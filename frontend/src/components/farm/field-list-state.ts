@@ -1,14 +1,14 @@
 export type FieldsSortKey =
   | 'name'
   | 'areaHa'
-  | 'cropRotation'
   | 'db2'
   | 'nLoad'
   | 'leaching'
+  | 'fen'
   | 'nQuotaKgN'
   | 'inTakeoutPlan'
   | 'retention'
-  | 'soil'
+  | 'jbnr'
 
 export type FieldsSortDirection = 'asc' | 'desc'
 

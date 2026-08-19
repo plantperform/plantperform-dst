@@ -3,7 +3,7 @@ import type { ExpressionSpecification } from 'maplibre-gl'
 export type ColorAttribute =
   | 'none'
   | 'retention'
-  | 'soilType'
+  | 'jbnr'
   | 'leaching'
   | 'nLoad'
   | 'nQuotaKgN'
@@ -95,17 +95,33 @@ const RETENTION: NumericSpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-const SOIL_TYPE: CategorySpec = {
+const rgbToHex = (r: number, g: number, b: number): string => {
+  const toHex = (channel: number) =>
+    Math.round(channel).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+// Light yellow (JB 1) → dark brown (JB 12), linearly interpolated per JB nr.
+const JB_GRADIENT_START: [number, number, number] = [254, 243, 199] // #fef3c7
+const JB_GRADIENT_END: [number, number, number] = [69, 26, 3] // #451a03
+
+const jbGradientColor = (jbnr: number): string => {
+  const t = (Math.min(Math.max(jbnr, 1), 12) - 1) / 11
+  const [r0, g0, b0] = JB_GRADIENT_START
+  const [r1, g1, b1] = JB_GRADIENT_END
+  return rgbToHex(r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t)
+}
+
+const JB_NR: CategorySpec = {
   kind: 'category',
-  label: 'Jordtype',
+  label: 'JB nr.',
   unit: '',
   source: 'both',
-  property: 'soilId',
-  bins: [
-    { value: 10, color: '#fde68a', label: 'Sand' },
-    { value: 11, color: '#a16207', label: 'Ler' },
-    { value: 20, color: '#a16207', label: 'Ler' },
-  ],
+  property: 'jbnr',
+  bins: Array.from({ length: 12 }, (_, i) => {
+    const jbnr = i + 1
+    return { value: jbnr, color: jbGradientColor(jbnr), label: `JB ${jbnr}` }
+  }),
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
@@ -228,7 +244,7 @@ const TAKEOUT: CategorySpec = {
 
 export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   retention: RETENTION,
-  soilType: SOIL_TYPE,
+  jbnr: JB_NR,
   nQuotaKgN: N_QUOTA,
   leaching: LEACHING,
   nLoad: N_LOAD,
@@ -241,7 +257,7 @@ export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
 export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'none', label: 'Ingen' },
   { value: 'retention', label: 'Retention' },
-  { value: 'soilType', label: 'Jordtype' },
+  { value: 'jbnr', label: 'JB nr.' },
   { value: 'nQuotaKgN', label: 'Kvælstofkvote' },
   { value: 'leaching', label: 'Udvaskning' },
   { value: 'nLoad', label: 'Udledning' },
@@ -255,7 +271,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
 // Registry MVT properties use snake_case (matching SQL column names).
 const REGISTRY_PROPERTY_NAMES: Record<string, string> = {
   retention: 'retention',
-  soilId: 'soil_id',
+  jbnr: 'jbnr',
   nQuotaKgN: 'n_quota_kg_n',
   kystvandId: 'kystvand_id',
   inTakeoutPlan: 'in_takeout_plan',

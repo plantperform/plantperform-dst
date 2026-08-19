@@ -9,14 +9,10 @@ import {
   simulationsKey,
   useSimulationFields,
 } from '@/api/hooks'
-import {
-  createSimulation,
-  deleteFarm,
-  deleteSimulation,
-  updateFarm,
-} from '@/api/mutations'
+import { deleteFarm, deleteSimulation, updateFarm } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
+import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -78,12 +74,10 @@ export const FarmSidebar = ({
 }: FarmSidebarProps) => {
   const navigate = useNavigate()
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isCreatingSimulation, setIsCreatingSimulation] = useState(false)
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
-  const [simulationDialogOpen, setSimulationDialogOpen] = useState(false)
-  const [simulationName, setSimulationName] = useState('')
+  const [newScenarioOpen, setNewScenarioOpen] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
   const [quotaInput, setQuotaInput] = useState(String(farm.nitrogenQuotaKg))
   const [isSavingQuota, setIsSavingQuota] = useState(false)
@@ -113,34 +107,6 @@ export const FarmSidebar = ({
       onError('Kunne ikke slette bedriften.')
     } finally {
       setIsDeleting(false)
-    }
-  }
-
-  const addSimulation = async () => {
-    const name = simulationName.trim()
-    if (!name) {
-      onError('Indtast et navn til simuleringen.')
-      return
-    }
-
-    setIsCreatingSimulation(true)
-    try {
-      const simulation = await createSimulation(farm.id, { name })
-      await mutate(
-        simulationsKey(farm.id),
-        (current: Simulation[] = []) => [...current, simulation],
-        { revalidate: false },
-      )
-      await mutate(simulationFieldsKey(farm.id, simulation.id))
-      void mutate(simulationsKey(farm.id))
-      onSelectionChange({ kind: 'simulation', id: simulation.id })
-      setSimulationName('')
-      setSimulationDialogOpen(false)
-      onError(null)
-    } catch {
-      onError('Kunne ikke oprette simuleringen.')
-    } finally {
-      setIsCreatingSimulation(false)
     }
   }
 
@@ -330,52 +296,24 @@ export const FarmSidebar = ({
                 Aktuelle marker og optimeringsalternativer.
               </p>
             </div>
-            <Dialog
-              open={simulationDialogOpen}
-              onOpenChange={setSimulationDialogOpen}
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-background/80"
+              onClick={() => setNewScenarioOpen(true)}
             >
-              <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="bg-background/80"
-                >
-                  Ny
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Opret simulering</DialogTitle>
-                  <DialogDescription>
-                    Dette kopierer alle aktuelle marker til et redigerbart
-                    alternativ.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <Label htmlFor="simulation-name">Navn</Label>
-                  <Input
-                    id="simulation-name"
-                    value={simulationName}
-                    placeholder="Reduceret kvælstofscenarie"
-                    onChange={(event) => setSimulationName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') void addSimulation()
-                    }}
-                  />
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="outline">Annuller</Button>
-                  </DialogClose>
-                  <Button
-                    onClick={() => void addSimulation()}
-                    disabled={isCreatingSimulation}
-                  >
-                    {isCreatingSimulation ? 'Opretter...' : 'Opret simulering'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              Ny
+            </Button>
+            <NewScenarioPanel
+              farmId={farm.id}
+              fields={fields}
+              open={newScenarioOpen}
+              onOpenChange={setNewScenarioOpen}
+              onSimulationCreated={(simulation) =>
+                onSelectionChange({ kind: 'simulation', id: simulation.id })
+              }
+              onError={onError}
+            />
           </div>
 
           <div className="space-y-2">

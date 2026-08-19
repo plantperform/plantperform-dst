@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from app.domain.field import Crop, FieldMeasures, Soil
+from app.domain.rotation_candidate import RotationYear
 
 OptimizationStatus = Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN"]
 
@@ -10,31 +10,25 @@ OptimizationStatus = Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN"]
 class RotationOption:
     key: str
     id: str
-    crops: tuple[Crop, ...]
-    measures: FieldMeasures
+    years: tuple[RotationYear, ...]
+    db2: float
+    n_load: float
+    leaching: float
+    fen: float
 
 
 @dataclass(frozen=True)
 class FieldInput:
     id: str
     area_ha: float
-    retention: float | None
-    soil: Soil
-    original_rotation: tuple[Crop, ...]
     options: tuple[RotationOption, ...]
-
-
-@dataclass(frozen=True)
-class CropPercentageInput:
-    crop: Crop
-    minimum_percentage: float
 
 
 @dataclass(frozen=True)
 class ConstraintsInput:
     max_n_load_kg: float | None
-    max_fields_with_new_rotation: int | None
-    crop_percentages: tuple[CropPercentageInput, ...]
+    min_fen: float | None
+    max_fen: float | None
 
 
 @dataclass(frozen=True)
@@ -48,8 +42,11 @@ class OptimizationInput:
 class AssignedRotation:
     field_id: str
     rotation_id: str
-    crops: tuple[Crop, ...]
-    measures: FieldMeasures
+    years: tuple[RotationYear, ...]
+    db2: float
+    n_load: float
+    leaching: float
+    fen: float
 
 
 @dataclass(frozen=True)
@@ -59,3 +56,4 @@ class OptimizationOutput:
     total_db2: float
     total_n_load_kg: float
     total_leaching_kg: float
+    total_fen: float

@@ -13,6 +13,7 @@ class RegistryField(CamelModel):
     kystvand_id: int | None = None
     retention: float | None = None
     soil_id: int | None = None
+    jbnr: int | None = None
     area_ha: float
     crop_rotation: str
     crop_history: dict[str, int | None]

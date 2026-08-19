@@ -6,7 +6,11 @@ import type {
   FieldRecord,
   RegistryField,
   RegistryFieldSummary,
+  RotationCandidateEvaluation,
+  RotationCandidateOption,
+  RotationKategoriOption,
   Simulation,
+  YearlySummaryEntry,
 } from '@/api/types'
 
 export const farmFieldsKey = (farmId?: string) => {
@@ -47,6 +51,44 @@ export const useSimulations = (farmId?: string) =>
 export const useSimulationFields = (farmId?: string, simulationId?: string) =>
   useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
 
+export const simulationFieldCandidateDetailKey = (
+  farmId?: string,
+  simulationId?: string,
+  fieldId?: string,
+) => {
+  if (!farmId || !simulationId || !fieldId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/fields/${encodeURIComponent(fieldId)}/candidate-detail`
+}
+
+export const useSimulationFieldCandidateDetail = (
+  farmId?: string,
+  simulationId?: string,
+  fieldId?: string,
+) =>
+  useSWR<RotationCandidateEvaluation>(
+    simulationFieldCandidateDetailKey(farmId, simulationId, fieldId),
+    fetcher,
+  )
+
+export const simulationYearlySummaryKey = (
+  farmId?: string,
+  simulationId?: string,
+) => {
+  if (!farmId || !simulationId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/yearly-summary`
+}
+
+export const useSimulationYearlySummary = (
+  farmId?: string,
+  simulationId?: string,
+) =>
+  useSWR<YearlySummaryEntry[]>(
+    simulationYearlySummaryKey(farmId, simulationId),
+    fetcher,
+  )
+
 export const useRegistryFieldsByCvr = (cvr?: string, limit = 100) =>
   useSWR<RegistryFieldSummary[]>(
     cvr
@@ -63,3 +105,30 @@ export const registryFieldsBulkKey = (imkIds: number[]) => {
 
   return `/registry/fields/bulk?imkIds=${imkIds.map(encodeURIComponent).join(',')}`
 }
+
+export const rotationCandidatesKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates`
+}
+
+export const useRotationCandidateOptions = (farmId?: string) =>
+  useSWR<RotationCandidateOption[]>(rotationCandidatesKey(farmId), fetcher)
+
+export const rotationKategorierKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/kategorier`
+}
+
+export const useRotationKategorier = (farmId?: string) =>
+  useSWR<RotationKategoriOption[]>(rotationKategorierKey(farmId), fetcher)
+
+export const rotationNNormProcenterKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/n-norm-procenter`
+}
+
+export const useRotationNNormProcenter = (farmId?: string) =>
+  useSWR<string[]>(rotationNNormProcenterKey(farmId), fetcher)
