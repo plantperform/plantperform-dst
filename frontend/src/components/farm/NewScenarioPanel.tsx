@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { mutate } from 'swr'
 
@@ -8,7 +9,7 @@ import {
   useRotationNNormProcenter,
 } from '@/api/hooks'
 import { createSimulation } from '@/api/mutations'
-import type { FieldRecord, Simulation } from '@/api/types'
+import type { FieldRecord, RotationKategoriOption, Simulation } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -34,6 +35,17 @@ type NewScenarioPanelProps = {
   onError: (message: string | null) => void
 }
 
+const toggleSet = (
+  set: Set<string>,
+  setSet: (next: Set<string>) => void,
+  value: string,
+) => {
+  const next = new Set(set)
+  if (next.has(value)) next.delete(value)
+  else next.add(value)
+  setSet(next)
+}
+
 export const NewScenarioPanel = ({
   farmId,
   fields,
@@ -46,7 +58,12 @@ export const NewScenarioPanel = ({
   const { data: nNormProcenter = [] } = useRotationNNormProcenter(farmId)
 
   const [scenarioName, setScenarioName] = useState('')
-  const [selectedKategorier, setSelectedKategorier] = useState<Set<string>>(new Set())
+  const [selectedByKategori, setSelectedByKategori] = useState<
+    Record<string, Set<string>>
+  >({})
+  const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(
+    new Set(),
+  )
   const [selectedNNorm, setSelectedNNorm] = useState<Set<string>>(new Set())
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
@@ -55,20 +72,40 @@ export const NewScenarioPanel = ({
 
   const eeaFdato = precisionDagsbasis ? fdatoDate : fdatoInterval
 
-  const toggleSet = (
-    set: Set<string>,
-    setSet: (next: Set<string>) => void,
-    value: string,
-  ) => {
-    const next = new Set(set)
-    if (next.has(value)) next.delete(value)
-    else next.add(value)
-    setSet(next)
+  const selectedFor = (kategori: string): Set<string> =>
+    selectedByKategori[kategori] ?? new Set()
+
+  const toggleKategoriAll = (option: RotationKategoriOption) => {
+    const current = selectedFor(option.kategori)
+    const allSelected =
+      option.saedskifter.length > 0 && current.size === option.saedskifter.length
+    setSelectedByKategori((prev) => ({
+      ...prev,
+      [option.kategori]: allSelected
+        ? new Set()
+        : new Set(option.saedskifter.map((s) => s.saedskiftevariant)),
+    }))
   }
+
+  const toggleSaedskifte = (kategori: string, saedskiftevariant: string) => {
+    setSelectedByKategori((prev) => {
+      const next = new Set(prev[kategori] ?? [])
+      if (next.has(saedskiftevariant)) next.delete(saedskiftevariant)
+      else next.add(saedskiftevariant)
+      return { ...prev, [kategori]: next }
+    })
+  }
+
+  const toggleExpanded = (kategori: string) =>
+    toggleSet(expandedKategorier, setExpandedKategorier, kategori)
+
+  const hasAnySelection = Object.values(selectedByKategori).some(
+    (set) => set.size > 0,
+  )
 
   const canCreate =
     scenarioName.trim() !== '' &&
-    selectedKategorier.size > 0 &&
+    hasAnySelection &&
     selectedNNorm.size > 0 &&
     fields.length > 0
 
@@ -78,8 +115,8 @@ export const NewScenarioPanel = ({
       onError('Indtast et navn til scenariet.')
       return
     }
-    if (selectedKategorier.size === 0) {
-      onError('Vælg mindst én sædskifte-kategori.')
+    if (!hasAnySelection) {
+      onError('Vælg mindst ét sædskifte i mindst én kategori.')
       return
     }
     if (selectedNNorm.size === 0) {
@@ -89,9 +126,14 @@ export const NewScenarioPanel = ({
 
     setIsCreating(true)
     try {
+      const kategoriSaedskifter = Object.fromEntries(
+        Object.entries(selectedByKategori)
+          .filter(([, set]) => set.size > 0)
+          .map(([kategori, set]) => [kategori, Array.from(set)]),
+      )
       const simulation = await createSimulation(farmId, {
         name,
-        kategorier: Array.from(selectedKategorier),
+        kategoriSaedskifter,
         nNormProcenter: Array.from(selectedNNorm),
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
@@ -107,7 +149,8 @@ export const NewScenarioPanel = ({
       onError(null)
       onOpenChange(false)
       setScenarioName('')
-      setSelectedKategorier(new Set())
+      setSelectedByKategori({})
+      setExpandedKategorier(new Set())
       setSelectedNNorm(new Set())
       setPrecisionDagsbasis(false)
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
@@ -146,30 +189,80 @@ export const NewScenarioPanel = ({
           <div className="space-y-2">
             <Label>Sædskifte-kategorier</Label>
             <p className="text-xs text-muted-foreground">
-              Driftsform og gødningsniveau følger kategorien — vælg én eller flere.
+              Driftsform og gødningsniveau følger kategorien. Fold en kategori ud for at
+              vælge specifikke sædskifter til/fra — ellers indgår alle.
             </p>
             <div className="space-y-1">
-              {kategorier.map((option) => (
-                <label
-                  key={option.kategori}
-                  className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={selectedKategorier.has(option.kategori)}
-                    onChange={() =>
-                      toggleSet(selectedKategorier, setSelectedKategorier, option.kategori)
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">{option.kategori}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {option.dyrkningssystem} · {option.antalSaedskifter} sædskifter
-                    </span>
-                  </span>
-                </label>
-              ))}
+              {kategorier.map((option) => {
+                const selected = selectedFor(option.kategori)
+                const allSelected =
+                  option.saedskifter.length > 0 &&
+                  selected.size === option.saedskifter.length
+                const partiallySelected = selected.size > 0 && !allSelected
+                const isExpanded = expandedKategorier.has(option.kategori)
+                return (
+                  <div key={option.kategori} className="rounded-md border bg-background">
+                    <div className="flex items-start gap-2 p-3 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={allSelected}
+                        ref={(element) => {
+                          if (element) element.indeterminate = partiallySelected
+                        }}
+                        onChange={() => toggleKategoriAll(option)}
+                      />
+                      <button
+                        type="button"
+                        className="flex flex-1 items-start justify-between gap-2 text-left"
+                        onClick={() => toggleExpanded(option.kategori)}
+                      >
+                        <span>
+                          <span className="font-medium">{option.kategori}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {option.dyrkningssystem} · {selected.size}/
+                            {option.antalSaedskifter} sædskifter valgt
+                          </span>
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown
+                            className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <ChevronRight
+                            className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <div className="max-h-56 space-y-1 overflow-y-auto border-t p-2">
+                        {option.saedskifter.map((saedskifte) => (
+                          <label
+                            key={saedskifte.saedskiftevariant}
+                            className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={selected.has(saedskifte.saedskiftevariant)}
+                              onChange={() =>
+                                toggleSaedskifte(
+                                  option.kategori,
+                                  saedskifte.saedskiftevariant,
+                                )
+                              }
+                            />
+                            <span>{saedskifte.cropSequence.join(' - ')}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           </div>
 

@@ -208,26 +208,36 @@ def evaluate_candidate_for_mark(
 
 
 def generate_candidates_for_field(
-    kategorier: list[str],
+    kategori_saedskifter: dict[str, list[str]],
     n_norm_procenter: list[str],
     jbnr: int,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
 ) -> list[RotationCandidateEvaluation]:
-    """Udvid valgte kategorier -> saedskiftevariant-mængde, kryds med valgte
-    N-norm%-værdier × alle varianter, og evaluer hver resulterende kandidat.
+    """Kryds de eksplicit valgte (kategori -> saedskiftevariant-id'er) med
+    valgte N-norm%-værdier × alle varianter, og evaluer hver resulterende
+    kandidat.
 
     Bruges af "Opret scenarie" (usynlig baggrundsberegning, jf. plan-
-    beslutning 14/19) — springer kombinationer der ikke findes i datasættet
-    over (fx en N-norm% der ikke er defineret for en given variant), og
-    deduplikerer på tværs af kategorier (saedskiftevariant "1"/ren brak
-    hører til alle 6 kategorier).
+    beslutning 14/19/Fase 9) — springer kombinationer der ikke findes i
+    datasættet over (fx en N-norm% der ikke er defineret for en given
+    variant), og deduplikerer på tværs af kategorier (saedskiftevariant
+    "1"/ren brak hører til alle 6 kategorier).
+
+    kategori_saedskifter styrer eksplicit hvilke saedskiftevariant-id'er der
+    indgår pr. kategori (fra "Nyt scenarie"s fold-ud-liste) — en
+    saedskiftevariant der ikke reelt hører til den angivne kategori
+    filtreres defensivt fra, så en fejlformet anmodning ikke kan blande
+    driftsform/gødningsregler forkert.
     """
     results: list[RotationCandidateEvaluation] = []
     seen_ref_ids: set[str] = set()
 
-    for kategori in kategorier:
-        for saedskiftevariant in saedskifte_kategorier.saedskifter_for_kategori(kategori):
+    for kategori, saedskiftevarianter in kategori_saedskifter.items():
+        valid_saedskiftevarianter = set(saedskifte_kategorier.saedskifter_for_kategori(kategori))
+        for saedskiftevariant in saedskiftevarianter:
+            if saedskiftevariant not in valid_saedskiftevarianter:
+                continue
             for variant in saedskifte_library.list_variants(saedskiftevariant):
                 available_norms = set(saedskifte_library.list_n_norms(saedskiftevariant, variant))
                 for n_norm_pct in n_norm_procenter:

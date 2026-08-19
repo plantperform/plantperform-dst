@@ -37,24 +37,64 @@ class RotationCandidateOption(CamelModel):
     crop_sequence: list[str]
 
 
+class SaedskifteOption(CamelModel):
+    saedskiftevariant: str
+    crop_sequence: list[str]
+    active_len: int
+
+
 class RotationKategoriOption(CamelModel):
     kategori: str
     dyrkningssystem: str
     antal_saedskifter: int
+    saedskifter: list[SaedskifteOption]
+
+
+def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
+    """Billig afgrødesekvens-forhåndsvisning for én saedskiftevariant — bruger
+    første tilgængelige (variant, N-norm%), ingen NLES5/DB2-beregning. Til
+    kategori-fold-ud-listen i "Nyt scenarie", ikke til reel evaluering."""
+    variants = saedskifte_library.list_variants(saedskiftevariant)
+    if not variants:
+        return None
+    variant = variants[0]
+    n_norms = saedskifte_library.list_n_norms(saedskiftevariant, variant)
+    if not n_norms:
+        return None
+    raw = saedskifte_library.get_raw_rotation(saedskiftevariant, variant, n_norms[0])
+    active_len = saedskifte_library.rotation_active_len(raw)
+    names = [
+        afgroede_normer.lookup_crop_params(code).get("navn", str(code))
+        for code, _udl, _udl_navn in raw[:active_len]
+    ]
+    return SaedskifteOption(
+        saedskiftevariant=saedskiftevariant, crop_sequence=names, active_len=active_len,
+    )
 
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
 async def list_rotation_kategorier() -> list[RotationKategoriOption]:
     """De 6 sædskifte-kategorier (driftsform + gødningsniveau), til
-    kategori-afkrydsningslisten i "Nyt scenarie"."""
-    return [
-        RotationKategoriOption(
-            kategori=kategori,
-            dyrkningssystem=saedskifte_kategorier.dyrkningssystem_for_kategori(kategori),
-            antal_saedskifter=len(saedskifte_kategorier.saedskifter_for_kategori(kategori)),
+    kategori-afkrydsningslisten i "Nyt scenarie" — hver med en liste af dens
+    individuelle sædskiftemuligheder (afgrødesekvens-forhåndsvisning), så
+    brugeren kan folde kategorien ud og vælge specifikke sædskifter til/fra."""
+    options = []
+    for kategori in saedskifte_kategorier.list_kategorier():
+        saedskiftevarianter = saedskifte_kategorier.saedskifter_for_kategori(kategori)
+        saedskifter = [
+            preview
+            for sv in saedskiftevarianter
+            if (preview := _saedskifte_preview(sv)) is not None
+        ]
+        options.append(
+            RotationKategoriOption(
+                kategori=kategori,
+                dyrkningssystem=saedskifte_kategorier.dyrkningssystem_for_kategori(kategori),
+                antal_saedskifter=len(saedskiftevarianter),
+                saedskifter=saedskifter,
+            )
         )
-        for kategori in saedskifte_kategorier.list_kategorier()
-    ]
+    return options
 
 
 @router.get("/n-norm-procenter", response_model=list[str])

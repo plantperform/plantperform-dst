@@ -162,7 +162,7 @@ export type Simulation = {
 
 export type CreateSimulationInput = {
   name: string
-  kategorier?: string[]
+  kategoriSaedskifter?: Record<string, string[]>
   nNormProcenter?: string[]
   eeaFdato?: string
   eeaPrecisionDagsbasis?: boolean
@@ -251,8 +251,15 @@ export type EvaluateRotationCandidatesInput = {
   irrigated?: boolean
 }
 
+export type SaedskifteOption = {
+  saedskiftevariant: string
+  cropSequence: string[]
+  activeLen: number
+}
+
 export type RotationKategoriOption = {
   kategori: string
   dyrkningssystem: Driftsform
   antalSaedskifter: number
+  saedskifter: SaedskifteOption[]
 }
