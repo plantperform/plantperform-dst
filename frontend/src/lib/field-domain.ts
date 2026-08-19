@@ -4,6 +4,7 @@ import type {
   FieldRecord,
   Measure,
   NamedRotation,
+  RotationYear,
   Soil,
 } from '@/api/types'
 
@@ -88,6 +89,26 @@ export const formatCrop = (crop: Crop) => {
 
 export const formatCropRotation = (rotation: Crop[]) =>
   rotation.length > 0 ? rotation.map(formatCrop).join(' - ') : 'Ukendt'
+
+// Startkalenderår for den 8-årige rotation — skal matche backend'ens
+// candidate_evaluator.py::_START_CALENDAR_YEAR. Position 1 = dette år,
+// position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
+export const ROTATION_START_CALENDAR_YEAR = 2024
+
+// Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
+// navnet i parentes lige efter.
+export const formatRotationYear = (year: RotationYear): string =>
+  year.udlaegNavn ? `${year.afgrodeNavn} (${year.udlaegNavn})` : year.afgrodeNavn
+
+// Rigtigt sædskifte (afgrødekode-baseret), som én sammenhængende streng.
+// Erstatter både den gamle formatCropRotation-brug og den separate
+// "Virkemidler: ..."-linje for marker der har et beregnet sædskifte (fra
+// "Optimér").
+export const formatRealRotation = (rotation: RotationYear[]): string => {
+  if (rotation.length === 0) return 'Intet sædskifte endnu — opret et scenarie og kør Optimér'
+
+  return rotation.map(formatRotationYear).join(' - ')
+}
 
 export const emptyMeasures = (): FieldMeasures => ({
   precisionFarming: false,
@@ -191,9 +212,13 @@ export const formatSoil = (soil: Soil) => {
   return 'Lerjord'
 }
 
-export const rotationsEqual = (left: Crop[], right: Crop[]) =>
+export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>
   left.length === right.length &&
-  left.every((crop, index) => crop === right[index])
+  left.every(
+    (year, index) =>
+      year.afgrodeKode === right[index].afgrodeKode &&
+      year.udlaegKode === right[index].udlaegKode,
+  )
 
 // Returns the ids of the view fields whose crop rotation differs from the live
 // ("Aktuel") field it was snapshotted from. The snapshot regenerates `id`, so
@@ -203,7 +228,7 @@ export const changedFieldIds = (
   viewFields: FieldRecord[],
   liveFields: FieldRecord[],
 ): Set<string> => {
-  const liveRotationByImk = new Map<number, Crop[]>()
+  const liveRotationByImk = new Map<number, RotationYear[]>()
   for (const field of liveFields) {
     if (field.imkId !== null) {
       liveRotationByImk.set(field.imkId, field.cropRotation)

@@ -225,6 +225,7 @@ def iter_registry_rows(
         "RedTot_pct",
         "Sand",
         "Clay",
+        "JB_Kode",
         "CVR_Anonym",
         "InSkitse_1",
         "n_kvote_mark_endelig_kgN",
@@ -273,6 +274,7 @@ def iter_registry_rows(
                 clean_int(row.KystvandID),
                 clean_float(row.RedTot_pct),
                 soil_id_from_flags(row.Sand, row.Clay),
+                clean_int(row.JB_Kode),
                 area_ha,
                 crop_rotation,
                 json.dumps(crop_history),
@@ -318,6 +320,7 @@ def load_registry() -> None:
                     kystvand_id integer,
                     retention double precision,
                     soil_id integer,
+                    jbnr smallint,
                     area_ha double precision,
                     crop_rotation text,
                     crop_history jsonb,
@@ -330,7 +333,7 @@ def load_registry() -> None:
             with cursor.copy(
                 """
                 COPY registry_field_load (
-                    imk_id, cvr, marknr, kystvand_id, retention, soil_id, area_ha,
+                    imk_id, cvr, marknr, kystvand_id, retention, soil_id, jbnr, area_ha,
                     crop_rotation, crop_history, in_takeout_plan, n_quota_kg_n, geom_wkt
                 ) FROM STDIN WITH (FORMAT CSV)
                 """
@@ -350,7 +353,7 @@ def load_registry() -> None:
             cursor.execute(
                 """
                 INSERT INTO registry_field (
-                    imk_id, cvr, marknr, kystvand_id, retention, soil_id, area_ha,
+                    imk_id, cvr, marknr, kystvand_id, retention, soil_id, jbnr, area_ha,
                     crop_rotation, crop_history, in_takeout_plan, n_quota_kg_n, geom,
                     centroid, sample_bucket
                 )
@@ -361,6 +364,7 @@ def load_registry() -> None:
                     kystvand_id,
                     retention,
                     soil_id,
+                    jbnr,
                     area_ha,
                     crop_rotation,
                     crop_history,

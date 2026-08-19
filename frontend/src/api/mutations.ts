@@ -3,8 +3,10 @@ import type {
   CreateFarmInput,
   CreateFieldInput,
   CreateSimulationInput,
+  EvaluateRotationCandidatesInput,
   Farm,
   FieldRecord,
+  FieldRotationCandidates,
   OptimizeSimulationInput,
   OptimizeSimulationResponse,
   OptimizationConstraints,
@@ -70,5 +72,14 @@ export const runSimulationOptimization = (
 ) =>
   postJson<OptimizeSimulationResponse, OptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize`,
+    input,
+  )
+
+export const evaluateRotationCandidates = (
+  farmId: string,
+  input: EvaluateRotationCandidatesInput,
+) =>
+  postJson<FieldRotationCandidates[], EvaluateRotationCandidatesInput>(
+    `/farms/${farmId}/rotation-candidates/evaluate`,
     input,
   )

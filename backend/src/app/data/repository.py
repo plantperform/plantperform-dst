@@ -10,10 +10,11 @@ from app.data.db import (
     SessionLocal,
     farm_table,
     field_table,
+    registry_field_table,
+    simulation_field_candidates_table,
     simulation_field_table,
     simulation_table,
 )
-from app.domain.calculations import compute_field_metrics
 from app.domain.farm import CreateFarmRequest, Farm, UpdateFarmRequest
 from app.domain.field import (
     CreateFieldRequest,
@@ -21,12 +22,15 @@ from app.domain.field import (
     UpdateFieldRequest,
     validate_measures_for_rotation,
 )
+from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.rotation_library import ROTATION_LIBRARY
 from app.domain.simulation import (
     CreateSimulationRequest,
     OptimizationConstraints,
     Simulation,
 )
+from app.services.scenario.candidate_evaluator import generate_candidates_for_field
+from app.services.soil.jbnr import FALLBACK_JBNR
 
 
 def _dump(model: BaseModel) -> dict:
@@ -41,12 +45,13 @@ def _load[ModelT: BaseModel](model_type: type[ModelT], data: dict) -> ModelT:
     return model_type.model_validate(data)
 
 
-def _with_computed_metrics(field: FieldRecord) -> FieldRecord:
-    db2, n_load, leaching = compute_field_metrics(field)
-    return field.model_copy(
-        update={"db2": db2, "n_load": n_load, "leaching": leaching},
-        deep=True,
-    )
+def _jbnr_for_imk_id(session: Session, imk_id: int | None) -> int:
+    if imk_id is None:
+        return FALLBACK_JBNR
+    jbnr = session.execute(
+        select(registry_field_table.c.jbnr).where(registry_field_table.c.imk_id == imk_id),
+    ).scalar_one_or_none()
+    return jbnr if jbnr is not None else FALLBACK_JBNR
 
 
 def _farm_exists(session: Session, farm_id: str) -> bool:
@@ -145,7 +150,7 @@ def list_fields(farm_id: str) -> list[FieldRecord] | None:
             .where(field_table.c.farm_id == farm_id)
             .order_by(field_table.c.created_at),
         ).scalars()
-        return [_with_computed_metrics(_load(FieldRecord, data)) for data in rows]
+        return [_load(FieldRecord, data) for data in rows]
 
 
 def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | None:
@@ -177,6 +182,8 @@ def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | Non
             db2=0,
             n_load=0,
             leaching=0,
+            fen=0,
+            jbnr=_jbnr_for_imk_id(session, request.imk_id),
             **field_data,
         )
 
@@ -195,7 +202,7 @@ def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | Non
                 .values(data=_dump(field), updated_at=func.now()),
             )
 
-        return _with_computed_metrics(field)
+        return field
 
 
 def detach_field(farm_id: str, field_id: str) -> bool | None:
@@ -235,6 +242,10 @@ def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulat
             farm_id=farm_id,
             name=request.name,
             created_at=datetime.now(UTC).isoformat(),
+            rotation_kategorier=request.kategorier,
+            rotation_n_norm_procenter=request.n_norm_procenter,
+            eea_fdato=request.eea_fdato,
+            eea_precision_dagsbasis=request.eea_precision_dagsbasis,
         )
         session.execute(
             insert(simulation_table).values(
@@ -264,12 +275,92 @@ def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulat
                 ),
             )
 
+            if request.kategorier and request.n_norm_procenter:
+                jbnr = _jbnr_for_imk_id(session, copied_field.imk_id)
+                candidates = generate_candidates_for_field(
+                    request.kategorier, request.n_norm_procenter, jbnr,
+                    fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
+                )
+                field_candidates = SimulationFieldCandidates(
+                    field_id=copied_field.id, jbnr=jbnr, candidates=candidates,
+                )
+                session.execute(
+                    insert(simulation_field_candidates_table).values(
+                        id=str(uuid4()),
+                        simulation_id=simulation.id,
+                        field_id=copied_field.id,
+                        data=_dump(field_candidates),
+                    ),
+                )
+
         return simulation
 
 
 def get_simulation(farm_id: str, simulation_id: str) -> Simulation | None:
     with SessionLocal() as session:
         return _get_simulation(session, farm_id, simulation_id)
+
+
+def list_simulation_field_candidates(
+    farm_id: str, simulation_id: str,
+) -> list[SimulationFieldCandidates] | None:
+    with SessionLocal() as session:
+        if _get_simulation(session, farm_id, simulation_id) is None:
+            return None
+
+        rows = session.execute(
+            select(simulation_field_candidates_table.c.data)
+            .where(simulation_field_candidates_table.c.simulation_id == simulation_id),
+        ).scalars()
+        return [_load(SimulationFieldCandidates, data) for data in rows]
+
+
+class FieldNotOptimizedError(Exception):
+    """Marken har endnu ikke et vindende sædskifte (rotation_id) — kør Optimér først."""
+
+
+def get_simulation_field_candidate_detail(
+    farm_id: str, simulation_id: str, field_id: str,
+) -> RotationCandidateEvaluation | None:
+    """Den fulde beregningsdetalje (leaching_detail/db_detail pr. år) for den
+    kandidat Optimér har valgt til denne mark. Returnerer None hvis
+    marken/simuleringen ikke findes; rejser FieldNotOptimizedError hvis marken
+    endnu ikke er blevet optimeret (intet rotation_id sat)."""
+    with SessionLocal() as session:
+        if _get_simulation(session, farm_id, simulation_id) is None:
+            return None
+
+        field_data = session.execute(
+            select(simulation_field_table.c.data).where(
+                simulation_field_table.c.id == field_id,
+                simulation_field_table.c.simulation_id == simulation_id,
+            ),
+        ).scalar_one_or_none()
+        if field_data is None:
+            return None
+
+        field = _load(FieldRecord, field_data)
+        if field.rotation_id is None:
+            raise FieldNotOptimizedError
+
+        candidates_data = session.execute(
+            select(simulation_field_candidates_table.c.data).where(
+                simulation_field_candidates_table.c.simulation_id == simulation_id,
+                simulation_field_candidates_table.c.field_id == field_id,
+            ),
+        ).scalar_one_or_none()
+        if candidates_data is None:
+            return None
+
+        field_candidates = _load(SimulationFieldCandidates, candidates_data)
+        return next(
+            (
+                candidate
+                for candidate in field_candidates.candidates
+                if candidate.ref.to_id() == field.rotation_id
+            ),
+            None,
+        )
 
 
 def delete_simulation(farm_id: str, simulation_id: str) -> bool | None:
@@ -345,7 +436,7 @@ def list_simulation_fields(farm_id: str, simulation_id: str) -> list[FieldRecord
             .where(simulation_field_table.c.simulation_id == simulation_id)
             .order_by(simulation_field_table.c.created_at),
         ).scalars()
-        return [_with_computed_metrics(_load(FieldRecord, data)) for data in rows]
+        return [_load(FieldRecord, data) for data in rows]
 
 
 def update_simulation_field(
@@ -378,4 +469,4 @@ def update_simulation_field(
             )
             .values(data=_dump(field), updated_at=func.now()),
         )
-        return _with_computed_metrics(field)
+        return field

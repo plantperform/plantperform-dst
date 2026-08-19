@@ -11,6 +11,8 @@ class CropPercentageConstraint(CamelModel):
 
 class OptimizationConstraints(CamelModel):
     max_n_load_kg: float | None = Field(default=None, ge=0)
+    min_fen: float | None = Field(default=None, ge=0)
+    max_fen: float | None = Field(default=None, ge=0)
     max_fields_with_new_rotation: int | None = Field(default=None, ge=0)
     crop_percentages: list[CropPercentageConstraint] = Field(default_factory=list)
     # UI-only memory of the last globally-applied allowed-rotation selection
@@ -53,6 +55,13 @@ class OptimizationConstraints(CamelModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_fen_range(self) -> "OptimizationConstraints":
+        if self.min_fen is not None and self.max_fen is not None and self.min_fen > self.max_fen:
+            raise ValueError("min_fen cannot exceed max_fen")
+
+        return self
+
 
 class Simulation(CamelModel):
     id: str
@@ -60,7 +69,23 @@ class Simulation(CamelModel):
     name: str
     created_at: str
     constraints: OptimizationConstraints = Field(default_factory=OptimizationConstraints)
+    # Hvilke sædskifte-kategorier + N-norm% "Opret scenarie" brugte til at
+    # generere den gemte kandidatmængde (simulation_field_candidates) — rent
+    # oplysende/audit, solveren læser dette indirekte via de gemte kandidater.
+    rotation_kategorier: list[str] = Field(default_factory=list)
+    rotation_n_norm_procenter: list[str] = Field(default_factory=list)
+    # Sådato/etableringsinterval for efterafgrøde (EEA) — gælder for alle år
+    # med efterafgrøde på tværs af scenariets marker (jf. streamlit_app.py's
+    # globale "gælder for alle år med efterafgrøde"-indstilling). eea_fdato er
+    # enten en af de 4 §37-intervaldatoer eller en af de 30 §38-dagsbasis-datoer,
+    # afhængig af eea_precision_dagsbasis.
+    eea_fdato: str = "20/8"
+    eea_precision_dagsbasis: bool = False
 
 
 class CreateSimulationRequest(CamelModel):
     name: str = Field(min_length=1)
+    kategorier: list[str] = Field(default_factory=list)
+    n_norm_procenter: list[str] = Field(default_factory=list)
+    eea_fdato: str = "20/8"
+    eea_precision_dagsbasis: bool = False

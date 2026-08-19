@@ -66,12 +66,15 @@ export type FieldRecord = {
   kystvandId: number | null
   retention: number | null
   soil: Soil
-  cropRotation: Crop[]
+  jbnr: number | null
+  cropRotation: RotationYear[]
+  rotationId: string | null
   measures: FieldMeasures
   allowedRotationIds: string[]
   db2: number
   nLoad: number
   leaching: number
+  fen: number
   name: string
   areaHa: number
   inTakeoutPlan: boolean
@@ -119,7 +122,7 @@ export type CreateFieldInput = {
   kystvandId?: number | null
   retention: number | null
   soil: Soil
-  cropRotation: Crop[]
+  cropRotation?: RotationYear[]
   measures?: FieldMeasures
   allowedRotationIds?: string[]
   name: string
@@ -138,6 +141,8 @@ export type CropPercentageConstraint = {
 
 export type OptimizationConstraints = {
   maxNLoadKg: number | null
+  minFen: number | null
+  maxFen: number | null
   maxFieldsWithNewRotation: number | null
   cropPercentages: CropPercentageConstraint[]
   globallyAllowedRotationIds: string[] | null
@@ -149,10 +154,18 @@ export type Simulation = {
   name: string
   createdAt: string
   constraints: OptimizationConstraints
+  rotationKategorier: string[]
+  rotationNNormProcenter: string[]
+  eeaFdato: string
+  eeaPrecisionDagsbasis: boolean
 }
 
 export type CreateSimulationInput = {
   name: string
+  kategorier?: string[]
+  nNormProcenter?: string[]
+  eeaFdato?: string
+  eeaPrecisionDagsbasis?: boolean
 }
 
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
@@ -164,7 +177,6 @@ export type OptimizeSimulationInput = {
 export type RotationAssignment = {
   fieldId: string
   rotationId: string
-  measures: FieldMeasures
 }
 
 export type OptimizeSimulationResponse = {
@@ -172,6 +184,75 @@ export type OptimizeSimulationResponse = {
   objectiveDb2: number
   totalNLoadKg: number
   totalLeachingKg: number
+  totalFen: number
   fields: FieldRecord[]
   assignments: RotationAssignment[]
+}
+
+export type YearlySummaryEntry = {
+  year: number
+  totalNLoadKg: number
+  totalDb2: number
+  totalFen: number
+  fieldCount: number
+}
+
+export type RotationCandidateRef = {
+  saedskiftevariant: string
+  variant: string
+  nNormPct: string
+}
+
+export type RotationCandidateOption = {
+  ref: RotationCandidateRef
+  activeLen: number
+  cropSequence: string[]
+}
+
+export type RotationYear = {
+  afgrodeKode: number
+  afgrodeNavn: string
+  udlaegKode: number | null
+  udlaegNavn: string | null
+}
+
+export type RotationCandidateYearResult = {
+  year: RotationYear
+  leachingKgNHa: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  leachingDetail: Record<string, any>
+  dbKrHa: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dbDetail: Record<string, any>
+}
+
+export type RotationCandidateEvaluation = {
+  ref: RotationCandidateRef
+  activeLen: number
+  years: RotationCandidateYearResult[]
+  avgLeachingKgNHa: number
+  avgDbKrHa: number
+  avgFen: number
+}
+
+export type FieldRotationCandidates = {
+  fieldId: string
+  jbnr: number
+  candidates: RotationCandidateEvaluation[]
+}
+
+export type Driftsform = 'Konventionel' | 'Økologisk'
+
+export type EvaluateRotationCandidatesInput = {
+  fieldIds: string[]
+  kategori: string
+  candidateRefs: RotationCandidateRef[]
+  startYear?: number
+  irrigated?: boolean
+}
+
+export type RotationKategoriOption = {
+  kategori: string
+  dyrkningssystem: Driftsform
+  antalSaedskifter: number
 }

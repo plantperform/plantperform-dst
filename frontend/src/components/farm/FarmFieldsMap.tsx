@@ -34,9 +34,7 @@ import {
 import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
-  formatCropRotation,
-  formatSoil,
-  parseRegistryRotation,
+  formatRealRotation,
   soilFromRegistryNumber,
 } from '@/lib/field-domain'
 import { fieldsToFeatureCollection, getFieldsBounds } from '@/lib/geo'
@@ -294,18 +292,11 @@ export const FarmFieldsMap = ({
 
       for (const field of registryFields) {
         try {
-          const cropRotation = parseRegistryRotation(field.cropRotation)
-          if (cropRotation.length === 0) {
-            skippedFields.push(`IMK ${field.imkId} (tomt sædskifte)`)
-            continue
-          }
-
           payload.push({
             imkId: field.imkId,
             kystvandId: field.kystvandId,
             retention: field.retention,
             soil: soilFromRegistryNumber(field.soilId),
-            cropRotation,
             name: field.marknr ?? `Mark ${field.imkId}`,
             areaHa: field.areaHa,
             inTakeoutPlan: field.inTakeoutPlan,
@@ -811,12 +802,16 @@ export const FarmFieldsMap = ({
                       }
                     />
                     <FieldStat
-                      label="Jordtype"
-                      value={formatSoil(selectedFarmField.soil)}
+                      label="JB nr."
+                      value={
+                        selectedFarmField.jbnr === null
+                          ? 'Ukendt'
+                          : String(selectedFarmField.jbnr)
+                      }
                     />
                     <FieldStat
                       label="Sædskifte"
-                      value={formatCropRotation(selectedFarmField.cropRotation)}
+                      value={formatRealRotation(selectedFarmField.cropRotation)}
                     />
                     <FieldStat
                       label="DB2"

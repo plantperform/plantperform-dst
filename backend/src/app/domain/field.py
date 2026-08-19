@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
+from app.domain.rotation_candidate import RotationYear
 
 type Position = tuple[float, float]
 type LinearRing = list[Position]
@@ -86,25 +87,17 @@ def crop_allows_cover_crop(crop_rotation: list[Crop], index: int) -> bool:
 
 def validate_measures_for_rotation(
     measures: FieldMeasures,
-    crop_rotation: list[Crop],
+    crop_rotation: list[RotationYear],
 ) -> FieldMeasures:
+    """Grænse-tjek kun. Den grove Crop-enums crop_allows_cover_crop/
+    crop_allows_early_sowing-eligibility-tjek er droppet her — virkemidler
+    hører nu til som kandidat-versioner genereret ved "Opret scenarie" (jf.
+    planens beslutning 7), ikke en efterfølgende per-mark-godkendelse."""
     crop_count = len(crop_rotation)
     if any(year >= crop_count for year in measures.cover_crop_years):
         raise ValueError("Cover crop year is outside the crop rotation")
     if any(year >= crop_count for year in measures.early_sowing_years):
         raise ValueError("Early sowing year is outside the crop rotation")
-
-    for year in measures.cover_crop_years:
-        if not crop_allows_cover_crop(crop_rotation, year):
-            raise ValueError(
-                "Cover crop cannot be used before winter cereal or winter cereal after grass"
-            )
-
-    for year in measures.early_sowing_years:
-        if not crop_allows_early_sowing(crop_rotation[year]):
-            raise ValueError(
-                "Early sowing can only be used for winter cereal or winter cereal after grass"
-            )
 
     return measures
 
@@ -173,12 +166,22 @@ class FieldRecord(CamelModel):
     kystvand_id: int | None = None
     retention: float | None = None
     soil: Soil
-    crop_rotation: list[Crop] = Field(default_factory=list)
+    jbnr: int | None = None
+    crop_rotation: list[RotationYear] = Field(default_factory=list)
+    # Sat af optimeringen (candidate ref id, fx "315:4:100") — bruges til at slå
+    # den fulde beregningsdetalje (leaching_detail/db_detail) op i
+    # simulation_field_candidates. None indtil marken er blevet optimeret.
+    rotation_id: str | None = None
     measures: FieldMeasures = Field(default_factory=FieldMeasures)
     allowed_rotation_ids: list[str] = Field(default_factory=default_allowed_rotation_ids)
     db2: float
     n_load: float
     leaching: float
+    # Foderenheder (FEN) — kun meningsfuldt for FE-noterede afgrøder (helsæd/
+    # græs). Sat af optimeringen sammen med db2/n_load/leaching, 0 indtil
+    # marken er blevet optimeret. Default (ikke required) så eksisterende
+    # markrækker uden dette felt stadig kan indlæses uden migration.
+    fen: float = 0
     name: str
     area_ha: float
     in_takeout_plan: bool = False
@@ -191,7 +194,7 @@ class CreateFieldRequest(CamelModel):
     kystvand_id: int | None = None
     retention: float | None = None
     soil: Soil
-    crop_rotation: list[Crop] = Field(default_factory=list)
+    crop_rotation: list[RotationYear] = Field(default_factory=list)
     measures: FieldMeasures = Field(default_factory=FieldMeasures)
     allowed_rotation_ids: list[str] = Field(default_factory=default_allowed_rotation_ids)
     name: str
@@ -200,13 +203,9 @@ class CreateFieldRequest(CamelModel):
     n_quota_kg_n: float | None = None
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
-    @field_validator("crop_rotation")
-    @classmethod
-    def validate_crop_rotation(cls, value: list[Crop]) -> list[Crop]:
-        if not value:
-            raise ValueError("Crop rotation must contain at least one crop")
-
-        return value
+    # Ingen "mindst ét år"-krav længere — marker oprettes typisk uden sædskifte
+    # (fx importeret fra kortet) og får først et rigtigt sædskifte ved
+    # "Opret scenarie" + "Optimér".
 
     @field_validator("allowed_rotation_ids")
     @classmethod
@@ -224,25 +223,22 @@ class UpdateFieldRequest(CamelModel):
     kystvand_id: int | None = None
     retention: float | None = None
     soil: Soil | None = None
-    crop_rotation: list[Crop] | None = None
+    crop_rotation: list[RotationYear] | None = None
+    rotation_id: str | None = None
     measures: FieldMeasures | None = None
     allowed_rotation_ids: list[str] | None = None
+    # Kun sat af optimeringen (jf. beslutning i Fase 5) — erstatter den
+    # tidligere automatiske genberegning-ved-hvert-opslag, som byggede på den
+    # nu-udgåede grove Crop-baserede metrics.py.
+    db2: float | None = None
+    n_load: float | None = None
+    leaching: float | None = None
+    fen: float | None = None
     name: str | None = None
     area_ha: float | None = None
     in_takeout_plan: bool | None = None
     n_quota_kg_n: float | None = None
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
-
-    @field_validator("crop_rotation")
-    @classmethod
-    def validate_crop_rotation(cls, value: list[Crop] | None) -> list[Crop] | None:
-        if value is None:
-            return value
-
-        if not value:
-            raise ValueError("Crop rotation must contain at least one crop")
-
-        return value
 
     @field_validator("allowed_rotation_ids")
     @classmethod

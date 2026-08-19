@@ -56,7 +56,7 @@ export const fieldsToFeatureCollection = (
         kystvandId: field.kystvandId,
         name: field.name,
         retention: field.retention,
-        soilId: field.soil === 'SAND' ? 10 : 11,
+        jbnr: field.jbnr,
         nQuotaKgN: field.nQuotaKgN,
         leaching: field.leaching,
         nLoad: field.nLoad,

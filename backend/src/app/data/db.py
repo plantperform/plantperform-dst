@@ -43,6 +43,7 @@ registry_field_table = Table(
     Column("kystvand_id", Integer, nullable=True, index=True),
     Column("retention", Float, nullable=True),
     Column("soil_id", Integer, nullable=True),
+    Column("jbnr", SmallInteger, nullable=True),
     Column("area_ha", Float, nullable=False),
     Column("crop_rotation", Text, nullable=False),
     Column(
@@ -103,6 +104,24 @@ simulation_field_table = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Index("ix_simulation_field_simulation_id", "simulation_id"),
+)
+
+simulation_field_candidates_table = Table(
+    "simulation_field_candidates",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column(
+        "simulation_id",
+        Text,
+        ForeignKey("simulation.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("field_id", Text, nullable=False),
+    Column("data", JSONB, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_simulation_field_candidates_simulation_id", "simulation_id"),
+    Index("ix_simulation_field_candidates_field_id", "field_id"),
 )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
