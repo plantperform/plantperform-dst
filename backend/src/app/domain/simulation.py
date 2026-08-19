@@ -85,7 +85,10 @@ class Simulation(CamelModel):
 
 class CreateSimulationRequest(CamelModel):
     name: str = Field(min_length=1)
-    kategorier: list[str] = Field(default_factory=list)
+    # Kategori-navn -> eksplicit valgte saedskiftevariant-id'er under den
+    # kategori (fra "Nyt scenarie"s fold-ud-liste pr. kategori). En kategori
+    # der ikke skal indgå udelades helt, i stedet for en tom liste.
+    kategori_saedskifter: dict[str, list[str]] = Field(default_factory=dict)
     n_norm_procenter: list[str] = Field(default_factory=list)
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False

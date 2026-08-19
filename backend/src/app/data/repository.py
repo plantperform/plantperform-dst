@@ -242,7 +242,7 @@ def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulat
             farm_id=farm_id,
             name=request.name,
             created_at=datetime.now(UTC).isoformat(),
-            rotation_kategorier=request.kategorier,
+            rotation_kategorier=list(request.kategori_saedskifter.keys()),
             rotation_n_norm_procenter=request.n_norm_procenter,
             eea_fdato=request.eea_fdato,
             eea_precision_dagsbasis=request.eea_precision_dagsbasis,
@@ -275,10 +275,10 @@ def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulat
                 ),
             )
 
-            if request.kategorier and request.n_norm_procenter:
+            if request.kategori_saedskifter and request.n_norm_procenter:
                 jbnr = _jbnr_for_imk_id(session, copied_field.imk_id)
                 candidates = generate_candidates_for_field(
-                    request.kategorier, request.n_norm_procenter, jbnr,
+                    request.kategori_saedskifter, request.n_norm_procenter, jbnr,
                     fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
                 )
                 field_candidates = SimulationFieldCandidates(
