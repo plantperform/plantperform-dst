@@ -1,9 +1,17 @@
-import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
-import { simulationFieldsKey, simulationsKey } from '@/api/hooks'
+import {
+  simulationFieldsKey,
+  simulationsKey,
+  simulationYearlySummaryKey,
+  useSimulationFields,
+  useYearlyOptimizationCandidates,
+} from '@/api/hooks'
 import {
   runSimulationOptimization,
+  runYearlySimulationOptimization,
   updateSimulationConstraints,
 } from '@/api/mutations'
 import type {
@@ -11,6 +19,7 @@ import type {
   FieldRecord,
   OptimizeSimulationResponse,
   Simulation,
+  YearlyOptimizationKategoriOption,
 } from '@/api/types'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
@@ -31,6 +40,29 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
+
+// Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
+// opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
+// Årsoversigt-stripet og "Beregningsgennemgang pr. år"-panelet henter fra
+// separate SWR-nøgler der ellers ville blive stående med data fra FØR
+// kørslen — usynligt for brugeren, men ser ud som om nye
+// begrænsninger/lofter blev ignoreret. Tving dem til at hente igen.
+const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
+  await mutate(simulationYearlySummaryKey(farmId, simulationId))
+  await mutate(
+    (key) =>
+      typeof key === 'string' &&
+      key.startsWith(`/farms/${farmId}/simulations/${simulationId}/fields/`) &&
+      key.endsWith('/candidate-detail'),
+  )
+}
+
+const NUM_ROTATION_YEARS = 8
+const ROTATION_CALENDAR_YEARS = Array.from(
+  { length: NUM_ROTATION_YEARS },
+  (_, index) => ROTATION_START_CALENDAR_YEAR + index,
+)
 
 type FarmInspectorProps = {
   farm: Farm
@@ -49,6 +81,7 @@ export const FarmInspector = ({
 }: FarmInspectorProps) => {
   const [view, setView] = useState<'list' | 'map'>('list')
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
+  const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] = useState(false)
   const [optimizationSummary, setOptimizationSummary] =
     useState<OptimizeSimulationResponse | null>(null)
   const [fieldsSort, setFieldsSort] =
@@ -100,6 +133,14 @@ export const FarmInspector = ({
           {selectedSimulation ? (
             <Button onClick={() => setOptimizeDialogOpen(true)}>Optimér</Button>
           ) : null}
+          {selectedSimulation ? (
+            <Button
+              variant="outline"
+              onClick={() => setYearlyOptimizeDialogOpen(true)}
+            >
+              Års-optimering
+            </Button>
+          ) : null}
           <div className="flex rounded-md border bg-muted/40 p-1">
             <Button
               size="sm"
@@ -132,6 +173,18 @@ export const FarmInspector = ({
           simulation={selectedSimulation}
           open={optimizeDialogOpen}
           onOpenChange={setOptimizeDialogOpen}
+          onError={onError}
+          onOptimized={setOptimizationSummary}
+        />
+      ) : null}
+
+      {selectedSimulation ? (
+        <YearlyOptimizeDialog
+          key={`yearly-${selectedSimulation.id}`}
+          farmId={farm.id}
+          simulation={selectedSimulation}
+          open={yearlyOptimizeDialogOpen}
+          onOpenChange={setYearlyOptimizeDialogOpen}
           onError={onError}
           onOptimized={setOptimizationSummary}
         />
@@ -243,6 +296,7 @@ const OptimizeDialog = ({
         response.fields,
         { revalidate: false },
       )
+      await invalidateOptimizationDisplays(farmId, simulation.id)
       onOptimized(response)
       onOpenChange(false)
       onError(null)
@@ -347,6 +401,336 @@ const OptimizeDialog = ({
             disabled={isSaving || isRunning}
           >
             {isSaving || isRunning ? 'Arbejder...' : 'Gem og kør optimering'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type YearlyOptimizeDialogProps = {
+  farmId: string
+  simulation: Simulation
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onError: (message: string | null) => void
+  onOptimized: (response: OptimizeSimulationResponse) => void
+}
+
+const YearlyOptimizeDialog = ({
+  farmId,
+  simulation,
+  open,
+  onOpenChange,
+  onError,
+  onOptimized,
+}: YearlyOptimizeDialogProps) => {
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(20)
+  const [sameForAllYears, setSameForAllYears] = useState(true)
+  const [uniformMaxNLoad, setUniformMaxNLoad] = useState('')
+  const [perYearMaxNLoad, setPerYearMaxNLoad] = useState<Record<number, string>>({})
+  const [db2SwingPct, setDb2SwingPct] = useState('')
+  const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
+  const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(new Set())
+  const [isRunning, setIsRunning] = useState(false)
+
+  const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
+  const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
+
+  const togglePair = (saedskiftevariant: string, variant: string) => {
+    const key = `${saedskiftevariant}:${variant}`
+    setSelectedPairs((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const toggleExpanded = (kategori: string) => {
+    setExpandedKategorier((current) => {
+      const next = new Set(current)
+      if (next.has(kategori)) next.delete(kategori)
+      else next.add(kategori)
+      return next
+    })
+  }
+
+  const toggleKategoriAll = (kategori: YearlyOptimizationKategoriOption) => {
+    const keys = kategori.saedskifter.map(
+      (s) => `${s.saedskiftevariant}:${s.variant}`,
+    )
+    const allSelected = keys.length > 0 && keys.every((k) => selectedPairs.has(k))
+    setSelectedPairs((current) => {
+      const next = new Set(current)
+      if (allSelected) {
+        for (const key of keys) next.delete(key)
+      } else {
+        for (const key of keys) next.add(key)
+      }
+      return next
+    })
+  }
+
+  // Estimat, ikke en garanti — baseret på ~2ms pr. forskudt (mark × valgt
+  // sædskifte × år-position), målt empirisk under denne funktions
+  // performance-arbejde. Vokser med både antal marker og antal valgte
+  // sædskifter, som brugeren selv styrer.
+  const estimatedSeconds = useMemo(() => {
+    const activeLenByPair = new Map<string, number>()
+    for (const kategori of kategorier) {
+      for (const option of kategori.saedskifter) {
+        activeLenByPair.set(
+          `${option.saedskiftevariant}:${option.variant}`,
+          option.activeLen,
+        )
+      }
+    }
+    let totalShiftUnits = 0
+    for (const pair of selectedPairs) {
+      totalShiftUnits += activeLenByPair.get(pair) ?? 8
+    }
+    return fields.length * totalShiftUnits * 0.002
+  }, [fields.length, kategorier, selectedPairs])
+
+  const runYearlyOptimization = async () => {
+    const maxNLoadByYear: Record<number, number> = {}
+    if (sameForAllYears) {
+      const trimmed = uniformMaxNLoad.trim()
+      if (trimmed !== '') {
+        for (const year of ROTATION_CALENDAR_YEARS) {
+          maxNLoadByYear[year] = Number(trimmed)
+        }
+      }
+    } else {
+      for (const [year, value] of Object.entries(perYearMaxNLoad)) {
+        const trimmed = value.trim()
+        if (trimmed !== '') {
+          maxNLoadByYear[Number(year)] = Number(trimmed)
+        }
+      }
+    }
+    const trimmedSwing = db2SwingPct.trim()
+    const selectedSaedskifter = Array.from(selectedPairs).map((pair) => {
+      const [saedskiftevariant, variant] = pair.split(':')
+      return { saedskiftevariant, variant }
+    })
+
+    setIsRunning(true)
+    try {
+      const response = await runYearlySimulationOptimization(farmId, simulation.id, {
+        timeLimitSeconds,
+        maxNLoadByYear,
+        db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
+        selectedSaedskifter,
+      })
+      await mutate(
+        simulationFieldsKey(farmId, simulation.id),
+        response.fields,
+        { revalidate: false },
+      )
+      await invalidateOptimizationDisplays(farmId, simulation.id)
+      onOptimized(response)
+      onOpenChange(false)
+      onError(null)
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : 'Kunne ikke køre års-optimeringen.',
+      )
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Års-optimering — {simulation.name}</DialogTitle>
+          <DialogDescription>
+            Optimér med udledningsloft pr. kalenderår og en grænse for hvor
+            meget dækningsbidraget må svinge år til år. Vælg herunder hvilke
+            sædskifter der må rykkes frem/tilbage i deres cyklus for at
+            overholde grænserne — du styrer selv afvejningen mellem hvor
+            mange muligheder optimeringen har, og hvor lang tid den tager.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="yearly-time-limit">Tidsgrænse</Label>
+            <Input
+              id="yearly-time-limit"
+              type="number"
+              min="1"
+              max="120"
+              value={timeLimitSeconds}
+              onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">sekunder</p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Maks. tilladt udledning pr. år</Label>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={sameForAllYears}
+                  onChange={(event) => setSameForAllYears(event.target.checked)}
+                />
+                Samme grænse for alle år
+              </label>
+            </div>
+            {sameForAllYears ? (
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  min="0"
+                  value={uniformMaxNLoad}
+                  placeholder="Ingen grænse"
+                  onChange={(event) => setUniformMaxNLoad(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">kg N, gælder hvert år</p>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-4">
+                {ROTATION_CALENDAR_YEARS.map((year) => (
+                  <label key={year} className="space-y-1 text-sm">
+                    <span className="text-xs text-muted-foreground">{year}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={perYearMaxNLoad[year] ?? ''}
+                      placeholder="Ingen grænse"
+                      onChange={(event) =>
+                        setPerYearMaxNLoad((current) => ({
+                          ...current,
+                          [year]: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="yearly-db-swing">Maks. udsving i DB2 mellem år</Label>
+            <Input
+              id="yearly-db-swing"
+              type="number"
+              min="0"
+              value={db2SwingPct}
+              placeholder="Ingen grænse"
+              onChange={(event) => setDb2SwingPct(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              % — intet års samlede DB2 må afvige mere end dette fra
+              gennemsnittet af scenariets år
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Sædskifter der må forskydes</Label>
+            <p className="text-xs text-muted-foreground">
+              Kun sædskifter du vælger her kan rykkes frem/tilbage i deres
+              cyklus for at overholde grænserne ovenfor — resten indgår
+              stadig i optimeringen, men fastholder deres nuværende
+              års-fordeling. Ingen valgt = ingen forskydning, optimeringen
+              vælger da kun blandt de allerede gemte kandidater.
+            </p>
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+              {kategorier.map((kategori) => {
+                const isExpanded = expandedKategorier.has(kategori.kategori)
+                const selectedCount = kategori.saedskifter.filter((s) =>
+                  selectedPairs.has(`${s.saedskiftevariant}:${s.variant}`),
+                ).length
+                const allSelected =
+                  kategori.saedskifter.length > 0 &&
+                  selectedCount === kategori.saedskifter.length
+                const partiallySelected = selectedCount > 0 && !allSelected
+                return (
+                  <div key={kategori.kategori} className="rounded-md">
+                    <div className="flex items-center gap-2 px-2 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(element) => {
+                          if (element) element.indeterminate = partiallySelected
+                        }}
+                        onChange={() => toggleKategoriAll(kategori)}
+                      />
+                      <button
+                        type="button"
+                        className="flex flex-1 items-center justify-between gap-2 rounded-md text-left text-sm hover:bg-muted/50"
+                        onClick={() => toggleExpanded(kategori.kategori)}
+                      >
+                        <span>
+                          {kategori.kategori}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {selectedCount}/{kategori.saedskifter.length} valgt
+                          </span>
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <div className="space-y-1 border-t px-2 py-1.5">
+                        {kategori.saedskifter.map((option) => {
+                          const key = `${option.saedskiftevariant}:${option.variant}`
+                          return (
+                            <label
+                              key={key}
+                              className="flex items-start gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={selectedPairs.has(key)}
+                                onChange={() =>
+                                  togglePair(option.saedskiftevariant, option.variant)
+                                }
+                              />
+                              <span>
+                                {option.cropSequence.join(' - ')}{' '}
+                                <span className="text-muted-foreground">
+                                  (variant {option.variant})
+                                </span>
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedPairs.size} sædskifter valgt · {fields.length} marker ·
+              ~{estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
+              (estimat, ikke en garanti)
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuller
+          </Button>
+          <Button
+            onClick={() => void runYearlyOptimization()}
+            disabled={isRunning}
+          >
+            {isRunning ? 'Arbejder...' : 'Kør års-optimering'}
           </Button>
         </DialogFooter>
       </DialogContent>

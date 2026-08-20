@@ -189,6 +189,42 @@ export type OptimizeSimulationResponse = {
   assignments: RotationAssignment[]
 }
 
+export type SaedskifteVariantRef = {
+  saedskiftevariant: string
+  variant: string
+}
+
+export type YearlyOptimizeSimulationInput = {
+  timeLimitSeconds?: number
+  maxNLoadByYear?: Record<number, number>
+  db2SwingPct?: number | null
+  selectedSaedskifter?: SaedskifteVariantRef[]
+}
+
+export type YearlyOptimizationSaedskifteOption = {
+  saedskiftevariant: string
+  variant: string
+  cropSequence: string[]
+  activeLen: number
+}
+
+export type YearlyOptimizationKategoriOption = {
+  kategori: string
+  saedskifter: YearlyOptimizationSaedskifteOption[]
+}
+
+export type YearlyOptimizeSimulationResponse = {
+  status: OptimizationStatus
+  objectiveDb2: number
+  totalNLoadKg: number
+  totalLeachingKg: number
+  totalFen: number
+  totalDb2ByYear: Record<number, number>
+  totalNLoadByYear: Record<number, number>
+  fields: FieldRecord[]
+  assignments: RotationAssignment[]
+}
+
 export type YearlySummaryEntry = {
   year: number
   totalNLoadKg: number

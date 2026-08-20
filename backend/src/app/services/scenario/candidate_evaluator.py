@@ -27,7 +27,7 @@ from app.services.rotations import afgroede_normer, saedskifte_kategorier, saeds
 # viste/beregnede 8-årige rotation starter ved 2024 — men NLES5's tidstrend-
 # led (τ·(Y−1991)) skal have det RIGTIGE kalenderår pr. position, ikke en
 # fast værdi for alle 8 år. Position 1 = 2024, position 2 = 2025, osv.
-_START_CALENDAR_YEAR = 2024
+START_CALENDAR_YEAR = 2024
 
 
 @lru_cache(maxsize=100_000)
@@ -162,7 +162,7 @@ def evaluate_sequence_for_mark(
             m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
             irrigated=irrigated,
             fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-            y=_START_CALENDAR_YEAR + i,
+            y=START_CALENDAR_YEAR + i,
         )
         db = calculate_db(
             this_code, driftsform, jbnr,
@@ -279,9 +279,18 @@ def evaluate_with_overrides(
         afgrode_seq[override.position] = override.afgrode_kode
 
     if overrides or start_year != 1:
+        suffix_parts = []
+        if start_year != 1:
+            suffix_parts.append(f"sy{start_year}")
+        if overrides:
+            ov_signature = ",".join(
+                f"{o.position}:{o.afgrode_kode}"
+                for o in sorted(overrides, key=lambda o: o.position)
+            )
+            suffix_parts.append(f"ov[{ov_signature}]")
         result_ref = RotationCandidateRef(
             saedskiftevariant=base_ref.saedskiftevariant,
-            variant=f"{base_ref.variant}+manuel",
+            variant=f"{base_ref.variant}+manuel-{'-'.join(suffix_parts)}",
             n_norm_pct=base_ref.n_norm_pct,
         )
     else:

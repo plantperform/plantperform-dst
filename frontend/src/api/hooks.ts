@@ -11,6 +11,7 @@ import type {
   RotationCandidateOption,
   RotationKategoriOption,
   Simulation,
+  YearlyOptimizationKategoriOption,
   YearlySummaryEntry,
 } from '@/api/types'
 
@@ -142,3 +143,21 @@ export const afgrodeKoderKey = (farmId?: string) => {
 
 export const useAfgrodeKoder = (farmId?: string) =>
   useSWR<AfgrodeKodeOption[]>(afgrodeKoderKey(farmId), fetcher)
+
+export const yearlyOptimizationCandidatesKey = (
+  farmId?: string,
+  simulationId?: string,
+) => {
+  if (!farmId || !simulationId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/yearly-optimization-candidates`
+}
+
+export const useYearlyOptimizationCandidates = (
+  farmId?: string,
+  simulationId?: string,
+) =>
+  useSWR<YearlyOptimizationKategoriOption[]>(
+    yearlyOptimizationCandidatesKey(farmId, simulationId),
+    fetcher,
+  )
