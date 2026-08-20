@@ -160,6 +160,7 @@ def apply_manual_rotation(
     field_id: str,
     base_ref: RotationCandidateRef,
     overrides: list[RotationPositionOverride],
+    start_year: int = 1,
 ) -> FieldRecord | None:
     """"Rediger manuelt" (Fase 10) — genberegner markens rotation ud fra
     base_ref + evt. enkelt-positions-overskrivninger, gemmer resultatet som
@@ -185,6 +186,7 @@ def apply_manual_rotation(
     candidate = candidate_evaluator.evaluate_with_overrides(
         base_ref, overrides, jbnr=candidates_row.jbnr, kategori=kategorier[0],
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
+        start_year=start_year,
     )
     if candidate is None:
         return None

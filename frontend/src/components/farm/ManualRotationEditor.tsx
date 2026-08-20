@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -70,6 +71,7 @@ export const ManualRotationEditor = ({
 
   const [baseRef, setBaseRef] = useState<RotationCandidateRef | null>(null)
   const [overrides, setOverrides] = useState<RotationPositionOverride[]>([])
+  const [startYear, setStartYear] = useState(1)
   const [preview, setPreview] = useState<RotationCandidateEvaluation | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
@@ -85,6 +87,7 @@ export const ManualRotationEditor = ({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBaseRef(current.baseRef ?? current.ref)
     setOverrides(current.overrides ?? [])
+    setStartYear(current.startYear ?? 1)
   }, [open, current])
 
   const availableKategorier = useMemo(
@@ -127,13 +130,18 @@ export const ManualRotationEditor = ({
     ).filter((n) => simulation.rotationNNormProcenter.includes(n))
   }, [allRefs, baseRef, simulation.rotationNNormProcenter])
 
-  const runPreview = (ref: RotationCandidateRef, overrideList: RotationPositionOverride[]) => {
+  const runPreview = (
+    ref: RotationCandidateRef,
+    overrideList: RotationPositionOverride[],
+    year: number,
+  ) => {
     const id = ++requestId.current
     setIsPreviewing(true)
     setPreviewError(null)
     previewFieldRotation(farmId, simulationId, field.id, {
       baseRef: ref,
       overrides: overrideList,
+      startYear: year,
     })
       .then((result) => {
         if (id !== requestId.current) return
@@ -153,18 +161,20 @@ export const ManualRotationEditor = ({
 
   useEffect(() => {
     // Kick off a fresh live-recalculation request whenever the chosen base
-    // sædskifte or the per-year overrides change — the loading/result state
-    // it sets is itself the synchronization point with this async request.
+    // sædskifte, startår eller de per-år-rettelser ændres — indlæsnings-/
+    // resultat-tilstanden den sætter er selv synkroniseringspunktet med
+    // denne asynkrone anmodning.
     if (!baseRef) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    runPreview(baseRef, overrides)
+    runPreview(baseRef, overrides, startYear)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseRef, overrides])
+  }, [baseRef, overrides, startYear])
 
   const changeBase = (next: RotationCandidateRef) => {
     if (baseRef && refsEqual(baseRef, next)) return
     setBaseRef(next)
     setOverrides([])
+    setStartYear(1)
   }
 
   const setPositionOverride = (position: number, afgrodeKode: number) => {
@@ -175,6 +185,11 @@ export const ManualRotationEditor = ({
   }
 
   const resetOverrides = () => setOverrides([])
+
+  const shiftStartYear = (delta: number) => {
+    setStartYear((prev) => prev + delta)
+    setOverrides([])
+  }
 
   const close = () => {
     setPreview(null)
@@ -189,6 +204,7 @@ export const ManualRotationEditor = ({
       const updatedField = await applyFieldRotation(farmId, simulationId, field.id, {
         baseRef,
         overrides,
+        startYear,
       })
       await mutate(
         simulationFieldsKey(farmId, simulationId),
@@ -314,7 +330,8 @@ export const ManualRotationEditor = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  Klik en afgrøde for at rette den for netop det år — resten af
+                  Klik en afgrøde for at rette den for netop det år, eller ryk
+                  hele sædskiftet frem/tilbage med pilene — resten af
                   sædskiftet forbliver som valgt ovenfor.
                 </span>
                 {overrides.length > 0 ? (
@@ -323,31 +340,53 @@ export const ManualRotationEditor = ({
                   </Button>
                 ) : null}
               </div>
-              <div className="grid gap-2 sm:grid-cols-4">
-                {years.map((y, index) => (
-                  <label key={index} className="space-y-1 text-sm">
-                    <span className="text-xs text-muted-foreground">
-                      {ROTATION_START_CALENDAR_YEAR + index}
-                    </span>
-                    <select
-                      className={`w-full rounded-md border bg-background px-2 py-1.5 text-sm ${
-                        overrides.some((o) => o.position === index)
-                          ? 'border-primary'
-                          : ''
-                      }`}
-                      value={y.year.afgrodeKode}
-                      onChange={(event) =>
-                        setPositionOverride(index, Number(event.target.value))
-                      }
-                    >
-                      {afgrodeKoder.map((a) => (
-                        <option key={a.code} value={a.code}>
-                          {a.navn}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 shrink-0 p-0"
+                  onClick={() => shiftStartYear(1)}
+                  aria-label="Ryk sædskiftet tilbage"
+                  title="Ryk sædskiftet tilbage — vis året før for hver position"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <div className="grid flex-1 gap-2 sm:grid-cols-4">
+                  {years.map((y, index) => (
+                    <label key={index} className="space-y-1 text-sm">
+                      <span className="text-xs text-muted-foreground">
+                        {ROTATION_START_CALENDAR_YEAR + index}
+                      </span>
+                      <select
+                        className={`w-full rounded-md border bg-background px-2 py-1.5 text-sm ${
+                          overrides.some((o) => o.position === index)
+                            ? 'border-primary'
+                            : ''
+                        }`}
+                        value={y.year.afgrodeKode}
+                        onChange={(event) =>
+                          setPositionOverride(index, Number(event.target.value))
+                        }
+                      >
+                        {afgrodeKoder.map((a) => (
+                          <option key={a.code} value={a.code}>
+                            {a.navn}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 shrink-0 p-0"
+                  onClick={() => shiftStartYear(-1)}
+                  aria-label="Ryk sædskiftet frem"
+                  title="Ryk sædskiftet frem — vis året efter for hver position"
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
               </div>
             </div>
           ) : null}

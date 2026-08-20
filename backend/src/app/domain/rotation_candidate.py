@@ -59,6 +59,7 @@ class RotationCandidateEvaluation(CamelModel):
     avg_fen: float
     base_ref: RotationCandidateRef | None = None
     overrides: list[RotationPositionOverride] = Field(default_factory=list)
+    start_year: int = 1
 
 
 class SimulationFieldCandidates(CamelModel):

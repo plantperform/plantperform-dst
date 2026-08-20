@@ -111,6 +111,7 @@ def evaluate_sequence_for_mark(
     precision_dagsbasis: bool = False,
     base_ref: RotationCandidateRef | None = None,
     overrides: list[RotationPositionOverride] = (),
+    start_year: int = 1,
 ) -> RotationCandidateEvaluation:
     """Kernen af kandidat-evaluering: 8 positioner, hver med udvaskning + DB,
     samt gennemsnit over én fuld rotationscyklus (active_len). Tager de
@@ -201,6 +202,7 @@ def evaluate_sequence_for_mark(
         avg_fen=avg_fen,
         base_ref=base_ref,
         overrides=list(overrides),
+        start_year=start_year,
     )
 
 
@@ -234,6 +236,7 @@ def evaluate_candidate_for_mark(
     return evaluate_sequence_for_mark(
         ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
         jbnr, kategori, irrigated, fdato, precision_dagsbasis,
+        start_year=start_year,
     )
 
 
@@ -245,18 +248,25 @@ def evaluate_with_overrides(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    start_year: int = 1,
 ) -> RotationCandidateEvaluation | None:
     """Som evaluate_candidate_for_mark, men overskriver hovedafgrøden i én
-    eller flere positioner efter opslag i biblioteket — bruges af Fase 10's
-    "Rediger manuelt" (levende beregning). Udlæg/virkemiddel ved den
-    overskrevne position røres ikke, kun hovedafgrøden.
+    eller flere positioner efter opslag i biblioteket, og/eller forskyder
+    rotationens startpunkt i cyklussen (start_year, 1-baseret, cyklisk —
+    "ryk sædskiftet frem/tilbage", jf. den gamle apps "Startår i rotation")
+    — bruges af Fase 10's "Rediger manuelt" (levende beregning). Udlæg/
+    virkemiddel ved en overskrevet position røres ikke, kun hovedafgrøden.
 
-    result.ref bliver base_ref uændret hvis overrides er tom (så et "preview
-    uden ændringer" er identisk med et almindeligt bibliotek-opslag);
-    ellers en syntetisk, kollisionsfri ref (variant-suffiks "+manuel").
+    result.ref bliver base_ref uændret hvis hverken overrides eller
+    start_year er ændret (så et "preview uden ændringer" er identisk med et
+    almindeligt bibliotek-opslag); ellers en syntetisk, kollisionsfri ref
+    (variant-suffiks "+manuel") — nødvendigt også for en ren start_year-
+    forskydning, da den afgrødesekvens der reelt beregnes ellers ville dele
+    ref-id med den (anderledes) start_year=1-kandidat i den gemte
+    kandidatmængde.
     """
     raw_rotation = saedskifte_library.generate_rotation(
-        base_ref.saedskiftevariant, base_ref.variant, base_ref.n_norm_pct, 1
+        base_ref.saedskiftevariant, base_ref.variant, base_ref.n_norm_pct, start_year
     )
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
@@ -268,7 +278,7 @@ def evaluate_with_overrides(
     for override in overrides:
         afgrode_seq[override.position] = override.afgrode_kode
 
-    if overrides:
+    if overrides or start_year != 1:
         result_ref = RotationCandidateRef(
             saedskiftevariant=base_ref.saedskiftevariant,
             variant=f"{base_ref.variant}+manuel",
@@ -280,7 +290,7 @@ def evaluate_with_overrides(
     return evaluate_sequence_for_mark(
         result_ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
         jbnr, kategori, irrigated, fdato, precision_dagsbasis,
-        base_ref=base_ref, overrides=overrides,
+        base_ref=base_ref, overrides=overrides, start_year=start_year,
     )
 
 
