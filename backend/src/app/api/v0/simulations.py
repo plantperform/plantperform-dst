@@ -214,6 +214,7 @@ async def get_farm_simulation_field_candidate_detail(
 class RecomputeFieldRotationRequest(CamelModel):
     base_ref: RotationCandidateRef
     overrides: list[RotationPositionOverride] = Field(default_factory=list)
+    start_year: int = 1
 
 
 @router.post(
@@ -250,6 +251,7 @@ async def post_farm_simulation_field_preview_rotation(
         kategori=kategorier[0],
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
+        start_year=request.start_year,
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
@@ -272,7 +274,8 @@ async def post_farm_simulation_field_apply_rotation(
     marken til dette valg (allowed_rotation_ids) indtil brugeren låser op."""
     try:
         field = apply_manual_rotation(
-            farm_id, simulation_id, field_id, request.base_ref, request.overrides,
+            farm_id, simulation_id, field_id,
+            request.base_ref, request.overrides, request.start_year,
         )
     except ManualRotationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulation or field not found") from error

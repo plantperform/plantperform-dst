@@ -240,11 +240,13 @@ export type RotationCandidateEvaluation = {
   avgFen: number
   baseRef?: RotationCandidateRef | null
   overrides: RotationPositionOverride[]
+  startYear: number
 }
 
 export type RecomputeFieldRotationInput = {
   baseRef: RotationCandidateRef
   overrides: RotationPositionOverride[]
+  startYear?: number
 }
 
 export type AfgrodeKodeOption = {
