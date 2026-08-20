@@ -226,6 +226,11 @@ export type RotationCandidateYearResult = {
   dbDetail: Record<string, any>
 }
 
+export type RotationPositionOverride = {
+  position: number
+  afgrodeKode: number
+}
+
 export type RotationCandidateEvaluation = {
   ref: RotationCandidateRef
   activeLen: number
@@ -233,6 +238,18 @@ export type RotationCandidateEvaluation = {
   avgLeachingKgNHa: number
   avgDbKrHa: number
   avgFen: number
+  baseRef?: RotationCandidateRef | null
+  overrides: RotationPositionOverride[]
+}
+
+export type RecomputeFieldRotationInput = {
+  baseRef: RotationCandidateRef
+  overrides: RotationPositionOverride[]
+}
+
+export type AfgrodeKodeOption = {
+  code: number
+  navn: string
 }
 
 export type FieldRotationCandidates = {

@@ -10,6 +10,7 @@ from app.data.repository import (
     delete_simulation,
     get_simulation,
     get_simulation_field_candidate_detail,
+    list_simulation_field_candidates,
     list_simulation_fields,
     list_simulations,
     update_simulation_constraints,
@@ -17,19 +18,27 @@ from app.data.repository import (
 )
 from app.domain.base import CamelModel
 from app.domain.field import FieldRecord, UpdateFieldRequest
-from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.rotation_candidate import (
+    RotationCandidateEvaluation,
+    RotationCandidateRef,
+    RotationPositionOverride,
+)
 from app.domain.simulation import (
     CreateSimulationRequest,
     OptimizationConstraints,
     Simulation,
 )
 from app.services.optimization.orchestrator import (
+    ManualRotationNotFoundError,
     OptimizationInfeasibleError,
     OptimizationNotFoundError,
     OptimizationUnknownError,
+    apply_manual_rotation,
     compute_yearly_summary,
     run_optimization,
 )
+from app.services.rotations import saedskifte_kategorier
+from app.services.scenario.candidate_evaluator import evaluate_with_overrides
 
 router = APIRouter(prefix="/farms/{farm_id}/simulations", tags=["simulations"])
 
@@ -200,6 +209,78 @@ async def get_farm_simulation_field_candidate_detail(
         raise HTTPException(status_code=404, detail="Candidate detail not found")
 
     return detail
+
+
+class RecomputeFieldRotationRequest(CamelModel):
+    base_ref: RotationCandidateRef
+    overrides: list[RotationPositionOverride] = Field(default_factory=list)
+
+
+@router.post(
+    "/{simulation_id}/fields/{field_id}/preview-rotation",
+    response_model=RotationCandidateEvaluation,
+)
+async def post_farm_simulation_field_preview_rotation(
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    request: RecomputeFieldRotationRequest,
+) -> RotationCandidateEvaluation:
+    """Levende beregning (Fase 10) — genberegner en rotation for én mark ud
+    fra base_ref + evt. enkelt-positions-overskrivninger, uden at gemme
+    noget. Bruges af "Rediger manuelt"-panelet til at vise resultatet af en
+    ændring, før brugeren trykker "Gem"."""
+    simulation = get_simulation(farm_id, simulation_id)
+    field_candidates = list_simulation_field_candidates(farm_id, simulation_id)
+    if simulation is None or field_candidates is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    candidates_row = next((fc for fc in field_candidates if fc.field_id == field_id), None)
+    if candidates_row is None:
+        raise HTTPException(status_code=404, detail="Field not found")
+
+    kategorier = saedskifte_kategorier.kategorier_for_saedskifte(request.base_ref.saedskiftevariant)
+    if not kategorier:
+        raise HTTPException(status_code=422, detail="Ukendt saedskiftevariant")
+
+    candidate = evaluate_with_overrides(
+        request.base_ref,
+        request.overrides,
+        jbnr=candidates_row.jbnr,
+        kategori=kategorier[0],
+        fdato=simulation.eea_fdato,
+        precision_dagsbasis=simulation.eea_precision_dagsbasis,
+    )
+    if candidate is None:
+        raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
+
+    return candidate
+
+
+@router.post(
+    "/{simulation_id}/fields/{field_id}/apply-rotation",
+    response_model=FieldRecord,
+)
+async def post_farm_simulation_field_apply_rotation(
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    request: RecomputeFieldRotationRequest,
+) -> FieldRecord:
+    """Gemmer resultatet af en manuel rettelse (samme genberegning som
+    preview-rotation), skriver den til marken som Optimér ville, og låser
+    marken til dette valg (allowed_rotation_ids) indtil brugeren låser op."""
+    try:
+        field = apply_manual_rotation(
+            farm_id, simulation_id, field_id, request.base_ref, request.overrides,
+        )
+    except ManualRotationNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Simulation or field not found") from error
+
+    if field is None:
+        raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
+
+    return field
 
 
 @router.get(
