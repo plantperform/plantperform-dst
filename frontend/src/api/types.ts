@@ -307,6 +307,11 @@ export type RotationPositionOverride = {
   afgrodeKode: number
 }
 
+export type RotationPositionOverride = {
+  position: number
+  afgrodeKode: number
+}
+
 export type RotationCandidateEvaluation = {
   ref: RotationCandidateRef
   activeLen: number
