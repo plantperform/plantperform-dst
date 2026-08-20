@@ -15,6 +15,8 @@ import type {
   Simulation,
   UpdateFarmInput,
   UpdateFieldInput,
+  YearlyOptimizeSimulationInput,
+  YearlyOptimizeSimulationResponse,
 } from '@/api/types'
 
 export const createFarm = (input: CreateFarmInput) =>
@@ -74,6 +76,16 @@ export const runSimulationOptimization = (
 ) =>
   postJson<OptimizeSimulationResponse, OptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize`,
+    input,
+  )
+
+export const runYearlySimulationOptimization = (
+  farmId: string,
+  simulationId: string,
+  input: YearlyOptimizeSimulationInput = {},
+) =>
+  postJson<YearlyOptimizeSimulationResponse, YearlyOptimizeSimulationInput>(
+    `/farms/${farmId}/simulations/${simulationId}/optimize-yearly`,
     input,
   )
 
