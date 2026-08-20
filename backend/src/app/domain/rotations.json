@@ -1,0 +1,572 @@
+[
+  {
+    "id": "rotation_1",
+    "name": "Brak",
+    "crops": ["FALLOW", "FALLOW", "FALLOW", "FALLOW", "FALLOW", "FALLOW", "FALLOW", "FALLOW"]
+  },
+  {
+    "id": "rotation_2",
+    "name": "Konventionel Plante 2",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_3",
+    "name": "Konventionel Plante 3",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_4",
+    "name": "Konventionel Plante 4",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_5",
+    "name": "Konventionel Plante 5",
+    "crops": ["RAPE", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "RAPE", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_6",
+    "name": "Konventionel Plante 6",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_WINTER", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_VEG_BEAN", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_7",
+    "name": "Konventionel Plante 7",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_8",
+    "name": "Konventionel Plante 8",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_9",
+    "name": "Konventionel Plante 9",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_SEED", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_10",
+    "name": "Konventionel Plante 10",
+    "crops": ["CEREAL_WINTER", "BEET", "CEREAL_SPRING", "GRASS_SEED", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "BEET"]
+  },
+  {
+    "id": "rotation_11",
+    "name": "Konventionel Plante 11",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_SEED", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_12",
+    "name": "Konventionel Plante 12",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_WINTER", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_13",
+    "name": "Konventionel Plante 13",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_14",
+    "name": "Konventionel Plante 14",
+    "crops": ["RAPE", "CEREAL_WINTER", "CEREAL_VEG_BEAN", "GRASS_SEED", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_15",
+    "name": "Konventionel Plante 15",
+    "crops": ["RAPE", "CEREAL_WINTER", "GRASS_SEED", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_16",
+    "name": "Konventionel Plante 16",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_SEED", "GRASS_SEED"]
+  },
+  {
+    "id": "rotation_17",
+    "name": "Konventionel Plante 17",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_18",
+    "name": "Konventionel Plante 18",
+    "crops": ["CEREAL_WINTER", "RAPE", "CEREAL_WINTER", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_19",
+    "name": "Konventionel Plante 19",
+    "crops": ["CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS"]
+  },
+  {
+    "id": "rotation_20",
+    "name": "Konventionel Plante 20",
+    "crops": ["CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS"]
+  },
+  {
+    "id": "rotation_21",
+    "name": "Konventionel Plante 21",
+    "crops": ["CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_WINTER_AFTER_GRASS"]
+  },
+  {
+    "id": "rotation_22",
+    "name": "Konventionel Plante 22",
+    "crops": ["CEREAL_WINTER", "BEET", "CEREAL_SPRING", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER", "BEET", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_23",
+    "name": "Konventionel Plante 23",
+    "crops": ["CEREAL_WINTER", "BEET", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_WINTER", "BEET", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_24",
+    "name": "Konventionel Plante 24",
+    "crops": ["MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_25",
+    "name": "Konventionel Plante 25",
+    "crops": ["CEREAL_SPRING", "GRASS_SEED", "GRASS_SEED", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_26",
+    "name": "Konventionel Plante 26",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_27",
+    "name": "Konventionel Plante 27",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_28",
+    "name": "Konventionel Plante 28",
+    "crops": ["CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_29",
+    "name": "Konventionel Plante 29",
+    "crops": ["CEREAL_WINTER", "BEET", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "BEET"]
+  },
+  {
+    "id": "rotation_30",
+    "name": "Konventionel Plante 30",
+    "crops": ["MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_31",
+    "name": "Konventionel Plante 31",
+    "crops": ["MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_32",
+    "name": "Konventionel Plante 32",
+    "crops": ["MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_33",
+    "name": "Konventionel Plante 33",
+    "crops": ["CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_34",
+    "name": "Konventionel Plante 34",
+    "crops": ["CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_35",
+    "name": "Konventionel Plante 35",
+    "crops": ["CEREAL_WINTER_AFTER_GRASS", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_36",
+    "name": "Konventionel Plante 36",
+    "crops": ["CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_201",
+    "name": "Konventionel Kvæg 201",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_202",
+    "name": "Konventionel Kvæg 202",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_203",
+    "name": "Konventionel Kvæg 203",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_204",
+    "name": "Konventionel Kvæg 204",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_205",
+    "name": "Konventionel Kvæg 205",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_206",
+    "name": "Konventionel Kvæg 206",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_207",
+    "name": "Konventionel Kvæg 207",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_208",
+    "name": "Konventionel Kvæg 208",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_209",
+    "name": "Konventionel Kvæg 209",
+    "crops": ["CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_210",
+    "name": "Konventionel Kvæg 210",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_211",
+    "name": "Konventionel Kvæg 211",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_212",
+    "name": "Konventionel Kvæg 212",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_213",
+    "name": "Konventionel Kvæg 213",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_214",
+    "name": "Konventionel Kvæg 214",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_215",
+    "name": "Konventionel Kvæg 215",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_216",
+    "name": "Konventionel Kvæg 216",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_217",
+    "name": "Konventionel Kvæg 217",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_218",
+    "name": "Konventionel Kvæg 218",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_219",
+    "name": "Konventionel Kvæg 219",
+    "crops": ["CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_220",
+    "name": "Konventionel Kvæg 220",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "RAPE", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_221",
+    "name": "Konventionel Kvæg 221",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_222",
+    "name": "Konventionel Kvæg 222",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "BEET", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_223",
+    "name": "Konventionel Kvæg 223",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_224",
+    "name": "Konventionel Kvæg 224",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_225",
+    "name": "Konventionel Kvæg 225",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_226",
+    "name": "Konventionel Kvæg 226",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_227",
+    "name": "Konventionel Kvæg 227",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_228",
+    "name": "Konventionel Kvæg 228",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_229",
+    "name": "Konventionel Kvæg 229",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_230",
+    "name": "Konventionel Kvæg 230",
+    "crops": ["CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_231",
+    "name": "Konventionel Kvæg 231",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_232",
+    "name": "Konventionel Kvæg 232",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_233",
+    "name": "Konventionel Kvæg 233",
+    "crops": ["CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_WINTER", "RAPE", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_234",
+    "name": "Konventionel Kvæg 234",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_235",
+    "name": "Konventionel Kvæg 235",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_236",
+    "name": "Konventionel Kvæg 236",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_237",
+    "name": "Konventionel Kvæg 237",
+    "crops": ["CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_238",
+    "name": "Konventionel Kvæg 238",
+    "crops": ["CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_SPRING", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_239",
+    "name": "Konventionel Kvæg 239",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_240",
+    "name": "Konventionel Kvæg 240",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "GRASS_SEED", "CEREAL_SPRING_AFTER_GRASS"]
+  },
+  {
+    "id": "rotation_241",
+    "name": "Konventionel Kvæg 241",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_242",
+    "name": "Konventionel Kvæg 242",
+    "crops": ["MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO", "MAIZE_POTATO"]
+  },
+  {
+    "id": "rotation_243",
+    "name": "Konventionel Kvæg 243",
+    "crops": ["CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_244",
+    "name": "Konventionel Kvæg 244",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_245",
+    "name": "Konventionel Kvæg 245",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_246",
+    "name": "Konventionel Kvæg 246",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_247",
+    "name": "Konventionel Kvæg 247",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_302",
+    "name": "Økologisk 107N 302",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_303",
+    "name": "Økologisk 107N 303",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_304",
+    "name": "Økologisk 107N 304",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_305",
+    "name": "Økologisk 107N 305",
+    "crops": ["CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_306",
+    "name": "Økologisk 107N 306",
+    "crops": ["CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_307",
+    "name": "Økologisk 107N 307",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_308",
+    "name": "Økologisk 107N 308",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_309",
+    "name": "Økologisk 107N 309",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_310",
+    "name": "Økologisk 107N 310",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_LEGUME_MIX"]
+  },
+  {
+    "id": "rotation_311",
+    "name": "Økologisk 107N 311",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_312",
+    "name": "Økologisk 107N 312",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "CEREAL_SPRING", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_313",
+    "name": "Økologisk 107N 313",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "MAIZE_POTATO", "RAPE", "CEREAL_VEG_BEAN", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_314",
+    "name": "Økologisk 107N 314",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "MAIZE_POTATO", "CEREAL_WINTER", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_315",
+    "name": "Økologisk 107N 315",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_316",
+    "name": "Økologisk 107N 316",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "RAPE", "CEREAL_WINTER", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_317",
+    "name": "Økologisk 107N 317",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_318",
+    "name": "Økologisk 107N 318",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_WINTER_AFTER_GRASS", "CEREAL_LEGUME_MIX", "GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_319",
+    "name": "Økologisk 107N 319",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_WINTER", "CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_320",
+    "name": "Økologisk 107N 320",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_WINTER", "CEREAL_VEG_BEAN", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_321",
+    "name": "Økologisk 107N 321",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_322",
+    "name": "Økologisk 107N 322",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_323",
+    "name": "Økologisk 107N 323",
+    "crops": ["CEREAL_SPRING", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_324",
+    "name": "Økologisk 107N 324",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_SPRING", "MAIZE_POTATO", "CEREAL_VEG_BEAN"]
+  },
+  {
+    "id": "rotation_325",
+    "name": "Økologisk 107N 325",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_SPRING", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_326",
+    "name": "Økologisk 107N 326",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_VEG_BEAN", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_327",
+    "name": "Økologisk 107N 327",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "GRASS_CLOVER", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_SPRING", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_328",
+    "name": "Økologisk 107N 328",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_SPRING", "CEREAL_SPRING", "RAPE", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_SPRING"]
+  },
+  {
+    "id": "rotation_329",
+    "name": "Økologisk 107N 329",
+    "crops": ["GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "RAPE", "CEREAL_WINTER", "CEREAL_VEG_BEAN", "GRASS_CLOVER", "GRASS_CLOVER"]
+  },
+  {
+    "id": "rotation_330",
+    "name": "Økologisk 107N 330",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "BEET", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_331",
+    "name": "Økologisk 107N 331",
+    "crops": ["CEREAL_WINTER", "GRASS_CLOVER", "CEREAL_SPRING_AFTER_GRASS", "CEREAL_SPRING", "BEET", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER"]
+  },
+  {
+    "id": "rotation_332",
+    "name": "Økologisk 107N 332",
+    "crops": ["CEREAL_VEG_BEAN", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_SPRING", "CEREAL_WINTER", "CEREAL_SPRING", "CEREAL_VEG_BEAN", "CEREAL_SPRING"]
+  }
+]

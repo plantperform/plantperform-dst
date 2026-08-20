@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Pixi
+.pixi/
+
+# Local environment and raw registry data
+.env
+.env.*
+!.env.default
+backend/database/data/raw/*
+!backend/database/data/raw/.gitkeep
+postgres-data/
+
+# Node
+node_modules/
+dist/
+build/
+*.local
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
