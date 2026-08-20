@@ -315,6 +315,36 @@ def list_simulation_field_candidates(
         return [_load(SimulationFieldCandidates, data) for data in rows]
 
 
+def append_manual_field_candidate(
+    farm_id: str, simulation_id: str, field_id: str, candidate: RotationCandidateEvaluation,
+) -> None:
+    """Føjer en manuelt genberegnet kandidat (Fase 10 — "Rediger manuelt")
+    til markens gemte kandidatmængde. Erstatter en evt. tidligere kandidat
+    med samme ref-id i stedet for at ophobe en historik — kun "seneste
+    manuelle rettelse for denne mark" er meningsfuld at beholde."""
+    with SessionLocal.begin() as session:
+        row = session.execute(
+            select(simulation_field_candidates_table.c.id, simulation_field_candidates_table.c.data)
+            .where(
+                simulation_field_candidates_table.c.simulation_id == simulation_id,
+                simulation_field_candidates_table.c.field_id == field_id,
+            ),
+        ).one_or_none()
+        if row is None:
+            return
+
+        row_id, data = row
+        field_candidates = _load(SimulationFieldCandidates, data)
+        ref_id = candidate.ref.to_id()
+        kept = [c for c in field_candidates.candidates if c.ref.to_id() != ref_id]
+        updated = field_candidates.model_copy(update={"candidates": [*kept, candidate]})
+        session.execute(
+            update(simulation_field_candidates_table)
+            .where(simulation_field_candidates_table.c.id == row_id)
+            .values(data=_dump(updated)),
+        )
+
+
 class FieldNotOptimizedError(Exception):
     """Marken har endnu ikke et vindende sædskifte (rotation_id) — kør Optimér først."""
 

@@ -11,15 +11,16 @@ type LinearRing = list[Position]
 
 
 def default_allowed_rotation_ids() -> list[str]:
-    from app.domain.rotation_library import default_allowed_rotation_ids as get_default
-
-    return get_default()
+    """Tom liste = ingen begrænsning (alle beregnede kandidater kan vælges af
+    Optimér). Et ikke-tomt sæt låser marken til netop disse kandidat-ref-id'er
+    (jf. Fase 10 — "Rediger manuelt" og den tilhørende lås-knap)."""
+    return []
 
 
 def validate_rotation_ids(value: list[str]) -> list[str]:
-    from app.domain.rotation_library import validate_allowed_rotation_ids
-
-    return validate_allowed_rotation_ids(value)
+    if len(set(value)) != len(value):
+        raise ValueError("Allowed rotations must be unique")
+    return value
 
 
 class GeoJSONPolygon(CamelModel):

@@ -50,6 +50,11 @@ class RotationKategoriOption(CamelModel):
     saedskifter: list[SaedskifteOption]
 
 
+class AfgrodeKodeOption(CamelModel):
+    code: int
+    navn: str
+
+
 def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
     """Billig afgrødesekvens-forhåndsvisning for én saedskiftevariant — bruger
     første tilgængelige (variant, N-norm%), ingen NLES5/DB2-beregning. Til
@@ -104,6 +109,22 @@ async def list_rotation_n_norm_procenter() -> list[str]:
     denne omgang — en forenkling, jf. planen."""
     values = {n for _s, _v, n in saedskifte_library.list_all_candidate_refs()}
     return sorted(values, key=int)
+
+
+@router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
+async def list_afgrode_koder() -> list[AfgrodeKodeOption]:
+    """Alle rigtige afgrødekoder (Bilag 1/NUAR) med en gyldig NUAR M-kode
+    (dvs. reelt brugbare som hovedafgrøde i en NLES5-beregning), til
+    afgrøde-dropdownen i "Rediger manuelt" (Fase 10 — levende beregning),
+    sorteret på navn. Et lille mindretal koder uden M-kode (fx administrative
+    arealtyper) udelades, da de ikke kan indgå i en beregning."""
+    names = afgroede_normer.crop_names_from_normer()
+    options = [
+        AfgrodeKodeOption(code=code, navn=navn)
+        for code, navn in names.items()
+        if afgroede_normer.lookup_crop_params(code).get("M") is not None
+    ]
+    return sorted(options, key=lambda o: o.navn)
 
 
 @router.get("", response_model=list[RotationCandidateOption])

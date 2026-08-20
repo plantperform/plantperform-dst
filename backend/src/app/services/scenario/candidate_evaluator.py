@@ -16,6 +16,7 @@ from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
     RotationCandidateYearResult,
+    RotationPositionOverride,
     RotationYear,
 )
 from app.services.economics.db_calculator import calculate_db
@@ -97,34 +98,28 @@ def compute_n_inputs(
     }
 
 
-def evaluate_candidate_for_mark(
-    ref: RotationCandidateRef,
+def evaluate_sequence_for_mark(
+    result_ref: RotationCandidateRef,
+    afgrode_seq: list[int | None],
+    udlaeg_seq: list[int | None],
+    udlaeg_navn_seq: list[str | None],
+    active_len: int,
     jbnr: int,
     kategori: str,
-    start_year: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
-) -> RotationCandidateEvaluation | None:
-    """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
-    DB, samt gennemsnit over én fuld rotationscyklus (active_len).
-
-    Returnerer None hvis (saedskiftevariant, variant, n_norm_pct) ikke findes
-    i datasættet (fx en N-norm% der ikke er defineret for denne variant) —
-    kaldere skal springe disse over, ikke fejle.
+    base_ref: RotationCandidateRef | None = None,
+    overrides: list[RotationPositionOverride] = (),
+) -> RotationCandidateEvaluation:
+    """Kernen af kandidat-evaluering: 8 positioner, hver med udvaskning + DB,
+    samt gennemsnit over én fuld rotationscyklus (active_len). Tager de
+    færdige afgrøde-/udlægssekvenser direkte i stedet for selv at slå dem op
+    i biblioteket — genbrugt af både evaluate_candidate_for_mark (bibliotek)
+    og evaluate_with_overrides (Fase 10 — manuel enkelt-position-rettelse).
     """
-    raw_rotation = saedskifte_library.generate_rotation(
-        ref.saedskiftevariant, ref.variant, ref.n_norm_pct, start_year
-    )
-    active_len = saedskifte_library.rotation_active_len(raw_rotation)
-    if active_len == 0:
-        return None
-    n_norm_pct = float(ref.n_norm_pct)
+    n_norm_pct = float(result_ref.n_norm_pct)
     driftsform = saedskifte_kategorier.dyrkningssystem_for_kategori(kategori)
-
-    afgrode_seq = [raw_rotation[i][0] for i in range(8)]
-    udlaeg_seq = [raw_rotation[i][1] for i in range(8)]
-    udlaeg_navn_seq = [raw_rotation[i][2] for i in range(8)]
 
     n_inputs = [
         compute_n_inputs(
@@ -198,12 +193,94 @@ def evaluate_candidate_for_mark(
     avg_fen = sum(fen_values) / len(cycle) if fen_values else 0.0
 
     return RotationCandidateEvaluation(
-        ref=ref,
+        ref=result_ref,
         active_len=active_len,
         years=years,
         avg_leaching_kg_n_ha=avg_leaching,
         avg_db_kr_ha=avg_db,
         avg_fen=avg_fen,
+        base_ref=base_ref,
+        overrides=list(overrides),
+    )
+
+
+def evaluate_candidate_for_mark(
+    ref: RotationCandidateRef,
+    jbnr: int,
+    kategori: str,
+    start_year: int = 1,
+    irrigated: bool = False,
+    fdato: str = "20/8",
+    precision_dagsbasis: bool = False,
+) -> RotationCandidateEvaluation | None:
+    """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
+    DB, samt gennemsnit over én fuld rotationscyklus (active_len).
+
+    Returnerer None hvis (saedskiftevariant, variant, n_norm_pct) ikke findes
+    i datasættet (fx en N-norm% der ikke er defineret for denne variant) —
+    kaldere skal springe disse over, ikke fejle.
+    """
+    raw_rotation = saedskifte_library.generate_rotation(
+        ref.saedskiftevariant, ref.variant, ref.n_norm_pct, start_year
+    )
+    active_len = saedskifte_library.rotation_active_len(raw_rotation)
+    if active_len == 0:
+        return None
+
+    afgrode_seq = [raw_rotation[i][0] for i in range(8)]
+    udlaeg_seq = [raw_rotation[i][1] for i in range(8)]
+    udlaeg_navn_seq = [raw_rotation[i][2] for i in range(8)]
+
+    return evaluate_sequence_for_mark(
+        ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
+        jbnr, kategori, irrigated, fdato, precision_dagsbasis,
+    )
+
+
+def evaluate_with_overrides(
+    base_ref: RotationCandidateRef,
+    overrides: list[RotationPositionOverride],
+    jbnr: int,
+    kategori: str,
+    irrigated: bool = False,
+    fdato: str = "20/8",
+    precision_dagsbasis: bool = False,
+) -> RotationCandidateEvaluation | None:
+    """Som evaluate_candidate_for_mark, men overskriver hovedafgrøden i én
+    eller flere positioner efter opslag i biblioteket — bruges af Fase 10's
+    "Rediger manuelt" (levende beregning). Udlæg/virkemiddel ved den
+    overskrevne position røres ikke, kun hovedafgrøden.
+
+    result.ref bliver base_ref uændret hvis overrides er tom (så et "preview
+    uden ændringer" er identisk med et almindeligt bibliotek-opslag);
+    ellers en syntetisk, kollisionsfri ref (variant-suffiks "+manuel").
+    """
+    raw_rotation = saedskifte_library.generate_rotation(
+        base_ref.saedskiftevariant, base_ref.variant, base_ref.n_norm_pct, 1
+    )
+    active_len = saedskifte_library.rotation_active_len(raw_rotation)
+    if active_len == 0:
+        return None
+
+    afgrode_seq = [raw_rotation[i][0] for i in range(8)]
+    udlaeg_seq = [raw_rotation[i][1] for i in range(8)]
+    udlaeg_navn_seq = [raw_rotation[i][2] for i in range(8)]
+    for override in overrides:
+        afgrode_seq[override.position] = override.afgrode_kode
+
+    if overrides:
+        result_ref = RotationCandidateRef(
+            saedskiftevariant=base_ref.saedskiftevariant,
+            variant=f"{base_ref.variant}+manuel",
+            n_norm_pct=base_ref.n_norm_pct,
+        )
+    else:
+        result_ref = base_ref
+
+    return evaluate_sequence_for_mark(
+        result_ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
+        jbnr, kategori, irrigated, fdato, precision_dagsbasis,
+        base_ref=base_ref, overrides=overrides,
     )
 
 

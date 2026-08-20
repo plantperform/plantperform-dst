@@ -2,6 +2,7 @@ import useSWR from 'swr'
 
 import { fetcher } from '@/api/client'
 import type {
+  AfgrodeKodeOption,
   Farm,
   FieldRecord,
   RegistryField,
@@ -132,3 +133,12 @@ export const rotationNNormProcenterKey = (farmId?: string) => {
 
 export const useRotationNNormProcenter = (farmId?: string) =>
   useSWR<string[]>(rotationNNormProcenterKey(farmId), fetcher)
+
+export const afgrodeKoderKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/afgrode-koder`
+}
+
+export const useAfgrodeKoder = (farmId?: string) =>
+  useSWR<AfgrodeKodeOption[]>(afgrodeKoderKey(farmId), fetcher)

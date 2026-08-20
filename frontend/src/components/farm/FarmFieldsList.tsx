@@ -10,6 +10,7 @@ import type {
   FieldsSortKey,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
+import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
 import {
@@ -195,6 +196,7 @@ export const FarmFieldsList = ({
   const [, setLockingFieldId] = useState<string | null>(null)
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null)
+  const [manualEditFieldId, setManualEditFieldId] = useState<string | null>(null)
 
   const sortedFields = useMemo(
     () => [...fields].sort((left, right) => compareFields(left, right, sort)),
@@ -225,15 +227,14 @@ export const FarmFieldsList = ({
 
   const isFieldLocked = (field: FieldRecord) =>
     field.allowedRotationIds.length === 1 &&
-    field.allowedRotationIds[0] === 'current'
+    field.rotationId !== null &&
+    field.allowedRotationIds[0] === field.rotationId
 
   const toggleFieldLock = async (field: FieldRecord) => {
-    if (!simulationId) return
+    if (!simulationId || field.rotationId === null) return
 
     const locked = isFieldLocked(field)
-    const globalIds = simulation?.constraints.globallyAllowedRotationIds ?? []
-    const unlockedIds = Array.from(new Set(['current', ...globalIds]))
-    const target = locked ? unlockedIds : ['current']
+    const target = locked ? [] : [field.rotationId]
 
     setLockingFieldId(field.id)
     try {
@@ -494,8 +495,13 @@ export const FarmFieldsList = ({
                             <Button
                               size="sm"
                               variant="outline"
-                              disabled
-                              title={NOT_YET_AVAILABLE_TITLE}
+                              disabled={field.rotationId === null}
+                              onClick={() => setManualEditFieldId(field.id)}
+                              title={
+                                field.rotationId === null
+                                  ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
+                                  : undefined
+                              }
                             >
                               Rediger manuelt
                             </Button>
@@ -514,14 +520,18 @@ export const FarmFieldsList = ({
                             size="sm"
                             variant="ghost"
                             onClick={() => void toggleFieldLock(field)}
-                            disabled
+                            disabled={field.rotationId === null}
                             aria-label={isFieldLocked(field) ? 'Lås op' : 'Lås'}
                             className={
                               isFieldLocked(field)
                                 ? 'h-8 w-8 p-0 bg-amber-100 text-amber-700'
                                 : 'h-8 w-8 p-0 text-muted-foreground'
                             }
-                            title={`${isFieldLocked(field) ? 'Marken er låst.' : 'Marken er ikke låst.'} ${NOT_YET_AVAILABLE_TITLE}`}
+                            title={
+                              isFieldLocked(field)
+                                ? 'Marken er låst til det valgte sædskifte — Optimér ændrer den ikke. Klik for at låse op.'
+                                : 'Marken er ikke låst — Optimér kan frit ændre den. Klik for at låse.'
+                            }
                           >
                             {isFieldLocked(field) ? (
                               <Lock className="h-4 w-4" aria-hidden="true" />
@@ -563,6 +573,19 @@ export const FarmFieldsList = ({
                         />
                       </td>
                     </tr>
+                  ) : null}
+                  {simulationId && simulation ? (
+                    <ManualRotationEditor
+                      farmId={farmId}
+                      simulationId={simulationId}
+                      simulation={simulation}
+                      field={field}
+                      open={manualEditFieldId === field.id}
+                      onOpenChange={(nextOpen) =>
+                        setManualEditFieldId(nextOpen ? field.id : null)
+                      }
+                      onError={onError}
+                    />
                   ) : null}
                   </Fragment>
                 )

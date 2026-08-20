@@ -9,8 +9,14 @@ from app.domain.optimization import (
     OptimizationOutput,
     RotationOption,
 )
-from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.rotation_candidate import (
+    RotationCandidateEvaluation,
+    RotationCandidateRef,
+    RotationPositionOverride,
+)
 from app.services.optimization.engine import solve
+from app.services.rotations import saedskifte_kategorier
+from app.services.scenario import candidate_evaluator
 
 
 class OptimizationNotFoundError(Exception):
@@ -46,8 +52,16 @@ def _build_options(
 ) -> tuple[RotationOption, ...]:
     """Ét RotationOption pr. gemt, usynligt beregnet sædskifte-kandidat (jf.
     "Opret scenarie") — ingen 2^n virkemiddel-udfoldning her (beslutning 7:
-    virkemidler er en fremtidig ekstra kandidat-facet, ikke bygget endnu)."""
+    virkemidler er en fremtidig ekstra kandidat-facet, ikke bygget endnu).
+
+    Hvis marken har `allowed_rotation_ids` sat (fx en manuel rettelse gemt
+    via Fase 10's "Rediger manuelt", som låser marken til netop det valg),
+    begrænses kandidatmængden til kun disse — Optimér kan så ikke overskrive
+    en bevidst manuel rettelse igen, før brugeren selv låser op."""
     retention_factor = 1 - (field.retention or 0) / 100
+    if field.allowed_rotation_ids:
+        allowed = set(field.allowed_rotation_ids)
+        candidates = [c for c in candidates if c.ref.to_id() in allowed]
     options = []
     for candidate in candidates:
         ref_id = candidate.ref.to_id()
@@ -134,6 +148,64 @@ def run_optimization(
         updated_fields.append(updated_field)
 
     return OptimizationRunResult(output=output, fields=tuple(updated_fields))
+
+
+class ManualRotationNotFoundError(Exception):
+    """Simulering, mark eller markens gemte kandidatmængde (jbnr-kilden) findes ikke."""
+
+
+def apply_manual_rotation(
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    base_ref: RotationCandidateRef,
+    overrides: list[RotationPositionOverride],
+) -> FieldRecord | None:
+    """"Rediger manuelt" (Fase 10) — genberegner markens rotation ud fra
+    base_ref + evt. enkelt-positions-overskrivninger, gemmer resultatet som
+    en ekstra (erstattelig) kandidat på marken, skriver det tilbage til
+    marken præcis som Optimér ville (samme areal-/retentionsskalering som
+    _build_options), og låser marken til dette valg (allowed_rotation_ids)
+    så en senere Optimér-kørsel ikke overskriver den manuelle rettelse
+    igen, før brugeren selv låser op."""
+    simulation = repository.get_simulation(farm_id, simulation_id)
+    fields = repository.list_simulation_fields(farm_id, simulation_id)
+    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id)
+    if simulation is None or fields is None or field_candidates is None:
+        raise ManualRotationNotFoundError
+
+    field = next((f for f in fields if f.id == field_id), None)
+    candidates_row = next((fc for fc in field_candidates if fc.field_id == field_id), None)
+    if field is None or candidates_row is None:
+        raise ManualRotationNotFoundError
+
+    kategorier = saedskifte_kategorier.kategorier_for_saedskifte(base_ref.saedskiftevariant)
+    if not kategorier:
+        return None
+    candidate = candidate_evaluator.evaluate_with_overrides(
+        base_ref, overrides, jbnr=candidates_row.jbnr, kategori=kategorier[0],
+        fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
+    )
+    if candidate is None:
+        return None
+
+    repository.append_manual_field_candidate(farm_id, simulation_id, field_id, candidate)
+
+    retention_factor = 1 - (field.retention or 0) / 100
+    leaching_total = candidate.avg_leaching_kg_n_ha * field.area_ha
+    rotation_id = candidate.ref.to_id()
+    return repository.update_simulation_field(
+        farm_id, simulation_id, field_id,
+        UpdateFieldRequest(
+            crop_rotation=[y.year for y in candidate.years[: candidate.active_len]],
+            rotation_id=rotation_id,
+            db2=candidate.avg_db_kr_ha * field.area_ha,
+            n_load=leaching_total * retention_factor,
+            leaching=leaching_total,
+            fen=candidate.avg_fen * field.area_ha,
+            allowed_rotation_ids=[rotation_id],
+        ),
+    )
 
 
 def compute_yearly_summary(

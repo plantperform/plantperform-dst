@@ -10,6 +10,8 @@ import type {
   OptimizeSimulationInput,
   OptimizeSimulationResponse,
   OptimizationConstraints,
+  RecomputeFieldRotationInput,
+  RotationCandidateEvaluation,
   Simulation,
   UpdateFarmInput,
   UpdateFieldInput,
@@ -81,5 +83,27 @@ export const evaluateRotationCandidates = (
 ) =>
   postJson<FieldRotationCandidates[], EvaluateRotationCandidatesInput>(
     `/farms/${farmId}/rotation-candidates/evaluate`,
+    input,
+  )
+
+export const previewFieldRotation = (
+  farmId: string,
+  simulationId: string,
+  fieldId: string,
+  input: RecomputeFieldRotationInput,
+) =>
+  postJson<RotationCandidateEvaluation, RecomputeFieldRotationInput>(
+    `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}/preview-rotation`,
+    input,
+  )
+
+export const applyFieldRotation = (
+  farmId: string,
+  simulationId: string,
+  fieldId: string,
+  input: RecomputeFieldRotationInput,
+) =>
+  postJson<FieldRecord, RecomputeFieldRotationInput>(
+    `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}/apply-rotation`,
     input,
   )
