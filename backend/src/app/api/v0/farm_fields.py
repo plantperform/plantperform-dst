@@ -12,7 +12,7 @@ async def get_farm_fields(farm_id: str) -> list[FieldRecord]:
     fields = list_fields(farm_id)
 
     if fields is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     return fields
 
@@ -26,14 +26,14 @@ async def post_farm_fields(
         fields = [upsert_field(farm_id, field_request) for field_request in request]
 
         if any(field is None for field in fields):
-            raise HTTPException(status_code=404, detail="Farm not found")
+            raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
         return [field for field in fields if field is not None]
 
     field = upsert_field(farm_id, request)
 
     if field is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     return field
 
@@ -43,7 +43,7 @@ async def detach_farm_field(farm_id: str, field_id: str) -> None:
     detached = detach_field(farm_id, field_id)
 
     if detached is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     if not detached:
-        raise HTTPException(status_code=404, detail="Field not found")
+        raise HTTPException(status_code=404, detail="Mark ikke fundet")

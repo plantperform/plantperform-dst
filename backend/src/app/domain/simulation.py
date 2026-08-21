@@ -45,7 +45,7 @@ class OptimizationConstraints(CamelModel):
     ) -> list[CropPercentageConstraint]:
         crops = [constraint.crop for constraint in value]
         if len(crops) != len(set(crops)):
-            raise ValueError("Crop percentage constraints cannot contain duplicate crops")
+            raise ValueError("Afgrødeandel-krav kan ikke indeholde samme afgrøde flere gange")
 
         return value
 
@@ -58,7 +58,7 @@ class OptimizationConstraints(CamelModel):
         if value is None:
             return value
         if len(set(value)) != len(value):
-            raise ValueError("Globally allowed rotation ids must be unique")
+            raise ValueError("Globalt tilladte sædskifte-id'er skal være unikke")
         return value
 
     @model_validator(mode="after")
@@ -67,7 +67,7 @@ class OptimizationConstraints(CamelModel):
             constraint.minimum_percentage for constraint in self.crop_percentages
         )
         if total_percentage > 100:
-            raise ValueError("Crop percentage constraints cannot exceed 100 percent")
+            raise ValueError("Afgrødeandel-krav kan ikke overstige 100 procent samlet")
 
         return self
 
