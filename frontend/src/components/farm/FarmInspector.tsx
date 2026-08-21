@@ -44,18 +44,22 @@ import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 
 // Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
 // opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
-// Årsoversigt-stripet og "Beregningsgennemgang pr. år"-panelet henter fra
-// separate SWR-nøgler der ellers ville blive stående med data fra FØR
-// kørslen — usynligt for brugeren, men ser ud som om nye
-// begrænsninger/lofter blev ignoreret. Tving dem til at hente igen.
+// Årsoversigt-stripet henter fra en separat SWR-nøgle der ellers ville
+// blive stående med data fra FØR kørslen — usynligt for brugeren, men ser
+// ud som om nye begrænsninger/lofter blev ignoreret. Tving den til at
+// hente igen.
+//
+// "Beregningsgennemgang pr. år"-panelet (candidate-detail) invalideres
+// bevidst IKKE her længere — det blev tidligere gjort med en bredt
+// matchende nøgle-revalidering, der genopfriskede ALLE candidate-detail-
+// nøgler brugeren nogensinde havde åbnet i denne simulering, uanset om
+// marken rent faktisk fik en ny tildeling. På et scenarie med u-optimerede
+// marker gav det en byge af samtidige mislykkede kald (422 "ikke
+// optimeret endnu") for hver tidligere-åbnet mark. SWR genindlæser
+// candidate-detail automatisk, hver gang panelet næste gang åbnes
+// (mount-tids-revalidering) — det er nok i praksis.
 const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
-  await mutate(
-    (key) =>
-      typeof key === 'string' &&
-      key.startsWith(`/farms/${farmId}/simulations/${simulationId}/fields/`) &&
-      key.endsWith('/candidate-detail'),
-  )
 }
 
 const NUM_ROTATION_YEARS = 8
