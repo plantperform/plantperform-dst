@@ -177,7 +177,6 @@ export const FarmInspector = ({
           simulation={selectedSimulation}
           open={optimizeDialogOpen}
           onOpenChange={setOptimizeDialogOpen}
-          onError={onError}
           onOptimized={setOptimizationSummary}
         />
       ) : null}
@@ -189,7 +188,6 @@ export const FarmInspector = ({
           simulation={selectedSimulation}
           open={yearlyOptimizeDialogOpen}
           onOpenChange={setYearlyOptimizeDialogOpen}
-          onError={onError}
           onOptimized={setOptimizationSummary}
         />
       ) : null}
@@ -239,7 +237,6 @@ type OptimizeDialogProps = {
   simulation: Simulation
   open: boolean
   onOpenChange: (open: boolean) => void
-  onError: (message: string | null) => void
   onOptimized: (response: OptimizeSimulationResponse) => void
 }
 
@@ -256,12 +253,17 @@ const OptimizeDialog = ({
   simulation,
   open,
   onOpenChange,
-  onError,
   onOptimized,
 }: OptimizeDialogProps) => {
   const [constraints, setConstraints] = useState(simulation.constraints)
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) setRunError(null)
+    onOpenChange(nextOpen)
+  }
 
   const saveConstraints = async () => {
     setIsSaving(true)
@@ -281,10 +283,10 @@ const OptimizeDialog = ({
           ),
         { revalidate: false },
       )
-      onError(null)
+      setRunError(null)
       return true
     } catch {
-      onError('Kunne ikke gemme optimeringskrav.')
+      setRunError('Kunne ikke gemme optimeringskrav.')
       return false
     } finally {
       setIsSaving(false)
@@ -302,10 +304,9 @@ const OptimizeDialog = ({
       )
       await invalidateOptimizationDisplays(farmId, simulation.id)
       onOptimized(response)
-      onOpenChange(false)
-      onError(null)
+      handleOpenChange(false)
     } catch (error) {
-      onError(
+      setRunError(
         error instanceof Error
           ? error.message
           : 'Kunne ikke køre optimeringen.',
@@ -323,7 +324,7 @@ const OptimizeDialog = ({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Optimér {simulation.name}</DialogTitle>
@@ -389,8 +390,14 @@ const OptimizeDialog = ({
           </div>
         </div>
 
+        {runError ? (
+          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+            {runError}
+          </p>
+        ) : null}
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Annuller
           </Button>
           <Button
@@ -417,7 +424,6 @@ type YearlyOptimizeDialogProps = {
   simulation: Simulation
   open: boolean
   onOpenChange: (open: boolean) => void
-  onError: (message: string | null) => void
   onOptimized: (response: OptimizeSimulationResponse) => void
 }
 
@@ -426,7 +432,6 @@ const YearlyOptimizeDialog = ({
   simulation,
   open,
   onOpenChange,
-  onError,
   onOptimized,
 }: YearlyOptimizeDialogProps) => {
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(20)
@@ -437,6 +442,12 @@ const YearlyOptimizeDialog = ({
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
   const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(new Set())
   const [isRunning, setIsRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) setRunError(null)
+    onOpenChange(nextOpen)
+  }
 
   const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
@@ -535,10 +546,9 @@ const YearlyOptimizeDialog = ({
       )
       await invalidateOptimizationDisplays(farmId, simulation.id)
       onOptimized(response)
-      onOpenChange(false)
-      onError(null)
+      handleOpenChange(false)
     } catch (error) {
-      onError(
+      setRunError(
         error instanceof Error
           ? error.message
           : 'Kunne ikke køre års-optimeringen.',
@@ -549,7 +559,7 @@ const YearlyOptimizeDialog = ({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Års-optimering — {simulation.name}</DialogTitle>
@@ -726,8 +736,14 @@ const YearlyOptimizeDialog = ({
           </div>
         </div>
 
+        {runError ? (
+          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+            {runError}
+          </p>
+        ) : null}
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Annuller
           </Button>
           <Button
