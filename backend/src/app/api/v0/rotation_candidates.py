@@ -119,24 +119,36 @@ async def list_rotation_n_norm_procenter() -> list[str]:
 
 @router.get("/godnings-presets", response_model=list[GodningPresetOption])
 async def list_godnings_presets() -> list[GodningPresetOption]:
-    """De 5 navngivne gødnings-presets (Svinegylle/Kvæggylle, konventionel og
-    økologisk) til "Nyt scenarie"s gødnings-sektion (Fase 13) — ren
-    eksponering af de allerede eksisterende tal i
-    saedskifte_kategorier.KATEGORI_GODNING, nu uden nogen binding til hvilke
-    sædskifter der er valgbare. "Plantesædskifter" (ren mineralsk gødning,
-    org_mineral_n=0) udelades — det er UI'ens "Ingen organisk gødning"."""
+    """Gødningstype-presets til "Nyt scenarie"s gødnings-sektion (Fase 13,
+    forenklet) — navngivet efter selve gødningstypen (Svinegylle/Kvæggylle),
+    ikke efter en driftsform- eller N-mængde-specifik variant. Samme preset
+    bruges uanset om marken er konventionel eller økologisk — org_mineral_n/
+    mineralsk_andel_pct/kun-organisk er altid frit justerbare bagefter, jf.
+    Fase 13's fulde afkobling. Tallene er et rimeligt udgangspunkt hentet
+    fra de konventionelle varianter i saedskifte_kategorier.KATEGORI_GODNING
+    (samme tal som tidligere blev vist bag "Sædskifter med svinegylle
+    (150 N)"/"...kvæggylle (170 kg organisk N)")."""
+    svin = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.SVINEGYLLE_150]
+    kvaeg = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KVAEGGYLLE_170]
     return [
         GodningPresetOption(
-            navn=navn,
+            navn="Svinegylle",
             godning=GodningSettings(
-                driftsform=data["dyrkningssystem"],
-                org_mineral_n=data["org_mineral_n"],
-                mineralsk_andel_pct=data["mineralsk_andel_pct"],
-                only_organic=data["only_organic"],
+                driftsform=svin["dyrkningssystem"],
+                org_mineral_n=svin["org_mineral_n"],
+                mineralsk_andel_pct=svin["mineralsk_andel_pct"],
+                only_organic=svin["only_organic"],
             ),
-        )
-        for navn, data in saedskifte_kategorier.KATEGORI_GODNING.items()
-        if navn != saedskifte_kategorier.PLANTESAEDSKIFTER
+        ),
+        GodningPresetOption(
+            navn="Kvæggylle",
+            godning=GodningSettings(
+                driftsform=kvaeg["dyrkningssystem"],
+                org_mineral_n=kvaeg["org_mineral_n"],
+                mineralsk_andel_pct=kvaeg["mineralsk_andel_pct"],
+                only_organic=kvaeg["only_organic"],
+            ),
+        ),
     ]
 
 
