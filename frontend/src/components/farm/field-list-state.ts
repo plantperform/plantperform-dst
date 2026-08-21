@@ -5,7 +5,7 @@ export type FieldsSortKey =
   | 'nLoad'
   | 'leaching'
   | 'fen'
-  | 'nQuotaKgN'
+  | 'udledningskvoteMarkKgn'
   | 'inTakeoutPlan'
   | 'retention'
   | 'jbnr'

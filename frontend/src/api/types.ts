@@ -3,7 +3,7 @@ export type Farm = {
   cvr: string | null
   name: string
   ownerName: string
-  nitrogenQuotaKg: number
+  udledningskvoteKgN: number
   rotationLibrary: NamedRotation[]
 }
 
@@ -11,11 +11,11 @@ export type CreateFarmInput = {
   name: string
   ownerName: string
   cvr: string | null
-  nitrogenQuotaKg?: number
+  udledningskvoteKgN?: number
 }
 
 export type UpdateFarmInput = {
-  nitrogenQuotaKg: number
+  udledningskvoteKgN: number
 }
 
 export type GeoJSONPolygon = {
@@ -78,7 +78,8 @@ export type FieldRecord = {
   name: string
   areaHa: number
   inTakeoutPlan: boolean
-  nQuotaKgN: number | null
+  udledningsgraenseKgnHa: number
+  udledningskvoteMarkKgn: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
 
@@ -93,7 +94,8 @@ export type RegistryField = {
   cropRotation: string
   cropHistory: Record<string, number | null>
   inTakeoutPlan: boolean
-  nQuotaKgN: number | null
+  udledningsgraenseKgnHa: number
+  udledningskvoteMarkKgn: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon
 }
 
@@ -107,7 +109,8 @@ export type RegistryFieldSummary = {
   areaHa: number
   cropRotation: string
   inTakeoutPlan: boolean
-  nQuotaKgN: number | null
+  udledningsgraenseKgnHa: number
+  udledningskvoteMarkKgn: number
 }
 
 export type RegistryBounds = {
@@ -128,7 +131,8 @@ export type CreateFieldInput = {
   name: string
   areaHa: number
   inTakeoutPlan?: boolean
-  nQuotaKgN?: number | null
+  udledningsgraenseKgnHa?: number
+  udledningskvoteMarkKgn?: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
 

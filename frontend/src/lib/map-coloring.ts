@@ -6,7 +6,7 @@ export type ColorAttribute =
   | 'jbnr'
   | 'leaching'
   | 'nLoad'
-  | 'nQuotaKgN'
+  | 'udledningsgraenseKgnHa'
   | 'db2'
   | 'vandopland'
   | 'rotationChanged'
@@ -139,20 +139,25 @@ const JB_NR: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-const N_QUOTA: NumericSpec = {
+const UDLEDNINGSGRAENSE: NumericSpec = {
   kind: 'numeric',
-  label: 'Kvælstofkvote',
+  label: 'Udledningsgrænse',
   unit: 'kg N/ha',
   source: 'both',
-  property: 'nQuotaKgN',
+  property: 'udledningsgraenseKgnHa',
   bins: [
-    { max: 100, color: '#dbeafe', label: '< 100' },
-    { max: 150, color: '#93c5fd', label: '100–150' },
-    { max: 200, color: '#3b82f6', label: '150–200' },
-    { max: Number.POSITIVE_INFINITY, color: '#1d4ed8', label: '≥ 200' },
+    { max: 5, color: '#440154', label: '< 5' },
+    { max: 10, color: '#482878', label: '5–10' },
+    { max: 15, color: '#3e4a89', label: '10–15' },
+    { max: 20, color: '#31688e', label: '15–20' },
+    { max: 25, color: '#26828e', label: '20–25' },
+    { max: 30, color: '#1f9e89', label: '25–30' },
+    { max: 35, color: '#35b779', label: '30–35' },
+    { max: 40, color: '#6dcd59', label: '35–40' },
+    { max: Number.POSITIVE_INFINITY, color: '#fde725', label: '> 40' },
   ],
-  aboveColor: '#1d4ed8',
-  aboveLabel: '≥ 200',
+  aboveColor: '#fde725',
+  aboveLabel: '> 40',
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
@@ -259,7 +264,7 @@ const TAKEOUT: CategorySpec = {
 export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   retention: RETENTION,
   jbnr: JB_NR,
-  nQuotaKgN: N_QUOTA,
+  udledningsgraenseKgnHa: UDLEDNINGSGRAENSE,
   leaching: LEACHING,
   nLoad: N_LOAD,
   db2: DB2,
@@ -272,7 +277,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'none', label: 'Ingen' },
   { value: 'retention', label: 'Retention' },
   { value: 'jbnr', label: 'JB nr.' },
-  { value: 'nQuotaKgN', label: 'Kvælstofkvote' },
+  { value: 'udledningsgraenseKgnHa', label: 'Udledningsgrænse' },
   { value: 'leaching', label: 'Udvaskning' },
   { value: 'nLoad', label: 'Udledning' },
   { value: 'db2', label: 'DB2' },
@@ -286,7 +291,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
 const REGISTRY_PROPERTY_NAMES: Record<string, string> = {
   retention: 'retention',
   jbnr: 'jbnr',
-  nQuotaKgN: 'n_quota_kg_n',
+  udledningsgraenseKgnHa: 'udledningsgraense_kgn_ha',
   kystvandId: 'kystvand_id',
   inTakeoutPlan: 'in_takeout_plan',
 }

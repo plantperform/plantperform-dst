@@ -300,7 +300,8 @@ export const FarmFieldsMap = ({
             name: field.marknr ?? `Mark ${field.imkId}`,
             areaHa: field.areaHa,
             inTakeoutPlan: field.inTakeoutPlan,
-            nQuotaKgN: field.nQuotaKgN,
+            udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
+            udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
             geometry: field.geometry,
           })
         } catch {
@@ -833,17 +834,9 @@ export const FarmFieldsMap = ({
                       value={selectedFarmField.inTakeoutPlan ? 'Ja' : 'Nej'}
                     />
                     <FieldStat
-                      label="Kvælstofkvote"
-                      value={
-                        selectedFarmField.nQuotaKgN === null
-                          ? 'Ukendt'
-                          : `${formatNumber(selectedFarmField.nQuotaKgN)} kg N`
-                      }
-                      subValue={
-                        selectedFarmField.nQuotaKgN === null
-                          ? undefined
-                          : perHa(selectedFarmField.nQuotaKgN, 'kg N/ha')
-                      }
+                      label="Udledningskvote"
+                      value={`${formatNumber(selectedFarmField.udledningskvoteMarkKgn)} kg N`}
+                      subValue={`${formatNumber(selectedFarmField.udledningsgraenseKgnHa)} kg N/ha`}
                     />
                   </>
                 )

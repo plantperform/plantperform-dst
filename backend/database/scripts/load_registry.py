@@ -228,7 +228,6 @@ def iter_registry_rows(
         "JB_Kode",
         "CVR_Anonym",
         "InSkitse_1",
-        "n_kvote_mark_endelig_kgN",
         "KystvandID",
     ]
 
@@ -279,7 +278,6 @@ def iter_registry_rows(
                 crop_rotation,
                 json.dumps(crop_history),
                 clean_bool(row.InSkitse_1),
-                clean_float(row.n_kvote_mark_endelig_kgN),
                 to_multipolygon_wkt(row.geometry),
             )
 
@@ -325,7 +323,6 @@ def load_registry() -> None:
                     crop_rotation text,
                     crop_history jsonb,
                     in_takeout_plan boolean,
-                    n_quota_kg_n double precision,
                     geom_wkt text
                 ) ON COMMIT DROP
                 """
@@ -334,7 +331,7 @@ def load_registry() -> None:
                 """
                 COPY registry_field_load (
                     imk_id, cvr, marknr, kystvand_id, retention, soil_id, jbnr, area_ha,
-                    crop_rotation, crop_history, in_takeout_plan, n_quota_kg_n, geom_wkt
+                    crop_rotation, crop_history, in_takeout_plan, geom_wkt
                 ) FROM STDIN WITH (FORMAT CSV)
                 """
             ) as copy:
@@ -350,11 +347,15 @@ def load_registry() -> None:
 
             reporter.tick(reporter.scanned, reporter.loaded, force=True)
             print("Inserting into registry_field...", flush=True)
+            # udledningsgraense_kgn_ha/udledningskvote_mark_kgn are left at their
+            # DB default (0) here — they come from a separate national layer, not
+            # the IMK GeoPackage. Run load_udledningsgraenser.py after this to
+            # (re)compute them.
             cursor.execute(
                 """
                 INSERT INTO registry_field (
                     imk_id, cvr, marknr, kystvand_id, retention, soil_id, jbnr, area_ha,
-                    crop_rotation, crop_history, in_takeout_plan, n_quota_kg_n, geom,
+                    crop_rotation, crop_history, in_takeout_plan, geom,
                     centroid, sample_bucket
                 )
                 SELECT
@@ -369,7 +370,6 @@ def load_registry() -> None:
                     crop_rotation,
                     crop_history,
                     in_takeout_plan,
-                    n_quota_kg_n,
                     ST_Multi(ST_GeomFromText(geom_wkt, 4326)),
                     ST_PointOnSurface(ST_GeomFromText(geom_wkt, 4326)),
                     (hashtext(imk_id::text) & 1023)
