@@ -416,15 +416,15 @@ async def post_farm_simulation_field_preview_rotation(
     if candidates_row is None:
         raise HTTPException(status_code=404, detail="Field not found")
 
-    kategorier = saedskifte_kategorier.kategorier_for_saedskifte(request.base_ref.saedskiftevariant)
-    if not kategorier:
-        raise HTTPException(status_code=422, detail="Ukendt saedskiftevariant")
-
+    godning = simulation.godning
     candidate = evaluate_with_overrides(
         request.base_ref,
         request.overrides,
         jbnr=candidates_row.jbnr,
-        kategori=kategorier[0],
+        driftsform=godning.driftsform,
+        org_mineral_n=godning.org_mineral_n,
+        mineralsk_andel_pct=godning.mineralsk_andel_pct,
+        only_organic=godning.only_organic,
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=request.start_year,

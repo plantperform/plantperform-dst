@@ -5,11 +5,17 @@ import { mutate } from 'swr'
 import {
   simulationFieldsKey,
   simulationsKey,
+  useGodningsPresets,
   useRotationKategorier,
   useRotationNNormProcenter,
 } from '@/api/hooks'
 import { createSimulation } from '@/api/mutations'
-import type { FieldRecord, RotationKategoriOption, Simulation } from '@/api/types'
+import type {
+  FieldRecord,
+  GodningSettings,
+  RotationKategoriOption,
+  Simulation,
+} from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -56,6 +62,7 @@ export const NewScenarioPanel = ({
 }: NewScenarioPanelProps) => {
   const { data: kategorier = [] } = useRotationKategorier(farmId)
   const { data: nNormProcenter = [] } = useRotationNNormProcenter(farmId)
+  const { data: godningsPresets = [] } = useGodningsPresets(farmId)
 
   const [scenarioName, setScenarioName] = useState('')
   const [selectedByKategori, setSelectedByKategori] = useState<
@@ -65,10 +72,33 @@ export const NewScenarioPanel = ({
     new Set(),
   )
   const [selectedNNorm, setSelectedNNorm] = useState<Set<string>>(new Set())
+  const [godningsTypeValg, setGodningsTypeValg] = useState('ingen')
+  const [driftsform, setDriftsform] = useState<GodningSettings['driftsform']>('Konventionel')
+  const [orgMineralN, setOrgMineralN] = useState('0')
+  const [mineralskAndelPct, setMineralskAndelPct] = useState('100')
+  const [onlyOrganic, setOnlyOrganic] = useState(false)
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
   const [fdatoDate, setFdatoDate] = useState('20/8')
   const [isCreating, setIsCreating] = useState(false)
+
+  const applyGodningsTypeValg = (value: string) => {
+    setGodningsTypeValg(value)
+    if (value === 'ingen') {
+      setOrgMineralN('0')
+      setMineralskAndelPct('100')
+      setOnlyOrganic(false)
+      return
+    }
+    if (value === 'brugerdefineret') return
+
+    const preset = godningsPresets.find((p) => p.navn === value)
+    if (!preset) return
+    setDriftsform(preset.godning.driftsform)
+    setOrgMineralN(String(preset.godning.orgMineralN))
+    setMineralskAndelPct(String(preset.godning.mineralskAndelPct))
+    setOnlyOrganic(preset.godning.onlyOrganic)
+  }
 
   const eeaFdato = precisionDagsbasis ? fdatoDate : fdatoInterval
 
@@ -126,15 +156,21 @@ export const NewScenarioPanel = ({
 
     setIsCreating(true)
     try {
-      const kategoriSaedskifter = Object.fromEntries(
-        Object.entries(selectedByKategori)
-          .filter(([, set]) => set.size > 0)
-          .map(([kategori, set]) => [kategori, Array.from(set)]),
+      const saedskiftevarianter = Array.from(
+        new Set(
+          Object.values(selectedByKategori).flatMap((set) => Array.from(set)),
+        ),
       )
       const simulation = await createSimulation(farmId, {
         name,
-        kategoriSaedskifter,
+        saedskiftevarianter,
         nNormProcenter: Array.from(selectedNNorm),
+        godning: {
+          driftsform,
+          orgMineralN: Number(orgMineralN) || 0,
+          mineralskAndelPct: Number(mineralskAndelPct) || 100,
+          onlyOrganic,
+        },
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
       })
@@ -152,6 +188,11 @@ export const NewScenarioPanel = ({
       setSelectedByKategori({})
       setExpandedKategorier(new Set())
       setSelectedNNorm(new Set())
+      setGodningsTypeValg('ingen')
+      setDriftsform('Konventionel')
+      setOrgMineralN('0')
+      setMineralskAndelPct('100')
+      setOnlyOrganic(false)
       setPrecisionDagsbasis(false)
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
       setFdatoDate('20/8')
@@ -187,10 +228,11 @@ export const NewScenarioPanel = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Sædskifte-kategorier</Label>
+            <Label>Sædskifter</Label>
             <p className="text-xs text-muted-foreground">
-              Driftsform og gødningsniveau følger kategorien. Fold en kategori ud for at
-              vælge specifikke sædskifter til/fra — ellers indgår alle.
+              Grupperet efter sædskifte-type til overblik — gødning vælges separat
+              nedenfor og er uafhængig af hvilke sædskifter du vælger her. Fold en
+              gruppe ud for at vælge specifikke sædskifter til/fra — ellers indgår alle.
             </p>
             <div className="space-y-1">
               {kategorier.map((option) => {
@@ -220,8 +262,7 @@ export const NewScenarioPanel = ({
                         <span>
                           <span className="font-medium">{option.kategori}</span>
                           <span className="block text-xs text-muted-foreground">
-                            {option.dyrkningssystem} · {selected.size}/
-                            {option.antalSaedskifter} sædskifter valgt
+                            {selected.size}/{option.antalSaedskifter} sædskifter valgt
                           </span>
                         </span>
                         {isExpanded ? (
@@ -264,6 +305,82 @@ export const NewScenarioPanel = ({
                 )
               })}
             </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Gødning</Label>
+            <p className="text-xs text-muted-foreground">
+              Uafhængig af hvilke sædskifter du har valgt ovenfor — samme
+              gødningsvalg bruges for alle valgte sædskifter i scenariet.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Driftsform</span>
+                <select
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={driftsform}
+                  onChange={(event) =>
+                    setDriftsform(event.target.value as GodningSettings['driftsform'])
+                  }
+                >
+                  <option value="Konventionel">Konventionel</option>
+                  <option value="Økologisk">Økologisk</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Gødningstype</span>
+                <select
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={godningsTypeValg}
+                  onChange={(event) => applyGodningsTypeValg(event.target.value)}
+                >
+                  <option value="ingen">Ingen organisk gødning (ren handelsgødning)</option>
+                  {godningsPresets.map((preset) => (
+                    <option key={preset.navn} value={preset.navn}>
+                      {preset.navn}
+                    </option>
+                  ))}
+                  <option value="brugerdefineret">Brugerdefineret</option>
+                </select>
+              </label>
+            </div>
+
+            {godningsTypeValg !== 'ingen' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm">
+                  <span className="text-xs text-muted-foreground">
+                    Udnyttet N fra organisk gødning (kg N/ha)
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={orgMineralN}
+                    onChange={(event) => setOrgMineralN(event.target.value)}
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-xs text-muted-foreground">Mineralsk andel (%)</span>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={mineralskAndelPct}
+                    onChange={(event) => setMineralskAndelPct(event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            {godningsTypeValg === 'brugerdefineret' ? (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={onlyOrganic}
+                  onChange={(event) => setOnlyOrganic(event.target.checked)}
+                />
+                Kun organisk gødning (ingen handelsgødnings-optopning)
+              </label>
+            ) : null}
           </div>
 
           <div className="space-y-2">

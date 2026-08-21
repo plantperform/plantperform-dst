@@ -3,9 +3,10 @@ udvaskning og dækningsbidrag pr. år (8 positioner), samt gennemsnit over én
 fuld rotationscyklus.
 
 N-input-logikken (compute_n_inputs) er porteret fra c:\\plantperform-nles\\
-streamlit_app.py's "Organisk gødning"-sidebar (linje ~452-628, 911-1027),
-nu datadrevet af kategori (se services.rotations.saedskifte_kategorier) i
-stedet for en fri driftsform/regelsæt/andel-formular — se docstring på
+streamlit_app.py's "Organisk gødning"-sidebar (linje ~452-628, 911-1027).
+Gødningsparametrene (org_mineral_n, mineralsk_andel_pct, only_organic) samt
+driftsform er scenarie-niveau-valg (Fase 13's GodningSettings), fuldt
+uafhængige af hvilket sædskifte der evalueres — se docstring på
 compute_n_inputs for detaljer.
 """
 from __future__ import annotations
@@ -19,9 +20,10 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
     RotationYear,
 )
+from app.domain.simulation import GodningSettings
 from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
-from app.services.rotations import afgroede_normer, saedskifte_kategorier, saedskifte_library
+from app.services.rotations import afgroede_normer, saedskifte_library
 
 # Rigtig historik dækker kun 2017-2023 (jf. planens beslutning 11), så den
 # viste/beregnede 8-årige rotation starter ved 2024 — men NLES5's tidstrend-
@@ -36,16 +38,18 @@ def compute_n_inputs(
     prev_afgrode_kode: int | None,
     jbnr: int,
     n_norm_pct: float,
-    kategori: str,
+    org_mineral_n: float,
+    mineralsk_andel_pct: float,
+    only_organic: bool,
     irrigated: bool = False,
 ) -> dict:
     """Beregn {mncs, mnca, g0, net_n, org_mineral_n_applied} for én position.
 
-    Kategorien slår op i saedskifte_kategorier.KATEGORI_GODNING for
-    {org_mineral_n, mineralsk_andel_pct, only_organic}:
-      - org_mineral_n=0 (Plantesædskifter): MNCS = fuld N-norm (skaleret med
-        N-norm%), G0=0 — organisk/handelsgødning er ligegyldig for NLES5 når
-        der ingen organisk kilde er.
+    org_mineral_n/mineralsk_andel_pct/only_organic er scenariets gødningsvalg
+    (Fase 13's GodningSettings — uafhængigt af hvilket sædskifte der evalueres):
+      - org_mineral_n=0 (ren mineralsk gødning): MNCS = fuld N-norm (skaleret
+        med N-norm%), G0=0 — organisk/handelsgødning er ligegyldig for NLES5
+        når der ingen organisk kilde er.
       - only_organic=False (konventionel + gylle): MNCS = net_scaled stadig
         (handelsgødning topper op til fuld norm), men G0 afspejler nu den
         ikke-udnyttede del af den faste gylle-mængde.
@@ -53,8 +57,8 @@ def compute_n_inputs(
         — ingen handelsgødnings-optopning. G0 = org_mineral_n ×
         (100−mineralsk_andel%)/mineralsk_andel%.
 
-    MNCA (efterårs mineral-N) er IKKE en kategori-kanal i den oprindelige
-    model — det er et separat, uafhængigt input, som udgangspunkt 0.
+    MNCA (efterårs mineral-N) er IKKE en del af gødningsvalget i den
+    oprindelige model — det er et separat, uafhængigt input, som udgangspunkt 0.
     """
     norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated)
     prev_norm = (
@@ -70,9 +74,6 @@ def compute_n_inputs(
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
     net_scaled = net_n * (float(n_norm_pct) / 100.0)
 
-    godning = saedskifte_kategorier.KATEGORI_GODNING[kategori]
-    org_mineral_n = godning["org_mineral_n"]
-
     if org_mineral_n <= 0:
         return {
             "mncs": net_scaled, "mnca": 0.0, "g0": 0.0,
@@ -80,11 +81,10 @@ def compute_n_inputs(
         }
 
     eff_org = min(org_mineral_n, net_scaled)
-    mineralsk_andel_pct = godning["mineralsk_andel_pct"]
     pool_pct = 100.0 - mineralsk_andel_pct
     g0 = org_mineral_n * (pool_pct / mineralsk_andel_pct)
 
-    if godning["only_organic"]:
+    if only_organic:
         mncs = eff_org
     else:
         mncs = net_scaled  # organisk + handelsgødning summerer altid til fuld norm
@@ -105,7 +105,10 @@ def evaluate_sequence_for_mark(
     udlaeg_navn_seq: list[str | None],
     active_len: int,
     jbnr: int,
-    kategori: str,
+    driftsform: str,
+    org_mineral_n: float,
+    mineralsk_andel_pct: float,
+    only_organic: bool,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
@@ -120,7 +123,6 @@ def evaluate_sequence_for_mark(
     og evaluate_with_overrides (Fase 10 — manuel enkelt-position-rettelse).
     """
     n_norm_pct = float(result_ref.n_norm_pct)
-    driftsform = saedskifte_kategorier.dyrkningssystem_for_kategori(kategori)
 
     n_inputs = [
         compute_n_inputs(
@@ -128,7 +130,9 @@ def evaluate_sequence_for_mark(
             afgrode_seq[(i - 1) % active_len],
             jbnr,
             n_norm_pct,
-            kategori,
+            org_mineral_n,
+            mineralsk_andel_pct,
+            only_organic,
             irrigated,
         )
         for i in range(8)
@@ -209,7 +213,10 @@ def evaluate_sequence_for_mark(
 def evaluate_candidate_for_mark(
     ref: RotationCandidateRef,
     jbnr: int,
-    kategori: str,
+    driftsform: str,
+    org_mineral_n: float,
+    mineralsk_andel_pct: float,
+    only_organic: bool,
     start_year: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",
@@ -235,7 +242,8 @@ def evaluate_candidate_for_mark(
 
     return evaluate_sequence_for_mark(
         ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
-        jbnr, kategori, irrigated, fdato, precision_dagsbasis,
+        jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
+        irrigated, fdato, precision_dagsbasis,
         start_year=start_year,
     )
 
@@ -244,7 +252,10 @@ def evaluate_with_overrides(
     base_ref: RotationCandidateRef,
     overrides: list[RotationPositionOverride],
     jbnr: int,
-    kategori: str,
+    driftsform: str,
+    org_mineral_n: float,
+    mineralsk_andel_pct: float,
+    only_organic: bool,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
@@ -298,59 +309,55 @@ def evaluate_with_overrides(
 
     return evaluate_sequence_for_mark(
         result_ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
-        jbnr, kategori, irrigated, fdato, precision_dagsbasis,
+        jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
+        irrigated, fdato, precision_dagsbasis,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
     )
 
 
 def generate_candidates_for_field(
-    kategori_saedskifter: dict[str, list[str]],
+    saedskiftevarianter: list[str],
     n_norm_procenter: list[str],
     jbnr: int,
+    godning: GodningSettings,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
 ) -> list[RotationCandidateEvaluation]:
-    """Kryds de eksplicit valgte (kategori -> saedskiftevariant-id'er) med
-    valgte N-norm%-værdier × alle varianter, og evaluer hver resulterende
-    kandidat.
+    """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
+    N-norm%-værdier × alle varianter, og evaluer hver resulterende kandidat
+    under scenariets gødningsvalg (Fase 13 — samme godning for alle valgte
+    sædskifter, fuldt uafhængigt af hvilke der er valgt).
 
     Bruges af "Opret scenarie" (usynlig baggrundsberegning, jf. plan-
     beslutning 14/19/Fase 9) — springer kombinationer der ikke findes i
     datasættet over (fx en N-norm% der ikke er defineret for en given
-    variant), og deduplikerer på tværs af kategorier (saedskiftevariant
-    "1"/ren brak hører til alle 6 kategorier).
-
-    kategori_saedskifter styrer eksplicit hvilke saedskiftevariant-id'er der
-    indgår pr. kategori (fra "Nyt scenarie"s fold-ud-liste) — en
-    saedskiftevariant der ikke reelt hører til den angivne kategori
-    filtreres defensivt fra, så en fejlformet anmodning ikke kan blande
-    driftsform/gødningsregler forkert.
+    variant).
     """
     results: list[RotationCandidateEvaluation] = []
     seen_ref_ids: set[str] = set()
 
-    for kategori, saedskiftevarianter in kategori_saedskifter.items():
-        valid_saedskiftevarianter = set(saedskifte_kategorier.saedskifter_for_kategori(kategori))
-        for saedskiftevariant in saedskiftevarianter:
-            if saedskiftevariant not in valid_saedskiftevarianter:
-                continue
-            for variant in saedskifte_library.list_variants(saedskiftevariant):
-                available_norms = set(saedskifte_library.list_n_norms(saedskiftevariant, variant))
-                for n_norm_pct in n_norm_procenter:
-                    if n_norm_pct not in available_norms:
-                        continue
-                    ref = RotationCandidateRef(
-                        saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
-                    )
-                    ref_id = ref.to_id()
-                    if ref_id in seen_ref_ids:
-                        continue
-                    seen_ref_ids.add(ref_id)
-                    result = evaluate_candidate_for_mark(
-                        ref, jbnr=jbnr, kategori=kategori,
-                        fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-                    )
-                    if result is not None:
-                        results.append(result)
+    for saedskiftevariant in saedskiftevarianter:
+        for variant in saedskifte_library.list_variants(saedskiftevariant):
+            available_norms = set(saedskifte_library.list_n_norms(saedskiftevariant, variant))
+            for n_norm_pct in n_norm_procenter:
+                if n_norm_pct not in available_norms:
+                    continue
+                ref = RotationCandidateRef(
+                    saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
+                )
+                ref_id = ref.to_id()
+                if ref_id in seen_ref_ids:
+                    continue
+                seen_ref_ids.add(ref_id)
+                result = evaluate_candidate_for_mark(
+                    ref, jbnr=jbnr,
+                    driftsform=godning.driftsform,
+                    org_mineral_n=godning.org_mineral_n,
+                    mineralsk_andel_pct=godning.mineralsk_andel_pct,
+                    only_organic=godning.only_organic,
+                    fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                )
+                if result is not None:
+                    results.append(result)
 
     return results

@@ -19,9 +19,9 @@ from app.domain.rotation_candidate import (
     RotationCandidateRef,
     RotationPositionOverride,
 )
+from app.domain.simulation import GodningSettings
 from app.services.optimization.engine import solve
 from app.services.optimization.yearly_engine import solve_yearly
-from app.services.rotations import saedskifte_kategorier
 from app.services.scenario import candidate_evaluator
 
 
@@ -192,11 +192,13 @@ def apply_manual_rotation(
     if field is None or candidates_row is None:
         raise ManualRotationNotFoundError
 
-    kategorier = saedskifte_kategorier.kategorier_for_saedskifte(base_ref.saedskiftevariant)
-    if not kategorier:
-        return None
+    godning = simulation.godning
     candidate = candidate_evaluator.evaluate_with_overrides(
-        base_ref, overrides, jbnr=candidates_row.jbnr, kategori=kategorier[0],
+        base_ref, overrides, jbnr=candidates_row.jbnr,
+        driftsform=godning.driftsform,
+        org_mineral_n=godning.org_mineral_n,
+        mineralsk_andel_pct=godning.mineralsk_andel_pct,
+        only_organic=godning.only_organic,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=start_year,
     )
@@ -226,6 +228,7 @@ def _expand_yearly_options(
     field: FieldRecord,
     candidates: list[RotationCandidateEvaluation],
     jbnr: int,
+    godning: GodningSettings,
     fdato: str,
     precision_dagsbasis: bool,
     selected_pairs: set[tuple[str, str]],
@@ -284,12 +287,6 @@ def _expand_yearly_options(
     for candidate in candidates:
         if candidate.active_len == 0:
             continue
-        kategorier = saedskifte_kategorier.kategorier_for_saedskifte(
-            candidate.ref.saedskiftevariant
-        )
-        if not kategorier:
-            continue
-        kategori = kategorier[0]
 
         max_shift = (
             candidate.active_len if candidate.ref.to_id() in shift_eligible_ids else 1
@@ -299,7 +296,11 @@ def _expand_yearly_options(
                 candidate
                 if shift == 1
                 else candidate_evaluator.evaluate_with_overrides(
-                    candidate.ref, [], jbnr=jbnr, kategori=kategori,
+                    candidate.ref, [], jbnr=jbnr,
+                    driftsform=godning.driftsform,
+                    org_mineral_n=godning.org_mineral_n,
+                    mineralsk_andel_pct=godning.mineralsk_andel_pct,
+                    only_organic=godning.only_organic,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     start_year=shift,
                 )
@@ -367,7 +368,7 @@ def run_yearly_optimization(
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
         jbnr = field_candidates_row.jbnr if field_candidates_row else 0
         options = _expand_yearly_options(
-            field, base_candidates, jbnr=jbnr,
+            field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
             selected_pairs=selected_pairs,
         )
