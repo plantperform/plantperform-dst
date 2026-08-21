@@ -95,21 +95,35 @@ const RETENTION: NumericSpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-const rgbToHex = (r: number, g: number, b: number): string => {
-  const toHex = (channel: number) =>
-    Math.round(channel).toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+// Officielle JB-nummer-farver (Bilag 1-klassifikation), ikke en beregnet gradient.
+const JB_LABELS: Record<number, string> = {
+  1: 'Grovsandet jord',
+  2: 'Finsandet jord',
+  3: 'Grov lerblandet sandjord',
+  4: 'Fin lerblandet sandjord',
+  5: 'Grov sandblandet lerjord',
+  6: 'Fin sandblandet lerjord',
+  7: 'Lerjord',
+  8: 'Svær lerjord',
+  9: 'Meget svær lerjord',
+  10: 'Siltjord',
+  11: 'Humus',
+  12: 'Specielle jordtyper',
 }
 
-// Light yellow (JB 1) → dark brown (JB 12), linearly interpolated per JB nr.
-const JB_GRADIENT_START: [number, number, number] = [254, 243, 199] // #fef3c7
-const JB_GRADIENT_END: [number, number, number] = [69, 26, 3] // #451a03
-
-const jbGradientColor = (jbnr: number): string => {
-  const t = (Math.min(Math.max(jbnr, 1), 12) - 1) / 11
-  const [r0, g0, b0] = JB_GRADIENT_START
-  const [r1, g1, b1] = JB_GRADIENT_END
-  return rgbToHex(r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t)
+const JB_COLORS: Record<number, string> = {
+  1: '#FFEEA6',
+  2: '#FFCCB3',
+  3: '#FFBE5C',
+  4: '#FFA600',
+  5: '#CDA35C',
+  6: '#A66B00',
+  7: '#896000',
+  8: '#5AA13A',
+  9: '#467500',
+  10: '#3F5100',
+  11: '#B9E83D',
+  12: '#8C8C8C',
 }
 
 const JB_NR: CategorySpec = {
@@ -120,7 +134,7 @@ const JB_NR: CategorySpec = {
   property: 'jbnr',
   bins: Array.from({ length: 12 }, (_, i) => {
     const jbnr = i + 1
-    return { value: jbnr, color: jbGradientColor(jbnr), label: `JB ${jbnr}` }
+    return { value: jbnr, color: JB_COLORS[jbnr], label: `JB ${jbnr} — ${JB_LABELS[jbnr]}` }
   }),
   fallbackColor: NEUTRAL_FALLBACK,
 }
