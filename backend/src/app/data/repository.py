@@ -84,10 +84,6 @@ def _get_simulation(
     return None if data is None else _load(Simulation, data)
 
 
-def _default_allowed_rotation_ids_for_farm(farm: Farm) -> list[str]:
-    return ["current", *(rotation.id for rotation in farm.rotation_library)]
-
-
 def list_farms() -> list[Farm]:
     with SessionLocal() as session:
         rows = session.execute(
@@ -173,8 +169,6 @@ def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | Non
 
         field_id = existing.id if existing is not None else str(uuid4())
         field_data = request.model_dump()
-        if "allowed_rotation_ids" not in request.model_fields_set:
-            field_data["allowed_rotation_ids"] = _default_allowed_rotation_ids_for_farm(farm)
 
         field = FieldRecord(
             id=field_id,
