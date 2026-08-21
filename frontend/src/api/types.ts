@@ -148,22 +148,36 @@ export type OptimizationConstraints = {
   globallyAllowedRotationIds: string[] | null
 }
 
+export type GodningSettings = {
+  driftsform: 'Konventionel' | 'Økologisk'
+  orgMineralN: number
+  mineralskAndelPct: number
+  onlyOrganic: boolean
+}
+
+export type GodningPresetOption = {
+  navn: string
+  godning: GodningSettings
+}
+
 export type Simulation = {
   id: string
   farmId: string
   name: string
   createdAt: string
   constraints: OptimizationConstraints
-  rotationKategorier: string[]
+  rotationSaedskiftevarianter: string[]
   rotationNNormProcenter: string[]
+  godning: GodningSettings
   eeaFdato: string
   eeaPrecisionDagsbasis: boolean
 }
 
 export type CreateSimulationInput = {
   name: string
-  kategoriSaedskifter?: Record<string, string[]>
+  saedskiftevarianter?: string[]
   nNormProcenter?: string[]
+  godning?: GodningSettings
   eeaFdato?: string
   eeaPrecisionDagsbasis?: boolean
 }

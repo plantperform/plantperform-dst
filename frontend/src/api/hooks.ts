@@ -5,6 +5,7 @@ import type {
   AfgrodeKodeOption,
   Farm,
   FieldRecord,
+  GodningPresetOption,
   RegistryField,
   RegistryFieldSummary,
   RotationCandidateEvaluation,
@@ -143,6 +144,15 @@ export const afgrodeKoderKey = (farmId?: string) => {
 
 export const useAfgrodeKoder = (farmId?: string) =>
   useSWR<AfgrodeKodeOption[]>(afgrodeKoderKey(farmId), fetcher)
+
+export const godningsPresetsKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/godnings-presets`
+}
+
+export const useGodningsPresets = (farmId?: string) =>
+  useSWR<GodningPresetOption[]>(godningsPresetsKey(farmId), fetcher)
 
 export const yearlyOptimizationCandidatesKey = (
   farmId?: string,

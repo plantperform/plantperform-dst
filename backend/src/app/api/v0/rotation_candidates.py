@@ -9,6 +9,7 @@ from app.data.registry_repository import get_registry_fields
 from app.data.repository import list_fields
 from app.domain.base import CamelModel
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
+from app.domain.simulation import GodningSettings
 from app.services.rotations import afgroede_normer, saedskifte_kategorier, saedskifte_library
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
@@ -19,7 +20,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 class EvaluateRotationCandidatesRequest(CamelModel):
     field_ids: list[str] = Field(min_length=1)
-    kategori: str
+    godning: GodningSettings
     candidate_refs: list[RotationCandidateRef] = Field(min_length=1)
     start_year: int = 1
     irrigated: bool = False
@@ -53,6 +54,11 @@ class RotationKategoriOption(CamelModel):
 class AfgrodeKodeOption(CamelModel):
     code: int
     navn: str
+
+
+class GodningPresetOption(CamelModel):
+    navn: str
+    godning: GodningSettings
 
 
 def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
@@ -109,6 +115,29 @@ async def list_rotation_n_norm_procenter() -> list[str]:
     denne omgang — en forenkling, jf. planen."""
     values = {n for _s, _v, n in saedskifte_library.list_all_candidate_refs()}
     return sorted(values, key=int)
+
+
+@router.get("/godnings-presets", response_model=list[GodningPresetOption])
+async def list_godnings_presets() -> list[GodningPresetOption]:
+    """De 5 navngivne gødnings-presets (Svinegylle/Kvæggylle, konventionel og
+    økologisk) til "Nyt scenarie"s gødnings-sektion (Fase 13) — ren
+    eksponering af de allerede eksisterende tal i
+    saedskifte_kategorier.KATEGORI_GODNING, nu uden nogen binding til hvilke
+    sædskifter der er valgbare. "Plantesædskifter" (ren mineralsk gødning,
+    org_mineral_n=0) udelades — det er UI'ens "Ingen organisk gødning"."""
+    return [
+        GodningPresetOption(
+            navn=navn,
+            godning=GodningSettings(
+                driftsform=data["dyrkningssystem"],
+                org_mineral_n=data["org_mineral_n"],
+                mineralsk_andel_pct=data["mineralsk_andel_pct"],
+                only_organic=data["only_organic"],
+            ),
+        )
+        for navn, data in saedskifte_kategorier.KATEGORI_GODNING.items()
+        if navn != saedskifte_kategorier.PLANTESAEDSKIFTER
+    ]
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
@@ -180,7 +209,10 @@ async def evaluate_rotation_candidates(
             evaluate_candidate_for_mark(
                 ref,
                 jbnr=jbnr,
-                kategori=request.kategori,
+                driftsform=request.godning.driftsform,
+                org_mineral_n=request.godning.org_mineral_n,
+                mineralsk_andel_pct=request.godning.mineralsk_andel_pct,
+                only_organic=request.godning.only_organic,
                 start_year=request.start_year,
                 irrigated=request.irrigated,
             )

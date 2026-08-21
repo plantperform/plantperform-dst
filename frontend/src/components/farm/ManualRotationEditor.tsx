@@ -90,10 +90,15 @@ export const ManualRotationEditor = ({
     setStartYear(current.startYear ?? 1)
   }, [open, current])
 
-  const availableKategorier = useMemo(
-    () => kategorier.filter((k) => simulation.rotationKategorier.includes(k.kategori)),
-    [kategorier, simulation.rotationKategorier],
-  )
+  const availableKategorier = useMemo(() => {
+    const allowed = new Set(simulation.rotationSaedskiftevarianter)
+    return kategorier
+      .map((k) => ({
+        ...k,
+        saedskifter: k.saedskifter.filter((s) => allowed.has(s.saedskiftevariant)),
+      }))
+      .filter((k) => k.saedskifter.length > 0)
+  }, [kategorier, simulation.rotationSaedskiftevarianter])
 
   const selectedKategori = useMemo(() => {
     if (!baseRef) return availableKategorier[0]

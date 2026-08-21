@@ -1,7 +1,23 @@
+from typing import Literal
+
 from pydantic import Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
 from app.domain.field import Crop
+
+
+class GodningSettings(CamelModel):
+    """Scenarie-niveau gødningsvalg (Fase 13) — porteret fra
+    streamlit_app.py's "Organisk gødning"-sidebar, nu fuldt afkoblet fra
+    hvilke sædskifter/varianter der er valgt (var tidligere bundlet
+    sammen via saedskifte_kategorier's kategori-system). Samme tre tal
+    candidate_evaluator.compute_n_inputs allerede har brugt siden Fase 2,
+    blot ikke længere opslået via en kategori-streng."""
+
+    driftsform: Literal["Konventionel", "Økologisk"] = "Konventionel"
+    org_mineral_n: float = Field(default=0.0, ge=0)
+    mineralsk_andel_pct: float = Field(default=100.0, gt=0, le=100)
+    only_organic: bool = False
 
 
 class CropPercentageConstraint(CamelModel):
@@ -69,11 +85,16 @@ class Simulation(CamelModel):
     name: str
     created_at: str
     constraints: OptimizationConstraints = Field(default_factory=OptimizationConstraints)
-    # Hvilke sædskifte-kategorier + N-norm% "Opret scenarie" brugte til at
+    # Hvilke sædskiftevarianter + N-norm% "Opret scenarie" brugte til at
     # generere den gemte kandidatmængde (simulation_field_candidates) — rent
     # oplysende/audit, solveren læser dette indirekte via de gemte kandidater.
-    rotation_kategorier: list[str] = Field(default_factory=list)
+    rotation_saedskiftevarianter: list[str] = Field(default_factory=list)
     rotation_n_norm_procenter: list[str] = Field(default_factory=list)
+    # Gødningsvalg (Fase 13) — uafhængig af rotation_saedskiftevarianter.
+    # Sikker default for allerede-gemte simuleringer: tolkes som "ren
+    # mineralsk gødning, konventionel" (samme "genskab for korrekte tal"-
+    # præcedens som Fase 7/8/9's andre additive scenarie-felter).
+    godning: GodningSettings = Field(default_factory=GodningSettings)
     # Sådato/etableringsinterval for efterafgrøde (EEA) — gælder for alle år
     # med efterafgrøde på tværs af scenariets marker (jf. streamlit_app.py's
     # globale "gælder for alle år med efterafgrøde"-indstilling). eea_fdato er
@@ -85,10 +106,11 @@ class Simulation(CamelModel):
 
 class CreateSimulationRequest(CamelModel):
     name: str = Field(min_length=1)
-    # Kategori-navn -> eksplicit valgte saedskiftevariant-id'er under den
-    # kategori (fra "Nyt scenarie"s fold-ud-liste pr. kategori). En kategori
-    # der ikke skal indgå udelades helt, i stedet for en tom liste.
-    kategori_saedskifter: dict[str, list[str]] = Field(default_factory=dict)
+    # Flad liste af valgte saedskiftevariant-id'er (fra "Nyt scenarie"s
+    # fold-ud-liste, som stadig grupperer efter kategori for browsing —
+    # men gødning (herunder) er fuldt uafhængig af dette valg, jf. Fase 13).
+    saedskiftevarianter: list[str] = Field(default_factory=list)
     n_norm_procenter: list[str] = Field(default_factory=list)
+    godning: GodningSettings = Field(default_factory=GodningSettings)
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
