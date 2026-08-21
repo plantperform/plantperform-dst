@@ -39,7 +39,7 @@ async def get_field_bounds(
     bounds = get_registry_bounds(db, cvr=cvr, imk_ids=parsed_imk_ids)
 
     if bounds is None:
-        raise HTTPException(status_code=404, detail="No registry bounds found")
+        raise HTTPException(status_code=404, detail="Ingen registerudstrækning fundet")
 
     return bounds
 
@@ -53,7 +53,9 @@ async def get_fields(
     fields = get_registry_fields(db, parsed_imk_ids)
 
     if len(fields) != len(set(parsed_imk_ids)):
-        raise HTTPException(status_code=404, detail="One or more registry fields were not found")
+        raise HTTPException(
+            status_code=404, detail="Én eller flere registermarker blev ikke fundet"
+        )
 
     return fields
 
@@ -63,7 +65,7 @@ async def get_field(imk_id: int, db: DbSession) -> RegistryField:
     field = get_registry_field(db, imk_id)
 
     if field is None:
-        raise HTTPException(status_code=404, detail="Registry field not found")
+        raise HTTPException(status_code=404, detail="Registermark ikke fundet")
 
     return field
 

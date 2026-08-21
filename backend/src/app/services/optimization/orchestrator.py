@@ -105,7 +105,7 @@ def run_optimization(
         raise OptimizationNotFoundError
 
     if not fields:
-        raise OptimizationInfeasibleError("Simulation has no fields to optimize.")
+        raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc.candidates for fc in field_candidates}
 
@@ -114,8 +114,8 @@ def run_optimization(
         options = _build_options(field, candidates_by_field_id.get(field.id, []))
         if not options:
             raise OptimizationInfeasibleError(
-                f"Field {field.name} has no calculated rotation candidates — "
-                "recreate the scenario with at least one kategori and N-norm%."
+                f"Marken {field.name} har ingen beregnede sædskifte-kandidater — "
+                "genopret scenariet med mindst én kategori og N-norm%."
             )
 
         field_inputs.append(FieldInput(id=field.id, area_ha=field.area_ha, options=options))
@@ -134,11 +134,15 @@ def run_optimization(
 
     if output.status == "INFEASIBLE":
         raise OptimizationInfeasibleError(
-            "No feasible crop rotation assignment satisfies the saved constraints."
+            "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
+            "maks. udledning eller foderenheder og prøv igen."
         )
 
     if output.status == "UNKNOWN":
-        raise OptimizationUnknownError("Optimization did not find a feasible solution in time.")
+        raise OptimizationUnknownError(
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — "
+            "prøv en længere tidsgrænse."
+        )
 
     updated_fields = []
     for assignment in output.assignments:
@@ -357,7 +361,7 @@ def run_yearly_optimization(
         raise OptimizationNotFoundError
 
     if not fields:
-        raise OptimizationInfeasibleError("Simulation has no fields to optimize.")
+        raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc for fc in field_candidates}
 
@@ -374,8 +378,8 @@ def run_yearly_optimization(
         )
         if not options:
             raise OptimizationInfeasibleError(
-                f"Field {field.name} has no calculated rotation candidates — "
-                "recreate the scenario with at least one kategori and N-norm%."
+                f"Marken {field.name} har ingen beregnede sædskifte-kandidater — "
+                "genopret scenariet med mindst én kategori og N-norm%."
             )
         options_by_field_id[field.id] = options
         field_inputs.append(YearlyFieldInput(id=field.id, area_ha=field.area_ha, options=options))
@@ -395,11 +399,15 @@ def run_yearly_optimization(
 
     if output.status == "INFEASIBLE":
         raise OptimizationInfeasibleError(
-            "No feasible crop rotation assignment satisfies the saved constraints."
+            "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
+            "maks. udledning eller foderenheder og prøv igen."
         )
 
     if output.status == "UNKNOWN":
-        raise OptimizationUnknownError("Optimization did not find a feasible solution in time.")
+        raise OptimizationUnknownError(
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — "
+            "prøv en længere tidsgrænse."
+        )
 
     updated_fields = []
     for assignment in output.assignments:

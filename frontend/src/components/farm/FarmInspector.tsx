@@ -259,6 +259,7 @@ const OptimizeDialog = ({
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setRunError(null)
@@ -296,7 +297,9 @@ const OptimizeDialog = ({
   const runOptimization = async () => {
     setIsRunning(true)
     try {
-      const response = await runSimulationOptimization(farmId, simulation.id)
+      const response = await runSimulationOptimization(farmId, simulation.id, {
+        timeLimitSeconds,
+      })
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
         response.fields,
@@ -335,6 +338,22 @@ const OptimizeDialog = ({
         </DialogHeader>
 
         <div className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="optimize-time-limit">Tidsgrænse</Label>
+            <Input
+              id="optimize-time-limit"
+              type="number"
+              min="1"
+              max="600"
+              value={timeLimitSeconds}
+              onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              sekunder — sæt højere hvis optimeringen ikke når at finde en
+              løsning i tide på en stor bedrift
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="max-n-load">Maks. tilladt Udledning</Label>
@@ -579,7 +598,7 @@ const YearlyOptimizeDialog = ({
               id="yearly-time-limit"
               type="number"
               min="1"
-              max="120"
+              max="600"
               value={timeLimitSeconds}
               onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
             />

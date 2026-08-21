@@ -19,7 +19,7 @@ def default_allowed_rotation_ids() -> list[str]:
 
 def validate_rotation_ids(value: list[str]) -> list[str]:
     if len(set(value)) != len(value):
-        raise ValueError("Allowed rotations must be unique")
+        raise ValueError("Tilladte sædskifter skal være unikke")
     return value
 
 
@@ -69,9 +69,9 @@ class FieldMeasures(CamelModel):
     @classmethod
     def validate_unique_years(cls, value: list[int]) -> list[int]:
         if any(year < 0 for year in value):
-            raise ValueError("Measure years cannot be negative")
+            raise ValueError("Virkemiddel-år kan ikke være negative")
         if len(set(value)) != len(value):
-            raise ValueError("Measure years must be unique")
+            raise ValueError("Virkemiddel-år skal være unikke")
         return sorted(value)
 
 
@@ -96,9 +96,9 @@ def validate_measures_for_rotation(
     planens beslutning 7), ikke en efterfølgende per-mark-godkendelse."""
     crop_count = len(crop_rotation)
     if any(year >= crop_count for year in measures.cover_crop_years):
-        raise ValueError("Cover crop year is outside the crop rotation")
+        raise ValueError("Efterafgrøde-år ligger uden for sædskiftet")
     if any(year >= crop_count for year in measures.early_sowing_years):
-        raise ValueError("Early sowing year is outside the crop rotation")
+        raise ValueError("Tidlig-sånings-år ligger uden for sædskiftet")
 
     return measures
 
@@ -131,7 +131,7 @@ _CROP_BY_REGISTRY_ID: dict[int, Crop] = {
 
 def parse_soil_id(value: int | None) -> Soil:
     if value is None:
-        raise ValueError("Soil id is required")
+        raise ValueError("Jordtype-id er påkrævet")
 
     soil = _SOIL_BY_REGISTRY_ID.get(value)
     if soil is None:
@@ -255,6 +255,6 @@ class UpdateFieldRequest(CamelModel):
     @model_validator(mode="after")
     def validate_soil(self) -> "UpdateFieldRequest":
         if "soil" in self.model_fields_set and self.soil is None:
-            raise ValueError("Soil is required")
+            raise ValueError("Jordtype er påkrævet")
 
         return self

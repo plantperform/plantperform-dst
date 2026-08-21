@@ -22,7 +22,7 @@ async def get_farm_by_id(farm_id: str) -> Farm:
     farm = get_farm(farm_id)
 
     if farm is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     return farm
 
@@ -32,7 +32,7 @@ async def patch_farm(farm_id: str, request: UpdateFarmRequest) -> Farm:
     farm = update_farm(farm_id, request)
 
     if farm is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     return farm
 
@@ -42,4 +42,4 @@ async def delete_farm_by_id(farm_id: str) -> None:
     deleted = delete_farm(farm_id)
 
     if not deleted:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")

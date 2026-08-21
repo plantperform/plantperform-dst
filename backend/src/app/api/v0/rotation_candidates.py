@@ -204,11 +204,11 @@ async def evaluate_rotation_candidates(
     oprettelse, jf. planen)."""
     fields = list_fields(farm_id)
     if fields is None:
-        raise HTTPException(status_code=404, detail="Farm not found")
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     selected = [field for field in fields if field.id in request.field_ids]
     if len(selected) != len(set(request.field_ids)):
-        raise HTTPException(status_code=404, detail="One or more fields were not found")
+        raise HTTPException(status_code=404, detail="Én eller flere marker blev ikke fundet")
 
     imk_ids = [field.imk_id for field in selected if field.imk_id is not None]
     registries_by_imk_id = {r.imk_id: r for r in get_registry_fields(db, imk_ids)} if imk_ids else {}
