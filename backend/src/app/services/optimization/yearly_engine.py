@@ -104,9 +104,15 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     for field in input.fields:
         for option in field.options:
             if solver.BooleanValue(choice_vars[(field.id, option.key)]):
-                db2_value = sum(option.db2_by_year)
-                n_load_value = sum(option.n_load_by_year)
-                leaching_value = sum(option.leaching_by_year)
+                # db2_by_year/n_load_by_year/leaching_by_year hold one real
+                # calendar-year value each (8 entries) — summing all 8 gives
+                # a whole rotation-cycle total, 8x too large compared to what
+                # every other code path (engine.py's solve(), _build_options,
+                # apply_manual_rotation) treats a field's db2/n_load/leaching
+                # as: one representative year. Average, don't sum, to match.
+                db2_value = sum(option.db2_by_year) / NUM_YEARS
+                n_load_value = sum(option.n_load_by_year) / NUM_YEARS
+                leaching_value = sum(option.leaching_by_year) / NUM_YEARS
                 assignments.append(
                     AssignedRotation(
                         field_id=field.id,
