@@ -94,7 +94,9 @@ export const NewScenarioPanel = ({
 
     const preset = godningsPresets.find((p) => p.navn === value)
     if (!preset) return
-    setDriftsform(preset.godning.driftsform)
+    // Driftsform sættes IKKE fra preset'et — samme gødningstype (fx
+    // Kvæggylle) bruges uanset om marken er konventionel eller økologisk;
+    // driftsform styres udelukkende af den separate vælger ovenfor.
     setOrgMineralN(String(preset.godning.orgMineralN))
     setMineralskAndelPct(String(preset.godning.mineralskAndelPct))
     setOnlyOrganic(preset.godning.onlyOrganic)
@@ -371,14 +373,14 @@ export const NewScenarioPanel = ({
               </div>
             ) : null}
 
-            {godningsTypeValg === 'brugerdefineret' ? (
+            {godningsTypeValg !== 'ingen' ? (
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={onlyOrganic}
                   onChange={(event) => setOnlyOrganic(event.target.checked)}
                 />
-                Kun organisk gødning (ingen handelsgødnings-optopning)
+                Kun organisk gødning (ingen handelsgødnings-optopning) — typisk økologisk
               </label>
             ) : null}
           </div>
