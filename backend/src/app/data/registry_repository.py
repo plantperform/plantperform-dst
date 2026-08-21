@@ -33,7 +33,8 @@ def _summary_from_row(row: RowMapping) -> RegistryFieldSummary:
         area_ha=row["area_ha"],
         crop_rotation=row["crop_rotation"],
         in_takeout_plan=row["in_takeout_plan"],
-        n_quota_kg_n=row["n_quota_kg_n"],
+        udledningsgraense_kgn_ha=row["udledningsgraense_kgn_ha"],
+        udledningskvote_mark_kgn=row["udledningskvote_mark_kgn"],
     )
 
 
@@ -54,7 +55,8 @@ def _field_from_row(row: RowMapping) -> RegistryField:
         crop_rotation=row["crop_rotation"],
         crop_history=row["crop_history"],
         in_takeout_plan=row["in_takeout_plan"],
-        n_quota_kg_n=row["n_quota_kg_n"],
+        udledningsgraense_kgn_ha=row["udledningsgraense_kgn_ha"],
+        udledningskvote_mark_kgn=row["udledningskvote_mark_kgn"],
         geometry=geometry,
     )
 
@@ -77,7 +79,8 @@ def search_registry_fields(
             area_ha,
             crop_rotation,
             in_takeout_plan,
-            n_quota_kg_n
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn
         FROM registry_field
         {where_clause}
         ORDER BY imk_id
@@ -101,7 +104,8 @@ def get_registry_field(db: Session, imk_id: int) -> RegistryField | None:
             crop_rotation,
             crop_history,
             in_takeout_plan,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             ST_AsGeoJSON(geom)::json AS geometry
         FROM registry_field
         WHERE imk_id = :imk_id
@@ -127,7 +131,8 @@ def get_registry_fields(db: Session, imk_ids: list[int]) -> list[RegistryField]:
             crop_rotation,
             crop_history,
             in_takeout_plan,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             ST_AsGeoJSON(geom)::json AS geometry
         FROM registry_field
         WHERE imk_id = ANY(:imk_ids)
@@ -252,7 +257,8 @@ def _regular_fields_tile_query(cvr_clause: str, focus_clause: str) -> str:
             jbnr,
             area_ha,
             crop_rotation,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             in_takeout_plan::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             false AS focus,
@@ -277,7 +283,8 @@ def _focus_fields_tile_query(focus_clause: str) -> str:
             jbnr,
             area_ha,
             crop_rotation,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             in_takeout_plan::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             true AS focus,
@@ -301,7 +308,8 @@ def _regular_points_tile_query(cvr_clause: str, focus_clause: str) -> str:
             retention,
             soil_id,
             jbnr,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             in_takeout_plan::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             false AS focus,
@@ -325,7 +333,8 @@ def _focus_points_tile_query(focus_clause: str) -> str:
             retention,
             soil_id,
             jbnr,
-            n_quota_kg_n,
+            udledningsgraense_kgn_ha,
+            udledningskvote_mark_kgn,
             in_takeout_plan::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             true AS focus,

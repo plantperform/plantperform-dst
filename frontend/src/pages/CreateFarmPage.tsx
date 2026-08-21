@@ -19,7 +19,7 @@ export const CreateFarmPage = () => {
   const [name, setName] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [cvr, setCvr] = useState('')
-  const [nitrogenQuotaKg, setNitrogenQuotaKg] = useState('')
+  const [udledningskvoteKgN, setUdledningskvoteKgN] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -37,10 +37,10 @@ export const CreateFarmPage = () => {
       return
     }
 
-    const trimmedQuota = nitrogenQuotaKg.trim()
+    const trimmedQuota = udledningskvoteKgN.trim()
     const quota = trimmedQuota ? Number(trimmedQuota) : null
     if (quota !== null && (!Number.isFinite(quota) || quota < 0)) {
-      setError('Kvælstofkvoten skal være et positivt tal eller nul.')
+      setError('Udledningskvoten skal være et positivt tal eller nul.')
       return
     }
 
@@ -50,7 +50,7 @@ export const CreateFarmPage = () => {
         name: name.trim(),
         ownerName: ownerName.trim(),
         cvr: cvr.trim() || null,
-        ...(quota === null ? {} : { nitrogenQuotaKg: quota }),
+        ...(quota === null ? {} : { udledningskvoteKgN: quota }),
       })
       await mutate('/farms')
       navigate(`/farms/${farm.id}`)
@@ -101,14 +101,14 @@ export const CreateFarmPage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="quota">Kvælstofkvote (kg, valgfrit)</Label>
+                <Label htmlFor="quota">Udledningskvote (kg, valgfrit)</Label>
                 <Input
                   id="quota"
                   type="number"
                   min="0"
                   step="0.1"
-                  value={nitrogenQuotaKg}
-                  onChange={(event) => setNitrogenQuotaKg(event.target.value)}
+                  value={udledningskvoteKgN}
+                  onChange={(event) => setUdledningskvoteKgN(event.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
                   Kan udfyldes senere ud fra markernes kvoter.

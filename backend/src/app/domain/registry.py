@@ -18,7 +18,8 @@ class RegistryField(CamelModel):
     crop_rotation: str
     crop_history: dict[str, int | None]
     in_takeout_plan: bool = False
-    n_quota_kg_n: float | None = None
+    udledningsgraense_kgn_ha: float = 0
+    udledningskvote_mark_kgn: float = 0
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | dict[str, Any]
 
 
@@ -32,7 +33,8 @@ class RegistryFieldSummary(CamelModel):
     area_ha: float
     crop_rotation: str
     in_takeout_plan: bool = False
-    n_quota_kg_n: float | None = None
+    udledningsgraense_kgn_ha: float = 0
+    udledningskvote_mark_kgn: float = 0
 
 
 class RegistryBounds(CamelModel):

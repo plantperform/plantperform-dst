@@ -186,7 +186,8 @@ class FieldRecord(CamelModel):
     name: str
     area_ha: float
     in_takeout_plan: bool = False
-    n_quota_kg_n: float | None = None
+    udledningsgraense_kgn_ha: float = 0
+    udledningskvote_mark_kgn: float = 0
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
 
@@ -201,7 +202,8 @@ class CreateFieldRequest(CamelModel):
     name: str
     area_ha: float
     in_takeout_plan: bool = False
-    n_quota_kg_n: float | None = None
+    udledningsgraense_kgn_ha: float = 0
+    udledningskvote_mark_kgn: float = 0
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
     # Ingen "mindst ét år"-krav længere — marker oprettes typisk uden sædskifte
@@ -238,7 +240,8 @@ class UpdateFieldRequest(CamelModel):
     name: str | None = None
     area_ha: float | None = None
     in_takeout_plan: bool | None = None
-    n_quota_kg_n: float | None = None
+    udledningsgraense_kgn_ha: float | None = None
+    udledningskvote_mark_kgn: float | None = None
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
     @field_validator("allowed_rotation_ids")

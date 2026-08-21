@@ -79,21 +79,21 @@ export const FarmSidebar = ({
   >(null)
   const [newScenarioOpen, setNewScenarioOpen] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
-  const [quotaInput, setQuotaInput] = useState(String(farm.nitrogenQuotaKg))
+  const [quotaInput, setQuotaInput] = useState(String(farm.udledningskvoteKgN))
   const [isSavingQuota, setIsSavingQuota] = useState(false)
   const totals = getFieldTotals(fields)
   const quotaSum = fields.reduce(
-    (sum, field) => sum + (field.nQuotaKgN ?? 0),
+    (sum, field) => sum + field.udledningskvoteMarkKgn,
     0,
   )
   const roundedQuotaSum = Math.round(quotaSum)
   const missingQuotaCount = fields.filter(
-    (field) => field.nQuotaKgN === null,
+    (field) => field.udledningskvoteMarkKgn === 0,
   ).length
 
   const setQuotaDialogState = (open: boolean) => {
     setQuotaDialogOpen(open)
-    if (open) setQuotaInput(String(farm.nitrogenQuotaKg))
+    if (open) setQuotaInput(String(farm.udledningskvoteKgN))
   }
 
   const confirmDelete = async () => {
@@ -113,13 +113,13 @@ export const FarmSidebar = ({
   const saveQuota = async () => {
     const quota = Number(quotaInput)
     if (!Number.isFinite(quota) || quota < 0) {
-      onError('Kvælstofkvoten skal være et positivt tal eller nul.')
+      onError('Udledningskvoten skal være et positivt tal eller nul.')
       return
     }
 
     setIsSavingQuota(true)
     try {
-      const updatedFarm = await updateFarm(farm.id, { nitrogenQuotaKg: quota })
+      const updatedFarm = await updateFarm(farm.id, { udledningskvoteKgN: quota })
       await mutate(farmKey(farm.id), updatedFarm, { revalidate: false })
       await mutate('/farms')
       setQuotaDialogOpen(false)
@@ -178,9 +178,9 @@ export const FarmSidebar = ({
           <div className="rounded-lg border bg-background p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-muted-foreground">Kvælstofkvote</p>
+                <p className="text-muted-foreground">Udledningskvote</p>
                 <p className="mt-1 font-medium">
-                  {formatNumber(farm.nitrogenQuotaKg)} kg N
+                  {formatNumber(farm.udledningskvoteKgN)} kg N
                 </p>
               </div>
               <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogState}>
@@ -195,15 +195,15 @@ export const FarmSidebar = ({
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Rediger kvælstofkvote</DialogTitle>
+                    <DialogTitle>Rediger udledningskvote</DialogTitle>
                     <DialogDescription>
-                      Justér bedriftens samlede kvælstofkvote, eller beregn den
-                      ud fra summen af markernes kvoter.
+                      Justér bedriftens samlede udledningskvote, eller beregn
+                      den ud fra summen af markernes kvoter.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="farm-quota">Kvælstofkvote (kg N)</Label>
+                      <Label htmlFor="farm-quota">Udledningskvote (kg N)</Label>
                       <Input
                         id="farm-quota"
                         type="number"
@@ -222,8 +222,8 @@ export const FarmSidebar = ({
                         <p className="text-amber-700">
                           {missingQuotaCount}{' '}
                           {missingQuotaCount === 1 ? 'mark' : 'marker'} uden
-                          kvote indgår som 0 kg N. Summen kan derfor være for
-                          lav.
+                          data for udledningsgrænse indgår som 0 kg N. Summen
+                          kan derfor være for lav.
                         </p>
                       ) : null}
                     </div>

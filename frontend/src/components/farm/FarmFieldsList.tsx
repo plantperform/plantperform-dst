@@ -75,10 +75,10 @@ const comparePrimary = (
       return compareNumber(left.leaching, right.leaching, sort.direction)
     case 'fen':
       return compareNumber(left.fen, right.fen, sort.direction)
-    case 'nQuotaKgN':
+    case 'udledningskvoteMarkKgn':
       return compareNullableNumber(
-        left.nQuotaKgN,
-        right.nQuotaKgN,
+        left.udledningskvoteMarkKgn,
+        right.udledningskvoteMarkKgn,
         sort.direction,
       )
     case 'inTakeoutPlan':
@@ -342,8 +342,8 @@ export const FarmFieldsList = ({
                   onSortChange={onSortChange}
                 />
                 <SortableHeader
-                  label="Kvælstofkvote (kg N)"
-                  sortKey="nQuotaKgN"
+                  label="Udledningskvote (kg N)"
+                  sortKey="udledningskvoteMarkKgn"
                   sort={sort}
                   onSortChange={onSortChange}
                 />
@@ -452,15 +452,11 @@ export const FarmFieldsList = ({
                     </td>
                     <td className="px-4 py-3">
                       <div>
-                        {field.nQuotaKgN === null
-                          ? 'Ukendt'
-                          : `${formatNumber(field.nQuotaKgN)} kg N`}
+                        {formatNumber(field.udledningskvoteMarkKgn)} kg N
                       </div>
-                      {field.nQuotaKgN !== null && field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.nQuotaKgN / field.areaHa)} kg N/ha
-                        </div>
-                      ) : null}
+                      <div className="text-xs text-muted-foreground/80">
+                        {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {field.inTakeoutPlan ? 'Ja' : 'Nej'}
