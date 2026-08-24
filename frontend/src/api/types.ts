@@ -284,6 +284,8 @@ export type RotationCandidateYearResult = {
   tildeltHandelsgodningKgnHa: number
   husdyrgodningOrganiskBundetKgnHa: number
   husdyrgodningTonPrHa: number
+  afgrodeNormKgnHa: number | null
+  nNormPct: number
 }
 
 export type RotationPositionOverride = {

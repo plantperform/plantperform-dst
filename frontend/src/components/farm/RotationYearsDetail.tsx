@@ -108,8 +108,20 @@ const KeyMetricsSection = ({
   const tildeltGoedning = husdyrUdnyttet + handelsgodning
   const tilgaengeligtN = forfrugt + tildeltGoedning
 
+  const afgrodeNorm = year.afgrodeNormKgnHa
+  const reduceretNorm = afgrodeNorm !== null ? afgrodeNorm * (year.nNormPct / 100) : null
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <MetricTile
+        label="Afgrøde-norm"
+        value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
+        caption={
+          reduceretNorm !== null
+            ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
+            : undefined
+        }
+      />
       <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
       <MetricTile
         label="Foderenheder"
