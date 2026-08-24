@@ -86,6 +86,20 @@ def compute_n_inputs(
 
     eff_org = min(org_mineral_n, net_scaled)
     pool_pct = 100.0 - mineralsk_andel_pct
+    # G0 bruger bevidst den RÅ org_mineral_n, ikke eff_org (som er kappet til
+    # DENNE afgrødes norm-behov, kun brugsbart for MNCS). Porteret præcist fra
+    # streamlit_app.py's sidebar (linje 966-986): der er to UAFHÆNGIGE
+    # kapninger af org_mineral_n i den gamle app — (1) et regelsæt-loft
+    # (max_mineral_n/max_total_n, EU-regler 170/107/65 kg N/ha), anvendt ÉN
+    # GANG på scenarie-niveau og fælles for alle afgrøder i rotationen, som
+    # G0 (org_pool_n) beregnes af; og (2) et PER-AFGRØDE loft mod dens egen
+    # norm (samme eff_org som her), der KUN bruges til MNCS. DST2 modellerer
+    # ikke regelsæt-loftet (1) — scenariets org_mineral_n-indstilling
+    # SVARER TIL den gamle apps allerede regelsæt-kappede værdi, så G0 skal
+    # bruge den direkte, ikke kappes yderligere pr. afgrøde. En tidligere
+    # rettelse her (brugte eff_org) byggede på en forkert antagelse om at
+    # "udnyttet" og "organisk bundet" skal beskrive samme fysiske udbringning
+    # — det gør de bevidst ikke i den gamle app.
     g0 = org_mineral_n * (pool_pct / mineralsk_andel_pct)
 
     if only_organic:
