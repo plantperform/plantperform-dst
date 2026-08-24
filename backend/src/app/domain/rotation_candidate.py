@@ -78,14 +78,6 @@ class RotationPositionOverride(CamelModel):
     afgrode_kode: int
 
 
-class RotationPositionOverride(CamelModel):
-    """Manuel overskrivning af hovedafgrøden i én position (0-7) af en
-    ellers biblioteksgenereret rotation — jf. Fase 10 (levende beregning)."""
-
-    position: int = Field(ge=0, le=7)
-    afgrode_kode: int
-
-
 class RotationCandidateEvaluation(CamelModel):
     ref: RotationCandidateRef
     active_len: int
