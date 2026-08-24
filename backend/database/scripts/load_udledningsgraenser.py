@@ -24,7 +24,7 @@ from shapely.geometry import MultiPolygon, Polygon
 from app.data.db import DATABASE_URL
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw" / "Udeledningsdata"
+RAW_DIR = ROOT / "data" / "raw" / "ANGJ-data" / "Udeledningsdata"
 SHP_PATH = (
     RAW_DIR / "Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp"
 )
