@@ -203,6 +203,7 @@ def apply_manual_rotation(
         org_mineral_n=godning.org_mineral_n,
         mineralsk_andel_pct=godning.mineralsk_andel_pct,
         only_organic=godning.only_organic,
+        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=start_year,
     )
@@ -305,6 +306,7 @@ def _expand_yearly_options(
                     org_mineral_n=godning.org_mineral_n,
                     mineralsk_andel_pct=godning.mineralsk_andel_pct,
                     only_organic=godning.only_organic,
+                    n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     start_year=shift,
                 )

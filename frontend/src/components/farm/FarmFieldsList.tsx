@@ -566,6 +566,8 @@ export const FarmFieldsList = ({
                           farmId={farmId}
                           simulationId={simulationId}
                           fieldId={field.id}
+                          rotationId={field.rotationId}
+                          areaHa={field.areaHa}
                         />
                       </td>
                     </tr>

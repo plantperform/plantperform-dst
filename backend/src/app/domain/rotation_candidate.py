@@ -40,6 +40,26 @@ class RotationCandidateYearResult(CamelModel):
     leaching_detail: dict
     db_kr_ha: float
     db_detail: dict
+    # Nøgletal til "nøgletal"-laget i markens beregningsgennemgang (jf. den
+    # gamle app) — allerede beregnet af compute_n_inputs, men tidligere kasseret
+    # efter brug i selve NLES5-/DB-kaldet, ikke gjort tilgængelig for UI'en.
+    # Husdyrgødning består af en udnyttet/mineralsk del (tæller med i normen,
+    # ligesom handelsgødning) og en organisk bundet del (tæller IKKE med i
+    # normen, men indgår i NLES5-udvaskningen via G0/G1/G2).
+    forfrugtsvaerdi_kgn_ha: float = 0.0
+    tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0.0
+    tildelt_handelsgodning_kgn_ha: float = 0.0
+    husdyrgodning_organisk_bundet_kgn_ha: float = 0.0
+    # Ton-overblik (streamlit_app.py's "Reference — ton-overblik") — den
+    # udlagte mængde husdyrgødning i ton/ha (scenariets "Maks tilladt
+    # udnyttet N"-indstilling ÷ gødningens N-indhold kg N/ton), samme for
+    # alle positioner i rotationen (jf. Fase 13: én gødningsindstilling for
+    # hele scenariet). IKKE opdelt i udnyttet/organisk bundet — det er kun
+    # relevant for selve NLES5-/DB-beregningen, ikke for hvor meget gødning
+    # der fysisk køres ud. Rent opgørelsestal, ingen beregningseffekt — til
+    # senere brug som optimeringsparameter (min/maks ton gødning brugt
+    # pr. år).
+    husdyrgodning_ton_pr_ha: float = 0.0
 
 
 class RotationPositionOverride(CamelModel):

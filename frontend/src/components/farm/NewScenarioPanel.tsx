@@ -77,6 +77,7 @@ export const NewScenarioPanel = ({
   const [orgMineralN, setOrgMineralN] = useState('0')
   const [mineralskAndelPct, setMineralskAndelPct] = useState('100')
   const [onlyOrganic, setOnlyOrganic] = useState(false)
+  const [nIndholdKgPerTon, setNIndholdKgPerTon] = useState('6')
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
   const [fdatoDate, setFdatoDate] = useState('20/8')
@@ -172,6 +173,7 @@ export const NewScenarioPanel = ({
           orgMineralN: Number(orgMineralN) || 0,
           mineralskAndelPct: Number(mineralskAndelPct) || 100,
           onlyOrganic,
+          nIndholdKgPerTon: Number(nIndholdKgPerTon) || 6,
         },
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
@@ -207,7 +209,7 @@ export const NewScenarioPanel = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nyt scenarie</DialogTitle>
           <DialogDescription>
@@ -351,7 +353,7 @@ export const NewScenarioPanel = ({
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
                   <span className="text-xs text-muted-foreground">
-                    Udnyttet N fra organisk gødning (kg N/ha)
+                    Maks tilladt udnyttet N fra organisk gødning (kg N/ha)
                   </span>
                   <Input
                     type="number"
@@ -369,6 +371,36 @@ export const NewScenarioPanel = ({
                     value={mineralskAndelPct}
                     onChange={(event) => setMineralskAndelPct(event.target.value)}
                   />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-xs text-muted-foreground">
+                    Udnyttet N-indhold (kg N/ton)
+                  </span>
+                  <Input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={nIndholdKgPerTon}
+                    onChange={(event) => setNIndholdKgPerTon(event.target.value)}
+                  />
+                  <span className="block text-xs text-muted-foreground">
+                    Typisk kvæggylle: 4–7 kg udnyttet N/ton. Bruges til at
+                    omregne til ton gødning brugt pr. mark pr. år (reference,
+                    ingen beregningseffekt).
+                    {(() => {
+                      const udnyttetPerTon = Number(nIndholdKgPerTon)
+                      const mineralskPct = Number(mineralskAndelPct)
+                      if (!udnyttetPerTon || !mineralskPct) return null
+                      const totalPerTon = udnyttetPerTon / (mineralskPct / 100)
+                      return (
+                        <>
+                          {' '}
+                          Svarer til ca. {totalPerTon.toFixed(1)} kg total N/ton
+                          (ved {mineralskPct}% mineralsk andel).
+                        </>
+                      )
+                    })()}
+                  </span>
                 </label>
               </div>
             ) : null}

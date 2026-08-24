@@ -18,6 +18,10 @@ class GodningSettings(CamelModel):
     org_mineral_n: float = Field(default=0.0, ge=0)
     mineralsk_andel_pct: float = Field(default=100.0, gt=0, le=100)
     only_organic: bool = False
+    # Ton-overblik (streamlit_app.py's "Reference — ton-overblik", linje
+    # 1016-1018) — gødningens N-indhold, brugt til at omregne kg N til ton
+    # gødning. Default matcher den gamle apps default; typisk kvæggylle 4-7.
+    n_indhold_kg_per_ton: float = Field(default=6.0, gt=0)
 
 
 class CropPercentageConstraint(CamelModel):

@@ -225,6 +225,7 @@ async def evaluate_rotation_candidates(
                 org_mineral_n=request.godning.org_mineral_n,
                 mineralsk_andel_pct=request.godning.mineralsk_andel_pct,
                 only_organic=request.godning.only_organic,
+                n_indhold_kg_per_ton=request.godning.n_indhold_kg_per_ton,
                 start_year=request.start_year,
                 irrigated=request.irrigated,
             )
