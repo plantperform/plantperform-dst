@@ -160,13 +160,9 @@ const KeyMetricsSection = ({
         value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
       />
       <MetricTile
-        label="Ton gødning (udnyttet N)"
-        value={`${fmt(year.husdyrgodningTonUdnyttetPrHa * areaHa, 1)} ton`}
-        caption={
-          `${fmt(year.husdyrgodningTonUdnyttetPrHa, 2)} ton/ha — reference, indgår senere i optimeringen. ` +
-          `Inkl. organisk bundet: ${fmt(year.husdyrgodningTonTotalPrHa * areaHa, 1)} ton ` +
-          `(${fmt(year.husdyrgodningTonTotalPrHa, 2)} ton/ha)`
-        }
+        label="Ton gødning"
+        value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
+        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha — reference, indgår senere i optimeringen`}
       />
     </div>
   )

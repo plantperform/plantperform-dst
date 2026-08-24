@@ -50,15 +50,16 @@ class RotationCandidateYearResult(CamelModel):
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0.0
     tildelt_handelsgodning_kgn_ha: float = 0.0
     husdyrgodning_organisk_bundet_kgn_ha: float = 0.0
-    # Ton-overblik (streamlit_app.py's "Reference — ton-overblik") — udnyttet
-    # N ÷ gødningens N-indhold (kg N/ton) er primærtallet (svarer direkte til
-    # scenariets "Maks tilladt udnyttet N"-indtastning); ton_total_pr_ha
-    # regner på udnyttet + organisk bundet N i stedet — den fysiske mængde
-    # gødning der reelt skal udbringes. Rene opgørelsestal, ingen
-    # beregningseffekt — til senere brug som optimeringsparameter (min/maks
-    # ton gødning brugt pr. år).
-    husdyrgodning_ton_udnyttet_pr_ha: float = 0.0
-    husdyrgodning_ton_total_pr_ha: float = 0.0
+    # Ton-overblik (streamlit_app.py's "Reference — ton-overblik") — den
+    # udlagte mængde husdyrgødning i ton/ha (scenariets "Maks tilladt
+    # udnyttet N"-indstilling ÷ gødningens N-indhold kg N/ton), samme for
+    # alle positioner i rotationen (jf. Fase 13: én gødningsindstilling for
+    # hele scenariet). IKKE opdelt i udnyttet/organisk bundet — det er kun
+    # relevant for selve NLES5-/DB-beregningen, ikke for hvor meget gødning
+    # der fysisk køres ud. Rent opgørelsestal, ingen beregningseffekt — til
+    # senere brug som optimeringsparameter (min/maks ton gødning brugt
+    # pr. år).
+    husdyrgodning_ton_pr_ha: float = 0.0
     # Afgrødens fulde Bilag 1-N-norm (kg N/ha), FØR forfrugtsværdi trækkes fra
     # og FØR N-norm%-reduktionen — None hvis afgrøden ikke har en norm i
     # datasættet (fx en administrativ arealtype). n_norm_pct er reduktionen

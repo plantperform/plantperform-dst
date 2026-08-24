@@ -210,24 +210,18 @@ def evaluate_sequence_for_mark(
         # ikke med i normen, men indgår i L_nuar via G0/G1/G2 ovenfor).
         tildelt_husdyrgodning_udnyttet = n_inputs[i]["org_mineral_n_applied"]
         tildelt_handelsgodning = max(0.0, n_inputs[i]["mncs"] - tildelt_husdyrgodning_udnyttet)
-        # Ton-overblik, porteret fra streamlit_app.py's sidebar-reference (linje
-        # 1014-1024), men med udnyttet N som primær beregningsbasis (bruger-
-        # præcisering) i stedet for gødningens totale N-indhold: primærtallet
-        # svarer direkte til scenariets "Maks tilladt udnyttet N"-indtastning
-        # divideret med gødningens N-indhold (kg N/ton, brugervalgt — default
-        # 6.0, typisk kvæggylle 4-7 kg N/ton). Total-N-baseret tal (udnyttet +
-        # organisk bundet del) vises stadig ved siden af, som reference — det
-        # svarer til den fysiske mængde gødning der reelt skal udbringes for at
-        # levere den udnyttede mængde. Rene opgørelsestal, påvirker ikke selve
-        # udvasknings-/DB-beregningen — til senere brug som optimeringsparameter
-        # (min/maks ton gødning pr. år, jf. bruger).
-        husdyrgodning_total_n = tildelt_husdyrgodning_udnyttet + n_inputs[i]["g0"]
-        husdyrgodning_ton_udnyttet = (
+        # Ton-overblik — hvor mange ton husdyrgødning der reelt blev tildelt
+        # på denne position. Bruger BEVIDST tildelt_husdyrgodning_udnyttet
+        # (eff_org, denne positions norm-begrænsede tildeling), ikke den rå
+        # scenarie-indstilling org_mineral_n — org_mineral_n er en ØVRE
+        # GRÆNSE for hvor meget udnyttet N der må tildeles via husdyrgødning,
+        # ikke en fast udbragt mængde; man gøder kun til norm, aldrig mere.
+        # Er der ingen norm (fx brak/administrativt areal), er
+        # tildelt_husdyrgodning_udnyttet allerede 0, så ton bliver det også.
+        husdyrgodning_ton = (
             tildelt_husdyrgodning_udnyttet / n_indhold_kg_per_ton
-            if n_indhold_kg_per_ton > 0 else 0.0
-        )
-        husdyrgodning_ton_total = (
-            husdyrgodning_total_n / n_indhold_kg_per_ton if n_indhold_kg_per_ton > 0 else 0.0
+            if n_indhold_kg_per_ton > 0
+            else 0.0
         )
 
         years.append(RotationCandidateYearResult(
@@ -245,8 +239,7 @@ def evaluate_sequence_for_mark(
             tildelt_husdyrgodning_udnyttet_kgn_ha=tildelt_husdyrgodning_udnyttet,
             tildelt_handelsgodning_kgn_ha=tildelt_handelsgodning,
             husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"],
-            husdyrgodning_ton_udnyttet_pr_ha=husdyrgodning_ton_udnyttet,
-            husdyrgodning_ton_total_pr_ha=husdyrgodning_ton_total,
+            husdyrgodning_ton_pr_ha=husdyrgodning_ton,
             afgrode_norm_kgn_ha=n_inputs[i]["n_norm"],
             n_norm_pct=n_norm_pct,
         ))
