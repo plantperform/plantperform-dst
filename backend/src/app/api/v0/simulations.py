@@ -425,6 +425,7 @@ async def post_farm_simulation_field_preview_rotation(
         org_mineral_n=godning.org_mineral_n,
         mineralsk_andel_pct=godning.mineralsk_andel_pct,
         only_organic=godning.only_organic,
+        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=request.start_year,

@@ -157,6 +157,7 @@ export type GodningSettings = {
   orgMineralN: number
   mineralskAndelPct: number
   onlyOrganic: boolean
+  nIndholdKgPerTon: number
 }
 
 export type GodningPresetOption = {
@@ -278,6 +279,11 @@ export type RotationCandidateYearResult = {
   dbKrHa: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dbDetail: Record<string, any>
+  forfrugtsvaerdiKgnHa: number
+  tildeltHusdyrgodningUdnyttetKgnHa: number
+  tildeltHandelsgodningKgnHa: number
+  husdyrgodningOrganiskBundetKgnHa: number
+  husdyrgodningTonPrHa: number
 }
 
 export type RotationPositionOverride = {

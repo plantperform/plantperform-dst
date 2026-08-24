@@ -66,6 +66,81 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </h4>
 )
 
+const MetricTile = ({
+  label,
+  value,
+  caption,
+}: {
+  label: string
+  value: string
+  caption?: string
+}) => (
+  <div className="rounded-md border bg-background p-3">
+    <p className="text-xs text-muted-foreground">{label}</p>
+    <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+    {caption ? (
+      <p className="mt-0.5 text-xs text-muted-foreground">{caption}</p>
+    ) : null}
+  </div>
+)
+
+// Nøgletal-laget — samme metrics som den gamle app viste pr. år (Normudbytte,
+// Forfrugt FV, Tildelt N) plus DB og foderenheder, som DST2 allerede beregner
+// men ikke tidligere samlede ét sted. Det fulde formel-gennemgang (M/W/MP/WP,
+// Nθ, L_nuar, DB2-poster) er lag 2, foldet ud herfra, ikke vist som standard.
+const KeyMetricsSection = ({
+  year,
+  areaHa,
+}: {
+  year: RotationCandidateYearResult
+  areaHa: number
+}) => {
+  const udbytte = num(year.dbDetail.udbytte)
+  const udbytteenhed = String(year.dbDetail.udbytteenhed ?? '')
+  const isFoderafgroede = udbytteenhed === 'FE/ha'
+  const forfrugt = year.forfrugtsvaerdiKgnHa
+  // Husdyrgødning har to dele: en udnyttet/mineralsk del, der tæller med i
+  // normopfyldelsen ligesom handelsgødning, og en organisk bundet del, der
+  // ikke gør (men stadig indgår i selve udvaskningsberegningen som G0).
+  const husdyrUdnyttet = year.tildeltHusdyrgodningUdnyttetKgnHa
+  const handelsgodning = year.tildeltHandelsgodningKgnHa
+  const organiskBundet = year.husdyrgodningOrganiskBundetKgnHa
+  const tildeltGoedning = husdyrUdnyttet + handelsgodning
+  const tilgaengeligtN = forfrugt + tildeltGoedning
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
+      <MetricTile
+        label="Foderenheder"
+        value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
+      />
+      <MetricTile label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
+      <MetricTile
+        label="Tildelt gødning"
+        value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
+        caption={
+          `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
+          (organiskBundet > 0
+            ? ` — heraf yderligere ${fmt(organiskBundet, 0)} kg N/ha organisk bundet (tæller ikke med i normen)`
+            : '')
+        }
+      />
+      <MetricTile label="DB" value={`${fmt(year.dbKrHa, 0)} kr/ha`} />
+      <MetricTile
+        label="Tilgængeligt N"
+        value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
+        caption={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
+      />
+      <MetricTile
+        label="Ton gødning"
+        value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
+        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha — reference, indgår senere i optimeringen`}
+      />
+    </div>
+  )
+}
+
 const LeachingDetailSection = ({
   detail,
 }: {
@@ -365,10 +440,12 @@ const EconomicDetailSection = ({
 
 type RotationYearsDetailProps = {
   years: RotationCandidateYearResult[]
+  areaHa: number
 }
 
-export const RotationYearsDetail = ({ years }: RotationYearsDetailProps) => {
+export const RotationYearsDetail = ({ years, areaHa }: RotationYearsDetailProps) => {
   const [selectedYear, setSelectedYear] = useState(0)
+  const [showFullDetail, setShowFullDetail] = useState(false)
 
   const year = years[Math.min(selectedYear, years.length - 1)]
   if (!year) return null
@@ -392,10 +469,23 @@ export const RotationYearsDetail = ({ years }: RotationYearsDetailProps) => {
           </button>
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <LeachingDetailSection detail={year.leachingDetail} />
-        <EconomicDetailSection detail={year.dbDetail} />
-      </div>
+
+      <KeyMetricsSection year={year} areaHa={areaHa} />
+
+      <button
+        type="button"
+        onClick={() => setShowFullDetail((current) => !current)}
+        className="text-xs font-medium text-primary hover:underline"
+      >
+        {showFullDetail ? '▴ Skjul fuld beregningsgennemgang' : '▾ Vis fuld beregningsgennemgang'}
+      </button>
+
+      {showFullDetail ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <LeachingDetailSection detail={year.leachingDetail} />
+          <EconomicDetailSection detail={year.dbDetail} />
+        </div>
+      ) : null}
     </div>
   )
 }

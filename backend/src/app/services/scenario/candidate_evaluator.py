@@ -69,7 +69,10 @@ def compute_n_inputs(
     fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
 
     if not norm or norm["n_norm"] is None:
-        return {"mncs": 0.0, "mnca": 0.0, "g0": 0.0, "net_n": None, "org_mineral_n_applied": 0.0}
+        return {
+            "mncs": 0.0, "mnca": 0.0, "g0": 0.0, "net_n": None, "org_mineral_n_applied": 0.0,
+            "fv_forfrugt": fv_forfrugt,
+        }
 
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
     net_scaled = net_n * (float(n_norm_pct) / 100.0)
@@ -78,6 +81,7 @@ def compute_n_inputs(
         return {
             "mncs": net_scaled, "mnca": 0.0, "g0": 0.0,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
+            "fv_forfrugt": fv_forfrugt,
         }
 
     eff_org = min(org_mineral_n, net_scaled)
@@ -95,6 +99,7 @@ def compute_n_inputs(
         "g0": g0,
         "net_n": net_n,
         "org_mineral_n_applied": eff_org,
+        "fv_forfrugt": fv_forfrugt,
     }
 
 
@@ -109,6 +114,7 @@ def evaluate_sequence_for_mark(
     org_mineral_n: float,
     mineralsk_andel_pct: float,
     only_organic: bool,
+    n_indhold_kg_per_ton: float = 6.0,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
@@ -175,6 +181,26 @@ def evaluate_sequence_for_mark(
             udlaeg_kode=udl_code,
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
+        # org_mineral_n_applied er husdyrgødningens UDNYTTEDE/mineralske del —
+        # den eneste del der tæller med i normopfyldelsen, ligesom
+        # handelsgødning. g0 er den resterende, organisk bundne del (tæller
+        # ikke med i normen, men indgår i L_nuar via G0/G1/G2 ovenfor).
+        tildelt_husdyrgodning_udnyttet = n_inputs[i]["org_mineral_n_applied"]
+        tildelt_handelsgodning = max(0.0, n_inputs[i]["mncs"] - tildelt_husdyrgodning_udnyttet)
+        # Ton-overblik, porteret fra streamlit_app.py's sidebar-reference (linje
+        # 1014-1024) — hvor mange ton husdyrgødning der bruges pr. ha, ikke
+        # hvor meget der tæller med i normen for netop denne afgrøde. Bruger
+        # derfor den RÅ scenarie-indstilling org_mineral_n (samme mængde
+        # gødning lægges ud på alle valgte sædskifter, jf. Fase 13), ikke
+        # n_inputs[i]["org_mineral_n_applied"] — som er denne positions
+        # normbegrænsede (og dermed lavere) udnyttelse af samme udlagte
+        # mængde. Delt op i udnyttet/organisk bundet giver ikke mening her;
+        # det er kun relevant for selve NLES5-/DB-beregningen. Rent
+        # opgørelsestal, ingen beregningseffekt — til senere brug som
+        # optimeringsparameter (min/maks ton gødning brugt pr. år).
+        husdyrgodning_ton = (
+            org_mineral_n / n_indhold_kg_per_ton if n_indhold_kg_per_ton > 0 else 0.0
+        )
 
         years.append(RotationCandidateYearResult(
             year=RotationYear(
@@ -187,6 +213,11 @@ def evaluate_sequence_for_mark(
             leaching_detail=leaching,
             db_kr_ha=db["db"],
             db_detail=db,
+            forfrugtsvaerdi_kgn_ha=n_inputs[i]["fv_forfrugt"],
+            tildelt_husdyrgodning_udnyttet_kgn_ha=tildelt_husdyrgodning_udnyttet,
+            tildelt_handelsgodning_kgn_ha=tildelt_handelsgodning,
+            husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"],
+            husdyrgodning_ton_pr_ha=husdyrgodning_ton,
         ))
 
     cycle = years[:active_len]
@@ -217,6 +248,7 @@ def evaluate_candidate_for_mark(
     org_mineral_n: float,
     mineralsk_andel_pct: float,
     only_organic: bool,
+    n_indhold_kg_per_ton: float = 6.0,
     start_year: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",
@@ -243,7 +275,8 @@ def evaluate_candidate_for_mark(
     return evaluate_sequence_for_mark(
         ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
         jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
-        irrigated, fdato, precision_dagsbasis,
+        n_indhold_kg_per_ton=n_indhold_kg_per_ton,
+        irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
         start_year=start_year,
     )
 
@@ -256,6 +289,7 @@ def evaluate_with_overrides(
     org_mineral_n: float,
     mineralsk_andel_pct: float,
     only_organic: bool,
+    n_indhold_kg_per_ton: float = 6.0,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
@@ -310,7 +344,8 @@ def evaluate_with_overrides(
     return evaluate_sequence_for_mark(
         result_ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
         jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
-        irrigated, fdato, precision_dagsbasis,
+        n_indhold_kg_per_ton=n_indhold_kg_per_ton,
+        irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
     )
 
@@ -355,6 +390,7 @@ def generate_candidates_for_field(
                     org_mineral_n=godning.org_mineral_n,
                     mineralsk_andel_pct=godning.mineralsk_andel_pct,
                     only_organic=godning.only_organic,
+                    n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                 )
                 if result is not None:
