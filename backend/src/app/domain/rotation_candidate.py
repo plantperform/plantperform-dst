@@ -60,6 +60,14 @@ class RotationCandidateYearResult(CamelModel):
     # senere brug som optimeringsparameter (min/maks ton gødning brugt
     # pr. år).
     husdyrgodning_ton_pr_ha: float = 0.0
+    # Afgrødens fulde Bilag 1-N-norm (kg N/ha), FØR forfrugtsværdi trækkes fra
+    # og FØR N-norm%-reduktionen — None hvis afgrøden ikke har en norm i
+    # datasættet (fx en administrativ arealtype). n_norm_pct er reduktionen
+    # scenariet reelt gøder til (fx "80" = 80% af normen) — samme værdi som
+    # candidate.ref.n_norm_pct, men som tal i stedet for streng, til direkte
+    # visning ("100% gødet til norm"/"80% gødet til norm").
+    afgrode_norm_kgn_ha: float | None = None
+    n_norm_pct: float = 100.0
 
 
 class RotationPositionOverride(CamelModel):

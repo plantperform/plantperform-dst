@@ -71,7 +71,7 @@ def compute_n_inputs(
     if not norm or norm["n_norm"] is None:
         return {
             "mncs": 0.0, "mnca": 0.0, "g0": 0.0, "net_n": None, "org_mineral_n_applied": 0.0,
-            "fv_forfrugt": fv_forfrugt,
+            "fv_forfrugt": fv_forfrugt, "n_norm": None,
         }
 
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
@@ -81,7 +81,7 @@ def compute_n_inputs(
         return {
             "mncs": net_scaled, "mnca": 0.0, "g0": 0.0,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
-            "fv_forfrugt": fv_forfrugt,
+            "fv_forfrugt": fv_forfrugt, "n_norm": norm["n_norm"],
         }
 
     eff_org = min(org_mineral_n, net_scaled)
@@ -100,6 +100,7 @@ def compute_n_inputs(
         "net_n": net_n,
         "org_mineral_n_applied": eff_org,
         "fv_forfrugt": fv_forfrugt,
+        "n_norm": norm["n_norm"],
     }
 
 
@@ -218,6 +219,8 @@ def evaluate_sequence_for_mark(
             tildelt_handelsgodning_kgn_ha=tildelt_handelsgodning,
             husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"],
             husdyrgodning_ton_pr_ha=husdyrgodning_ton,
+            afgrode_norm_kgn_ha=n_inputs[i]["n_norm"],
+            n_norm_pct=n_norm_pct,
         ))
 
     cycle = years[:active_len]
