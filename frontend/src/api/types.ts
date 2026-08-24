@@ -297,7 +297,8 @@ export type RotationCandidateYearResult = {
   tildeltHusdyrgodningUdnyttetKgnHa: number
   tildeltHandelsgodningKgnHa: number
   husdyrgodningOrganiskBundetKgnHa: number
-  husdyrgodningTonPrHa: number
+  husdyrgodningTonUdnyttetPrHa: number
+  husdyrgodningTonTotalPrHa: number
   afgrodeNormKgnHa: number | null
   nNormPct: number
 }
