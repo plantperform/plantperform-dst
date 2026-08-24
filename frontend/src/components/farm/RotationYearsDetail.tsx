@@ -134,7 +134,7 @@ const KeyMetricsSection = ({
         caption={
           `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
           (organiskBundet > 0
-            ? ` — heraf yderligere ${fmt(organiskBundet, 0)} kg N/ha organisk bundet (tæller ikke med i normen)`
+            ? ` — plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet fra den udlagte gødning (tæller ikke med i normen; regnes af den fulde gødningsmængde, ikke kun det denne afgrøde kunne bruge — de to tal summer derfor bevidst ikke til gødningens fulde totale N-indhold)`
             : '')
         }
       />
