@@ -187,12 +187,11 @@ def apply_manual_rotation(
     igen, før brugeren selv låser op."""
     simulation = repository.get_simulation(farm_id, simulation_id)
     fields = repository.list_simulation_fields(farm_id, simulation_id)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id)
-    if simulation is None or fields is None or field_candidates is None:
+    if simulation is None or fields is None:
         raise ManualRotationNotFoundError
 
     field = next((f for f in fields if f.id == field_id), None)
-    candidates_row = next((fc for fc in field_candidates if fc.field_id == field_id), None)
+    candidates_row = repository.get_simulation_field_candidates(farm_id, simulation_id, field_id)
     if field is None or candidates_row is None:
         raise ManualRotationNotFoundError
 

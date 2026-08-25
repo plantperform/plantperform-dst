@@ -311,6 +311,28 @@ def list_simulation_field_candidates(
         return [_load(SimulationFieldCandidates, data) for data in rows]
 
 
+def get_simulation_field_candidates(
+    farm_id: str, simulation_id: str, field_id: str,
+) -> SimulationFieldCandidates | None:
+    """Én marks gemte kandidatmængde — filtreret direkte i SQL'en, i
+    modsætning til list_simulation_field_candidates som henter ALLE marker i
+    simuleringens fulde kandidatmængder (inkl. hver kandidats år-for-år
+    udvasknings-/DB-detalje). Brug denne når kun én mark er relevant (fx
+    "Rediger manuelt"s preview/apply, som kun læser candidates_row.jbnr) —
+    undgår at hente og deserialisere resten af simuleringens marker forgæves."""
+    with SessionLocal() as session:
+        if _get_simulation(session, farm_id, simulation_id) is None:
+            return None
+
+        data = session.execute(
+            select(simulation_field_candidates_table.c.data).where(
+                simulation_field_candidates_table.c.simulation_id == simulation_id,
+                simulation_field_candidates_table.c.field_id == field_id,
+            ),
+        ).scalar_one_or_none()
+        return _load(SimulationFieldCandidates, data) if data is not None else None
+
+
 def append_manual_field_candidate(
     farm_id: str, simulation_id: str, field_id: str, candidate: RotationCandidateEvaluation,
 ) -> None:
