@@ -86,21 +86,17 @@ def compute_n_inputs(
 
     eff_org = min(org_mineral_n, net_scaled)
     pool_pct = 100.0 - mineralsk_andel_pct
-    # G0 bruger bevidst den RÅ org_mineral_n, ikke eff_org (som er kappet til
-    # DENNE afgrødes norm-behov, kun brugsbart for MNCS). Porteret præcist fra
-    # streamlit_app.py's sidebar (linje 966-986): der er to UAFHÆNGIGE
-    # kapninger af org_mineral_n i den gamle app — (1) et regelsæt-loft
-    # (max_mineral_n/max_total_n, EU-regler 170/107/65 kg N/ha), anvendt ÉN
-    # GANG på scenarie-niveau og fælles for alle afgrøder i rotationen, som
-    # G0 (org_pool_n) beregnes af; og (2) et PER-AFGRØDE loft mod dens egen
-    # norm (samme eff_org som her), der KUN bruges til MNCS. DST2 modellerer
-    # ikke regelsæt-loftet (1) — scenariets org_mineral_n-indstilling
-    # SVARER TIL den gamle apps allerede regelsæt-kappede værdi, så G0 skal
-    # bruge den direkte, ikke kappes yderligere pr. afgrøde. En tidligere
-    # rettelse her (brugte eff_org) byggede på en forkert antagelse om at
-    # "udnyttet" og "organisk bundet" skal beskrive samme fysiske udbringning
-    # — det gør de bevidst ikke i den gamle app.
-    g0 = org_mineral_n * (pool_pct / mineralsk_andel_pct)
+    # G0 bruger BEVIDST eff_org (den norm-begrænsede, faktisk tildelte
+    # mængde), ikke den rå org_mineral_n-scenarieindstilling. Den gamle app
+    # (streamlit_app.py, sidebar linje 966-986) beregner org_pool_n af den
+    # ukappede org_mineral_n — men det svarer til at antage at hele den
+    # maksimalt tilladte mængde husdyrgødning altid køres fysisk ud, uanset
+    # afgrødens behov. Bekræftet forkert antagelse: man gøder kun til norm,
+    # ikke mere — org_mineral_n er en ØVRE GRÆNSE for hvor meget udnyttet N
+    # der må tildeles, ikke en fast udbragt mængde. G0 skal derfor afspejle
+    # den organisk bundne rest af DEN MÆNGDE DER RENT FAKTISK BLEV TILDELT
+    # (eff_org), ikke af loftet.
+    g0 = eff_org * (pool_pct / mineralsk_andel_pct)
 
     if only_organic:
         mncs = eff_org
@@ -202,22 +198,17 @@ def evaluate_sequence_for_mark(
         # ikke med i normen, men indgår i L_nuar via G0/G1/G2 ovenfor).
         tildelt_husdyrgodning_udnyttet = n_inputs[i]["org_mineral_n_applied"]
         tildelt_handelsgodning = max(0.0, n_inputs[i]["mncs"] - tildelt_husdyrgodning_udnyttet)
-        # Ton-overblik, porteret fra streamlit_app.py's sidebar-reference (linje
-        # 1014-1024) — hvor mange ton husdyrgødning der bruges pr. ha, ikke
-        # hvor meget der tæller med i normen for netop denne afgrøde. Bruger
-        # derfor den RÅ scenarie-indstilling org_mineral_n (samme mængde
-        # gødning lægges ud på alle valgte sædskifter, jf. Fase 13), ikke
-        # n_inputs[i]["org_mineral_n_applied"] — som er denne positions
-        # normbegrænsede (og dermed lavere) udnyttelse af samme udlagte
-        # mængde. Delt op i udnyttet/organisk bundet giver ikke mening her;
-        # det er kun relevant for selve NLES5-/DB-beregningen. Rent
-        # opgørelsestal, ingen beregningseffekt — til senere brug som
-        # optimeringsparameter (min/maks ton gødning brugt pr. år).
-        # Ingen norm (fx brak/administrativt areal, net_n=None) -> intet at
-        # gøde overhovedet, uanset scenariets gødningsindstilling.
+        # Ton-overblik — hvor mange ton husdyrgødning der reelt blev tildelt
+        # på denne position. Bruger BEVIDST tildelt_husdyrgodning_udnyttet
+        # (eff_org, denne positions norm-begrænsede tildeling), ikke den rå
+        # scenarie-indstilling org_mineral_n — org_mineral_n er en ØVRE
+        # GRÆNSE for hvor meget udnyttet N der må tildeles via husdyrgødning,
+        # ikke en fast udbragt mængde; man gøder kun til norm, aldrig mere.
+        # Er der ingen norm (fx brak/administrativt areal), er
+        # tildelt_husdyrgodning_udnyttet allerede 0, så ton bliver det også.
         husdyrgodning_ton = (
-            org_mineral_n / n_indhold_kg_per_ton
-            if n_indhold_kg_per_ton > 0 and n_inputs[i]["net_n"] is not None
+            tildelt_husdyrgodning_udnyttet / n_indhold_kg_per_ton
+            if n_indhold_kg_per_ton > 0
             else 0.0
         )
 
