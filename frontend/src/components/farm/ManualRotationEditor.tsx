@@ -70,6 +70,11 @@ export const ManualRotationEditor = ({
   const { data: afgrodeKoder = [] } = useAfgrodeKoder(farmId)
 
   const [baseRef, setBaseRef] = useState<RotationCandidateRef | null>(null)
+  // Kategori er sin egen tilstand, ikke udledt af baseRef — "Brak" hører til
+  // ALLE kategorier (ren browsing-gruppering, jf. Fase 13's afkobling af
+  // gødning fra sædskiftevalg), så en kategori kan ikke entydigt genfindes
+  // ud fra sædskiftekoden alene når den er Brak.
+  const [selectedKategoriName, setSelectedKategoriName] = useState<string | null>(null)
   const [overrides, setOverrides] = useState<RotationPositionOverride[]>([])
   const [startYear, setStartYear] = useState(1)
   const [preview, setPreview] = useState<RotationCandidateEvaluation | null>(null)
@@ -78,18 +83,6 @@ export const ManualRotationEditor = ({
   const [isSaving, setIsSaving] = useState(false)
   const requestId = useRef(0)
 
-  useEffect(() => {
-    // Seed local draft state from the field's currently saved candidate
-    // once the dialog opens and the SWR fetch resolves — synchronizing
-    // React's editable draft with external server state, not derivable
-    // during render since `current` arrives asynchronously.
-    if (!open || !current) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBaseRef(current.baseRef ?? current.ref)
-    setOverrides(current.overrides ?? [])
-    setStartYear(current.startYear ?? 1)
-  }, [open, current])
-
   const availableKategorier = useMemo(() => {
     const allowed = new Set(simulation.rotationSaedskiftevarianter)
     return kategorier
@@ -97,17 +90,36 @@ export const ManualRotationEditor = ({
         ...k,
         saedskifter: k.saedskifter.filter((s) => allowed.has(s.saedskiftevariant)),
       }))
-      .filter((k) => k.saedskifter.length > 0)
+      // Brak hører til alle kategorier — en kategori hvor Brak er det eneste
+      // beregnede sædskifte er reelt ikke valgt/relevant for netop DEN
+      // kategori, og skal ikke vises som en selvstændig mulighed.
+      .filter((k) => k.saedskifter.some((s) => s.saedskiftevariant !== '1'))
   }, [kategorier, simulation.rotationSaedskiftevarianter])
 
-  const selectedKategori = useMemo(() => {
-    if (!baseRef) return availableKategorier[0]
-    return (
-      availableKategorier.find((k) =>
-        k.saedskifter.some((s) => s.saedskiftevariant === baseRef.saedskiftevariant),
-      ) ?? availableKategorier[0]
+  useEffect(() => {
+    // Seed local draft state from the field's currently saved candidate
+    // once the dialog opens and the SWR fetch resolves — synchronizing
+    // React's editable draft with external server state, not derivable
+    // during render since `current` arrives asynchronously.
+    if (!open || !current) return
+    const ref = current.baseRef ?? current.ref
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBaseRef(ref)
+    setOverrides(current.overrides ?? [])
+    setStartYear(current.startYear ?? 1)
+    const kategori = availableKategorier.find((k) =>
+      k.saedskifter.some((s) => s.saedskiftevariant === ref.saedskiftevariant),
     )
-  }, [availableKategorier, baseRef])
+    setSelectedKategoriName(kategori?.kategori ?? availableKategorier[0]?.kategori ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, current])
+
+  const selectedKategori = useMemo(
+    () =>
+      availableKategorier.find((k) => k.kategori === selectedKategoriName) ??
+      availableKategorier[0],
+    [availableKategorier, selectedKategoriName],
+  )
 
   const variantsForSaedskifte = useMemo(() => {
     if (!baseRef) return []
@@ -252,10 +264,16 @@ export const ManualRotationEditor = ({
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 value={selectedKategori?.kategori ?? ''}
                 onChange={(event) => {
+                  setSelectedKategoriName(event.target.value)
                   const kategori = availableKategorier.find(
                     (k) => k.kategori === event.target.value,
                   )
-                  const first = kategori?.saedskifter[0]
+                  // Brak (saedskiftevariant "1") hører til alle kategorier og
+                  // ligger derfor altid først — vælg et andet, mere
+                  // repræsentativt sædskifte for kategorien når muligt.
+                  const first =
+                    kategori?.saedskifter.find((s) => s.saedskiftevariant !== '1') ??
+                    kategori?.saedskifter[0]
                   if (first) {
                     changeBase({
                       saedskiftevariant: first.saedskiftevariant,
