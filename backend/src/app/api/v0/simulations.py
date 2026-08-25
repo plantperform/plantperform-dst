@@ -10,6 +10,7 @@ from app.data.repository import (
     delete_simulation,
     get_simulation,
     get_simulation_field_candidate_detail,
+    get_simulation_field_candidates,
     list_simulation_field_candidates,
     list_simulation_fields,
     list_simulations,
@@ -408,11 +409,10 @@ async def post_farm_simulation_field_preview_rotation(
     noget. Bruges af "Rediger manuelt"-panelet til at vise resultatet af en
     ændring, før brugeren trykker "Gem"."""
     simulation = get_simulation(farm_id, simulation_id)
-    field_candidates = list_simulation_field_candidates(farm_id, simulation_id)
-    if simulation is None or field_candidates is None:
+    if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
-    candidates_row = next((fc for fc in field_candidates if fc.field_id == field_id), None)
+    candidates_row = get_simulation_field_candidates(farm_id, simulation_id, field_id)
     if candidates_row is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
 
