@@ -8,8 +8,11 @@ NUAR_koder-arket i Bilag 1-mastertabellen.
 W-bestemmelsen er porteret fra c:\\plantperform-nles\\streamlit_app.py
 (linje ~344-369): W for en given position afhænger af hvad der sås/pløjes
 i efteråret — altså af NÆSTE positions afgrøde, ikke kun af afgrøden selv.
-MP/WP for en given position er derimod FORRIGE positions egne MP/WP-felter
-(forfrugtens forfrugtskategori/vinterdække).
+MP for en given position er FORRIGE positions egen MP-felt (forfrugtens
+forfrugtskategori). WP følger samme "næste år overstyrer"-idé som W, men ét
+år forskudt: er DENNE positions egen afgrøde en vinterafgrøde, er vinter-
+perioden mellem forfrugten og nu reelt optaget af den — ellers falder WP
+tilbage til forrige positions egen statiske WP-felt (se _resolve_wp).
 
 P/S/NT kommer fra services.soil.percolation_placeholder (midlertidigt fladt
 sæt, jf. planen — IKKE AAa/AAb/APb, som er bridge.py's forældede tilgang).
@@ -96,6 +99,28 @@ def _resolve_w(
     return auto_w if auto_w is not None else 5
 
 
+# Næste-års M-kode -> WP, når dette års vinterperiode reelt er optaget af NÆSTE
+# års vinterafgrøde (samme "næste år overstyrer" idé som _NEXT_M_TO_W, men på
+# WP's egen, rigere kategoriskala — WP har fx en selvstændig Vinterraps-kategori
+# (8), som W's bredere "græs/kløvergræs/vinterraps/roer"-kategori (6) ikke har).
+# Kun de to entydige tilfælde er kortlagt (M=1 Vintersæd, M=9 Vinterraps) — M=10/
+# 11/12 ("... efter græs") har ingen entydig WP-modpart og falder derfor tilbage
+# til den statiske pr.-afgrødekode WP-tabel, ikke en gættet kortlægning.
+_NEXT_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
+
+
+def _resolve_wp(prev_params: dict, this_params: dict) -> int:
+    """WP for indeværende position = vinterdækket mellem forrige og denne
+    afgrøde. Hvis DENNE afgrødes M er en vinterafgrøde, er den vinterperiode
+    reelt optaget af denne afgrøde selv (den er allerede sået om efteråret) —
+    ikke af forrige afgrødes egen statiske WP-klassificering."""
+    this_m = this_params.get("M")
+    wp_from_next = _NEXT_M_TO_WP.get(this_m) if this_m is not None else None
+    if wp_from_next is not None:
+        return wp_from_next
+    return prev_params.get("WP") or 1
+
+
 @lru_cache(maxsize=100_000)
 def evaluate_leaching_position(
     afgrode_kode: int,
@@ -127,7 +152,7 @@ def evaluate_leaching_position(
     m = this_params.get("M") or 1
     wc = this_params.get("WC") or 1
     mp = prev_params.get("MP") or 1
-    wp = prev_params.get("WP") or 1
+    wp = _resolve_wp(prev_params, this_params)
     w = _resolve_w(this_params, next_params, udlaeg_kode)
 
     perc = percolation_placeholder(afstromningskategori)
