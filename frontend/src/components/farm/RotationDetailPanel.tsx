@@ -19,6 +19,7 @@ type RotationDetailPanelProps = {
   // nøgler på én gang (det var netop den byge af 422'ere, der blev rettet).
   rotationId: string | null
   areaHa: number
+  retention: number | null
 }
 
 export const RotationDetailPanel = ({
@@ -27,6 +28,7 @@ export const RotationDetailPanel = ({
   fieldId,
   rotationId,
   areaHa,
+  retention,
 }: RotationDetailPanelProps) => {
   const {
     data: detail,
@@ -64,7 +66,7 @@ export const RotationDetailPanel = ({
 
   return (
     <div className="border-t bg-muted/20 p-4">
-      <RotationYearsDetail years={years} areaHa={areaHa} />
+      <RotationYearsDetail years={years} areaHa={areaHa} retention={retention} />
     </div>
   )
 }

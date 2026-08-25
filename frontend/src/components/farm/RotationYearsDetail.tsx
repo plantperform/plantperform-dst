@@ -147,7 +147,7 @@ const KeyMetricsSection = ({
       <MetricTile
         label="Ton gødning"
         value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
-        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha — reference, indgår senere i optimeringen`}
+        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha`}
       />
     </div>
   )
@@ -155,8 +155,12 @@ const KeyMetricsSection = ({
 
 const LeachingDetailSection = ({
   detail,
+  areaHa,
+  retention,
 }: {
   detail: Record<string, unknown>
+  areaHa: number
+  retention: number | null
 }) => {
   const m = num(detail.M)
   const wUsed = num(detail.W_used ?? detail.W)
@@ -209,6 +213,7 @@ const LeachingDetailSection = ({
   const lRaw = Math.max(0, trend + cropSoil)
   const l = num(detail.L)
   const lNuar = num(detail.L_nuar)
+  const udledningPrHa = lNuar * (100 - (retention ?? 0)) / 100
 
   const m11Applied = Boolean(detail.M11_korrektion_anvendt)
   const eeaRed = num(detail.EEA) * num(detail.Fdato_factor)
@@ -397,14 +402,84 @@ const LeachingDetailSection = ({
           </p>
         ) : null}
       </div>
+
+      <div className="space-y-1.5">
+        <SectionHeading>Udledning — efter retention og markareal</SectionHeading>
+        <p className="font-mono text-xs text-muted-foreground">
+          Udledning = L_nuar × (1 − retention) ; Udledning (mark) = Udledning × areal
+        </p>
+        <DetailTable
+          rows={[
+            { label: 'L_nuar', value: `${fmt(lNuar, 3)} kg N/ha` },
+            {
+              label: 'Retention',
+              detail: retention === null ? 'ikke sat — bruger 0%' : `${fmt(retention, 1)}%`,
+              value: `× ${fmt((100 - (retention ?? 0)) / 100, 4)}`,
+            },
+            { label: 'Udledning', detail: '', value: `${fmt(udledningPrHa, 3)} kg N/ha`, strong: true },
+            { label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` },
+          ]}
+        />
+        <Callout>
+          Udledning (mark) = {fmt(udledningPrHa, 3)} × {fmt(areaHa, 2)} ={' '}
+          <strong>{fmt(udledningPrHa * areaHa, 1)} kg N</strong>
+        </Callout>
+      </div>
+    </div>
+  )
+}
+
+type Linje = { kategori: string; behandling: string; udgift_kr_ha: number }
+
+// Én kategori-total (fx "Gødning") med de enkeltposter der summer til den —
+// foldet ud på klik, i stedet for kun at vise den allerede sammenlagte sum.
+const CategoryBreakdownRow = ({
+  label,
+  total,
+  linjer,
+}: {
+  label: string
+  total: number
+  linjer: Linje[]
+}) => {
+  const [open, setOpen] = useState(false)
+  const hasBreakdown = linjer.length > 0
+
+  return (
+    <div className="border-t py-1.5">
+      <button
+        type="button"
+        onClick={() => hasBreakdown && setOpen((current) => !current)}
+        className={`flex w-full items-center justify-between gap-2 text-left text-xs ${
+          hasBreakdown ? 'cursor-pointer' : 'cursor-default'
+        }`}
+      >
+        <span className="text-muted-foreground">
+          {hasBreakdown ? (open ? '▾ ' : '▸ ') : ''}
+          {label}
+        </span>
+        <span className="tabular-nums">−{fmt(total, 0)} kr/ha</span>
+      </button>
+      {open && hasBreakdown ? (
+        <div className="mt-1 space-y-0.5 border-l pl-3">
+          {linjer.map((l, index) => (
+            <div key={index} className="flex justify-between gap-2 text-xs text-muted-foreground">
+              <span>{l.behandling}</span>
+              <span className="tabular-nums">−{fmt(l.udgift_kr_ha, 0)} kr/ha</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
 
 const EconomicDetailSection = ({
   detail,
+  areaHa,
 }: {
   detail: Record<string, unknown>
+  areaHa: number
 }) => {
   const udbytte = num(detail.udbytte)
   const enhed = String(detail.udbytteenhed ?? '')
@@ -418,6 +493,9 @@ const EconomicDetailSection = ({
   const toerring = num(detail.toerring)
   const omkostninger = num(detail.omkostninger_total)
   const db = num(detail.db)
+
+  const linjer = Array.isArray(detail.linjer) ? (detail.linjer as Linje[]) : []
+  const linjerFor = (kategori: string) => linjer.filter((l) => l.kategori === kategori)
 
   return (
     <div className="space-y-1.5">
@@ -434,17 +512,26 @@ const EconomicDetailSection = ({
           { label: 'Salgspris', value: `${fmt(salgspris, 2)} kr/${enhed || 'enhed'}` },
           { label: 'Indtægt', detail: 'udbytte × salgspris', value: `${fmt(indtaegt, 0)} kr/ha`, strong: true },
           { label: 'Tilskud', value: `+${fmt(tilskud, 0)} kr/ha` },
-          { label: 'Gødning', value: `−${fmt(goedning, 0)} kr/ha` },
-          { label: 'Udsæd', value: `−${fmt(udsaed, 0)} kr/ha` },
-          { label: 'Planteværn', value: `−${fmt(plantevaern, 0)} kr/ha` },
-          { label: 'Markarbejde', value: `−${fmt(markarbejde, 0)} kr/ha` },
-          { label: 'Tørring/lagring', value: `−${fmt(toerring, 0)} kr/ha` },
-          { label: 'Omkostninger i alt', value: `−${fmt(omkostninger, 0)} kr/ha`, strong: true },
         ]}
+      />
+      <div>
+        <CategoryBreakdownRow label="Gødning" total={goedning} linjer={linjerFor('Gødning')} />
+        <CategoryBreakdownRow label="Udsæd" total={udsaed} linjer={linjerFor('Udsæd')} />
+        <CategoryBreakdownRow label="Planteværn" total={plantevaern} linjer={linjerFor('Planteværn')} />
+        <CategoryBreakdownRow label="Markarbejde" total={markarbejde} linjer={linjerFor('Markarbejde')} />
+        <CategoryBreakdownRow label="Tørring/lagring" total={toerring} linjer={linjerFor('Tørring/lagring')} />
+      </div>
+      <DetailTable
+        rows={[{ label: 'Omkostninger i alt', value: `−${fmt(omkostninger, 0)} kr/ha`, strong: true }]}
       />
       <Callout>
         DB2 = {fmt(indtaegt, 0)} + {fmt(tilskud, 0)} − {fmt(omkostninger, 0)} ={' '}
         <strong>{fmt(db, 0)} kr/ha</strong>
+      </Callout>
+      <DetailTable rows={[{ label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` }]} />
+      <Callout>
+        DB2 (mark) = {fmt(db, 0)} × {fmt(areaHa, 2)} ={' '}
+        <strong>{fmt(db * areaHa, 0)} kr</strong>
       </Callout>
     </div>
   )
@@ -453,9 +540,10 @@ const EconomicDetailSection = ({
 type RotationYearsDetailProps = {
   years: RotationCandidateYearResult[]
   areaHa: number
+  retention: number | null
 }
 
-export const RotationYearsDetail = ({ years, areaHa }: RotationYearsDetailProps) => {
+export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsDetailProps) => {
   const [selectedYear, setSelectedYear] = useState(0)
   const [showFullDetail, setShowFullDetail] = useState(false)
 
@@ -494,8 +582,8 @@ export const RotationYearsDetail = ({ years, areaHa }: RotationYearsDetailProps)
 
       {showFullDetail ? (
         <div className="grid gap-6 lg:grid-cols-2">
-          <LeachingDetailSection detail={year.leachingDetail} />
-          <EconomicDetailSection detail={year.dbDetail} />
+          <LeachingDetailSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
+          <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
         </div>
       ) : null}
     </div>

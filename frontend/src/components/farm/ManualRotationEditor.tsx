@@ -423,7 +423,7 @@ export const ManualRotationEditor = ({
 
           {preview ? (
             <div className="max-h-[40vh] overflow-y-auto rounded-md border bg-muted/20 p-4">
-              <RotationYearsDetail years={years} areaHa={field.areaHa} />
+              <RotationYearsDetail years={years} areaHa={field.areaHa} retention={field.retention} />
             </div>
           ) : null}
 

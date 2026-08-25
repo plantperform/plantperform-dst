@@ -311,23 +311,59 @@ def calculate_db(
     if mncs is None:
         mncs = (norm["n_norm"] if norm else None) or 0.0
 
+    # Itemiserede linjer bag hver kategori-sum, til UI'ens beregningsgennemgang
+    # (hvilke enkeltposter der reelt summer til fx "Gødning" eller "Markarbejde").
+    goedning_linjer: list[dict] = []
     if driftsform == OEKOLOGISK:
         # Økologiske kandidater er altid "kun organisk" (only_organic=True i
         # KATEGORI_GODNING) — hele mncs er organisk, ingen handelsgødningsdel.
-        goedning = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+        gylle_udbringning = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+        goedning = gylle_udbringning
+        goedning_linjer.append({
+            "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
+            "udgift_kr_ha": gylle_udbringning,
+        })
     else:
         handelsgodning_n = max(0.0, mncs - org_mineral_n_applied) + mnca
-        goedning = handelsgodning_n * _n_pris()
+        handelsgodning_kr = handelsgodning_n * _n_pris()
+        goedning = handelsgodning_kr
+        goedning_linjer.append({
+            "kategori": "Gødning",
+            "behandling": f"Handelsgødning, N ({handelsgodning_n:.0f} kg/ha)",
+            "udgift_kr_ha": handelsgodning_kr,
+        })
         if handelsgodning_n > 0:
-            goedning += _n_udbringning()
+            n_udb = _n_udbringning()
+            goedning += n_udb
+            goedning_linjer.append({
+                "kategori": "Gødning", "behandling": "Udbringning, handelsgødning",
+                "udgift_kr_ha": n_udb,
+            })
         if org_mineral_n_applied > 0:
-            goedning += _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+            gylle_udb = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+            goedning += gylle_udb
+            goedning_linjer.append({
+                "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
+                "udgift_kr_ha": gylle_udb,
+            })
 
-    linjer = _load_dyrkningsomkostninger().get((afgrodekode, driftsform), [])
+    linjer = list(_load_dyrkningsomkostninger().get((afgrodekode, driftsform), []))
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode)
-    udsaed = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Udsæd") + udlaeg_udsaed
+    if udlaeg_udsaed:
+        linjer.append({
+            "kategori": "Udsæd", "behandling": "Udlæg/efterafgrøde, udsæd",
+            "udgift_kr_ha": udlaeg_udsaed,
+        })
+    if udlaeg_etablering:
+        linjer.append({
+            "kategori": "Markarbejde", "behandling": "Udlæg/efterafgrøde, etablering",
+            "udgift_kr_ha": udlaeg_etablering,
+        })
+    alle_linjer = goedning_linjer + linjer
+
+    udsaed = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Udsæd")
     plantevaern = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Planteværn")
-    markarbejde = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Markarbejde") + udlaeg_etablering
+    markarbejde = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Markarbejde")
     toerring = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Tørring/lagring")
 
     tilskud = _tilskud_kr_ha(afgrodekode, driftsform)
@@ -352,4 +388,5 @@ def calculate_db(
         "toerring": round(toerring, 0),
         "omkostninger_total": round(omkostninger, 0),
         "db": round(db, 0),
+        "linjer": alle_linjer,
     }
