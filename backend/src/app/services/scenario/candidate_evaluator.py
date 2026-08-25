@@ -213,8 +213,12 @@ def evaluate_sequence_for_mark(
         # det er kun relevant for selve NLES5-/DB-beregningen. Rent
         # opgørelsestal, ingen beregningseffekt — til senere brug som
         # optimeringsparameter (min/maks ton gødning brugt pr. år).
+        # Ingen norm (fx brak/administrativt areal, net_n=None) -> intet at
+        # gøde overhovedet, uanset scenariets gødningsindstilling.
         husdyrgodning_ton = (
-            org_mineral_n / n_indhold_kg_per_ton if n_indhold_kg_per_ton > 0 else 0.0
+            org_mineral_n / n_indhold_kg_per_ton
+            if n_indhold_kg_per_ton > 0 and n_inputs[i]["net_n"] is not None
+            else 0.0
         )
 
         years.append(RotationCandidateYearResult(
