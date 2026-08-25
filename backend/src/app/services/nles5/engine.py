@@ -84,21 +84,13 @@ def P_func(jbnr, AAa, AAb, APb,
     return (1 - math.exp(-delta1c * AAa - delta2c * AAb)) * math.exp(-noo2c * APb)
 
 
-# § 23, stk. 4 (Bekendtgørelse om udledningsbaseret markregulering for 2027): WP er for
-# planperiode 2027 IKKE en kategori-opslået værdi som M/W/MP — bekendtgørelsen angiver en
-# enkelt fast parameterværdi for vinterplantedække til forfrugt, uanset hvad forfrugten var.
-# Gælder kun 2027 (fastlåst til forfrugtsåret 2026) — en senere planperiodes bekendtgørelse
-# kan definere WP anderledes, derfor styres den her pr. år, ikke som en global konstant.
-WP_FIXED_BY_YEAR = {
-    2027: 7.2595,
-}
-
-
-def C_func(M, W, MP, WP, Y=None):
+def C_func(M, W, MP, WP):
     """Crop effect C based on crop group codes (Bilag 2, tabel 3/5/8).
 
-    Y: beregningsår. Hvis Y har en fast WP-værdi (jf. WP_FIXED_BY_YEAR), bruges den i
-    stedet for WP_p-kategoriopslaget for WP-bidraget.
+    § 23, stk. 4-bekendtgørelsens faste 2027-parameterværdi (7,2595 for
+    vinterplantedække til forfrugt, uanset hvad forfrugten faktisk var) er bevidst
+    IKKE implementeret her — reglen er uafklaret og forventes ændret, så WP
+    kategoriopslås som for alle andre år (jf. WP_p nedenfor).
     """
     M_p = {
         1: 0,
@@ -144,13 +136,11 @@ def C_func(M, W, MP, WP, Y=None):
         10: 10.975,
     }
 
-    wp_contribution = WP_FIXED_BY_YEAR[Y] if Y in WP_FIXED_BY_YEAR else WP_p.get(WP, 0)
-
     return (
         M_p.get(M, 0)
         + W_p.get(W, 0)
         + MP_p.get(MP, 0)
-        + wp_contribution
+        + WP_p.get(WP, 0)
     )
 
 
@@ -456,7 +446,6 @@ def calculate_leaching(sample):
         W=w_used,
         MP=sample.get("MP", 1),
         WP=sample.get("WP", 1),
-        Y=sample.get("Y"),
     )
     if sample.get("P_override") is not None:
         p = float(sample["P_override"])
