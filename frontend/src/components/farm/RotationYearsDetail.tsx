@@ -75,11 +75,11 @@ const MetricTile = ({
   value: string
   caption?: string
 }) => (
-  <div className="rounded-md border bg-background p-3">
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+  <div className="rounded-md border bg-background px-2.5 py-1.5">
+    <p className="text-[11px] leading-tight text-muted-foreground">{label}</p>
+    <p className="text-sm font-semibold leading-tight tabular-nums">{value}</p>
     {caption ? (
-      <p className="mt-0.5 text-xs text-muted-foreground">{caption}</p>
+      <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{caption}</p>
     ) : null}
   </div>
 )
@@ -91,9 +91,11 @@ const MetricTile = ({
 const KeyMetricsSection = ({
   year,
   areaHa,
+  retention,
 }: {
   year: RotationCandidateYearResult
   areaHa: number
+  retention: number | null
 }) => {
   const udbytte = num(year.dbDetail.udbytte)
   const udbytteenhed = String(year.dbDetail.udbytteenhed ?? '')
@@ -111,8 +113,22 @@ const KeyMetricsSection = ({
   const afgrodeNorm = year.afgrodeNormKgnHa
   const reduceretNorm = afgrodeNorm !== null ? afgrodeNorm * (year.nNormPct / 100) : null
 
+  const udvaskning = year.leachingKgNHa
+  const udledning = udvaskning * (100 - (retention ?? 0)) / 100
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <MetricTile
+        label="Udledning"
+        value={`${fmt(udledning, 1)} kg N/ha`}
+        caption={
+          retention === null
+            ? 'Retention ikke sat — bruger 0%'
+            : `Efter ${fmt(retention, 1)}% retention`
+        }
+      />
+      <MetricTile label="DB" value={`${fmt(year.dbKrHa, 0)} kr/ha`} />
+      <MetricTile label="Udvaskning" value={`${fmt(udvaskning, 1)} kg N/ha`} />
       <MetricTile
         label="Afgrøde-norm"
         value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
@@ -122,10 +138,10 @@ const KeyMetricsSection = ({
             : undefined
         }
       />
-      <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
       <MetricTile
-        label="Foderenheder"
-        value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
+        label="Tilgængeligt N"
+        value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
+        caption={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
       />
       <MetricTile label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
       <MetricTile
@@ -134,15 +150,14 @@ const KeyMetricsSection = ({
         caption={
           `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
           (organiskBundet > 0
-            ? ` — plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet fra den udlagte gødning (tæller ikke med i normen; regnes af den fulde gødningsmængde, ikke kun det denne afgrøde kunne bruge — de to tal summer derfor bevidst ikke til gødningens fulde totale N-indhold)`
+            ? ` — plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
             : '')
         }
       />
-      <MetricTile label="DB" value={`${fmt(year.dbKrHa, 0)} kr/ha`} />
+      <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
       <MetricTile
-        label="Tilgængeligt N"
-        value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
-        caption={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
+        label="Foderenheder"
+        value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
       />
       <MetricTile
         label="Ton gødning"
@@ -570,7 +585,7 @@ export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsD
         ))}
       </div>
 
-      <KeyMetricsSection year={year} areaHa={areaHa} />
+      <KeyMetricsSection year={year} areaHa={areaHa} retention={retention} />
 
       <button
         type="button"
