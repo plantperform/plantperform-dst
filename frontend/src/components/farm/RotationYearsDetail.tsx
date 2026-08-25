@@ -162,7 +162,7 @@ const KeyMetricsSection = ({
       <MetricTile
         label="Ton gødning"
         value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
-        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha — reference, indgår senere i optimeringen`}
+        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha`}
       />
     </div>
   )
