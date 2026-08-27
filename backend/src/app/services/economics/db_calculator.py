@@ -4,7 +4,8 @@ Kobler fire kilder sammen, alle under database/data/raw/ANGJ-data/:
   - Testdata_salgspriser_afgroedekoder.csv       kr/hkg eller kr/FE, pr. (afgrødekode, driftsform)
   - Testdata_dyrkningsomkostninger_afgroedekoder.csv  kr/ha, itemiseret pr. kategori/behandling
   - midlertidig_test_prisliste_2026.csv          SEGES-satser: maskinomkostninger, tilskud, N-pris
-  - PlantPerform_master_afgroedenormer_...xlsx (Lang_lookup)  udbyttenorm pr. (afgrødekode, JB-nr, vanding)
+  - PlantPerform_master_afgroedenormer_...xlsx (Lang_lookup)
+    udbyttenorm pr. (afgrødekode, JB-nr, vanding)
 
 Udbyttenormen er allerede angivet i samme enhed som salgsprisen (hkg/ha mod
 kr/hkg for kornafgrøder, FE/ha mod kr/FE for helsæd/græs), så
@@ -55,7 +56,8 @@ _SALGSPRISER_PATH = _DATA_DIR / "Testdata_salgspriser_afgroedekoder.csv"
 _DYRKNINGSOMKOSTNINGER_PATH = _DATA_DIR / "Testdata_dyrkningsomkostninger_afgroedekoder.csv"
 _PRISLISTE_PATH = _DATA_DIR / "midlertidig_test_prisliste_2026.csv"
 _NORMER_XLSX_PATH = (
-    _DATA_DIR / "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx"
+    _DATA_DIR
+    / "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx"
 )
 
 KONVENTIONEL = "Konventionel"
@@ -363,10 +365,16 @@ def calculate_db(
         })
     alle_linjer = goedning_linjer + linjer
 
-    udsaed = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Udsæd")
-    plantevaern = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Planteværn")
-    markarbejde = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Markarbejde")
-    toerring = sum(l["udgift_kr_ha"] for l in linjer if l["kategori"] == "Tørring/lagring")
+    udsaed = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Udsæd")
+    plantevaern = sum(
+        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Planteværn"
+    )
+    markarbejde = sum(
+        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Markarbejde"
+    )
+    toerring = sum(
+        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Tørring/lagring"
+    )
 
     tilskud = _tilskud_kr_ha(afgrodekode, driftsform)
     omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring

@@ -211,7 +211,11 @@ async def evaluate_rotation_candidates(
         raise HTTPException(status_code=404, detail="Én eller flere marker blev ikke fundet")
 
     imk_ids = [field.imk_id for field in selected if field.imk_id is not None]
-    registries_by_imk_id = {r.imk_id: r for r in get_registry_fields(db, imk_ids)} if imk_ids else {}
+    registries_by_imk_id = (
+        {registry.imk_id: registry for registry in get_registry_fields(db, imk_ids)}
+        if imk_ids
+        else {}
+    )
 
     results: list[FieldRotationCandidates] = []
     for field in selected:
