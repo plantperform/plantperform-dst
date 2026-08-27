@@ -5,7 +5,6 @@ import type {
   Measure,
   NamedRotation,
   RotationYear,
-  Soil,
 } from '@/api/types'
 
 export const CROP_VALUES: Crop[] = [
@@ -58,14 +57,6 @@ export const parseRegistryRotation = (value: string): Crop[] =>
       if (!part || !/^\d+$/.test(part)) return 'CEREAL_WINTER'
       return cropFromRegistryNumber(Number(part))
     })
-
-export const soilFromRegistryNumber = (value: number | null): Soil => {
-  if (value === null) throw new Error('Jordtype-id mangler')
-  if (value === 10) return 'SAND'
-  if (value === 11 || value === 20) return 'CLAY'
-
-  throw new Error(`Ikke understøttet jordtype-id ${value}`)
-}
 
 export const formatCrop = (crop: Crop) => {
   const cropLabels: Record<Crop, string> = {
@@ -205,11 +196,6 @@ export const groupRotationsByCategory = (
   }
 
   return groups
-}
-
-export const formatSoil = (soil: Soil) => {
-  if (soil === 'SAND') return 'Sandjord'
-  return 'Lerjord'
 }
 
 export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>

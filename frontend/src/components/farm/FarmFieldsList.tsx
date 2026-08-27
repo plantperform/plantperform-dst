@@ -83,8 +83,8 @@ const comparePrimary = (
       )
     case 'inTakeoutPlan':
       return compareNumber(
-        Number(left.inTakeoutPlan),
-        Number(right.inTakeoutPlan),
+        left.inTakeoutPlan === 'nej' ? 0 : 1,
+        right.inTakeoutPlan === 'nej' ? 0 : 1,
         sort.direction,
       )
     case 'retention':
@@ -458,9 +458,7 @@ export const FarmFieldsList = ({
                         {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      {field.inTakeoutPlan ? 'Ja' : 'Nej'}
-                    </td>
+                    <td className="px-4 py-3">{field.inTakeoutPlan}</td>
                     <td className="px-4 py-3">
                       {field.retention === null
                         ? 'Ukendt'
