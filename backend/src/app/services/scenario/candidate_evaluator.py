@@ -163,9 +163,21 @@ def evaluate_sequence_for_mark(
         udl_code = udlaeg_seq[i]
         idx1, idx2 = (i - 1) % active_len, (i - 2) % active_len
 
-        f0 = afgroede_normer.lookup_nfix(this_code, jbnr, irrigated) if this_code is not None else 0.0
-        f1 = afgroede_normer.lookup_nfix(afgrode_seq[idx1], jbnr, irrigated) if afgrode_seq[idx1] is not None else 0.0
-        f2 = afgroede_normer.lookup_nfix(afgrode_seq[idx2], jbnr, irrigated) if afgrode_seq[idx2] is not None else 0.0
+        f0 = (
+            afgroede_normer.lookup_nfix(this_code, jbnr, irrigated)
+            if this_code is not None
+            else 0.0
+        )
+        f1 = (
+            afgroede_normer.lookup_nfix(afgrode_seq[idx1], jbnr, irrigated)
+            if afgrode_seq[idx1] is not None
+            else 0.0
+        )
+        f2 = (
+            afgroede_normer.lookup_nfix(afgrode_seq[idx2], jbnr, irrigated)
+            if afgrode_seq[idx2] is not None
+            else 0.0
+        )
         m1 = n_inputs[idx1]["mncs"] + n_inputs[idx1]["mnca"]
         m2 = n_inputs[idx2]["mncs"] + n_inputs[idx2]["mnca"]
         g1 = n_inputs[idx1]["g0"]
@@ -237,7 +249,11 @@ def evaluate_sequence_for_mark(
     avg_db = sum(y.db_kr_ha for y in cycle) / len(cycle)
     # FEN: kun meningsfuldt for FE-noterede afgrøder (helsæd/græs) — grovfoder-
     # udbytte, jf. samme definition som TabSaedsk's "Grovfoder FEN pr. ha".
-    fen_values = [y.db_detail["udbytte"] for y in cycle if y.db_detail.get("udbytteenhed") == "FE/ha"]
+    fen_values = [
+        year.db_detail["udbytte"]
+        for year in cycle
+        if year.db_detail.get("udbytteenhed") == "FE/ha"
+    ]
     avg_fen = sum(fen_values) / len(cycle) if fen_values else 0.0
 
     return RotationCandidateEvaluation(
