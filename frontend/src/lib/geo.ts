@@ -63,7 +63,7 @@ export const fieldsToFeatureCollection = (
         nLoad: field.nLoad,
         db2: field.db2,
         rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
-        inTakeoutPlan: field.inTakeoutPlan ? 1 : 0,
+        inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
       },
       geometry: field.geometry,
     })),

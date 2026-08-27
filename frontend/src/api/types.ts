@@ -42,8 +42,6 @@ export type GeoJSONMultiPolygon = {
   coordinates: [number, number][][][]
 }
 
-export type Soil = 'SAND' | 'CLAY'
-
 export type Crop =
   | 'CEREAL_WINTER'
   | 'CEREAL_SPRING'
@@ -79,7 +77,6 @@ export type FieldRecord = {
   imkId: number | null
   kystvandId: number | null
   retention: number | null
-  soil: Soil
   jbnr: number | null
   cropRotation: RotationYear[]
   rotationId: string | null
@@ -91,7 +88,7 @@ export type FieldRecord = {
   fen: number
   name: string
   areaHa: number
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
@@ -101,13 +98,15 @@ export type RegistryField = {
   imkId: number
   cvr: string | null
   marknr: string | null
+  markblok: string | null
+  journalnr: string | null
   kystvandId: number | null
   retention: number | null
-  soilId: number | null
+  jbnr: number | null
   areaHa: number
   cropRotation: string
   cropHistory: Record<string, number | null>
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon
@@ -119,10 +118,9 @@ export type RegistryFieldSummary = {
   marknr: string | null
   kystvandId: number | null
   retention: number | null
-  soilId: number | null
   areaHa: number
   cropRotation: string
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
 }
@@ -138,13 +136,12 @@ export type CreateFieldInput = {
   imkId: number | null
   kystvandId?: number | null
   retention: number | null
-  soil: Soil
   cropRotation?: RotationYear[]
   measures?: FieldMeasures
   allowedRotationIds?: string[]
   name: string
   areaHa: number
-  inTakeoutPlan?: boolean
+  inTakeoutPlan?: string
   udledningsgraenseKgnHa?: number
   udledningskvoteMarkKgn?: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
