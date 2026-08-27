@@ -39,6 +39,22 @@ pixi run dev
 The API listens on `http://localhost:8000`; its health endpoint is
 `http://localhost:8000/api/v0/healthz`.
 
+While developing a migration, revert the latest revision before editing it:
+
+```bash
+pixi run db-revert
+```
+
+If a migration has been edited before it was reverted, reset the local
+database instead. This removes the Docker volume, recreates PostGIS, waits for
+it to become healthy, and applies all migrations from scratch:
+
+```bash
+pixi run db-reset
+```
+
+`db-reset` is destructive and removes all data in the local database volume.
+
 ### Start the frontend
 
 In another terminal:
