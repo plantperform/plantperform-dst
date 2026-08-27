@@ -189,7 +189,7 @@ def evaluate_sequence_for_mark(
             this_code, driftsform, jbnr,
             mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
             org_mineral_n_applied=n_inputs[i]["org_mineral_n_applied"],
-            udlaeg_kode=udl_code,
+            udlaeg_kode=udl_code, only_organic=only_organic,
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied er husdyrgødningens UDNYTTEDE/mineralske del —
