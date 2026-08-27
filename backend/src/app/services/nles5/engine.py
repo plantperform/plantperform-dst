@@ -438,7 +438,11 @@ def calculate_leaching(sample):
     eea = 0 if sample.get("mellemafgroede", False) else sample.get("EEA", 0)
 
     w_original = sample.get("W", 1)
-    w_ref = reference_w_for_eea(sample.get("M", 1), sample.get("crop_name", "")) if eea > 0 else None
+    w_ref = (
+        reference_w_for_eea(sample.get("M", 1), sample.get("crop_name", ""))
+        if eea > 0
+        else None
+    )
     w_used = w_ref if (w_ref is not None and eea > 0) else w_original
 
     c = C_func(

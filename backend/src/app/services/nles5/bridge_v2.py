@@ -157,7 +157,11 @@ def evaluate_leaching_position(
 
     perc = percolation_placeholder(afstromningskategori)
 
-    vk = _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL) if udlaeg_kode is not None else _NO_VIRKEMIDDEL
+    vk = (
+        _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL)
+        if udlaeg_kode is not None
+        else _NO_VIRKEMIDDEL
+    )
 
     sample = {
         "crop_code": afgrode_kode,
