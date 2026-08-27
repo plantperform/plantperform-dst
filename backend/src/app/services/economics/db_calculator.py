@@ -265,6 +265,7 @@ def calculate_db(
     irrigated: bool = False,
     org_mineral_n_applied: float = 0.0,
     udlaeg_kode: int | None = None,
+    only_organic: bool = False,
 ) -> dict:
     """Beregn dækningsbidrag (kr/ha) for én (afgrødekode, driftsform, JB-nr).
 
@@ -279,6 +280,12 @@ def calculate_db(
     gylle-delen koster kun udbringning (jf. "gylle skal kun koste
     udbringningsprisen"). Gælder også for KONVENTIONELLE gylle-kategorier
     (fx svinegylle/kvæggylle-sædskifter), ikke kun økologisk.
+
+    only_organic: scenariets gødningsvalg (Fase 13's GodningSettings) —
+    IKKE det samme som driftsform. Om handelsgødning må toppe MNCS op ud
+    over den organiske tildeling afgøres af denne, ikke af driftsform (en
+    Økologisk-mærket simulering kan sagtens have only_organic=False, og skal
+    så også prissættes for den resterende handelsgødning).
 
     udlaeg_kode: rotationspositionens udlægskode (samme kode som
     bridge_v2.evaluate_leaching_position modtager) — bestemmer om der lægges
@@ -313,39 +320,34 @@ def calculate_db(
 
     # Itemiserede linjer bag hver kategori-sum, til UI'ens beregningsgennemgang
     # (hvilke enkeltposter der reelt summer til fx "Gødning" eller "Markarbejde").
+    # Om handelsgødning må toppe MNCS op afgøres af only_organic — IKKE af
+    # driftsform. En Økologisk-mærket simulering kan sagtens have
+    # only_organic=False (Fase 13 afkoblede de to indstillinger), og skal så
+    # også prissættes for den resterende handelsgødning, ligesom konventionel.
     goedning_linjer: list[dict] = []
-    if driftsform == OEKOLOGISK:
-        # Økologiske kandidater er altid "kun organisk" (only_organic=True i
-        # KATEGORI_GODNING) — hele mncs er organisk, ingen handelsgødningsdel.
-        gylle_udbringning = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
-        goedning = gylle_udbringning
-        goedning_linjer.append({
-            "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
-            "udgift_kr_ha": gylle_udbringning,
-        })
-    else:
-        handelsgodning_n = max(0.0, mncs - org_mineral_n_applied) + mnca
+    goedning = 0.0
+    handelsgodning_n = 0.0 if only_organic else max(0.0, mncs - org_mineral_n_applied) + mnca
+    if handelsgodning_n > 0:
         handelsgodning_kr = handelsgodning_n * _n_pris()
-        goedning = handelsgodning_kr
+        goedning += handelsgodning_kr
         goedning_linjer.append({
             "kategori": "Gødning",
             "behandling": f"Handelsgødning, N ({handelsgodning_n:.0f} kg/ha)",
             "udgift_kr_ha": handelsgodning_kr,
         })
-        if handelsgodning_n > 0:
-            n_udb = _n_udbringning()
-            goedning += n_udb
-            goedning_linjer.append({
-                "kategori": "Gødning", "behandling": "Udbringning, handelsgødning",
-                "udgift_kr_ha": n_udb,
-            })
-        if org_mineral_n_applied > 0:
-            gylle_udb = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
-            goedning += gylle_udb
-            goedning_linjer.append({
-                "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
-                "udgift_kr_ha": gylle_udb,
-            })
+        n_udb = _n_udbringning()
+        goedning += n_udb
+        goedning_linjer.append({
+            "kategori": "Gødning", "behandling": "Udbringning, handelsgødning",
+            "udgift_kr_ha": n_udb,
+        })
+    if org_mineral_n_applied > 0:
+        gylle_udb = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+        goedning += gylle_udb
+        goedning_linjer.append({
+            "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
+            "udgift_kr_ha": gylle_udb,
+        })
 
     linjer = list(_load_dyrkningsomkostninger().get((afgrodekode, driftsform), []))
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode)
