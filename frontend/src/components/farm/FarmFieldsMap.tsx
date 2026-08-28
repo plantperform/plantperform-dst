@@ -83,12 +83,12 @@ const MARS_LEGEND: { label: string; color: string; virkemidler: string[] }[] = [
   },
 ]
 const MARS_OTHER_COLOR = '#94a3b8'
-const marsFillColor: ExpressionSpecification = [
+const marsFillColor = [
   'match',
   ['get', 'virkemiddel'],
   ...MARS_LEGEND.flatMap(({ virkemidler, color }) => [virkemidler, color]),
   MARS_OTHER_COLOR,
-] as ExpressionSpecification
+] as unknown as ExpressionSpecification
 
 type FarmFieldsMapProps = {
   farm: Farm
