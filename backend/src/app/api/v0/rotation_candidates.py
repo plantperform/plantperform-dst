@@ -12,6 +12,7 @@ from app.domain.base import CamelModel
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
 from app.domain.simulation import GodningSettings
 from app.services.rotations import afgroede_normer, saedskifte_kategorier, saedskifte_library
+from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
 
@@ -233,6 +234,13 @@ def evaluate_rotation_candidates(
     for field in selected:
         registry = registries_by_imk_id.get(field.imk_id) if field.imk_id is not None else None
         jbnr = jbnr_for_registry(registry)
+        real_history = (
+            real_history_lookback(
+                registry.crop_history, jbnr, registry.goedningsregion, registry.oeko
+            )
+            if registry is not None
+            else None
+        )
         candidates = [
             evaluate_candidate_for_mark(
                 ref,
@@ -244,6 +252,7 @@ def evaluate_rotation_candidates(
                 n_indhold_kg_per_ton=request.godning.n_indhold_kg_per_ton,
                 start_year=request.start_year,
                 irrigated=request.irrigated,
+                real_history=real_history,
             )
             for ref in request.candidate_refs
         ]

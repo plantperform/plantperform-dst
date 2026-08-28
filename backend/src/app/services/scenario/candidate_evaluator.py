@@ -132,19 +132,40 @@ def evaluate_sequence_for_mark(
     base_ref: RotationCandidateRef | None = None,
     overrides: list[RotationPositionOverride] = (),
     start_year: int = 1,
+    real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation:
     """Kernen af kandidat-evaluering: 8 positioner, hver med udvaskning + DB,
     samt gennemsnit over én fuld rotationscyklus (active_len). Tager de
     færdige afgrøde-/udlægssekvenser direkte i stedet for selv at slå dem op
     i biblioteket — genbrugt af både evaluate_candidate_for_mark (bibliotek)
     og evaluate_with_overrides (Fase 10 — manuel enkelt-position-rettelse).
+
+    real_history (valgfri): {2025: {"code", "mncs", "mnca", "g0"}, 2026: {...}}
+    fra historisk_goedning.real_history_lookback — markens EGNE ægte 2025/26-
+    afgrøder og deres historiske N-input (Bilag 3), til at seede f1/f2/g1/g2/
+    m1/m2 for position 0 (2027) og 1 (2028) i stedet for at ombukke cyklisk
+    til en hypotetisk fremtidig position i SAMME kandidat — kun disse to
+    positioners bagudkig påvirkes; resten af rotationen (2029+) bruger
+    stadig scenariets gødningsvalg uændret. Ingen real_history (default) =
+    uændret opførsel (ren cyklisk ombukning, som før denne funktion fik
+    parameteren).
     """
     n_norm_pct = float(result_ref.n_norm_pct)
+
+    def prev_code_for(i: int) -> int | None:
+        """Afgrødekoden 1 år før position i — ægte 2026-historik for
+        position 0 når real_history er givet, ellers cyklisk ombukning."""
+        idx = i - 1
+        if real_history is not None and idx < 0:
+            entry = real_history.get(str(START_CALENDAR_YEAR + idx))
+            if entry is not None:
+                return entry["code"]
+        return afgrode_seq[idx % active_len]
 
     n_inputs = [
         compute_n_inputs(
             afgrode_seq[i],
-            afgrode_seq[(i - 1) % active_len],
+            prev_code_for(i),
             jbnr,
             n_norm_pct,
             org_mineral_n,
@@ -155,33 +176,41 @@ def evaluate_sequence_for_mark(
         for i in range(8)
     ]
 
+    def lookback(i: int, offset: int) -> tuple[int | None, float, float, float]:
+        """(code, f, m, g) for afgrøden `offset` år før position i — ægte
+        2025/26-historik når lookback'et ellers ville ombukke til en
+        hypotetisk fremtidig position i SAMME kandidat (kun sandt for
+        position 0/2027 og 1/2028's bagudkig, jf. den bekræftede regel)."""
+        idx = i - offset
+        if real_history is not None and idx < 0:
+            entry = real_history.get(str(START_CALENDAR_YEAR + idx))
+            if entry is not None:
+                code = entry["code"]
+                f = afgroede_normer.lookup_nfix(code, jbnr, irrigated) if code is not None else 0.0
+                return code, f, entry["mncs"] + entry["mnca"], entry["g0"]
+        wrapped = idx % active_len
+        code = afgrode_seq[wrapped]
+        f = afgroede_normer.lookup_nfix(code, jbnr, irrigated) if code is not None else 0.0
+        return (
+            code,
+            f,
+            n_inputs[wrapped]["mncs"] + n_inputs[wrapped]["mnca"],
+            n_inputs[wrapped]["g0"],
+        )
+
     years: list[RotationCandidateYearResult] = []
     for i in range(8):
         this_code = afgrode_seq[i]
         next_code = afgrode_seq[(i + 1) % active_len]
-        prev_code = afgrode_seq[(i - 1) % active_len]
+        prev_code, f1, m1, g1 = lookback(i, 1)
+        _, f2, m2, g2 = lookback(i, 2)
         udl_code = udlaeg_seq[i]
-        idx1, idx2 = (i - 1) % active_len, (i - 2) % active_len
 
         f0 = (
             afgroede_normer.lookup_nfix(this_code, jbnr, irrigated)
             if this_code is not None
             else 0.0
         )
-        f1 = (
-            afgroede_normer.lookup_nfix(afgrode_seq[idx1], jbnr, irrigated)
-            if afgrode_seq[idx1] is not None
-            else 0.0
-        )
-        f2 = (
-            afgroede_normer.lookup_nfix(afgrode_seq[idx2], jbnr, irrigated)
-            if afgrode_seq[idx2] is not None
-            else 0.0
-        )
-        m1 = n_inputs[idx1]["mncs"] + n_inputs[idx1]["mnca"]
-        m2 = n_inputs[idx2]["mncs"] + n_inputs[idx2]["mnca"]
-        g1 = n_inputs[idx1]["g0"]
-        g2 = n_inputs[idx2]["g0"]
 
         leaching = bridge_v2.evaluate_leaching_position(
             afgrode_kode=this_code,
@@ -281,6 +310,7 @@ def evaluate_candidate_for_mark(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
     DB, samt gennemsnit over én fuld rotationscyklus (active_len).
@@ -306,6 +336,7 @@ def evaluate_candidate_for_mark(
         n_indhold_kg_per_ton=n_indhold_kg_per_ton,
         irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
         start_year=start_year,
+        real_history=real_history,
     )
 
 
@@ -322,6 +353,7 @@ def evaluate_with_overrides(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     start_year: int = 1,
+    real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Som evaluate_candidate_for_mark, men overskriver hovedafgrøden i én
     eller flere positioner efter opslag i biblioteket, og/eller forskyder
@@ -375,6 +407,7 @@ def evaluate_with_overrides(
         n_indhold_kg_per_ton=n_indhold_kg_per_ton,
         irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
+        real_history=real_history,
     )
 
 
@@ -385,6 +418,7 @@ def generate_candidates_for_field(
     godning: GodningSettings,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    real_history: dict[str, dict] | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
     N-norm%-værdier × alle varianter, og evaluer hver resulterende kandidat
@@ -420,6 +454,7 @@ def generate_candidates_for_field(
                     only_organic=godning.only_organic,
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                    real_history=real_history,
                 )
                 if result is not None:
                     results.append(result)
