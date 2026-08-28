@@ -467,6 +467,7 @@ def post_farm_simulation_field_preview_rotation(
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=request.start_year,
+        real_history=candidates_row.real_history,
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
