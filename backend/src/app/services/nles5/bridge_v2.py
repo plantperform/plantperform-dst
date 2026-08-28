@@ -138,7 +138,7 @@ def evaluate_leaching_position(
     f2: float = 0.0,
     g1: float = 0.0,
     g2: float = 0.0,
-    y: int = 2024,
+    y: int = 2027,
     afstromningskategori: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",
