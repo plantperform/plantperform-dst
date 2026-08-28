@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Plant Perform</title>
+  <desc id="desc">A cream sprout inside a circular crop-rotation arrow on a deep green rounded square.</desc>
+
+  <defs>
+    <linearGradient id="field" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#174F3C"/>
+      <stop offset="1" stop-color="#0B3328"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="29" y1="17" x2="43" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF8D9"/>
+      <stop offset="1" stop-color="#DCE9A6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="16" fill="url(#field)"/>
+
+  <!-- Circular crop-rotation cue -->
+  <path d="M16.5 35.7A20.5 20.5 0 0 1 39.2 14.4" fill="none" stroke="#72B58A" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="m37.7 9.8 7.8 4.1-6.9 5.5" fill="none" stroke="#72B58A" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M47.5 28.3A20.5 20.5 0 0 1 24.8 49.6" fill="none" stroke="#72B58A" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="m26.3 54.2-7.8-4.1 6.9-5.5" fill="none" stroke="#72B58A" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Sprout / plant-performance cue -->
+  <path d="M31.8 47.2V29.8" fill="none" stroke="#FFF8D9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M31.9 31.3c-8.9.1-13.8-4.7-13.6-12.9 8.3-.2 13.6 4.1 13.6 12.9Z" fill="url(#leaf)"/>
+  <path d="M32.4 29.8c.1-9.6 5.1-14.6 14.2-14.1.1 8.6-5 13.8-14.2 14.1Z" fill="url(#leaf)"/>
+  <path d="M24.2 24.1c2.8 1.2 5.2 3.1 7.2 5.7M40.4 21.3c-3.2 2-5.8 4.7-8 8.2" fill="none" stroke="#7E9C61" stroke-width="1.7" stroke-linecap="round" opacity=".9"/>
+
+  <!-- Ground line -->
+  <path d="M22.5 47.2h19" fill="none" stroke="#FFF8D9" stroke-width="4" stroke-linecap="round"/>
+</svg>
