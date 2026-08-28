@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { useAuth } from '@/auth/context'
 import { useFarms } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/components/ui/card'
 
 export const HomePage = () => {
+  const { user, signOut } = useAuth()
   const { data: farms = [], error, isLoading } = useFarms()
 
   return (
@@ -30,9 +32,13 @@ export const HomePage = () => {
               marker fra registret.
             </p>
           </div>
-          <Button asChild size="lg">
-            <Link to="/farms/new">Opret ny bedrift</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-muted-foreground">{user?.email}</span>
+            <Button variant="outline" onClick={() => void signOut()}>Log ud</Button>
+            <Button asChild size="lg">
+              <Link to="/farms/new">Opret ny bedrift</Link>
+            </Button>
+          </div>
         </header>
 
         <Card>

@@ -96,10 +96,11 @@ def run_optimization(
     farm_id: str,
     simulation_id: str,
     time_limit_seconds: float,
+    email: str,
 ) -> OptimizationRunResult:
-    simulation = repository.get_simulation(farm_id, simulation_id)
-    fields = repository.list_simulation_fields(farm_id, simulation_id)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id)
+    simulation = repository.get_simulation(farm_id, simulation_id, email)
+    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
+    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -158,6 +159,7 @@ def run_optimization(
                 leaching=assignment.leaching,
                 fen=assignment.fen,
             ),
+            email,
         )
         if updated_field is None:
             raise OptimizationNotFoundError
@@ -176,6 +178,7 @@ def apply_manual_rotation(
     field_id: str,
     base_ref: RotationCandidateRef,
     overrides: list[RotationPositionOverride],
+    email: str,
     start_year: int = 1,
 ) -> FieldRecord | None:
     """"Rediger manuelt" (Fase 10) — genberegner markens rotation ud fra
@@ -185,13 +188,18 @@ def apply_manual_rotation(
     _build_options), og låser marken til dette valg (allowed_rotation_ids)
     så en senere Optimér-kørsel ikke overskriver den manuelle rettelse
     igen, før brugeren selv låser op."""
-    simulation = repository.get_simulation(farm_id, simulation_id)
-    fields = repository.list_simulation_fields(farm_id, simulation_id)
+    simulation = repository.get_simulation(farm_id, simulation_id, email)
+    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
     if simulation is None or fields is None:
         raise ManualRotationNotFoundError
 
     field = next((f for f in fields if f.id == field_id), None)
-    candidates_row = repository.get_simulation_field_candidates(farm_id, simulation_id, field_id)
+    candidates_row = repository.get_simulation_field_candidates(
+        farm_id,
+        simulation_id,
+        field_id,
+        email,
+    )
     if field is None or candidates_row is None:
         raise ManualRotationNotFoundError
 
@@ -209,7 +217,14 @@ def apply_manual_rotation(
     if candidate is None:
         return None
 
-    repository.append_manual_field_candidate(farm_id, simulation_id, field_id, candidate)
+    if not repository.append_manual_field_candidate(
+        farm_id,
+        simulation_id,
+        field_id,
+        candidate,
+        email,
+    ):
+        raise ManualRotationNotFoundError
 
     retention_factor = 1 - (field.retention or 0) / 100
     leaching_total = candidate.avg_leaching_kg_n_ha * field.area_ha
@@ -225,6 +240,7 @@ def apply_manual_rotation(
             fen=candidate.avg_fen * field.area_ha,
             allowed_rotation_ids=[rotation_id],
         ),
+        email,
     )
 
 
@@ -343,6 +359,7 @@ def run_yearly_optimization(
     max_n_load_by_year: tuple[float | None, ...],
     db2_swing_pct: float | None,
     selected_pairs: set[tuple[str, str]],
+    email: str,
 ) -> YearlyOptimizationRunResult:
     """"Års-optimering" (Fase 11) — som run_optimization, men lader solveren
     også vælge hvor meget hvert felts sædskifte forskydes (start_year), for
@@ -354,9 +371,9 @@ def run_yearly_optimization(
 
     `selected_pairs` — (saedskiftevariant, variant)-par brugeren eksplicit
     har valgt skal kunne forskydes (Fase 12) — se _expand_yearly_options."""
-    simulation = repository.get_simulation(farm_id, simulation_id)
-    fields = repository.list_simulation_fields(farm_id, simulation_id)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id)
+    simulation = repository.get_simulation(farm_id, simulation_id, email)
+    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
+    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -417,9 +434,14 @@ def run_yearly_optimization(
             for option in options_by_field_id[assignment.field_id]
             if option.id == assignment.rotation_id
         )
-        repository.append_manual_field_candidate(
-            farm_id, simulation_id, assignment.field_id, winning_option.candidate,
-        )
+        if not repository.append_manual_field_candidate(
+            farm_id,
+            simulation_id,
+            assignment.field_id,
+            winning_option.candidate,
+            email,
+        ):
+            raise OptimizationNotFoundError
         updated_field = repository.update_simulation_field(
             farm_id,
             simulation_id,
@@ -432,6 +454,7 @@ def run_yearly_optimization(
                 leaching=assignment.leaching,
                 fen=assignment.fen,
             ),
+            email,
         )
         if updated_field is None:
             raise OptimizationNotFoundError
@@ -441,7 +464,9 @@ def run_yearly_optimization(
 
 
 def compute_yearly_summary(
-    farm_id: str, simulation_id: str,
+    farm_id: str,
+    simulation_id: str,
+    email: str,
 ) -> tuple[YearlySummaryEntry, ...] | None:
     """Summér kvælstofudledning (retentionskorrigeret)/DB2/foderenheder pr. år
     (position i den enkelte marks
@@ -450,8 +475,8 @@ def compute_yearly_summary(
     kandidat (endnu ikke optimeret) bidrager ikke. Rotationer med kortere
     cyklus end andre marker bidrager kun til de år de reelt dækker (field_count
     afspejler hvor mange marker der har data for det pågældende år)."""
-    fields = repository.list_simulation_fields(farm_id, simulation_id)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id)
+    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
+    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
     if fields is None or field_candidates is None:
         return None
 

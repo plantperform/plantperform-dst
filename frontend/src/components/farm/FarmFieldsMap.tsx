@@ -12,6 +12,7 @@ import Map, {
 } from 'react-map-gl/maplibre'
 import { mutate } from 'swr'
 
+import { getAccessToken } from '@/api/auth'
 import { API_BASE, fetcher } from '@/api/client'
 import { farmFieldsKey, registryFieldsBulkKey, useFarmFields } from '@/api/hooks'
 import { createFields, detachField } from '@/api/mutations'
@@ -444,6 +445,11 @@ export const FarmFieldsMap = ({
         ref={mapRef}
         initialViewState={initialViewState}
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
+        transformRequest={(url) => {
+          const token = getAccessToken()
+          if (!token || !url.includes('/api/v0/')) return { url }
+          return { url, headers: { Authorization: `Bearer ${token}` } }
+        }}
         interactiveLayerIds={
           addMode
             ? [

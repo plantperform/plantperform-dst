@@ -1,9 +1,10 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
+from app.auth import AuthenticatedUser, current_user
 from app.data.repository import (
     FieldNotOptimizedError,
     create_simulation,
@@ -48,6 +49,7 @@ from app.services.scenario.candidate_evaluator import (
 NUM_ROTATION_YEARS = 8
 
 router = APIRouter(prefix="/farms/{farm_id}/simulations", tags=["simulations"])
+CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 
 class OptimizeSimulationRequest(CamelModel):
@@ -78,8 +80,11 @@ class YearlySummaryEntryResponse(CamelModel):
 
 
 @router.get("", response_model=list[Simulation])
-async def get_farm_simulations(farm_id: str) -> list[Simulation]:
-    simulations = list_simulations(farm_id)
+async def get_farm_simulations(
+    farm_id: str,
+    user: CurrentUser,
+) -> list[Simulation]:
+    simulations = list_simulations(farm_id, user.email)
 
     if simulations is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
@@ -88,8 +93,12 @@ async def get_farm_simulations(farm_id: str) -> list[Simulation]:
 
 
 @router.post("", response_model=Simulation)
-async def post_farm_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulation:
-    simulation = create_simulation(farm_id, request)
+async def post_farm_simulation(
+    farm_id: str,
+    request: CreateSimulationRequest,
+    user: CurrentUser,
+) -> Simulation:
+    simulation = create_simulation(farm_id, request, user.email)
 
     if simulation is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
@@ -98,8 +107,12 @@ async def post_farm_simulation(farm_id: str, request: CreateSimulationRequest) -
 
 
 @router.get("/{simulation_id}", response_model=Simulation)
-async def get_farm_simulation(farm_id: str, simulation_id: str) -> Simulation:
-    simulation = get_simulation(farm_id, simulation_id)
+async def get_farm_simulation(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+) -> Simulation:
+    simulation = get_simulation(farm_id, simulation_id, user.email)
 
     if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -108,8 +121,12 @@ async def get_farm_simulation(farm_id: str, simulation_id: str) -> Simulation:
 
 
 @router.delete("/{simulation_id}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_simulation(farm_id: str, simulation_id: str) -> None:
-    deleted = delete_simulation(farm_id, simulation_id)
+async def delete_farm_simulation(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+) -> None:
+    deleted = delete_simulation(farm_id, simulation_id, user.email)
 
     if deleted is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
@@ -123,9 +140,10 @@ async def patch_farm_simulation_constraints(
     farm_id: str,
     simulation_id: str,
     request: OptimizationConstraints,
+    user: CurrentUser,
 ) -> Simulation:
     try:
-        simulation = update_simulation_constraints(farm_id, simulation_id, request)
+        simulation = update_simulation_constraints(farm_id, simulation_id, request, user.email)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -139,6 +157,7 @@ async def patch_farm_simulation_constraints(
 async def post_farm_simulation_optimization(
     farm_id: str,
     simulation_id: str,
+    user: CurrentUser,
     request: OptimizeSimulationRequest | None = None,
 ) -> OptimizeSimulationResponse:
     optimization_request = request or OptimizeSimulationRequest()
@@ -148,6 +167,7 @@ async def post_farm_simulation_optimization(
             farm_id,
             simulation_id,
             optimization_request.time_limit_seconds,
+            user.email,
         )
     except OptimizationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
@@ -201,6 +221,7 @@ class YearlyOptimizeSimulationResponse(CamelModel):
 async def post_farm_simulation_yearly_optimization(
     farm_id: str,
     simulation_id: str,
+    user: CurrentUser,
     request: YearlyOptimizeSimulationRequest | None = None,
 ) -> YearlyOptimizeSimulationResponse:
     """"Års-optimering" (Fase 11) — som /optimize, men med pr.-kalenderår
@@ -224,6 +245,7 @@ async def post_farm_simulation_yearly_optimization(
             max_n_load_by_year,
             optimization_request.db2_swing_pct,
             selected_pairs,
+            user.email,
         )
     except OptimizationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
@@ -274,14 +296,16 @@ class YearlyOptimizationKategoriOption(CamelModel):
     response_model=list[YearlyOptimizationKategoriOption],
 )
 async def get_farm_simulation_yearly_optimization_candidates(
-    farm_id: str, simulation_id: str,
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
 ) -> list[YearlyOptimizationKategoriOption]:
     """Fase 12 — de (saedskiftevariant, variant)-par der reelt er gemt for
     denne simulerings marker (fra "Opret scenarie"), til "Års-optimering"s
     eksplicitte sædskifte-vælger. Kun rigtige biblioteks-refs vises
     (base_ref er None) — tidligere Fase 10/11-efterladte "+manuel"-varianter
     filtreres fra, samme mønster som _expand_yearly_options's dedup."""
-    field_candidates = list_simulation_field_candidates(farm_id, simulation_id)
+    field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
     if field_candidates is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
@@ -344,8 +368,12 @@ async def get_farm_simulation_yearly_optimization_candidates(
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
-async def get_farm_simulation_fields(farm_id: str, simulation_id: str) -> list[FieldRecord]:
-    fields = list_simulation_fields(farm_id, simulation_id)
+async def get_farm_simulation_fields(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+) -> list[FieldRecord]:
+    fields = list_simulation_fields(farm_id, simulation_id, user.email)
 
     if fields is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -359,8 +387,9 @@ async def patch_farm_simulation_field(
     simulation_id: str,
     field_id: str,
     request: UpdateFieldRequest,
+    user: CurrentUser,
 ) -> FieldRecord:
-    field = update_simulation_field(farm_id, simulation_id, field_id, request)
+    field = update_simulation_field(farm_id, simulation_id, field_id, request, user.email)
 
     if field is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
@@ -373,10 +402,13 @@ async def patch_farm_simulation_field(
     response_model=RotationCandidateEvaluation,
 )
 async def get_farm_simulation_field_candidate_detail(
-    farm_id: str, simulation_id: str, field_id: str,
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    user: CurrentUser,
 ) -> RotationCandidateEvaluation:
     try:
-        detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id)
+        detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
     except FieldNotOptimizedError as error:
         raise HTTPException(
             status_code=422, detail="Marken er ikke optimeret endnu",
@@ -403,16 +435,22 @@ async def post_farm_simulation_field_preview_rotation(
     simulation_id: str,
     field_id: str,
     request: RecomputeFieldRotationRequest,
+    user: CurrentUser,
 ) -> RotationCandidateEvaluation:
     """Levende beregning (Fase 10) — genberegner en rotation for én mark ud
     fra base_ref + evt. enkelt-positions-overskrivninger, uden at gemme
     noget. Bruges af "Rediger manuelt"-panelet til at vise resultatet af en
     ændring, før brugeren trykker "Gem"."""
-    simulation = get_simulation(farm_id, simulation_id)
+    simulation = get_simulation(farm_id, simulation_id, user.email)
     if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
-    candidates_row = get_simulation_field_candidates(farm_id, simulation_id, field_id)
+    candidates_row = get_simulation_field_candidates(
+        farm_id,
+        simulation_id,
+        field_id,
+        user.email,
+    )
     if candidates_row is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
 
@@ -445,6 +483,7 @@ async def post_farm_simulation_field_apply_rotation(
     simulation_id: str,
     field_id: str,
     request: RecomputeFieldRotationRequest,
+    user: CurrentUser,
 ) -> FieldRecord:
     """Gemmer resultatet af en manuel rettelse (samme genberegning som
     preview-rotation), skriver den til marken som Optimér ville, og låser
@@ -452,7 +491,7 @@ async def post_farm_simulation_field_apply_rotation(
     try:
         field = apply_manual_rotation(
             farm_id, simulation_id, field_id,
-            request.base_ref, request.overrides, request.start_year,
+            request.base_ref, request.overrides, user.email, request.start_year,
         )
     except ManualRotationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering eller mark ikke fundet") from error
@@ -468,9 +507,11 @@ async def post_farm_simulation_field_apply_rotation(
     response_model=list[YearlySummaryEntryResponse],
 )
 async def get_farm_simulation_yearly_summary(
-    farm_id: str, simulation_id: str,
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
 ) -> list[YearlySummaryEntryResponse]:
-    summary = compute_yearly_summary(farm_id, simulation_id)
+    summary = compute_yearly_summary(farm_id, simulation_id, user.email)
 
     if summary is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")

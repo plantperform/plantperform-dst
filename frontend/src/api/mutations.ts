@@ -5,6 +5,7 @@ import type {
   CreateSimulationInput,
   EvaluateRotationCandidatesInput,
   Farm,
+  FarmMember,
   FieldRecord,
   FieldRotationCandidates,
   OptimizeSimulationInput,
@@ -26,6 +27,12 @@ export const deleteFarm = (farmId: string) => deleteJson(`/farms/${farmId}`)
 
 export const updateFarm = (farmId: string, input: UpdateFarmInput) =>
   patchJson<Farm, UpdateFarmInput>(`/farms/${farmId}`, input)
+
+export const addFarmMember = (farmId: string, email: string) =>
+  postJson<FarmMember, { email: string }>(`/farms/${farmId}/members`, { email })
+
+export const removeFarmMember = (farmId: string, email: string) =>
+  deleteJson(`/farms/${farmId}/members/${encodeURIComponent(email)}`)
 
 export const createField = (farmId: string, input: CreateFieldInput) =>
   postJson<FieldRecord, CreateFieldInput>(`/farms/${farmId}/fields`, input)

@@ -1,4 +1,16 @@
+import { getAccessToken, refreshAccessToken } from '@/api/auth'
+
 export const API_BASE = '/api/v0'
+
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
 
 type FastApiValidationError = {
   loc?: (string | number)[]
@@ -88,11 +100,28 @@ const getErrorMessage = async (response: Response) => {
   return `API-kald fejlede med status ${response.status}`
 }
 
+const request = async (path: string, init: RequestInit = {}, canRetry = true): Promise<Response> => {
+  const token = getAccessToken()
+  const headers = new Headers(init.headers)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  })
+  if (response.status === 401 && canRetry && !path.startsWith('/auth/')) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) return request(path, init, false)
+    window.dispatchEvent(new Event('auth:expired'))
+  }
+  return response
+}
+
 export const fetcher = async <T>(path: string): Promise<T> => {
-  const response = await fetch(`${API_BASE}${path}`)
+  const response = await request(path)
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response))
+    throw new ApiError(response.status, await getErrorMessage(response))
   }
 
   return response.json() as Promise<T>
@@ -102,7 +131,7 @@ export const postJson = async <TResponse, TBody>(
   path: string,
   body: TBody,
 ): Promise<TResponse> => {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await request(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -111,7 +140,7 @@ export const postJson = async <TResponse, TBody>(
   })
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response))
+    throw new ApiError(response.status, await getErrorMessage(response))
   }
 
   return response.json() as Promise<TResponse>
@@ -121,7 +150,7 @@ export const patchJson = async <TResponse, TBody>(
   path: string,
   body: TBody,
 ): Promise<TResponse> => {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await request(path, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -130,14 +159,14 @@ export const patchJson = async <TResponse, TBody>(
   })
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response))
+    throw new ApiError(response.status, await getErrorMessage(response))
   }
 
   return response.json() as Promise<TResponse>
 }
 
 export const deleteJson = async (path: string): Promise<void> => {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await request(path, {
     method: 'DELETE',
   })
 

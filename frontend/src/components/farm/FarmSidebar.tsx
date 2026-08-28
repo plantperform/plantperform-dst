@@ -5,11 +5,20 @@ import { mutate } from 'swr'
 import {
   farmKey,
   farmFieldsKey,
+  farmMembersKey,
   simulationFieldsKey,
   simulationsKey,
+  useFarmMembers,
   useSimulationFields,
 } from '@/api/hooks'
-import { deleteFarm, deleteSimulation, updateFarm } from '@/api/mutations'
+import {
+  addFarmMember,
+  deleteFarm,
+  deleteSimulation,
+  removeFarmMember,
+  updateFarm,
+} from '@/api/mutations'
+import { useAuth } from '@/auth/context'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
@@ -73,12 +82,16 @@ export const FarmSidebar = ({
   onError,
 }: FarmSidebarProps) => {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [isDeleting, setIsDeleting] = useState(false)
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
   const [newScenarioOpen, setNewScenarioOpen] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false)
+  const [memberEmail, setMemberEmail] = useState('')
+  const [isSharing, setIsSharing] = useState(false)
   const [quotaInput, setQuotaInput] = useState(String(farm.udledningskvoteKgN))
   const [isSavingQuota, setIsSavingQuota] = useState(false)
   const totals = getFieldTotals(fields)
@@ -90,6 +103,7 @@ export const FarmSidebar = ({
   const missingQuotaCount = fields.filter(
     (field) => field.udledningskvoteMarkKgn === 0,
   ).length
+  const { data: members = [], isLoading: membersLoading } = useFarmMembers(farm.id)
 
   const setQuotaDialogState = (open: boolean) => {
     setQuotaDialogOpen(open)
@@ -147,6 +161,40 @@ export const FarmSidebar = ({
       onError('Kunne ikke slette simuleringen.')
     } finally {
       setDeletingSimulationId(null)
+    }
+  }
+
+  const shareFarm = async () => {
+    const email = memberEmail.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      onError('Indtast en gyldig e-mailadresse.')
+      return
+    }
+    setIsSharing(true)
+    try {
+      await addFarmMember(farm.id, email)
+      await mutate(farmMembersKey(farm.id))
+      setMemberEmail('')
+      onError(null)
+    } catch {
+      onError('Kunne ikke dele bedriften. Brugeren skal have en bekræftet konto.')
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const revokeMember = async (email: string) => {
+    if (members.length <= 1) return
+    try {
+      await removeFarmMember(farm.id, email)
+      await mutate(farmMembersKey(farm.id))
+      if (user?.email.toLowerCase() === email.toLowerCase()) {
+        await mutate('/farms')
+        navigate('/')
+      }
+      onError(null)
+    } catch {
+      onError('Kunne ikke fjerne brugeren fra bedriften.')
     }
   }
 
@@ -362,6 +410,37 @@ export const FarmSidebar = ({
             ))}
           </div>
         </div>
+
+        <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full bg-background/80">
+                Del bedrift
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Del bedrift</DialogTitle>
+                <DialogDescription>
+                  Alle medlemmer har samme adgang og kan selv dele bedriften videre.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                {membersLoading ? <p className="text-sm text-muted-foreground">Indlæser medlemmer...</p> : null}
+                {members.map((member) => (
+                  <div key={member.email} className="flex items-center justify-between gap-3 rounded border p-2 text-sm">
+                    <span className="truncate">{member.email}</span>
+                    <Button size="sm" variant="outline" disabled={members.length <= 1} onClick={() => void revokeMember(member.email)}>
+                      Fjern
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Input type="email" placeholder="bruger@example.com" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
+                  <Button onClick={() => void shareFarm()} disabled={isSharing}>{isSharing ? '...' : 'Del'}</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
         <Dialog>
           <DialogTrigger asChild>

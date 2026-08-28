@@ -1,14 +1,30 @@
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v0.router import router as v0_router
+from app.auth import configured_origins, validate_aws_region
 
-app = FastAPI(title="DST API")
 
-# We currently only allow the frontend on the same domain, and local development on localhost:5173.
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        validate_aws_region()
+    yield
+
+
+app = FastAPI(title="DST API", lifespan=lifespan)
+
+allowed_origins = configured_origins()
+
+# By default, only the configured public frontend origin is allowed. Local or
+# multi-origin setups can provide CORS_ORIGINS explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

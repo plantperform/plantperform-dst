@@ -1,3 +1,17 @@
+export type User = {
+  email: string
+}
+
+export type TokenResponse = {
+  accessToken: string
+  tokenType: string
+  expiresIn: number
+}
+
+export type FarmMember = {
+  email: string
+}
+
 export type Farm = {
   id: string
   cvr: string | null

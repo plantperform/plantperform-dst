@@ -26,6 +26,17 @@ Create the local backend environment file:
 cp backend/.env.default backend/.env
 ```
 
+Authentication requires two locally generated secrets in `backend/.env`:
+`AUTH_JWT_SECRET` and `AUTH_REFRESH_PEPPER` should each be at least 32 random
+characters. In local development, verification links are printed in the
+backend console automatically. The AWS deployment supplies the production
+email settings at runtime and sends through Amazon SES without SMTP
+credentials. `PUBLIC_APP_URL` must point to the frontend that is being used and
+is also used as the default CORS origin. Set `CORS_ORIGINS` only when the
+frontend needs to allow additional origins.
+The authentication secrets are intentionally placeholders in `.env.default`; real
+secrets must never be committed.
+
 Then install the environment, start PostGIS, apply migrations, and run the API:
 
 ```bash

@@ -4,6 +4,7 @@ import { fetcher } from '@/api/client'
 import type {
   AfgrodeKodeOption,
   Farm,
+  FarmMember,
   FieldRecord,
   GodningPresetOption,
   RegistryField,
@@ -23,6 +24,14 @@ export const farmFieldsKey = (farmId?: string) => {
 }
 
 export const useFarms = () => useSWR<Farm[]>('/farms', fetcher)
+
+export const farmMembersKey = (farmId?: string) => {
+  if (!farmId) return null
+  return `/farms/${encodeURIComponent(farmId)}/members`
+}
+
+export const useFarmMembers = (farmId?: string) =>
+  useSWR<FarmMember[]>(farmMembersKey(farmId), fetcher)
 
 export const farmKey = (farmId?: string) => {
   if (!farmId) return null

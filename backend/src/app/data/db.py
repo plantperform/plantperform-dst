@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     MetaData,
+    PrimaryKeyConstraint,
     SmallInteger,
     Table,
     Text,
@@ -123,6 +125,53 @@ simulation_field_candidates_table = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Index("ix_simulation_field_candidates_simulation_id", "simulation_id"),
     Index("ix_simulation_field_candidates_field_id", "field_id"),
+)
+
+app_user_table = Table(
+    "app_user",
+    metadata,
+    Column("email", Text, primary_key=True),
+    Column("password_hash", Text, nullable=False),
+    Column("verified_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint("email = lower(email)", name="ck_app_user_email_lowercase"),
+)
+
+farm_member_table = Table(
+    "farm_member",
+    metadata,
+    Column("farm_id", Text, ForeignKey("farm.id", ondelete="CASCADE"), nullable=False),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Index("ix_farm_member_email", "email"),
+    PrimaryKeyConstraint("farm_id", "email"),
+)
+
+email_verification_token_table = Table(
+    "email_verification_token",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", Text, nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("used_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_email_verification_token_email", "email"),
+)
+
+refresh_session_table = Table(
+    "auth_refresh_session",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Column("family_id", Text, nullable=False),
+    Column("token_hash", Text, nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("used_at", DateTime(timezone=True), nullable=True),
+    Column("revoked_at", DateTime(timezone=True), nullable=True),
+    Index("ix_auth_refresh_session_email", "email"),
+    Index("ix_auth_refresh_session_family_id", "family_id"),
 )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)

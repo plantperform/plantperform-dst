@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
+from app.auth import AuthenticatedUser, current_user
 from app.data.db import get_db
 from app.data.registry_repository import (
     get_registry_bounds,
@@ -15,6 +16,7 @@ from app.data.repository import list_fields
 from app.domain.registry import RegistryBounds, RegistryField, RegistryFieldSummary
 
 router = APIRouter(prefix="/registry", tags=["registry"])
+CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 DbSession = Annotated[Session, Depends(get_db)]
 OwnedByFarmId = Annotated[str | None, Query(alias="ownedByFarmId")]
 FocusCvr = Annotated[str | None, Query(alias="focusCvr")]
@@ -23,6 +25,7 @@ FocusCvr = Annotated[str | None, Query(alias="focusCvr")]
 @router.get("/fields/search", response_model=list[RegistryFieldSummary])
 async def search_fields(
     db: DbSession,
+    _: CurrentUser,
     cvr: str | None = None,
     limit: int = 100,
 ) -> list[RegistryFieldSummary]:
@@ -32,6 +35,7 @@ async def search_fields(
 @router.get("/fields/bounds", response_model=RegistryBounds)
 async def get_field_bounds(
     db: DbSession,
+    _: CurrentUser,
     cvr: str | None = None,
     imk_ids: str | None = Query(default=None, alias="imkIds"),
 ) -> RegistryBounds:
@@ -47,6 +51,7 @@ async def get_field_bounds(
 @router.get("/fields/bulk", response_model=list[RegistryField])
 async def get_fields(
     db: DbSession,
+    _: CurrentUser,
     imk_ids: str = Query(alias="imkIds"),
 ) -> list[RegistryField]:
     parsed_imk_ids = [int(value) for value in imk_ids.split(",") if value]
@@ -61,7 +66,11 @@ async def get_fields(
 
 
 @router.get("/fields/{imk_id}", response_model=RegistryField)
-async def get_field(imk_id: int, db: DbSession) -> RegistryField:
+async def get_field(
+    imk_id: int,
+    db: DbSession,
+    _: CurrentUser,
+) -> RegistryField:
     field = get_registry_field(db, imk_id)
 
     if field is None:
@@ -76,11 +85,17 @@ async def get_tile(
     x: int,
     y: int,
     db: DbSession,
+    user: CurrentUser,
     cvr: str | None = None,
     focus_cvr: FocusCvr = None,
     owned_by_farm_id: OwnedByFarmId = None,
 ) -> Response:
-    farm_fields = list_fields(owned_by_farm_id) if owned_by_farm_id is not None else []
+    if owned_by_farm_id is not None:
+        farm_fields = list_fields(owned_by_farm_id, user.email)
+        if farm_fields is None:
+            raise HTTPException(status_code=404, detail="Farm not found")
+    else:
+        farm_fields = []
     owned_imk_ids = [field.imk_id for field in (farm_fields or []) if field.imk_id is not None]
     tile = get_registry_tile(
         db,
@@ -94,5 +109,5 @@ async def get_tile(
     return Response(
         content=tile,
         media_type="application/x-protobuf",
-        headers={"Cache-Control": "public, max-age=7200"},
+        headers={"Cache-Control": "private, max-age=7200"},
     )

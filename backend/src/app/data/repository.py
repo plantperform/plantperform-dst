@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.data.db import (
     SessionLocal,
+    app_user_table,
+    farm_member_table,
     farm_table,
     field_table,
     registry_field_table,
@@ -54,18 +56,27 @@ def _jbnr_for_imk_id(session: Session, imk_id: int | None) -> int:
     return jbnr if jbnr is not None else FALLBACK_JBNR
 
 
-def _farm_exists(session: Session, farm_id: str) -> bool:
+def _member_exists(session: Session, farm_id: str, email: str) -> bool:
     return (
         session.execute(
-            select(farm_table.c.id).where(farm_table.c.id == farm_id)
+            select(farm_member_table.c.farm_id).where(
+                farm_member_table.c.farm_id == farm_id,
+                farm_member_table.c.email == email,
+            )
         ).scalar_one_or_none()
         is not None
     )
 
 
-def _get_farm(session: Session, farm_id: str) -> Farm | None:
+def _farm_exists(session: Session, farm_id: str, email: str) -> bool:
+    return _member_exists(session, farm_id, email)
+
+
+def _get_farm(session: Session, farm_id: str, email: str) -> Farm | None:
     data = session.execute(
-        select(farm_table.c.data).where(farm_table.c.id == farm_id),
+        select(farm_table.c.data)
+        .join(farm_member_table, farm_member_table.c.farm_id == farm_table.c.id)
+        .where(farm_table.c.id == farm_id, farm_member_table.c.email == email),
     ).scalar_one_or_none()
     return None if data is None else _load(Farm, data)
 
@@ -74,25 +85,36 @@ def _get_simulation(
     session: Session,
     farm_id: str,
     simulation_id: str,
+    email: str,
 ) -> Simulation | None:
     data = session.execute(
-        select(simulation_table.c.data).where(
+        select(simulation_table.c.data)
+        .join(farm_member_table, farm_member_table.c.farm_id == simulation_table.c.farm_id)
+        .where(
             simulation_table.c.id == simulation_id,
             simulation_table.c.farm_id == farm_id,
-        ),
+            farm_member_table.c.email == email,
+        )
     ).scalar_one_or_none()
     return None if data is None else _load(Simulation, data)
 
 
-def list_farms() -> list[Farm]:
+def _default_allowed_rotation_ids_for_farm(farm: Farm) -> list[str]:
+    return ["current", *(rotation.id for rotation in farm.rotation_library)]
+
+
+def list_farms(email: str) -> list[Farm]:
     with SessionLocal() as session:
         rows = session.execute(
-            select(farm_table.c.data).order_by(farm_table.c.created_at),
+            select(farm_table.c.data)
+            .join(farm_member_table, farm_member_table.c.farm_id == farm_table.c.id)
+            .where(farm_member_table.c.email == email)
+            .order_by(farm_table.c.created_at),
         ).scalars()
         return [_load(Farm, data) for data in rows]
 
 
-def create_farm(request: CreateFarmRequest) -> Farm:
+def create_farm(request: CreateFarmRequest, email: str) -> Farm:
     farm = Farm(
         id=str(uuid4()),
         rotation_library=deepcopy(ROTATION_LIBRARY),
@@ -106,18 +128,21 @@ def create_farm(request: CreateFarmRequest) -> Farm:
                 data=_dump(farm),
             ),
         )
+        session.execute(
+            insert(farm_member_table).values(farm_id=farm.id, email=email),
+        )
 
     return farm
 
 
-def get_farm(farm_id: str) -> Farm | None:
+def get_farm(farm_id: str, email: str) -> Farm | None:
     with SessionLocal() as session:
-        return _get_farm(session, farm_id)
+        return _get_farm(session, farm_id, email)
 
 
-def update_farm(farm_id: str, request: UpdateFarmRequest) -> Farm | None:
+def update_farm(farm_id: str, request: UpdateFarmRequest, email: str) -> Farm | None:
     with SessionLocal.begin() as session:
-        farm = _get_farm(session, farm_id)
+        farm = _get_farm(session, farm_id, email)
         if farm is None:
             return None
 
@@ -130,15 +155,23 @@ def update_farm(farm_id: str, request: UpdateFarmRequest) -> Farm | None:
         return updated_farm
 
 
-def delete_farm(farm_id: str) -> bool:
+def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
-        result = session.execute(delete(farm_table).where(farm_table.c.id == farm_id))
+        result = session.execute(
+            delete(farm_table)
+            .where(
+                farm_table.c.id == farm_id,
+                farm_table.c.id.in_(
+                    select(farm_member_table.c.farm_id).where(farm_member_table.c.email == email)
+                ),
+            )
+        )
         return result.rowcount > 0
 
 
-def list_fields(farm_id: str) -> list[FieldRecord] | None:
+def list_fields(farm_id: str, email: str) -> list[FieldRecord] | None:
     with SessionLocal() as session:
-        if not _farm_exists(session, farm_id):
+        if not _farm_exists(session, farm_id, email):
             return None
 
         rows = session.execute(
@@ -149,9 +182,9 @@ def list_fields(farm_id: str) -> list[FieldRecord] | None:
         return [_load(FieldRecord, data) for data in rows]
 
 
-def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | None:
+def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> FieldRecord | None:
     with SessionLocal.begin() as session:
-        farm = _get_farm(session, farm_id)
+        farm = _get_farm(session, farm_id, email)
         if farm is None:
             return None
 
@@ -199,9 +232,9 @@ def upsert_field(farm_id: str, request: CreateFieldRequest) -> FieldRecord | Non
         return field
 
 
-def detach_field(farm_id: str, field_id: str) -> bool | None:
+def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
     with SessionLocal.begin() as session:
-        if not _farm_exists(session, farm_id):
+        if not _farm_exists(session, farm_id, email):
             return None
 
         result = session.execute(
@@ -213,9 +246,9 @@ def detach_field(farm_id: str, field_id: str) -> bool | None:
         return result.rowcount > 0
 
 
-def list_simulations(farm_id: str) -> list[Simulation] | None:
+def list_simulations(farm_id: str, email: str) -> list[Simulation] | None:
     with SessionLocal() as session:
-        if not _farm_exists(session, farm_id):
+        if not _farm_exists(session, farm_id, email):
             return None
 
         rows = session.execute(
@@ -226,9 +259,13 @@ def list_simulations(farm_id: str) -> list[Simulation] | None:
         return [_load(Simulation, data) for data in rows]
 
 
-def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulation | None:
+def create_simulation(
+    farm_id: str,
+    request: CreateSimulationRequest,
+    email: str,
+) -> Simulation | None:
     with SessionLocal.begin() as session:
-        if not _farm_exists(session, farm_id):
+        if not _farm_exists(session, farm_id, email):
             return None
 
         simulation = Simulation(
@@ -292,16 +329,16 @@ def create_simulation(farm_id: str, request: CreateSimulationRequest) -> Simulat
         return simulation
 
 
-def get_simulation(farm_id: str, simulation_id: str) -> Simulation | None:
+def get_simulation(farm_id: str, simulation_id: str, email: str) -> Simulation | None:
     with SessionLocal() as session:
-        return _get_simulation(session, farm_id, simulation_id)
+        return _get_simulation(session, farm_id, simulation_id, email)
 
 
 def list_simulation_field_candidates(
-    farm_id: str, simulation_id: str,
+    farm_id: str, simulation_id: str, email: str,
 ) -> list[SimulationFieldCandidates] | None:
     with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id) is None:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
 
         rows = session.execute(
@@ -312,7 +349,10 @@ def list_simulation_field_candidates(
 
 
 def get_simulation_field_candidates(
-    farm_id: str, simulation_id: str, field_id: str,
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    email: str,
 ) -> SimulationFieldCandidates | None:
     """Én marks gemte kandidatmængde — filtreret direkte i SQL'en, i
     modsætning til list_simulation_field_candidates som henter ALLE marker i
@@ -321,7 +361,7 @@ def get_simulation_field_candidates(
     "Rediger manuelt"s preview/apply, som kun læser candidates_row.jbnr) —
     undgår at hente og deserialisere resten af simuleringens marker forgæves."""
     with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id) is None:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
 
         data = session.execute(
@@ -334,13 +374,20 @@ def get_simulation_field_candidates(
 
 
 def append_manual_field_candidate(
-    farm_id: str, simulation_id: str, field_id: str, candidate: RotationCandidateEvaluation,
-) -> None:
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    candidate: RotationCandidateEvaluation,
+    email: str,
+) -> bool:
     """Føjer en manuelt genberegnet kandidat (Fase 10 — "Rediger manuelt")
     til markens gemte kandidatmængde. Erstatter en evt. tidligere kandidat
     med samme ref-id i stedet for at ophobe en historik — kun "seneste
     manuelle rettelse for denne mark" er meningsfuld at beholde."""
     with SessionLocal.begin() as session:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
+            return False
+
         row = session.execute(
             select(simulation_field_candidates_table.c.id, simulation_field_candidates_table.c.data)
             .where(
@@ -349,7 +396,7 @@ def append_manual_field_candidate(
             ),
         ).one_or_none()
         if row is None:
-            return
+            return False
 
         row_id, data = row
         field_candidates = _load(SimulationFieldCandidates, data)
@@ -361,6 +408,7 @@ def append_manual_field_candidate(
             .where(simulation_field_candidates_table.c.id == row_id)
             .values(data=_dump(updated)),
         )
+        return True
 
 
 class FieldNotOptimizedError(Exception):
@@ -368,14 +416,17 @@ class FieldNotOptimizedError(Exception):
 
 
 def get_simulation_field_candidate_detail(
-    farm_id: str, simulation_id: str, field_id: str,
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    email: str,
 ) -> RotationCandidateEvaluation | None:
     """Den fulde beregningsdetalje (leaching_detail/db_detail pr. år) for den
     kandidat Optimér har valgt til denne mark. Returnerer None hvis
     marken/simuleringen ikke findes; rejser FieldNotOptimizedError hvis marken
     endnu ikke er blevet optimeret (intet rotation_id sat)."""
     with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id) is None:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
 
         field_data = session.execute(
@@ -411,9 +462,9 @@ def get_simulation_field_candidate_detail(
         )
 
 
-def delete_simulation(farm_id: str, simulation_id: str) -> bool | None:
+def delete_simulation(farm_id: str, simulation_id: str, email: str) -> bool | None:
     with SessionLocal.begin() as session:
-        if not _farm_exists(session, farm_id):
+        if not _farm_exists(session, farm_id, email):
             return None
 
         result = session.execute(
@@ -429,9 +480,10 @@ def update_simulation_constraints(
     farm_id: str,
     simulation_id: str,
     constraints: OptimizationConstraints,
+    email: str,
 ) -> Simulation | None:
     with SessionLocal.begin() as session:
-        simulation = _get_simulation(session, farm_id, simulation_id)
+        simulation = _get_simulation(session, farm_id, simulation_id, email)
         if simulation is None:
             return None
 
@@ -447,7 +499,7 @@ def update_simulation_constraints(
             )
 
         if constraints.globally_allowed_rotation_ids is not None:
-            farm = _get_farm(session, farm_id)
+            farm = _get_farm(session, farm_id, email)
             if farm is None:
                 return None
             library_ids = {rotation.id for rotation in farm.rotation_library}
@@ -474,9 +526,13 @@ def update_simulation_constraints(
         return updated_simulation
 
 
-def list_simulation_fields(farm_id: str, simulation_id: str) -> list[FieldRecord] | None:
+def list_simulation_fields(
+    farm_id: str,
+    simulation_id: str,
+    email: str,
+) -> list[FieldRecord] | None:
     with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id) is None:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
 
         rows = session.execute(
@@ -492,9 +548,10 @@ def update_simulation_field(
     simulation_id: str,
     field_id: str,
     request: UpdateFieldRequest,
+    email: str,
 ) -> FieldRecord | None:
     with SessionLocal.begin() as session:
-        if _get_simulation(session, farm_id, simulation_id) is None:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
 
         data = session.execute(
@@ -518,3 +575,56 @@ def update_simulation_field(
             .values(data=_dump(field), updated_at=func.now()),
         )
         return field
+
+
+def list_farm_members(farm_id: str, email: str) -> list[str] | None:
+    with SessionLocal() as session:
+        if not _member_exists(session, farm_id, email):
+            return None
+        return list(
+            session.execute(
+                select(farm_member_table.c.email)
+                .where(farm_member_table.c.farm_id == farm_id)
+                .order_by(farm_member_table.c.email)
+            ).scalars()
+        )
+
+
+def add_farm_member(farm_id: str, email: str, member_email: str) -> str:
+    with SessionLocal.begin() as session:
+        if not _member_exists(session, farm_id, email):
+            return "farm_not_found"
+        user = session.execute(
+            select(app_user_table.c.email, app_user_table.c.verified_at).where(
+                app_user_table.c.email == member_email
+            )
+        ).first()
+        if user is None or user.verified_at is None:
+            return "user_not_found"
+        if _member_exists(session, farm_id, member_email):
+            return "already_member"
+        session.execute(
+            insert(farm_member_table).values(farm_id=farm_id, email=member_email)
+        )
+        return "added"
+
+
+def remove_farm_member(farm_id: str, email: str, member_email: str) -> str:
+    with SessionLocal.begin() as session:
+        if not _member_exists(session, farm_id, email):
+            return "farm_not_found"
+        members = session.execute(
+            select(farm_member_table.c.email)
+            .where(farm_member_table.c.farm_id == farm_id)
+            .with_for_update()
+        ).scalars().all()
+        count = len(members)
+        if count <= 1:
+            return "last_member"
+        result = session.execute(
+            delete(farm_member_table).where(
+                farm_member_table.c.farm_id == farm_id,
+                farm_member_table.c.email == member_email,
+            )
+        )
+        return "removed" if result.rowcount else "member_not_found"
