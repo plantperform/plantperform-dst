@@ -86,6 +86,12 @@ export const formatCropRotation = (rotation: Crop[]) =>
 // position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
 export const ROTATION_START_CALENDAR_YEAR = 2027
 
+// Startkalenderår for "Aktuel"-markoversigtens ægte historik (skal matche
+// backend'ens field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7) — de 8
+// positioner er markens egne rigtige 2019-2026-afgrøder, ikke en fremadrettet
+// scenarie-rotation.
+export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
+
 // Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
 // navnet i parentes lige efter.
 export const formatRotationYear = (year: RotationYear): string =>

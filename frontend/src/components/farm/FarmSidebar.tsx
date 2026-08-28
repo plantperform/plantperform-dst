@@ -100,9 +100,6 @@ export const FarmSidebar = ({
     0,
   )
   const roundedQuotaSum = Math.round(quotaSum)
-  const missingQuotaCount = fields.filter(
-    (field) => field.udledningskvoteMarkKgn === 0,
-  ).length
   const { data: members = [], isLoading: membersLoading } = useFarmMembers(farm.id)
 
   const setQuotaDialogState = (open: boolean) => {
@@ -266,14 +263,6 @@ export const FarmSidebar = ({
                         Sum af markernes kvoter: {formatNumber(roundedQuotaSum)}{' '}
                         kg N
                       </p>
-                      {missingQuotaCount > 0 ? (
-                        <p className="text-amber-700">
-                          {missingQuotaCount}{' '}
-                          {missingQuotaCount === 1 ? 'mark' : 'marker'} uden
-                          data for udledningsgrænse indgår som 0 kg N. Summen
-                          kan derfor være for lav.
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                   <DialogFooter>
