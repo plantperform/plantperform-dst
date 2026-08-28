@@ -213,6 +213,7 @@ def apply_manual_rotation(
         n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=start_year,
+        real_history=candidates_row.real_history,
     )
     if candidate is None:
         return None
@@ -252,6 +253,7 @@ def _expand_yearly_options(
     fdato: str,
     precision_dagsbasis: bool,
     selected_pairs: set[tuple[str, str]],
+    real_history: dict[str, dict] | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
     """Udvider hver gemt kandidat til op til dens active_len forskudte
     varianter (start_year 1..active_len, jf. Fase 10's evaluate_with_overrides)
@@ -324,6 +326,7 @@ def _expand_yearly_options(
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     start_year=shift,
+                    real_history=real_history,
                 )
             )
             if variant is None:
@@ -389,10 +392,11 @@ def run_yearly_optimization(
         field_candidates_row = candidates_by_field_id.get(field.id)
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
         jbnr = field_candidates_row.jbnr if field_candidates_row else 0
+        real_history = field_candidates_row.real_history if field_candidates_row else None
         options = _expand_yearly_options(
             field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
-            selected_pairs=selected_pairs,
+            selected_pairs=selected_pairs, real_history=real_history,
         )
         if not options:
             raise OptimizationInfeasibleError(
