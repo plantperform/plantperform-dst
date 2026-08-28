@@ -1,6 +1,7 @@
 import type { FeatureCollection } from 'geojson'
 
 import type { FieldRecord, GeoJSONMultiPolygon, GeoJSONPolygon } from '@/api/types'
+import { isFieldLocked } from '@/lib/field-domain'
 
 type Bounds = [number, number, number, number]
 
@@ -41,6 +42,15 @@ export const getFieldsBounds = (fields: FieldRecord[]): Bounds | null => {
   return bounds
 }
 
+export const fieldLabelPoint = (
+  field: FieldRecord,
+): [number, number] | null => {
+  const bounds = getFieldsBounds([field])
+  if (!bounds) return null
+
+  return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2]
+}
+
 export const fieldsToFeatureCollection = (
   fields: FieldRecord[],
   changedFieldIds?: Set<string>,
@@ -64,6 +74,7 @@ export const fieldsToFeatureCollection = (
         db2: field.db2,
         rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
         inTakeoutPlan: field.inTakeoutPlan ? 1 : 0,
+        fieldLocked: isFieldLocked(field) ? 1 : 0,
       },
       geometry: field.geometry,
     })),

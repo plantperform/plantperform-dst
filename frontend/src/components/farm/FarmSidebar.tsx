@@ -199,7 +199,7 @@ export const FarmSidebar = ({
   }
 
   return (
-    <aside className="border-b bg-muted/30 p-6 lg:min-h-screen lg:border-b-0 lg:border-r">
+    <aside className="overflow-y-auto border-b bg-muted/30 p-6 lg:h-full lg:border-b-0 lg:border-r">
       <Button
         asChild
         variant="outline"

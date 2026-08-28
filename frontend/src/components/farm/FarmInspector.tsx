@@ -1,10 +1,15 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Info,
+  SlidersHorizontal,
+  Table2,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
   simulationFieldsKey,
-  simulationsKey,
   simulationYearlySummaryKey,
   useSimulationFields,
   useYearlyOptimizationCandidates,
@@ -12,7 +17,6 @@ import {
 import {
   runSimulationOptimization,
   runYearlySimulationOptimization,
-  updateSimulationConstraints,
 } from '@/api/mutations'
 import type {
   Farm,
@@ -27,7 +31,11 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
-import type { FarmViewSelection } from '@/components/farm/types'
+import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
+import type {
+  FarmInspectorMode,
+  FarmViewSelection,
+} from '@/components/farm/types'
 import { YearlyOverviewStrip } from '@/components/farm/YearlyOverviewStrip'
 import { Button } from '@/components/ui/button'
 import {
@@ -84,6 +92,7 @@ export const FarmInspector = ({
   onError,
 }: FarmInspectorProps) => {
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [mode, setMode] = useState<FarmInspectorMode>('values')
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] = useState(false)
   const [optimizationSummary, setOptimizationSummary] =
@@ -92,13 +101,27 @@ export const FarmInspector = ({
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const isSimulationView = selection.kind === 'simulation'
 
+  const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
+  const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
+  const isRules = effectiveMode === 'rules'
+
   return (
-    <section className="flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <header
+        className={`flex shrink-0 flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between ${
+          isRules ? 'border-indigo-300 bg-indigo-50' : 'bg-background'
+        }`}
+      >
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">
-              Markgennemgang
+            <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+              {isRules ? (
+                <SlidersHorizontal
+                  className="h-5 w-5 text-indigo-600"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {isRules ? 'Optimeringsregler' : 'Markgennemgang'}
             </h2>
             {selectedSimulation ? (
               <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">
@@ -107,11 +130,13 @@ export const FarmInspector = ({
             ) : null}
           </div>
           <p className="text-sm text-muted-foreground">
-            {isSimulationView
-              ? 'Gennemgå de kopierede marker for dette optimeringsalternativ.'
-              : 'Gennemgå tilknyttede marker som liste eller direkte på kortet.'}
+            {isRules
+              ? 'Her bestemmer du, hvad optimeringen må gøre. Intet her er tal, marken har — det er rammer for næste kørsel.'
+              : isSimulationView
+                ? 'Gennemgå de kopierede marker for dette optimeringsalternativ.'
+                : 'Gennemgå tilknyttede marker som liste eller direkte på kortet.'}
           </p>
-          {optimizationSummary && selectedSimulation ? (
+          {optimizationSummary && selectedSimulation && !isRules ? (
             <p className="mt-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
               Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
               {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
@@ -134,6 +159,41 @@ export const FarmInspector = ({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canSwitchMode ? (
+            <div className="flex rounded-md border border-indigo-300 bg-indigo-100/60 p-1">
+              <Button
+                size="sm"
+                variant={mode === 'values' ? 'default' : 'outline'}
+                className={
+                  mode === 'values' ? '' : 'border-transparent bg-transparent'
+                }
+                onClick={() => setMode('values')}
+                aria-pressed={mode === 'values'}
+                title="Vis hvad optimeringen har beregnet for markerne"
+              >
+                <Table2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Værdier
+              </Button>
+              <Button
+                size="sm"
+                variant={mode === 'rules' ? 'default' : 'outline'}
+                className={
+                  mode === 'rules'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'border-transparent bg-transparent'
+                }
+                onClick={() => setMode('rules')}
+                aria-pressed={mode === 'rules'}
+                title="Sæt hvad optimeringen må gøre"
+              >
+                <SlidersHorizontal
+                  className="mr-1.5 h-4 w-4"
+                  aria-hidden="true"
+                />
+                Regler
+              </Button>
+            </div>
+          ) : null}
           {selectedSimulation ? (
             <Button onClick={() => setOptimizeDialogOpen(true)}>Optimér</Button>
           ) : null}
@@ -192,41 +252,69 @@ export const FarmInspector = ({
         />
       ) : null}
 
-      <div className="flex-1 space-y-4 p-4">
-        {view === 'list' ? (
-          <>
-            {isSimulationView && selection.kind === 'simulation' ? (
-              <YearlyOverviewStrip farmId={farm.id} simulationId={selection.id} />
-            ) : null}
-            <FarmFieldsList
+      <div
+        className={`grid min-h-0 min-w-0 flex-1 gap-4 p-4 ${
+          isRules && selectedSimulation
+            ? 'lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]'
+            : 'grid-cols-1'
+        } ${isRules ? 'bg-indigo-50/40' : ''}`.trim()}
+      >
+        {isRules && selectedSimulation ? (
+          <div className="min-h-0 overflow-y-auto pr-1">
+            <SimulationRulesPanel
+              key={selectedSimulation.id}
               farmId={farm.id}
-              fields={fields}
-              isSimulationView={isSimulationView}
-              simulationId={
-                selection.kind === 'simulation' ? selection.id : undefined
-              }
-              simulation={
-                selection.kind === 'simulation' ? selectedSimulation : undefined
-              }
-              sort={fieldsSort}
-              onSortChange={setFieldsSort}
-              onSwitchToMap={() => setView('map')}
-              onError={onError}
+              simulation={selectedSimulation}
             />
-          </>
-        ) : (
-          <FarmFieldsMap
-            key={
-              selection.kind === 'current'
-                ? 'current'
-                : `simulation-${selection.id}`
-            }
-            farm={farm}
-            fields={fields}
-            readOnly={isSimulationView}
-            onError={onError}
-          />
-        )}
+          </div>
+        ) : null}
+        <div className="flex min-h-0 min-w-0 flex-col gap-4">
+          {view === 'list' ? (
+            <>
+              {isSimulationView && selection.kind === 'simulation' && !isRules ? (
+                <div className="shrink-0">
+                  <YearlyOverviewStrip
+                    farmId={farm.id}
+                    simulationId={selection.id}
+                  />
+                </div>
+              ) : null}
+              <div className="flex min-h-0 flex-1 flex-col">
+                <FarmFieldsList
+                  farmId={farm.id}
+                  fields={fields}
+                  isSimulationView={isSimulationView}
+                  simulationId={
+                    selection.kind === 'simulation' ? selection.id : undefined
+                  }
+                  simulation={
+                    selection.kind === 'simulation' ? selectedSimulation : undefined
+                  }
+                  mode={effectiveMode}
+                  sort={fieldsSort}
+                  onSortChange={setFieldsSort}
+                  onSwitchToMap={() => setView('map')}
+                  onError={onError}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="min-h-0 flex-1">
+              <FarmFieldsMap
+                key={
+                  selection.kind === 'current'
+                    ? 'current'
+                    : `simulation-${selection.id}`
+                }
+                farm={farm}
+                fields={fields}
+                readOnly={isSimulationView}
+                mode={effectiveMode}
+                onError={onError}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </section>
   )
@@ -240,13 +328,8 @@ type OptimizeDialogProps = {
   onOptimized: (response: OptimizeSimulationResponse) => void
 }
 
-const numberToInput = (value: number | null) =>
-  value === null ? '' : String(value)
-
-const inputToOptionalNumber = (value: string) => {
-  const trimmed = value.trim()
-  return trimmed === '' ? null : Number(trimmed)
-}
+const formatLimit = (value: number | null, unit: string) =>
+  value === null ? 'Ingen grænse' : `${value.toLocaleString('da-DK')} ${unit}`
 
 const OptimizeDialog = ({
   farmId,
@@ -255,8 +338,6 @@ const OptimizeDialog = ({
   onOpenChange,
   onOptimized,
 }: OptimizeDialogProps) => {
-  const [constraints, setConstraints] = useState(simulation.constraints)
-  const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
@@ -264,34 +345,6 @@ const OptimizeDialog = ({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setRunError(null)
     onOpenChange(nextOpen)
-  }
-
-  const saveConstraints = async () => {
-    setIsSaving(true)
-    try {
-      const updatedSimulation = await updateSimulationConstraints(
-        farmId,
-        simulation.id,
-        constraints,
-      )
-      await mutate(
-        simulationsKey(farmId),
-        (current: Simulation[] = []) =>
-          current.map((currentSimulation) =>
-            currentSimulation.id === updatedSimulation.id
-              ? updatedSimulation
-              : currentSimulation,
-          ),
-        { revalidate: false },
-      )
-      setRunError(null)
-      return true
-    } catch {
-      setRunError('Kunne ikke gemme optimeringskrav.')
-      return false
-    } finally {
-      setIsSaving(false)
-    }
   }
 
   const runOptimization = async () => {
@@ -319,12 +372,7 @@ const OptimizeDialog = ({
     }
   }
 
-  const saveAndRunOptimization = async () => {
-    const saved = await saveConstraints()
-    if (!saved) return
-
-    await runOptimization()
-  }
+  const { constraints } = simulation
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -332,12 +380,38 @@ const OptimizeDialog = ({
         <DialogHeader>
           <DialogTitle>Optimér {simulation.name}</DialogTitle>
           <DialogDescription>
-            Konfigurer globale krav for denne simulering, og kør optimeringen
-            direkte bagefter.
+            Kør optimeringen med de regler, der er gemt på scenariet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
+          <div className="space-y-2 rounded-md border border-indigo-200 bg-indigo-50/60 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <SlidersHorizontal
+                className="h-4 w-4 text-indigo-600"
+                aria-hidden="true"
+              />
+              Gældende grænser
+            </div>
+            <dl className="grid gap-2 text-xs sm:grid-cols-3">
+              <div>
+                <dt className="text-muted-foreground">Maks. udledning</dt>
+                <dd>{formatLimit(constraints.maxNLoadKg, 'kg N')}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Min. foderenheder</dt>
+                <dd>{formatLimit(constraints.minFen, 'FE')}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Maks. foderenheder</dt>
+                <dd>{formatLimit(constraints.maxFen, 'FE')}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              Ændres under <strong>Regler</strong> — ikke her.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="optimize-time-limit">Tidsgrænse</Label>
             <Input
@@ -353,60 +427,6 @@ const OptimizeDialog = ({
               løsning i tide på en stor bedrift
             </p>
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="max-n-load">Maks. tilladt Udledning</Label>
-              <Input
-                id="max-n-load"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.maxNLoadKg)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    maxNLoadKg: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">kg N</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="min-fen">Min. foderenheder</Label>
-              <Input
-                id="min-fen"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.minFen)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    minFen: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="max-fen">Maks. foderenheder</Label>
-              <Input
-                id="max-fen"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.maxFen)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    maxFen: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-          </div>
         </div>
 
         {runError ? (
@@ -419,18 +439,8 @@ const OptimizeDialog = ({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Annuller
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => void saveConstraints()}
-            disabled={isSaving || isRunning}
-          >
-            {isSaving ? 'Gemmer...' : 'Gem krav'}
-          </Button>
-          <Button
-            onClick={() => void saveAndRunOptimization()}
-            disabled={isSaving || isRunning}
-          >
-            {isSaving || isRunning ? 'Arbejder...' : 'Gem og kør optimering'}
+          <Button onClick={() => void runOptimization()} disabled={isRunning}>
+            {isRunning ? 'Arbejder...' : 'Kør optimering'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -590,6 +600,19 @@ const YearlyOptimizeDialog = ({
             mange muligheder optimeringen har, og hvor lang tid den tager.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <Info
+            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+            aria-hidden="true"
+          />
+          <p className="text-xs text-amber-900">
+            Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
+            gemmes ikke på scenariet — de nulstilles, når dialogen lukkes, og
+            vises derfor ikke under Regler. Notér dem, hvis du skal kunne
+            gentage kørslen.
+          </p>
+        </div>
 
         <div className="space-y-5">
           <div className="space-y-2">

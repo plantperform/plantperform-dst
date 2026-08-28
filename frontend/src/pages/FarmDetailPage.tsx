@@ -119,8 +119,8 @@ export const FarmDetailPage = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="grid min-h-screen lg:grid-cols-[320px_1fr]">
+    <main className="h-screen overflow-hidden bg-background">
+      <div className="grid h-full lg:grid-cols-[320px_1fr]">
         <FarmSidebar
           farm={farm}
           fields={fields}
@@ -129,7 +129,7 @@ export const FarmDetailPage = () => {
           onSelectionChange={setSelection}
           onError={showErrorToast}
         />
-        <div>
+        <div className="flex min-h-0 min-w-0 flex-col">
           {toast ? (
             <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
               <p role="alert">{toast.message}</p>

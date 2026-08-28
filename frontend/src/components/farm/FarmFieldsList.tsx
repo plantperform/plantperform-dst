@@ -1,4 +1,11 @@
-import { ChevronDown, ChevronRight, Lock, LockOpen, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Lock,
+  LockOpen,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -10,6 +17,7 @@ import type {
   FieldsSortKey,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
+import type { FarmInspectorMode } from '@/components/farm/types'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
@@ -22,12 +30,17 @@ import {
 } from '@/components/ui/card'
 import {
   changedFieldIds,
+  formatLockTooltip,
   formatRotationYear,
+  isFieldLocked,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
 
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+const numberFormat = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 1,
+})
+
+const formatNumber = (value: number) => numberFormat.format(value)
 
 const collator = new Intl.Collator('da-DK', { sensitivity: 'base' })
 
@@ -172,6 +185,7 @@ type FarmFieldsListProps = {
   isSimulationView?: boolean
   simulationId?: string
   simulation?: Simulation
+  mode: FarmInspectorMode
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
   onSwitchToMap: () => void
@@ -187,16 +201,18 @@ export const FarmFieldsList = ({
   isSimulationView = false,
   simulationId,
   simulation,
+  mode,
   sort,
   onSortChange,
   onSwitchToMap,
   onError,
 }: FarmFieldsListProps) => {
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
-  const [, setLockingFieldId] = useState<string | null>(null)
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
+  const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null)
   const [manualEditFieldId, setManualEditFieldId] = useState<string | null>(null)
+
+  const isRules = mode === 'rules'
 
   const sortedFields = useMemo(
     () => [...fields].sort((left, right) => compareFields(left, right, sort)),
@@ -208,8 +224,8 @@ export const FarmFieldsList = ({
 
   const { data: liveFields = [] } = useFarmFields(farmId)
   const changedFields = useMemo(
-    () => changedFieldIds(fields, liveFields),
-    [fields, liveFields],
+    () => (isRules ? new Set<string>() : changedFieldIds(fields, liveFields)),
+    [isRules, fields, liveFields],
   )
 
   const detachFarmField = async (fieldId: string) => {
@@ -224,11 +240,6 @@ export const FarmFieldsList = ({
       setDetachingFieldId(null)
     }
   }
-
-  const isFieldLocked = (field: FieldRecord) =>
-    field.allowedRotationIds.length === 1 &&
-    field.rotationId !== null &&
-    field.allowedRotationIds[0] === field.rotationId
 
   const toggleFieldLock = async (field: FieldRecord) => {
     if (!simulationId || field.rotationId === null) return
@@ -280,23 +291,50 @@ export const FarmFieldsList = ({
     )
   }
 
+  const showActions = isRules || !isSimulationView
+  const hasDetailColumn = isSimulationView && !isRules
+  const valuesColumnCount =
+    (hasDetailColumn ? 1 : 0) + 2 + maxYears + 8 + (showActions ? 1 : 0)
+
+  const headBackground = isRules ? 'bg-indigo-100' : 'bg-muted'
+  const stickyDetail = 'sticky left-0'
+  const stickyName = `sticky ${hasDetailColumn ? 'left-8' : 'left-0'} border-r`
+  const pinnedBodyCell = (highlighted: boolean) =>
+    `z-10 border-t ${highlighted ? 'bg-blue-50' : 'bg-background'}`
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Marker</CardTitle>
+    <Card
+      className={`flex min-h-0 flex-1 flex-col ${isRules ? 'border-indigo-300' : ''}`.trim()}
+    >
+      <CardHeader
+        className={`shrink-0 ${isRules ? 'border-b border-indigo-200' : ''}`.trim()}
+      >
+        <CardTitle className="flex items-center gap-2">
+          {isRules ? (
+            <SlidersHorizontal
+              className="h-4 w-4 text-indigo-600"
+              aria-hidden="true"
+            />
+          ) : null}
+          {isRules ? 'Regler pr. mark' : 'Marker'}
+        </CardTitle>
         <CardDescription>
-          {isSimulationView
-            ? 'Marker kopieret ind i denne simulering.'
-            : 'Marker, der aktuelt er tilknyttet bedriften.'}
+          {isRules
+            ? 'Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste kørsel — de er ikke tal, marken har.'
+            : isSimulationView
+              ? 'Sædskifte og tal, som optimeringen har beregnet for denne simulering.'
+              : 'Marker, der aktuelt er tilknyttet bedriften.'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-muted/60">
+      <CardContent className="min-h-0 flex-1 overflow-hidden">
+        <div
+          className={`h-full overflow-auto rounded-lg border ${isRules ? 'border-indigo-200' : ''}`.trim()}
+        >
+          <table className="w-full min-w-max border-collapse text-left text-sm">
+            <thead className={`sticky top-0 z-20 ${headBackground}`}>
               <tr>
-                {isSimulationView ? (
-                  <th className="w-8 px-2 py-3">
+                {hasDetailColumn ? (
+                  <th className={`w-8 px-2 py-3 z-30 ${stickyDetail} ${headBackground}`}>
                     <span className="sr-only">Beregningsdetaljer</span>
                   </th>
                 ) : null}
@@ -305,6 +343,7 @@ export const FarmFieldsList = ({
                   sortKey="name"
                   sort={sort}
                   onSortChange={onSortChange}
+                  className={`z-30 ${stickyName} ${headBackground}`}
                 />
                 <SortableHeader
                   label="Areal"
@@ -312,76 +351,92 @@ export const FarmFieldsList = ({
                   sort={sort}
                   onSortChange={onSortChange}
                 />
-                {yearIndexes.map((index) => (
-                  <th key={index} className="px-4 py-3 font-medium">
-                    {ROTATION_START_CALENDAR_YEAR + index}
+                {isRules ? (
+                  <>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Bundet sædskifte</th>
+                    <th className="px-4 py-3 font-medium">
+                      Tilladte sædskifter
+                    </th>
+                  </>
+                ) : (
+                  <>
+                    {yearIndexes.map((index) => (
+                      <th key={index} className="px-4 py-3 font-medium">
+                        {ROTATION_START_CALENDAR_YEAR + index}
+                      </th>
+                    ))}
+                    <SortableHeader
+                      label="DB2 (kr)"
+                      sortKey="db2"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="Kvælstofudledning (kg N)"
+                      sortKey="nLoad"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="Udvaskning (kg N)"
+                      sortKey="leaching"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="Foderenheder (FE)"
+                      sortKey="fen"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="Udledningskvote (kg N)"
+                      sortKey="udledningskvoteMarkKgn"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="I omlægningsplan"
+                      sortKey="inTakeoutPlan"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="Retention"
+                      sortKey="retention"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                    <SortableHeader
+                      label="JB nr."
+                      sortKey="jbnr"
+                      sort={sort}
+                      onSortChange={onSortChange}
+                    />
+                  </>
+                )}
+                {showActions ? (
+                  <th className="px-4 py-3 text-right font-medium">
+                    Handlinger
                   </th>
-                ))}
-                <SortableHeader
-                  label="DB2 (kr)"
-                  sortKey="db2"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="Kvælstofudledning (kg N)"
-                  sortKey="nLoad"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="Udvaskning (kg N)"
-                  sortKey="leaching"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="Foderenheder (FE)"
-                  sortKey="fen"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="Udledningskvote (kg N)"
-                  sortKey="udledningskvoteMarkKgn"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="I omlægningsplan"
-                  sortKey="inTakeoutPlan"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="Retention"
-                  sortKey="retention"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <SortableHeader
-                  label="JB nr."
-                  sortKey="jbnr"
-                  sort={sort}
-                  onSortChange={onSortChange}
-                />
-                <th className="px-4 py-3 text-right font-medium">Handlinger</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {sortedFields.map((field) => {
-                const isEditing = editingFieldId === field.id
                 const canEdit = isSimulationView && Boolean(simulationId)
-                const isChanged = changedFields.has(field.id)
+                const highlighted = !isRules && changedFields.has(field.id)
                 const isExpanded = expandedFieldId === field.id
                 const canShowDetail = isSimulationView && field.rotationId !== null
+                const locked = isFieldLocked(field)
                 return (
                   <Fragment key={field.id}>
-                  <tr
-                    className={`border-t ${isChanged ? 'bg-blue-50' : ''}`}
-                  >
-                    {isSimulationView ? (
-                      <td className="px-2 py-3">
+                  <tr className={`border-t ${highlighted ? 'bg-blue-50' : ''}`}>
+                    {hasDetailColumn ? (
+                      <td
+                        className={`px-2 py-3 ${stickyDetail} ${pinnedBodyCell(highlighted)}`}
+                      >
                         {canShowDetail ? (
                           <Button
                             size="sm"
@@ -406,162 +461,217 @@ export const FarmFieldsList = ({
                         ) : null}
                       </td>
                     ) : null}
-                    <td className="px-4 py-3 font-medium">{field.name}</td>
+                    <td
+                      className={`px-4 py-3 font-medium ${stickyName} ${pinnedBodyCell(highlighted)}`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {field.name}
+                        {locked ? (
+                          <span
+                            title={formatLockTooltip(field)}
+                            className="inline-flex"
+                          >
+                            <Lock
+                              className="h-4.5 w-4.5 shrink-0 text-amber-600"
+                              aria-label="Låst mark"
+                            />
+                          </span>
+                        ) : null}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       {formatNumber(field.areaHa)} ha
                     </td>
-                    {yearIndexes.map((index) => {
-                      const year = field.cropRotation[index]
-                      return (
-                        <td key={index} className="px-4 py-3">
-                          {year ? formatRotationYear(year) : '—'}
+                    {isRules ? (
+                      <>
+                        <td className="px-4 py-3">
+                          {locked ? (
+                            <span
+                              title={formatLockTooltip(field)}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                            >
+                              <Lock className="h-3 w-3" aria-hidden="true" />
+                              Låst
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              <LockOpen className="h-3 w-3" aria-hidden="true" />
+                              Fri
+                            </span>
+                          )}
                         </td>
-                      )
-                    })}
-                    <td className="px-4 py-3">
-                      <div>{formatNumber(field.db2)} kr</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.db2 / field.areaHa)} kr/ha
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{formatNumber(field.nLoad)} kg N</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.nLoad / field.areaHa)} kg N/ha
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{formatNumber(field.leaching)} kg N</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.leaching / field.areaHa)} kg N/ha
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{formatNumber(field.fen)} FE</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.fen / field.areaHa)} FE/ha
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        {formatNumber(field.udledningskvoteMarkKgn)} kg N
-                      </div>
-                      <div className="text-xs text-muted-foreground/80">
-                        {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {field.inTakeoutPlan ? 'Ja' : 'Nej'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {field.retention === null
-                        ? 'Ukendt'
-                        : formatNumber(field.retention)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {field.jbnr === null ? 'Ukendt' : field.jbnr}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <div className="flex flex-nowrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant={isEditing ? 'default' : 'outline'}
-                          onClick={() =>
-                            setEditingFieldId(isEditing ? null : field.id)
-                          }
-                          disabled={!canEdit && !isEditing}
-                          title={
-                            canEdit
-                              ? undefined
-                              : 'Opret en simulering for at redigere sædskifter.'
-                          }
-                        >
-                          {isEditing ? 'Færdig' : 'Rediger'}
-                        </Button>
-                        {isEditing && canEdit ? (
-                          <>
+                        <td className="px-4 py-3">
+                          {locked && field.cropRotation.length > 0 ? (
+                            <span
+                              className="block max-w-xs truncate"
+                              title={field.cropRotation
+                                .map(formatRotationYear)
+                                .join(' - ')}
+                            >
+                              {field.cropRotation
+                                .map(formatRotationYear)
+                                .join(' - ')}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Optimeringen vælger
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {field.allowedRotationIds.length === 0 ? (
+                            <span className="text-muted-foreground">
+                              Alle i scenariet
+                            </span>
+                          ) : (
+                            `${field.allowedRotationIds.length} valgt`
+                          )}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        {yearIndexes.map((index) => {
+                          const year = field.cropRotation[index]
+                          return (
+                            <td key={index} className="px-4 py-3">
+                              {year ? formatRotationYear(year) : '—'}
+                            </td>
+                          )
+                        })}
+                        <td className="px-4 py-3">
+                          <div>{formatNumber(field.db2)} kr</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.db2 / field.areaHa)} kr/ha
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>{formatNumber(field.nLoad)} kg N</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.nLoad / field.areaHa)} kg N/ha
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>{formatNumber(field.leaching)} kg N</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.leaching / field.areaHa)} kg N/ha
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>{formatNumber(field.fen)} FE</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.fen / field.areaHa)} FE/ha
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            {formatNumber(field.udledningskvoteMarkKgn)} kg N
+                          </div>
+                          <div className="text-xs text-muted-foreground/80">
+                            {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {field.inTakeoutPlan ? 'Ja' : 'Nej'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {field.retention === null
+                            ? 'Ukendt'
+                            : formatNumber(field.retention)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {field.jbnr === null ? 'Ukendt' : field.jbnr}
+                        </td>
+                      </>
+                    )}
+                    {showActions ? (
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <div className="flex flex-nowrap justify-end gap-2">
+                          {isRules && canEdit ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={field.rotationId === null}
+                                onClick={() => setManualEditFieldId(field.id)}
+                                title={
+                                  field.rotationId === null
+                                    ? 'Kør Optimér for denne mark, før du kan binde et sædskifte.'
+                                    : 'Bind marken til et bestemt sædskifte, som optimeringen skal respektere.'
+                                }
+                              >
+                                Fastlås sædskifte
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled
+                                title={NOT_YET_AVAILABLE_TITLE}
+                              >
+                                Tilladte sædskifter
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void toggleFieldLock(field)}
+                                disabled={
+                                  field.rotationId === null ||
+                                  lockingFieldId === field.id
+                                }
+                                aria-label={locked ? 'Lås op' : 'Lås'}
+                                className={
+                                  locked
+                                    ? 'h-8 w-8 p-0 bg-amber-100 text-amber-700'
+                                    : 'h-8 w-8 p-0 text-muted-foreground'
+                                }
+                                title={
+                                  locked
+                                    ? 'Marken er låst til det valgte sædskifte — Optimér ændrer den ikke. Klik for at låse op.'
+                                    : 'Marken er ikke låst — Optimér kan frit ændre den. Klik for at låse.'
+                                }
+                              >
+                                {locked ? (
+                                  <Lock className="h-4 w-4" aria-hidden="true" />
+                                ) : (
+                                  <LockOpen
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </Button>
+                            </>
+                          ) : null}
+                          {!isSimulationView ? (
                             <Button
+                              variant="ghost"
                               size="sm"
-                              variant="outline"
-                              disabled={field.rotationId === null}
-                              onClick={() => setManualEditFieldId(field.id)}
+                              onClick={() => void detachFarmField(field.id)}
+                              disabled={detachingFieldId === field.id}
+                              aria-label="Fjern"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:bg-red-50 hover:text-red-700"
                               title={
-                                field.rotationId === null
-                                  ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
-                                  : undefined
+                                detachingFieldId === field.id
+                                  ? 'Fjerner...'
+                                  : 'Fjern marken fra bedriften.'
                               }
                             >
-                              Rediger manuelt
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled
-                              title={NOT_YET_AVAILABLE_TITLE}
-                            >
-                              Tilladte sædskifter
-                            </Button>
-                          </>
-                        ) : null}
-                        {canEdit ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void toggleFieldLock(field)}
-                            disabled={field.rotationId === null}
-                            aria-label={isFieldLocked(field) ? 'Lås op' : 'Lås'}
-                            className={
-                              isFieldLocked(field)
-                                ? 'h-8 w-8 p-0 bg-amber-100 text-amber-700'
-                                : 'h-8 w-8 p-0 text-muted-foreground'
-                            }
-                            title={
-                              isFieldLocked(field)
-                                ? 'Marken er låst til det valgte sædskifte — Optimér ændrer den ikke. Klik for at låse op.'
-                                : 'Marken er ikke låst — Optimér kan frit ændre den. Klik for at låse.'
-                            }
-                          >
-                            {isFieldLocked(field) ? (
-                              <Lock className="h-4 w-4" aria-hidden="true" />
-                            ) : (
-                              <LockOpen
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </Button>
-                        ) : null}
-                        {!isSimulationView ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void detachFarmField(field.id)}
-                            disabled={detachingFieldId === field.id}
-                            aria-label="Fjern"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:bg-red-50 hover:text-red-700"
-                            title={
-                              detachingFieldId === field.id
-                                ? 'Fjerner...'
-                                : 'Fjern marken fra bedriften.'
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
+                          ) : null}
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
-                  {isExpanded && simulationId ? (
+                  {isExpanded && simulationId && !isRules ? (
                     <tr className="border-t">
-                      <td colSpan={12 + maxYears} className="p-0">
+                      <td colSpan={valuesColumnCount} className="p-0">
                         <RotationDetailPanel
                           farmId={farmId}
                           simulationId={simulationId}

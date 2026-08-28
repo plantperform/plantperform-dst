@@ -11,6 +11,7 @@ export type ColorAttribute =
   | 'vandopland'
   | 'rotationChanged'
   | 'inTakeoutPlan'
+  | 'fieldLocked'
 
 export type ColorSource = 'both' | 'farm'
 
@@ -261,6 +262,19 @@ const TAKEOUT: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
+const FIELD_LOCKED: CategorySpec = {
+  kind: 'category',
+  label: 'Låst sædskifte',
+  unit: '',
+  source: 'farm',
+  property: 'fieldLocked',
+  bins: [
+    { value: 1, color: '#4f46e5', label: 'Låst — Optimér må ikke ændre' },
+    { value: 0, color: NEUTRAL_FALLBACK, label: 'Fri — Optimér vælger' },
+  ],
+  fallbackColor: NEUTRAL_FALLBACK,
+}
+
 export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   retention: RETENTION,
   jbnr: JB_NR,
@@ -271,6 +285,7 @@ export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   vandopland: VANDOPLAND,
   rotationChanged: ROTATION_CHANGED,
   inTakeoutPlan: TAKEOUT,
+  fieldLocked: FIELD_LOCKED,
 }
 
 export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
@@ -284,6 +299,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'vandopland', label: 'Vandopland' },
   { value: 'rotationChanged', label: 'Ændret sædskifte' },
   { value: 'inTakeoutPlan', label: 'Omlægning' },
+  { value: 'fieldLocked', label: 'Låst sædskifte' },
 ]
 
 // Farm GeoJSON properties use camelCase (matching FieldRecord).

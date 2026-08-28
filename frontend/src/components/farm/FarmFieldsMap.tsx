@@ -1,10 +1,13 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 
+import { Lock } from 'lucide-react'
+
 import type { FeatureCollection } from 'geojson'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
   Layer,
+  Marker,
   Popup,
   Source,
   type MapLayerMouseEvent,
@@ -24,6 +27,7 @@ import type {
   RegistryField,
   RegistryFieldSummary,
 } from '@/api/types'
+import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -36,9 +40,14 @@ import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
   formatRealRotation,
+  isFieldLocked,
   soilFromRegistryNumber,
 } from '@/lib/field-domain'
-import { fieldsToFeatureCollection, getFieldsBounds } from '@/lib/geo'
+import {
+  fieldLabelPoint,
+  fieldsToFeatureCollection,
+  getFieldsBounds,
+} from '@/lib/geo'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
@@ -70,6 +79,7 @@ type FarmFieldsMapProps = {
   farm: Farm
   fields: FieldRecord[]
   readOnly?: boolean
+  mode?: FarmInspectorMode
   onError: (message: string | null) => void
 }
 
@@ -84,6 +94,7 @@ export const FarmFieldsMap = ({
   farm,
   fields,
   readOnly = false,
+  mode = 'values',
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -101,7 +112,16 @@ export const FarmFieldsMap = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [hoveredField, setHoveredField] = useState<HoveredField | null>(null)
-  const [colorBy, setColorBy] = useState<ColorAttribute>('none')
+  const [colorBy, setColorBy] = useState<ColorAttribute>(
+    mode === 'rules' ? 'fieldLocked' : 'none',
+  )
+  
+  const previousMode = useRef(mode)
+  useEffect(() => {
+    if (previousMode.current === mode) return
+    previousMode.current = mode
+    setColorBy(mode === 'rules' ? 'fieldLocked' : 'none')
+  }, [mode])
 
   const activeColorSpec = colorBy === 'none' ? null : COLOR_SPECS[colorBy]
   const farmThemedColor = activeColorSpec
@@ -130,9 +150,27 @@ export const FarmFieldsMap = ({
   // Live ("Aktuel") fields are the baseline for the "Ændret sædskifte" scheme.
   // SWR dedupes by key, so this reuses the data already fetched by the page.
   const { data: liveFields = [] } = useFarmFields(farm.id)
-  const changedFields = changedFieldIds(fields, liveFields)
+  const changedFields = useMemo(
+    () => changedFieldIds(fields, liveFields),
+    [fields, liveFields],
+  )
 
-  const farmFieldsGeoJson = fieldsToFeatureCollection(fields, changedFields)
+  const lockedFieldMarkers = useMemo(
+    () =>
+      fields
+        .filter(isFieldLocked)
+        .map((field) => ({ field, point: fieldLabelPoint(field) }))
+        .filter(
+          (entry): entry is { field: FieldRecord; point: [number, number] } =>
+            entry.point !== null,
+        ),
+    [fields],
+  )
+
+  const farmFieldsGeoJson = useMemo(
+    () => fieldsToFeatureCollection(fields, changedFields),
+    [fields, changedFields],
+  )
   const selectedFarmField = selectedFieldId
     ? fields.find((field) => field.id === selectedFieldId)
     : undefined
@@ -440,7 +478,7 @@ export const FarmFieldsMap = ({
   }
 
   return (
-    <div className="relative h-[calc(100vh-8.5rem)] min-h-[560px] overflow-hidden rounded-xl border bg-muted">
+    <div className="relative h-full min-h-[360px] overflow-hidden rounded-xl border bg-muted">
       <Map
         ref={mapRef}
         initialViewState={initialViewState}
@@ -646,6 +684,25 @@ export const FarmFieldsMap = ({
             paint={{ 'line-color': '#1d4ed8', 'line-width': 3 }}
           />
         </Source>
+
+        {lockedFieldMarkers.map(({ field, point }) => (
+          <Marker
+            key={`lock-${field.id}`}
+            longitude={point[0]}
+            latitude={point[1]}
+            anchor="center"
+            style={{ pointerEvents: 'none' }}
+          >
+            <span className="flex items-center justify-center">
+              <Lock
+                className="h-6 w-6 text-white"
+                strokeWidth={2.5}
+                aria-hidden="true"
+              />
+              <span className="sr-only">Låst mark</span>
+            </span>
+          </Marker>
+        ))}
 
         {hoveredField ? (
           <Popup
