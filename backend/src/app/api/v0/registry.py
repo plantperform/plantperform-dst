@@ -23,7 +23,7 @@ FocusCvr = Annotated[str | None, Query(alias="focusCvr")]
 
 
 @router.get("/fields/search", response_model=list[RegistryFieldSummary])
-async def search_fields(
+def search_fields(
     db: DbSession,
     _: CurrentUser,
     cvr: str | None = None,
@@ -33,7 +33,7 @@ async def search_fields(
 
 
 @router.get("/fields/bounds", response_model=RegistryBounds)
-async def get_field_bounds(
+def get_field_bounds(
     db: DbSession,
     _: CurrentUser,
     cvr: str | None = None,
@@ -49,7 +49,7 @@ async def get_field_bounds(
 
 
 @router.get("/fields/bulk", response_model=list[RegistryField])
-async def get_fields(
+def get_fields(
     db: DbSession,
     _: CurrentUser,
     imk_ids: str = Query(alias="imkIds"),
@@ -66,7 +66,7 @@ async def get_fields(
 
 
 @router.get("/fields/{imk_id}", response_model=RegistryField)
-async def get_field(
+def get_field(
     imk_id: int,
     db: DbSession,
     _: CurrentUser,
@@ -80,7 +80,7 @@ async def get_field(
 
 
 @router.get("/tiles/{z}/{x}/{y}.pbf")
-async def get_tile(
+def get_tile(
     z: int,
     x: int,
     y: int,

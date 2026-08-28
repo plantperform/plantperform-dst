@@ -1,4 +1,3 @@
-import asyncio
 import os
 import unittest
 from types import SimpleNamespace
@@ -28,9 +27,9 @@ def dependency_calls(route: object) -> set[object]:
 
 
 class SimulationAccessControlTests(unittest.TestCase):
-    def assert_not_found(self, awaitable: object) -> None:
+    def assert_not_found(self, func: object, *args: object, **kwargs: object) -> None:
         with self.assertRaises(HTTPException) as context:
-            asyncio.run(awaitable)  # type: ignore[arg-type]
+            func(*args, **kwargs)  # type: ignore[operator]
         self.assertEqual(context.exception.status_code, 404)
 
     def test_rework_routes_require_authentication(self) -> None:
@@ -56,11 +55,10 @@ class SimulationAccessControlTests(unittest.TestCase):
             side_effect=simulations.OptimizationNotFoundError,
         ) as run_optimization:
             self.assert_not_found(
-                simulations.post_farm_simulation_yearly_optimization(
-                    "farm-1",
-                    "simulation-1",
-                    MEMBER,
-                )
+                simulations.post_farm_simulation_yearly_optimization,
+                "farm-1",
+                "simulation-1",
+                MEMBER,
             )
 
         self.assertEqual(run_optimization.call_args.args[-1], MEMBER.email)
@@ -72,11 +70,10 @@ class SimulationAccessControlTests(unittest.TestCase):
             return_value=None,
         ) as list_candidates:
             self.assert_not_found(
-                simulations.get_farm_simulation_yearly_optimization_candidates(
-                    "farm-1",
-                    "simulation-1",
-                    MEMBER,
-                )
+                simulations.get_farm_simulation_yearly_optimization_candidates,
+                "farm-1",
+                "simulation-1",
+                MEMBER,
             )
 
         self.assertEqual(list_candidates.call_args.args[-1], MEMBER.email)
@@ -88,12 +85,11 @@ class SimulationAccessControlTests(unittest.TestCase):
             return_value=None,
         ) as get_detail:
             self.assert_not_found(
-                simulations.get_farm_simulation_field_candidate_detail(
-                    "farm-1",
-                    "simulation-1",
-                    "field-1",
-                    MEMBER,
-                )
+                simulations.get_farm_simulation_field_candidate_detail,
+                "farm-1",
+                "simulation-1",
+                "field-1",
+                MEMBER,
             )
 
         self.assertEqual(get_detail.call_args.args[-1], MEMBER.email)
@@ -105,13 +101,12 @@ class SimulationAccessControlTests(unittest.TestCase):
             return_value=None,
         ) as get_simulation:
             self.assert_not_found(
-                simulations.post_farm_simulation_field_preview_rotation(
-                    "farm-1",
-                    "simulation-1",
-                    "field-1",
-                    None,  # type: ignore[arg-type]
-                    MEMBER,
-                )
+                simulations.post_farm_simulation_field_preview_rotation,
+                "farm-1",
+                "simulation-1",
+                "field-1",
+                None,  # type: ignore[arg-type]
+                MEMBER,
             )
 
         self.assertEqual(get_simulation.call_args.args[-1], MEMBER.email)
@@ -124,13 +119,12 @@ class SimulationAccessControlTests(unittest.TestCase):
             side_effect=simulations.ManualRotationNotFoundError,
         ) as apply_rotation:
             self.assert_not_found(
-                simulations.post_farm_simulation_field_apply_rotation(
-                    "farm-1",
-                    "simulation-1",
-                    "field-1",
-                    request,
-                    MEMBER,
-                )
+                simulations.post_farm_simulation_field_apply_rotation,
+                "farm-1",
+                "simulation-1",
+                "field-1",
+                request,
+                MEMBER,
             )
 
         self.assertEqual(apply_rotation.call_args.args[-2], MEMBER.email)
@@ -142,11 +136,10 @@ class SimulationAccessControlTests(unittest.TestCase):
             return_value=None,
         ) as yearly_summary:
             self.assert_not_found(
-                simulations.get_farm_simulation_yearly_summary(
-                    "farm-1",
-                    "simulation-1",
-                    MEMBER,
-                )
+                simulations.get_farm_simulation_yearly_summary,
+                "farm-1",
+                "simulation-1",
+                MEMBER,
             )
 
         self.assertEqual(yearly_summary.call_args.args[-1], MEMBER.email)
@@ -181,13 +174,11 @@ class RotationCandidateAccessControlTests(unittest.TestCase):
         request = SimpleNamespace(field_ids=["field-1"])
         with patch.object(rotation_candidates, "list_fields", return_value=None) as list_fields:
             with self.assertRaises(HTTPException) as context:
-                asyncio.run(
-                    rotation_candidates.evaluate_rotation_candidates(
-                        "farm-1",
-                        request,  # type: ignore[arg-type]
-                        object(),  # type: ignore[arg-type]
-                        MEMBER,
-                    )
+                rotation_candidates.evaluate_rotation_candidates(
+                    "farm-1",
+                    request,  # type: ignore[arg-type]
+                    object(),  # type: ignore[arg-type]
+                    MEMBER,
                 )
 
         self.assertEqual(context.exception.status_code, 404)
@@ -208,24 +199,23 @@ class RegistryAccessControlTests(unittest.TestCase):
     def test_registry_search_allows_verified_user_without_farm_membership(self) -> None:
         db = object()
         with patch.object(registry, "search_registry_fields", return_value=[]) as search_fields:
-            result = asyncio.run(registry.search_fields(db, MEMBER))
+            result = registry.search_fields(db, MEMBER)
 
         self.assertEqual(result, [])
         search_fields.assert_called_once_with(db, cvr=None, limit=100)
 
     def test_owned_tile_rejects_non_member(self) -> None:
-        with patch.object(registry, "list_fields", return_value=None) as list_fields:
+        db = object()
+        with patch.object(registry, "get_owned_imk_ids", return_value=None) as get_owned_imk_ids:
             with self.assertRaises(HTTPException) as context:
-                asyncio.run(
-                    registry.get_tile(
-                        1,
-                        1,
-                        1,
-                        object(),
-                        MEMBER,
-                        owned_by_farm_id="farm-1",
-                    )
+                registry.get_tile(
+                    1,
+                    1,
+                    1,
+                    db,
+                    MEMBER,
+                    owned_by_farm_id="farm-1",
                 )
 
         self.assertEqual(context.exception.status_code, 404)
-        self.assertEqual(list_fields.call_args.args, ("farm-1", MEMBER.email))
+        self.assertEqual(get_owned_imk_ids.call_args.args, (db, "farm-1", MEMBER.email))

@@ -199,7 +199,7 @@ refresh_session_table = Table(
     Index("ix_auth_refresh_session_family_id", "family_id"),
 )
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
