@@ -82,9 +82,9 @@ export const formatCropRotation = (rotation: Crop[]) =>
   rotation.length > 0 ? rotation.map(formatCrop).join(' - ') : 'Ukendt'
 
 // Startkalenderår for den 8-årige rotation — skal matche backend'ens
-// candidate_evaluator.py::_START_CALENDAR_YEAR. Position 1 = dette år,
+// candidate_evaluator.py::START_CALENDAR_YEAR. Position 1 = dette år,
 // position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
-export const ROTATION_START_CALENDAR_YEAR = 2024
+export const ROTATION_START_CALENDAR_YEAR = 2027
 
 // Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
 // navnet i parentes lige efter.
