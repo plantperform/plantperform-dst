@@ -39,12 +39,12 @@ class FarmMemberResponse(CamelModel):
 
 
 @router.get("", response_model=list[Farm])
-async def get_farms(user: CurrentUser) -> list[Farm]:
+def get_farms(user: CurrentUser) -> list[Farm]:
     return list_farms(user.email)
 
 
 @router.post("", response_model=Farm)
-async def post_farm(
+def post_farm(
     request: CreateFarmRequest,
     user: CurrentUser,
 ) -> Farm:
@@ -52,7 +52,7 @@ async def post_farm(
 
 
 @router.get("/{farm_id}", response_model=Farm)
-async def get_farm_by_id(
+def get_farm_by_id(
     farm_id: str,
     user: CurrentUser,
 ) -> Farm:
@@ -65,7 +65,7 @@ async def get_farm_by_id(
 
 
 @router.patch("/{farm_id}", response_model=Farm)
-async def patch_farm(
+def patch_farm(
     farm_id: str,
     request: UpdateFarmRequest,
     user: CurrentUser,
@@ -79,7 +79,7 @@ async def patch_farm(
 
 
 @router.delete("/{farm_id}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_by_id(
+def delete_farm_by_id(
     farm_id: str,
     user: CurrentUser,
 ) -> None:
@@ -90,7 +90,7 @@ async def delete_farm_by_id(
 
 
 @router.get("/{farm_id}/members", response_model=list[FarmMemberResponse])
-async def get_farm_members(
+def get_farm_members(
     farm_id: str,
     user: CurrentUser,
 ) -> list[FarmMemberResponse]:
@@ -101,7 +101,7 @@ async def get_farm_members(
 
 
 @router.post("/{farm_id}/members", response_model=FarmMemberResponse, status_code=201)
-async def post_farm_member(
+def post_farm_member(
     farm_id: str,
     request: FarmMemberRequest,
     user: CurrentUser,
@@ -117,7 +117,7 @@ async def post_farm_member(
 
 
 @router.delete("/{farm_id}/members/{member_email}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_member(
+def delete_farm_member(
     farm_id: str,
     member_email: str,
     user: CurrentUser,

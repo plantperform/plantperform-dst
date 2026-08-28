@@ -11,7 +11,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/tiles/{z}/{x}/{y}.pbf")
-async def get_tile(z: int, x: int, y: int, db: DbSession) -> Response:
+def get_tile(z: int, x: int, y: int, db: DbSession) -> Response:
     tile = get_mars_tile(db, z=z, x=x, y=y)
     return Response(
         content=tile,

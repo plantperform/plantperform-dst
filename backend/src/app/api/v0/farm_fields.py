@@ -12,7 +12,7 @@ CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 
 @router.get("", response_model=list[FieldRecord])
-async def get_farm_fields(
+def get_farm_fields(
     farm_id: str,
     user: CurrentUser,
 ) -> list[FieldRecord]:
@@ -25,7 +25,7 @@ async def get_farm_fields(
 
 
 @router.post("", response_model=FieldRecord | list[FieldRecord])
-async def post_farm_fields(
+def post_farm_fields(
     farm_id: str,
     request: CreateFieldRequest | list[CreateFieldRequest],
     user: CurrentUser,
@@ -47,7 +47,7 @@ async def post_farm_fields(
 
 
 @router.delete("/{field_id}", status_code=HTTP_204_NO_CONTENT)
-async def detach_farm_field(
+def detach_farm_field(
     farm_id: str,
     field_id: str,
     user: CurrentUser,

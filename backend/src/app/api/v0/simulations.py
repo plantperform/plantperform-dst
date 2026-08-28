@@ -80,7 +80,7 @@ class YearlySummaryEntryResponse(CamelModel):
 
 
 @router.get("", response_model=list[Simulation])
-async def get_farm_simulations(
+def get_farm_simulations(
     farm_id: str,
     user: CurrentUser,
 ) -> list[Simulation]:
@@ -93,7 +93,7 @@ async def get_farm_simulations(
 
 
 @router.post("", response_model=Simulation)
-async def post_farm_simulation(
+def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
     user: CurrentUser,
@@ -107,7 +107,7 @@ async def post_farm_simulation(
 
 
 @router.get("/{simulation_id}", response_model=Simulation)
-async def get_farm_simulation(
+def get_farm_simulation(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -121,7 +121,7 @@ async def get_farm_simulation(
 
 
 @router.delete("/{simulation_id}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_simulation(
+def delete_farm_simulation(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -136,7 +136,7 @@ async def delete_farm_simulation(
 
 
 @router.patch("/{simulation_id}/constraints", response_model=Simulation)
-async def patch_farm_simulation_constraints(
+def patch_farm_simulation_constraints(
     farm_id: str,
     simulation_id: str,
     request: OptimizationConstraints,
@@ -154,7 +154,7 @@ async def patch_farm_simulation_constraints(
 
 
 @router.post("/{simulation_id}/optimize", response_model=OptimizeSimulationResponse)
-async def post_farm_simulation_optimization(
+def post_farm_simulation_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -218,7 +218,7 @@ class YearlyOptimizeSimulationResponse(CamelModel):
 
 
 @router.post("/{simulation_id}/optimize-yearly", response_model=YearlyOptimizeSimulationResponse)
-async def post_farm_simulation_yearly_optimization(
+def post_farm_simulation_yearly_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -295,7 +295,7 @@ class YearlyOptimizationKategoriOption(CamelModel):
     "/{simulation_id}/yearly-optimization-candidates",
     response_model=list[YearlyOptimizationKategoriOption],
 )
-async def get_farm_simulation_yearly_optimization_candidates(
+def get_farm_simulation_yearly_optimization_candidates(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -368,7 +368,7 @@ async def get_farm_simulation_yearly_optimization_candidates(
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
-async def get_farm_simulation_fields(
+def get_farm_simulation_fields(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -382,7 +382,7 @@ async def get_farm_simulation_fields(
 
 
 @router.patch("/{simulation_id}/fields/{field_id}", response_model=FieldRecord)
-async def patch_farm_simulation_field(
+def patch_farm_simulation_field(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -401,7 +401,7 @@ async def patch_farm_simulation_field(
     "/{simulation_id}/fields/{field_id}/candidate-detail",
     response_model=RotationCandidateEvaluation,
 )
-async def get_farm_simulation_field_candidate_detail(
+def get_farm_simulation_field_candidate_detail(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -430,7 +430,7 @@ class RecomputeFieldRotationRequest(CamelModel):
     "/{simulation_id}/fields/{field_id}/preview-rotation",
     response_model=RotationCandidateEvaluation,
 )
-async def post_farm_simulation_field_preview_rotation(
+def post_farm_simulation_field_preview_rotation(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -478,7 +478,7 @@ async def post_farm_simulation_field_preview_rotation(
     "/{simulation_id}/fields/{field_id}/apply-rotation",
     response_model=FieldRecord,
 )
-async def post_farm_simulation_field_apply_rotation(
+def post_farm_simulation_field_apply_rotation(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -506,7 +506,7 @@ async def post_farm_simulation_field_apply_rotation(
     "/{simulation_id}/yearly-summary",
     response_model=list[YearlySummaryEntryResponse],
 )
-async def get_farm_simulation_yearly_summary(
+def get_farm_simulation_yearly_summary(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,

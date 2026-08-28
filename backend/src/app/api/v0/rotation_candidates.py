@@ -95,7 +95,7 @@ def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
 
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
-async def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
+def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
     """De 6 sædskifte-kategorier (driftsform + gødningsniveau), til
     kategori-afkrydsningslisten i "Nyt scenarie" — hver med en liste af dens
     individuelle sædskiftemuligheder (afgrødesekvens-forhåndsvisning), så
@@ -120,7 +120,7 @@ async def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption
 
 
 @router.get("/n-norm-procenter", response_model=list[str])
-async def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
+def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
     """Alle N-norm%-niveauer der findes i datasættet, til N-norm%-
     afkrydsningslisten i "Nyt scenarie". Ikke betinget af kategori-valget i
     denne omgang — en forenkling, jf. planen."""
@@ -129,7 +129,7 @@ async def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
 
 
 @router.get("/godnings-presets", response_model=list[GodningPresetOption])
-async def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
+def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
     """Gødningstype-presets til "Nyt scenarie"s gødnings-sektion (Fase 13,
     forenklet) — navngivet efter selve gødningstypen (Svinegylle/Kvæggylle),
     ikke efter en driftsform- eller N-mængde-specifik variant. Samme preset
@@ -164,7 +164,7 @@ async def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
-async def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
+def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
     """Alle rigtige afgrødekoder (Bilag 1/NUAR) med en gyldig NUAR M-kode
     (dvs. reelt brugbare som hovedafgrøde i en NLES5-beregning), til
     afgrøde-dropdownen i "Rediger manuelt" (Fase 10 — levende beregning),
@@ -180,7 +180,7 @@ async def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
 
 
 @router.get("", response_model=list[RotationCandidateOption])
-async def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
+def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
     """Alle tilgængelige sædskifte-kandidater (til fejlsøgning/debugging),
     med en kort afgrødesekvens-forhåndsvisning pr. kandidat.
 
@@ -204,7 +204,7 @@ async def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
 
 
 @router.post("/evaluate", response_model=list[FieldRotationCandidates])
-async def evaluate_rotation_candidates(
+def evaluate_rotation_candidates(
     farm_id: str,
     request: EvaluateRotationCandidatesRequest,
     db: DbSession,
