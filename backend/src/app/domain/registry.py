@@ -15,6 +15,9 @@ class RegistryField(CamelModel):
     kystvand_id: int | None = None
     retention: float | None = None
     jbnr: int | None = None
+    goedningsregion: str | None = None
+    oeko: bool = False
+    kvotegivende: bool = False
     area_ha: float
     crop_rotation: str
     crop_history: dict[str, int | None]

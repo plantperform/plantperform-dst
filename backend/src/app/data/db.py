@@ -62,6 +62,8 @@ registry_field_table = Table(
     Column("hoejeste_hnv", SmallInteger, nullable=True),
     Column("omlaegningsplan_virkemiddel", Text, nullable=True),
     Column("omlaegningsplan_status", Text, nullable=True),
+    Column("goedningsregion", Text, nullable=True),
+    Column("kvotegivende", Boolean, nullable=False, server_default=false()),
     Column("crop_history", JSON, nullable=False),
     Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False),
     Column("centroid", Geometry(geometry_type="POINT", srid=4326), nullable=True),

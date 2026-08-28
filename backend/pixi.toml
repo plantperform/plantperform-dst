@@ -49,3 +49,5 @@ load-kystvandoplande = "PYTHONPATH=src python database/scripts/load_kystvandopla
 load-oekologi-hnv = "PYTHONPATH=src python database/scripts/load_oekologi_hnv.py"
 load-retentionskort = "PYTHONPATH=src python database/scripts/load_retentionskort.py"
 load-mars-projekter = "PYTHONPATH=src python database/scripts/load_mars_projekter.py"
+load-historisk-goedningsfordeling = "PYTHONPATH=src python database/scripts/load_historisk_goedningsfordeling.py"
+load-kvotegivende-areal = "PYTHONPATH=src python database/scripts/load_kvotegivende_areal.py"
