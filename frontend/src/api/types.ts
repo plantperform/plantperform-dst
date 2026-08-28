@@ -91,6 +91,7 @@ export type FieldRecord = {
   inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
 
@@ -109,6 +110,7 @@ export type RegistryField = {
   inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon
 }
 
