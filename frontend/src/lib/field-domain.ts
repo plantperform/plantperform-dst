@@ -250,3 +250,117 @@ export const changedFieldIds = (
 
   return changed
 }
+
+// En marks tal (DB2, udledning, udvaskning, foderenheder) er kun troværdige
+// når marken rent faktisk er beregnet. I en simulering betyder det et sat
+// rotationId. I Aktuel-visningen har marker ikke noget rotationId (det er
+// altid null der), så signalet i stedet er at alle fire nøgletal er 0.
+export const isFieldCalculated = (
+  field: FieldRecord,
+  isSimulationView: boolean,
+): boolean => {
+  if (isSimulationView) return field.rotationId !== null
+  return (
+    field.db2 !== 0 ||
+    field.nLoad !== 0 ||
+    field.leaching !== 0 ||
+    field.fen !== 0
+  )
+}
+
+// Statuskolonnens/-kortets tærskel for "tæt på kvoten" - en mark under
+// tærsklen er grøn, fra tærsklen til og med 1,0 er den gul, og over 1,0 er
+// den rød. Delt mellem markoversigtens statuskolonne og markpanelets
+// statuskort, så de aldrig kan komme til at vise forskellige farver for
+// samme mark.
+export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
+
+export type QuotaStatusLevel =
+  | 'ok'
+  | 'near'
+  | 'over'
+  | 'uncalculated'
+  | 'noData'
+  | 'partial'
+
+// Ren beregning på tal, uden kendskab til FieldRecord - så både
+// markoversigtens per-mark-status og dens totalrække (der arbejder på
+// summerede tal) kan bruge den samme farvelogik.
+export const quotaStatusLevel = (
+  nLoad: number,
+  quotaKgn: number,
+  isCalculated: boolean,
+): QuotaStatusLevel => {
+  if (!isCalculated) return 'uncalculated'
+  if (quotaKgn === 0) return 'noData'
+  const ratio = nLoad / quotaKgn
+  if (ratio > 1) return 'over'
+  if (ratio >= QUOTA_STATUS_NEAR_THRESHOLD) return 'near'
+  return 'ok'
+}
+
+// Status for en SUM af flere marker (fx markoversigtens totalrække). Må
+// ALDRIG konkludere grønt eller gult på et delvist grundlag - så
+// EmissionStatusBar (FarmInspector.tsx) og denne totalrække aldrig kan
+// komme til at vise modstridende konklusioner på samme data. Er nogle men
+// ikke alle marker beregnet, er en "over grænsen"-konklusion stadig gyldig
+// (en delsum kan kun vokse når flere marker bliver beregnet), mens en
+// delsum under kvoten viser en neutral 'partial'-tilstand i stedet for en
+// grøn frikendelse uden dækning.
+export const aggregateQuotaStatusLevel = (
+  nLoad: number,
+  quotaKgn: number,
+  calculatedCount: number,
+  totalCount: number,
+): QuotaStatusLevel => {
+  if (calculatedCount === 0) return 'uncalculated'
+  if (quotaKgn === 0) return 'noData'
+  if (calculatedCount < totalCount) {
+    return nLoad > quotaKgn ? 'over' : 'partial'
+  }
+  return quotaStatusLevel(nLoad, quotaKgn, true)
+}
+
+export type QuotaStatus = {
+  level: QuotaStatusLevel
+  nLoad: number
+  quotaKgn: number
+}
+
+// Markens udledning målt mod dens kvote - bruges af markoversigtens
+// statuskolonne og genbruges af markpanelets statuskort.
+export const getFieldQuotaStatus = (
+  field: FieldRecord,
+  isSimulationView: boolean,
+): QuotaStatus => ({
+  level: quotaStatusLevel(
+    field.nLoad,
+    field.udledningskvoteMarkKgn,
+    isFieldCalculated(field, isSimulationView),
+  ),
+  nLoad: field.nLoad,
+  quotaKgn: field.udledningskvoteMarkKgn,
+})
+
+// Fast palet til sædskiftets årstern - indekseret pr. unik afgrødekode i
+// bedriften, så samme afgrøde altid får samme farve overalt i
+// markoversigten (og i markpanelets år-for-år-liste). Efterafgrøde/udlæg
+// markeres i stedet med en bundkant i denne grønne farve, uanset
+// hovedafgrødens farve.
+export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
+export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
+
+export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> => {
+  const colorByCropCode = new Map<number, string>()
+  for (const field of fields) {
+    for (const year of field.cropRotation) {
+      if (!colorByCropCode.has(year.afgrodeKode)) {
+        colorByCropCode.set(
+          year.afgrodeKode,
+          CROP_YEAR_PALETTE[colorByCropCode.size % CROP_YEAR_PALETTE.length],
+        )
+      }
+    }
+  }
+  return colorByCropCode
+}

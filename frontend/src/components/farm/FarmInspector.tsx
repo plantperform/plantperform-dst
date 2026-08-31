@@ -1,4 +1,10 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleHelp,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -7,6 +13,7 @@ import {
   simulationsKey,
   simulationYearlySummaryKey,
   useSimulationFields,
+  useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
 import {
@@ -20,6 +27,7 @@ import type {
   OptimizeSimulationResponse,
   Simulation,
   YearlyOptimizationKategoriOption,
+  YearlySummaryEntry,
 } from '@/api/types'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
@@ -40,7 +48,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
+import {
+  isFieldCalculated,
+  ROTATION_START_CALENDAR_YEAR,
+} from '@/lib/field-domain'
 
 // Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
 // opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
@@ -67,6 +78,199 @@ const ROTATION_CALENDAR_YEARS = Array.from(
   { length: NUM_ROTATION_YEARS },
   (_, index) => ROTATION_START_CALENDAR_YEAR + index,
 )
+
+// Afledt af rotationens kalenderår-spænd, så teksten aldrig kan komme ud
+// af trit med ROTATION_START_CALENDAR_YEAR/NUM_ROTATION_YEARS.
+const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
+  ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
+}`
+
+const formatNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+
+const formatFieldCount = (count: number) =>
+  `${count} ${count === 1 ? 'mark' : 'marker'}`
+
+type EmissionStatusTone = 'ok' | 'over' | 'unknown'
+
+const EMISSION_STATUS_TONE_CLASSES: Record<EmissionStatusTone, string> = {
+  ok: 'border-green-200 bg-green-50 text-green-800',
+  over: 'border-red-200 bg-red-50 text-red-800',
+  unknown: 'border-amber-200 bg-amber-50 text-amber-800',
+}
+
+// Bedriftens vigtigste tal, oversat til svar først: hvor meget udleder vi,
+// og hvordan står det til med kvoten. Kvoten er brugerens egen indtastning
+// på bedriften, hvis den er sat - ellers summen af markernes egne kvoter -
+// og statuslinjen siger eksplicit hvilket af de to grundlag der bruges.
+// Findes intet kvotegrundlag, eller er ingen marker beregnet endnu, er
+// tallet ikke til at stole på, og statuslinjen siger det ærligt i stedet
+// for at vise et falsk nul. Er kun nogle marker beregnet, kan delsummen
+// kun vokse efterhånden som resten beregnes - så en grøn "under grænsen"
+// er kun en gyldig konklusion når alle marker er talt med. En rød "OVER"
+// er derimod stadig gyldig på et delvist grundlag.
+const EmissionStatusBar = ({
+  farm,
+  fields,
+  isSimulationView,
+}: {
+  farm: Farm
+  fields: FieldRecord[]
+  isSimulationView: boolean
+}) => {
+  const calculatedFields = fields.filter((field) =>
+    isFieldCalculated(field, isSimulationView),
+  )
+  const calculatedCount = calculatedFields.length
+  const uncalculatedCount = fields.length - calculatedCount
+  // Kun beregnede markers udledning tælles med - u-beregnede marker har i
+  // dag garanteret nLoad=0 fra backend, men reglen skal være eksplicit her,
+  // så den følger samme "beregnet"-definition som totalrækken i
+  // FarmFieldsList, i stedet for at hvile på en implicit antagelse.
+  const totalNLoad = calculatedFields.reduce(
+    (sum, field) => sum + field.nLoad,
+    0,
+  )
+  const quotaSum = fields.reduce(
+    (sum, field) => sum + field.udledningskvoteMarkKgn,
+    0,
+  )
+  const quota = farm.udledningskvoteKgN > 0 ? farm.udledningskvoteKgN : quotaSum
+
+  let tone: EmissionStatusTone
+  let Icon: typeof CircleCheck
+  let message: string
+
+  if (quota === 0) {
+    tone = 'unknown'
+    Icon = CircleHelp
+    message =
+      'Udledningen kan ikke opgøres endnu - ingen udledningsgrænse på markerne'
+  } else if (calculatedCount === 0) {
+    tone = 'unknown'
+    Icon = CircleHelp
+    message =
+      'Udledningen kan ikke opgøres endnu - markerne er ikke beregnet endnu'
+  } else {
+    const over = totalNLoad > quota
+    const diff = Math.abs(quota - totalNLoad)
+    const quotaBasis =
+      farm.udledningskvoteKgN > 0
+        ? 'bedriftens kvote'
+        : 'summen af markernes kvoter'
+
+    if (over) {
+      // "OVER" er en gyldig konklusion selv på et delvist grundlag - en
+      // delsum kan kun vokse når flere marker bliver beregnet.
+      const uncalculatedNote =
+        uncalculatedCount > 0
+          ? `, ${formatFieldCount(uncalculatedCount)} ikke beregnet`
+          : ''
+      tone = 'over'
+      Icon = CircleAlert
+      message =
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N ` +
+        `(${quotaBasis}${uncalculatedNote}) - ${formatNumber(diff)} kg N OVER grænsen`
+    } else if (uncalculatedCount > 0) {
+      // Delsummen ligger under grænsen, men grundlaget er ikke fuldt endnu -
+      // en grøn frikendelse ville ikke have dækning, så vi viser en neutral
+      // tilstand i stedet.
+      tone = 'unknown'
+      Icon = CircleHelp
+      message =
+        `${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N (${quotaBasis}) brugt - ` +
+        `${formatFieldCount(uncalculatedCount)} ikke beregnet endnu`
+    } else {
+      tone = 'ok'
+      Icon = CircleCheck
+      message =
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N ` +
+        `(${quotaBasis}) - ${formatNumber(diff)} kg N under grænsen`
+    }
+  }
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${EMISSION_STATUS_TONE_CLASSES[tone]}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
+// Miniaturevisning af de 8 rotationsårs DB2, brugt som forhåndsvisning i
+// den sammenfoldede årsoversigt-sektion - kun højden er meningsfuld
+// (relativt til det højeste år i sættet), tallene selv vises først når
+// sektionen foldes ud.
+const YearlyOverviewMiniBars = ({ entries }: { entries: YearlySummaryEntry[] }) => {
+  const maxDb2 = Math.max(1, ...entries.map((entry) => entry.totalDb2))
+
+  return (
+    <div className="flex h-6 items-end gap-0.5" aria-hidden="true">
+      {entries.map((entry) => {
+        const heightPct = Math.max(8, (entry.totalDb2 / maxDb2) * 100)
+        return (
+          <div
+            key={entry.year}
+            className="w-[7px] rounded-t-sm"
+            style={{ height: `${heightPct}%`, backgroundColor: '#cfdfc6' }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+// Sammenfoldet som standard, så toppen af markgennemgangen bliver rolig -
+// kun når brugeren aktivt beder om det, vises den fulde YearlyOverviewStrip
+// (uændret komponent) med tal for alle 8 år. Skjules helt uden data, ligesom
+// stripet selv gjorde det tidligere.
+const YearlyOverviewSection = ({
+  farmId,
+  simulationId,
+}: {
+  farmId: string
+  simulationId: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const { data: entries } = useSimulationYearlySummary(farmId, simulationId)
+
+  if (!entries || entries.length === 0) return null
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-2">
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+              isOpen ? 'rotate-90' : ''
+            }`}
+            aria-hidden="true"
+          />
+          <div>
+            <div className="text-sm font-semibold">Årsoversigt</div>
+            <div className="text-xs text-muted-foreground">
+              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - vis DB2 og udledning år for
+              år
+            </div>
+          </div>
+        </div>
+        <YearlyOverviewMiniBars entries={entries} />
+      </button>
+      {isOpen ? (
+        <div className="border-t px-3 pb-3 pt-3">
+          <YearlyOverviewStrip farmId={farmId} simulationId={simulationId} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 type FarmInspectorProps = {
   farm: Farm
@@ -193,10 +397,15 @@ export const FarmInspector = ({
       ) : null}
 
       <div className="flex-1 space-y-4 p-4">
+        <EmissionStatusBar
+          farm={farm}
+          fields={fields}
+          isSimulationView={isSimulationView}
+        />
         {view === 'list' ? (
           <>
             {isSimulationView && selection.kind === 'simulation' ? (
-              <YearlyOverviewStrip farmId={farm.id} simulationId={selection.id} />
+              <YearlyOverviewSection farmId={farm.id} simulationId={selection.id} />
             ) : null}
             <FarmFieldsList
               farmId={farm.id}

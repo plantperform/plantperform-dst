@@ -28,6 +28,19 @@ const fmtSigned = (value: unknown, digits = 3) => {
   return `${n >= 0 ? '+' : ''}${fmt(n, digits)}`
 }
 
+// Fælles udledningsformel: L_nuar (kg N/ha, efter virkemidler) reduceres med
+// retention (procent, null = ikke sat = regn med 0%) og ganges med markens
+// areal. Bruges af KeyMetricsSection, CalculationStepsSection og
+// LeachingDetailSection, så de tre steder aldrig kan regne forskelligt.
+const beregnUdledning = (
+  lNuar: number,
+  retention: number | null,
+  areaHa: number,
+): { udledningPrHa: number; udledningMark: number } => {
+  const udledningPrHa = (lNuar * (100 - (retention ?? 0))) / 100
+  return { udledningPrHa, udledningMark: udledningPrHa * areaHa }
+}
+
 type Row = { label: string; detail?: string; value: string; strong?: boolean }
 
 const DetailTable = ({ rows }: { rows: Row[] }) => (
@@ -114,7 +127,7 @@ const KeyMetricsSection = ({
   const reduceretNorm = afgrodeNorm !== null ? afgrodeNorm * (year.nNormPct / 100) : null
 
   const udvaskning = year.leachingKgNHa
-  const udledning = udvaskning * (100 - (retention ?? 0)) / 100
+  const { udledningPrHa: udledning } = beregnUdledning(udvaskning, retention, areaHa)
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -164,6 +177,102 @@ const KeyMetricsSection = ({
         value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
         caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha`}
       />
+    </div>
+  )
+}
+
+// En linje i den trinvise gennemgang: forklarende tekst til venstre,
+// det tilhørende tal højrestillet - enkel kvittering uden farvede bokse.
+const StepRow = ({
+  text,
+  value,
+  strong,
+}: {
+  text: React.ReactNode
+  value: React.ReactNode
+  strong?: boolean
+}) => (
+  <div className="flex items-baseline justify-between gap-3">
+    <p className={`text-sm ${strong ? 'font-semibold' : ''}`}>{text}</p>
+    <span className={`shrink-0 tabular-nums text-sm ${strong ? 'font-semibold' : ''}`}>
+      {value}
+    </span>
+  </div>
+)
+
+// Lag 2, trinvis udgave - samme tal som formel-gennemgangen nedenfor
+// (bag "Vis formler og mellemregninger"), men fortalt i almindeligt
+// landmandssprog uden regressionsled, græske bogstaver eller forkortelser
+// som EEA/EMA/ETS/EPJ/NUAR. Læser direkte fra de samme detail-felter som
+// LeachingDetailSection, så tallene aldrig kan løbe fra hinanden.
+const CalculationStepsSection = ({
+  detail,
+  areaHa,
+  retention,
+}: {
+  detail: Record<string, unknown>
+  areaHa: number
+  retention: number | null
+}) => {
+  const l = num(detail.L)
+  const lNuar = num(detail.L_nuar)
+  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
+
+  const virkemidler = [
+    { navn: 'Efterafgrøde', pct: num(detail.EEA) * num(detail.Fdato_factor) * 100 },
+    { navn: 'Mellemafgrøde', pct: num(detail.EMA) * 100 },
+    { navn: 'Tidlig såning', pct: num(detail.ETS) * 100 },
+    { navn: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
+  ].filter((v) => v.pct > 0.001)
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <SectionHeading>1. Udvaskning fra rodzonen</SectionHeading>
+        <StepRow
+          text="Ud fra afgrøderne, jordtypen og gødningen er udvaskningen beregnet til"
+          value={`${fmt(l, 1)} kg N pr. ha`}
+        />
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>2. Virkemidler</SectionHeading>
+        {virkemidler.length > 0 ? (
+          <div className="space-y-1">
+            {virkemidler.map((v) => (
+              <StepRow
+                key={v.navn}
+                text={`${v.navn} reducerer med`}
+                value={`${fmt(v.pct, 1)}%`}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Ingen virkemidler på denne mark</p>
+        )}
+        <StepRow
+          text="Udvaskning efter virkemidler"
+          value={`${fmt(lNuar, 1)} kg N pr. ha`}
+          strong
+        />
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>3. Retention</SectionHeading>
+        <p className="text-sm">
+          {retention === null
+            ? 'Retention er ikke sat for marken - der regnes med 0%'
+            : `${fmt(retention, 1)}% af kvælstoffet tilbageholdes naturligt på vejen mod kysten`}
+        </p>
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>4. Markens udledning</SectionHeading>
+        <Callout>
+          {fmt(udledningPrHa, 1)} kg N pr. ha gange arealet på {fmt(areaHa, 1)} ha ={' '}
+          <strong>{fmt(udledningMark, 1)} kg N</strong>
+        </Callout>
+      </div>
     </div>
   )
 }
@@ -228,7 +337,7 @@ const LeachingDetailSection = ({
   const lRaw = Math.max(0, trend + cropSoil)
   const l = num(detail.L)
   const lNuar = num(detail.L_nuar)
-  const udledningPrHa = lNuar * (100 - (retention ?? 0)) / 100
+  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
 
   const m11Applied = Boolean(detail.M11_korrektion_anvendt)
   const eeaRed = num(detail.EEA) * num(detail.Fdato_factor)
@@ -318,8 +427,8 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Midlertidig fælles placeholder-værdi (afstrømningskategori 1),
-            indtil rigtige per-mark-værdier findes.
+            Foreløbigt fællestal for alle marker - rigtige tal pr. mark
+            kommer senere.
           </p>
           <Callout>
             P = <strong>{fmt(p, 5)}</strong>
@@ -328,8 +437,8 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>S — Jordfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Midlertidig fælles placeholder-værdi, indtil rigtige
-            per-mark-værdier findes.
+            Foreløbigt fællestal for alle marker - rigtige tal pr. mark
+            kommer senere.
           </p>
           <Callout>
             S = <strong>{fmt(s, 5)}</strong>
@@ -437,7 +546,7 @@ const LeachingDetailSection = ({
         />
         <Callout>
           Udledning (mark) = {fmt(udledningPrHa, 3)} × {fmt(areaHa, 2)} ={' '}
-          <strong>{fmt(udledningPrHa * areaHa, 1)} kg N</strong>
+          <strong>{fmt(udledningMark, 1)} kg N</strong>
         </Callout>
       </div>
     </div>
@@ -513,8 +622,13 @@ const EconomicDetailSection = ({
   const linjerFor = (kategori: string) => linjer.filter((l) => l.kategori === kategori)
 
   return (
-    <div className="space-y-1.5">
-      <SectionHeading>Dækningsbidrag (DB2)</SectionHeading>
+    <div className="space-y-1.5 border-t pt-3">
+      <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
+      <p className="text-sm">
+        Indtægt og tilskud, minus omkostninger til gødning, udsæd,
+        planteværn, markarbejde og tørring, giver dækningsbidraget (DB2) pr.
+        hektar - ganget med markens areal til sidst.
+      </p>
       {detail.udbyttenorm_mangler ? (
         <p className="text-xs text-amber-700">
           Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og
@@ -561,6 +675,7 @@ type RotationYearsDetailProps = {
 export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsDetailProps) => {
   const [selectedYear, setSelectedYear] = useState(0)
   const [showFullDetail, setShowFullDetail] = useState(false)
+  const [showFormulas, setShowFormulas] = useState(false)
 
   const year = years[Math.min(selectedYear, years.length - 1)]
   if (!year) return null
@@ -592,13 +707,36 @@ export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsD
         onClick={() => setShowFullDetail((current) => !current)}
         className="text-xs font-medium text-primary hover:underline"
       >
-        {showFullDetail ? '▴ Skjul fuld beregningsgennemgang' : '▾ Vis fuld beregningsgennemgang'}
+        {showFullDetail ? '▴ Skjul beregning' : '▾ Vis beregning'}
       </button>
 
       {showFullDetail ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <LeachingDetailSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold">Sådan er tallet beregnet</h4>
+          <CalculationStepsSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
           <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
+
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              onClick={() => setShowFormulas((current) => !current)}
+              className="text-[11px] text-muted-foreground hover:underline"
+            >
+              {showFormulas
+                ? '▴ Skjul formler og mellemregninger'
+                : '▾ Vis formler og mellemregninger'}
+            </button>
+
+            {showFormulas ? (
+              <div className="mt-3">
+                <LeachingDetailSection
+                  detail={year.leachingDetail}
+                  areaHa={areaHa}
+                  retention={retention}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>
