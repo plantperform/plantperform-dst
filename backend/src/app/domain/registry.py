@@ -13,6 +13,7 @@ class RegistryField(CamelModel):
     markblok: str | None = None
     journalnr: str | None = None
     kystvand_id: int | None = None
+    kystvand_navn: str | None = None
     retention: float | None = None
     jbnr: int | None = None
     goedningsregion: str | None = None
@@ -32,6 +33,7 @@ class RegistryFieldSummary(CamelModel):
     cvr: str | None = Field(default=None, pattern=r"^\d{8}$")
     marknr: str | None = None
     kystvand_id: int | None = None
+    kystvand_navn: str | None = None
     retention: float | None = None
     area_ha: float
     crop_rotation: str
