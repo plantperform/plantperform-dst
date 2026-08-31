@@ -79,6 +79,12 @@ npm run dev
 Open the URL printed by Vite, normally `http://localhost:5173`. The development
 server proxies `/api` requests to the backend on port 8000.
 
+The backend setting `ROTATION_START_CALENDAR_YEAR` controls the calendar year
+used for position 1 when calculating new rotations. The frontend has its own
+corresponding Vite setting, `VITE_ROTATION_START_CALENDAR_YEAR`, in
+`frontend/.env`; keep the two values equal when changing the rotation start
+year.
+
 ## Registry data
 
 Registry source data is not distributed with this repository. If you are

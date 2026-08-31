@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { RotationCandidateYearResult } from '@/api/types'
+import { ROTATION_START_CALENDAR_YEAR } from '@/config'
 import {
   L_FORMULA_CONSTANTS,
   M_LABELS,
@@ -219,7 +220,7 @@ const LeachingDetailSection = ({
 
   const p = num(detail.P)
   const s = num(detail.S)
-  const y = num(detail.Y) || 2024
+  const y = num(detail.Y) || ROTATION_START_CALENDAR_YEAR
   const { tau, mu, kappa, rho } = L_FORMULA_CONSTANTS
   const trend = tau * (y - 1991)
   const base = mu + ntheta + num(detail.C)

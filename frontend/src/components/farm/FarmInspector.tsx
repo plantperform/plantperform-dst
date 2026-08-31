@@ -91,6 +91,10 @@ export const FarmInspector = ({
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const isSimulationView = selection.kind === 'simulation'
+  const metricsAvailable =
+    isSimulationView &&
+    fields.length > 0 &&
+    fields.every((field) => field.rotationId !== null)
 
   return (
     <section className="flex min-h-screen flex-col">
@@ -202,6 +206,7 @@ export const FarmInspector = ({
               farmId={farm.id}
               fields={fields}
               isSimulationView={isSimulationView}
+              metricsAvailable={metricsAvailable}
               simulationId={
                 selection.kind === 'simulation' ? selection.id : undefined
               }
@@ -224,6 +229,7 @@ export const FarmInspector = ({
             farm={farm}
             fields={fields}
             readOnly={isSimulationView}
+            metricsAvailable={metricsAvailable}
             onError={onError}
           />
         )}

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from app.config import ROTATION_START_CALENDAR_YEAR
 from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer
 from app.services.soil.percolation_placeholder import percolation_placeholder
@@ -138,7 +139,7 @@ def evaluate_leaching_position(
     f2: float = 0.0,
     g1: float = 0.0,
     g2: float = 0.0,
-    y: int = 2024,
+    y: int = ROTATION_START_CALENDAR_YEAR,
     afstromningskategori: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",

@@ -67,6 +67,7 @@ const formatRelativeTime = (value: string) => {
 type FarmSidebarProps = {
   farm: Farm
   fields: FieldRecord[]
+  activeSimulationFields?: FieldRecord[]
   simulations: Simulation[]
   selection: FarmViewSelection
   onSelectionChange: (selection: FarmViewSelection) => void
@@ -76,6 +77,7 @@ type FarmSidebarProps = {
 export const FarmSidebar = ({
   farm,
   fields,
+  activeSimulationFields,
   simulations,
   selection,
   onSelectionChange,
@@ -94,7 +96,13 @@ export const FarmSidebar = ({
   const [isSharing, setIsSharing] = useState(false)
   const [quotaInput, setQuotaInput] = useState(String(farm.udledningskvoteKgN))
   const [isSavingQuota, setIsSavingQuota] = useState(false)
-  const totals = getFieldTotals(fields)
+  const displayedFields =
+    selection.kind === 'simulation' ? (activeSimulationFields ?? []) : fields
+  const totals = getFieldTotals(displayedFields)
+  const metricsAvailable =
+    selection.kind === 'simulation' &&
+    displayedFields.length > 0 &&
+    displayedFields.every((field) => field.rotationId !== null)
   const quotaSum = fields.reduce(
     (sum, field) => sum + field.udledningskvoteMarkKgn,
     0,
@@ -301,7 +309,7 @@ export const FarmSidebar = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border bg-background p-4">
               <p className="text-muted-foreground">Marker</p>
-              <p className="mt-1 text-xl font-semibold">{fields.length}</p>
+              <p className="mt-1 text-xl font-semibold">{displayedFields.length}</p>
             </div>
             <div className="rounded-lg border bg-background p-4">
               <p className="text-muted-foreground">Areal</p>
@@ -314,13 +322,13 @@ export const FarmSidebar = ({
             <div className="rounded-lg border bg-background p-4">
               <p className="text-muted-foreground">DB2</p>
               <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.db2)} kr
+                {metricsAvailable ? `${formatNumber(totals.db2)} kr` : '—'}
               </p>
             </div>
             <div className="rounded-lg border bg-background p-4">
               <p className="text-muted-foreground">Udledning</p>
               <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.nLoad)} kg N
+                {metricsAvailable ? `${formatNumber(totals.nLoad)} kg N` : '—'}
               </p>
             </div>
           </div>
@@ -328,10 +336,15 @@ export const FarmSidebar = ({
             <div className="rounded-lg border bg-background p-4">
               <p className="text-muted-foreground">Udvaskning</p>
               <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.leaching)} kg N
+                {metricsAvailable ? `${formatNumber(totals.leaching)} kg N` : '—'}
               </p>
             </div>
           </div>
+          {!metricsAvailable ? (
+            <p className="text-xs text-muted-foreground">
+              Opret og optimér et scenarie for at beregne nøgletal.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-3">
@@ -386,9 +399,7 @@ export const FarmSidebar = ({
                 ha
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
-                DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-                {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-                {formatNumber(totals.leaching)} kg N
+                Nøgletal kræver et optimeret scenarie.
               </span>
             </button>
 
@@ -493,6 +504,8 @@ const SimulationViewRow = ({
     simulation.id,
   )
   const totals = getFieldTotals(fields)
+  const metricsAvailable =
+    fields.length > 0 && fields.every((field) => field.rotationId !== null)
 
   return (
     <div
@@ -520,9 +533,9 @@ const SimulationViewRow = ({
         </span>
         {!isLoading ? (
           <span className="mt-1 block text-xs text-muted-foreground">
-            DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-            {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-            {formatNumber(totals.leaching)} kg N
+            {metricsAvailable
+              ? `DB2 ${formatNumber(totals.db2)} kr · Udledning ${formatNumber(totals.nLoad)} kg N · Udvaskning ${formatNumber(totals.leaching)} kg N`
+              : 'Afventer optimering'}
           </span>
         ) : null}
       </button>

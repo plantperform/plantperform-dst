@@ -1,5 +1,7 @@
 import math
 
+from app.config import ROTATION_START_CALENDAR_YEAR
+
 
 def S_func(cu, p_ler=0.001849):
     """Soil factor S based on clay content (Ligning 7: S = exp(-p_ler * lerprocent))."""
@@ -475,7 +477,7 @@ def calculate_leaching(sample):
     ets = resolve_ets(sample)
 
     result = nles5(
-        Y=sample.get("Y", 2024),
+        Y=sample.get("Y", ROTATION_START_CALENDAR_YEAR),
         Ntheta=ntheta,
         C=c,
         P=p,
@@ -520,7 +522,7 @@ def calculate_leaching(sample):
 
 def sample_crop_mapping():
     return {
-        "Y": 2024,
+        "Y": ROTATION_START_CALENDAR_YEAR,
         "NT": 0.5,
         "MNCS": 20,
         "MNCA": 15,

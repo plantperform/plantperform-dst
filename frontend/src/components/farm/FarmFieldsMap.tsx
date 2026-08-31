@@ -33,11 +33,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  changedFieldIds,
-  formatRealRotation,
-  soilFromRegistryNumber,
-} from '@/lib/field-domain'
+import { changedFieldIds, formatRealRotation } from '@/lib/field-domain'
 import { fieldsToFeatureCollection, getFieldsBounds } from '@/lib/geo'
 import {
   ATTRIBUTE_OPTIONS,
@@ -57,6 +53,7 @@ const emptyFeatureCollection: FeatureCollection = {
 }
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
+const marsPolygonMinZoom = 11
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
 
 type SavedMapViewState = typeof defaultMapViewState & {
@@ -66,10 +63,38 @@ type SavedMapViewState = typeof defaultMapViewState & {
 
 const savedMapViewStates = new globalThis.Map<string, SavedMapViewState>()
 
+// Colour groups for the MARS "virkemiddel" layer. Everything not listed
+// (Ekstensivering, Øvrige, ...) falls back to MARS_OTHER_COLOR.
+const MARS_LEGEND: { label: string; color: string; virkemidler: string[] }[] = [
+  {
+    label: 'Vådområder',
+    color: '#7c3aed',
+    virkemidler: [
+      'Kvælstofvådområder',
+      'Minivådområder',
+      'Fosforvådområder og ådale',
+    ],
+  },
+  { label: 'Skovrejsning', color: '#166534', virkemidler: ['Skovrejsning'] },
+  {
+    label: 'Lavbundsprojekter',
+    color: '#b08968',
+    virkemidler: ['Lavbundsprojekter'],
+  },
+]
+const MARS_OTHER_COLOR = '#94a3b8'
+const marsFillColor = [
+  'match',
+  ['get', 'virkemiddel'],
+  ...MARS_LEGEND.flatMap(({ virkemidler, color }) => [virkemidler, color]),
+  MARS_OTHER_COLOR,
+] as unknown as ExpressionSpecification
+
 type FarmFieldsMapProps = {
   farm: Farm
   fields: FieldRecord[]
   readOnly?: boolean
+  metricsAvailable: boolean
   onError: (message: string | null) => void
 }
 
@@ -80,10 +105,21 @@ type HoveredField = {
   vandopland: string | null
 }
 
+type HoveredMars = {
+  longitude: number
+  latitude: number
+  titel: string | null
+  virkemiddel: string | null
+  status: string | null
+  tilskudsordning: string | null
+  arealHa: number | null
+}
+
 export const FarmFieldsMap = ({
   farm,
   fields,
   readOnly = false,
+  metricsAvailable,
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -102,6 +138,14 @@ export const FarmFieldsMap = ({
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [hoveredField, setHoveredField] = useState<HoveredField | null>(null)
   const [colorBy, setColorBy] = useState<ColorAttribute>('none')
+  const [showMars, setShowMars] = useState(false)
+  const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
+
+  const attributeOptions = metricsAvailable
+    ? ATTRIBUTE_OPTIONS
+    : ATTRIBUTE_OPTIONS.filter(
+      (option) => !['db2', 'leaching', 'nLoad'].includes(option.value),
+    )
 
   const activeColorSpec = colorBy === 'none' ? null : COLOR_SPECS[colorBy]
   const farmThemedColor = activeColorSpec
@@ -174,6 +218,7 @@ export const FarmFieldsMap = ({
     tileParams.set('focusCvr', highlightedCvr)
   }
   const tileUrl = `${window.location.origin}${API_BASE}/registry/tiles/{z}/{x}/{y}.pbf?${tileParams}`
+  const marsTileUrl = `${window.location.origin}${API_BASE}/mars/tiles/{z}/{x}/{y}.pbf`
 
   const saveMapViewState = () => {
     const map = mapRef.current
@@ -288,46 +333,23 @@ export const FarmFieldsMap = ({
       if (!registryFieldsKey) return
 
       const registryFields = await fetcher<RegistryField[]>(registryFieldsKey)
-      const skippedFields: string[] = []
-      const payload: CreateFieldInput[] = []
-
-      for (const field of registryFields) {
-        try {
-          payload.push({
-            imkId: field.imkId,
-            kystvandId: field.kystvandId,
-            retention: field.retention,
-            soil: soilFromRegistryNumber(field.soilId),
-            name: field.marknr ?? `Mark ${field.imkId}`,
-            areaHa: field.areaHa,
-            inTakeoutPlan: field.inTakeoutPlan,
-            udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
-            udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
-            geometry: field.geometry,
-          })
-        } catch {
-          skippedFields.push(
-            `IMK ${field.imkId} (ikke understøttet jordtype-id ${field.soilId})`,
-          )
-        }
-      }
-
-      if (payload.length === 0) {
-        onError(
-          `Ingen af de valgte marker kunne tilføjes. Sprang over ${skippedFields.join(', ')}.`,
-        )
-        return
-      }
+      const payload: CreateFieldInput[] = registryFields.map((field) => ({
+        imkId: field.imkId,
+        kystvandId: field.kystvandId,
+        retention: field.retention,
+        name: field.marknr ?? `Mark ${field.imkId}`,
+        areaHa: field.areaHa,
+        inTakeoutPlan: field.inTakeoutPlan,
+        udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
+        udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+        geometry: field.geometry,
+      }))
 
       await createFields(farm.id, payload)
       await mutate(farmFieldsKey(farm.id))
       setSelectedImkIds([])
       setAddMode(false)
-      onError(
-        skippedFields.length > 0
-          ? `Tilføjede ${payload.length} ${payload.length === 1 ? 'mark' : 'marker'}. Sprang over ${skippedFields.join(', ')}.`
-          : null,
-      )
+      onError(null)
     } catch {
       onError('Kunne ikke tilføje de valgte marker til bedriften.')
     } finally {
@@ -370,6 +392,34 @@ export const FarmFieldsMap = ({
   }
 
   const handleMapHover = (event: MapLayerMouseEvent) => {
+    const marsFeature = showMars
+      ? event.features?.find((item) =>
+        ['mars-fill', 'mars-points'].includes(item.layer.id),
+      )
+      : undefined
+
+    if (marsFeature) {
+      mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
+      setHoveredField(null)
+      setHoveredMars({
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
+        titel: (marsFeature.properties?.titel as string | undefined) ?? null,
+        virkemiddel:
+          (marsFeature.properties?.virkemiddel as string | undefined) ?? null,
+        status: (marsFeature.properties?.status as string | undefined) ?? null,
+        tilskudsordning:
+          (marsFeature.properties?.tilskudsordning as string | undefined) ?? null,
+        arealHa:
+          typeof marsFeature.properties?.areal_ha === 'number'
+            ? marsFeature.properties.areal_ha
+            : null,
+      })
+      return
+    }
+
+    setHoveredMars(null)
+
     const feature = event.features?.find((item) => {
       if (addMode) {
         return [
@@ -450,22 +500,24 @@ export const FarmFieldsMap = ({
           if (!token || !url.includes('/api/v0/')) return { url }
           return { url, headers: { Authorization: `Bearer ${token}` } }
         }}
-        interactiveLayerIds={
-          addMode
+        interactiveLayerIds={[
+          ...(addMode
             ? [
               'registry-selected-fill',
               'registry-cvr-highlight-fill',
               'registry-candidate-fill',
               'registry-owned-fill',
             ]
-            : ['farm-fields-fill']
-        }
+            : ['farm-fields-fill']),
+          ...(showMars ? ['mars-fill', 'mars-points'] : []),
+        ]}
         onLoad={() => setIsMapLoaded(true)}
         onMoveEnd={saveMapViewState}
         onClick={handleMapClick}
         onMouseMove={handleMapHover}
         onMouseLeave={() => {
           setHoveredField(null)
+          setHoveredMars(null)
           mapRef.current?.getCanvas().style.setProperty('cursor', '')
         }}
         style={{ width: '100%', height: '100%' }}
@@ -630,6 +682,46 @@ export const FarmFieldsMap = ({
           </Source>
         ) : null}
 
+        {showMars ? (
+          <Source
+            key={marsTileUrl}
+            id="mars-projekter"
+            type="vector"
+            tiles={[marsTileUrl]}
+            maxzoom={16}
+          >
+            <Layer
+              id="mars-points"
+              source-layer="mars"
+              type="circle"
+              maxzoom={marsPolygonMinZoom}
+              paint={{
+                'circle-color': marsFillColor,
+                'circle-opacity': 0.85,
+                'circle-radius': registryPointRadius,
+              }}
+            />
+            <Layer
+              id="mars-fill"
+              source-layer="mars"
+              type="fill"
+              minzoom={marsPolygonMinZoom}
+              paint={{ 'fill-color': marsFillColor, 'fill-opacity': 0.45 }}
+            />
+            <Layer
+              id="mars-outline"
+              source-layer="mars"
+              type="line"
+              minzoom={marsPolygonMinZoom}
+              paint={{
+                'line-color': marsFillColor,
+                'line-width': 1.5,
+                'line-opacity': 0.9,
+              }}
+            />
+          </Source>
+        ) : null}
+
         <Source
           id="selected-farm-field"
           type="geojson"
@@ -662,6 +754,37 @@ export const FarmFieldsMap = ({
                 {hoveredField.vandopland !== null
                   ? `Vandopland ${hoveredField.vandopland}`
                   : 'Vandopland ukendt'}
+              </span>
+            </div>
+          </Popup>
+        ) : null}
+
+        {hoveredMars ? (
+          <Popup
+            longitude={hoveredMars.longitude}
+            latitude={hoveredMars.latitude}
+            closeButton={false}
+            closeOnClick={false}
+            anchor="top"
+            offset={8}
+          >
+            <div className="flex flex-col gap-0.5 text-xs">
+              <span className="font-medium">
+                {hoveredMars.titel ?? 'MARS-projekt'}
+              </span>
+              {hoveredMars.virkemiddel ? (
+                <span>{hoveredMars.virkemiddel}</span>
+              ) : null}
+              {hoveredMars.tilskudsordning ? (
+                <span className="text-muted-foreground">
+                  {hoveredMars.tilskudsordning}
+                </span>
+              ) : null}
+              <span className="text-muted-foreground">
+                {hoveredMars.status ?? 'Status ukendt'}
+                {hoveredMars.arealHa !== null
+                  ? ` · ${formatNumber(hoveredMars.arealHa)} ha`
+                  : ''}
               </span>
             </div>
           </Popup>
@@ -820,24 +943,33 @@ export const FarmFieldsMap = ({
                       label="Sædskifte"
                       value={formatRealRotation(selectedFarmField.cropRotation)}
                     />
-                    <FieldStat
-                      label="DB2"
-                      value={`${formatNumber(selectedFarmField.db2)} kr`}
-                      subValue={perHa(selectedFarmField.db2, 'kr/ha')}
-                    />
-                    <FieldStat
-                      label="Udledning"
-                      value={`${formatNumber(selectedFarmField.nLoad)} kg N`}
-                      subValue={perHa(selectedFarmField.nLoad, 'kg N/ha')}
-                    />
-                    <FieldStat
-                      label="Udvaskning"
-                      value={`${formatNumber(selectedFarmField.leaching)} kg N`}
-                      subValue={perHa(selectedFarmField.leaching, 'kg N/ha')}
-                    />
+                    {metricsAvailable ? (
+                      <>
+                        <FieldStat
+                          label="DB2"
+                          value={`${formatNumber(selectedFarmField.db2)} kr`}
+                          subValue={perHa(selectedFarmField.db2, 'kr/ha')}
+                        />
+                        <FieldStat
+                          label="Udledning"
+                          value={`${formatNumber(selectedFarmField.nLoad)} kg N`}
+                          subValue={perHa(selectedFarmField.nLoad, 'kg N/ha')}
+                        />
+                        <FieldStat
+                          label="Udvaskning"
+                          value={`${formatNumber(selectedFarmField.leaching)} kg N`}
+                          subValue={perHa(selectedFarmField.leaching, 'kg N/ha')}
+                        />
+                      </>
+                    ) : (
+                      <FieldStat
+                        label="Nøgletal"
+                        value="Afventer optimering"
+                      />
+                    )}
                     <FieldStat
                       label="Indgår i omlægningsplan"
-                      value={selectedFarmField.inTakeoutPlan ? 'Ja' : 'Nej'}
+                      value={selectedFarmField.inTakeoutPlan}
                     />
                     <FieldStat
                       label="Udledningskvote"
@@ -879,7 +1011,7 @@ export const FarmFieldsMap = ({
               setColorBy(event.target.value as ColorAttribute)
             }
           >
-            {ATTRIBUTE_OPTIONS.map((option) => (
+            {attributeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -913,6 +1045,37 @@ export const FarmFieldsMap = ({
               ) : null}
             </div>
           ) : null}
+
+          <div className="space-y-2 border-t pt-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showMars}
+                onChange={(event) => setShowMars(event.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              Grøn Trepart - Omlægningsplan
+            </label>
+            {showMars ? (
+              <ul className="space-y-1 pl-6">
+                {[
+                  ...MARS_LEGEND,
+                  { label: 'Andet', color: MARS_OTHER_COLOR, virkemidler: [] },
+                ].map((entry) => (
+                  <li
+                    key={entry.label}
+                    className="flex items-center gap-2 text-xs"
+                  >
+                    <span
+                      className="inline-block h-3 w-4 flex-shrink-0 rounded-sm border border-black/10"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span>{entry.label}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     </div>

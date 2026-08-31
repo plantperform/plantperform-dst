@@ -124,6 +124,9 @@ export const FarmDetailPage = () => {
         <FarmSidebar
           farm={farm}
           fields={fields}
+          activeSimulationFields={
+            activeSelection.kind === 'simulation' ? simulationFields : undefined
+          }
           simulations={simulations}
           selection={activeSelection}
           onSelectionChange={setSelection}

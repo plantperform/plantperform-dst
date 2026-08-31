@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from app.config import ROTATION_START_CALENDAR_YEAR
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
@@ -25,11 +26,11 @@ from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
 from app.services.rotations import afgroede_normer, saedskifte_library
 
-# Rigtig historik dækker kun 2017-2023 (jf. planens beslutning 11), så den
-# viste/beregnede 8-årige rotation starter ved 2024 — men NLES5's tidstrend-
-# led (τ·(Y−1991)) skal have det RIGTIGE kalenderår pr. position, ikke en
-# fast værdi for alle 8 år. Position 1 = 2024, position 2 = 2025, osv.
-START_CALENDAR_YEAR = 2024
+# Den viste/beregnede 8-årige rotation starter ved det konfigurerede år (nye
+# simuleringer) —
+# men NLES5's tidstrend-led (τ·(Y−1991)) skal have det RIGTIGE kalenderår pr.
+# position, ikke en fast værdi for alle 8 år. Position 1 er startåret, position
+# 2 er startåret + 1, osv.
 
 
 @lru_cache(maxsize=100_000)
@@ -195,7 +196,7 @@ def evaluate_sequence_for_mark(
             m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
             irrigated=irrigated,
             fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-            y=START_CALENDAR_YEAR + i,
+            y=ROTATION_START_CALENDAR_YEAR + i,
         )
         db = calculate_db(
             this_code, driftsform, jbnr,

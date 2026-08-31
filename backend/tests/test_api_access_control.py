@@ -214,18 +214,22 @@ class RegistryAccessControlTests(unittest.TestCase):
         search_fields.assert_called_once_with(db, cvr=None, limit=100)
 
     def test_owned_tile_rejects_non_member(self) -> None:
-        with patch.object(registry, "list_fields", return_value=None) as list_fields:
+        db = object()
+        with patch.object(registry, "get_owned_imk_ids", return_value=None) as get_owned_imk_ids:
             with self.assertRaises(HTTPException) as context:
                 asyncio.run(
                     registry.get_tile(
                         1,
                         1,
                         1,
-                        object(),
+                        db,
                         MEMBER,
                         owned_by_farm_id="farm-1",
                     )
                 )
 
         self.assertEqual(context.exception.status_code, 404)
-        self.assertEqual(list_fields.call_args.args, ("farm-1", MEMBER.email))
+        self.assertEqual(
+            get_owned_imk_ids.call_args.args,
+            (db, "farm-1", MEMBER.email),
+        )

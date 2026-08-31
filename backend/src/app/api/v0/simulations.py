@@ -5,6 +5,7 @@ from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
 from app.auth import AuthenticatedUser, current_user
+from app.config import ROTATION_START_CALENDAR_YEAR
 from app.data.repository import (
     FieldNotOptimizedError,
     create_simulation,
@@ -41,10 +42,7 @@ from app.services.optimization.orchestrator import (
     run_yearly_optimization,
 )
 from app.services.rotations import saedskifte_kategorier
-from app.services.scenario.candidate_evaluator import (
-    START_CALENDAR_YEAR,
-    evaluate_with_overrides,
-)
+from app.services.scenario.candidate_evaluator import evaluate_with_overrides
 
 NUM_ROTATION_YEARS = 8
 
@@ -229,7 +227,7 @@ async def post_farm_simulation_yearly_optimization(
     solveren vælger selv hvor meget hvert felts sædskifte forskydes."""
     optimization_request = request or YearlyOptimizeSimulationRequest()
     max_n_load_by_year = tuple(
-        optimization_request.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
+        optimization_request.max_n_load_by_year.get(ROTATION_START_CALENDAR_YEAR + i)
         for i in range(NUM_ROTATION_YEARS)
     )
     selected_pairs = {
@@ -261,11 +259,11 @@ async def post_farm_simulation_yearly_optimization(
         total_leaching_kg=result.output.total_leaching_kg,
         total_fen=result.output.total_fen,
         total_db2_by_year={
-            START_CALENDAR_YEAR + i: value
+            ROTATION_START_CALENDAR_YEAR + i: value
             for i, value in enumerate(result.output.total_db2_by_year)
         },
         total_n_load_by_year={
-            START_CALENDAR_YEAR + i: value
+            ROTATION_START_CALENDAR_YEAR + i: value
             for i, value in enumerate(result.output.total_n_load_by_year)
         },
         fields=list(result.fields),

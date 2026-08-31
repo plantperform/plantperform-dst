@@ -83,8 +83,8 @@ const comparePrimary = (
       )
     case 'inTakeoutPlan':
       return compareNumber(
-        Number(left.inTakeoutPlan),
-        Number(right.inTakeoutPlan),
+        left.inTakeoutPlan === 'nej' ? 0 : 1,
+        right.inTakeoutPlan === 'nej' ? 0 : 1,
         sort.direction,
       )
     case 'retention':
@@ -170,6 +170,7 @@ type FarmFieldsListProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView?: boolean
+  metricsAvailable: boolean
   simulationId?: string
   simulation?: Simulation
   sort: FieldsSortState
@@ -185,6 +186,7 @@ export const FarmFieldsList = ({
   farmId,
   fields,
   isSimulationView = false,
+  metricsAvailable,
   simulationId,
   simulation,
   sort,
@@ -419,36 +421,60 @@ export const FarmFieldsList = ({
                       )
                     })}
                     <td className="px-4 py-3">
-                      <div>{formatNumber(field.db2)} kr</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.db2 / field.areaHa)} kr/ha
-                        </div>
-                      ) : null}
+                      {metricsAvailable ? (
+                        <>
+                          <div>{formatNumber(field.db2)} kr</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.db2 / field.areaHa)} kr/ha
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Afventer optimering</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <div>{formatNumber(field.nLoad)} kg N</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.nLoad / field.areaHa)} kg N/ha
-                        </div>
-                      ) : null}
+                      {metricsAvailable ? (
+                        <>
+                          <div>{formatNumber(field.nLoad)} kg N</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.nLoad / field.areaHa)} kg N/ha
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Afventer optimering</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <div>{formatNumber(field.leaching)} kg N</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.leaching / field.areaHa)} kg N/ha
-                        </div>
-                      ) : null}
+                      {metricsAvailable ? (
+                        <>
+                          <div>{formatNumber(field.leaching)} kg N</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.leaching / field.areaHa)} kg N/ha
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Afventer optimering</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <div>{formatNumber(field.fen)} FE</div>
-                      {field.areaHa > 0 ? (
-                        <div className="text-xs text-muted-foreground/80">
-                          {formatNumber(field.fen / field.areaHa)} FE/ha
-                        </div>
-                      ) : null}
+                      {metricsAvailable ? (
+                        <>
+                          <div>{formatNumber(field.fen)} FE</div>
+                          {field.areaHa > 0 ? (
+                            <div className="text-xs text-muted-foreground/80">
+                              {formatNumber(field.fen / field.areaHa)} FE/ha
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Afventer optimering</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div>
@@ -458,9 +484,7 @@ export const FarmFieldsList = ({
                         {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      {field.inTakeoutPlan ? 'Ja' : 'Nej'}
-                    </td>
+                    <td className="px-4 py-3">{field.inTakeoutPlan}</td>
                     <td className="px-4 py-3">
                       {field.retention === null
                         ? 'Ukendt'

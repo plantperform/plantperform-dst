@@ -11,6 +11,7 @@ Source: Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp
 
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 
@@ -25,11 +26,17 @@ from app.data.db import DATABASE_URL
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw" / "ANGJ-data" / "Udeledningsdata"
-SHP_PATH = (
-    RAW_DIR / "Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp"
-)
+SHP_PATH = RAW_DIR / "Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp"
 BATCH_SIZE = 50_000
 STAGING_TABLE = "udledningsgraense_omrade_load"
+
+
+@dataclass(frozen=True)
+class OverlayResult:
+    reset_registry_fields: int
+    updated_registry_fields: int
+    synchronized_farm_fields: int
+    unmatched_farm_fields: int
 
 
 def format_duration(seconds: float) -> str:
@@ -116,19 +123,31 @@ def load_staging_table(dsn: str) -> None:
                     loaded += 1
             print(f"Loaded {loaded:,} rows, building spatial index...", flush=True)
             cursor.execute(
-                f"CREATE INDEX ix_{STAGING_TABLE}_geom ON {STAGING_TABLE} "
-                f"USING gist (geom)"
+                f"CREATE INDEX ix_{STAGING_TABLE}_geom ON {STAGING_TABLE} USING gist (geom)"
             )
             cursor.execute(f"ANALYZE {STAGING_TABLE}")
         connection.commit()
 
 
-def compute_overlay(dsn: str) -> None:
+def compute_overlay(dsn: str) -> OverlayResult:
     print("Computing area-weighted overlay onto registry_field...", flush=True)
     start = time.monotonic()
 
     with psycopg.connect(dsn) as connection:
         with connection.cursor() as cursor:
+            # Rows outside the source layer deliberately have a zero limit.
+            # Resetting first also makes an overlay rerun correct when source
+            # geometries change and a previously overlapping field no longer
+            # has a matching limit polygon.
+            cursor.execute(
+                """
+                UPDATE registry_field
+                SET
+                    udledningsgraense_kgn_ha = 0,
+                    udledningskvote_mark_kgn = 0
+                """
+            )
+            reset = cursor.rowcount
             cursor.execute(
                 f"""
                 WITH parts AS (
@@ -159,10 +178,56 @@ def compute_overlay(dsn: str) -> None:
                 """
             )
             updated = cursor.rowcount
+            cursor.execute(
+                """
+                UPDATE field AS f
+                SET
+                    data = jsonb_set(
+                        jsonb_set(
+                            f.data,
+                            '{udledningsgraense_kgn_ha}',
+                            to_jsonb(rf.udledningsgraense_kgn_ha)
+                        ),
+                        '{udledningskvote_mark_kgn}',
+                        to_jsonb(rf.udledningskvote_mark_kgn)
+                    ),
+                    updated_at = now()
+                FROM registry_field AS rf
+                WHERE f.data->>'imk_id' IS NOT NULL
+                  AND (f.data->>'imk_id')::bigint = rf.imk_id
+                """
+            )
+            synchronized = cursor.rowcount
+            cursor.execute(
+                """
+                SELECT count(*)
+                FROM field AS f
+                WHERE f.data->>'imk_id' IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM registry_field AS rf
+                      WHERE rf.imk_id = (f.data->>'imk_id')::bigint
+                  )
+                """
+            )
+            unmatched = cursor.fetchone()[0]
         connection.commit()
 
     elapsed = time.monotonic() - start
-    print(f"Updated {updated:,} registry fields in {format_duration(elapsed)}", flush=True)
+    print(
+        "Reset "
+        f"{reset:,} registry fields, updated {updated:,} from the overlay, "
+        f"and synchronized {synchronized:,} farm fields "
+        f"({unmatched:,} linked fields without a registry match) in "
+        f"{format_duration(elapsed)}",
+        flush=True,
+    )
+    return OverlayResult(
+        reset_registry_fields=reset,
+        updated_registry_fields=updated,
+        synchronized_farm_fields=synchronized,
+        unmatched_farm_fields=unmatched,
+    )
 
 
 def drop_staging_table(dsn: str) -> None:
