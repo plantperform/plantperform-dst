@@ -17,7 +17,7 @@ from app.data.db import (
     simulation_field_table,
     simulation_table,
 )
-from app.domain.farm import CreateFarmRequest, Farm, UpdateFarmRequest
+from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.field import (
     CreateFieldRequest,
     FieldRecord,
@@ -131,37 +131,47 @@ def _aktuel_field_state(
     }
 
 
-def _recompute_farm_udledningskvote(session: Session, farm_id: str) -> None:
-    """Genberegner farmens udledningskvote (Farm.udledningskvote_kg_n) som sum
-    af udledningskvote_mark_kgn for alle dens tilknyttede marker, hvor den
-    tilhørende registry_field er kvotegivende=true. Køres ved hver "Tilføj
-    marker" (samme trigger som "Aktuel"-beregningen). Feltet forbliver
-    brugerredigerbart via "Rediger udledningskvote" bagefter — en manuel
-    rettelse overskrives dog igen, næste gang en mark tilføjes/ændres.
+def get_farm_udledning_per_kystvandopland(
+    farm_id: str, email: str,
+) -> list[KystvandoplandUdledning] | None:
+    """Udledningskvote og beregnet udledning ("Aktuel", dvs. FieldRecord.n_load)
+    grupperet pr. kystvandopland — bekendtgørelsen opgør begge dele pr. opland,
+    aldrig samlet på tværs (se KystvandoplandUdledning). Marker uden imk_id
+    (fx manuelt tegnede) matcher ingen registry_field-række og indgår derfor
+    ikke i nogen gruppe, samme afgrænsning som den tidligere flade sum havde.
     """
-    total = session.execute(
-        text(
-            """
-            SELECT COALESCE(SUM(rf.udledningskvote_mark_kgn), 0)
-            FROM field f
-            JOIN registry_field rf ON rf.imk_id = (f.data->>'imk_id')::bigint
-            WHERE f.farm_id = :farm_id AND rf.kvotegivende = true
-            """
-        ),
-        {"farm_id": farm_id},
-    ).scalar_one()
+    with SessionLocal() as session:
+        if not _farm_exists(session, farm_id, email):
+            return None
 
-    farm_data = session.execute(
-        select(farm_table.c.data).where(farm_table.c.id == farm_id)
-    ).scalar_one_or_none()
-    if farm_data is None:
-        return
-    farm_data = {**farm_data, "udledningskvoteKgN": round(float(total), 1)}
-    session.execute(
-        update(farm_table)
-        .where(farm_table.c.id == farm_id)
-        .values(data=farm_data, updated_at=func.now())
-    )
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    rf.kystvand_id,
+                    rf.kystvand_navn,
+                    COALESCE(SUM(rf.udledningskvote_mark_kgn), 0) AS kvote,
+                    COALESCE(SUM((f.data->>'n_load')::float), 0) AS udledning
+                FROM field f
+                JOIN registry_field rf ON rf.imk_id = (f.data->>'imk_id')::bigint
+                WHERE f.farm_id = :farm_id
+                GROUP BY rf.kystvand_id, rf.kystvand_navn
+                ORDER BY rf.kystvand_navn NULLS LAST, rf.kystvand_id NULLS LAST
+                """
+            ),
+            {"farm_id": farm_id},
+        ).all()
+
+        return [
+            KystvandoplandUdledning(
+                kystvand_id=row.kystvand_id,
+                kystvand_navn=row.kystvand_navn,
+                udledningskvote_kg_n=round(float(row.kvote), 1),
+                beregnet_udledning_kg_n=round(float(row.udledning), 1),
+                overholder=float(row.udledning) <= float(row.kvote),
+            )
+            for row in rows
+        ]
 
 
 def _member_exists(session: Session, farm_id: str, email: str) -> bool:
@@ -248,21 +258,6 @@ def get_farm(farm_id: str, email: str) -> Farm | None:
         return _get_farm(session, farm_id, email)
 
 
-def update_farm(farm_id: str, request: UpdateFarmRequest, email: str) -> Farm | None:
-    with SessionLocal.begin() as session:
-        farm = _get_farm(session, farm_id, email)
-        if farm is None:
-            return None
-
-        updated_farm = farm.model_copy(update=request.model_dump(), deep=True)
-        session.execute(
-            update(farm_table)
-            .where(farm_table.c.id == farm_id)
-            .values(data=_dump(updated_farm), updated_at=func.now()),
-        )
-        return updated_farm
-
-
 def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
         result = session.execute(
@@ -342,8 +337,6 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> Field
                 .values(data=_dump(field), updated_at=func.now()),
             )
 
-        _recompute_farm_udledningskvote(session, farm_id)
-
         return field
 
 
@@ -358,8 +351,6 @@ def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
                 field_table.c.farm_id == farm_id,
             ),
         )
-        if result.rowcount > 0:
-            _recompute_farm_udledningskvote(session, farm_id)
         return result.rowcount > 0
 
 
