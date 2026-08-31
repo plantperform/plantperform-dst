@@ -368,7 +368,7 @@ export const FarmSidebar = ({
                   selection.kind === 'current' ? 'font-semibold' : 'font-medium'
                 }
               >
-                Aktuel
+                Afgrødehistorik
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {formatFieldCount(fields.length)} · {formatNumber(totals.area)}{' '}
