@@ -6,6 +6,7 @@ import {
   simulationFieldsKey,
   simulationsKey,
   simulationYearlySummaryKey,
+  useFarmUdledning,
   useSimulationFields,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
@@ -17,6 +18,8 @@ import {
 import type {
   Farm,
   FieldRecord,
+  KystvandoplandNLoadCap,
+  KystvandoplandYearlyNLoadCaps,
   OptimizeSimulationResponse,
   Simulation,
   YearlyOptimizationKategoriOption,
@@ -248,6 +251,54 @@ const inputToOptionalNumber = (value: string) => {
   return trimmed === '' ? null : Number(trimmed)
 }
 
+type CatchmentOption = { kystvandId: number | null; label: string }
+
+// Nøgle til React-lister og lokal input-state — kystvandId er ofte null
+// (marker uden et tilknyttet kystvandopland), som ikke er en gyldig
+// objektnøgle i sig selv.
+const catchmentKey = (kystvandId: number | null) => String(kystvandId ?? 'none')
+
+// Bekendtgørelsen håndhæver udledning pr. kystvandopland, aldrig som én
+// samlet sum (se FarmSidebar's tilsvarende Aktuel-visning) — begge
+// optimerings-dialoger skal derfor selv udlede hvilke oplande scenariets
+// marker faktisk ligger i, og vise ét sæt felter pr. opland i stedet for
+// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmUdledning
+// (samme datakilde som FarmSidebar), med et "Kystvandopland {id}"-fallback
+// hvis en mark hører til et opland uden marker i den nuværende Aktuel-
+// opgørelse (fx et helt nyt scenarie før "Tilføj marker" er kørt igen).
+const useCatchmentOptions = (
+  farmId: string,
+  fields: FieldRecord[],
+): CatchmentOption[] => {
+  const { data: udledning = [] } = useFarmUdledning(farmId)
+  return useMemo(() => {
+    const nameById = new Map(udledning.map((u) => [u.kystvandId, u.kystvandNavn]))
+    const seen = new Map<string, CatchmentOption>()
+    for (const field of fields) {
+      const key = catchmentKey(field.kystvandId)
+      if (seen.has(key)) continue
+      const label =
+        field.kystvandId === null
+          ? 'Uden kystvandopland'
+          : (nameById.get(field.kystvandId) ?? `Kystvandopland ${field.kystvandId}`)
+      seen.set(key, { kystvandId: field.kystvandId, label })
+    }
+    return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label, 'da'))
+  }, [fields, udledning])
+}
+
+type CatchmentYearlyInput = {
+  sameForAllYears: boolean
+  uniform: string
+  perYear: Record<number, string>
+}
+
+const DEFAULT_CATCHMENT_YEARLY_INPUT: CatchmentYearlyInput = {
+  sameForAllYears: true,
+  uniform: '',
+  perYear: {},
+}
+
 const OptimizeDialog = ({
   farmId,
   simulation,
@@ -256,10 +307,21 @@ const OptimizeDialog = ({
   onOptimized,
 }: OptimizeDialogProps) => {
   const [constraints, setConstraints] = useState(simulation.constraints)
+  const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      simulation.constraints.maxNLoadByKystvandopland.map((cap) => [
+        catchmentKey(cap.kystvandId),
+        cap.maxNLoadKg === null ? '' : String(cap.maxNLoadKg),
+      ]),
+    ),
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
+
+  const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
+  const catchments = useCatchmentOptions(farmId, fields)
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setRunError(null)
@@ -269,10 +331,14 @@ const OptimizeDialog = ({
   const saveConstraints = async () => {
     setIsSaving(true)
     try {
+      const maxNLoadByKystvandopland: KystvandoplandNLoadCap[] = catchments.map((c) => ({
+        kystvandId: c.kystvandId,
+        maxNLoadKg: inputToOptionalNumber(maxNLoadInputs[catchmentKey(c.kystvandId)] ?? ''),
+      }))
       const updatedSimulation = await updateSimulationConstraints(
         farmId,
         simulation.id,
-        constraints,
+        { ...constraints, maxNLoadByKystvandopland },
       )
       await mutate(
         simulationsKey(farmId),
@@ -354,24 +420,46 @@ const OptimizeDialog = ({
             </p>
           </div>
 
+          <div className="space-y-2">
+            <Label>Maks. tilladt udledning pr. kystvandopland</Label>
+            {catchments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Ingen marker med et kystvandopland i denne simulering.
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {catchments.map((catchment) => {
+                  const key = catchmentKey(catchment.kystvandId)
+                  return (
+                    <div key={key} className="space-y-1">
+                      <Label
+                        htmlFor={`max-n-load-${key}`}
+                        className="text-xs font-normal text-muted-foreground"
+                      >
+                        {catchment.label}
+                      </Label>
+                      <Input
+                        id={`max-n-load-${key}`}
+                        type="number"
+                        min="0"
+                        value={maxNLoadInputs[key] ?? ''}
+                        placeholder="Ingen grænse"
+                        onChange={(event) =>
+                          setMaxNLoadInputs((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">kg N pr. opland</p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="max-n-load">Maks. tilladt Udledning</Label>
-              <Input
-                id="max-n-load"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.maxNLoadKg)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    maxNLoadKg: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">kg N</p>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="min-fen">Min. foderenheder</Label>
               <Input
@@ -454,9 +542,9 @@ const YearlyOptimizeDialog = ({
   onOptimized,
 }: YearlyOptimizeDialogProps) => {
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(20)
-  const [sameForAllYears, setSameForAllYears] = useState(true)
-  const [uniformMaxNLoad, setUniformMaxNLoad] = useState('')
-  const [perYearMaxNLoad, setPerYearMaxNLoad] = useState<Record<number, string>>({})
+  const [catchmentInputs, setCatchmentInputs] = useState<
+    Record<string, CatchmentYearlyInput>
+  >({})
   const [db2SwingPct, setDb2SwingPct] = useState('')
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
   const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(new Set())
@@ -470,6 +558,20 @@ const YearlyOptimizeDialog = ({
 
   const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
+  const catchments = useCatchmentOptions(farmId, fields)
+
+  const catchmentInput = (key: string): CatchmentYearlyInput =>
+    catchmentInputs[key] ?? DEFAULT_CATCHMENT_YEARLY_INPUT
+
+  const updateCatchmentInput = (
+    key: string,
+    patch: Partial<CatchmentYearlyInput>,
+  ) => {
+    setCatchmentInputs((current) => ({
+      ...current,
+      [key]: { ...catchmentInput(key), ...patch },
+    }))
+  }
 
   const togglePair = (saedskiftevariant: string, variant: string) => {
     const key = `${saedskiftevariant}:${variant}`
@@ -528,22 +630,29 @@ const YearlyOptimizeDialog = ({
   }, [fields.length, kategorier, selectedPairs])
 
   const runYearlyOptimization = async () => {
-    const maxNLoadByYear: Record<number, number> = {}
-    if (sameForAllYears) {
-      const trimmed = uniformMaxNLoad.trim()
-      if (trimmed !== '') {
-        for (const year of ROTATION_CALENDAR_YEARS) {
-          maxNLoadByYear[year] = Number(trimmed)
+    const maxNLoadByKystvandopland: KystvandoplandYearlyNLoadCaps[] = catchments.map(
+      (catchment) => {
+        const key = catchmentKey(catchment.kystvandId)
+        const input = catchmentInput(key)
+        const maxNLoadByYear: Record<number, number> = {}
+        if (input.sameForAllYears) {
+          const trimmed = input.uniform.trim()
+          if (trimmed !== '') {
+            for (const year of ROTATION_CALENDAR_YEARS) {
+              maxNLoadByYear[year] = Number(trimmed)
+            }
+          }
+        } else {
+          for (const [year, value] of Object.entries(input.perYear)) {
+            const trimmed = value.trim()
+            if (trimmed !== '') {
+              maxNLoadByYear[Number(year)] = Number(trimmed)
+            }
+          }
         }
-      }
-    } else {
-      for (const [year, value] of Object.entries(perYearMaxNLoad)) {
-        const trimmed = value.trim()
-        if (trimmed !== '') {
-          maxNLoadByYear[Number(year)] = Number(trimmed)
-        }
-      }
-    }
+        return { kystvandId: catchment.kystvandId, maxNLoadByYear }
+      },
+    )
     const trimmedSwing = db2SwingPct.trim()
     const selectedSaedskifter = Array.from(selectedPairs).map((pair) => {
       const [saedskiftevariant, variant] = pair.split(':')
@@ -554,7 +663,7 @@ const YearlyOptimizeDialog = ({
     try {
       const response = await runYearlySimulationOptimization(farmId, simulation.id, {
         timeLimitSeconds,
-        maxNLoadByYear,
+        maxNLoadByKystvandopland,
         db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
         selectedSaedskifter,
       })
@@ -605,49 +714,69 @@ const YearlyOptimizeDialog = ({
             <p className="text-xs text-muted-foreground">sekunder</p>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Maks. tilladt udledning pr. år</Label>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={sameForAllYears}
-                  onChange={(event) => setSameForAllYears(event.target.checked)}
-                />
-                Samme grænse for alle år
-              </label>
-            </div>
-            {sameForAllYears ? (
-              <div className="space-y-1">
-                <Input
-                  type="number"
-                  min="0"
-                  value={uniformMaxNLoad}
-                  placeholder="Ingen grænse"
-                  onChange={(event) => setUniformMaxNLoad(event.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">kg N, gælder hvert år</p>
-              </div>
+          <div className="space-y-3">
+            <Label>Maks. tilladt udledning pr. år, pr. kystvandopland</Label>
+            {catchments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Ingen marker med et kystvandopland i denne simulering.
+              </p>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-4">
-                {ROTATION_CALENDAR_YEARS.map((year) => (
-                  <label key={year} className="space-y-1 text-sm">
-                    <span className="text-xs text-muted-foreground">{year}</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={perYearMaxNLoad[year] ?? ''}
-                      placeholder="Ingen grænse"
-                      onChange={(event) =>
-                        setPerYearMaxNLoad((current) => ({
-                          ...current,
-                          [year]: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
+              catchments.map((catchment) => {
+                const key = catchmentKey(catchment.kystvandId)
+                const input = catchmentInput(key)
+                return (
+                  <div key={key} className="space-y-2 rounded border p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{catchment.label}</span>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={input.sameForAllYears}
+                          onChange={(event) =>
+                            updateCatchmentInput(key, {
+                              sameForAllYears: event.target.checked,
+                            })
+                          }
+                        />
+                        Samme grænse for alle år
+                      </label>
+                    </div>
+                    {input.sameForAllYears ? (
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={input.uniform}
+                          placeholder="Ingen grænse"
+                          onChange={(event) =>
+                            updateCatchmentInput(key, { uniform: event.target.value })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">kg N, gælder hvert år</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        {ROTATION_CALENDAR_YEARS.map((year) => (
+                          <label key={year} className="space-y-1 text-sm">
+                            <span className="text-xs text-muted-foreground">{year}</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={input.perYear[year] ?? ''}
+                              placeholder="Ingen grænse"
+                              onChange={(event) =>
+                                updateCatchmentInput(key, {
+                                  perYear: { ...input.perYear, [year]: event.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
             )}
           </div>
 

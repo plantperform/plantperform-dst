@@ -119,13 +119,21 @@ def run_optimization(
                 "genopret scenariet med mindst én kategori og N-norm%."
             )
 
-        field_inputs.append(FieldInput(id=field.id, area_ha=field.area_ha, options=options))
+        field_inputs.append(
+            FieldInput(
+                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+            )
+        )
 
     output = solve(
         input=OptimizationInput(
             fields=tuple(field_inputs),
             constraints=ConstraintsInput(
-                max_n_load_kg=simulation.constraints.max_n_load_kg,
+                max_n_load_by_kystvandopland={
+                    cap.kystvand_id: cap.max_n_load_kg
+                    for cap in simulation.constraints.max_n_load_by_kystvandopland
+                    if cap.max_n_load_kg is not None
+                },
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
             ),
@@ -359,7 +367,7 @@ def run_yearly_optimization(
     farm_id: str,
     simulation_id: str,
     time_limit_seconds: float,
-    max_n_load_by_year: tuple[float | None, ...],
+    max_n_load_by_kystvandopland: dict[int | None, tuple[float | None, ...]],
     db2_swing_pct: float | None,
     selected_pairs: set[tuple[str, str]],
     email: str,
@@ -404,13 +412,17 @@ def run_yearly_optimization(
                 "genopret scenariet med mindst én kategori og N-norm%."
             )
         options_by_field_id[field.id] = options
-        field_inputs.append(YearlyFieldInput(id=field.id, area_ha=field.area_ha, options=options))
+        field_inputs.append(
+            YearlyFieldInput(
+                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+            )
+        )
 
     output = solve_yearly(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
             constraints=YearlyConstraintsInput(
-                max_n_load_by_year=max_n_load_by_year,
+                max_n_load_by_kystvandopland_and_year=max_n_load_by_kystvandopland,
                 db2_swing_pct=db2_swing_pct,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,

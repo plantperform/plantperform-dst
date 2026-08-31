@@ -29,8 +29,19 @@ class CropPercentageConstraint(CamelModel):
     minimum_percentage: float = Field(ge=0, le=100)
 
 
-class OptimizationConstraints(CamelModel):
+class KystvandoplandNLoadCap(CamelModel):
+    """Udledningsloft for ét kystvandopland (en simulerings marker kan
+    fordele sig over flere) — bekendtgørelsen håndhæver udledning pr.
+    opland, aldrig som én samlet sum, jf. FarmSidebar's tilsvarende Aktuel-
+    visning. `kystvand_id=None` dækker marker uden et tilknyttet opland.
+    Et opland der ikke har en post her er ubegrænset."""
+
+    kystvand_id: int | None = None
     max_n_load_kg: float | None = Field(default=None, ge=0)
+
+
+class OptimizationConstraints(CamelModel):
+    max_n_load_by_kystvandopland: list[KystvandoplandNLoadCap] = Field(default_factory=list)
     min_fen: float | None = Field(default=None, ge=0)
     max_fen: float | None = Field(default=None, ge=0)
     max_fields_with_new_rotation: int | None = Field(default=None, ge=0)

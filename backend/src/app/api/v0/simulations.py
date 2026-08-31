@@ -198,9 +198,19 @@ class SaedskifteVariantRef(CamelModel):
     variant: str
 
 
+class KystvandoplandYearlyNLoadCaps(CamelModel):
+    """Udledningslofter pr. kalenderår for ét kystvandopland — hvert opland i
+    scenariets marker kan sættes uafhængigt (egen "samme for alle år"/
+    "pr. år"-tilstand i UI'en), jf. KystvandoplandNLoadCap for hvorfor
+    oplande ikke må blandes."""
+
+    kystvand_id: int | None = None
+    max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
+
+
 class YearlyOptimizeSimulationRequest(CamelModel):
     time_limit_seconds: float = Field(default=20, gt=0, le=600)
-    max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
+    max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
     selected_saedskifter: list[SaedskifteVariantRef] = Field(default_factory=list)
 
@@ -228,10 +238,13 @@ def post_farm_simulation_yearly_optimization(
     udledningslofter og en DB-udsvingsgrænse i stedet for scenarie-totaler;
     solveren vælger selv hvor meget hvert felts sædskifte forskydes."""
     optimization_request = request or YearlyOptimizeSimulationRequest()
-    max_n_load_by_year = tuple(
-        optimization_request.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
-        for i in range(NUM_ROTATION_YEARS)
-    )
+    max_n_load_by_kystvandopland = {
+        cap.kystvand_id: tuple(
+            cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
+            for i in range(NUM_ROTATION_YEARS)
+        )
+        for cap in optimization_request.max_n_load_by_kystvandopland
+    }
     selected_pairs = {
         (ref.saedskiftevariant, ref.variant)
         for ref in optimization_request.selected_saedskifter
@@ -242,7 +255,7 @@ def post_farm_simulation_yearly_optimization(
             farm_id,
             simulation_id,
             optimization_request.time_limit_seconds,
-            max_n_load_by_year,
+            max_n_load_by_kystvandopland,
             optimization_request.db2_swing_pct,
             selected_pairs,
             user.email,
