@@ -87,7 +87,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=AuthMessage, status_code=status.HTTP_202_ACCEPTED)
-async def register(request: EmailPasswordRequest) -> AuthMessage:
+def register(request: EmailPasswordRequest) -> AuthMessage:
     try:
         registered = register_user(request.email, request.password)
     except RuntimeError as error:
@@ -108,7 +108,7 @@ async def register(request: EmailPasswordRequest) -> AuthMessage:
     response_model=AuthMessage,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def resend(request: EmailRequest) -> AuthMessage:
+def resend(request: EmailRequest) -> AuthMessage:
     try:
         resend_verification(request.email)
     except RuntimeError as error:
@@ -120,7 +120,7 @@ async def resend(request: EmailRequest) -> AuthMessage:
 
 
 @router.post("/verify", response_model=AuthMessage)
-async def verify(request: VerificationRequest) -> AuthMessage:
+def verify(request: VerificationRequest) -> AuthMessage:
     try:
         verify_email(request.token)
     except InvalidVerificationTokenError as error:
@@ -132,7 +132,7 @@ async def verify(request: VerificationRequest) -> AuthMessage:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(
+def login(
     request: EmailPasswordRequest,
     response: Response,
     _: None = Depends(require_same_origin),
@@ -157,7 +157,7 @@ RefreshToken = Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)]
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(
+def refresh(
     response: Response,
     refresh_token: RefreshToken = None,
     _: None = Depends(require_same_origin),
@@ -180,7 +180,7 @@ async def refresh(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(
+def logout(
     response: Response,
     refresh_token: RefreshToken = None,
     _: None = Depends(require_same_origin),
@@ -190,5 +190,5 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: CurrentUser) -> UserResponse:
+def me(user: CurrentUser) -> UserResponse:
     return UserResponse(email=user.email)

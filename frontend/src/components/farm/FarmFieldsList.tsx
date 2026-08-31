@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, Lock, LockOpen, Trash2 } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
-import { farmFieldsKey, simulationFieldsKey, useFarmFields } from '@/api/hooks'
+import { farmFieldsKey, farmKey, simulationFieldsKey, useFarmFields } from '@/api/hooks'
 import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
 import type {
@@ -23,6 +23,7 @@ import {
 import {
   changedFieldIds,
   formatRotationYear,
+  REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
 
@@ -83,8 +84,8 @@ const comparePrimary = (
       )
     case 'inTakeoutPlan':
       return compareNumber(
-        Number(left.inTakeoutPlan),
-        Number(right.inTakeoutPlan),
+        left.inTakeoutPlan === 'nej' ? 0 : 1,
+        right.inTakeoutPlan === 'nej' ? 0 : 1,
         sort.direction,
       )
     case 'retention':
@@ -217,6 +218,7 @@ export const FarmFieldsList = ({
     try {
       await detachField(farmId, fieldId)
       await mutate(farmFieldsKey(farmId))
+      await mutate(farmKey(farmId))
       onError(null)
     } catch {
       onError('Kunne ikke fjerne marken fra bedriften.')
@@ -314,7 +316,9 @@ export const FarmFieldsList = ({
                 />
                 {yearIndexes.map((index) => (
                   <th key={index} className="px-4 py-3 font-medium">
-                    {ROTATION_START_CALENDAR_YEAR + index}
+                    {(isSimulationView
+                      ? ROTATION_START_CALENDAR_YEAR
+                      : REAL_HISTORY_START_CALENDAR_YEAR) + index}
                   </th>
                 ))}
                 <SortableHeader
@@ -454,13 +458,13 @@ export const FarmFieldsList = ({
                       <div>
                         {formatNumber(field.udledningskvoteMarkKgn)} kg N
                       </div>
-                      <div className="text-xs text-muted-foreground/80">
-                        {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
-                      </div>
+                      {field.areaHa > 0 ? (
+                        <div className="text-xs text-muted-foreground/80">
+                          {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg N/ha
+                        </div>
+                      ) : null}
                     </td>
-                    <td className="px-4 py-3">
-                      {field.inTakeoutPlan ? 'Ja' : 'Nej'}
-                    </td>
+                    <td className="px-4 py-3">{field.inTakeoutPlan}</td>
                     <td className="px-4 py-3">
                       {field.retention === null
                         ? 'Ukendt'

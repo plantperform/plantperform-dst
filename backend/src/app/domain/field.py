@@ -33,11 +33,6 @@ class GeoJSONMultiPolygon(CamelModel):
     coordinates: list[list[LinearRing]]
 
 
-class Soil(StrEnum):
-    SAND = "SAND"
-    CLAY = "CLAY"
-
-
 class Crop(StrEnum):
     CEREAL_WINTER = "CEREAL_WINTER"
     CEREAL_SPRING = "CEREAL_SPRING"
@@ -103,12 +98,6 @@ def validate_measures_for_rotation(
     return measures
 
 
-_SOIL_BY_REGISTRY_ID: dict[int, Soil] = {
-    10: Soil.SAND,
-    11: Soil.CLAY,
-    20: Soil.CLAY,
-}
-
 # NLES 13-class aggregation. Code 0 ("NotInNLESAgg") and missing values are
 # intentionally absent here; parse_crop_rotation falls back to CEREAL_WINTER
 # until the agronomic mapping for these is decided.
@@ -127,17 +116,6 @@ _CROP_BY_REGISTRY_ID: dict[int, Crop] = {
     12: Crop.CEREAL_SPRING_AFTER_GRASS,
     13: Crop.CEREAL_VEG_BEAN,
 }
-
-
-def parse_soil_id(value: int | None) -> Soil:
-    if value is None:
-        raise ValueError("Jordtype-id er påkrævet")
-
-    soil = _SOIL_BY_REGISTRY_ID.get(value)
-    if soil is None:
-        raise ValueError(f"Unsupported soil id {value}")
-
-    return soil
 
 
 def parse_crop_rotation(value: str | None) -> list[Crop]:
@@ -166,7 +144,6 @@ class FieldRecord(CamelModel):
     imk_id: int | None = None
     kystvand_id: int | None = None
     retention: float | None = None
-    soil: Soil
     jbnr: int | None = None
     crop_rotation: list[RotationYear] = Field(default_factory=list)
     # Sat af optimeringen (candidate ref id, fx "315:4:100") — bruges til at slå
@@ -185,9 +162,12 @@ class FieldRecord(CamelModel):
     fen: float = 0
     name: str
     area_ha: float
-    in_takeout_plan: bool = False
+    in_takeout_plan: str = "nej"
     udledningsgraense_kgn_ha: float = 0
     udledningskvote_mark_kgn: float = 0
+    # Om markens 2026-afgrødekode er kvotegivende areal (Bilag 1 tabel 1) —
+    # sat fra registry_field.kvotegivende ved "Tilføj marker", jf. jbnr.
+    kvotegivende: bool = False
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
 
@@ -195,13 +175,12 @@ class CreateFieldRequest(CamelModel):
     imk_id: int | None = None
     kystvand_id: int | None = None
     retention: float | None = None
-    soil: Soil
     crop_rotation: list[RotationYear] = Field(default_factory=list)
     measures: FieldMeasures = Field(default_factory=FieldMeasures)
     allowed_rotation_ids: list[str] = Field(default_factory=default_allowed_rotation_ids)
     name: str
     area_ha: float
-    in_takeout_plan: bool = False
+    in_takeout_plan: str = "nej"
     udledningsgraense_kgn_ha: float = 0
     udledningskvote_mark_kgn: float = 0
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
@@ -225,7 +204,6 @@ class UpdateFieldRequest(CamelModel):
     imk_id: int | None = None
     kystvand_id: int | None = None
     retention: float | None = None
-    soil: Soil | None = None
     crop_rotation: list[RotationYear] | None = None
     rotation_id: str | None = None
     measures: FieldMeasures | None = None
@@ -239,7 +217,7 @@ class UpdateFieldRequest(CamelModel):
     fen: float | None = None
     name: str | None = None
     area_ha: float | None = None
-    in_takeout_plan: bool | None = None
+    in_takeout_plan: str | None = None
     udledningsgraense_kgn_ha: float | None = None
     udledningskvote_mark_kgn: float | None = None
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
@@ -251,10 +229,3 @@ class UpdateFieldRequest(CamelModel):
             return value
 
         return validate_rotation_ids(value)
-
-    @model_validator(mode="after")
-    def validate_soil(self) -> "UpdateFieldRequest":
-        if "soil" in self.model_fields_set and self.soil is None:
-            raise ValueError("Jordtype er påkrævet")
-
-        return self

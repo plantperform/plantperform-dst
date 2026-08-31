@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from app.auth import AuthenticatedUser, current_user
 from app.data.db import get_db
 from app.data.registry_repository import (
+    get_owned_imk_ids,
     get_registry_bounds,
     get_registry_field,
     get_registry_fields,
     get_registry_tile,
     search_registry_fields,
 )
-from app.data.repository import list_fields
 from app.domain.registry import RegistryBounds, RegistryField, RegistryFieldSummary
 
 router = APIRouter(prefix="/registry", tags=["registry"])
@@ -23,7 +23,7 @@ FocusCvr = Annotated[str | None, Query(alias="focusCvr")]
 
 
 @router.get("/fields/search", response_model=list[RegistryFieldSummary])
-async def search_fields(
+def search_fields(
     db: DbSession,
     _: CurrentUser,
     cvr: str | None = None,
@@ -33,7 +33,7 @@ async def search_fields(
 
 
 @router.get("/fields/bounds", response_model=RegistryBounds)
-async def get_field_bounds(
+def get_field_bounds(
     db: DbSession,
     _: CurrentUser,
     cvr: str | None = None,
@@ -49,7 +49,7 @@ async def get_field_bounds(
 
 
 @router.get("/fields/bulk", response_model=list[RegistryField])
-async def get_fields(
+def get_fields(
     db: DbSession,
     _: CurrentUser,
     imk_ids: str = Query(alias="imkIds"),
@@ -66,7 +66,7 @@ async def get_fields(
 
 
 @router.get("/fields/{imk_id}", response_model=RegistryField)
-async def get_field(
+def get_field(
     imk_id: int,
     db: DbSession,
     _: CurrentUser,
@@ -80,7 +80,7 @@ async def get_field(
 
 
 @router.get("/tiles/{z}/{x}/{y}.pbf")
-async def get_tile(
+def get_tile(
     z: int,
     x: int,
     y: int,
@@ -91,12 +91,11 @@ async def get_tile(
     owned_by_farm_id: OwnedByFarmId = None,
 ) -> Response:
     if owned_by_farm_id is not None:
-        farm_fields = list_fields(owned_by_farm_id, user.email)
-        if farm_fields is None:
+        owned_imk_ids = get_owned_imk_ids(db, owned_by_farm_id, user.email)
+        if owned_imk_ids is None:
             raise HTTPException(status_code=404, detail="Farm not found")
     else:
-        farm_fields = []
-    owned_imk_ids = [field.imk_id for field in (farm_fields or []) if field.imk_id is not None]
+        owned_imk_ids = []
     tile = get_registry_tile(
         db,
         z=z,

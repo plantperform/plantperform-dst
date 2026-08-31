@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.orm import Session
 
 from app.data.db import (
@@ -17,7 +17,7 @@ from app.data.db import (
     simulation_field_table,
     simulation_table,
 )
-from app.domain.farm import CreateFarmRequest, Farm, UpdateFarmRequest
+from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.field import (
     CreateFieldRequest,
     FieldRecord,
@@ -32,6 +32,8 @@ from app.domain.simulation import (
     Simulation,
 )
 from app.services.scenario.candidate_evaluator import generate_candidates_for_field
+from app.services.scenario.field_history_evaluator import evaluate_real_history_for_field
+from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.soil.jbnr import FALLBACK_JBNR
 
 
@@ -54,6 +56,120 @@ def _jbnr_for_imk_id(session: Session, imk_id: int | None) -> int:
         select(registry_field_table.c.jbnr).where(registry_field_table.c.imk_id == imk_id),
     ).scalar_one_or_none()
     return jbnr if jbnr is not None else FALLBACK_JBNR
+
+
+def _registry_context_for_imk_id(session: Session, imk_id: int | None):
+    """Rå registry_field-kontekst (jbnr/goedningsregion/oeko/crop_history) for
+    en imk_id — delt grundlag for både "Aktuel"-beregningen og
+    real_history-opslaget til 2027/2028's bagudkig i sædskifte-scenarier.
+    Returnerer None hvis imk_id mangler eller ikke findes.
+    """
+    if imk_id is None:
+        return None
+    return session.execute(
+        select(
+            registry_field_table.c.jbnr,
+            registry_field_table.c.goedningsregion,
+            registry_field_table.c.oeko,
+            registry_field_table.c.kvotegivende,
+            registry_field_table.c.crop_history,
+        ).where(registry_field_table.c.imk_id == imk_id),
+    ).first()
+
+
+def _real_history_for_imk_id(session: Session, imk_id: int | None) -> dict | None:
+    """real_history-dict (jf. historisk_goedning.real_history_lookback) for en
+    imk_id, eller None hvis marken ikke findes/mangler imk_id — kaldere skal
+    da falde tilbage til uændret cyklisk ombukning (real_history=None)."""
+    row = _registry_context_for_imk_id(session, imk_id)
+    if row is None:
+        return None
+    jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
+    return real_history_lookback(row.crop_history or {}, jbnr, row.goedningsregion, bool(row.oeko))
+
+
+def _aktuel_field_state(session: Session, imk_id: int | None, area_ha: float, retention: float | None) -> dict:
+    """"Aktuel"-tilstand (db2/n_load/leaching/fen) beregnet ud fra markens
+    egen ægte crop_history og den historiske gødningstildeling (Bilag 3) —
+    ingen scenarie/gødnings-slider involveret. Bruges ved "Tilføj marker" i
+    stedet for de hidtidige hardkodede 0'er.
+    """
+    fallback = {
+        "jbnr": FALLBACK_JBNR, "db2": 0.0, "n_load": 0.0, "leaching": 0.0, "fen": 0.0,
+        "crop_rotation": [], "kvotegivende": False,
+    }
+    row = _registry_context_for_imk_id(session, imk_id)
+    if row is None:
+        return fallback
+
+    jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
+    years = evaluate_real_history_for_field(
+        row.crop_history or {}, jbnr, row.goedningsregion, bool(row.oeko),
+    )
+    avg_leaching = sum(y.leaching_kg_n_ha for y in years) / len(years)
+    avg_db = sum(y.db_kr_ha for y in years) / len(years)
+    fen_values = [
+        y.db_detail["udbytte"] for y in years if y.db_detail.get("udbytteenhed") == "FE/ha"
+    ]
+    avg_fen = sum(fen_values) / len(years) if fen_values else 0.0
+
+    leaching_total = avg_leaching * area_ha
+    retention_factor = 1 - (retention or 0) / 100
+    return {
+        "jbnr": jbnr,
+        "db2": avg_db * area_ha,
+        "n_load": leaching_total * retention_factor,
+        "leaching": leaching_total,
+        "fen": avg_fen * area_ha,
+        # Ægte 2019-2026-afgrøder (samme 8 positioner som beregningen ovenfor)
+        # — vist i "Aktuel"-markoversigten med rigtige kalenderår, jf. bruger-
+        # ønske om at se historikken ligesom scenariernes fremadrettede år.
+        "crop_rotation": [y.year for y in years],
+        "kvotegivende": bool(row.kvotegivende),
+    }
+
+
+def get_farm_udledning_per_kystvandopland(
+    farm_id: str, email: str,
+) -> list[KystvandoplandUdledning] | None:
+    """Udledningskvote og beregnet udledning ("Aktuel", dvs. FieldRecord.n_load)
+    grupperet pr. kystvandopland — bekendtgørelsen opgør begge dele pr. opland,
+    aldrig samlet på tværs (se KystvandoplandUdledning). Marker uden imk_id
+    (fx manuelt tegnede) matcher ingen registry_field-række og indgår derfor
+    ikke i nogen gruppe, samme afgrænsning som den tidligere flade sum havde.
+    """
+    with SessionLocal() as session:
+        if not _farm_exists(session, farm_id, email):
+            return None
+
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    rf.kystvand_id,
+                    rf.kystvand_navn,
+                    COALESCE(SUM(rf.udledningskvote_mark_kgn), 0) AS kvote,
+                    COALESCE(SUM((f.data->>'n_load')::float), 0) AS udledning
+                FROM field f
+                JOIN registry_field rf ON rf.imk_id = (f.data->>'imk_id')::bigint
+                WHERE f.farm_id = :farm_id
+                GROUP BY rf.kystvand_id, rf.kystvand_navn
+                ORDER BY rf.kystvand_navn NULLS LAST, rf.kystvand_id NULLS LAST
+                """
+            ),
+            {"farm_id": farm_id},
+        ).all()
+
+        return [
+            KystvandoplandUdledning(
+                kystvand_id=row.kystvand_id,
+                kystvand_navn=row.kystvand_navn,
+                udledningskvote_kg_n=round(float(row.kvote), 1),
+                beregnet_udledning_kg_n=round(float(row.udledning), 1),
+                overholder=float(row.udledning) <= float(row.kvote),
+            )
+            for row in rows
+        ]
 
 
 def _member_exists(session: Session, farm_id: str, email: str) -> bool:
@@ -140,21 +256,6 @@ def get_farm(farm_id: str, email: str) -> Farm | None:
         return _get_farm(session, farm_id, email)
 
 
-def update_farm(farm_id: str, request: UpdateFarmRequest, email: str) -> Farm | None:
-    with SessionLocal.begin() as session:
-        farm = _get_farm(session, farm_id, email)
-        if farm is None:
-            return None
-
-        updated_farm = farm.model_copy(update=request.model_dump(), deep=True)
-        session.execute(
-            update(farm_table)
-            .where(farm_table.c.id == farm_id)
-            .values(data=_dump(updated_farm), updated_at=func.now()),
-        )
-        return updated_farm
-
-
 def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
         result = session.execute(
@@ -203,14 +304,19 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> Field
         field_id = existing.id if existing is not None else str(uuid4())
         field_data = request.model_dump()
 
+        aktuel = _aktuel_field_state(
+            session, request.imk_id, field_data["area_ha"], field_data.get("retention"),
+        )
+        field_data["crop_rotation"] = aktuel["crop_rotation"]
         field = FieldRecord(
             id=field_id,
             farm_id=farm_id,
-            db2=0,
-            n_load=0,
-            leaching=0,
-            fen=0,
-            jbnr=_jbnr_for_imk_id(session, request.imk_id),
+            db2=aktuel["db2"],
+            n_load=aktuel["n_load"],
+            leaching=aktuel["leaching"],
+            fen=aktuel["fen"],
+            jbnr=aktuel["jbnr"],
+            kvotegivende=aktuel["kvotegivende"],
             **field_data,
         )
 
@@ -309,13 +415,16 @@ def create_simulation(
 
             if request.saedskiftevarianter and request.n_norm_procenter:
                 jbnr = _jbnr_for_imk_id(session, copied_field.imk_id)
+                real_history = _real_history_for_imk_id(session, copied_field.imk_id)
                 candidates = generate_candidates_for_field(
                     request.saedskiftevarianter, request.n_norm_procenter, jbnr,
                     request.godning,
                     fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
+                    real_history=real_history,
                 )
                 field_candidates = SimulationFieldCandidates(
                     field_id=copied_field.id, jbnr=jbnr, candidates=candidates,
+                    real_history=real_history,
                 )
                 session.execute(
                     insert(simulation_field_candidates_table).values(
