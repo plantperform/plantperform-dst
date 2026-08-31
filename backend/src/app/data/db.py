@@ -45,6 +45,7 @@ registry_field_table = Table(
     Column("markblok", Text, nullable=True),
     Column("journalnr", Text, nullable=True),
     Column("kystvand_id", Integer, nullable=True, index=True),
+    Column("kystvand_navn", Text, nullable=True),
     Column("retention", Float, nullable=True),
     Column("jbnr", SmallInteger, nullable=True),
     Column("area_ha", Float, nullable=False),

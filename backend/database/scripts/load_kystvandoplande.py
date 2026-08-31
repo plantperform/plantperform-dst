@@ -1,11 +1,14 @@
 """Load the national Kystvandoplande (coastal-water-catchment) polygon layer
-into a staging table, then set each registry field's kystvand_id to the
-catchment covering the LARGEST share of the field's area (dominant-overlap —
-catchment boundaries don't meaningfully split a single field the way the
-udledningsgraense/jordbundskort layers do, so a plain lookup is enough here).
+into a staging table, then set each registry field's kystvand_id/kystvand_navn
+to the catchment covering the LARGEST share of the field's area
+(dominant-overlap — catchment boundaries don't meaningfully split a single
+field the way the udledningsgraense/jordbundskort layers do, so a plain
+lookup is enough here).
 
-Source: Kystvandoplande_VP3_II_2025.shp (EPSG:25832, 545 polygons, column
-"KystvandID").
+Source: Kystvandoplande_VP3_II_2025.shp (EPSG:25832, 545 polygons, columns
+"KystvandID" and "KystvandNa" — the catchment's real name, e.g. "Sejerø
+Bugt", used only to label the udledningskvote-per-kystvandopland breakdown;
+never loaded before this).
 """
 
 import csv
@@ -49,7 +52,7 @@ def csv_line(row: tuple[object, ...]) -> str:
 
 
 def load_staging_table(dsn: str) -> None:
-    frame = read_dataframe(str(SHP_PATH), columns=["KystvandID"])
+    frame = read_dataframe(str(SHP_PATH), columns=["KystvandID", "KystvandNa"])
     frame = gpd.GeoDataFrame(frame, geometry="geometry", crs=frame.crs).to_crs(4326)
     print(f"Loading {len(frame):,} Kystvandoplande polygons into staging", flush=True)
 
@@ -60,12 +63,13 @@ def load_staging_table(dsn: str) -> None:
                 f"""
                 CREATE TABLE {STAGING_TABLE} (
                     kystvand_id integer NOT NULL,
+                    kystvand_navn text,
                     geom geometry(MULTIPOLYGON, 4326) NOT NULL
                 )
                 """
             )
             with cursor.copy(
-                f"COPY {STAGING_TABLE} (kystvand_id, geom) FROM STDIN WITH (FORMAT CSV)"
+                f"COPY {STAGING_TABLE} (kystvand_id, kystvand_navn, geom) FROM STDIN WITH (FORMAT CSV)"
             ) as copy:
                 loaded = 0
                 for row in frame.itertuples(index=False):
@@ -73,7 +77,11 @@ def load_staging_table(dsn: str) -> None:
                         continue
                     copy.write(
                         csv_line(
-                            (int(row.KystvandID), f"SRID=4326;{to_multipolygon_wkt(row.geometry)}")
+                            (
+                                int(row.KystvandID),
+                                row.KystvandNa,
+                                f"SRID=4326;{to_multipolygon_wkt(row.geometry)}",
+                            )
                         )
                     )
                     loaded += 1
@@ -92,7 +100,7 @@ def load_staging_table(dsn: str) -> None:
 
 
 def compute_dominant_kystvand_id(dsn: str) -> None:
-    print("Computing dominant-overlap kystvand_id onto registry_field...", flush=True)
+    print("Computing dominant-overlap kystvand_id/kystvand_navn onto registry_field...", flush=True)
     start = time.monotonic()
 
     with psycopg.connect(dsn) as connection:
@@ -103,18 +111,19 @@ def compute_dominant_kystvand_id(dsn: str) -> None:
                     SELECT
                         rf.imk_id,
                         s.kystvand_id,
+                        s.kystvand_navn,
                         ST_Area(ST_Intersection(rf.geom, s.geom)) AS overlap_area
                     FROM registry_field rf
                     JOIN {STAGING_TABLE} s ON ST_Intersects(rf.geom, s.geom)
                 ),
                 best AS (
-                    SELECT DISTINCT ON (imk_id) imk_id, kystvand_id
+                    SELECT DISTINCT ON (imk_id) imk_id, kystvand_id, kystvand_navn
                     FROM overlap_candidates
                     WHERE overlap_area > 0
                     ORDER BY imk_id, overlap_area DESC
                 )
                 UPDATE registry_field rf
-                SET kystvand_id = best.kystvand_id
+                SET kystvand_id = best.kystvand_id, kystvand_navn = best.kystvand_navn
                 FROM best
                 WHERE rf.imk_id = best.imk_id
                 """
