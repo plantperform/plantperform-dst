@@ -28,10 +28,6 @@ const fmtSigned = (value: unknown, digits = 3) => {
   return `${n >= 0 ? '+' : ''}${fmt(n, digits)}`
 }
 
-// Fælles udledningsformel: L_nuar (kg N/ha, efter virkemidler) reduceres med
-// retention (procent, null = ikke sat = regn med 0%) og ganges med markens
-// areal. Bruges af KeyMetricsSection, CalculationStepsSection og
-// LeachingDetailSection, så de tre steder aldrig kan regne forskelligt.
 const beregnUdledning = (
   lNuar: number,
   retention: number | null,
@@ -79,21 +75,47 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </h4>
 )
 
-const MetricTile = ({
+const BigMetricTile = ({
   label,
   value,
   caption,
 }: {
   label: string
   value: string
-  caption?: string
+  caption: string
 }) => (
-  <div className="rounded-md border bg-background px-2.5 py-1.5">
-    <p className="text-[11px] leading-tight text-muted-foreground">{label}</p>
-    <p className="text-sm font-semibold leading-tight tabular-nums">{value}</p>
-    {caption ? (
-      <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{caption}</p>
-    ) : null}
+  <div className="rounded-xl border bg-background p-4">
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+    </p>
+    <p className="mt-1 text-[22px] font-bold leading-tight tabular-nums">{value}</p>
+    <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
+  </div>
+)
+
+const DefinitionRow = ({
+  label,
+  value,
+  title,
+  muted,
+}: {
+  label: string
+  value: string
+  title?: string
+  muted?: boolean
+}) => (
+  <div
+    className="flex items-baseline justify-between gap-3 border-t py-1.5 first:border-t-0"
+    title={title}
+  >
+    <span className={`text-muted-foreground ${muted ? 'text-xs' : 'text-sm'}`}>{label}</span>
+    <span
+      className={`shrink-0 tabular-nums ${
+        muted ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+      }`}
+    >
+      {value}
+    </span>
   </div>
 )
 
@@ -129,60 +151,72 @@ const KeyMetricsSection = ({
   const udvaskning = year.leachingKgNHa
   const { udledningPrHa: udledning } = beregnUdledning(udvaskning, retention, areaHa)
 
+  const retentionTekst =
+    retention === null
+      ? 'retention ikke sat, regner med 0%'
+      : `${fmt(retention, 1)}% tilbageholdes (retention)`
+
+  const tonTotal = year.husdyrgodningTonPrHa * areaHa
+  const tonPrHa = year.husdyrgodningTonPrHa
+  const visFoderenheder = isFoderafgroede && udbytte > 0
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      <MetricTile
-        label="Udledning"
-        value={`${fmt(udledning, 1)} kg N/ha`}
-        caption={
-          retention === null
-            ? 'Retention ikke sat — bruger 0%'
-            : `Efter ${fmt(retention, 1)}% retention`
-        }
-      />
-      <MetricTile label="DB" value={`${fmt(year.dbKrHa, 0)} kr/ha`} />
-      <MetricTile label="Udvaskning" value={`${fmt(udvaskning, 1)} kg N/ha`} />
-      <MetricTile
-        label="Afgrøde-norm"
-        value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
-        caption={
-          reduceretNorm !== null
-            ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
-            : undefined
-        }
-      />
-      <MetricTile
-        label="Tilgængeligt N"
-        value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
-        caption={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
-      />
-      <MetricTile label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
-      <MetricTile
-        label="Tildelt gødning"
-        value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
-        caption={
-          `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
-          (organiskBundet > 0
-            ? ` — plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
-            : '')
-        }
-      />
-      <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
-      <MetricTile
-        label="Foderenheder"
-        value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
-      />
-      <MetricTile
-        label="Ton gødning"
-        value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
-        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha`}
-      />
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <BigMetricTile
+          label="Udledning"
+          value={`${fmt(udledning, 1)} kg N/ha`}
+          caption={`Udvaskning ${fmt(udvaskning, 1)} kg N/ha - ${retentionTekst}`}
+        />
+        <BigMetricTile
+          label="DB2"
+          value={`${fmt(year.dbKrHa, 0)} kr/ha`}
+          caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte —'}
+        />
+      </div>
+
+      <div className="rounded-md border bg-background px-3 py-2">
+        <SectionHeading>Gødning</SectionHeading>
+        <div className="mt-1">
+          <DefinitionRow
+            label="Afgrøde-norm"
+            value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
+            title={
+              reduceretNorm !== null
+                ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
+                : undefined
+            }
+          />
+          <DefinitionRow
+            label="Tilgængeligt N"
+            value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
+            title={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
+          />
+          <DefinitionRow label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
+          <DefinitionRow
+            label="Tildelt gødning"
+            value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
+            title={
+              `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
+              (organiskBundet > 0
+                ? ` - plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
+                : '')
+            }
+          />
+          {visFoderenheder ? (
+            <DefinitionRow label="Foderenheder" value={`${fmt(udbytte, 0)} FE/ha`} />
+          ) : null}
+          <DefinitionRow
+            label="Ton gødning"
+            value={`${fmt(tonTotal, 1)} ton - ${fmt(tonPrHa, 2)} ton/ha`}
+            muted
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
-// En linje i den trinvise gennemgang: forklarende tekst til venstre,
-// det tilhørende tal højrestillet - enkel kvittering uden farvede bokse.
 const StepRow = ({
   text,
   value,
@@ -200,11 +234,6 @@ const StepRow = ({
   </div>
 )
 
-// Lag 2, trinvis udgave - samme tal som formel-gennemgangen nedenfor
-// (bag "Vis formler og mellemregninger"), men fortalt i almindeligt
-// landmandssprog uden regressionsled, græske bogstaver eller forkortelser
-// som EEA/EMA/ETS/EPJ/NUAR. Læser direkte fra de samme detail-felter som
-// LeachingDetailSection, så tallene aldrig kan løbe fra hinanden.
 const CalculationStepsSection = ({
   detail,
   areaHa,
@@ -670,35 +699,46 @@ type RotationYearsDetailProps = {
   years: RotationCandidateYearResult[]
   areaHa: number
   retention: number | null
+  selectedYearIndex?: number
+  hideYearSelector?: boolean
 }
 
-export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsDetailProps) => {
-  const [selectedYear, setSelectedYear] = useState(0)
+export const RotationYearsDetail = ({
+  years,
+  areaHa,
+  retention,
+  selectedYearIndex,
+  hideYearSelector = false,
+}: RotationYearsDetailProps) => {
+  const [internalSelectedYear, setInternalSelectedYear] = useState(0)
   const [showFullDetail, setShowFullDetail] = useState(false)
   const [showFormulas, setShowFormulas] = useState(false)
 
+  const selectedYear = selectedYearIndex ?? internalSelectedYear
   const year = years[Math.min(selectedYear, years.length - 1)]
   if (!year) return null
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {years.map((y, index) => (
-          <button
-            key={index}
-            type="button"
-            onClick={() => setSelectedYear(index)}
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              index === selectedYear
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'bg-background hover:bg-muted'
-            }`}
-          >
-            År {index + 1} — {y.year.afgrodeNavn}
-            {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
-          </button>
-        ))}
-      </div>
+      {!hideYearSelector ? (
+        <div className="flex flex-wrap gap-2">
+          {years.map((y, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => setInternalSelectedYear(index)}
+              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                index === selectedYear
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-muted'
+              }`}
+            >
+              År {index + 1} — {y.year.afgrodeNavn}
+              {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <KeyMetricsSection year={year} areaHa={areaHa} retention={retention} />
 

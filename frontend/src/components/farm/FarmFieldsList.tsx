@@ -9,16 +9,8 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
+import { ChevronRight, Columns3, Lock } from 'lucide-react'
 import {
-  ChevronDown,
-  ChevronRight,
-  Columns3,
-  Lock,
-  LockOpen,
-  Trash2,
-} from 'lucide-react'
-import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -30,13 +22,13 @@ import { mutate } from 'swr'
 import { farmFieldsKey, simulationFieldsKey, useFarmFields } from '@/api/hooks'
 import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
-import type {
-  FieldsSortDirection,
-  FieldsSortKey,
-  FieldsSortState,
+import {
+  DEFAULT_FIELDS_SORT,
+  type FieldsSortDirection,
+  type FieldsSortKey,
+  type FieldsSortState,
 } from '@/components/farm/field-list-state'
-import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
-import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
+import { MarkPanel } from '@/components/farm/MarkPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -76,23 +68,18 @@ import {
   CROP_YEAR_COVER_CROP_BORDER,
   getFieldQuotaStatus,
   isFieldCalculated,
+  resolveFarmQuota,
   ROTATION_START_CALENDAR_YEAR,
   type QuotaStatus,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
-// Ekstra klassenavne pr. kolonne, så headeren, cellerne og footer-cellen
-// kan dele samme layout uden at hver renderfunktion skal gentage dem.
 declare module '@tanstack/react-table' {
-  // Generiske parametre er påkrævet af TanStack's egen interface-signatur
-  // for at kunne udvide den korrekt, selvom de ikke bruges her.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     headerClassName?: string
     cellClassName?: string
-    // Vises som tekst for kolonnens checkboks i "Kolonner"-vælgeren. Kun
-    // sat på de kolonner der reelt er valgfrie (alt undtagen Mark, Areal og
-    // Handlinger).
     toggleLabel?: string
   }
 }
@@ -100,10 +87,6 @@ declare module '@tanstack/react-table' {
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
 
-// Sædskiftecellens korte tekst ved siden af årstjernene: første ord af
-// hvert unikt afgrødenavn i rotationen, højst to, med "m.fl." hvis marken
-// har flere end to forskellige afgrøder. Fuldt navn pr. år findes stadig i
-// title-tooltippen på det enkelte årsfirkant.
 const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => {
   const seenNames: string[] = []
   for (const year of rotation) {
@@ -115,9 +98,6 @@ const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => 
   return seenNames.length > 2 ? `${firstWords.join(' + ')} m.fl.` : firstWords.join(' + ')
 }
 
-// Statuskolonnens visuelle byggesten pr. niveau. Farverne matcher den
-// godkendte mockup (prikker og badge) og deles ikke med field-domain, da de
-// er ren visning og ikke forretningslogik.
 const QUOTA_STATUS_DOT_COLOR: Record<QuotaStatusLevel, string> = {
   ok: '#16a34a',
   near: '#d97706',
@@ -170,9 +150,13 @@ const QuotaStatusIndicator = ({
 
 const renderQuotaStatus = (
   status: QuotaStatus,
-  options: { bold?: boolean; uncalculatedCount?: number } = {},
+  options: {
+    bold?: boolean
+    uncalculatedCount?: number
+    basisLabel?: string
+  } = {},
 ) => {
-  const { bold = false, uncalculatedCount = 0 } = options
+  const { bold = false, uncalculatedCount = 0, basisLabel } = options
 
   if (status.level === 'uncalculated') {
     return (
@@ -189,22 +173,18 @@ const renderQuotaStatus = (
     )
   }
 
-  // "Over" er en gyldig konklusion selv på et delvist grundlag (en delsum
-  // kan kun vokse), så den får samme "(N ikke beregnet)"-note som den
-  // neutrale 'partial'-tilstand - præcis som EmissionStatusBar i
-  // FarmInspector.tsx. For et fuldt beregnet grundlag er
-  // uncalculatedCount 0, og noten forsvinder derfor af sig selv.
-  const partialNote =
+  const notes: string[] = []
+  if (basisLabel) notes.push(basisLabel)
+  if (
     (status.level === 'over' || status.level === 'partial') &&
     uncalculatedCount > 0
-      ? ` (${uncalculatedCount} ikke beregnet)`
-      : ''
-  const amountText = `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N${partialNote}`
+  ) {
+    notes.push(`${uncalculatedCount} ikke beregnet`)
+  }
+  const noteText = notes.length > 0 ? ` (${notes.join(', ')})` : ''
+  const amountText = `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N${noteText}`
 
   if (status.level === 'partial') {
-    // Delsummen ligger under kvoten, men grundlaget er ikke fuldt endnu -
-    // en grøn/gul konklusion ville ikke have dækning, så vi viser en
-    // neutral, grå tekst i stedet (uden badge).
     return (
       <QuotaStatusIndicator level={status.level} bold={bold}>
         <span className="text-muted-foreground">{amountText}</span>
@@ -219,8 +199,6 @@ const renderQuotaStatus = (
   )
 }
 
-// Kolonner der kan slås til/fra i "Kolonner"-vælgeren - alt undtagen Mark,
-// Areal og Handlinger. Rækkefølgen her styrer også rækkefølgen i dropdownen.
 const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
   'db2',
@@ -235,9 +213,6 @@ const OPTIONAL_COLUMN_IDS = [
   'jbnr',
 ]
 
-// Standardsynlighed pr. visning. Simulering fremhæver DB2 og udledning mod
-// kvote; Aktuel (hvor intet er beregnet endnu) viser i stedet markens kvote
-// og jordbund. Alt andet er skjult indtil brugeren selv slår det til.
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
   'db2',
@@ -258,7 +233,6 @@ const buildDefaultColumnVisibility = (isSimulationView: boolean): VisibilityStat
   )
 }
 
-// Marknavne som "10-0" skal komme efter "9-0", ikke før "6-0" - deraf numeric.
 const nameCollator = new Intl.Collator('da-DK', {
   numeric: true,
   sensitivity: 'base',
@@ -344,10 +318,6 @@ const compareFields = (
   return idCollator.compare(left.id, right.id)
 }
 
-// Header-indhold for en sorterbar kolonne. Sorteringstilstanden læses fra
-// TanStack's kolonne-API (afledt af sort-proppen), men selve klik-toggeringen
-// styres eksplicit her, så den matcher den hidtidige to-trins asc/desc-adfærd
-// (ingen "usorteret" mellemtrin), uanset TanStack's egne type-heuristikker.
 const SortableColumnHeaderContent = ({
   label,
   column,
@@ -381,6 +351,7 @@ type FarmFieldsListProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView?: boolean
+  farmQuotaKgN: number
   simulationId?: string
   simulation?: Simulation
   sort: FieldsSortState
@@ -389,13 +360,11 @@ type FarmFieldsListProps = {
   onError: (message: string | null) => void
 }
 
-const NOT_YET_AVAILABLE_TITLE =
-  "Ikke tilgængelig i det nye optimeringsflow — sædskiftet genereres nu som scenarie-kandidater ved 'Opret scenarie', og Optimér vælger automatisk den bedste blandt dem."
-
 export const FarmFieldsList = ({
   farmId,
   fields,
   isSimulationView = false,
+  farmQuotaKgN,
   simulationId,
   simulation,
   sort,
@@ -405,11 +374,7 @@ export const FarmFieldsList = ({
 }: FarmFieldsListProps) => {
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
-  const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null)
-  const [manualEditFieldId, setManualEditFieldId] = useState<string | null>(
-    null,
-  )
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [confirmDetachField, setConfirmDetachField] =
     useState<FieldRecord | null>(null)
 
@@ -418,8 +383,9 @@ export const FarmFieldsList = ({
     [fields, sort],
   )
 
-  // Bruges både til "Sædskifte"-kolonnens årsspænd i headeren og til at
-  // afgøre om det er meningsfuldt at vise et interval frem for et enkelt år.
+  const selectedField =
+    fields.find((field) => field.id === selectedFieldId) ?? null
+
   const maxYears = Math.max(
     0,
     ...fields.map((field) => field.cropRotation.length),
@@ -431,14 +397,6 @@ export const FarmFieldsList = ({
     [fields, liveFields],
   )
 
-  // DB2, udledning, udvaskning og foderenheder summeres kun over marker der
-  // rent faktisk er beregnet - ellers ville et par u-beregnede marker med
-  // stiltiende 0-værdier trække totalen ned uden at brugeren kan se det.
-  // Er ingen marker beregnet (calculatedCount === 0), er summen 0 kr/0 kg N
-  // uden at betyde noget, og footerne for de fire kolonner viser derfor
-  // samme ærlige "ikke beregnet"-markering som cellerne i stedet for et
-  // falsk nul. Areal og markkvoter findes uafhængigt af beregning og
-  // tælles derfor altid med, jf. delleverance C.
   const totals = useMemo(() => {
     const calculatedFields = fields.filter((field) =>
       isFieldCalculated(field, isSimulationView),
@@ -461,20 +419,27 @@ export const FarmFieldsList = ({
     }
   }, [fields, isSimulationView])
 
-  // Farvepaletten til sædskiftets årstern er indekseret pr. unik afgrødekode
-  // i hele bedriften (ikke pr. mark), så samme afgrøde altid får samme
-  // farve i tabellen.
+  const resolvedQuota = useMemo(
+    () => resolveFarmQuota(farmQuotaKgN, totals.udledningskvoteMarkKgn),
+    [farmQuotaKgN, totals.udledningskvoteMarkKgn],
+  )
+
   const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
 
-  // Kolonnevisning er ren lokal React-state (nulstilles ved reload, jf.
-  // opgavebeskrivelsen). Simulering og Aktuel har hver deres standardsæt,
-  // så et skift af visning nulstiller til den nye visnings standard i
-  // stedet for at beholde et valg der ikke giver mening i den nye kontekst.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => buildDefaultColumnVisibility(isSimulationView),
   )
   useEffect(() => {
-    setColumnVisibility(buildDefaultColumnVisibility(isSimulationView))
+    const nextVisibility = buildDefaultColumnVisibility(isSimulationView)
+    setColumnVisibility(nextVisibility)
+    if (OPTIONAL_COLUMN_IDS.includes(sort.key) && !nextVisibility[sort.key]) {
+      onSortChange(DEFAULT_FIELDS_SORT)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSimulationView])
+
+  useEffect(() => {
+    setSelectedFieldId(null)
   }, [isSimulationView])
 
   const detachFarmField = useCallback(
@@ -493,8 +458,6 @@ export const FarmFieldsList = ({
     [farmId, onError],
   )
 
-  // Ingen eksterne afhængigheder ud over den mark der undersøges, så
-  // funktionsreferencen kan holdes helt stabil.
   const isFieldLocked = useCallback(
     (field: FieldRecord) =>
       field.allowedRotationIds.length === 1 &&
@@ -536,48 +499,8 @@ export const FarmFieldsList = ({
     [farmId, simulationId, isFieldLocked, onError],
   )
 
-  // Kolonnedefinitionerne genopbygges kun når noget de faktisk bruger
-  // ændrer sig (isSimulationView, simulationId, årskolonnernes antal,
-  // totalrækkens summer og den lokale UI-tilstand cellerne læser).
-  // Handlerne ovenfor er stabiliseret med useCallback, så de kan indgå i
-  // afhængighedslisten uden at tvinge en genopbygning hver render.
   const columns = useMemo<ColumnDef<FieldRecord, unknown>[]>(() => {
     const list: ColumnDef<FieldRecord, unknown>[] = []
-
-    if (isSimulationView) {
-      list.push({
-        id: 'expand',
-        header: () => <span className="sr-only">Beregningsdetaljer</span>,
-        cell: ({ row }) => {
-          const field = row.original
-          const canShowDetail = isSimulationView && field.rotationId !== null
-          if (!canShowDetail) return null
-          const isExpanded = expandedFieldId === field.id
-          return (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={() => setExpandedFieldId(isExpanded ? null : field.id)}
-              aria-label={
-                isExpanded
-                  ? 'Skjul beregningsdetaljer'
-                  : 'Vis beregningsdetaljer'
-              }
-              title="Vis beregningsgennemgang for udvaskning og dækningsbidrag pr. år"
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              )}
-            </Button>
-          )
-        },
-        enableSorting: false,
-        meta: { headerClassName: 'w-8 px-2 py-3', cellClassName: 'px-2 py-3' },
-      })
-    }
 
     list.push(
       {
@@ -585,7 +508,23 @@ export const FarmFieldsList = ({
         header: ({ column }) => (
           <SortableColumnHeaderContent label="Mark" column={column} />
         ),
-        cell: ({ row }) => row.original.name,
+        cell: ({ row }) => {
+          const rowField = row.original
+          const locked = isFieldLocked(rowField)
+          return (
+            <span className="flex items-center gap-1.5">
+              <span>{rowField.name}</span>
+              {locked ? (
+                <span title="Marken er låst til sit sædskifte - Optimér kan ikke ændre den.">
+                  <Lock
+                    className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                    aria-hidden="true"
+                  />
+                </span>
+              ) : null}
+            </span>
+          )
+        },
         footer: () =>
           totals.uncalculatedCount > 0
             ? `I alt (${totals.uncalculatedCount} ikke beregnet)`
@@ -732,14 +671,18 @@ export const FarmFieldsList = ({
             {
               level: aggregateQuotaStatusLevel(
                 totals.nLoad,
-                totals.udledningskvoteMarkKgn,
+                resolvedQuota.quotaKgn,
                 totals.calculatedCount,
                 fields.length,
               ),
               nLoad: totals.nLoad,
-              quotaKgn: totals.udledningskvoteMarkKgn,
+              quotaKgn: resolvedQuota.quotaKgn,
             },
-            { bold: true, uncalculatedCount: totals.uncalculatedCount },
+            {
+              bold: true,
+              uncalculatedCount: totals.uncalculatedCount,
+              basisLabel: resolvedQuota.basis,
+            },
           ),
         enableSorting: false,
         meta: {
@@ -863,9 +806,6 @@ export const FarmFieldsList = ({
         ),
         cell: ({ row }) => {
           const field = row.original
-          // 0 er backend-defaulten for registermarker uden en sat
-          // udledningsgrænse - ikke et reelt "0 kg N i kvote". Vis det
-          // derfor som manglende data, uden den vildledende kg N/ha-linje.
           if (field.udledningskvoteMarkKgn === 0) {
             return <span className="text-muted-foreground">Ingen data</span>
           }
@@ -951,129 +891,27 @@ export const FarmFieldsList = ({
           toggleLabel: 'JB nr.',
         },
       },
-      {
-        id: 'actions',
-        header: () => 'Handlinger',
-        cell: ({ row }) => {
-          const field = row.original
-          const isEditing = editingFieldId === field.id
-          const canEdit = isSimulationView && Boolean(simulationId)
-          return (
-            <div className="flex flex-nowrap justify-end gap-2">
-              <Button
-                size="sm"
-                variant={isEditing ? 'default' : 'outline'}
-                onClick={() => setEditingFieldId(isEditing ? null : field.id)}
-                disabled={!canEdit && !isEditing}
-                title={
-                  canEdit
-                    ? undefined
-                    : 'Opret en simulering for at redigere sædskifter.'
-                }
-              >
-                {isEditing ? 'Færdig' : 'Rediger'}
-              </Button>
-              {isEditing && canEdit ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={field.rotationId === null}
-                    onClick={() => setManualEditFieldId(field.id)}
-                    title={
-                      field.rotationId === null
-                        ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
-                        : undefined
-                    }
-                  >
-                    Rediger manuelt
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled
-                    title={NOT_YET_AVAILABLE_TITLE}
-                  >
-                    Tilladte sædskifter
-                  </Button>
-                </>
-              ) : null}
-              {canEdit ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void toggleFieldLock(field)}
-                  disabled={
-                    field.rotationId === null || lockingFieldId === field.id
-                  }
-                  aria-label={isFieldLocked(field) ? 'Lås op' : 'Lås'}
-                  className={
-                    isFieldLocked(field)
-                      ? 'h-8 w-8 p-0 bg-amber-100 text-amber-700'
-                      : 'h-8 w-8 p-0 text-muted-foreground'
-                  }
-                  title={
-                    isFieldLocked(field)
-                      ? 'Marken er låst til det valgte sædskifte — Optimér ændrer den ikke. Klik for at låse op.'
-                      : 'Marken er ikke låst — Optimér kan frit ændre den. Klik for at låse.'
-                  }
-                >
-                  {isFieldLocked(field) ? (
-                    <Lock className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <LockOpen className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </Button>
-              ) : null}
-              {!isSimulationView ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmDetachField(field)}
-                  disabled={detachingFieldId === field.id}
-                  aria-label="Fjern"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:bg-red-50 hover:text-red-700"
-                  title={
-                    detachingFieldId === field.id
-                      ? 'Fjerner...'
-                      : 'Fjern marken fra bedriften.'
-                  }
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              ) : null}
-            </div>
-          )
-        },
-        enableSorting: false,
-        meta: {
-          headerClassName: 'px-4 py-3 text-right font-medium whitespace-normal',
-          cellClassName: 'whitespace-nowrap px-4 py-3 text-right',
-        },
-      },
     )
 
-    return list
-  }, [
-    isSimulationView,
-    simulationId,
-    maxYears,
-    fields,
-    cropColorMap,
-    totals,
-    expandedFieldId,
-    editingFieldId,
-    lockingFieldId,
-    detachingFieldId,
-    toggleFieldLock,
-    isFieldLocked,
-  ])
+    list.push({
+      id: 'rowAffordance',
+      header: () => null,
+      cell: () => (
+        <ChevronRight
+          className="h-4 w-4 text-muted-foreground/60"
+          aria-hidden="true"
+        />
+      ),
+      enableSorting: false,
+      meta: {
+        headerClassName: 'w-8 px-2 py-3',
+        cellClassName: 'w-8 px-2 py-3 text-right',
+      },
+    })
 
-  // Sorteringen er styret fra parent (sort/onSortChange). TanStack's eget
-  // sorteringsstate afledes af prop'en her og mappes tilbage til det samme
-  // prop-format i onSortingChange, så FarmInspector ikke skal ændres.
-  // Selve rækkefølgen beregnes fortsat manuelt via compareFields ovenfor
-  // (manualSorting), bl.a. for at bevare den særlige tiebreak-logik.
+    return list
+  }, [isSimulationView, maxYears, fields, cropColorMap, totals, resolvedQuota, isFieldLocked])
+
   const sorting: SortingState = useMemo(
     () => [{ id: sort.key, desc: sort.direction === 'desc' }],
     [sort],
@@ -1099,8 +937,6 @@ export const FarmFieldsList = ({
     getCoreRowModel: getCoreRowModel(),
   })
 
-  // De valgfrie kolonner i "Kolonner"-dropdownen, i den rækkefølge de er
-  // defineret ovenfor - alt undtagen Mark, Areal og Handlinger.
   const optionalColumns = table
     .getAllLeafColumns()
     .filter((column) => OPTIONAL_COLUMN_IDS.includes(column.id))
@@ -1156,9 +992,12 @@ export const FarmFieldsList = ({
                   key={column.id}
                   checked={column.getIsVisible()}
                   onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked) => {
                     column.toggleVisibility(Boolean(checked))
-                  }
+                    if (!checked && column.id === sort.key) {
+                      onSortChange(DEFAULT_FIELDS_SORT)
+                    }
+                  }}
                 >
                   {column.columnDef.meta?.toggleLabel ?? column.id}
                 </DropdownMenuCheckboxItem>
@@ -1206,62 +1045,45 @@ export const FarmFieldsList = ({
                 {table.getRowModel().rows.map((row) => {
                   const field = row.original
                   const isChanged = changedFields.has(field.id)
-                  const isExpanded = expandedFieldId === field.id
+                  const isSelected = selectedFieldId === field.id
+                  const openPanel = () =>
+                    setSelectedFieldId(isSelected ? null : field.id)
                   return (
-                    <Fragment key={field.id}>
-                      <TableRow
-                        className={isChanged ? 'bg-blue-50' : undefined}
-                      >
-                        {row.getVisibleCells().map((cell) => {
-                          const meta = cell.column.columnDef.meta
-                          return (
-                            <TableCell
-                              key={cell.id}
-                              className={meta?.cellClassName}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </TableCell>
-                          )
-                        })}
-                      </TableRow>
-                      {isExpanded && simulationId ? (
-                        <TableRow>
+                    <TableRow
+                      key={field.id}
+                      onClick={openPanel}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        openPanel()
+                      }}
+                      tabIndex={0}
+                      aria-label={`Vis detaljer for mark ${field.name}`}
+                      data-selected={isSelected}
+                      className={cn(
+                        'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                        isSelected
+                          ? 'bg-[#f4f7ef]'
+                          : isChanged
+                            ? 'bg-blue-50'
+                            : undefined,
+                      )}
+                    >
+                      {row.getVisibleCells().map((cell) => {
+                        const meta = cell.column.columnDef.meta
+                        return (
                           <TableCell
-                            colSpan={table.getVisibleLeafColumns().length}
-                            className="p-0"
+                            key={cell.id}
+                            className={meta?.cellClassName}
                           >
-                            <RotationDetailPanel
-                              farmId={farmId}
-                              simulationId={simulationId}
-                              fieldId={field.id}
-                              rotationId={field.rotationId}
-                              areaHa={field.areaHa}
-                              retention={field.retention}
-                            />
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
                           </TableCell>
-                        </TableRow>
-                      ) : null}
-                      {simulationId &&
-                      simulation &&
-                      manualEditFieldId === field.id ? (
-                        // Kun den åbne rækkes dialog mountes, i stedet for en
-                        // dialog pr. række som før.
-                        <ManualRotationEditor
-                          farmId={farmId}
-                          simulationId={simulationId}
-                          simulation={simulation}
-                          field={field}
-                          open
-                          onOpenChange={(nextOpen) =>
-                            setManualEditFieldId(nextOpen ? field.id : null)
-                          }
-                          onError={onError}
-                        />
-                      ) : null}
-                    </Fragment>
+                        )
+                      })}
+                    </TableRow>
                   )
                 })}
               </TableBody>
@@ -1291,6 +1113,24 @@ export const FarmFieldsList = ({
           </div>
         </CardContent>
       </Card>
+      {selectedField ? (
+        <MarkPanel
+          key={selectedField.id}
+          farmId={farmId}
+          field={selectedField}
+          isSimulationView={isSimulationView}
+          simulationId={simulationId}
+          simulation={simulation}
+          cropColorMap={cropColorMap}
+          isLocked={isFieldLocked(selectedField)}
+          isLockingInProgress={lockingFieldId === selectedField.id}
+          onToggleLock={() => void toggleFieldLock(selectedField)}
+          isDetaching={detachingFieldId === selectedField.id}
+          onRequestDetach={() => setConfirmDetachField(selectedField)}
+          onClose={() => setSelectedFieldId(null)}
+          onError={onError}
+        />
+      ) : null}
       <Dialog
         open={confirmDetachField !== null}
         onOpenChange={(open) => {

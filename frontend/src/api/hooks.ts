@@ -1,4 +1,4 @@
-import useSWR from 'swr'
+import useSWR, { preload } from 'swr'
 
 import { fetcher } from '@/api/client'
 import type {
@@ -153,6 +153,12 @@ export const afgrodeKoderKey = (farmId?: string) => {
 
 export const useAfgrodeKoder = (farmId?: string) =>
   useSWR<AfgrodeKodeOption[]>(afgrodeKoderKey(farmId), fetcher)
+
+export const preloadRotationCandidateCatalog = (farmId: string) => {
+  void preload(rotationKategorierKey(farmId), fetcher)
+  void preload(rotationCandidatesKey(farmId), fetcher)
+  void preload(afgrodeKoderKey(farmId), fetcher)
+}
 
 export const godningsPresetsKey = (farmId?: string) => {
   if (!farmId) return null

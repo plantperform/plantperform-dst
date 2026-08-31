@@ -251,10 +251,6 @@ export const changedFieldIds = (
   return changed
 }
 
-// En marks tal (DB2, udledning, udvaskning, foderenheder) er kun troværdige
-// når marken rent faktisk er beregnet. I en simulering betyder det et sat
-// rotationId. I Aktuel-visningen har marker ikke noget rotationId (det er
-// altid null der), så signalet i stedet er at alle fire nøgletal er 0.
 export const isFieldCalculated = (
   field: FieldRecord,
   isSimulationView: boolean,
@@ -268,11 +264,6 @@ export const isFieldCalculated = (
   )
 }
 
-// Statuskolonnens/-kortets tærskel for "tæt på kvoten" - en mark under
-// tærsklen er grøn, fra tærsklen til og med 1,0 er den gul, og over 1,0 er
-// den rød. Delt mellem markoversigtens statuskolonne og markpanelets
-// statuskort, så de aldrig kan komme til at vise forskellige farver for
-// samme mark.
 export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
 
 export type QuotaStatusLevel =
@@ -283,9 +274,6 @@ export type QuotaStatusLevel =
   | 'noData'
   | 'partial'
 
-// Ren beregning på tal, uden kendskab til FieldRecord - så både
-// markoversigtens per-mark-status og dens totalrække (der arbejder på
-// summerede tal) kan bruge den samme farvelogik.
 export const quotaStatusLevel = (
   nLoad: number,
   quotaKgn: number,
@@ -299,14 +287,6 @@ export const quotaStatusLevel = (
   return 'ok'
 }
 
-// Status for en SUM af flere marker (fx markoversigtens totalrække). Må
-// ALDRIG konkludere grønt eller gult på et delvist grundlag - så
-// EmissionStatusBar (FarmInspector.tsx) og denne totalrække aldrig kan
-// komme til at vise modstridende konklusioner på samme data. Er nogle men
-// ikke alle marker beregnet, er en "over grænsen"-konklusion stadig gyldig
-// (en delsum kan kun vokse når flere marker bliver beregnet), mens en
-// delsum under kvoten viser en neutral 'partial'-tilstand i stedet for en
-// grøn frikendelse uden dækning.
 export const aggregateQuotaStatusLevel = (
   nLoad: number,
   quotaKgn: number,
@@ -327,8 +307,21 @@ export type QuotaStatus = {
   quotaKgn: number
 }
 
-// Markens udledning målt mod dens kvote - bruges af markoversigtens
-// statuskolonne og genbruges af markpanelets statuskort.
+export type FarmQuotaBasis = 'bedriftens kvote' | 'summen af markernes kvoter'
+
+export type ResolvedFarmQuota = {
+  quotaKgn: number
+  basis: FarmQuotaBasis
+}
+
+export const resolveFarmQuota = (
+  farmQuotaKgn: number,
+  fieldQuotaSum: number,
+): ResolvedFarmQuota =>
+  farmQuotaKgn > 0
+    ? { quotaKgn: farmQuotaKgn, basis: 'bedriftens kvote' }
+    : { quotaKgn: fieldQuotaSum, basis: 'summen af markernes kvoter' }
+
 export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
@@ -342,11 +335,6 @@ export const getFieldQuotaStatus = (
   quotaKgn: field.udledningskvoteMarkKgn,
 })
 
-// Fast palet til sædskiftets årstern - indekseret pr. unik afgrødekode i
-// bedriften, så samme afgrøde altid får samme farve overalt i
-// markoversigten (og i markpanelets år-for-år-liste). Efterafgrøde/udlæg
-// markeres i stedet med en bundkant i denne grønne farve, uanset
-// hovedafgrødens farve.
 export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
 

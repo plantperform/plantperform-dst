@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   isFieldCalculated,
+  resolveFarmQuota,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
 
@@ -79,8 +80,6 @@ const ROTATION_CALENDAR_YEARS = Array.from(
   (_, index) => ROTATION_START_CALENDAR_YEAR + index,
 )
 
-// Afledt af rotationens kalenderår-spænd, så teksten aldrig kan komme ud
-// af trit med ROTATION_START_CALENDAR_YEAR/NUM_ROTATION_YEARS.
 const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
   ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
 }`
@@ -99,16 +98,6 @@ const EMISSION_STATUS_TONE_CLASSES: Record<EmissionStatusTone, string> = {
   unknown: 'border-amber-200 bg-amber-50 text-amber-800',
 }
 
-// Bedriftens vigtigste tal, oversat til svar først: hvor meget udleder vi,
-// og hvordan står det til med kvoten. Kvoten er brugerens egen indtastning
-// på bedriften, hvis den er sat - ellers summen af markernes egne kvoter -
-// og statuslinjen siger eksplicit hvilket af de to grundlag der bruges.
-// Findes intet kvotegrundlag, eller er ingen marker beregnet endnu, er
-// tallet ikke til at stole på, og statuslinjen siger det ærligt i stedet
-// for at vise et falsk nul. Er kun nogle marker beregnet, kan delsummen
-// kun vokse efterhånden som resten beregnes - så en grøn "under grænsen"
-// er kun en gyldig konklusion når alle marker er talt med. En rød "OVER"
-// er derimod stadig gyldig på et delvist grundlag.
 const EmissionStatusBar = ({
   farm,
   fields,
@@ -123,10 +112,6 @@ const EmissionStatusBar = ({
   )
   const calculatedCount = calculatedFields.length
   const uncalculatedCount = fields.length - calculatedCount
-  // Kun beregnede markers udledning tælles med - u-beregnede marker har i
-  // dag garanteret nLoad=0 fra backend, men reglen skal være eksplicit her,
-  // så den følger samme "beregnet"-definition som totalrækken i
-  // FarmFieldsList, i stedet for at hvile på en implicit antagelse.
   const totalNLoad = calculatedFields.reduce(
     (sum, field) => sum + field.nLoad,
     0,
@@ -135,7 +120,10 @@ const EmissionStatusBar = ({
     (sum, field) => sum + field.udledningskvoteMarkKgn,
     0,
   )
-  const quota = farm.udledningskvoteKgN > 0 ? farm.udledningskvoteKgN : quotaSum
+  const { quotaKgn: quota, basis: quotaBasis } = resolveFarmQuota(
+    farm.udledningskvoteKgN,
+    quotaSum,
+  )
 
   let tone: EmissionStatusTone
   let Icon: typeof CircleCheck
@@ -154,14 +142,8 @@ const EmissionStatusBar = ({
   } else {
     const over = totalNLoad > quota
     const diff = Math.abs(quota - totalNLoad)
-    const quotaBasis =
-      farm.udledningskvoteKgN > 0
-        ? 'bedriftens kvote'
-        : 'summen af markernes kvoter'
 
     if (over) {
-      // "OVER" er en gyldig konklusion selv på et delvist grundlag - en
-      // delsum kan kun vokse når flere marker bliver beregnet.
       const uncalculatedNote =
         uncalculatedCount > 0
           ? `, ${formatFieldCount(uncalculatedCount)} ikke beregnet`
@@ -172,9 +154,6 @@ const EmissionStatusBar = ({
         `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N ` +
         `(${quotaBasis}${uncalculatedNote}) - ${formatNumber(diff)} kg N OVER grænsen`
     } else if (uncalculatedCount > 0) {
-      // Delsummen ligger under grænsen, men grundlaget er ikke fuldt endnu -
-      // en grøn frikendelse ville ikke have dækning, så vi viser en neutral
-      // tilstand i stedet.
       tone = 'unknown'
       Icon = CircleHelp
       message =
@@ -199,10 +178,6 @@ const EmissionStatusBar = ({
   )
 }
 
-// Miniaturevisning af de 8 rotationsårs DB2, brugt som forhåndsvisning i
-// den sammenfoldede årsoversigt-sektion - kun højden er meningsfuld
-// (relativt til det højeste år i sættet), tallene selv vises først når
-// sektionen foldes ud.
 const YearlyOverviewMiniBars = ({ entries }: { entries: YearlySummaryEntry[] }) => {
   const maxDb2 = Math.max(1, ...entries.map((entry) => entry.totalDb2))
 
@@ -222,10 +197,6 @@ const YearlyOverviewMiniBars = ({ entries }: { entries: YearlySummaryEntry[] }) 
   )
 }
 
-// Sammenfoldet som standard, så toppen af markgennemgangen bliver rolig -
-// kun når brugeren aktivt beder om det, vises den fulde YearlyOverviewStrip
-// (uændret komponent) med tal for alle 8 år. Skjules helt uden data, ligesom
-// stripet selv gjorde det tidligere.
 const YearlyOverviewSection = ({
   farmId,
   simulationId,
@@ -411,6 +382,7 @@ export const FarmInspector = ({
               farmId={farm.id}
               fields={fields}
               isSimulationView={isSimulationView}
+              farmQuotaKgN={farm.udledningskvoteKgN}
               simulationId={
                 selection.kind === 'simulation' ? selection.id : undefined
               }
