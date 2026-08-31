@@ -160,8 +160,13 @@ export type CropPercentageConstraint = {
   minimumPercentage: number
 }
 
-export type OptimizationConstraints = {
+export type KystvandoplandNLoadCap = {
+  kystvandId: number | null
   maxNLoadKg: number | null
+}
+
+export type OptimizationConstraints = {
+  maxNLoadByKystvandopland: KystvandoplandNLoadCap[]
   minFen: number | null
   maxFen: number | null
   maxFieldsWithNewRotation: number | null
@@ -230,9 +235,14 @@ export type SaedskifteVariantRef = {
   variant: string
 }
 
+export type KystvandoplandYearlyNLoadCaps = {
+  kystvandId: number | null
+  maxNLoadByYear: Record<number, number>
+}
+
 export type YearlyOptimizeSimulationInput = {
   timeLimitSeconds?: number
-  maxNLoadByYear?: Record<number, number>
+  maxNLoadByKystvandopland?: KystvandoplandYearlyNLoadCaps[]
   db2SwingPct?: number | null
   selectedSaedskifter?: SaedskifteVariantRef[]
 }

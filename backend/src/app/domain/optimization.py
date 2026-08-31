@@ -21,12 +21,18 @@ class RotationOption:
 class FieldInput:
     id: str
     area_ha: float
+    kystvand_id: int | None
     options: tuple[RotationOption, ...]
 
 
 @dataclass(frozen=True)
 class ConstraintsInput:
-    max_n_load_kg: float | None
+    # Udledningsloft pr. kystvandopland (nøgle=kystvand_id, None for marker
+    # uden et tilknyttet opland) — bekendtgørelsen opgør udledning pr. opland,
+    # aldrig samlet på tværs, jf. FarmSidebar's tilsvarende Aktuel-visning.
+    # Et opland uden nøgle her er ubegrænset. Kun oplande der faktisk har
+    # marker i denne simulering får en håndhævet grænse.
+    max_n_load_by_kystvandopland: dict[int | None, float]
     min_fen: float | None
     max_fen: float | None
 
@@ -80,12 +86,15 @@ class YearlyRotationOption:
 class YearlyFieldInput:
     id: str
     area_ha: float
+    kystvand_id: int | None
     options: tuple[YearlyRotationOption, ...]
 
 
 @dataclass(frozen=True)
 class YearlyConstraintsInput:
-    max_n_load_by_year: tuple[float | None, ...]
+    # Samme pr.-kystvandopland-princip som ConstraintsInput, men med et
+    # 8-langt (pr. kalenderår) loft-tuple pr. opland i stedet for ét tal.
+    max_n_load_by_kystvandopland_and_year: dict[int | None, tuple[float | None, ...]]
     db2_swing_pct: float | None
     min_fen: float | None
     max_fen: float | None
