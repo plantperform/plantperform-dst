@@ -318,8 +318,18 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Midlertidig fælles placeholder-værdi (afstrømningskategori 1),
-            indtil rigtige per-mark-værdier findes.
+            Afstrømningskategori <strong>{String(detail.afstromningskategori ?? '—')}</strong>
+            {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
+            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Selve
+            P-værdien er stadig én fælles placeholder pr. kategori, indtil
+            rigtige per-mark-værdier findes.
+            {detail.afstromningskategori_ukendt ? (
+              <span className="text-amber-700">
+                {' '}
+                ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1
+                er brugt som et rent gæt, ikke et opslag.
+              </span>
+            ) : null}
           </p>
           <Callout>
             P = <strong>{fmt(p, 5)}</strong>
