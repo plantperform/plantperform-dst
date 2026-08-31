@@ -17,7 +17,6 @@ export type Farm = {
   cvr: string | null
   name: string
   ownerName: string
-  udledningskvoteKgN: number
   rotationLibrary: NamedRotation[]
 }
 
@@ -25,11 +24,14 @@ export type CreateFarmInput = {
   name: string
   ownerName: string
   cvr: string | null
-  udledningskvoteKgN?: number
 }
 
-export type UpdateFarmInput = {
+export type KystvandoplandUdledning = {
+  kystvandId: number | null
+  kystvandNavn: string | null
   udledningskvoteKgN: number
+  beregnetUdledningKgN: number
+  overholder: boolean
 }
 
 export type GeoJSONPolygon = {
@@ -102,6 +104,7 @@ export type RegistryField = {
   markblok: string | null
   journalnr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
   jbnr: number | null
   areaHa: number
@@ -119,6 +122,7 @@ export type RegistryFieldSummary = {
   cvr: string | null
   marknr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
   areaHa: number
   cropRotation: string
