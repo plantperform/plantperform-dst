@@ -75,21 +75,23 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </h4>
 )
 
-const BigMetricTile = ({
+export const BigMetricTile = ({
   label,
   value,
   caption,
 }: {
   label: string
   value: string
-  caption: string
+  caption?: string
 }) => (
   <div className="rounded-xl border bg-background p-4">
     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </p>
     <p className="mt-1 text-[22px] font-bold leading-tight tabular-nums">{value}</p>
-    <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
+    {caption ? (
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
+    ) : null}
   </div>
 )
 
@@ -171,7 +173,7 @@ const KeyMetricsSection = ({
         <BigMetricTile
           label="DB2"
           value={`${fmt(year.dbKrHa, 0)} kr/ha`}
-          caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte —'}
+          caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte -'}
         />
       </div>
 
@@ -180,7 +182,7 @@ const KeyMetricsSection = ({
         <div className="mt-1">
           <DefinitionRow
             label="Afgrøde-norm"
-            value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
+            value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '-'}
             title={
               reduceretNorm !== null
                 ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
@@ -733,7 +735,7 @@ export const RotationYearsDetail = ({
                   : 'bg-background hover:bg-muted'
               }`}
             >
-              År {index + 1} — {y.year.afgrodeNavn}
+              År {index + 1} - {y.year.afgrodeNavn}
               {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
             </button>
           ))}

@@ -58,3 +58,10 @@ body {
   min-height: 100vh;
   margin: 0;
 }
+
+@keyframes slide-in {
+  from {
+    transform: translateX(var(--slide-from));
+    opacity: 0.2;
+  }
+}

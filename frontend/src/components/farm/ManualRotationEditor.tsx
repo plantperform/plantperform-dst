@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RotateCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -19,7 +19,9 @@ import type {
   RotationPositionOverride,
   Simulation,
 } from '@/api/types'
-import { RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
+import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
+import { BigMetricTile, RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
 import { SearchableCropPickerList } from '@/components/farm/SearchableCropPickerList'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,7 +32,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
+import {
+  compactCropSequenceLabel,
+  CROP_YEAR_FALLBACK_COLOR,
+  formatRotationYear,
+  ROTATION_START_CALENDAR_YEAR,
+} from '@/lib/field-domain'
 
 type ManualRotationEditorProps = {
   farmId: string
@@ -42,8 +49,6 @@ type ManualRotationEditorProps = {
   onOpenChange: (open: boolean) => void
   onError: (message: string | null) => void
 }
-
-const FALLBACK_CROP_COLOR = '#a7c69b'
 
 const fmt = (value: number, digits = 1) =>
   new Intl.NumberFormat('da-DK', {
@@ -63,25 +68,7 @@ const chipClassName = (selected: boolean) =>
       : 'bg-background hover:bg-muted'
   }`
 
-const BigMetricTile = ({
-  label,
-  value,
-  caption,
-}: {
-  label: string
-  value: string
-  caption?: string
-}) => (
-  <div className="rounded-xl border bg-background p-4">
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-      {label}
-    </p>
-    <p className="mt-1 text-[22px] font-bold leading-tight tabular-nums">{value}</p>
-    {caption ? (
-      <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
-    ) : null}
-  </div>
-)
+const AMBER_PILL_CLASSES = 'rounded-full border border-amber-200 bg-amber-50 text-amber-800'
 
 export const ManualRotationEditor = ({
   farmId,
@@ -126,12 +113,15 @@ export const ManualRotationEditor = ({
   const [selectedKategoriName, setSelectedKategoriName] = useState<string | null>(null)
   const [overrides, setOverrides] = useState<RotationPositionOverride[]>([])
   const [startYear, setStartYear] = useState(1)
+  const [baselineStartYear, setBaselineStartYear] = useState(1)
   const [activeYearIndex, setActiveYearIndex] = useState<number | null>(null)
   const [preview, setPreview] = useState<RotationCandidateEvaluation | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [shiftAnimation, setShiftAnimation] = useState<'left' | 'right' | null>(null)
   const requestId = useRef(0)
+  const pendingShiftDirectionRef = useRef<'left' | 'right' | null>(null)
 
   const availableKategorier = useMemo(() => {
     const allowed = new Set(simulation.rotationSaedskiftevarianter)
@@ -146,10 +136,12 @@ export const ManualRotationEditor = ({
   useEffect(() => {
     if (!open || !current) return
     const ref = current.baseRef ?? current.ref
+    const seededStartYear = current.startYear ?? 1
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBaseRef(ref)
     setOverrides(current.overrides ?? [])
-    setStartYear(current.startYear ?? 1)
+    setStartYear(seededStartYear)
+    setBaselineStartYear(seededStartYear)
     const kategori = availableKategorier.find((k) =>
       k.saedskifter.some((s) => s.saedskiftevariant === ref.saedskiftevariant),
     )
@@ -196,7 +188,31 @@ export const ManualRotationEditor = ({
   )
 
   const colorForCropName = (name: string) =>
-    cropColorMap.get(codeByCropName.get(name) ?? -1) ?? FALLBACK_CROP_COLOR
+    cropColorMap.get(codeByCropName.get(name) ?? -1) ?? CROP_YEAR_FALLBACK_COLOR
+
+  const kategoriPickerItems = useMemo(
+    () =>
+      (selectedKategori?.saedskifter ?? []).map((s) => ({
+        key: s.saedskiftevariant,
+        label: compactCropSequenceLabel(s.cropSequence),
+        title: s.cropSequence.join(' - '),
+        colors: s.cropSequence.map(colorForCropName),
+        meta: `${s.cropSequence.length} år`,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedKategori, codeByCropName, cropColorMap],
+  )
+
+  const afgrodePickerItems = useMemo(
+    () =>
+      afgrodeKoder.map((a) => ({
+        key: String(a.code),
+        label: a.navn,
+        title: a.navn,
+        colors: [cropColorMap.get(a.code) ?? CROP_YEAR_FALLBACK_COLOR],
+      })),
+    [afgrodeKoder, cropColorMap],
+  )
 
   const runPreview = (
     ref: RotationCandidateRef,
@@ -214,9 +230,12 @@ export const ManualRotationEditor = ({
       .then((result) => {
         if (id !== requestId.current) return
         setPreview(result)
+        setShiftAnimation(pendingShiftDirectionRef.current)
+        pendingShiftDirectionRef.current = null
       })
       .catch((error: unknown) => {
         if (id !== requestId.current) return
+        pendingShiftDirectionRef.current = null
         setPreview(null)
         setPreviewError(
           error instanceof Error ? error.message : 'Kunne ikke genberegne rotationen.',
@@ -234,11 +253,20 @@ export const ManualRotationEditor = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseRef, overrides, startYear])
 
+  useEffect(() => {
+    if (!shiftAnimation) return
+    const timeoutId = window.setTimeout(() => setShiftAnimation(null), 2000)
+    return () => window.clearTimeout(timeoutId)
+  }, [shiftAnimation])
+
   const changeBase = (next: RotationCandidateRef) => {
     if (baseRef && refsEqual(baseRef, next)) return
+    pendingShiftDirectionRef.current = null
+    setShiftAnimation(null)
     setBaseRef(next)
     setOverrides([])
     setStartYear(1)
+    setBaselineStartYear(1)
     setActiveYearIndex(null)
   }
 
@@ -270,6 +298,9 @@ export const ManualRotationEditor = ({
   }
 
   const shiftStartYear = (delta: number) => {
+    pendingShiftDirectionRef.current =
+      years.length > 1 && Math.abs(delta) === 1 ? (delta > 0 ? 'right' : 'left') : null
+    setShiftAnimation(null)
     setStartYear((prev) => prev + delta)
     setOverrides([])
     setActiveYearIndex(null)
@@ -310,6 +341,22 @@ export const ManualRotationEditor = ({
   }
 
   const years = preview ? preview.years.slice(0, preview.activeLen) : []
+  const activeYear = activeYearIndex !== null ? years[activeYearIndex] : undefined
+  const rotationLength = years.length
+  const startYearOffset =
+    rotationLength > 0
+      ? (((startYear - baselineStartYear) % rotationLength) + rotationLength) % rotationLength
+      : 0
+  const slideAnimationClassName = shiftAnimation
+    ? 'motion-safe:animate-[slide-in_280ms_ease-out]'
+    : ''
+  const slideAnimationKey = `shift-${startYear}`
+  const wrapCell =
+    shiftAnimation && rotationLength > 0
+      ? shiftAnimation === 'right'
+        ? { index: rotationLength - 1, fromYear: ROTATION_START_CALENDAR_YEAR }
+        : { index: 0, fromYear: ROTATION_START_CALENDAR_YEAR + rotationLength - 1 }
+      : null
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
@@ -326,15 +373,7 @@ export const ManualRotationEditor = ({
         {candidatesError ? (
           <p className="text-sm text-red-700">Kunne ikke hente sædskifter.</p>
         ) : isLoadingCandidates ? (
-          <div className="space-y-3 p-4">
-            <p className="text-sm text-muted-foreground">Henter sædskifter...</p>
-            <div className="space-y-2" aria-hidden="true">
-              <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
-              <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-            </div>
-          </div>
+          <LoadingSkeleton message="Henter sædskifter..." />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-6 lg:grid-cols-2">
@@ -362,12 +401,7 @@ export const ManualRotationEditor = ({
                   <Label>Sædskifte</Label>
                   <SearchableCropPickerList
                     key={selectedKategori?.kategori ?? 'none'}
-                    items={(selectedKategori?.saedskifter ?? []).map((s) => ({
-                      key: s.saedskiftevariant,
-                      label: s.cropSequence.join(' - '),
-                      title: s.cropSequence.join(' - '),
-                      colors: s.cropSequence.map(colorForCropName),
-                    }))}
+                    items={kategoriPickerItems}
                     selectedKey={baseRef?.saedskiftevariant ?? null}
                     onSelect={(key) =>
                       changeBase({
@@ -421,6 +455,12 @@ export const ManualRotationEditor = ({
                     ))}
                   </div>
                 </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Varianter har samme afgrøder - forskellen er hvor mange efterafgrøder
+                  og andre virkemidler der er lagt ind. N-norm er andelen af fuld
+                  kvælstofnorm.
+                </p>
               </div>
 
               <div className="space-y-4">
@@ -457,80 +497,129 @@ export const ManualRotationEditor = ({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <Label>Sædskifte år for år</Label>
-                          {overrides.length > 0 ? (
-                            <Button size="sm" variant="ghost" onClick={resetOverrides}>
-                              Nulstil rettelser
-                            </Button>
-                          ) : null}
+                          <div className="flex items-center gap-2">
+                            {startYearOffset !== 0 ? (
+                              <div
+                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${AMBER_PILL_CLASSES}`}
+                              >
+                                <span>Forskudt +{startYearOffset} år</span>
+                                <button
+                                  type="button"
+                                  onClick={() => shiftStartYear(baselineStartYear - startYear)}
+                                  className="font-medium text-amber-900 underline hover:no-underline"
+                                >
+                                  Nulstil
+                                </button>
+                              </div>
+                            ) : null}
+                            {overrides.length > 0 ? (
+                              <Button size="sm" variant="ghost" onClick={resetOverrides}>
+                                Nulstil rettelser
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Klik et år for at se og rette dets afgrøde, eller ryk hele
-                          sædskiftet frem/tilbage med pilene.
+                          Klik et år for at se og rette det.
                         </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 shrink-0 p-0"
-                            onClick={() => shiftStartYear(1)}
-                            aria-label="Ryk sædskiftet tilbage"
-                            title="Ryk sædskiftet tilbage - vis året før for hver position"
-                          >
-                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                          </Button>
-                          <div className="flex flex-1 flex-wrap gap-1.5">
-                            {years.map((y, index) => {
-                              const calendarYear = ROTATION_START_CALENDAR_YEAR + index
-                              const isOverridden = overrides.some((o) => o.position === index)
-                              const isActive = activeYearIndex === index
-                              const color =
-                                cropColorMap.get(y.year.afgrodeKode) ?? FALLBACK_CROP_COLOR
-                              return (
-                                <button
-                                  key={index}
-                                  type="button"
-                                  aria-pressed={isActive}
-                                  onClick={() => setActiveYearIndex(isActive ? null : index)}
-                                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                                    isActive
-                                      ? 'border-primary bg-primary text-primary-foreground'
-                                      : isOverridden
-                                        ? 'border-primary bg-primary/10'
-                                        : 'bg-background hover:bg-muted'
+                        <div className="grid grid-cols-4 gap-2">
+                          {years.map((y, index) => {
+                            const calendarYear = ROTATION_START_CALENDAR_YEAR + index
+                            const isOverridden = overrides.some((o) => o.position === index)
+                            const isActive = activeYearIndex === index
+                            const cellWrap = wrapCell && wrapCell.index === index ? wrapCell : null
+                            const color =
+                              cropColorMap.get(y.year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+                            const cellTitle = cellWrap
+                              ? `Afgrøden rullede rundt fra ${cellWrap.fromYear}`
+                              : formatRotationYear(y.year)
+                            return (
+                              <button
+                                key={index}
+                                type="button"
+                                aria-pressed={isActive}
+                                title={cellTitle}
+                                onClick={() => setActiveYearIndex(isActive ? null : index)}
+                                className={`relative flex flex-col items-start gap-1 overflow-hidden rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                                  isActive
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : isOverridden
+                                      ? 'border-primary bg-primary/10'
+                                      : 'bg-background hover:bg-muted'
+                                }`}
+                              >
+                                <span
+                                  className={`text-[11px] ${
+                                    isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
                                   }`}
                                 >
-                                  <span
-                                    className="h-[10px] w-[8px] shrink-0 rounded-[2px]"
-                                    style={{ backgroundColor: color }}
-                                    aria-hidden="true"
+                                  {calendarYear}
+                                </span>
+                                <span
+                                  key={slideAnimationKey}
+                                  className={`flex w-full min-w-0 items-center gap-1.5 ${slideAnimationClassName}`}
+                                  style={
+                                    shiftAnimation
+                                      ? ({
+                                          '--slide-from': shiftAnimation === 'left' ? '-100%' : '100%',
+                                        } as React.CSSProperties)
+                                      : undefined
+                                  }
+                                >
+                                  <CropYearSwatch
+                                    color={color}
+                                    hasUdlaeg={y.year.udlaegNavn !== null}
+                                    size="10x8"
                                   />
-                                  {calendarYear}: {y.year.afgrodeNavn}
-                                </button>
-                              )
-                            })}
-                          </div>
+                                  <span className="min-w-0 truncate">{y.year.afgrodeNavn}</span>
+                                </span>
+                                {cellWrap ? (
+                                  <span
+                                    className={`pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 px-1.5 text-[10px] ${AMBER_PILL_CLASSES}`}
+                                  >
+                                    <RotateCw className="h-2.5 w-2.5" aria-hidden="true" />
+                                    fra {cellWrap.fromYear}
+                                  </span>
+                                ) : null}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Ryk alle afgrøder</span>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 shrink-0 p-0"
-                            onClick={() => shiftStartYear(-1)}
-                            aria-label="Ryk sædskiftet frem"
-                            title="Ryk sædskiftet frem - vis året efter for hver position"
+                            onClick={() => shiftStartYear(1)}
+                            title="Ryk hele sædskiftet et år tilbage"
                           >
+                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            Et år tilbage
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => shiftStartYear(-1)}
+                            title="Ryk hele sædskiftet et år frem"
+                          >
+                            Et år frem
                             <ChevronRight className="h-4 w-4" aria-hidden="true" />
                           </Button>
                         </div>
 
-                        {activeYearIndex !== null && years[activeYearIndex] ? (
+                        {startYearOffset !== 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            Samme rækkefølge - kun startåret flytter sig. Gennemsnittet
+                            påvirkes ikke.
+                          </p>
+                        ) : null}
+
+                        {activeYearIndex !== null && activeYear ? (
                           <SearchableCropPickerList
                             key={activeYearIndex}
-                            items={afgrodeKoder.map((a) => ({
-                              key: String(a.code),
-                              label: a.navn,
-                              title: a.navn,
-                              colors: [cropColorMap.get(a.code) ?? FALLBACK_CROP_COLOR],
-                            }))}
-                            selectedKey={String(years[activeYearIndex].year.afgrodeKode)}
+                            items={afgrodePickerItems}
+                            selectedKey={String(activeYear.year.afgrodeKode)}
                             onSelect={(key) => setPositionOverride(activeYearIndex, Number(key))}
                             searchLabel="Søg afgrøde"
                             searchPlaceholder="Søg afgrøde..."
@@ -539,7 +628,7 @@ export const ManualRotationEditor = ({
                           />
                         ) : null}
 
-                        {activeYearIndex !== null && years[activeYearIndex] ? (
+                        {activeYearIndex !== null && activeYear ? (
                           <div className="rounded-md border bg-muted/20 p-4">
                             <RotationYearsDetail
                               years={years}
@@ -555,17 +644,19 @@ export const ManualRotationEditor = ({
                   </div>
 
                   {isPreviewing ? (
-                    <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center">
-                      <div
-                        role="status"
-                        aria-live="polite"
-                        className="mt-2 flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm"
-                      >
-                        <span
-                          className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
-                          aria-hidden="true"
-                        />
-                        Genberegner...
+                    <div className="pointer-events-none absolute inset-0 flex items-start justify-center">
+                      <div className="sticky top-[40%]">
+                        <div
+                          role="status"
+                          aria-live="polite"
+                          className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground shadow-lg"
+                        >
+                          <span
+                            className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
+                            aria-hidden="true"
+                          />
+                          Genberegner...
+                        </div>
                       </div>
                     </div>
                   ) : null}

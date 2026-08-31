@@ -1,30 +1,32 @@
-import { ChevronRight, Lock, LockOpen, X } from 'lucide-react'
+import { ChevronRight, Lock, LockOpen, Repeat, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
 import type { FieldRecord, Simulation } from '@/api/types'
+import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
 import {
-  CROP_YEAR_COVER_CROP_BORDER,
+  CROP_YEAR_FALLBACK_COLOR,
+  CURRENT_CALENDAR_YEAR,
+  formatNumber,
+  formatQuotaAmount,
   getFieldQuotaStatus,
   isFieldCalculated,
+  QUOTA_WARNING_LEVEL_COLORS,
   ROTATION_START_CALENDAR_YEAR,
   type QuotaStatus,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
 
 const STATUS_CARD_STYLES: Record<
   QuotaStatusLevel,
   { bg: string; border: string; text: string }
 > = {
   ok: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
-  near: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
-  over: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+  near: QUOTA_WARNING_LEVEL_COLORS.near,
+  over: QUOTA_WARNING_LEVEL_COLORS.over,
   uncalculated: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
   noData: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
   partial: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
@@ -34,7 +36,7 @@ const buildStatusMessage = (status: QuotaStatus): string => {
   if (status.level === 'uncalculated') return 'Ikke beregnet endnu - kør Optimér'
   if (status.level === 'noData') return 'Ingen kvote sat for denne mark'
 
-  const amount = `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
+  const amount = formatQuotaAmount(status)
   const pct =
     status.quotaKgn > 0 ? Math.round((status.nLoad / status.quotaKgn) * 100) : 0
 
@@ -96,23 +98,22 @@ const RotationYearRow = ({
 }) => {
   const calendarYear = ROTATION_START_CALENDAR_YEAR + index
   const hasUdlaeg = year.udlaegNavn !== null
-  const color = cropColorMap.get(year.afgrodeKode) ?? '#a7c69b'
+  const color = cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+  const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   return (
     <li className="flex items-center gap-2.5">
       <span className="w-9 shrink-0 text-xs text-muted-foreground">
         {calendarYear}
       </span>
-      <span
-        className="box-border h-[14px] w-[10px] shrink-0 rounded-[3px]"
-        style={{
-          backgroundColor: color,
-          borderBottom: hasUdlaeg
-            ? `3px solid ${CROP_YEAR_COVER_CROP_BORDER}`
-            : undefined,
-        }}
-        aria-hidden="true"
-      />
-      <span className="text-sm">{year.afgrodeNavn}</span>
+      <CropYearSwatch color={color} hasUdlaeg={hasUdlaeg} size="14x10" />
+      <span className={`text-sm ${isCurrentYear ? 'font-medium' : ''}`}>
+        {year.afgrodeNavn}
+      </span>
+      {isCurrentYear ? (
+        <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
+          i år
+        </span>
+      ) : null}
       {hasUdlaeg ? (
         <span
           className="rounded-full px-2 py-0.5 text-xs"
@@ -298,48 +299,51 @@ export const MarkPanel = ({
               <p className="text-sm text-muted-foreground">
                 Intet sædskifte endnu
               </p>
-            ) : calcOpen ? (
-              <div className="grid grid-cols-2 gap-x-8">
-                <ul className="space-y-1.5">
-                  {field.cropRotation
-                    .slice(0, Math.ceil(field.cropRotation.length / 2))
-                    .map((year, index) => (
-                      <RotationYearRow
-                        key={index}
-                        year={year}
-                        index={index}
-                        cropColorMap={cropColorMap}
-                      />
-                    ))}
-                </ul>
-                <ul className="space-y-1.5">
-                  {field.cropRotation
-                    .slice(Math.ceil(field.cropRotation.length / 2))
-                    .map((year, index) => {
-                      const actualIndex =
-                        Math.ceil(field.cropRotation.length / 2) + index
-                      return (
-                        <RotationYearRow
-                          key={actualIndex}
-                          year={year}
-                          index={actualIndex}
-                          cropColorMap={cropColorMap}
-                        />
-                      )
-                    })}
-                </ul>
-              </div>
             ) : (
-              <ul className="space-y-1.5">
-                {field.cropRotation.map((year, index) => (
-                  <RotationYearRow
-                    key={index}
-                    year={year}
-                    index={index}
-                    cropColorMap={cropColorMap}
-                  />
-                ))}
-              </ul>
+              (() => {
+                const columns = calcOpen ? 2 : 1
+                const columnSize = Math.ceil(field.cropRotation.length / columns)
+                const columnLists = Array.from({ length: columns }, (_, columnIndex) => (
+                  <ul key={columnIndex} className="space-y-1.5">
+                    {field.cropRotation
+                      .slice(columnIndex * columnSize, (columnIndex + 1) * columnSize)
+                      .map((year, index) => {
+                        const actualIndex = columnIndex * columnSize + index
+                        return (
+                          <RotationYearRow
+                            key={actualIndex}
+                            year={year}
+                            index={actualIndex}
+                            cropColorMap={cropColorMap}
+                          />
+                        )
+                      })}
+                  </ul>
+                ))
+                const restartYear = ROTATION_START_CALENDAR_YEAR + field.cropRotation.length
+                return (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Marken følger en fast plan på {field.cropRotation.length} år,
+                      der gentager sig. Markens tal er gennemsnittet over planens år.
+                    </p>
+                    {columns === 2 ? (
+                      <div className="grid grid-cols-2 gap-x-8">
+                        {columnLists}
+                      </div>
+                    ) : (
+                      columnLists[0]
+                    )}
+                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>
+                        {restartYear}: forfra med{' '}
+                        {field.cropRotation[0].afgrodeNavn}
+                      </span>
+                    </div>
+                  </>
+                )
+              })()
             )}
           </div>
         </div>
@@ -410,8 +414,8 @@ export const MarkPanel = ({
                 }
                 title={
                   isLocked
-                    ? 'Marken er låst til det valgte sædskifte — Optimér ændrer den ikke. Klik for at låse op.'
-                    : 'Marken er ikke låst — Optimér kan frit ændre den. Klik for at låse.'
+                    ? 'Marken er låst til det valgte sædskifte - Optimér ændrer den ikke. Klik for at låse op.'
+                    : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse.'
                 }
               >
                 {isLocked ? (

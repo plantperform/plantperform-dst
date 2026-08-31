@@ -2,21 +2,12 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
-  type Column,
-  type ColumnDef,
   type OnChangeFn,
-  type RowData,
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { ChevronRight, Columns3, Lock } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { Columns3 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import { farmFieldsKey, simulationFieldsKey, useFarmFields } from '@/api/hooks'
@@ -24,12 +15,14 @@ import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
 import {
   DEFAULT_FIELDS_SORT,
-  type FieldsSortDirection,
   type FieldsSortKey,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
+import {
+  buildFarmFieldsColumns,
+  OPTIONAL_COLUMN_IDS,
+} from '@/components/farm/farm-fields-columns'
 import { MarkPanel } from '@/components/farm/MarkPanel'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -62,156 +55,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  aggregateQuotaStatusLevel,
   buildCropColorMap,
   changedFieldIds,
-  CROP_YEAR_COVER_CROP_BORDER,
-  getFieldQuotaStatus,
   isFieldCalculated,
   resolveFarmQuota,
-  ROTATION_START_CALENDAR_YEAR,
-  type QuotaStatus,
-  type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { compareFields } from '@/lib/field-sort'
 import { cn } from '@/lib/utils'
-
-declare module '@tanstack/react-table' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface ColumnMeta<TData extends RowData, TValue> {
-    headerClassName?: string
-    cellClassName?: string
-    toggleLabel?: string
-  }
-}
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
-
-const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => {
-  const seenNames: string[] = []
-  for (const year of rotation) {
-    if (!seenNames.includes(year.afgrodeNavn)) seenNames.push(year.afgrodeNavn)
-  }
-  const firstWords = seenNames
-    .slice(0, 2)
-    .map((name) => name.trim().split(/\s+/)[0])
-  return seenNames.length > 2 ? `${firstWords.join(' + ')} m.fl.` : firstWords.join(' + ')
-}
-
-const QUOTA_STATUS_DOT_COLOR: Record<QuotaStatusLevel, string> = {
-  ok: '#16a34a',
-  near: '#d97706',
-  over: '#c62020',
-  uncalculated: '#9ca3af',
-  noData: '#9ca3af',
-  partial: '#9ca3af',
-}
-
-const QUOTA_STATUS_BADGE: Partial<
-  Record<QuotaStatusLevel, { label: string; bg: string; border: string; color: string }>
-> = {
-  near: { label: 'tæt på', bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
-  over: { label: 'over', bg: '#fef2f2', border: '#fecaca', color: '#991b1b' },
-}
-
-const QuotaStatusIndicator = ({
-  level,
-  children,
-  bold = false,
-}: {
-  level: QuotaStatusLevel
-  children: ReactNode
-  bold?: boolean
-}) => {
-  const badge = QUOTA_STATUS_BADGE[level]
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span
-        className="h-[9px] w-[9px] shrink-0 rounded-full"
-        style={{ backgroundColor: QUOTA_STATUS_DOT_COLOR[level] }}
-        aria-hidden="true"
-      />
-      <span className={bold ? 'font-semibold' : undefined}>{children}</span>
-      {badge ? (
-        <span
-          className="rounded-full border px-2 py-0.5 text-xs"
-          style={{
-            backgroundColor: badge.bg,
-            borderColor: badge.border,
-            color: badge.color,
-          }}
-        >
-          {badge.label}
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-const renderQuotaStatus = (
-  status: QuotaStatus,
-  options: {
-    bold?: boolean
-    uncalculatedCount?: number
-    basisLabel?: string
-  } = {},
-) => {
-  const { bold = false, uncalculatedCount = 0, basisLabel } = options
-
-  if (status.level === 'uncalculated') {
-    return (
-      <QuotaStatusIndicator level={status.level} bold={bold}>
-        <span className="text-muted-foreground">Ikke beregnet</span>
-      </QuotaStatusIndicator>
-    )
-  }
-  if (status.level === 'noData') {
-    return (
-      <QuotaStatusIndicator level={status.level} bold={bold}>
-        <span className="text-muted-foreground">Ingen data</span>
-      </QuotaStatusIndicator>
-    )
-  }
-
-  const notes: string[] = []
-  if (basisLabel) notes.push(basisLabel)
-  if (
-    (status.level === 'over' || status.level === 'partial') &&
-    uncalculatedCount > 0
-  ) {
-    notes.push(`${uncalculatedCount} ikke beregnet`)
-  }
-  const noteText = notes.length > 0 ? ` (${notes.join(', ')})` : ''
-  const amountText = `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N${noteText}`
-
-  if (status.level === 'partial') {
-    return (
-      <QuotaStatusIndicator level={status.level} bold={bold}>
-        <span className="text-muted-foreground">{amountText}</span>
-      </QuotaStatusIndicator>
-    )
-  }
-
-  return (
-    <QuotaStatusIndicator level={status.level} bold={bold}>
-      {amountText}
-    </QuotaStatusIndicator>
-  )
-}
-
-const OPTIONAL_COLUMN_IDS = [
-  'cropRotation',
-  'db2',
-  'quotaStatus',
-  'nLoad',
-  'leaching',
-  'fen',
-  'udledningskvoteMarkKgn',
-  'soilSummary',
-  'inTakeoutPlan',
-  'retention',
-  'jbnr',
-]
 
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
@@ -230,120 +80,6 @@ const buildDefaultColumnVisibility = (isSimulationView: boolean): VisibilityStat
     : CURRENT_DEFAULT_VISIBLE_COLUMNS
   return Object.fromEntries(
     OPTIONAL_COLUMN_IDS.map((id) => [id, visible.has(id)]),
-  )
-}
-
-const nameCollator = new Intl.Collator('da-DK', {
-  numeric: true,
-  sensitivity: 'base',
-})
-const idCollator = new Intl.Collator('da-DK', { sensitivity: 'base' })
-
-const compareNullableNumber = (
-  left: number | null,
-  right: number | null,
-  direction: FieldsSortDirection,
-) => {
-  if (left === null && right === null) return 0
-  if (left === null) return 1
-  if (right === null) return -1
-  return direction === 'asc' ? left - right : right - left
-}
-
-const compareNumber = (
-  left: number,
-  right: number,
-  direction: FieldsSortDirection,
-) => (direction === 'asc' ? left - right : right - left)
-
-const compareName = (
-  left: string,
-  right: string,
-  direction: FieldsSortDirection,
-) => {
-  const result = nameCollator.compare(left, right)
-  return direction === 'asc' ? result : -result
-}
-
-const comparePrimary = (
-  left: FieldRecord,
-  right: FieldRecord,
-  sort: FieldsSortState,
-) => {
-  switch (sort.key) {
-    case 'name':
-      return compareName(left.name, right.name, sort.direction)
-    case 'areaHa':
-      return compareNumber(left.areaHa, right.areaHa, sort.direction)
-    case 'db2':
-      return compareNumber(left.db2, right.db2, sort.direction)
-    case 'nLoad':
-      return compareNumber(left.nLoad, right.nLoad, sort.direction)
-    case 'leaching':
-      return compareNumber(left.leaching, right.leaching, sort.direction)
-    case 'fen':
-      return compareNumber(left.fen, right.fen, sort.direction)
-    case 'udledningskvoteMarkKgn':
-      return compareNullableNumber(
-        left.udledningskvoteMarkKgn,
-        right.udledningskvoteMarkKgn,
-        sort.direction,
-      )
-    case 'inTakeoutPlan':
-      return compareNumber(
-        Number(left.inTakeoutPlan),
-        Number(right.inTakeoutPlan),
-        sort.direction,
-      )
-    case 'retention':
-      return compareNullableNumber(
-        left.retention,
-        right.retention,
-        sort.direction,
-      )
-    case 'jbnr':
-      return compareNullableNumber(left.jbnr, right.jbnr, sort.direction)
-  }
-}
-
-const compareFields = (
-  left: FieldRecord,
-  right: FieldRecord,
-  sort: FieldsSortState,
-) => {
-  const primary = comparePrimary(left, right, sort)
-  if (primary !== 0) return primary
-  const imkTie = compareNullableNumber(left.imkId, right.imkId, 'asc')
-  if (imkTie !== 0) return imkTie
-  return idCollator.compare(left.id, right.id)
-}
-
-const SortableColumnHeaderContent = ({
-  label,
-  column,
-}: {
-  label: string
-  column: Column<FieldRecord, unknown>
-}) => {
-  const sorted = column.getIsSorted()
-  const glyph = sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : ''
-  const handleClick = () => {
-    column.toggleSorting(sorted === 'asc')
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="-mx-1 flex w-full items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-muted/70"
-    >
-      <span>{label}</span>
-      {glyph ? (
-        <span aria-hidden="true" className="text-xs text-muted-foreground">
-          {glyph}
-        </span>
-      ) : null}
-    </button>
   )
 }
 
@@ -499,418 +235,19 @@ export const FarmFieldsList = ({
     [farmId, simulationId, isFieldLocked, onError],
   )
 
-  const columns = useMemo<ColumnDef<FieldRecord, unknown>[]>(() => {
-    const list: ColumnDef<FieldRecord, unknown>[] = []
-
-    list.push(
-      {
-        accessorKey: 'name',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="Mark" column={column} />
-        ),
-        cell: ({ row }) => {
-          const rowField = row.original
-          const locked = isFieldLocked(rowField)
-          return (
-            <span className="flex items-center gap-1.5">
-              <span>{rowField.name}</span>
-              {locked ? (
-                <span title="Marken er låst til sit sædskifte - Optimér kan ikke ændre den.">
-                  <Lock
-                    className="h-3.5 w-3.5 shrink-0 text-amber-600"
-                    aria-hidden="true"
-                  />
-                </span>
-              ) : null}
-            </span>
-          )
-        },
-        footer: () =>
-          totals.uncalculatedCount > 0
-            ? `I alt (${totals.uncalculatedCount} ikke beregnet)`
-            : 'I alt',
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 font-medium whitespace-normal',
-        },
-      },
-      {
-        accessorKey: 'areaHa',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="Areal" column={column} />
-        ),
-        cell: ({ row }) => `${formatNumber(row.original.areaHa)} ha`,
-        footer: () => `${formatNumber(totals.areaHa)} ha`,
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-        },
-      },
-    )
-
-    list.push({
-      id: 'cropRotation',
-      header: () => (
-        <div className="flex flex-col">
-          <span>Sædskifte</span>
-          <span className="block text-xs font-normal text-muted-foreground">
-            {maxYears > 1
-              ? `${ROTATION_START_CALENDAR_YEAR}-${ROTATION_START_CALENDAR_YEAR + maxYears - 1}`
-              : ROTATION_START_CALENDAR_YEAR}
-          </span>
-        </div>
-      ),
-      cell: ({ row }) => {
-        const rotation = row.original.cropRotation
-        if (rotation.length === 0) {
-          return (
-            <span className="text-muted-foreground">Intet sædskifte endnu</span>
-          )
-        }
-        return (
-          <div className="flex items-center gap-2.5">
-            <div className="flex shrink-0 gap-[3px]">
-              {rotation.map((year, index) => {
-                const calendarYear = ROTATION_START_CALENDAR_YEAR + index
-                const hasUdlaeg = year.udlaegNavn !== null
-                const title = hasUdlaeg
-                  ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
-                  : `${calendarYear}: ${year.afgrodeNavn}`
-                const color =
-                  cropColorMap.get(year.afgrodeKode) ?? '#a7c69b'
-                return (
-                  <span
-                    key={index}
-                    title={title}
-                    className="box-border h-[14px] w-[10px] shrink-0 rounded-[3px]"
-                    style={{
-                      backgroundColor: color,
-                      borderBottom: hasUdlaeg
-                        ? `3px solid ${CROP_YEAR_COVER_CROP_BORDER}`
-                        : undefined,
-                    }}
-                  />
-                )
-              })}
-            </div>
-            <span className="text-sm">{uniqueCropNamesLabel(rotation)}</span>
-          </div>
-        )
-      },
-      footer: () => {
-        if (isSimulationView) return null
-        const withoutRotation = fields.filter(
-          (field) => field.cropRotation.length === 0,
-        ).length
-        return withoutRotation > 0 ? (
-          <span className="text-muted-foreground">
-            {withoutRotation} marker uden sædskifte
-          </span>
-        ) : null
-      },
-      enableSorting: false,
-      meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
-        toggleLabel: 'Sædskifte',
-      },
-    })
-
-    list.push(
-      {
-        accessorKey: 'db2',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="DB2 (kr)" column={column} />
-        ),
-        cell: ({ row }) => {
-          const field = row.original
-          if (!isFieldCalculated(field, isSimulationView)) {
-            return (
-              <Badge
-                variant="outline"
-                className="font-normal text-muted-foreground"
-              >
-                Ikke beregnet
-              </Badge>
-            )
-          }
-          return (
-            <>
-              <div>{formatNumber(field.db2)} kr</div>
-              {field.areaHa > 0 ? (
-                <div className="text-xs text-muted-foreground/80">
-                  {formatNumber(field.db2 / field.areaHa)} kr/ha
-                </div>
-              ) : null}
-            </>
-          )
-        },
-        footer: () =>
-          totals.calculatedCount === 0 ? (
-            <span className="font-normal text-muted-foreground">
-              Ikke beregnet
-            </span>
-          ) : (
-            <div>{formatNumber(totals.db2)} kr</div>
-          ),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'DB2 (kr)',
-        },
-      },
-      {
-        id: 'quotaStatus',
-        header: () => 'Udledning mod kvote',
-        cell: ({ row }) =>
-          renderQuotaStatus(
-            getFieldQuotaStatus(row.original, isSimulationView),
-          ),
-        footer: () =>
-          renderQuotaStatus(
-            {
-              level: aggregateQuotaStatusLevel(
-                totals.nLoad,
-                resolvedQuota.quotaKgn,
-                totals.calculatedCount,
-                fields.length,
-              ),
-              nLoad: totals.nLoad,
-              quotaKgn: resolvedQuota.quotaKgn,
-            },
-            {
-              bold: true,
-              uncalculatedCount: totals.uncalculatedCount,
-              basisLabel: resolvedQuota.basis,
-            },
-          ),
-        enableSorting: false,
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Udledning mod kvote',
-        },
-      },
-      {
-        accessorKey: 'nLoad',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent
-            label="Kvælstofudledning (kg N)"
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          const field = row.original
-          if (!isFieldCalculated(field, isSimulationView)) {
-            return <span className="text-muted-foreground">-</span>
-          }
-          return (
-            <>
-              <div>{formatNumber(field.nLoad)} kg N</div>
-              {field.areaHa > 0 ? (
-                <div className="text-xs text-muted-foreground/80">
-                  {formatNumber(field.nLoad / field.areaHa)} kg N/ha
-                </div>
-              ) : null}
-            </>
-          )
-        },
-        footer: () =>
-          totals.calculatedCount === 0 ? (
-            <span className="text-muted-foreground">-</span>
-          ) : (
-            <div>{formatNumber(totals.nLoad)} kg N</div>
-          ),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Kvælstofudledning (kg N)',
-        },
-      },
-      {
-        accessorKey: 'leaching',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent
-            label="Udvaskning (kg N)"
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          const field = row.original
-          if (!isFieldCalculated(field, isSimulationView)) {
-            return <span className="text-muted-foreground">-</span>
-          }
-          return (
-            <>
-              <div>{formatNumber(field.leaching)} kg N</div>
-              {field.areaHa > 0 ? (
-                <div className="text-xs text-muted-foreground/80">
-                  {formatNumber(field.leaching / field.areaHa)} kg N/ha
-                </div>
-              ) : null}
-            </>
-          )
-        },
-        footer: () =>
-          totals.calculatedCount === 0 ? (
-            <span className="text-muted-foreground">-</span>
-          ) : (
-            <div>{formatNumber(totals.leaching)} kg N</div>
-          ),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Udvaskning (kg N)',
-        },
-      },
-      {
-        accessorKey: 'fen',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent
-            label="Foderenheder (FE)"
-            column={column}
-          />
-        ),
-        cell: ({ row }) => {
-          const field = row.original
-          if (!isFieldCalculated(field, isSimulationView)) {
-            return <span className="text-muted-foreground">-</span>
-          }
-          return (
-            <>
-              <div>{formatNumber(field.fen)} FE</div>
-              {field.areaHa > 0 ? (
-                <div className="text-xs text-muted-foreground/80">
-                  {formatNumber(field.fen / field.areaHa)} FE/ha
-                </div>
-              ) : null}
-            </>
-          )
-        },
-        footer: () =>
-          totals.calculatedCount === 0 ? (
-            <span className="text-muted-foreground">-</span>
-          ) : (
-            <div>{formatNumber(totals.fen)} FE</div>
-          ),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Foderenheder (FE)',
-        },
-      },
-      {
-        accessorKey: 'udledningskvoteMarkKgn',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="Kvote (kg N)" column={column} />
-        ),
-        cell: ({ row }) => {
-          const field = row.original
-          if (field.udledningskvoteMarkKgn === 0) {
-            return <span className="text-muted-foreground">Ingen data</span>
-          }
-          return (
-            <>
-              <div>{formatNumber(field.udledningskvoteMarkKgn)} kg N</div>
-              <div className="text-xs text-muted-foreground/80">
-                {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
-              </div>
-            </>
-          )
-        },
-        footer: () => (
-          <div>{formatNumber(totals.udledningskvoteMarkKgn)} kg N</div>
-        ),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Kvote (kg N)',
-        },
-      },
-      {
-        id: 'soilSummary',
-        header: () => 'Jord',
-        cell: ({ row }) => {
-          const { jbnr, retention } = row.original
-          if (jbnr === null || retention === null) {
-            return <span className="text-muted-foreground">Ukendt</span>
-          }
-          return (
-            <span>
-              JB {jbnr} - retention {formatNumber(retention)}
-            </span>
-          )
-        },
-        enableSorting: false,
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Jord',
-        },
-      },
-      {
-        accessorKey: 'inTakeoutPlan',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent
-            label="I omlægningsplan"
-            column={column}
-          />
-        ),
-        cell: ({ row }) => (row.original.inTakeoutPlan ? 'Ja' : 'Nej'),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'I omlægningsplan',
-        },
-      },
-      {
-        accessorKey: 'retention',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="Retention" column={column} />
-        ),
-        cell: ({ row }) =>
-          row.original.retention === null
-            ? 'Ukendt'
-            : formatNumber(row.original.retention),
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'Retention',
-        },
-      },
-      {
-        accessorKey: 'jbnr',
-        header: ({ column }) => (
-          <SortableColumnHeaderContent label="JB nr." column={column} />
-        ),
-        cell: ({ row }) =>
-          row.original.jbnr === null ? 'Ukendt' : row.original.jbnr,
-        meta: {
-          headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-          cellClassName: 'px-4 py-3 whitespace-normal',
-          toggleLabel: 'JB nr.',
-        },
-      },
-    )
-
-    list.push({
-      id: 'rowAffordance',
-      header: () => null,
-      cell: () => (
-        <ChevronRight
-          className="h-4 w-4 text-muted-foreground/60"
-          aria-hidden="true"
-        />
-      ),
-      enableSorting: false,
-      meta: {
-        headerClassName: 'w-8 px-2 py-3',
-        cellClassName: 'w-8 px-2 py-3 text-right',
-      },
-    })
-
-    return list
-  }, [isSimulationView, maxYears, fields, cropColorMap, totals, resolvedQuota, isFieldLocked])
+  const columns = useMemo(
+    () =>
+      buildFarmFieldsColumns({
+        isSimulationView,
+        maxYears,
+        fields,
+        cropColorMap,
+        totals,
+        resolvedQuota,
+        isFieldLocked,
+      }),
+    [isSimulationView, maxYears, fields, cropColorMap, totals, resolvedQuota, isFieldLocked],
+  )
 
   const sorting: SortingState = useMemo(
     () => [{ id: sort.key, desc: sort.direction === 'desc' }],
@@ -939,7 +276,7 @@ export const FarmFieldsList = ({
 
   const optionalColumns = table
     .getAllLeafColumns()
-    .filter((column) => OPTIONAL_COLUMN_IDS.includes(column.id))
+    .filter((column) => column.columnDef.meta?.toggleLabel !== undefined)
   const visibleOptionalCount = optionalColumns.filter((column) =>
     column.getIsVisible(),
   ).length

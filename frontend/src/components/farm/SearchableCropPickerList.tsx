@@ -122,7 +122,7 @@ export const SearchableCropPickerList = ({
                 <span className="line-clamp-2 min-w-0 flex-1">{item.label}</span>
                 {item.meta ? (
                   <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-                    {item.meta}
+                    · {item.meta}
                   </span>
                 ) : null}
               </button>

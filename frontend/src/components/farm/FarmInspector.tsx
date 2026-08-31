@@ -4,6 +4,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
@@ -49,9 +50,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  isFieldCalculated,
-  resolveFarmQuota,
+  aggregateQuotaStatusLevel,
+  computeFarmQuotaSummary,
+  formatFieldCount,
+  formatNumber,
   ROTATION_START_CALENDAR_YEAR,
+  type QuotaStatusLevel,
 } from '@/lib/field-domain'
 
 // Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
@@ -84,18 +88,27 @@ const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
   ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
 }`
 
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
-
-const formatFieldCount = (count: number) =>
-  `${count} ${count === 1 ? 'mark' : 'marker'}`
-
 type EmissionStatusTone = 'ok' | 'over' | 'unknown'
 
 const EMISSION_STATUS_TONE_CLASSES: Record<EmissionStatusTone, string> = {
   ok: 'border-green-200 bg-green-50 text-green-800',
   over: 'border-red-200 bg-red-50 text-red-800',
   unknown: 'border-amber-200 bg-amber-50 text-amber-800',
+}
+
+const EMISSION_TONE_BY_QUOTA_LEVEL: Record<QuotaStatusLevel, EmissionStatusTone> = {
+  ok: 'ok',
+  near: 'ok',
+  over: 'over',
+  uncalculated: 'unknown',
+  noData: 'unknown',
+  partial: 'unknown',
+}
+
+const EMISSION_ICON_BY_TONE: Record<EmissionStatusTone, LucideIcon> = {
+  ok: CircleCheck,
+  over: CircleAlert,
+  unknown: CircleHelp,
 }
 
 const EmissionStatusBar = ({
@@ -107,63 +120,48 @@ const EmissionStatusBar = ({
   fields: FieldRecord[]
   isSimulationView: boolean
 }) => {
-  const calculatedFields = fields.filter((field) =>
-    isFieldCalculated(field, isSimulationView),
+  const { totalNLoad, quota, calculatedCount, uncalculatedCount } = useMemo(
+    () => computeFarmQuotaSummary(fields, isSimulationView, farm.udledningskvoteKgN),
+    [fields, isSimulationView, farm.udledningskvoteKgN],
   )
-  const calculatedCount = calculatedFields.length
-  const uncalculatedCount = fields.length - calculatedCount
-  const totalNLoad = calculatedFields.reduce(
-    (sum, field) => sum + field.nLoad,
-    0,
-  )
-  const quotaSum = fields.reduce(
-    (sum, field) => sum + field.udledningskvoteMarkKgn,
-    0,
-  )
-  const { quotaKgn: quota, basis: quotaBasis } = resolveFarmQuota(
-    farm.udledningskvoteKgN,
-    quotaSum,
-  )
+  const { quotaKgn, basis: quotaBasis } = quota
 
-  let tone: EmissionStatusTone
-  let Icon: typeof CircleCheck
+  const level = aggregateQuotaStatusLevel(
+    totalNLoad,
+    quotaKgn,
+    calculatedCount,
+    fields.length,
+  )
+  const tone = EMISSION_TONE_BY_QUOTA_LEVEL[level]
+  const Icon = EMISSION_ICON_BY_TONE[tone]
+
   let message: string
 
-  if (quota === 0) {
-    tone = 'unknown'
-    Icon = CircleHelp
+  if (quotaKgn === 0) {
     message =
       'Udledningen kan ikke opgøres endnu - ingen udledningsgrænse på markerne'
   } else if (calculatedCount === 0) {
-    tone = 'unknown'
-    Icon = CircleHelp
     message =
       'Udledningen kan ikke opgøres endnu - markerne er ikke beregnet endnu'
   } else {
-    const over = totalNLoad > quota
-    const diff = Math.abs(quota - totalNLoad)
+    const over = totalNLoad > quotaKgn
+    const diff = Math.abs(quotaKgn - totalNLoad)
 
     if (over) {
       const uncalculatedNote =
         uncalculatedCount > 0
           ? `, ${formatFieldCount(uncalculatedCount)} ikke beregnet`
           : ''
-      tone = 'over'
-      Icon = CircleAlert
       message =
-        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N ` +
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
         `(${quotaBasis}${uncalculatedNote}) - ${formatNumber(diff)} kg N OVER grænsen`
     } else if (uncalculatedCount > 0) {
-      tone = 'unknown'
-      Icon = CircleHelp
       message =
-        `${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N (${quotaBasis}) brugt - ` +
+        `${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N (${quotaBasis}) brugt - ` +
         `${formatFieldCount(uncalculatedCount)} ikke beregnet endnu`
     } else {
-      tone = 'ok'
-      Icon = CircleCheck
       message =
-        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quota)} kg N ` +
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
         `(${quotaBasis}) - ${formatNumber(diff)} kg N under grænsen`
     }
   }

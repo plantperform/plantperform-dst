@@ -94,6 +94,7 @@ export const formatCropRotation = (rotation: Crop[]) =>
 // candidate_evaluator.py::_START_CALENDAR_YEAR. Position 1 = dette år,
 // position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
 export const ROTATION_START_CALENDAR_YEAR = 2024
+export const CURRENT_CALENDAR_YEAR = new Date().getFullYear()
 
 // Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
 // navnet i parentes lige efter.
@@ -108,6 +109,21 @@ export const formatRealRotation = (rotation: RotationYear[]): string => {
   if (rotation.length === 0) return 'Intet sædskifte endnu — opret et scenarie og kør Optimér'
 
   return rotation.map(formatRotationYear).join(' - ')
+}
+
+export const compactCropSequenceLabel = (cropSequence: string[]): string => {
+  const parts: string[] = []
+  let index = 0
+  while (index < cropSequence.length) {
+    const name = cropSequence[index]
+    let count = 1
+    while (index + count < cropSequence.length && cropSequence[index + count] === name) {
+      count += 1
+    }
+    parts.push(count > 1 ? `${name} ×${count}` : name)
+    index += count
+  }
+  return parts.join(' · ')
 }
 
 export const emptyMeasures = (): FieldMeasures => ({
@@ -335,8 +351,58 @@ export const getFieldQuotaStatus = (
   quotaKgn: field.udledningskvoteMarkKgn,
 })
 
+export const formatNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+
+export const formatQuotaAmount = (status: QuotaStatus): string =>
+  `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
+
+export const formatFieldCount = (count: number) =>
+  `${count} ${count === 1 ? 'mark' : 'marker'}`
+
+export const QUOTA_WARNING_LEVEL_COLORS: Record<
+  'near' | 'over',
+  { bg: string; border: string; text: string }
+> = {
+  near: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
+  over: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+}
+
+export type FarmQuotaSummary = {
+  totalNLoad: number
+  quota: ResolvedFarmQuota
+  calculatedCount: number
+  uncalculatedCount: number
+}
+
+export const computeFarmQuotaSummary = (
+  fields: FieldRecord[],
+  isSimulationView: boolean,
+  farmQuotaKgN: number,
+): FarmQuotaSummary => {
+  const calculatedFields = fields.filter((field) =>
+    isFieldCalculated(field, isSimulationView),
+  )
+  const calculatedCount = calculatedFields.length
+  const totalNLoad = calculatedFields.reduce(
+    (sum, field) => sum + field.nLoad,
+    0,
+  )
+  const quotaSum = fields.reduce(
+    (sum, field) => sum + field.udledningskvoteMarkKgn,
+    0,
+  )
+  return {
+    totalNLoad,
+    quota: resolveFarmQuota(farmQuotaKgN, quotaSum),
+    calculatedCount,
+    uncalculatedCount: fields.length - calculatedCount,
+  }
+}
+
 export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
+export const CROP_YEAR_FALLBACK_COLOR = '#a7c69b'
 
 export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> => {
   const colorByCropCode = new Map<number, string>()
