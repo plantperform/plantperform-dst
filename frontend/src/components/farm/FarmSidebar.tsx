@@ -33,34 +33,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
-
-const formatFieldCount = (count: number) =>
-  `${count} ${count === 1 ? 'mark' : 'marker'}`
-
-const getFieldTotals = (fields: FieldRecord[]) => ({
-  area: fields.reduce((sum, field) => sum + field.areaHa, 0),
-  db2: fields.reduce((sum, field) => sum + field.db2, 0),
-  nLoad: fields.reduce((sum, field) => sum + field.nLoad, 0),
-  leaching: fields.reduce((sum, field) => sum + field.leaching, 0),
-})
-
-const formatRelativeTime = (value: string) => {
-  const createdAt = new Date(value).getTime()
-  if (Number.isNaN(createdAt)) return 'oprettet for nylig'
-
-  const diffMinutes = Math.max(0, Math.round((Date.now() - createdAt) / 60_000))
-  if (diffMinutes < 1) return 'oprettet netop nu'
-  if (diffMinutes < 60) return `oprettet for ${diffMinutes} min. siden`
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) return `oprettet for ${diffHours} t. siden`
-
-  const diffDays = Math.round(diffHours / 24)
-  return `oprettet for ${diffDays} d. siden`
-}
+import {
+  formatFieldCount,
+  formatNumber,
+  formatRelativeTime,
+  getFieldTotals,
+} from '@/lib/farm-totals'
 
 type FarmSidebarProps = {
   farm: Farm
@@ -226,40 +204,6 @@ export const FarmSidebar = ({
                   </div>
                 ))
               )}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Marker</p>
-              <p className="mt-1 text-xl font-semibold">{fields.length}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Areal</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.area)} ha
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">DB2</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.db2)} kr
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Udledning</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.nLoad)} kg N
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Udvaskning</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.leaching)} kg N
-              </p>
             </div>
           </div>
         </div>

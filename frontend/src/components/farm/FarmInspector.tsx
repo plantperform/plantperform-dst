@@ -30,6 +30,7 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
+import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { YearlyOverviewStrip } from '@/components/farm/YearlyOverviewStrip'
 import { Button } from '@/components/ui/button'
@@ -172,6 +173,8 @@ export const FarmInspector = ({
           </div>
         </div>
       </header>
+
+      <FarmMetricsBar farm={farm} fields={fields} onError={onError} />
 
       {selectedSimulation ? (
         <OptimizeDialog
