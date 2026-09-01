@@ -5,6 +5,7 @@ import { AuthPage } from '@/pages/AuthPage'
 import { CreateFarmPage } from '@/pages/CreateFarmPage'
 import { FarmDetailPage } from '@/pages/FarmDetailPage'
 import { HomePage } from '@/pages/HomePage'
+import { ProfilePage } from '@/pages/ProfilePage'
 import { VerifyEmailPage } from '@/pages/VerifyEmailPage'
 
 const App = () => (
@@ -14,6 +15,7 @@ const App = () => (
     <Route path="/verify-email" element={<VerifyEmailPage />} />
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<HomePage />} />
+      <Route path="/profil" element={<ProfilePage />} />
       <Route path="/farms/new" element={<CreateFarmPage />} />
       <Route path="/farms/:farmId" element={<FarmDetailPage />} />
     </Route>

@@ -297,11 +297,11 @@ export const FarmInspector = ({
   const isSimulationView = selection.kind === 'simulation'
 
   return (
-    <section className="flex min-h-screen flex-col">
+    <section className="flex min-h-[calc(100vh-3.5rem)] flex-col">
       <header className="flex flex-col gap-4 border-b bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">
+            <h2 className="font-display text-2xl tracking-tight">
               Markgennemgang
             </h2>
             {selectedSimulation ? (

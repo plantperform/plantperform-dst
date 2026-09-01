@@ -23,7 +23,9 @@ export const farmFieldsKey = (farmId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/fields`
 }
 
-export const useFarms = () => useSWR<Farm[]>('/farms', fetcher)
+export const farmsKey = '/farms'
+
+export const useFarms = () => useSWR<Farm[]>(farmsKey, fetcher)
 
 export const farmMembersKey = (farmId?: string) => {
   if (!farmId) return null

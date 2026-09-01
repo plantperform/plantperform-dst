@@ -7,6 +7,8 @@ import {
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
+import { useAuth } from '@/auth/context'
+import { AppTopbar } from '@/components/AppTopbar'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import type { FarmViewSelection } from '@/components/farm/types'
@@ -18,9 +20,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
+  const { user } = useAuth()
+  const email = user?.email ?? ''
   const {
     data: farm,
     error: farmError,
@@ -47,6 +52,14 @@ export const FarmDetailPage = () => {
     null,
   )
   const toastTimeoutRef = useRef<number | null>(null)
+
+  const loadedFarmId = farm?.id
+
+  useEffect(() => {
+    if (email && loadedFarmId) {
+      markFarmOpened(email, loadedFarmId)
+    }
+  }, [email, loadedFarmId])
 
   useEffect(
     () => () => {
@@ -77,8 +90,9 @@ export const FarmDetailPage = () => {
 
   if (farmError) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-3xl">
+      <main className="min-h-screen bg-background">
+        <AppTopbar />
+        <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10">
           <Card>
             <CardHeader>
               <CardTitle>Bedriften blev ikke fundet</CardTitle>
@@ -86,7 +100,9 @@ export const FarmDetailPage = () => {
             </CardHeader>
             <CardContent>
               <Button asChild>
-                <Link to="/">Tilbage til bedrifter</Link>
+                <Link to="/" state={HOME_OVERVIEW_STATE}>
+                  Tilbage til bedrifter
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -103,8 +119,9 @@ export const FarmDetailPage = () => {
     simulationFieldsLoading
   ) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-3xl">
+      <main className="min-h-screen bg-background">
+        <AppTopbar />
+        <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10">
           <Card>
             <CardHeader>
               <CardTitle>Indlæser bedrift</CardTitle>
@@ -120,7 +137,8 @@ export const FarmDetailPage = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="grid min-h-screen lg:grid-cols-[320px_1fr]">
+      <AppTopbar />
+      <div className="grid min-h-[calc(100vh-3.5rem)] lg:grid-cols-[320px_1fr]">
         <FarmSidebar
           farm={farm}
           fields={fields}
@@ -131,7 +149,7 @@ export const FarmDetailPage = () => {
         />
         <div>
           {toast ? (
-            <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
+            <div className="fixed right-4 top-[4.5rem] z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
               <p role="alert">{toast.message}</p>
             </div>
           ) : null}

@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
   farmKey,
   farmFieldsKey,
   farmMembersKey,
+  farmsKey,
   simulationFieldsKey,
   simulationsKey,
   useFarmMembers,
@@ -20,6 +21,7 @@ import {
 } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
+import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { Button } from '@/components/ui/button'
@@ -114,9 +116,9 @@ export const FarmSidebar = ({
     setIsDeleting(true)
     try {
       await deleteFarm(farm.id)
-      await mutate('/farms')
+      await mutate(farmsKey)
       await mutate(farmFieldsKey(farm.id))
-      navigate('/')
+      navigate('/', { state: HOME_OVERVIEW_STATE })
     } catch {
       onError('Kunne ikke slette bedriften.')
     } finally {
@@ -135,7 +137,7 @@ export const FarmSidebar = ({
     try {
       const updatedFarm = await updateFarm(farm.id, { udledningskvoteKgN: quota })
       await mutate(farmKey(farm.id), updatedFarm, { revalidate: false })
-      await mutate('/farms')
+      await mutate(farmsKey)
       setQuotaDialogOpen(false)
       onError(null)
     } catch {
@@ -189,8 +191,8 @@ export const FarmSidebar = ({
       await removeFarmMember(farm.id, email)
       await mutate(farmMembersKey(farm.id))
       if (user?.email.toLowerCase() === email.toLowerCase()) {
-        await mutate('/farms')
-        navigate('/')
+        await mutate(farmsKey)
+        navigate('/', { state: HOME_OVERVIEW_STATE })
       }
       onError(null)
     } catch {
@@ -199,20 +201,11 @@ export const FarmSidebar = ({
   }
 
   return (
-    <aside className="border-b bg-muted/30 p-6 lg:min-h-screen lg:border-b-0 lg:border-r">
-      <Button
-        asChild
-        variant="outline"
-        size="sm"
-        className="mb-6 bg-background/80"
-      >
-        <Link to="/">Tilbage til bedrifter</Link>
-      </Button>
-
+    <aside className="border-b bg-muted/30 p-6 lg:min-h-[calc(100vh-3.5rem)] lg:border-b-0 lg:border-r">
       <div className="space-y-6">
         <div>
           <p className="text-sm font-medium text-muted-foreground">Bedrift</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 font-display text-3xl tracking-tight">
             {farm.name}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">{farm.ownerName}</p>

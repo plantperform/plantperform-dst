@@ -19,6 +19,9 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+  --font-display:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
+    serif;
 }
 
 :root {
@@ -27,6 +30,7 @@
   --card: 0 0% 100%;
   --card-foreground: 150 21% 13%;
   --primary: 142 63% 24%;
+  --primary-deep: 142 63% 12%;
   --primary-foreground: 48 33% 97%;
   --secondary: 91 31% 88%;
   --secondary-foreground: 142 63% 18%;
@@ -63,5 +67,18 @@ body {
   from {
     transform: translateX(var(--slide-from));
     opacity: 0.2;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+}
+
+@keyframes mosaic-in {
+  from {
+    opacity: 0;
   }
 }
