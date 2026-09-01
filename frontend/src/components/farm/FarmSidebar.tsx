@@ -13,6 +13,16 @@ import type { FarmViewSelection } from '@/components/farm/types'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   formatFieldCount,
   formatNumber,
   formatRelativeTime,
@@ -204,16 +214,38 @@ const SimulationViewRow = ({
           onSelect={onSelect}
         />
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 shrink-0 px-2 text-muted-foreground hover:text-red-600"
-        onClick={onDelete}
-        disabled={deleting}
-        aria-label={`Slet ${simulation.name}`}
-      >
-        <Trash2 className="size-4" />
-      </Button>
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 shrink-0 px-2 text-muted-foreground hover:text-red-600"
+            disabled={deleting}
+            aria-label={`Slet ${simulation.name}`}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Slet {simulation.name}?</DialogTitle>
+            <DialogDescription>
+              Simuleringen og dens kopierede marker slettes. Bedriftens egne
+              marker berøres ikke. Handlingen kan ikke fortrydes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Annuller</Button>
+            </DialogClose>
+            <DialogClose asChild>
+              <Button variant="destructive" onClick={onDelete}>
+                Slet simulering
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
