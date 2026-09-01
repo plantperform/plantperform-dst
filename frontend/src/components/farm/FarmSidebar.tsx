@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { mutate } from 'swr'
 
@@ -61,89 +62,111 @@ export const FarmSidebar = ({
   }
 
   return (
-    <aside className="border-b bg-muted/30 p-4 lg:border-b-0 lg:border-r">
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Visninger
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Aktuelle marker og optimeringsalternativer.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-background/80"
-              onClick={() => setNewScenarioOpen(true)}
-            >
-              Ny
-            </Button>
-            <NewScenarioPanel
-              farmId={farm.id}
-              fields={fields}
-              open={newScenarioOpen}
-              onOpenChange={setNewScenarioOpen}
-              onSimulationCreated={(simulation) =>
-                onSelectionChange({ kind: 'simulation', id: simulation.id })
-              }
-              onError={onError}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <button
-              type="button"
-              className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
-                selection.kind === 'current'
-                  ? 'border-primary bg-primary/10'
-                  : 'bg-background/70 hover:bg-background'
-              }`}
-              onClick={() => onSelectionChange({ kind: 'current' })}
-            >
-              <span
-                className={
-                  selection.kind === 'current' ? 'font-semibold' : 'font-medium'
-                }
-              >
-                Afgrødehistorik
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {formatFieldCount(fields.length)} · {formatNumber(totals.area)}{' '}
-                ha
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-                {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-                {formatNumber(totals.leaching)} kg N
-              </span>
-            </button>
-
-            {simulations.map((simulation) => (
-              <SimulationViewRow
-                key={simulation.id}
-                farmId={farm.id}
-                simulation={simulation}
-                selected={
-                  selection.kind === 'simulation' &&
-                  selection.id === simulation.id
-                }
-                deleting={deletingSimulationId === simulation.id}
-                onSelect={() =>
-                  onSelectionChange({ kind: 'simulation', id: simulation.id })
-                }
-                onDelete={() => void removeSimulation(simulation.id)}
-              />
-            ))}
-          </div>
-        </div>
-
+    <nav
+      aria-label="Visninger"
+      className="border-b bg-muted/30 p-3 lg:border-b-0 lg:border-r"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Visninger
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-xs"
+          onClick={() => setNewScenarioOpen(true)}
+        >
+          Ny
+        </Button>
+        <NewScenarioPanel
+          farmId={farm.id}
+          fields={fields}
+          open={newScenarioOpen}
+          onOpenChange={setNewScenarioOpen}
+          onSimulationCreated={(simulation) =>
+            onSelectionChange({ kind: 'simulation', id: simulation.id })
+          }
+          onError={onError}
+        />
       </div>
-    </aside>
+
+      <ul className="space-y-1">
+        <li>
+          <ViewRowButton
+            label="Afgrødehistorik"
+            context={`${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`}
+            selected={selection.kind === 'current'}
+            onSelect={() => onSelectionChange({ kind: 'current' })}
+          />
+        </li>
+
+        {simulations.length > 0 ? (
+          <li>
+            <p className="px-3 pb-1 pt-3 text-xs font-medium text-muted-foreground">
+              Optimeringsalternativer
+            </p>
+            {/* Indented under Afgrødehistorik: every simulering is a copy of the
+                bedrift's marker, not a sibling of them. */}
+            <ul className="ml-3 space-y-1 border-l pl-2">
+              {simulations.map((simulation) => (
+                <li key={simulation.id}>
+                  <SimulationViewRow
+                    farmId={farm.id}
+                    simulation={simulation}
+                    selected={
+                      selection.kind === 'simulation' &&
+                      selection.id === simulation.id
+                    }
+                    deleting={deletingSimulationId === simulation.id}
+                    onSelect={() =>
+                      onSelectionChange({
+                        kind: 'simulation',
+                        id: simulation.id,
+                      })
+                    }
+                    onDelete={() => void removeSimulation(simulation.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </li>
+        ) : null}
+      </ul>
+    </nav>
   )
 }
+
+type ViewRowButtonProps = {
+  label: string
+  context: string
+  selected: boolean
+  onSelect: () => void
+}
+
+const ViewRowButton = ({
+  label,
+  context,
+  selected,
+  onSelect,
+}: ViewRowButtonProps) => (
+  <button
+    type="button"
+    aria-current={selected ? 'page' : undefined}
+    className={`w-full rounded-md border-l-2 px-3 py-2 text-left transition-colors ${
+      selected
+        ? 'border-l-primary bg-primary/10 text-primary'
+        : 'border-l-transparent hover:bg-background'
+    }`}
+    onClick={onSelect}
+  >
+    <span className={`block truncate text-sm ${selected ? 'font-semibold' : 'font-medium'}`}>
+      {label}
+    </span>
+    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+      {context}
+    </span>
+  </button>
+)
 
 type SimulationViewRowProps = {
   farmId: string
@@ -167,48 +190,29 @@ const SimulationViewRow = ({
     simulation.id,
   )
   const totals = getFieldTotals(fields)
+  const context = isLoading
+    ? formatRelativeTime(simulation.createdAt)
+    : `${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`
 
   return (
-    <div
-      className={`flex items-center gap-2 rounded-lg border bg-background/70 p-2 transition-colors ${
-        selected ? 'border-primary bg-primary/10' : 'hover:bg-background'
-      }`}
-    >
-      <button
-        type="button"
-        className="min-w-0 flex-1 text-left"
-        onClick={onSelect}
-      >
-        <span
-          className={`block truncate text-sm ${selected ? 'font-semibold' : 'font-medium'}`}
-        >
-          {simulation.name}
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {formatRelativeTime(simulation.createdAt)}
-        </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
-          {isLoading
-            ? 'Indlæser nøgletal...'
-            : `${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`}
-        </span>
-        {!isLoading ? (
-          <span className="mt-1 block text-xs text-muted-foreground">
-            DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-            {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-            {formatNumber(totals.leaching)} kg N
-          </span>
-        ) : null}
-      </button>
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">
+        <ViewRowButton
+          label={simulation.name}
+          context={context}
+          selected={selected}
+          onSelect={onSelect}
+        />
+      </div>
       <Button
         size="sm"
-        variant="outline"
-        className="bg-background/80 px-2"
+        variant="ghost"
+        className="h-8 shrink-0 px-2 text-muted-foreground hover:text-red-600"
         onClick={onDelete}
         disabled={deleting}
         aria-label={`Slet ${simulation.name}`}
       >
-        {deleting ? '...' : 'Slet'}
+        <Trash2 className="size-4" />
       </Button>
     </div>
   )
