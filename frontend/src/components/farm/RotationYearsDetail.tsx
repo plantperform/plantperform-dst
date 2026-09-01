@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { RotationCandidateYearResult } from '@/api/types'
+import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 import {
   L_FORMULA_CONSTANTS,
   M_LABELS,
@@ -735,7 +736,8 @@ export const RotationYearsDetail = ({
                   : 'bg-background hover:bg-muted'
               }`}
             >
-              År {index + 1} - {y.year.afgrodeNavn}
+              År {index + 1} ({ROTATION_START_CALENDAR_YEAR + index}) -{' '}
+              {y.year.afgrodeNavn}
               {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
             </button>
           ))}

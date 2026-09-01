@@ -37,7 +37,7 @@ import {
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import type { FarmViewSelection } from '@/components/farm/types'
-import { YearlyOverviewStrip } from '@/components/farm/YearlyOverviewStrip'
+import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -55,6 +55,8 @@ import {
   formatFieldCount,
   formatNumber,
   ROTATION_START_CALENDAR_YEAR,
+  YEAR_BAR_FILL_COLOR,
+  YEAR_BAR_OVER_COLOR,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 
@@ -176,18 +178,32 @@ const EmissionStatusBar = ({
   )
 }
 
-const YearlyOverviewMiniBars = ({ entries }: { entries: YearlySummaryEntry[] }) => {
-  const maxDb2 = Math.max(1, ...entries.map((entry) => entry.totalDb2))
+const YearlyOverviewMiniBars = ({
+  entries,
+  quotaKgn,
+}: {
+  entries: YearlySummaryEntry[]
+  quotaKgn: number
+}) => {
+  const scale = Math.max(
+    1,
+    quotaKgn,
+    ...entries.map((entry) => entry.totalNLoadKg),
+  )
 
   return (
     <div className="flex h-6 items-end gap-0.5" aria-hidden="true">
       {entries.map((entry) => {
-        const heightPct = Math.max(8, (entry.totalDb2 / maxDb2) * 100)
+        const heightPct = Math.max(8, (entry.totalNLoadKg / scale) * 100)
+        const isOver = quotaKgn > 0 && entry.totalNLoadKg > quotaKgn
         return (
           <div
             key={entry.year}
             className="w-[7px] rounded-t-sm"
-            style={{ height: `${heightPct}%`, backgroundColor: '#cfdfc6' }}
+            style={{
+              height: `${heightPct}%`,
+              backgroundColor: isOver ? YEAR_BAR_OVER_COLOR : YEAR_BAR_FILL_COLOR,
+            }}
           />
         )
       })}
@@ -196,16 +212,27 @@ const YearlyOverviewMiniBars = ({ entries }: { entries: YearlySummaryEntry[] }) 
 }
 
 const YearlyOverviewSection = ({
-  farmId,
+  farm,
+  fields,
   simulationId,
 }: {
-  farmId: string
+  farm: Farm
+  fields: FieldRecord[]
   simulationId: string
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const { data: entries } = useSimulationYearlySummary(farmId, simulationId)
+  const { data: entries } = useSimulationYearlySummary(farm.id, simulationId)
+  const quota = useMemo(
+    () => computeFarmQuotaSummary(fields, true, farm.udledningskvoteKgN).quota,
+    [farm.udledningskvoteKgN, fields],
+  )
 
   if (!entries || entries.length === 0) return null
+
+  const overYearCount =
+    quota.quotaKgn > 0
+      ? entries.filter((entry) => entry.totalNLoadKg > quota.quotaKgn).length
+      : 0
 
   return (
     <div className="rounded-lg border">
@@ -225,16 +252,20 @@ const YearlyOverviewSection = ({
           <div>
             <div className="text-sm font-semibold">Årsoversigt</div>
             <div className="text-xs text-muted-foreground">
-              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - vis DB2 og udledning år for
-              år
+              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - DB2 og udledning år for år
+              {overYearCount > 0 ? (
+                <span className="ml-1 font-medium text-red-700">
+                  · {overYearCount} af {entries.length} år over grænsen
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
-        <YearlyOverviewMiniBars entries={entries} />
+        <YearlyOverviewMiniBars entries={entries} quotaKgn={quota.quotaKgn} />
       </button>
       {isOpen ? (
-        <div className="border-t px-3 pb-3 pt-3">
-          <YearlyOverviewStrip farmId={farmId} simulationId={simulationId} />
+        <div className="border-t px-4 pb-4 pt-3">
+          <YearlyOverviewTable entries={entries} quota={quota} />
         </div>
       ) : null}
     </div>
@@ -374,7 +405,11 @@ export const FarmInspector = ({
         {view === 'list' ? (
           <>
             {isSimulationView && selection.kind === 'simulation' ? (
-              <YearlyOverviewSection farmId={farm.id} simulationId={selection.id} />
+              <YearlyOverviewSection
+                farm={farm}
+                fields={fields}
+                simulationId={selection.id}
+              />
             ) : null}
             <FarmFieldsList
               farmId={farm.id}

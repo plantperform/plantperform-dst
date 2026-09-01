@@ -354,6 +354,9 @@ export const getFieldQuotaStatus = (
 export const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
 
+export const formatWholeNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
+
 export const formatQuotaAmount = (status: QuotaStatus): string =>
   `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
 
@@ -399,6 +402,9 @@ export const computeFarmQuotaSummary = (
     uncalculatedCount: fields.length - calculatedCount,
   }
 }
+
+export const YEAR_BAR_FILL_COLOR = '#cfdfc6'
+export const YEAR_BAR_OVER_COLOR = '#f87171'
 
 export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
