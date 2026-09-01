@@ -9,6 +9,7 @@ import {
 } from '@/api/hooks'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
+import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -119,8 +120,9 @@ export const FarmDetailPage = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="grid min-h-screen lg:grid-cols-[320px_1fr]">
+    <main className="flex min-h-screen flex-col bg-background">
+      <FarmTopBar farm={farm} onError={showErrorToast} />
+      <div className="grid flex-1 lg:grid-cols-[320px_1fr]">
         <FarmSidebar
           farm={farm}
           fields={fields}

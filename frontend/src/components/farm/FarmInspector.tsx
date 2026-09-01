@@ -97,7 +97,7 @@ export const FarmInspector = ({
   const isSimulationView = selection.kind === 'simulation'
 
   return (
-    <section className="flex min-h-screen flex-col">
+    <section className="flex min-h-full flex-col">
       <header className="flex flex-col gap-4 border-b bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
