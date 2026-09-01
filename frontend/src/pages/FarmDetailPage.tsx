@@ -1,3 +1,4 @@
+import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -10,6 +11,8 @@ import {
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
+import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
+import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,6 +51,8 @@ export const FarmDetailPage = () => {
     null,
   )
   const toastTimeoutRef = useRef<number | null>(null)
+  const { width: sidebarWidth, changeWidth: setSidebarWidth } =
+    useSidebarWidth()
 
   useEffect(
     () => () => {
@@ -122,16 +127,25 @@ export const FarmDetailPage = () => {
   return (
     <main className="flex min-h-screen flex-col bg-background">
       <FarmTopBar farm={farm} onError={showErrorToast} />
-      <div className="grid flex-1 lg:grid-cols-[320px_1fr]">
-        <FarmSidebar
-          farm={farm}
-          fields={fields}
-          simulations={simulations}
-          selection={activeSelection}
-          onSelectionChange={setSelection}
-          onError={showErrorToast}
+      <div
+        className="flex flex-1 flex-col lg:flex-row"
+        style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        <div className="w-full shrink-0 lg:w-[var(--sidebar-width)]">
+          <FarmSidebar
+            farm={farm}
+            fields={fields}
+            simulations={simulations}
+            selection={activeSelection}
+            onSelectionChange={setSelection}
+            onError={showErrorToast}
+          />
+        </div>
+        <SidebarResizeHandle
+          width={sidebarWidth}
+          onWidthChange={setSidebarWidth}
         />
-        <div>
+        <div className="min-w-0 flex-1">
           {toast ? (
             <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
               <p role="alert">{toast.message}</p>
