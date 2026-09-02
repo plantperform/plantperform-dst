@@ -1,10 +1,10 @@
 import {
-  ChevronLeft,
   FlaskConical,
   PanelLeft,
   Plus,
   Sprout,
   Trash2,
+  Warehouse,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -130,10 +130,10 @@ export const FarmSidebar = ({
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Bedrifter">
+                <SidebarMenuButton asChild tooltip="Alle bedrifter">
                   <Link to="/">
-                    <ChevronLeft />
-                    <span>Bedrifter</span>
+                    <Warehouse />
+                    <span>Alle bedrifter</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

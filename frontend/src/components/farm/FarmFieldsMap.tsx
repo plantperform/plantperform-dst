@@ -484,7 +484,7 @@ export const FarmFieldsMap = ({
   }
 
   return (
-    <div className="relative h-full min-h-0 flex-1 overflow-hidden rounded-xl border bg-muted">
+    <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border bg-muted">
       <Map
         ref={mapRef}
         initialViewState={initialViewState}
