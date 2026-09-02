@@ -14,15 +14,6 @@ export const getFieldTotals = (fields: FieldRecord[]): FieldTotals => ({
   leaching: fields.reduce((sum, field) => sum + field.leaching, 0),
 })
 
-// Sum of the per-mark udledningskvoter. Marks without a registered
-// udledningsgrænse contribute 0, so the sum can understate the real quota —
-// callers that show it also show how many marks are missing data.
-export const getMarkQuotaSum = (fields: FieldRecord[]) =>
-  fields.reduce((sum, field) => sum + field.udledningskvoteMarkKgn, 0)
-
-export const countFieldsWithoutQuota = (fields: FieldRecord[]) =>
-  fields.filter((field) => field.udledningskvoteMarkKgn === 0).length
-
 export const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
 

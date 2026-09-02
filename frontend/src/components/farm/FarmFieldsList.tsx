@@ -293,7 +293,7 @@ export const FarmFieldsList = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-muted/60">
               <tr>

@@ -12,7 +12,7 @@ type SidebarResizeHandleProps = {
 }
 
 /**
- * Drag handle on the sidebar's right edge. Keyboard users can focus it and
+ * Drag handle on the sidebar's right edge, anchored inside the sidebar panel. Keyboard users can focus it and
  * resize with the arrow keys.
  */
 export const SidebarResizeHandle = ({
@@ -69,7 +69,7 @@ export const SidebarResizeHandle = ({
       aria-valuemin={MIN_SIDEBAR_WIDTH}
       aria-valuemax={MAX_SIDEBAR_WIDTH}
       tabIndex={0}
-      className={`hidden w-1 shrink-0 cursor-col-resize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:block ${
+      className={`absolute inset-y-0 right-0 z-20 hidden w-1 cursor-col-resize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:block ${
         isDragging ? 'bg-primary' : 'bg-transparent hover:bg-primary/40'
       }`}
       onPointerDown={(event) => {

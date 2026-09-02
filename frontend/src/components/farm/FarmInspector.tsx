@@ -31,6 +31,7 @@ import {
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
+import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { YearlyOverviewStrip } from '@/components/farm/YearlyOverviewStrip'
 import { Button } from '@/components/ui/button'
@@ -97,84 +98,79 @@ export const FarmInspector = ({
   const isSimulationView = selection.kind === 'simulation'
 
   return (
-    <section className="flex min-h-full flex-col">
-      <header className="flex flex-col gap-4 border-b bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <section className="flex h-full min-h-0 flex-col">
+      <FarmTopBar
+        farm={farm}
+        visning={
+          selectedSimulation
+            ? `Simulering: ${selectedSimulation.name}`
+            : 'Afgrødehistorik'
+        }
+        onError={onError}
+        details={<FarmMetricsBar farmId={farm.id} fields={fields} />}
+        actions={
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">
-              Markgennemgang
-            </h2>
             {selectedSimulation ? (
-              <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">
-                Simulering: {selectedSimulation.name}
-              </span>
+              <Button size="sm" onClick={() => setOptimizeDialogOpen(true)}>
+                Optimér
+              </Button>
             ) : null}
+            {selectedSimulation ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setYearlyOptimizeDialogOpen(true)}
+              >
+                Års-optimering
+              </Button>
+            ) : null}
+            <div className="flex rounded-md border bg-muted/40 p-0.5">
+              <Button
+                size="sm"
+                variant={view === 'list' ? 'default' : 'outline'}
+                className={
+                  view === 'list' ? '' : 'border-transparent bg-transparent'
+                }
+                onClick={() => setView('list')}
+              >
+                Liste
+              </Button>
+              <Button
+                size="sm"
+                variant={view === 'map' ? 'default' : 'outline'}
+                className={
+                  view === 'map' ? '' : 'border-transparent bg-transparent'
+                }
+                onClick={() => setView('map')}
+              >
+                Kort
+              </Button>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {isSimulationView
-              ? 'Gennemgå de kopierede marker for dette optimeringsalternativ.'
-              : 'Gennemgå tilknyttede marker som liste eller direkte på kortet.'}
-          </p>
-          {optimizationSummary && selectedSimulation ? (
-            <p className="mt-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-              Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
-              {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}
-              , Udledning{' '}
-              {optimizationSummary.totalNLoadKg.toLocaleString(undefined, {
-                maximumFractionDigits: 1,
-              })}{' '}
-              kg N, udvaskning{' '}
-              {optimizationSummary.totalLeachingKg.toLocaleString(undefined, {
-                maximumFractionDigits: 1,
-              })}{' '}
-              kg N, foderenheder{' '}
-              {optimizationSummary.totalFen.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}{' '}
-              FE.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {selectedSimulation ? (
-            <Button onClick={() => setOptimizeDialogOpen(true)}>Optimér</Button>
-          ) : null}
-          {selectedSimulation ? (
-            <Button
-              variant="outline"
-              onClick={() => setYearlyOptimizeDialogOpen(true)}
-            >
-              Års-optimering
-            </Button>
-          ) : null}
-          <div className="flex rounded-md border bg-muted/40 p-1">
-            <Button
-              size="sm"
-              variant={view === 'list' ? 'default' : 'outline'}
-              className={
-                view === 'list' ? '' : 'border-transparent bg-transparent'
-              }
-              onClick={() => setView('list')}
-            >
-              Liste
-            </Button>
-            <Button
-              size="sm"
-              variant={view === 'map' ? 'default' : 'outline'}
-              className={
-                view === 'map' ? '' : 'border-transparent bg-transparent'
-              }
-              onClick={() => setView('map')}
-            >
-              Kort
-            </Button>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
-      <FarmMetricsBar farm={farm} fields={fields} onError={onError} />
+      {optimizationSummary && selectedSimulation ? (
+        <p className="border-b border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
+          {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+          })}
+          , Udledning{' '}
+          {optimizationSummary.totalNLoadKg.toLocaleString(undefined, {
+            maximumFractionDigits: 1,
+          })}{' '}
+          kg N, udvaskning{' '}
+          {optimizationSummary.totalLeachingKg.toLocaleString(undefined, {
+            maximumFractionDigits: 1,
+          })}{' '}
+          kg N, foderenheder{' '}
+          {optimizationSummary.totalFen.toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+          })}{' '}
+          FE.
+        </p>
+      ) : null}
 
       {selectedSimulation ? (
         <OptimizeDialog
@@ -198,7 +194,13 @@ export const FarmInspector = ({
         />
       ) : null}
 
-      <div className="flex-1 space-y-4 p-4">
+      <div
+        className={
+          view === 'list'
+            ? 'min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4'
+            : 'flex min-h-0 min-w-0 flex-1 flex-col p-4'
+        }
+      >
         {view === 'list' ? (
           <>
             {isSimulationView && selection.kind === 'simulation' ? (

@@ -1,6 +1,7 @@
-import { ChevronLeft, MoreHorizontal } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { ChevronDown, MoreHorizontal } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import { farmFieldsKey, farmMembersKey, useFarmMembers } from '@/api/hooks'
@@ -18,48 +19,92 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 
 type FarmTopBarProps = {
   farm: Farm
+  /** Name of the visning shown below, when it is not the bedrift's own marker. */
+  visning?: string
+  /** Controls for the visning below, kept on the same row to save vertical space. */
+  actions?: ReactNode
+  /** Nøgletal for the visning, folded away until the user asks for them. */
+  details?: ReactNode
   onError: (message: string | null) => void
 }
 
 /**
- * Identity of, and actions on, the bedrift itself. Everything here acts on the
- * whole bedrift, which is what puts it above the sidebar: the visninger in the
- * sidebar belong to the bedrift named here.
+ * The one header of the bedrift view: identity of the bedrift, which visning is
+ * open, and the actions for both. Navigation between visninger lives in the
+ * sidebar, so nothing here repeats it.
  */
-export const FarmTopBar = ({ farm, onError }: FarmTopBarProps) => {
+export const FarmTopBar = ({
+  farm,
+  visning,
+  actions,
+  details,
+  onError,
+}: FarmTopBarProps) => {
   const [shareOpen, setShareOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  // Nøgletal start folded: they are a lookup, not something to read on arrival.
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsId = useId()
 
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-background px-4 py-3">
-      <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link to="/">
-          <ChevronLeft className="size-4" />
-          Bedrifter
-        </Link>
-      </Button>
+    <header className="border-b bg-background">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+        {/* The sidebar has its own toggle; on mobile it is a sheet, so it
+            cannot be reopened from inside itself. */}
+        <SidebarTrigger className="-ml-1 md:hidden" />
+        <Separator orientation="vertical" className="h-4 md:hidden" />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="truncate text-lg font-semibold tracking-tight">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h1 className="truncate text-base font-semibold tracking-tight">
             {farm.name}
           </h1>
-          <p className="truncate text-sm text-muted-foreground">
-            {farm.ownerName}
-          </p>
+          {visning ? (
+            <span className="truncate rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">
+              {visning}
+            </span>
+          ) : null}
           <p className="truncate text-xs text-muted-foreground">
-            CVR {farm.cvr ?? '—'}
+            {farm.ownerName} · CVR {farm.cvr ?? '—'}
           </p>
         </div>
+
+        {details ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            onClick={() => setDetailsOpen((current) => !current)}
+          >
+            Nøgletal
+            <ChevronDown
+              className={`size-4 transition-transform ${
+                detailsOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </Button>
+        ) : null}
+
+        <div className="flex-1" />
+
+        {actions}
+
+        <FarmActionsMenu
+          onShare={() => setShareOpen(true)}
+          onDelete={() => setDeleteOpen(true)}
+        />
       </div>
 
-      <FarmActionsMenu
-        onShare={() => setShareOpen(true)}
-        onDelete={() => setDeleteOpen(true)}
-      />
+      {details && detailsOpen ? (
+        <div id={detailsId} className="border-t">
+          {details}
+        </div>
+      ) : null}
 
       <ShareFarmDialog
         farm={farm}

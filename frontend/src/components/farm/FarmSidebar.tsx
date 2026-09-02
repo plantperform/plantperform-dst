@@ -1,5 +1,13 @@
-import { Trash2 } from 'lucide-react'
+import {
+  ChevronLeft,
+  FlaskConical,
+  PanelLeft,
+  Plus,
+  Sprout,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
@@ -11,6 +19,7 @@ import { deleteSimulation } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
+import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,8 +29,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarFooter,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from '@/components/ui/sidebar'
 import {
   formatFieldCount,
   formatNumber,
@@ -36,8 +58,16 @@ type FarmSidebarProps = {
   selection: FarmViewSelection
   onSelectionChange: (selection: FarmViewSelection) => void
   onError: (message: string | null) => void
+  width: number
+  onWidthChange: (width: number) => void
 }
 
+/**
+ * Navigation for the bedrift: back to the bedrift list, then the visninger.
+ * Rows are single-line so the list stays dense; only the selected visning
+ * expands to describe itself, which keeps the detail where it is being read.
+ * Collapses to an icon rail, so every visning keeps a row even when minimized.
+ */
 export const FarmSidebar = ({
   farm,
   fields,
@@ -45,10 +75,14 @@ export const FarmSidebar = ({
   selection,
   onSelectionChange,
   onError,
+  width,
+  onWidthChange,
 }: FarmSidebarProps) => {
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
+  const [simulationToDelete, setSimulationToDelete] =
+    useState<Simulation | null>(null)
   const [newScenarioOpen, setNewScenarioOpen] = useState(false)
   const totals = getFieldTotals(fields)
 
@@ -72,113 +106,207 @@ export const FarmSidebar = ({
   }
 
   return (
-    <nav
-      aria-label="Visninger"
-      className="border-b bg-muted/30 p-3 lg:border-b-0 lg:border-r"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Visninger
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 px-2 text-xs"
-          onClick={() => setNewScenarioOpen(true)}
-        >
-          Ny
-        </Button>
-        <NewScenarioPanel
-          farmId={farm.id}
-          fields={fields}
-          open={newScenarioOpen}
-          onOpenChange={setNewScenarioOpen}
-          onSimulationCreated={(simulation) =>
-            onSelectionChange({ kind: 'simulation', id: simulation.id })
-          }
-          onError={onError}
-        />
-      </div>
-
-      <ul className="space-y-1">
-        <li>
-          <ViewRowButton
-            label="Afgrødehistorik"
-            context={`${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`}
-            selected={selection.kind === 'current'}
-            onSelect={() => onSelectionChange({ kind: 'current' })}
+    <Sidebar collapsible="icon" aria-label="Visninger">
+      <SidebarHeader className="p-2">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <img
+            src="/plant-perform-tab-icon.svg"
+            alt=""
+            className="size-8 shrink-0 rounded-md"
           />
-        </li>
+          <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate text-sm font-semibold">PlantPerform</span>
+            <span className="truncate text-xs text-muted-foreground">
+              Sædskifteplanlægning
+            </span>
+          </div>
+        </div>
+      </SidebarHeader>
 
-        {simulations.length > 0 ? (
-          <li>
-            <p className="px-3 pb-1 pt-3 text-xs font-medium text-muted-foreground">
-              Optimeringsalternativer
-            </p>
-            {/* Indented under Afgrødehistorik: every simulering is a copy of the
-                bedrift's marker, not a sibling of them. */}
-            <ul className="ml-3 space-y-1 border-l pl-2">
+      <SidebarDivider />
+
+      <SidebarContent>
+        <SidebarGroup className="py-1">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Bedrifter">
+                  <Link to="/">
+                    <ChevronLeft />
+                    <span>Bedrifter</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarDivider />
+
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Optimeringsalternativer</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
               {simulations.map((simulation) => (
-                <li key={simulation.id}>
-                  <SimulationViewRow
-                    farmId={farm.id}
-                    simulation={simulation}
-                    selected={
-                      selection.kind === 'simulation' &&
-                      selection.id === simulation.id
-                    }
-                    deleting={deletingSimulationId === simulation.id}
-                    onSelect={() =>
-                      onSelectionChange({
-                        kind: 'simulation',
-                        id: simulation.id,
-                      })
-                    }
-                    onDelete={() => void removeSimulation(simulation.id)}
-                  />
-                </li>
+                <SimulationMenuItem
+                  key={simulation.id}
+                  farmId={farm.id}
+                  simulation={simulation}
+                  selected={
+                    selection.kind === 'simulation' &&
+                    selection.id === simulation.id
+                  }
+                  deleting={deletingSimulationId === simulation.id}
+                  onSelect={() =>
+                    onSelectionChange({
+                      kind: 'simulation',
+                      id: simulation.id,
+                    })
+                  }
+                  onDelete={() => setSimulationToDelete(simulation)}
+                />
               ))}
-            </ul>
-          </li>
-        ) : null}
-      </ul>
-    </nav>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  className="text-sidebar-foreground/70"
+                  tooltip="Ny simulering"
+                  onClick={() => setNewScenarioOpen(true)}
+                >
+                  <Plus />
+                  <span>Ny simulering</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Visninger</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <ViewMenuButton
+                  icon={<Sprout />}
+                  label="Afgrødehistorik"
+                  selected={selection.kind === 'current'}
+                  onSelect={() => onSelectionChange({ kind: 'current' })}
+                />
+                {selection.kind === 'current' ? (
+                  <ViewDetails
+                    entries={[
+                      ['Marker', formatFieldCount(fields.length)],
+                      ['Areal', `${formatNumber(totals.area)} ha`],
+                    ]}
+                  />
+                ) : null}
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarDivider />
+
+      <SidebarFooter className="p-1 pb-3">
+        <CollapseMenuButton />
+      </SidebarFooter>
+
+      <SidebarWidthHandle width={width} onWidthChange={onWidthChange} />
+
+      <NewScenarioPanel
+        farmId={farm.id}
+        fields={fields}
+        open={newScenarioOpen}
+        onOpenChange={setNewScenarioOpen}
+        onSimulationCreated={(simulation) =>
+          onSelectionChange({ kind: 'simulation', id: simulation.id })
+        }
+        onError={onError}
+      />
+      <DeleteSimulationDialog
+        simulation={simulationToDelete}
+        onOpenChange={(open) => {
+          if (!open) setSimulationToDelete(null)
+        }}
+        onConfirm={(simulationId) => void removeSimulation(simulationId)}
+      />
+    </Sidebar>
   )
 }
 
-type ViewRowButtonProps = {
+/**
+ * A rule between sidebar sections. SidebarSeparator is not usable here: its
+ * `w-full` is a variant utility that outranks the `w-auto` meant to make room
+ * for the horizontal margin, so it overflows the sidebar by that margin.
+ */
+const SidebarDivider = () => (
+  <div className="mx-2 h-px shrink-0 bg-sidebar-border" />
+)
+
+/**
+ * Folds the sidebar down to its icon rail. It names what it does while the
+ * sidebar is open; collapsed, the tooltip says how to get back.
+ */
+const CollapseMenuButton = () => {
+  const { toggleSidebar } = useSidebar()
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          className="text-sidebar-foreground/70"
+          tooltip="Vis sidepanel"
+          onClick={toggleSidebar}
+        >
+          <PanelLeft />
+          <span>Skjul sidepanel</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+type ViewMenuButtonProps = {
+  icon: React.ReactNode
   label: string
-  context: string
   selected: boolean
   onSelect: () => void
 }
 
-const ViewRowButton = ({
+const ViewMenuButton = ({
+  icon,
   label,
-  context,
   selected,
   onSelect,
-}: ViewRowButtonProps) => (
-  <button
-    type="button"
+}: ViewMenuButtonProps) => (
+  <SidebarMenuButton
+    isActive={selected}
     aria-current={selected ? 'page' : undefined}
-    className={`w-full rounded-md border-l-2 px-3 py-2 text-left transition-colors ${
-      selected
-        ? 'border-l-primary bg-primary/10 text-primary'
-        : 'border-l-transparent hover:bg-background'
-    }`}
+    tooltip={label}
     onClick={onSelect}
   >
-    <span className={`block truncate text-sm ${selected ? 'font-semibold' : 'font-medium'}`}>
-      {label}
-    </span>
-    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-      {context}
-    </span>
-  </button>
+    {icon}
+    <span className="truncate">{label}</span>
+  </SidebarMenuButton>
 )
 
-type SimulationViewRowProps = {
+type ViewDetailsProps = {
+  entries: [label: string, value: string][]
+}
+
+/** Description of the selected visning, folded out under its navigation row. */
+const ViewDetails = ({ entries }: ViewDetailsProps) => (
+  <dl className="mt-1 mb-1 ml-4 space-y-0.5 border-l border-sidebar-border pl-3 text-xs group-data-[collapsible=icon]:hidden">
+    {entries.map(([label, value]) => (
+      <div key={label} className="flex items-baseline justify-between gap-2">
+        <dt className="text-sidebar-foreground/60">{label}</dt>
+        <dd className="truncate font-medium">{value}</dd>
+      </div>
+    ))}
+  </dl>
+)
+
+type SimulationMenuItemProps = {
   farmId: string
   simulation: Simulation
   selected: boolean
@@ -187,65 +315,102 @@ type SimulationViewRowProps = {
   onDelete: () => void
 }
 
-const SimulationViewRow = ({
+const SimulationMenuItem = ({
   farmId,
   simulation,
   selected,
   deleting,
   onSelect,
   onDelete,
-}: SimulationViewRowProps) => {
+}: SimulationMenuItemProps) => {
+  // Only the selected simulering describes itself, so only it needs its marker.
   const { data: fields = [], isLoading } = useSimulationFields(
     farmId,
-    simulation.id,
+    selected ? simulation.id : undefined,
   )
   const totals = getFieldTotals(fields)
-  const context = isLoading
-    ? formatRelativeTime(simulation.createdAt)
-    : `${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`
 
   return (
-    <div className="flex items-center gap-1">
-      <div className="min-w-0 flex-1">
-        <ViewRowButton
-          label={simulation.name}
-          context={context}
-          selected={selected}
-          onSelect={onSelect}
+    <SidebarMenuItem>
+      <ViewMenuButton
+        icon={<FlaskConical />}
+        label={simulation.name}
+        selected={selected}
+        onSelect={onSelect}
+      />
+      <SidebarMenuAction
+        showOnHover
+        disabled={deleting}
+        aria-label={`Slet ${simulation.name}`}
+        onClick={onDelete}
+      >
+        <Trash2 />
+      </SidebarMenuAction>
+      {selected ? (
+        <ViewDetails
+          entries={[
+            ['Marker', isLoading ? '…' : formatFieldCount(fields.length)],
+            ['Areal', isLoading ? '…' : `${formatNumber(totals.area)} ha`],
+            ['DB2', isLoading ? '…' : `${formatNumber(totals.db2)} kr`],
+            ['Oprettet', formatRelativeTime(simulation.createdAt)],
+          ]}
         />
-      </div>
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 shrink-0 px-2 text-muted-foreground hover:text-red-600"
-            disabled={deleting}
-            aria-label={`Slet ${simulation.name}`}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Slet {simulation.name}?</DialogTitle>
-            <DialogDescription>
-              Simuleringen og dens kopierede marker slettes. Bedriftens egne
-              marker berøres ikke. Handlingen kan ikke fortrydes.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Annuller</Button>
-            </DialogClose>
-            <DialogClose asChild>
-              <Button variant="destructive" onClick={onDelete}>
-                Slet simulering
-              </Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      ) : null}
+    </SidebarMenuItem>
   )
+}
+
+type DeleteSimulationDialogProps = {
+  simulation: Simulation | null
+  onOpenChange: (open: boolean) => void
+  onConfirm: (simulationId: string) => void
+}
+
+const DeleteSimulationDialog = ({
+  simulation,
+  onOpenChange,
+  onConfirm,
+}: DeleteSimulationDialogProps) => (
+  <Dialog open={simulation !== null} onOpenChange={onOpenChange}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Slet {simulation?.name}?</DialogTitle>
+        <DialogDescription>
+          Simuleringen og dens kopierede marker slettes. Bedriftens egne marker
+          berøres ikke. Handlingen kan ikke fortrydes.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Annuller</Button>
+        </DialogClose>
+        <DialogClose asChild>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (simulation) onConfirm(simulation.id)
+            }}
+          >
+            Slet simulering
+          </Button>
+        </DialogClose>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+)
+
+type SidebarWidthHandleProps = {
+  width: number
+  onWidthChange: (width: number) => void
+}
+
+/** The drag handle only makes sense while the sidebar shows its full width. */
+const SidebarWidthHandle = ({
+  width,
+  onWidthChange,
+}: SidebarWidthHandleProps) => {
+  const { state, isMobile } = useSidebar()
+  if (isMobile || state !== 'expanded') return null
+
+  return <SidebarResizeHandle width={width} onWidthChange={onWidthChange} />
 }
