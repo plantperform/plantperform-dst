@@ -1,9 +1,15 @@
 """Dækningsbidrag (DB) for de afgrødekoder der indgår i sædskifte-lookup.
 
-Kobler fire kilder sammen, alle under database/data/raw/ANGJ-data/:
-  - Testdata_salgspriser_afgroedekoder.csv       kr/hkg eller kr/FE, pr. (afgrødekode, driftsform)
-  - Testdata_dyrkningsomkostninger_afgroedekoder.csv  kr/ha, itemiseret pr. kategori/behandling
-  - midlertidig_test_prisliste_2026.csv          SEGES-satser: maskinomkostninger, tilskud, N-pris
+Kobler seks kilder sammen, alle under database/data/raw/ANGJ-data/:
+  - Testdata_salgspriser_afgroedekoder.csv   kr/hkg + halm_pris_kr_kg, pr.
+    (afgrødekode, driftsform, kvalitet) — IKKE jordbonitet, se nedenfor.
+  - Testdata_halmudbytte_afgroedekoder.csv   halm kg/ha, pr. (afgrødekode, jordbonitet)
+  - Testdata_arbejdssatser.csv               kr/enhed pr. (behandling, jordbonitet[, afgrødekode])
+  - Testdata_arbejdsmaengder.csv             antal enheder pr. (afgrødekode,
+    driftsform, jordbonitet, kvalitet, behandling)
+  - Testdata_dyrkningsomkostninger_afgroedekoder.csv  kr/ha, kun for de IKKE-migrerede
+    afgrødekoder (se nedenfor) — de migrerede bruger de to foregående i stedet.
+  - midlertidig_test_prisliste_2026.csv      SEGES-satser: tilskud, N-pris
   - PlantPerform_master_afgroedenormer_...xlsx (Lang_lookup)
     udbyttenorm pr. (afgrødekode, JB-nr, vanding)
 
@@ -15,8 +21,40 @@ Mastertabellens udbyttenormer er kun for konventionel drift. Indtil der
 findes rigtige øko-specifikke normer pr. afgrøde, reduceres udbyttet med en
 fast sats (32 %) for alle afgrøder ved økologisk driftsform.
 
-Gødningslinjen i dyrkningsomkostninger-filen er kun et fladt gæt og
-IGNORERES her til fordel for en reel beregning:
+Delvis reel prisdata (16 af sædskifte-lookup'ens 34 afgrødekoder, pr.
+2026-09-02 — resten venter stadig på samme behandling), udtrukket fra SEGES'
+Budgetkalkuler 2026. Kun "Uden husdyrgødning"-arkene er brugt til
+konventionel — "Med husdyrgødning"-varianten er ekskluderet, fordi
+husdyrgødnings-udbringning allerede prissættes dynamisk her (se
+org_mineral_n_applied nedenfor), og en statisk linje fra "med
+husdyrgødning"-arket ville derfor dobbelttælle den. Økologisk findes kun som
+"med husdyrgødning" hos SEGES, så samme filter (husdyrgødning-linjer droppet
+ved udtræk) er anvendt der af samme grund.
+
+**Prisen varierer ikke med jordbonitet** for nogen af de 16 udtrukne
+afgrøder — kun UDBYTTET gør (allerede en separat, JB-nøglet kilde). Derfor
+er salgspriser-filen flad pr. (afgrødekode, driftsform, kvalitet), uden
+JB-nøgle. Halm er samme mønster: halm_pris_kr_kg er flad i salgspriser,
+halm-UDBYTTET (kg/ha) er JB-specifikt i sin egen fil, mhp. samme
+fallback-kæde (_jordbonitet_kandidater) som kerneudbyttet allerede bruger.
+
+**Arbejde er opdelt i sats × mængde, ikke én fastlåst kr/ha-sum**, så en
+bruger der vil rette op på fx sprøjtesatsen kan gøre det ét sted
+(arbejdssatser) i stedet for at finde og rette hver afgrødes linje for sig.
+De fleste maskinoperationer (Pløjning, Sprøjtning, Gødningsspredning m.fl.)
+har ÉN standardsats pr. jordbonitet, delt af de fleste afgrøder — hvor en
+afgrøde reelt afviger (fx sprøjtning er dyrere for kartofler end for korn),
+får den sin egen linje i stedet, se _lookup_arbejdssats. Nogle behandlinger
+har derimod aldrig en fælles sats (Udsæd, Mejetærskning, de flade
+sæson-behandlinger Ukrudt/Sygdom/Skadedyr/Vækstregulering/Analyser) — her er
+hver afgrødes linje reelt forskellig fra alle andres, så de ender som
+afgrøde-specifikke satser uden nogen fælles standard at falde tilbage til.
+Ikke-migrerede afgrødekoder har slet ingen rækker i arbejdsmaengder-filen —
+_lookup_omkostningslinjer falder da tilbage til den gamle flade
+dyrkningsomkostninger-fil uændret (se _migrerede_afgrodekoder).
+
+Gødningslinjen i kildedata er kun et fladt gæt og IGNORERES her til fordel
+for en reel beregning:
   - Konventionel: (MNCS + MNCA) × N-pris (12,5 kr/kg N) + udbringning (115 kr/ha)
   - Økologisk (gylle): kun udbringningsomkostningen — gyllen værdisættes ikke
     her (bruger: "Gylle skal kun koste udbringningsprisen, det integrerer vi
@@ -24,14 +62,32 @@ IGNORERES her til fordel for en reel beregning:
     for udbragt mængde, så der genbruges midlertidigt samme flade
     udbringningssats som den konventionelle (115 kr/ha) — tydeligt markeret
     som en forenkling, ikke en rigtig gylle-pris.
+  - Fosfor og kalium er IKKE del af denne dynamiske beregning (ingen officiel
+    P/K-pris- eller forbrugsnorm er koblet ind endnu) — for de 16 reelt
+    udtrukne afgrødekoder kommer de i stedet med som én "Andre
+    gødningsstoffer"-behandling i arbejdsmaengder/arbejdssatser (SEGES' egen
+    P+K-sats, altid afgrøde-specifik — aldrig en fælles standardsats).
 
-Udsæd, planteværn, markarbejde og tørring/lagring tages uændret fra
-dyrkningsomkostninger-filen (stadig testdata/estimater — uændret i denne
-omgang), UNDTAGEN for positioner med et prissat efterafgrøde-/mellemafgrøde-/
-udlæg-udlæg (jf. bridge_v2.py's _UDL_VIRKEMIDDEL-familie) — her lægges en
-ekstra udsæds- og etableringsomkostning fra prislisten oveni (se
-_udlaeg_omkostning nedenfor), så virkemidlerne rent faktisk koster noget i
-optimeringen i stedet for at være en gratis udvasknings-reduktion.
+Udsæd, planteværn, markarbejde og tørring/lagring for de IKKE-migrerede
+afgrødekoder tages stadig uændret fra den gamle dyrkningsomkostninger-fil
+(stadig testdata/estimater), UNDTAGEN for positioner med et prissat
+efterafgrøde-/mellemafgrøde-/udlæg-udlæg (jf. bridge_v2.py's
+_UDL_VIRKEMIDDEL-familie) — her lægges en ekstra udsæds- og
+etableringsomkostning fra prislisten oveni (se _udlaeg_omkostning nedenfor),
+så virkemidlerne rent faktisk koster noget i optimeringen i stedet for at
+være en gratis udvasknings-reduktion.
+
+Halmpresning er ét specialtilfælde: kildedataens eget "antal" er et
+brøktal (fx 4,8) uden angivet enhed — det viste sig at være proportionalt
+med halm-kg, ikke et pasnings-/balletal (bekræftet: halmpresnings-kr / halm-
+indtægt er konstant 0,2 kr/kg halm på tværs af alle udtrukne afgrøder og
+jordboniteter). Prissat som kr/kg halm i stedet for kr/gang; "antal" i
+arbejdsmaengder er derfor det samme kg-tal som halmudbytte-filen bruger.
+
+kvalitet (default "" — normalsorten) rummer kvalitetsvarianter der er
+udtrukket, men ikke koblet ind i den almindelige sædskifte-brug endnu, fx
+"Brødhvede" for vinterhvede-kode 11 (samme afgrødekode, tilret pris/mængde
+manuelt indtil en rigtig kvalitets-toggle findes i UI'en).
 
 Tilskud lægges til DB:
   - Grundbetaling: alle rækker (generisk arealstøtte)
@@ -54,6 +110,9 @@ _DATA_DIR = _ROOT / "database" / "data" / "raw" / "ANGJ-data"
 
 _SALGSPRISER_PATH = _DATA_DIR / "Testdata_salgspriser_afgroedekoder.csv"
 _DYRKNINGSOMKOSTNINGER_PATH = _DATA_DIR / "Testdata_dyrkningsomkostninger_afgroedekoder.csv"
+_HALMUDBYTTE_PATH = _DATA_DIR / "Testdata_halmudbytte_afgroedekoder.csv"
+_ARBEJDSSATSER_PATH = _DATA_DIR / "Testdata_arbejdssatser.csv"
+_ARBEJDSMAENGDER_PATH = _DATA_DIR / "Testdata_arbejdsmaengder.csv"
 _PRISLISTE_PATH = _DATA_DIR / "midlertidig_test_prisliste_2026.csv"
 _NORMER_XLSX_PATH = (
     _DATA_DIR
@@ -67,6 +126,19 @@ _VANDING_PRIORITY = {
     True: ["Vandet", "Ikke særskilt vanding", "Uvandet"],
     False: ["Uvandet", "Ikke særskilt vanding", "Vandet"],
 }
+
+# JB-gruppering som i SEGES' egne Budgetkalkuler-ark: "JB1-3" dækker JB 1+3
+# uvandet, "JB1-4" dækker JB 1-4 VANDET (den eneste vandede variant SEGES har
+# for de lette jorde), "JB5-6" dækker JB 5+6 (ingen separat vandet-variant).
+# JB2 uvandet og JB>6 mangler helt i kildedata — falder tilbage til nærmeste
+# gruppe. (jordbonitet, vandet) -> prioriteret liste af kandidat-grupper at
+# forsøge i _load_salgspriser/_load_dyrkningsomkostninger's opslag.
+def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[tuple[str, bool]]:
+    if jbnr <= 4:
+        if irrigated:
+            return [("JB1-4", True), ("JB1-3", False), ("JB5-6", False)]
+        return [("JB1-3", False), ("JB1-4", True), ("JB5-6", False)]
+    return [("JB5-6", False), ("JB1-4", True), ("JB1-3", False)]
 
 # Tilskud der automatisk matches ind i DB (kr/ha) — resten af prislistens
 # tilskud er tilvalgsordninger, se moduldocstring.
@@ -171,28 +243,129 @@ def _lookup_udbyttenorm(afgrodekode: int, jb_nr: int, irrigated: bool = False) -
 
 
 @lru_cache(maxsize=1)
-def _load_salgspriser() -> dict[tuple[int, str], dict]:
-    """(afgrodekode, driftsform) -> {salgspris, enhed}. driftsform "—" = fælles for begge."""
-    lookup: dict[tuple[int, str], dict] = {}
+def _load_salgspriser() -> dict[tuple[int, str, str], dict]:
+    """(afgrodekode, driftsform, kvalitet) -> {salgspris, enhed,
+    halm_pris_kr_kg}. driftsform "—" = fælles for begge. Prisen viste sig
+    IKKE at variere med jordbonitet for nogen afgrøde (kun udbyttet gør, som
+    allerede kommer fra en separat kilde) — derfor ingen JB-nøgle her."""
+    lookup: dict[tuple[int, str, str], dict] = {}
     with open(_SALGSPRISER_PATH, encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f, delimiter=","):
             code = int(row["afgroedekode"])
             driftsform = row["driftsform"].strip()
-            lookup[(code, driftsform)] = {
+            kvalitet = row.get("kvalitet", "").strip()
+            lookup[(code, driftsform, kvalitet)] = {
                 "salgspris": _to_float(row["salgspris"]) or 0.0,
                 "enhed": row["enhed"].strip(),
+                "halm_pris_kr_kg": _to_float(row.get("halm_pris_kr_kg")) or 0.0,
             }
     return lookup
 
 
-def _lookup_salgspris(afgrodekode: int, driftsform: str) -> dict | None:
+def _lookup_salgspris(afgrodekode: int, driftsform: str, kvalitet: str = "") -> dict | None:
     lut = _load_salgspriser()
-    return lut.get((afgrodekode, driftsform)) or lut.get((afgrodekode, "—"))
+    for df in (driftsform, "—"):
+        hit = lut.get((afgrodekode, df, kvalitet))
+        if hit is not None:
+            return hit
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_halmudbytte() -> dict[tuple[int, str], float]:
+    """(afgrodekode, jordbonitet) -> halm kg/ha. Kun for afgrøder med halm —
+    ingen række her betyder ikke "0 halm", det betyder "ikke migreret endnu"
+    ELLER "afgrøden har ingen halm" (fx kartofler); calculate_db behandler
+    begge som 0 kr halm-indtægt, hvilket er korrekt i begge tilfælde."""
+    lookup: dict[tuple[int, str], float] = {}
+    with open(_HALMUDBYTTE_PATH, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f, delimiter=","):
+            code = int(row["afgroedekode"])
+            jordbonitet = row["jordbonitet"].strip()
+            lookup[(code, jordbonitet)] = _to_float(row["halm_udbytte_kg_ha"]) or 0.0
+    return lookup
+
+
+def _lookup_halm_udbytte(afgrodekode: int, jbnr: int, irrigated: bool) -> float:
+    lut = _load_halmudbytte()
+    for jb_gruppe, _ in _jordbonitet_kandidater(jbnr, irrigated):
+        hit = lut.get((afgrodekode, jb_gruppe))
+        if hit is not None:
+            return hit
+    return 0.0
+
+
+@lru_cache(maxsize=1)
+def _load_arbejdssatser() -> dict[tuple[str, str], list[dict]]:
+    """(behandling, jordbonitet) -> liste af satser, hver enten universel
+    (afgrodekode="") eller en afvigende sats for én bestemt afgrødekode.
+    _lookup_arbejdssats prøver crop-specifik først, falder tilbage til den
+    universelle standardsats."""
+    lookup: dict[tuple[str, str], list[dict]] = {}
+    with open(_ARBEJDSSATSER_PATH, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f, delimiter=","):
+            behandling = row["behandling"].strip()
+            jordbonitet = row["jordbonitet"].strip()
+            afgrodekode_raw = row["afgroedekode"].strip()
+            lookup.setdefault((behandling, jordbonitet), []).append({
+                "afgrodekode": int(afgrodekode_raw) if afgrodekode_raw else None,
+                "driftsform": row["driftsform"].strip(),
+                "pris_kr_per_enhed": _to_float(row["pris_kr_per_enhed"]) or 0.0,
+                "enhed": row["enhed"].strip(),
+            })
+    return lookup
+
+
+def _lookup_arbejdssats(
+    behandling: str, jordbonitet: str, afgrodekode: int, driftsform: str
+) -> tuple[float, str] | None:
+    satser = _load_arbejdssatser().get((behandling, jordbonitet), [])
+    universel = None
+    for sats in satser:
+        if sats["afgrodekode"] == afgrodekode and sats["driftsform"] in (driftsform, ""):
+            return sats["pris_kr_per_enhed"], sats["enhed"]
+        if sats["afgrodekode"] is None:
+            universel = sats
+    if universel is not None:
+        return universel["pris_kr_per_enhed"], universel["enhed"]
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_arbejdsmaengder() -> dict[tuple[int, str, str, str], list[dict]]:
+    """(afgrodekode, driftsform, jordbonitet, kvalitet) -> [{kategori,
+    behandling, antal}] — "hvor meget arbejde" denne afgrøde/JB-kombination
+    kræver af hver behandling. Sat sammen med _load_arbejdssatser giver det
+    udgift_kr_ha = antal × sats, i stedet for én fastlåst sum pr. linje."""
+    lookup: dict[tuple[int, str, str, str], list[dict]] = {}
+    with open(_ARBEJDSMAENGDER_PATH, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f, delimiter=","):
+            code = int(row["afgroedekode"])
+            driftsform = row["driftsform"].strip()
+            jordbonitet = row["jordbonitet"].strip()
+            kvalitet = row["kvalitet"].strip()
+            key = (code, driftsform, jordbonitet, kvalitet)
+            lookup.setdefault(key, []).append({
+                "kategori": row["kategori"].strip(),
+                "behandling": row["behandling"].strip(),
+                "antal": _to_float(row["antal"]) or 0.0,
+            })
+    return lookup
+
+
+@lru_cache(maxsize=1)
+def _migrerede_afgrodekoder() -> frozenset[int]:
+    """Afgrødekoder der har rigtige SEGES-satser i arbejdsmaengder/satser-
+    tabellerne — resten falder tilbage til den gamle flade
+    dyrkningsomkostninger-fil (se _lookup_omkostningslinjer)."""
+    return frozenset(code for code, _, _, _ in _load_arbejdsmaengder())
 
 
 @lru_cache(maxsize=1)
 def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
-    """(afgrodekode, driftsform) -> linjer, EKSKL. kategori "Gødning" (genberegnes dynamisk)."""
+    """(afgrodekode, driftsform) -> linjer, EKSKL. kategori "Gødning" (det
+    gamle fladt-gæt-NPK-forsøg, genberegnes dynamisk). Kun de IKKE-migrerede
+    afgrødekoder ligger her nu — de migrerede bruger arbejdsmaengder/satser."""
     lookup: dict[tuple[int, str], list[dict]] = {}
     with open(_DYRKNINGSOMKOSTNINGER_PATH, encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f, delimiter=","):
@@ -200,13 +373,44 @@ def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
                 continue
             code = int(row["afgroedekode"])
             driftsform = row["driftsform"].strip()
-            key = (code, driftsform)
-            lookup.setdefault(key, []).append({
+            lookup.setdefault((code, driftsform), []).append({
                 "kategori": row["kategori"].strip(),
                 "behandling": row["behandling"].strip(),
                 "udgift_kr_ha": _to_float(row["udgift_kr_ha"]) or 0.0,
             })
     return lookup
+
+
+def _lookup_omkostningslinjer(
+    afgrodekode: int, driftsform: str, jbnr: int, irrigated: bool, kvalitet: str = ""
+) -> list[dict]:
+    """Udgiftslinjer (kategori, behandling, udgift_kr_ha) for én afgrøde.
+    Migrerede afgrødekoder: antal × sats fra arbejdsmaengder/arbejdssatser,
+    med JB-fallback. Ikke-migrerede: det gamle flade linjesæt uændret."""
+    if afgrodekode not in _migrerede_afgrodekoder():
+        return _load_dyrkningsomkostninger().get((afgrodekode, driftsform), [])
+
+    maengder = _load_arbejdsmaengder()
+    raekker = None
+    valgt_jb = ""
+    for jb_gruppe, _ in _jordbonitet_kandidater(jbnr, irrigated):
+        hit = maengder.get((afgrodekode, driftsform, jb_gruppe, kvalitet))
+        if hit is not None:
+            raekker, valgt_jb = hit, jb_gruppe
+            break
+    if raekker is None:
+        return []
+
+    linjer = []
+    for r in raekker:
+        sats = _lookup_arbejdssats(r["behandling"], valgt_jb, afgrodekode, driftsform)
+        pris = sats[0] if sats is not None else 0.0
+        linjer.append({
+            "kategori": r["kategori"],
+            "behandling": r["behandling"],
+            "udgift_kr_ha": r["antal"] * pris,
+        })
+    return linjer
 
 
 @lru_cache(maxsize=1)
@@ -268,8 +472,12 @@ def calculate_db(
     org_mineral_n_applied: float = 0.0,
     udlaeg_kode: int | None = None,
     only_organic: bool = False,
+    kvalitet: str = "",
 ) -> dict:
     """Beregn dækningsbidrag (kr/ha) for én (afgrødekode, driftsform, JB-nr).
+
+    kvalitet: kvalitetsvariant (fx "Brødhvede" for afgrødekode 11) — default
+    "" er normalsorten. Kun udtrukket, ikke koblet ind i UI/sædskifte endnu.
 
     mncs: kg N/ha total tilført forårs-mineral-N (handelsgødning + evt.
     udnyttet organisk N). Default = afgrødens egen Bilag 1 N-norm (100 %) for
@@ -295,9 +503,12 @@ def calculate_db(
     mellemafgrøde/udlæg (se _udlaeg_omkostning).
     """
     norm = _lookup_udbyttenorm(afgrodekode, jbnr, irrigated)
-    pris = _lookup_salgspris(afgrodekode, driftsform)
+    pris = _lookup_salgspris(afgrodekode, driftsform, kvalitet)
 
     salgspris = pris["salgspris"] if pris else 0.0
+    halm_pris = pris["halm_pris_kr_kg"] if pris else 0.0
+    halm_udbytte = _lookup_halm_udbytte(afgrodekode, jbnr, irrigated)
+    halm_indtaegt = halm_udbytte * halm_pris
     if norm is not None:
         udbytte = norm["udbyttenorm"] or 0.0
         udbytteenhed = norm["udbytteenhed"]
@@ -315,7 +526,11 @@ def calculate_db(
     if driftsform == OEKOLOGISK:
         udbytte *= 1 - _OEKO_UDBYTTE_REDUKTION
 
-    indtaegt = udbytte * salgspris
+    # halm_udbytte er allerede JB-specifik (fra Testdata_halmudbytte, samme
+    # fallback-mønster som kerneudbyttet), og halm_pris er driftsform-specifik
+    # fra salgspriser-filen — begge er SEGES-tal, ikke ramt af den syntetiske
+    # økologiske udbytte-reduktion ovenfor, som kun gælder kerneudbyttet.
+    indtaegt = udbytte * salgspris + halm_indtaegt
 
     if mncs is None:
         mncs = (norm["n_norm"] if norm else None) or 0.0
@@ -351,7 +566,7 @@ def calculate_db(
             "udgift_kr_ha": gylle_udb,
         })
 
-    linjer = list(_load_dyrkningsomkostninger().get((afgrodekode, driftsform), []))
+    linjer = list(_lookup_omkostningslinjer(afgrodekode, driftsform, jbnr, irrigated, kvalitet))
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode)
     if udlaeg_udsaed:
         linjer.append({
@@ -375,23 +590,29 @@ def calculate_db(
     toerring = sum(
         line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Tørring/lagring"
     )
+    andre_goedningsstoffer = sum(
+        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andre gødningsstoffer"
+    )
 
     tilskud = _tilskud_kr_ha(afgrodekode, driftsform)
-    omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring
+    omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
     db = indtaegt + tilskud - omkostninger
 
     return {
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,
         "jbnr": jbnr,
+        "kvalitet": kvalitet,
         "udbytte": udbytte,
         "udbytteenhed": udbytteenhed,
         "udbyttenorm_mangler": norm_mangler,
         "salgspris": salgspris,
+        "halm_indtaegt": round(halm_indtaegt, 0),
         "indtaegt": round(indtaegt, 0),
         "tilskud": round(tilskud, 0),
         "mncs": mncs,
         "goedning": round(goedning, 0),
+        "andre_goedningsstoffer": round(andre_goedningsstoffer, 0),
         "udsaed": round(udsaed, 0),
         "plantevaern": round(plantevaern, 0),
         "markarbejde": round(markarbejde, 0),
