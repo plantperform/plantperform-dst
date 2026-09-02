@@ -53,7 +53,7 @@ export const FarmTopBar = ({
 
   return (
     <header className="border-b bg-background">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+      <div className="flex h-13 shrink-0 items-center gap-x-3 px-3">
         {/* The sidebar has its own toggle; on mobile it is a sheet, so it
             cannot be reopened from inside itself. */}
         <SidebarTrigger className="-ml-1 md:hidden" />

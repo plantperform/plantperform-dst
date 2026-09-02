@@ -107,7 +107,7 @@ export const FarmSidebar = ({
 
   return (
     <Sidebar collapsible="icon" aria-label="Visninger">
-      <SidebarHeader className="p-2">
+      <SidebarHeader className="h-13 justify-center border-b border-sidebar-border px-2 py-0">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <img
             src="/plant-perform-tab-icon.svg"
@@ -123,10 +123,9 @@ export const FarmSidebar = ({
         </div>
       </SidebarHeader>
 
-      <SidebarDivider />
-
       <SidebarContent>
         <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Bedrift</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -140,8 +139,6 @@ export const FarmSidebar = ({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarDivider />
 
         <SidebarGroup className="py-1">
           <SidebarGroupLabel>Optimeringsalternativer</SidebarGroupLabel>
@@ -205,8 +202,6 @@ export const FarmSidebar = ({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarDivider />
-
       <SidebarFooter className="p-1 pb-3">
         <CollapseMenuButton />
       </SidebarFooter>
@@ -233,15 +228,6 @@ export const FarmSidebar = ({
     </Sidebar>
   )
 }
-
-/**
- * A rule between sidebar sections. SidebarSeparator is not usable here: its
- * `w-full` is a variant utility that outranks the `w-auto` meant to make room
- * for the horizontal margin, so it overflows the sidebar by that margin.
- */
-const SidebarDivider = () => (
-  <div className="mx-2 h-px shrink-0 bg-sidebar-border" />
-)
 
 /**
  * Folds the sidebar down to its icon rail. It names what it does while the
