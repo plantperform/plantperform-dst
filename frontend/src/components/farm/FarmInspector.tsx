@@ -124,27 +124,19 @@ export const FarmInspector = ({
                 Års-optimering
               </Button>
             ) : null}
-            <div className="flex rounded-md border bg-muted/40 p-0.5">
-              <Button
-                size="sm"
-                variant={view === 'list' ? 'default' : 'outline'}
-                className={
-                  view === 'list' ? '' : 'border-transparent bg-transparent'
-                }
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+              <ViewToggleButton
+                active={view === 'list'}
                 onClick={() => setView('list')}
               >
                 Liste
-              </Button>
-              <Button
-                size="sm"
-                variant={view === 'map' ? 'default' : 'outline'}
-                className={
-                  view === 'map' ? '' : 'border-transparent bg-transparent'
-                }
+              </ViewToggleButton>
+              <ViewToggleButton
+                active={view === 'map'}
                 onClick={() => setView('map')}
               >
                 Kort
-              </Button>
+              </ViewToggleButton>
             </div>
           </div>
         }
@@ -239,6 +231,29 @@ export const FarmInspector = ({
     </section>
   )
 }
+
+type ViewToggleButtonProps = {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}
+
+/** One half of the Liste/Kort segmented control: the track carries the frame. */
+const ViewToggleButton = ({
+  active,
+  onClick,
+  children,
+}: ViewToggleButtonProps) => (
+  <Button
+    size="sm"
+    variant={active ? 'default' : 'ghost'}
+    aria-pressed={active}
+    className="h-8 px-3"
+    onClick={onClick}
+  >
+    {children}
+  </Button>
+)
 
 type OptimizeDialogProps = {
   farmId: string
