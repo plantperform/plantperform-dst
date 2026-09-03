@@ -1,29 +1,38 @@
 """Dækningsbidrag (DB) for de afgrødekoder der indgår i sædskifte-lookup.
 
 Kobler seks kilder sammen, alle under database/data/raw/ANGJ-data/:
-  - Testdata_salgspriser_afgroedekoder.csv   kr/hkg + halm_pris_kr_kg, pr.
+  - Salgspriser_afgroedekoder.csv       kr/hkg + halm_pris_kr_kg, pr.
     (afgrødekode, driftsform, kvalitet) — IKKE jordbonitet, se nedenfor.
-  - Testdata_halmudbytte_afgroedekoder.csv   halm kg/ha, pr. (afgrødekode, jordbonitet)
-  - Testdata_arbejdssatser.csv               kr/enhed pr. (behandling, jordbonitet[, afgrødekode])
-  - Testdata_arbejdsmaengder.csv             antal enheder pr. (afgrødekode,
+  - Halmudbytte_afgroedekoder.csv       halm kg/ha, pr. (afgrødekode, jordbonitet)
+  - Arbejdssatser.csv                   kr/enhed pr. (behandling, jordbonitet[, afgrødekode])
+  - Arbejdsmaengder_afgroedekoder.csv   antal enheder pr. (afgrødekode,
     driftsform, jordbonitet, kvalitet, behandling)
-  - Testdata_dyrkningsomkostninger_afgroedekoder.csv  kr/ha, kun for de IKKE-migrerede
-    afgrødekoder (se nedenfor) — de migrerede bruger de to foregående i stedet.
-  - midlertidig_test_prisliste_2026.csv      SEGES-satser: tilskud, N-pris
+  - Dyrkningsomkostninger_afgroedekoder.csv  kr/ha, kun for de IKKE-migrerede
+    afgrødekoder (pr. 2026-09-02 kun Lupin — se nedenfor); de migrerede
+    afgrødekoder bruger de to foregående i stedet.
+  - Prisliste_2026.csv                  SEGES-satser: tilskud, N-pris
   - PlantPerform_master_afgroedenormer_...xlsx (Lang_lookup)
-    udbyttenorm pr. (afgrødekode, JB-nr, vanding)
+    udbyttenorm pr. (afgrødekode, JB-nr, vanding, driftsform)
 
 Udbyttenormen er allerede angivet i samme enhed som salgsprisen (hkg/ha mod
 kr/hkg for kornafgrøder, FE/ha mod kr/FE for helsæd/græs), så
 indtægt = udbyttenorm × salgspris virker uden særtilfælde for FE-afgrøder.
 
-Mastertabellens udbyttenormer er kun for konventionel drift. Indtil der
-findes rigtige øko-specifikke normer pr. afgrøde, reduceres udbyttet med en
-fast sats (32 %) for alle afgrøder ved økologisk driftsform.
+Mastertabellen fik 2026-09-02 en Driftsform-kolonne og 192 nye Økologisk-
+rækker (32 af sædskifte-lookup'ens 34 afgrødekoder — flettet ind fra
+goedningsnormer_konventionel_og_estimeret_øko.xlsx, se Kilder_og_noter-fanen
+i mastertabellen for kilde og kvalitetsniveau pr. afgrøde). Findes der en
+reel øko-specifik række for (afgrødekode, JB-nr), bruges den direkte, uden
+reduktion. For de resterende afgrødekoder (endnu ingen kilde) samt for
+enhver kombination uden øko-række reduceres udbyttet stadig med en fast sats
+(32 %) af den konventionelle norm, som en midlertidig stedfortræder.
 
-Delvis reel prisdata (16 af sædskifte-lookup'ens 34 afgrødekoder, pr.
-2026-09-02 — resten venter stadig på samme behandling), udtrukket fra SEGES'
-Budgetkalkuler 2026. Kun "Uden husdyrgødning"-arkene er brugt til
+Reel prisdata for 33 af sædskifte-lookup'ens 34 afgrødekoder (pr.
+2026-09-02), udtrukket fra SEGES' Budgetkalkuler 2026. Den sidste (Lupin,
+kode 32) har ingen SEGES-kalkule overhovedet — konstrueret i stedet ud fra
+to landbrugsfaglige dyrkningsvejledninger + reelle satser for sammenlignelige
+bælgsæd allerede i datasættet, se kilde-feltet i Dyrkningsomkostninger_
+afgroedekoder.csv. Kun "Uden husdyrgødning"-arkene er brugt til
 konventionel — "Med husdyrgødning"-varianten er ekskluderet, fordi
 husdyrgødnings-udbringning allerede prissættes dynamisk her (se
 org_mineral_n_applied nedenfor), og en statisk linje fra "med
@@ -31,7 +40,7 @@ husdyrgødning"-arket ville derfor dobbelttælle den. Økologisk findes kun som
 "med husdyrgødning" hos SEGES, så samme filter (husdyrgødning-linjer droppet
 ved udtræk) er anvendt der af samme grund.
 
-**Prisen varierer ikke med jordbonitet** for nogen af de 16 udtrukne
+**Prisen varierer ikke med jordbonitet** for nogen af de 33 udtrukne
 afgrøder — kun UDBYTTET gør (allerede en separat, JB-nøglet kilde). Derfor
 er salgspriser-filen flad pr. (afgrødekode, driftsform, kvalitet), uden
 JB-nøgle. Halm er samme mønster: halm_pris_kr_kg er flad i salgspriser,
@@ -63,14 +72,14 @@ for en reel beregning:
     udbringningssats som den konventionelle (115 kr/ha) — tydeligt markeret
     som en forenkling, ikke en rigtig gylle-pris.
   - Fosfor og kalium er IKKE del af denne dynamiske beregning (ingen officiel
-    P/K-pris- eller forbrugsnorm er koblet ind endnu) — for de 16 reelt
+    P/K-pris- eller forbrugsnorm er koblet ind endnu) — for de 33 reelt
     udtrukne afgrødekoder kommer de i stedet med som én "Andre
     gødningsstoffer"-behandling i arbejdsmaengder/arbejdssatser (SEGES' egen
     P+K-sats, altid afgrøde-specifik — aldrig en fælles standardsats).
 
 Udsæd, planteværn, markarbejde og tørring/lagring for de IKKE-migrerede
-afgrødekoder tages stadig uændret fra den gamle dyrkningsomkostninger-fil
-(stadig testdata/estimater), UNDTAGEN for positioner med et prissat
+afgrødekoder (pr. 2026-09-02 kun Lupin, se ovenfor) tages stadig fra den
+gamle dyrkningsomkostninger-fil uændret, UNDTAGEN for positioner med et prissat
 efterafgrøde-/mellemafgrøde-/udlæg-udlæg (jf. bridge_v2.py's
 _UDL_VIRKEMIDDEL-familie) — her lægges en ekstra udsæds- og
 etableringsomkostning fra prislisten oveni (se _udlaeg_omkostning nedenfor),
@@ -108,12 +117,12 @@ import openpyxl
 _ROOT = Path(__file__).resolve().parents[4]  # .../backend
 _DATA_DIR = _ROOT / "database" / "data" / "raw" / "ANGJ-data"
 
-_SALGSPRISER_PATH = _DATA_DIR / "Testdata_salgspriser_afgroedekoder.csv"
-_DYRKNINGSOMKOSTNINGER_PATH = _DATA_DIR / "Testdata_dyrkningsomkostninger_afgroedekoder.csv"
-_HALMUDBYTTE_PATH = _DATA_DIR / "Testdata_halmudbytte_afgroedekoder.csv"
-_ARBEJDSSATSER_PATH = _DATA_DIR / "Testdata_arbejdssatser.csv"
-_ARBEJDSMAENGDER_PATH = _DATA_DIR / "Testdata_arbejdsmaengder.csv"
-_PRISLISTE_PATH = _DATA_DIR / "midlertidig_test_prisliste_2026.csv"
+_SALGSPRISER_PATH = _DATA_DIR / "Salgspriser_afgroedekoder.csv"
+_DYRKNINGSOMKOSTNINGER_PATH = _DATA_DIR / "Dyrkningsomkostninger_afgroedekoder.csv"
+_HALMUDBYTTE_PATH = _DATA_DIR / "Halmudbytte_afgroedekoder.csv"
+_ARBEJDSSATSER_PATH = _DATA_DIR / "Arbejdssatser.csv"
+_ARBEJDSMAENGDER_PATH = _DATA_DIR / "Arbejdsmaengder_afgroedekoder.csv"
+_PRISLISTE_PATH = _DATA_DIR / "Prisliste_2026.csv"
 _NORMER_XLSX_PATH = (
     _DATA_DIR
     / "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx"
@@ -151,10 +160,10 @@ _STIVELSESKARTOFLER_KODE = 151
 # så vi genbruger handelsgødningens flade udbringningssats indtil videre.
 _GYLLE_UDBRINGNING_PLACEHOLDER_POST = "Handelsgødning, udbringning"
 
-# Placeholder: Bilag 1-mastertabellens udbyttenormer er kun for konventionel
-# drift. Økologisk udbytte er typisk lavere; indtil der findes rigtige
-# øko-specifikke normer pr. afgrøde, bruges en fast reduktion på alle
-# afgrøder ved økologisk driftsform.
+# Placeholder for afgrødekoder UDEN en reel Økologisk-række i mastertabellens
+# Lang_lookup (se _lookup_udbyttenorm). Bruges kun som stedfortræder når der
+# ikke findes øko-specifik data — for de 32 afgrødekoder der fik rigtige
+# øko-normer 2026-09-02 rammes denne reduktion ikke længere.
 _OEKO_UDBYTTE_REDUKTION = 0.32
 
 # Udlægskode -> hvilken pris-kategori i prislisten dækker udsæd/etablering af
@@ -202,14 +211,19 @@ def _parse_jb_set(match_type, jb_values_str) -> set[int]:
 
 
 @lru_cache(maxsize=1)
-def _load_udbyttenormer() -> dict[tuple[int, int, str], dict]:
-    """(afgrodekode, jb_nr, vanding) -> {udbyttenorm, udbytteenhed, n_norm}."""
+def _load_udbyttenormer() -> dict[tuple[int, int, str, str], dict]:
+    """(afgrodekode, jb_nr, vanding, driftsform) -> {udbyttenorm, udbytteenhed,
+    n_norm}. Driftsform er "Konventionel" for alle oprindelige rækker (tom
+    celle i Driftsform-kolonnen) og "Økologisk" for de 192 rækker tilføjet
+    2026-09-02 (32 af sædskifte-lookup'ens 34 afgrødekoder — se
+    Kilder_og_noter-fanen for hvilke der er reelle SEGES-tal kontra stadig
+    "best bet")."""
     wb = openpyxl.load_workbook(_NORMER_XLSX_PATH, read_only=True, data_only=True)
     ws = wb["Lang_lookup"]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
 
-    lookup: dict[tuple[int, int, str], dict] = {}
+    lookup: dict[tuple[int, int, str, str], dict] = {}
     for row in rows[1:]:
         if not row[0]:
             continue
@@ -223,23 +237,36 @@ def _load_udbyttenormer() -> dict[tuple[int, int, str], dict]:
             continue
 
         vanding = str(row[7]).strip() if row[7] else ""
+        driftsform = str(row[25]).strip() if len(row) > 25 and row[25] else KONVENTIONEL
         data = {
             "udbytteenhed": str(row[9]).strip() if row[9] else "",
             "udbyttenorm": _to_float(row[10]),
             "n_norm": _to_float(row[13]),
         }
         for jb_nr in jb_set:
-            lookup[(code, jb_nr, vanding)] = data
+            lookup[(code, jb_nr, vanding, driftsform)] = data
     return lookup
 
 
-def _lookup_udbyttenorm(afgrodekode: int, jb_nr: int, irrigated: bool = False) -> dict | None:
+def _lookup_udbyttenorm(
+    afgrodekode: int, jb_nr: int, irrigated: bool = False, driftsform: str = KONVENTIONEL
+) -> tuple[dict | None, bool]:
+    """Returns (norm, er_reel_oeko_norm). er_reel_oeko_norm er True kun når
+    driftsform er Økologisk OG en rigtig øko-specifik række findes — det
+    styrer om _OEKO_UDBYTTE_REDUKTION skal lægges oveni i calculate_db (den
+    syntetiske reduktion er kun nødvendig som stedfortræder når der IKKE
+    findes en reel øko-norm for denne (afgrødekode, JB-nr))."""
     lut = _load_udbyttenormer()
+    if driftsform == OEKOLOGISK:
+        for vanding in _VANDING_PRIORITY[bool(irrigated)]:
+            key = (afgrodekode, jb_nr, vanding, OEKOLOGISK)
+            if key in lut:
+                return lut[key], True
     for vanding in _VANDING_PRIORITY[bool(irrigated)]:
-        key = (afgrodekode, jb_nr, vanding)
+        key = (afgrodekode, jb_nr, vanding, KONVENTIONEL)
         if key in lut:
-            return lut[key]
-    return None
+            return lut[key], False
+    return None, False
 
 
 @lru_cache(maxsize=1)
@@ -268,6 +295,13 @@ def _lookup_salgspris(afgrodekode: int, driftsform: str, kvalitet: str = "") -> 
         hit = lut.get((afgrodekode, df, kvalitet))
         if hit is not None:
             return hit
+    # Sikkerhedsnet: økologisk uden egen pris falder tilbage til konventionel
+    # i stedet for 0 kr. De 15 afgrødekoder der havde dette hul pr.
+    # 2026-09-02 har allerede fået en eksplicit Økologisk-række med samme
+    # begrundelse (se kilde-feltet i Salgspriser_afgroedekoder.csv) — dette
+    # er kun for en fremtidig/uforudset afgrødekode med samme mangel.
+    if driftsform == OEKOLOGISK:
+        return lut.get((afgrodekode, KONVENTIONEL, kvalitet))
     return None
 
 
@@ -502,7 +536,7 @@ def calculate_db(
     en ekstra udsæds-/etableringsomkostning oveni for efterafgrøde/
     mellemafgrøde/udlæg (se _udlaeg_omkostning).
     """
-    norm = _lookup_udbyttenorm(afgrodekode, jbnr, irrigated)
+    norm, er_reel_oeko_norm = _lookup_udbyttenorm(afgrodekode, jbnr, irrigated, driftsform)
     pris = _lookup_salgspris(afgrodekode, driftsform, kvalitet)
 
     salgspris = pris["salgspris"] if pris else 0.0
@@ -523,7 +557,11 @@ def calculate_db(
         udbytteenhed = ""
         norm_mangler = True  # afgrødekode findes ikke i Bilag 1-mastertabellen for dette JB-nr
 
-    if driftsform == OEKOLOGISK:
+    # Reel øko-norm (32 af 34 afgrødekoder pr. 2026-09-02, se Kilder_og_noter)
+    # bruges direkte uden reduktion. Kun når ingen øko-specifik række findes
+    # (endnu ikke-dækkede afgrødekoder) falder vi tilbage til den syntetiske
+    # -32 %-reduktion af konventionel-normen som stedfortræder.
+    if driftsform == OEKOLOGISK and not er_reel_oeko_norm:
         udbytte *= 1 - _OEKO_UDBYTTE_REDUKTION
 
     # halm_udbytte er allerede JB-specifik (fra Testdata_halmudbytte, samme
