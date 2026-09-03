@@ -3,6 +3,8 @@ solve(), men arbejder med pr.-kalenderår udledning/DB2 i stedet for
 scenarie-totaler. Se domain/optimization.py's YearlyRotationOption m.fl.
 for hvorfor dette er et sideordnet system, ikke en ombygning af solve().
 """
+from collections import defaultdict
+
 from ortools.sat.python import cp_model
 
 from app.domain.optimization import (
@@ -45,27 +47,44 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
         model.Add(sum(field_choice_vars) == 1)
 
     db2_terms_by_year: list[list] = [[] for _ in range(NUM_YEARS)]
-    n_load_terms_by_year: list[list] = [[] for _ in range(NUM_YEARS)]
+    n_load_terms_by_kystvand_year: dict[int | None, list[list]] = defaultdict(
+        lambda: [[] for _ in range(NUM_YEARS)]
+    )
     fen_terms = []
     for field in input.fields:
+        year_terms = n_load_terms_by_kystvand_year[field.kystvand_id]
         for option in field.options:
             variable = choice_vars[(field.id, option.key)]
             for y in range(NUM_YEARS):
                 db2_terms_by_year[y].append(_scale(option.db2_by_year[y]) * variable)
-                n_load_terms_by_year[y].append(_scale(option.n_load_by_year[y]) * variable)
+                year_terms[y].append(_scale(option.n_load_by_year[y]) * variable)
             fen_terms.append(_scale(option.fen) * variable)
 
     total_db2_by_year = [sum(terms) for terms in db2_terms_by_year]
-    total_n_load_by_year = [sum(terms) for terms in n_load_terms_by_year]
+    total_n_load_by_kystvand_year = {
+        kystvand_id: [sum(terms) for terms in year_terms]
+        for kystvand_id, year_terms in n_load_terms_by_kystvand_year.items()
+    }
+    total_n_load_by_year = [
+        sum(
+            total_n_load_by_kystvand_year[kystvand_id][y]
+            for kystvand_id in total_n_load_by_kystvand_year
+        )
+        for y in range(NUM_YEARS)
+    ]
     total_db2 = sum(total_db2_by_year)
     total_fen = sum(fen_terms)
 
     constraints = input.constraints
 
-    for y in range(NUM_YEARS):
-        cap = constraints.max_n_load_by_year[y]
-        if cap is not None:
-            model.Add(total_n_load_by_year[y] <= _scale(cap))
+    for kystvand_id, caps in constraints.max_n_load_by_kystvandopland_and_year.items():
+        year_totals = total_n_load_by_kystvand_year.get(kystvand_id)
+        if year_totals is None:
+            continue
+        for y in range(NUM_YEARS):
+            cap = caps[y]
+            if cap is not None:
+                model.Add(year_totals[y] <= _scale(cap))
 
     if constraints.db2_swing_pct is not None:
         pct = constraints.db2_swing_pct

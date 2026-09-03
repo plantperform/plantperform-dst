@@ -3,12 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
-  farmKey,
   farmFieldsKey,
   farmMembersKey,
   simulationFieldsKey,
   simulationsKey,
   useFarmMembers,
+  useFarmUdledning,
   useSimulationFields,
 } from '@/api/hooks'
 import {
@@ -16,7 +16,6 @@ import {
   deleteFarm,
   deleteSimulation,
   removeFarmMember,
-  updateFarm,
 } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
@@ -34,7 +33,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
@@ -88,27 +86,12 @@ export const FarmSidebar = ({
     string | null
   >(null)
   const [newScenarioOpen, setNewScenarioOpen] = useState(false)
-  const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
   const [membersDialogOpen, setMembersDialogOpen] = useState(false)
   const [memberEmail, setMemberEmail] = useState('')
   const [isSharing, setIsSharing] = useState(false)
-  const [quotaInput, setQuotaInput] = useState(String(farm.udledningskvoteKgN))
-  const [isSavingQuota, setIsSavingQuota] = useState(false)
   const totals = getFieldTotals(fields)
-  const quotaSum = fields.reduce(
-    (sum, field) => sum + field.udledningskvoteMarkKgn,
-    0,
-  )
-  const roundedQuotaSum = Math.round(quotaSum)
-  const missingQuotaCount = fields.filter(
-    (field) => field.udledningskvoteMarkKgn === 0,
-  ).length
   const { data: members = [], isLoading: membersLoading } = useFarmMembers(farm.id)
-
-  const setQuotaDialogState = (open: boolean) => {
-    setQuotaDialogOpen(open)
-    if (open) setQuotaInput(String(farm.udledningskvoteKgN))
-  }
+  const { data: udledningPerKystvandopland = [] } = useFarmUdledning(farm.id)
 
   const confirmDelete = async () => {
     setIsDeleting(true)
@@ -121,27 +104,6 @@ export const FarmSidebar = ({
       onError('Kunne ikke slette bedriften.')
     } finally {
       setIsDeleting(false)
-    }
-  }
-
-  const saveQuota = async () => {
-    const quota = Number(quotaInput)
-    if (!Number.isFinite(quota) || quota < 0) {
-      onError('Udledningskvoten skal være et positivt tal eller nul.')
-      return
-    }
-
-    setIsSavingQuota(true)
-    try {
-      const updatedFarm = await updateFarm(farm.id, { udledningskvoteKgN: quota })
-      await mutate(farmKey(farm.id), updatedFarm, { revalidate: false })
-      await mutate('/farms')
-      setQuotaDialogOpen(false)
-      onError(null)
-    } catch {
-      onError('Kunne ikke opdatere kvælstofkvoten.')
-    } finally {
-      setIsSavingQuota(false)
     }
   }
 
@@ -224,78 +186,46 @@ export const FarmSidebar = ({
             <p className="mt-1 font-medium">{farm.cvr ?? '—'}</p>
           </div>
           <div className="rounded-lg border bg-background p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-muted-foreground">Udledningskvote</p>
-                <p className="mt-1 font-medium">
-                  {formatNumber(farm.udledningskvoteKgN)} kg N
+            <p className="text-muted-foreground">Udledningskvote pr. kystvandopland</p>
+            <div className="mt-3 space-y-2">
+              {udledningPerKystvandopland.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Ingen marker med et kystvandopland endnu.
                 </p>
-              </div>
-              <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogState}>
-                <DialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-background/80"
+              ) : (
+                udledningPerKystvandopland.map((entry) => (
+                  <div
+                    key={entry.kystvandId ?? 'ukendt'}
+                    className="rounded border p-3 text-sm"
                   >
-                    Rediger
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Rediger udledningskvote</DialogTitle>
-                    <DialogDescription>
-                      Justér bedriftens samlede udledningskvote, eller beregn
-                      den ud fra summen af markernes kvoter.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="farm-quota">Udledningskvote (kg N)</Label>
-                      <Input
-                        id="farm-quota"
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value={quotaInput}
-                        onChange={(event) => setQuotaInput(event.target.value)}
-                      />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">
+                        {entry.kystvandNavn ??
+                          (entry.kystvandId !== null
+                            ? `Kystvandopland ${entry.kystvandId}`
+                            : 'Uden kystvandopland')}
+                      </span>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          entry.overholder
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {entry.overholder ? 'Overholder' : 'Overskrider'}
+                      </span>
                     </div>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-muted-foreground">
-                        Sum af markernes kvoter: {formatNumber(roundedQuotaSum)}{' '}
-                        kg N
-                      </p>
-                      {missingQuotaCount > 0 ? (
-                        <p className="text-amber-700">
-                          {missingQuotaCount}{' '}
-                          {missingQuotaCount === 1 ? 'mark' : 'marker'} uden
-                          data for udledningsgrænse indgår som 0 kg N. Summen
-                          kan derfor være for lav.
-                        </p>
-                      ) : null}
-                    </div>
+                    <p className="mt-2 text-xl font-semibold">
+                      {formatNumber(entry.udledningskvoteKgN)} kg N
+                    </p>
+                    <p className="text-xs text-muted-foreground">Udledningskvote</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Historisk &quot;estimeret&quot; udledning:{' '}
+                      {formatNumber(entry.beregnetUdledningKgN)} kg N
+                    </p>
                   </div>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="outline">Annuller</Button>
-                    </DialogClose>
-                    <Button
-                      variant="outline"
-                      onClick={() => setQuotaInput(String(roundedQuotaSum))}
-                      disabled={fields.length === 0}
-                    >
-                      Brug sum fra marker
-                    </Button>
-                    <Button
-                      onClick={() => void saveQuota()}
-                      disabled={isSavingQuota}
-                    >
-                      {isSavingQuota ? 'Gemmer...' : 'Gem'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                ))
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -379,7 +309,7 @@ export const FarmSidebar = ({
                   selection.kind === 'current' ? 'font-semibold' : 'font-medium'
                 }
               >
-                Aktuel
+                Afgrødehistorik
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {formatFieldCount(fields.length)} · {formatNumber(totals.area)}{' '}

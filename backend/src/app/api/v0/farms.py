@@ -10,13 +10,13 @@ from app.data.repository import (
     create_farm,
     delete_farm,
     get_farm,
+    get_farm_udledning_per_kystvandopland,
     list_farm_members,
     list_farms,
     remove_farm_member,
-    update_farm,
 )
 from app.domain.base import CamelModel
-from app.domain.farm import CreateFarmRequest, Farm, UpdateFarmRequest
+from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
@@ -39,12 +39,12 @@ class FarmMemberResponse(CamelModel):
 
 
 @router.get("", response_model=list[Farm])
-async def get_farms(user: CurrentUser) -> list[Farm]:
+def get_farms(user: CurrentUser) -> list[Farm]:
     return list_farms(user.email)
 
 
 @router.post("", response_model=Farm)
-async def post_farm(
+def post_farm(
     request: CreateFarmRequest,
     user: CurrentUser,
 ) -> Farm:
@@ -52,7 +52,7 @@ async def post_farm(
 
 
 @router.get("/{farm_id}", response_model=Farm)
-async def get_farm_by_id(
+def get_farm_by_id(
     farm_id: str,
     user: CurrentUser,
 ) -> Farm:
@@ -64,22 +64,23 @@ async def get_farm_by_id(
     return farm
 
 
-@router.patch("/{farm_id}", response_model=Farm)
-async def patch_farm(
+@router.get("/{farm_id}/udledning-per-kystvandopland", response_model=list[KystvandoplandUdledning])
+def get_farm_udledning(
     farm_id: str,
-    request: UpdateFarmRequest,
     user: CurrentUser,
-) -> Farm:
-    farm = update_farm(farm_id, request, user.email)
+) -> list[KystvandoplandUdledning]:
+    """Udledningskvote og beregnet udledning ("Aktuel") pr. kystvandopland —
+    bekendtgørelsens faktiske opgørelsesenhed, jf. KystvandoplandUdledning."""
+    result = get_farm_udledning_per_kystvandopland(farm_id, user.email)
 
-    if farm is None:
+    if result is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
-    return farm
+    return result
 
 
 @router.delete("/{farm_id}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_by_id(
+def delete_farm_by_id(
     farm_id: str,
     user: CurrentUser,
 ) -> None:
@@ -90,7 +91,7 @@ async def delete_farm_by_id(
 
 
 @router.get("/{farm_id}/members", response_model=list[FarmMemberResponse])
-async def get_farm_members(
+def get_farm_members(
     farm_id: str,
     user: CurrentUser,
 ) -> list[FarmMemberResponse]:
@@ -101,7 +102,7 @@ async def get_farm_members(
 
 
 @router.post("/{farm_id}/members", response_model=FarmMemberResponse, status_code=201)
-async def post_farm_member(
+def post_farm_member(
     farm_id: str,
     request: FarmMemberRequest,
     user: CurrentUser,
@@ -117,7 +118,7 @@ async def post_farm_member(
 
 
 @router.delete("/{farm_id}/members/{member_email}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_member(
+def delete_farm_member(
     farm_id: str,
     member_email: str,
     user: CurrentUser,

@@ -5,6 +5,18 @@ Dette dokumenterer 2026-registreringen af `registry_field` (og det separate
 `load_registry.py`-pipeline (2023 IMK-geopackage), som er efterladt urørt
 som reference men ikke længere køres.
 
+**Data-vintage:** denne version bruger den nyeste `ANGJ-data`, uploadet
+2026-08-28 — inkl. `Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv`
+(historisk gødningstildeling), `Bilag_1_tabel_1_Kvotegivende_areal_og_
+aktivitet.csv` (kvotegivende areal) og `DataIMK2023_DataPlantPerform_
+n609506_gpkg.gpkg` (2017-2023 crop_history-historik, overlap-matchet ind i
+2026-registreringen). `goedningsregion` er tildelt via centrum-i-region mod
+`Marker 24-25-25/Goedningsregioner_midlertidig.gpkg` (se
+[migrations/versions/20260828_0002_registry_field_goedningsregion.py]
+(../migrations/versions/20260828_0002_registry_field_goedningsregion.py))
+— gjort ad hoc, ikke som et genkørbart script; kontakt Anders hvis
+tildelingen skal genskabes fra bunden.
+
 ## Hvor ligger data?
 
 Der findes ingen "endelig fil" — resultatet er selve `registry_field`- og
