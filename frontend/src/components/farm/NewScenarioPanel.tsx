@@ -88,7 +88,7 @@ export const NewScenarioPanel = ({
     if (value === 'ingen') {
       setOrgMineralN('0')
       setMineralskAndelPct('100')
-      setOnlyOrganic(false)
+      setOnlyOrganic(driftsform === 'Økologisk')
       return
     }
     if (value === 'brugerdefineret') return
@@ -97,10 +97,13 @@ export const NewScenarioPanel = ({
     if (!preset) return
     // Driftsform sættes IKKE fra preset'et — samme gødningstype (fx
     // Kvæggylle) bruges uanset om marken er konventionel eller økologisk;
-    // driftsform styres udelukkende af den separate vælger ovenfor.
+    // driftsform styres udelukkende af den separate vælger ovenfor. Men
+    // "kun organisk gødning" skal altid følge driftsform frem for
+    // preset'ets egen (konventionelt formede) værdi, uanset i hvilken
+    // rækkefølge brugeren vælger driftsform/gødningstype.
     setOrgMineralN(String(preset.godning.orgMineralN))
     setMineralskAndelPct(String(preset.godning.mineralskAndelPct))
-    setOnlyOrganic(preset.godning.onlyOrganic)
+    setOnlyOrganic(driftsform === 'Økologisk' ? true : preset.godning.onlyOrganic)
   }
 
   const eeaFdato = precisionDagsbasis ? fdatoDate : fdatoInterval
@@ -232,6 +235,23 @@ export const NewScenarioPanel = ({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="scenario-driftsform">Driftsform</Label>
+            <select
+              id="scenario-driftsform"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              value={driftsform}
+              onChange={(event) => {
+                const value = event.target.value as GodningSettings['driftsform']
+                setDriftsform(value)
+                setOnlyOrganic(value === 'Økologisk')
+              }}
+            >
+              <option value="Konventionel">Konventionel</option>
+              <option value="Økologisk">Økologisk</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
             <Label>Sædskifter</Label>
             <p className="text-xs text-muted-foreground">
               Grupperet efter sædskifte-type til overblik — gødning vælges separat
@@ -317,37 +337,22 @@ export const NewScenarioPanel = ({
               Uafhængig af hvilke sædskifter du har valgt ovenfor — samme
               gødningsvalg bruges for alle valgte sædskifter i scenariet.
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm">
-                <span className="text-xs text-muted-foreground">Driftsform</span>
-                <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  value={driftsform}
-                  onChange={(event) =>
-                    setDriftsform(event.target.value as GodningSettings['driftsform'])
-                  }
-                >
-                  <option value="Konventionel">Konventionel</option>
-                  <option value="Økologisk">Økologisk</option>
-                </select>
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-xs text-muted-foreground">Gødningstype</span>
-                <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  value={godningsTypeValg}
-                  onChange={(event) => applyGodningsTypeValg(event.target.value)}
-                >
-                  <option value="ingen">Ingen organisk gødning (ren handelsgødning)</option>
-                  {godningsPresets.map((preset) => (
-                    <option key={preset.navn} value={preset.navn}>
-                      {preset.navn}
-                    </option>
-                  ))}
-                  <option value="brugerdefineret">Brugerdefineret</option>
-                </select>
-              </label>
-            </div>
+            <label className="space-y-1 text-sm">
+              <span className="text-xs text-muted-foreground">Gødningstype</span>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={godningsTypeValg}
+                onChange={(event) => applyGodningsTypeValg(event.target.value)}
+              >
+                <option value="ingen">Ingen organisk gødning (ren handelsgødning)</option>
+                {godningsPresets.map((preset) => (
+                  <option key={preset.navn} value={preset.navn}>
+                    {preset.navn}
+                  </option>
+                ))}
+                <option value="brugerdefineret">Brugerdefineret</option>
+              </select>
+            </label>
 
             {godningsTypeValg !== 'ingen' ? (
               <div className="grid gap-3 sm:grid-cols-2">
