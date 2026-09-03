@@ -79,6 +79,7 @@ export const NewScenarioPanel = ({
   const [onlyOrganic, setOnlyOrganic] = useState(false)
   const [nIndholdKgPerTon, setNIndholdKgPerTon] = useState('6')
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
+  const [praecisionsjordbrug, setPraecisionsjordbrug] = useState(false)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
   const [fdatoDate, setFdatoDate] = useState('20/8')
   const [isCreating, setIsCreating] = useState(false)
@@ -180,6 +181,7 @@ export const NewScenarioPanel = ({
         },
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
+        praecisionsjordbrug,
       })
       await mutate(
         simulationsKey(farmId),
@@ -203,6 +205,7 @@ export const NewScenarioPanel = ({
       setPrecisionDagsbasis(false)
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
       setFdatoDate('20/8')
+      setPraecisionsjordbrug(false)
     } catch {
       onError('Kunne ikke oprette scenariet.')
     } finally {
@@ -502,6 +505,27 @@ export const NewScenarioPanel = ({
               NUAR EEA-effekt: {fdatoEffectPercent(eeaFdato, precisionDagsbasis).toFixed(1)}%
               ({precisionDagsbasis ? 'dagsbasis, §38' : 'trappesats, §37'})
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Præcisionsjordbrug</Label>
+            <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={praecisionsjordbrug}
+                onChange={(event) => setPraecisionsjordbrug(event.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Anvend præcisionsjordbrug</span>
+                <span className="block text-xs text-muted-foreground">
+                  4 % ekstra reduktion af udvaskningen, ganget på som et selvstændigt led
+                  oveni evt. efterafgrøde/mellemafgrøde/tidlig såning. Gælder kun i år med
+                  korn eller raps som hovedafgrøde — ingen effekt eller omkostning
+                  (50 kr./ha) i andre år, selv når slået til.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="flex items-center gap-3">
