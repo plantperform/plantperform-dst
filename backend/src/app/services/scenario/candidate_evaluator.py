@@ -25,11 +25,11 @@ from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
 from app.services.rotations import afgroede_normer, saedskifte_library
 
-# Rigtig historik dækker kun 2017-2023 (jf. planens beslutning 11), så den
-# viste/beregnede 8-årige rotation starter ved 2024 — men NLES5's tidstrend-
-# led (τ·(Y−1991)) skal have det RIGTIGE kalenderår pr. position, ikke en
-# fast værdi for alle 8 år. Position 1 = 2024, position 2 = 2025, osv.
-START_CALENDAR_YEAR = 2024
+# Den viste/beregnede 8-årige rotation starter ved 2027 (nye simuleringer) —
+# men NLES5's tidstrend-led (τ·(Y−1991)) skal have det RIGTIGE kalenderår pr.
+# position, ikke en fast værdi for alle 8 år. Position 1 = 2027, position 2 =
+# 2028, osv.
+START_CALENDAR_YEAR = 2027
 
 
 @lru_cache(maxsize=100_000)

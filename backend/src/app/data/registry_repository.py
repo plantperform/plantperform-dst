@@ -22,6 +22,34 @@ def _bucket_cutoff(z: int) -> int:
     return _POINT_BUCKET_CUTOFFS.get(z, 1024)
 
 
+def get_owned_imk_ids(db: Session, farm_id: str, email: str) -> list[int] | None:
+    """Just the imk_ids for a farm's fields — used to flag "owned" tiles.
+
+    Reuses the tile endpoint's own session instead of list_fields(), which
+    opens a second pooled connection per call and fully deserializes every
+    FieldRecord (geometry included) just to read one id off each — expensive
+    and connection-hungry on a path called once per map tile. Still checks
+    farm membership itself (same farm_member check list_fields() does), so
+    a farm_id the caller isn't a member of can't be probed via this path
+    either — returns None when the caller has no access.
+    """
+    is_member = db.execute(
+        text("SELECT 1 FROM farm_member WHERE farm_id = :farm_id AND email = :email"),
+        {"farm_id": farm_id, "email": email},
+    ).scalar_one_or_none()
+    if is_member is None:
+        return None
+
+    rows = db.execute(
+        text(
+            "SELECT (data->>'imk_id')::bigint AS imk_id FROM field "
+            "WHERE farm_id = :farm_id AND data->>'imk_id' IS NOT NULL"
+        ),
+        {"farm_id": farm_id},
+    ).scalars()
+    return list(rows)
+
+
 def _summary_from_row(row: RowMapping) -> RegistryFieldSummary:
     return RegistryFieldSummary(
         imk_id=row["imk_id"],
@@ -29,7 +57,6 @@ def _summary_from_row(row: RowMapping) -> RegistryFieldSummary:
         marknr=row["marknr"],
         kystvand_id=row["kystvand_id"],
         retention=row["retention"],
-        soil_id=row["soil_id"],
         area_ha=row["area_ha"],
         crop_rotation=row["crop_rotation"],
         in_takeout_plan=row["in_takeout_plan"],
@@ -47,9 +74,10 @@ def _field_from_row(row: RowMapping) -> RegistryField:
         imk_id=row["imk_id"],
         cvr=row["cvr"],
         marknr=row["marknr"],
+        markblok=row["markblok"],
+        journalnr=row["journalnr"],
         kystvand_id=row["kystvand_id"],
         retention=row["retention"],
-        soil_id=row["soil_id"],
         jbnr=row["jbnr"],
         area_ha=row["area_ha"],
         crop_rotation=row["crop_rotation"],
@@ -75,7 +103,6 @@ def search_registry_fields(
             marknr,
             kystvand_id,
             retention,
-            soil_id,
             area_ha,
             crop_rotation,
             in_takeout_plan,
@@ -96,9 +123,10 @@ def get_registry_field(db: Session, imk_id: int) -> RegistryField | None:
             imk_id,
             cvr,
             marknr,
+            markblok,
+            journalnr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             area_ha,
             crop_rotation,
@@ -123,9 +151,10 @@ def get_registry_fields(db: Session, imk_ids: list[int]) -> list[RegistryField]:
             imk_id,
             cvr,
             marknr,
+            markblok,
+            journalnr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             area_ha,
             crop_rotation,
@@ -253,13 +282,12 @@ def _regular_fields_tile_query(cvr_clause: str, focus_clause: str) -> str:
             marknr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             area_ha,
             crop_rotation,
             udledningsgraense_kgn_ha,
             udledningskvote_mark_kgn,
-            in_takeout_plan::int AS in_takeout_plan,
+            (in_takeout_plan != 'nej')::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             false AS focus,
             ST_AsMVTGeom(ST_Transform(f.geom, 3857), bounds.geom_3857, 4096, 256, true) AS geom
@@ -279,13 +307,12 @@ def _focus_fields_tile_query(focus_clause: str) -> str:
             marknr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             area_ha,
             crop_rotation,
             udledningsgraense_kgn_ha,
             udledningskvote_mark_kgn,
-            in_takeout_plan::int AS in_takeout_plan,
+            (in_takeout_plan != 'nej')::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             true AS focus,
             ST_AsMVTGeom(ST_Transform(f.geom, 3857), bounds.geom_3857, 4096, 256, true) AS geom
@@ -306,11 +333,10 @@ def _regular_points_tile_query(cvr_clause: str, focus_clause: str) -> str:
             cvr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             udledningsgraense_kgn_ha,
             udledningskvote_mark_kgn,
-            in_takeout_plan::int AS in_takeout_plan,
+            (in_takeout_plan != 'nej')::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             false AS focus,
             ST_AsMVTGeom(ST_Transform(f.centroid, 3857), bounds.geom_3857, 4096, 64, true) AS geom
@@ -331,11 +357,10 @@ def _focus_points_tile_query(focus_clause: str) -> str:
             cvr,
             kystvand_id,
             retention,
-            soil_id,
             jbnr,
             udledningsgraense_kgn_ha,
             udledningskvote_mark_kgn,
-            in_takeout_plan::int AS in_takeout_plan,
+            (in_takeout_plan != 'nej')::int AS in_takeout_plan,
             CASE WHEN imk_id = ANY(:owned_imk_ids) THEN true ELSE false END AS owned,
             true AS focus,
             ST_AsMVTGeom(ST_Transform(f.centroid, 3857), bounds.geom_3857, 4096, 64, true) AS geom

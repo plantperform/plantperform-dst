@@ -219,7 +219,7 @@ const LeachingDetailSection = ({
 
   const p = num(detail.P)
   const s = num(detail.S)
-  const y = num(detail.Y) || 2024
+  const y = num(detail.Y) || 2027
   const { tau, mu, kappa, rho } = L_FORMULA_CONSTANTS
   const trend = tau * (y - 1991)
   const base = mu + ntheta + num(detail.C)

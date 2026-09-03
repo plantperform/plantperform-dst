@@ -5,7 +5,6 @@ import type {
   Measure,
   NamedRotation,
   RotationYear,
-  Soil,
 } from '@/api/types'
 
 export const CROP_VALUES: Crop[] = [
@@ -59,14 +58,6 @@ export const parseRegistryRotation = (value: string): Crop[] =>
       return cropFromRegistryNumber(Number(part))
     })
 
-export const soilFromRegistryNumber = (value: number | null): Soil => {
-  if (value === null) throw new Error('Jordtype-id mangler')
-  if (value === 10) return 'SAND'
-  if (value === 11 || value === 20) return 'CLAY'
-
-  throw new Error(`Ikke understøttet jordtype-id ${value}`)
-}
-
 export const formatCrop = (crop: Crop) => {
   const cropLabels: Record<Crop, string> = {
     CEREAL_WINTER: 'Vintersæd',
@@ -91,9 +82,9 @@ export const formatCropRotation = (rotation: Crop[]) =>
   rotation.length > 0 ? rotation.map(formatCrop).join(' - ') : 'Ukendt'
 
 // Startkalenderår for den 8-årige rotation — skal matche backend'ens
-// candidate_evaluator.py::_START_CALENDAR_YEAR. Position 1 = dette år,
+// candidate_evaluator.py::START_CALENDAR_YEAR. Position 1 = dette år,
 // position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
-export const ROTATION_START_CALENDAR_YEAR = 2024
+export const ROTATION_START_CALENDAR_YEAR = 2027
 
 // Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
 // navnet i parentes lige efter.
@@ -205,11 +196,6 @@ export const groupRotationsByCategory = (
   }
 
   return groups
-}
-
-export const formatSoil = (soil: Soil) => {
-  if (soil === 'SAND') return 'Sandjord'
-  return 'Lerjord'
 }
 
 export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>

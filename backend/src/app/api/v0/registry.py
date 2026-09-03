@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from app.auth import AuthenticatedUser, current_user
 from app.data.db import get_db
 from app.data.registry_repository import (
+    get_owned_imk_ids,
     get_registry_bounds,
     get_registry_field,
     get_registry_fields,
     get_registry_tile,
     search_registry_fields,
 )
-from app.data.repository import list_fields
 from app.domain.registry import RegistryBounds, RegistryField, RegistryFieldSummary
 
 router = APIRouter(prefix="/registry", tags=["registry"])
@@ -91,12 +91,11 @@ async def get_tile(
     owned_by_farm_id: OwnedByFarmId = None,
 ) -> Response:
     if owned_by_farm_id is not None:
-        farm_fields = list_fields(owned_by_farm_id, user.email)
-        if farm_fields is None:
+        owned_imk_ids = get_owned_imk_ids(db, owned_by_farm_id, user.email)
+        if owned_imk_ids is None:
             raise HTTPException(status_code=404, detail="Farm not found")
     else:
-        farm_fields = []
-    owned_imk_ids = [field.imk_id for field in (farm_fields or []) if field.imk_id is not None]
+        owned_imk_ids = []
     tile = get_registry_tile(
         db,
         z=z,
