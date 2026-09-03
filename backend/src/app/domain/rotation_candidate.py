@@ -97,3 +97,8 @@ class SimulationFieldCandidates(CamelModel):
     field_id: str
     jbnr: int
     candidates: list[RotationCandidateEvaluation]
+    # Markens egen ægte 2025/26-historik (afgrøde + historisk N-input,
+    # jf. historisk_goedning.real_history_lookback) — cachet her ved
+    # "Opret scenarie" så optimeringen/"Rediger manuelt" senere kan seede
+    # 2027/2028's bagudkig uden en ekstra DB-slå-op pr. mark pr. kald.
+    real_history: dict[str, dict] | None = None

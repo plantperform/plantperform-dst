@@ -17,7 +17,6 @@ export type Farm = {
   cvr: string | null
   name: string
   ownerName: string
-  udledningskvoteKgN: number
   rotationLibrary: NamedRotation[]
 }
 
@@ -25,11 +24,14 @@ export type CreateFarmInput = {
   name: string
   ownerName: string
   cvr: string | null
-  udledningskvoteKgN?: number
 }
 
-export type UpdateFarmInput = {
+export type KystvandoplandUdledning = {
+  kystvandId: number | null
+  kystvandNavn: string | null
   udledningskvoteKgN: number
+  beregnetUdledningKgN: number
+  overholder: boolean
 }
 
 export type GeoJSONPolygon = {
@@ -91,6 +93,7 @@ export type FieldRecord = {
   inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
 
@@ -101,6 +104,7 @@ export type RegistryField = {
   markblok: string | null
   journalnr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
   jbnr: number | null
   areaHa: number
@@ -109,6 +113,7 @@ export type RegistryField = {
   inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon
 }
 
@@ -117,6 +122,7 @@ export type RegistryFieldSummary = {
   cvr: string | null
   marknr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
   areaHa: number
   cropRotation: string
@@ -154,8 +160,13 @@ export type CropPercentageConstraint = {
   minimumPercentage: number
 }
 
-export type OptimizationConstraints = {
+export type KystvandoplandNLoadCap = {
+  kystvandId: number | null
   maxNLoadKg: number | null
+}
+
+export type OptimizationConstraints = {
+  maxNLoadByKystvandopland: KystvandoplandNLoadCap[]
   minFen: number | null
   maxFen: number | null
   maxFieldsWithNewRotation: number | null
@@ -224,9 +235,14 @@ export type SaedskifteVariantRef = {
   variant: string
 }
 
+export type KystvandoplandYearlyNLoadCaps = {
+  kystvandId: number | null
+  maxNLoadByYear: Record<number, number>
+}
+
 export type YearlyOptimizeSimulationInput = {
   timeLimitSeconds?: number
-  maxNLoadByYear?: Record<number, number>
+  maxNLoadByKystvandopland?: KystvandoplandYearlyNLoadCaps[]
   db2SwingPct?: number | null
   selectedSaedskifter?: SaedskifteVariantRef[]
 }

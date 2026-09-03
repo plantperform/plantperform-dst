@@ -45,6 +45,7 @@ registry_field_table = Table(
     Column("markblok", Text, nullable=True),
     Column("journalnr", Text, nullable=True),
     Column("kystvand_id", Integer, nullable=True, index=True),
+    Column("kystvand_navn", Text, nullable=True),
     Column("retention", Float, nullable=True),
     Column("jbnr", SmallInteger, nullable=True),
     Column("area_ha", Float, nullable=False),
@@ -62,6 +63,8 @@ registry_field_table = Table(
     Column("hoejeste_hnv", SmallInteger, nullable=True),
     Column("omlaegningsplan_virkemiddel", Text, nullable=True),
     Column("omlaegningsplan_status", Text, nullable=True),
+    Column("goedningsregion", Text, nullable=True),
+    Column("kvotegivende", Boolean, nullable=False, server_default=false()),
     Column("crop_history", JSON, nullable=False),
     Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False),
     Column("centroid", Geometry(geometry_type="POINT", srid=4326), nullable=True),
@@ -199,7 +202,7 @@ refresh_session_table = Table(
     Index("ix_auth_refresh_session_family_id", "family_id"),
 )
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

@@ -80,7 +80,7 @@ class YearlySummaryEntryResponse(CamelModel):
 
 
 @router.get("", response_model=list[Simulation])
-async def get_farm_simulations(
+def get_farm_simulations(
     farm_id: str,
     user: CurrentUser,
 ) -> list[Simulation]:
@@ -93,7 +93,7 @@ async def get_farm_simulations(
 
 
 @router.post("", response_model=Simulation)
-async def post_farm_simulation(
+def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
     user: CurrentUser,
@@ -107,7 +107,7 @@ async def post_farm_simulation(
 
 
 @router.get("/{simulation_id}", response_model=Simulation)
-async def get_farm_simulation(
+def get_farm_simulation(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -121,7 +121,7 @@ async def get_farm_simulation(
 
 
 @router.delete("/{simulation_id}", status_code=HTTP_204_NO_CONTENT)
-async def delete_farm_simulation(
+def delete_farm_simulation(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -136,7 +136,7 @@ async def delete_farm_simulation(
 
 
 @router.patch("/{simulation_id}/constraints", response_model=Simulation)
-async def patch_farm_simulation_constraints(
+def patch_farm_simulation_constraints(
     farm_id: str,
     simulation_id: str,
     request: OptimizationConstraints,
@@ -154,7 +154,7 @@ async def patch_farm_simulation_constraints(
 
 
 @router.post("/{simulation_id}/optimize", response_model=OptimizeSimulationResponse)
-async def post_farm_simulation_optimization(
+def post_farm_simulation_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -198,9 +198,19 @@ class SaedskifteVariantRef(CamelModel):
     variant: str
 
 
+class KystvandoplandYearlyNLoadCaps(CamelModel):
+    """Udledningslofter pr. kalenderår for ét kystvandopland — hvert opland i
+    scenariets marker kan sættes uafhængigt (egen "samme for alle år"/
+    "pr. år"-tilstand i UI'en), jf. KystvandoplandNLoadCap for hvorfor
+    oplande ikke må blandes."""
+
+    kystvand_id: int | None = None
+    max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
+
+
 class YearlyOptimizeSimulationRequest(CamelModel):
     time_limit_seconds: float = Field(default=20, gt=0, le=600)
-    max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
+    max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
     selected_saedskifter: list[SaedskifteVariantRef] = Field(default_factory=list)
 
@@ -218,7 +228,7 @@ class YearlyOptimizeSimulationResponse(CamelModel):
 
 
 @router.post("/{simulation_id}/optimize-yearly", response_model=YearlyOptimizeSimulationResponse)
-async def post_farm_simulation_yearly_optimization(
+def post_farm_simulation_yearly_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -228,10 +238,13 @@ async def post_farm_simulation_yearly_optimization(
     udledningslofter og en DB-udsvingsgrænse i stedet for scenarie-totaler;
     solveren vælger selv hvor meget hvert felts sædskifte forskydes."""
     optimization_request = request or YearlyOptimizeSimulationRequest()
-    max_n_load_by_year = tuple(
-        optimization_request.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
-        for i in range(NUM_ROTATION_YEARS)
-    )
+    max_n_load_by_kystvandopland = {
+        cap.kystvand_id: tuple(
+            cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
+            for i in range(NUM_ROTATION_YEARS)
+        )
+        for cap in optimization_request.max_n_load_by_kystvandopland
+    }
     selected_pairs = {
         (ref.saedskiftevariant, ref.variant)
         for ref in optimization_request.selected_saedskifter
@@ -242,7 +255,7 @@ async def post_farm_simulation_yearly_optimization(
             farm_id,
             simulation_id,
             optimization_request.time_limit_seconds,
-            max_n_load_by_year,
+            max_n_load_by_kystvandopland,
             optimization_request.db2_swing_pct,
             selected_pairs,
             user.email,
@@ -295,7 +308,7 @@ class YearlyOptimizationKategoriOption(CamelModel):
     "/{simulation_id}/yearly-optimization-candidates",
     response_model=list[YearlyOptimizationKategoriOption],
 )
-async def get_farm_simulation_yearly_optimization_candidates(
+def get_farm_simulation_yearly_optimization_candidates(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -368,7 +381,7 @@ async def get_farm_simulation_yearly_optimization_candidates(
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
-async def get_farm_simulation_fields(
+def get_farm_simulation_fields(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
@@ -382,7 +395,7 @@ async def get_farm_simulation_fields(
 
 
 @router.patch("/{simulation_id}/fields/{field_id}", response_model=FieldRecord)
-async def patch_farm_simulation_field(
+def patch_farm_simulation_field(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -401,7 +414,7 @@ async def patch_farm_simulation_field(
     "/{simulation_id}/fields/{field_id}/candidate-detail",
     response_model=RotationCandidateEvaluation,
 )
-async def get_farm_simulation_field_candidate_detail(
+def get_farm_simulation_field_candidate_detail(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -430,7 +443,7 @@ class RecomputeFieldRotationRequest(CamelModel):
     "/{simulation_id}/fields/{field_id}/preview-rotation",
     response_model=RotationCandidateEvaluation,
 )
-async def post_farm_simulation_field_preview_rotation(
+def post_farm_simulation_field_preview_rotation(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -467,6 +480,7 @@ async def post_farm_simulation_field_preview_rotation(
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=request.start_year,
+        real_history=candidates_row.real_history,
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
@@ -478,7 +492,7 @@ async def post_farm_simulation_field_preview_rotation(
     "/{simulation_id}/fields/{field_id}/apply-rotation",
     response_model=FieldRecord,
 )
-async def post_farm_simulation_field_apply_rotation(
+def post_farm_simulation_field_apply_rotation(
     farm_id: str,
     simulation_id: str,
     field_id: str,
@@ -506,7 +520,7 @@ async def post_farm_simulation_field_apply_rotation(
     "/{simulation_id}/yearly-summary",
     response_model=list[YearlySummaryEntryResponse],
 )
-async def get_farm_simulation_yearly_summary(
+def get_farm_simulation_yearly_summary(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,

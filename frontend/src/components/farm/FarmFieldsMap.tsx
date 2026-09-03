@@ -14,7 +14,7 @@ import { mutate } from 'swr'
 
 import { getAccessToken } from '@/api/auth'
 import { API_BASE, fetcher } from '@/api/client'
-import { farmFieldsKey, registryFieldsBulkKey, useFarmFields } from '@/api/hooks'
+import { farmFieldsKey, farmKey, registryFieldsBulkKey, useFarmFields } from '@/api/hooks'
 import { createFields, detachField } from '@/api/mutations'
 import type {
   CreateFieldInput,
@@ -339,6 +339,7 @@ export const FarmFieldsMap = ({
 
       await createFields(farm.id, payload)
       await mutate(farmFieldsKey(farm.id))
+      await mutate(farmKey(farm.id))
       setSelectedImkIds([])
       setAddMode(false)
       onError(null)
@@ -472,6 +473,7 @@ export const FarmFieldsMap = ({
     try {
       await detachField(farm.id, selectedFarmField.id)
       await mutate(farmFieldsKey(farm.id))
+      await mutate(farmKey(farm.id))
       setSelectedFieldId(null)
       onError(null)
     } catch {
@@ -957,7 +959,7 @@ export const FarmFieldsMap = ({
                     <FieldStat
                       label="Udledningskvote"
                       value={`${formatNumber(selectedFarmField.udledningskvoteMarkKgn)} kg N`}
-                      subValue={`${formatNumber(selectedFarmField.udledningsgraenseKgnHa)} kg N/ha`}
+                      subValue={perHa(selectedFarmField.udledningskvoteMarkKgn, 'kg N/ha')}
                     />
                   </>
                 )

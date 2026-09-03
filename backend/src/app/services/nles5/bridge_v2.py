@@ -14,15 +14,21 @@ forfrugtskategori). WP følger samme "næste år overstyrer"-idé som W, men ét
 perioden mellem forfrugten og nu reelt optaget af den — ellers falder WP
 tilbage til forrige positions egen statiske WP-felt (se _resolve_wp).
 
-P/S/NT kommer fra services.soil.percolation_placeholder (midlertidigt fladt
-sæt, jf. planen — IKKE AAa/AAb/APb, som er bridge.py's forældede tilgang).
+P kommer fra services.soil.percolation_placeholder (midlertidigt ét fælles
+P-sæt for alle marker, jf. planen — IKKE AAa/AAb/APb, som er bridge.py's
+forældede tilgang), men hvilken af de 8 P-værdier der bruges afhænger af
+afgrøden: services.rotations.afstromning slår afgrødekoden op i Bilag 7
+tabel 1 (Bilag_1_tabel_1_med_P_noegle.csv, alle 323 koder) og returnerer
+dens afstrømningskategori (1-8), med en alternativ kategori når positionen
+har et vinterdække-ændrende virkemiddel (EEA/efterafgrøde) samme år. S/NT
+er fortsat ét fladt tal, ikke afgrøde-afhængigt.
 """
 from __future__ import annotations
 
 from functools import lru_cache
 
 from app.services.nles5.engine import calculate_leaching
-from app.services.rotations import afgroede_normer
+from app.services.rotations import afgroede_normer, afstromning
 from app.services.soil.percolation_placeholder import percolation_placeholder
 
 # next-year M-kode -> denne positions W (Bilag 2 tabel 6: "hvad sås/pløjes i
@@ -139,7 +145,6 @@ def evaluate_leaching_position(
     g1: float = 0.0,
     g2: float = 0.0,
     y: int = 2027,
-    afstromningskategori: int = 1,
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
@@ -155,13 +160,21 @@ def evaluate_leaching_position(
     wp = _resolve_wp(prev_params, this_params)
     w = _resolve_w(this_params, next_params, udlaeg_kode)
 
-    perc = percolation_placeholder(afstromningskategori)
-
     vk = (
         _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL)
         if udlaeg_kode is not None
         else _NO_VIRKEMIDDEL
     )
+
+    # Hvilken af de 8 P-værdier der bruges afhænger af afgrøden (og af om
+    # positionen har et vinterdække-ændrende virkemiddel samme år, jf.
+    # afstromning.py, som dækker alle 323 afgrødekoder med ingen huller).
+    # kategori_ukendt er derfor i praksis altid False — bevaret som en ren
+    # sikkerhedsnet-flag for en fremtidig afgrødekode filen ikke (endnu)
+    # indeholder, uden at beregningen fejler.
+    kategori = afstromning.afstromningskategori(afgrode_kode, eea_on=vk["eea"])
+    kategori_ukendt = kategori is None
+    perc = percolation_placeholder(kategori if kategori is not None else 1)
 
     sample = {
         "crop_code": afgrode_kode,
@@ -175,6 +188,8 @@ def evaluate_leaching_position(
         "F0": f0, "F1": f1, "F2": f2,
         "G0": g0, "G1": g1, "G2": g2,
         "P_override": perc["P_override"], "S_override": perc["S_override"],
+        "afstromningskategori": kategori if kategori is not None else 1,
+        "afstromningskategori_ukendt": kategori_ukendt,
         # EEA/EMA/ETS er afledt af rotationens udlægskode (se _UDL_VIRKEMIDDEL
         # ovenfor) — ikke et frit valg. Fdato/precision_dagsbasis er en
         # scenarie-niveau-indstilling (jf. plan Fase 8), gælder ens for alle

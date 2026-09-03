@@ -165,6 +165,9 @@ class FieldRecord(CamelModel):
     in_takeout_plan: str = "nej"
     udledningsgraense_kgn_ha: float = 0
     udledningskvote_mark_kgn: float = 0
+    # Om markens 2026-afgrødekode er kvotegivende areal (Bilag 1 tabel 1) —
+    # sat fra registry_field.kvotegivende ved "Tilføj marker", jf. jbnr.
+    kvotegivende: bool = False
     geometry: GeoJSONPolygon | GeoJSONMultiPolygon | None = None
 
 

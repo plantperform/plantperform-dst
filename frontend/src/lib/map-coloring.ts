@@ -11,6 +11,7 @@ export type ColorAttribute =
   | 'vandopland'
   | 'rotationChanged'
   | 'inTakeoutPlan'
+  | 'kvotegivende'
 
 export type ColorSource = 'both' | 'farm'
 
@@ -261,6 +262,23 @@ const TAKEOUT: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
+// Om markens 2026-afgrødekode er kvotegivende areal (Bilag 1 tabel 1).
+// Samme mønster som TAKEOUT — kategorisk 1/0, virker på begge lag (farm
+// GeoJSON emitter kvotegivende som 1/0, registry MVT eksponerer kolonnen
+// direkte som kvotegivende::int).
+const KVOTEGIVENDE: CategorySpec = {
+  kind: 'category',
+  label: 'Kvotegivende areal',
+  unit: '',
+  source: 'both',
+  property: 'kvotegivende',
+  bins: [
+    { value: 1, color: '#0d9488', label: 'Kvotegivende' },
+    { value: 0, color: NEUTRAL_FALLBACK, label: 'Ikke kvotegivende' },
+  ],
+  fallbackColor: NEUTRAL_FALLBACK,
+}
+
 export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   retention: RETENTION,
   jbnr: JB_NR,
@@ -271,6 +289,7 @@ export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   vandopland: VANDOPLAND,
   rotationChanged: ROTATION_CHANGED,
   inTakeoutPlan: TAKEOUT,
+  kvotegivende: KVOTEGIVENDE,
 }
 
 export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
@@ -284,6 +303,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'vandopland', label: 'Vandopland' },
   { value: 'rotationChanged', label: 'Ændret sædskifte' },
   { value: 'inTakeoutPlan', label: 'Omlægning' },
+  { value: 'kvotegivende', label: 'Kvotegivende areal' },
 ]
 
 // Farm GeoJSON properties use camelCase (matching FieldRecord).
@@ -294,6 +314,7 @@ const REGISTRY_PROPERTY_NAMES: Record<string, string> = {
   udledningsgraenseKgnHa: 'udledningsgraense_kgn_ha',
   kystvandId: 'kystvand_id',
   inTakeoutPlan: 'in_takeout_plan',
+  kvotegivende: 'kvotegivende',
 }
 
 export const registryPropertyFor = (spec: ColorSpec): string | null => {
