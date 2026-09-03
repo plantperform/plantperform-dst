@@ -475,7 +475,7 @@ def calculate_leaching(sample):
     ets = resolve_ets(sample)
 
     result = nles5(
-        Y=sample.get("Y", 2024),
+        Y=sample.get("Y", 2027),
         Ntheta=ntheta,
         C=c,
         P=p,
@@ -520,7 +520,7 @@ def calculate_leaching(sample):
 
 def sample_crop_mapping():
     return {
-        "Y": 2024,
+        "Y": 2027,
         "NT": 0.5,
         "MNCS": 20,
         "MNCA": 15,
