@@ -332,11 +332,12 @@ def get_farm_simulation_yearly_optimization_candidates(
 
     # Kategorier er normalt gensidigt udelukkende for en given
     # saedskiftevariant — undtagelsen er "ren brak" (saedskiftevariant "1"),
-    # som hører til alle 6 kategorier i kildedataen (beslutning 15). Uden
-    # særbehandling ville brak-varianterne dukke op — og blive markeret
-    # valgt — identisk under alle 6 kategorier i vælgeren, så en "vælg alt"
-    # på blot én lille kategori kunne se ud som om den valgte på tværs af
-    # dem alle. Brak får derfor sin egen kategori i stedet.
+    # som hører til alle kategorier i kildedataen (beslutning 15; 4
+    # kategorier pr. 2026-09-02, tidligere 6). Uden særbehandling ville
+    # brak-varianterne dukke op — og blive markeret valgt — identisk under
+    # alle kategorier i vælgeren, så en "vælg alt" på blot én lille kategori
+    # kunne se ud som om den valgte på tværs af dem alle. Brak får derfor
+    # sin egen kategori i stedet.
     BRAK_KATEGORI = "Brak"
     # Brak-variant-id'erne (1-4, evt. flere) er alle den samme rene brak
     # gentaget hele vejen igennem — ingen virkemiddel- eller afgrødeforskel

@@ -310,12 +310,11 @@ def evaluate_candidate_for_mark(
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
     DB, samt gennemsnit over én fuld rotationscyklus (active_len).
 
-    Returnerer None hvis (saedskiftevariant, variant, n_norm_pct) ikke findes
-    i datasættet (fx en N-norm% der ikke er defineret for denne variant) —
-    kaldere skal springe disse over, ikke fejle.
+    Returnerer None hvis (saedskiftevariant, variant) ikke findes i
+    datasættet — kaldere skal springe disse over, ikke fejle.
     """
     raw_rotation = saedskifte_library.generate_rotation(
-        ref.saedskiftevariant, ref.variant, ref.n_norm_pct, start_year
+        ref.saedskiftevariant, ref.variant, start_year
     )
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
@@ -366,7 +365,7 @@ def evaluate_with_overrides(
     kandidatmængde.
     """
     raw_rotation = saedskifte_library.generate_rotation(
-        base_ref.saedskiftevariant, base_ref.variant, base_ref.n_norm_pct, start_year
+        base_ref.saedskiftevariant, base_ref.variant, start_year
     )
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
@@ -421,19 +420,18 @@ def generate_candidates_for_field(
     sædskifter, fuldt uafhængigt af hvilke der er valgt).
 
     Bruges af "Opret scenarie" (usynlig baggrundsberegning, jf. plan-
-    beslutning 14/19/Fase 9) — springer kombinationer der ikke findes i
-    datasættet over (fx en N-norm% der ikke er defineret for en given
-    variant).
+    beslutning 14/19/Fase 9). N-norm% er nu en ren procent-skalering
+    (candidate_evaluator.compute_n_inputs), ikke en del af selve
+    rotationsopslaget (se saedskifte_library.py's moduldocstring) — derfor
+    er der ikke længere kombinationer at springe over her, alle valgte
+    N-norm%-værdier gælder for alle valgte sædskifter/varianter.
     """
     results: list[RotationCandidateEvaluation] = []
     seen_ref_ids: set[str] = set()
 
     for saedskiftevariant in saedskiftevarianter:
         for variant in saedskifte_library.list_variants(saedskiftevariant):
-            available_norms = set(saedskifte_library.list_n_norms(saedskiftevariant, variant))
             for n_norm_pct in n_norm_procenter:
-                if n_norm_pct not in available_norms:
-                    continue
                 ref = RotationCandidateRef(
                     saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
                 )

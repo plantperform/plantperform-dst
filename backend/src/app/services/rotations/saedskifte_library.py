@@ -1,18 +1,47 @@
-"""Sædskifte rotation lookup fra Excel (v4).
+"""Sædskifte rotation lookup fra CSV (sammenlagt, semikolon-separeret).
 
-Porteret fra c:\\plantperform-nles\\src\\saedskifte_lookup.py — samme logik,
-sti tilpasset DST2's database/data/raw/ANGJ-data/.
+Kilde: Ny_sædskifte_lookup_sammenlagt.csv (2026-09-02) — erstatter
+PlantPerform_saedskifte_lookup_v4_uden_normgruppe_dedup (1).xlsx. Den nye
+fil har fjernet N-norm%-aksen fra selve rotationsopslaget (tidligere fandtes
+fx "Økologisk 107N" og "Økologisk 65N" som separate rækker for samme
+afgrødesekvens); N-tildeling håndteres nu udelukkende via scenariets egen
+N-norm%-vælger (rotation_candidates.py's /n-norm-procenter,
+candidate_evaluator.compute_n_inputs' n_norm_pct-skalering), IKKE længere som
+en del af selve rotationsopslaget. Rotation er derfor nøglet på
+(saedskiftevariant, variant) alene — ikke længere en tredelt
+(saedskiftevariant, variant, n_norm)-nøgle.
 
-Kolonnestruktur (v4, 37 kolonner):
-  0  lookup_id
-  1  saedskifte_id
-  2  saedskiftevariant
-  3  variant
-  4  N-norm %
-  5+4*(i-1)   afgrøde{i}_kode  (i = 1..8)
-  6+4*(i-1)   afgrøde{i}_navn
-  7+4*(i-1)   udl{i}_kode
-  8+4*(i-1)   udl{i}_navn
+Driftsform/Husdyr-gødningstype/Husdyr-gødning kg N/ha-kolonnerne beskriver
+hvordan kildedata oprindelig blev beregnet for DENNE specifikke række — de er
+IKKE en adgangsbegrænsning ved sædskiftevalg. Både konventionelle og
+økologiske brugere kan vælge ethvert sædskifte (jf. den eksisterende, fulde
+afkobling af driftsform fra sædskiftevalg, Fase 13's GodningSettings — se
+candidate_evaluator.py's modul-docstring). Kolonnerne bruges her kun til at
+udlede "Sammenlagt kategori" (get_kategori/get_driftsform, forbrugt af
+saedskifte_kategorier.py) — en ren UI-grupperingsetiket, ikke en filtrering
+af hvilke rotationer der kan vælges.
+
+Verificeret 2026-09-02: for de få (saedskiftevariant, variant)-par hvor
+kildefilen har flere rækker (kun ren brak, saedskiftevariant "1"), er
+afgrøde-/udlægssekvensen identisk på tværs af alle rækker — kun
+driftsform-/kategori-mærkningen varierer. Det er derfor sikkert at bruge
+første match uden yderligere disambiguering.
+
+Kolonnestruktur (41 kolonner, semikolon-separeret; kildefilens 4 indledende
+titel-/nummererings-/header-/underheader-rækker springes over):
+  0  Ident
+  1  Sædskifte nr.  (= saedskiftevariant)
+  2  Variant
+  3+4*(i-1)  afgr{i}_kode   (i = 1..8)
+  4+4*(i-1)  afgr{i}_navn
+  5+4*(i-1)  udl{i}_kode
+  6+4*(i-1)  udl{i}_navn
+  35 Driftsform
+  36 Husdyr-gødningstype
+  37 Husdyr-gødning kg N/ha
+  38 Sammenlagt kategori
+  39 Oprindelige N-kategorier   (kun sporbarhed, ikke brugt her)
+  40 Oprindelige sædskifte nr.  (kun sporbarhed, ikke brugt her)
 
 Forward-fill på afgr_kode inden for rotationens aktive længde:
   blank afgr = gentag foregående års afgrøde.
@@ -27,23 +56,31 @@ from pathlib import Path
 import pandas as pd
 
 _ROOT = Path(__file__).resolve().parents[4]  # .../backend
-_XLSX_PATH = (
-    _ROOT / "database" / "data" / "raw" / "ANGJ-data"
-    / "PlantPerform_saedskifte_lookup_v4_uden_normgruppe_dedup (1).xlsx"
+_CSV_PATH = (
+    _ROOT / "database" / "data" / "raw" / "ANGJ-data" / "Ny_sædskifte_lookup_sammenlagt.csv"
 )
+_HEADER_ROWS_TO_SKIP = 4
 
-_BASE_COLS = ["lookup_id", "saedskifte_id", "saedskiftevariant", "variant", "N-norm %"]
+_BASE_COLS = ["ident", "saedskiftevariant", "variant"]
 _YEAR_CLEAN: list[str] = []
 for _i in range(1, 9):
     _YEAR_CLEAN += [f"afgr{_i}_kode", f"afgr{_i}_navn", f"udl{_i}_kode", f"udl{_i}_navn"]
-_ALL_COLS = _BASE_COLS + _YEAR_CLEAN
+_META_COLS = [
+    "driftsform", "husdyr_type", "husdyr_kg_n_ha",
+    "kategori", "_oprindelige_n_kategorier", "_oprindelige_saedskifte_nr",
+]
+_ALL_COLS = _BASE_COLS + _YEAR_CLEAN + _META_COLS
 
 
 @lru_cache(maxsize=1)
 def _df() -> pd.DataFrame:
-    raw = pd.read_excel(_XLSX_PATH, dtype=str)
+    raw = pd.read_csv(
+        _CSV_PATH, sep=";", skiprows=_HEADER_ROWS_TO_SKIP, header=None,
+        dtype=str, encoding="utf-8-sig",
+    )
     raw.columns = _ALL_COLS[: len(raw.columns)]
     raw = raw.where(raw.notna() & (raw != ""), other=None)
+    raw = raw[raw["saedskiftevariant"].notna()]
     return raw
 
 
@@ -76,23 +113,33 @@ def list_variants(saedskifte: str) -> list[str]:
     return sorted(sub["variant"].dropna().unique(), key=lambda x: int(x))
 
 
-def list_n_norms(saedskifte: str, variant: str) -> list[str]:
-    """Sorterede N-norm %-værdier for (saedskifte, variant)."""
+def list_all_saedskifte_refs() -> list[tuple[str, str]]:
+    """Alle (saedskiftevariant, variant)-kombinationer i datasættet."""
     df = _df()
-    mask = (df["saedskiftevariant"] == str(saedskifte)) & (df["variant"] == str(variant))
-    return sorted(df[mask]["N-norm %"].dropna().unique(), key=lambda x: int(x))
+    sub = df[["saedskiftevariant", "variant"]].dropna(how="any")
+    pairs = {tuple(row) for row in sub.itertuples(index=False, name=None)}
+    return sorted(pairs, key=lambda t: (int(t[0]), int(t[1])))
 
 
-def list_all_candidate_refs() -> list[tuple[str, str, str]]:
-    """Alle (saedskiftevariant, variant, N-norm %)-kombinationer i datasættet."""
-    df = _df()
-    sub = df[["saedskiftevariant", "variant", "N-norm %"]].dropna(how="any")
-    triples = {tuple(row) for row in sub.itertuples(index=False, name=None)}
-    return sorted(triples, key=lambda t: (int(t[0]), int(t[1]), int(t[2])))
+def get_kategori(saedskifte: str) -> list[str]:
+    """"Sammenlagt kategori"-værdi(er) for et givet saedskiftevariant —
+    normalt netop én, men saedskiftevariant "1" (ren brak) hører til alle 4
+    kategorier på én gang, ligesom i den gamle kategori-CSV."""
+    sub = _df()[_df()["saedskiftevariant"] == str(saedskifte)]
+    return sorted(v for v in sub["kategori"].dropna().unique())
+
+
+def get_driftsform(saedskifte: str) -> str | None:
+    """Kildedataets EGEN driftsform-mærkning for dette saedskiftevariant —
+    bruges kun til kategori-udledning, IKKE som adgangsbegrænsning ved
+    sædskiftevalg (se moduldocstring)."""
+    sub = _df()[_df()["saedskiftevariant"] == str(saedskifte)]
+    values = sub["driftsform"].dropna().unique()
+    return values[0] if len(values) else None
 
 
 def get_raw_rotation(
-    saedskifte: str, variant: str, n_norm: str,
+    saedskifte: str, variant: str,
 ) -> list[tuple[int | None, int | None, str | None]]:
     """8-element liste af (afgr_code, udl_code, udl_navn).
 
@@ -103,11 +150,7 @@ def get_raw_rotation(
     cyklingen i generate_rotation fungerer korrekt.
     """
     df = _df()
-    mask = (
-        (df["saedskiftevariant"] == str(saedskifte))
-        & (df["variant"] == str(variant))
-        & (df["N-norm %"] == str(n_norm))
-    )
+    mask = (df["saedskiftevariant"] == str(saedskifte)) & (df["variant"] == str(variant))
     rows = df[mask]
     if rows.empty:
         return [(None, None, None)] * 8
@@ -152,7 +195,7 @@ def rotation_active_len(rotation: list[tuple[int | None, int | None, str | None]
 
 
 def generate_rotation(
-    saedskifte: str, variant: str, n_norm: str, start_year: int = 1
+    saedskifte: str, variant: str, start_year: int = 1
 ) -> list[tuple[int | None, int | None, str | None]]:
     """Generer 8-årig rotation fra start_year (1-baseret), cyklisk hvis nødvendigt.
 
@@ -160,7 +203,7 @@ def generate_rotation(
         rotation = [A, B, C, D, E]  (active_len=5), start_year=3
         resultat  = [C, D, E, A, B, C, D, E]
     """
-    base = get_raw_rotation(saedskifte, variant, n_norm)
+    base = get_raw_rotation(saedskifte, variant)
     act = rotation_active_len(base)
     if act == 0:
         return [(None, None, None)] * 8
