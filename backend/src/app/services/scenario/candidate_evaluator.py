@@ -31,11 +31,23 @@ from app.services.rotations import afgroede_normer, saedskifte_library
 # 2028, osv.
 START_CALENDAR_YEAR = 2027
 
+# Efterafgrødens kvælstofeftervirkning gives som forfrugtsværdi til den
+# FØLGENDE afgrøde, ikke som en negativ omkostning i selve efterafgrødens
+# etableringsår (jf. db_calculator._UDL_KOSTKATEGORI, hvor omkostningerne nu
+# er de rå udgifter uden fradrag for "sparet N"). 21 kg N/ha er SKH's egen
+# antagelse i den økonomiske kalkule for efterafgrøder efter korn/majshelsæd
+# (Faktaark om virkemidler, 2026) — gælder ikke mellemafgrøder (kilden er
+# eksplicit: "der indregnes ikke nogen kvælstofeftervirkning" for dem) eller
+# tidlig såning (intet forfrugtsværdi-koncept nævnt i den kilde).
+_EFTERAFGRODE_UDLAEG_KODER = {968, 9680, 970}
+_EFTERAFGRODE_FORFRUGTSVAERDI_KGN_HA = 21.0
+
 
 @lru_cache(maxsize=100_000)
 def compute_n_inputs(
     afgrode_kode: int,
     prev_afgrode_kode: int | None,
+    prev_udlaeg_kode: int | None,
     jbnr: int,
     n_norm_pct: float,
     org_mineral_n: float,
@@ -59,6 +71,13 @@ def compute_n_inputs(
 
     MNCA (efterårs mineral-N) er IKKE en del af gødningsvalget i den
     oprindelige model — det er et separat, uafhængigt input, som udgangspunkt 0.
+
+    prev_udlaeg_kode: udlægskoden på FORRIGE position (fx 968 = efterafgrøde).
+    Var der en efterafgrøde forrige år, lægges _EFTERAFGRODE_FORFRUGTSVAERDI_
+    KGN_HA oveni forfrugtsværdien fra selve forfrugten — efterafgrødens
+    kvælstofeftervirkning er en ekstra N-kilde til DENNE afgrøde, uafhængig af
+    hvilken hovedafgrøde efterafgrøden fulgte efter. Gælder ikke mellem-
+    afgrøder eller tidlig såning (se moduldocstring for kilden).
     """
     norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated)
     prev_norm = (
@@ -67,6 +86,8 @@ def compute_n_inputs(
         else None
     )
     fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+    if prev_udlaeg_kode in _EFTERAFGRODE_UDLAEG_KODER:
+        fv_forfrugt += _EFTERAFGRODE_FORFRUGTSVAERDI_KGN_HA
 
     if not norm or norm["n_norm"] is None:
         return {
@@ -129,6 +150,7 @@ def evaluate_sequence_for_mark(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
     base_ref: RotationCandidateRef | None = None,
     overrides: list[RotationPositionOverride] = (),
     start_year: int = 1,
@@ -162,10 +184,23 @@ def evaluate_sequence_for_mark(
                 return entry["code"]
         return afgrode_seq[idx % active_len]
 
+    def prev_udlaeg_for(i: int) -> int | None:
+        """Udlægskoden 1 år før position i — samme cykliske logik som
+        prev_code_for. Ingen real_history-modstykke: markens egen historiske
+        gødningsfordeling (Bilag 3) registrerer ikke om der var en
+        efterafgrøde, så positioner der ellers ville bruge real_history får
+        ingen efterafgrøde-forfrugtsværdi herfra (konservativt: ingen kendt
+        efterafgrøde antages, fremfor at gætte)."""
+        idx = i - 1
+        if real_history is not None and idx < 0:
+            return None
+        return udlaeg_seq[idx % active_len]
+
     n_inputs = [
         compute_n_inputs(
             afgrode_seq[i],
             prev_code_for(i),
+            prev_udlaeg_for(i),
             jbnr,
             n_norm_pct,
             org_mineral_n,
@@ -219,6 +254,7 @@ def evaluate_sequence_for_mark(
             m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
             irrigated=irrigated,
             fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+            praecisionsjordbrug=praecisionsjordbrug,
             y=START_CALENDAR_YEAR + i,
         )
         db = calculate_db(
@@ -226,6 +262,7 @@ def evaluate_sequence_for_mark(
             mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
             org_mineral_n_applied=n_inputs[i]["org_mineral_n_applied"],
             udlaeg_kode=udl_code, only_organic=only_organic,
+            praecisionsjordbrug=praecisionsjordbrug,
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied er husdyrgødningens UDNYTTEDE/mineralske del —
@@ -305,6 +342,7 @@ def evaluate_candidate_for_mark(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
     real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
@@ -329,6 +367,7 @@ def evaluate_candidate_for_mark(
         jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
         n_indhold_kg_per_ton=n_indhold_kg_per_ton,
         irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+        praecisionsjordbrug=praecisionsjordbrug,
         start_year=start_year,
         real_history=real_history,
     )
@@ -346,6 +385,7 @@ def evaluate_with_overrides(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
@@ -400,6 +440,7 @@ def evaluate_with_overrides(
         jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
         n_indhold_kg_per_ton=n_indhold_kg_per_ton,
         irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+        praecisionsjordbrug=praecisionsjordbrug,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
         real_history=real_history,
     )
@@ -412,6 +453,7 @@ def generate_candidates_for_field(
     godning: GodningSettings,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
     real_history: dict[str, dict] | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
@@ -447,6 +489,7 @@ def generate_candidates_for_field(
                     only_organic=godning.only_organic,
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                    praecisionsjordbrug=praecisionsjordbrug,
                     real_history=real_history,
                 )
                 if result is not None:

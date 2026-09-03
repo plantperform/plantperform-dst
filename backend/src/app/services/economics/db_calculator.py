@@ -172,9 +172,19 @@ _OEKO_UDBYTTE_REDUKTION = 0.32
 # eligibilitet) — fx er 960-966 ("udlæg/eftersslæt" klovergræs) og 2000
 # ("udlæg til frø") ikke NUAR-virkemidler, men koster stadig rigtig udsæd.
 # 3000 (jordbearbejdning efterår) er ikke en sået afgrøde og har ingen post her.
+#
+# 9680/9684 (frøgræs der fortsætter som efter-/mellemafgrøde) er egne
+# kategorier fra 968/970 og 9682 — frøgræsset selv udgør plantedækket, så
+# SKH's faktaark (2026) sætter omkostningen til 0 kr, adskilt fra den rigtige
+# sås-fra-bunden-etablering efter korn.
+# 9683 (Tidlig såning af vintersæd) manglede tidligere en prispost helt,
+# selvom den allerede findes som udlægskode på udvasknings-siden (bridge_v2.py).
 _UDL_KOSTKATEGORI: dict[int, str] = {
-    968: "Efterafgrøde", 9680: "Efterafgrøde", 970: "Efterafgrøde",
-    9682: "Mellemafgrøde", 9684: "Mellemafgrøde",
+    968: "Efterafgrøde", 970: "Efterafgrøde",
+    9680: "Efterafgrøde, frøgræs",
+    9682: "Mellemafgrøde",
+    9684: "Mellemafgrøde, frøgræs",
+    9683: "Tidlig såning",
     960: "Udlæg", 961: "Udlæg", 962: "Udlæg", 963: "Udlæg",
     964: "Udlæg", 965: "Udlæg", 966: "Udlæg", 2000: "Udlæg",
 }
@@ -471,13 +481,33 @@ def _n_udbringning() -> float:
     return _load_prisliste()["Handelsgødning, udbringning"]["pris"]
 
 
-def _udlaeg_omkostning(udlaeg_kode: int | None) -> tuple[float, float]:
+_MAJSHELSAED_KODE = 216
+
+# Afgrødekoder hvor præcisionsjordbrug kan anvendes (korn + raps, dansk
+# standardbetydning) — SKH's faktaark om virkemidler, 2026. Samme sæt som
+# bridge_v2._KORN_OG_RAPS_KODER — hold i sync, se dens kommentar for hvorfor
+# majs/bælgsæd er udeladt.
+_KORN_OG_RAPS_KODER = frozenset({1, 2, 3, 10, 11, 14, 15, 22})
+
+
+def _udlaeg_omkostning(
+    udlaeg_kode: int | None, afgrodekode: int | None = None,
+) -> tuple[float, float]:
     """(udsæd, etablering) kr/ha for et efterafgrøde-/mellemafgrøde-/udlæg-
     udlæg på denne position — (0, 0) hvis intet udlæg eller en kode uden
-    prissat kategori (fx 3000, jordbearbejdning)."""
+    prissat kategori (fx 3000, jordbearbejdning).
+
+    Efterafgrøde efter majshelsæd (afgrodekode 216) har sin egen, lavere
+    pris-kategori (radrensning/såning + udbyttetab i majs, ingen fuld
+    harvning) — SKH's faktaark om virkemidler, 2026. Gælder kun 968/970
+    (rigtig efterafgrøde); 9680 (frøgræs-videreført) er allerede 0 kr
+    uanset hovedafgrøde, ingen majs-variant nødvendig for den.
+    """
     kategori = _UDL_KOSTKATEGORI.get(udlaeg_kode) if udlaeg_kode is not None else None
     if kategori is None:
         return 0.0, 0.0
+    if kategori == "Efterafgrøde" and afgrodekode == _MAJSHELSAED_KODE:
+        kategori = "Efterafgrøde, majshelsæd"
 
     prisliste = _load_prisliste()
     udsaed = prisliste.get(f"{kategori}, udsæd", {}).get("pris", 0.0)
@@ -507,6 +537,7 @@ def calculate_db(
     udlaeg_kode: int | None = None,
     only_organic: bool = False,
     kvalitet: str = "",
+    praecisionsjordbrug: bool = False,
 ) -> dict:
     """Beregn dækningsbidrag (kr/ha) for én (afgrødekode, driftsform, JB-nr).
 
@@ -605,7 +636,7 @@ def calculate_db(
         })
 
     linjer = list(_lookup_omkostningslinjer(afgrodekode, driftsform, jbnr, irrigated, kvalitet))
-    udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode)
+    udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode, afgrodekode)
     if udlaeg_udsaed:
         linjer.append({
             "kategori": "Udsæd", "behandling": "Udlæg/efterafgrøde, udsæd",
@@ -615,6 +646,12 @@ def calculate_db(
         linjer.append({
             "kategori": "Markarbejde", "behandling": "Udlæg/efterafgrøde, etablering",
             "udgift_kr_ha": udlaeg_etablering,
+        })
+    if praecisionsjordbrug and afgrodekode in _KORN_OG_RAPS_KODER:
+        pjb_pris = _load_prisliste().get("Præcisionsjordbrug", {}).get("pris", 0.0)
+        linjer.append({
+            "kategori": "Markarbejde", "behandling": "Præcisionsjordbrug",
+            "udgift_kr_ha": pjb_pris,
         })
     alle_linjer = goedning_linjer + linjer
 

@@ -83,6 +83,38 @@ _NO_VIRKEMIDDEL: dict[str, bool] = {"eea": False, "ema": False, "ets": False}
 # `EEA = 0.45 if eea_on else 0.0`).
 _EEA_STRENGTH = 0.45
 
+# Efterafgrøde sået som udlæg i majs tæller mindre end efter korn — 10 %
+# (mod den almindelige 45 %). Bekræftet 2026-09-03 mod selve bekendtgørelsen
+# (Bilag 1 - Udkast til bekendtgørelse om udledningsbaseret markregulering,
+# § 37, stk. 2: "Efterafgrøder sået som udlæg i majs har en
+# kvælstofreducerende effekt på 10 procent") — en FLAD sats, ikke
+# dato-tiered som den almindelige 45/42/40/33 %-trappe i stk. 1. SKH's
+# faktaark har en selvstændig, høst-dato-baseret korrektionstabel (Tabel 2),
+# men den er ikke en del af selve loven og er derfor bevidst ikke
+# implementeret her.
+_EEA_STRENGTH_MAJS = 0.10
+_MAJSHELSAED_KODE = 216
+
+# Mellemafgrøder og tidligt såede vinterafgrøder ("tidlig såning") har hver
+# en flad kvælstofreducerende effekt, bekræftet mod selve bekendtgørelsen
+# (samme Bilag 1 som ovenfor): § 48, stk. 3 ("Mellemafgrøder har en
+# kvælstofreducerende effekt på 20 procent") og § 49, stk. 3 ("Tidligt såede
+# vinterafgrøder har en kvælstofreducerende effekt på 20 procent"). I
+# modsætning til EEA (efterafgrøde) er disse IKKE ganget med en dato-faktor
+# i formlen (engine.nuar_adjustment: L * (1 - EEA*fdato_factor - EMA - ETS)),
+# og loven giver heller ikke selv nogen dato-afhængig sats for dem — en flad
+# konstant er derfor korrekt, ikke en forenkling.
+_EMA_STRENGTH = 0.20
+_ETS_STRENGTH = 0.20
+
+# Afgrødekoder hvor præcisionsjordbrug kan anvendes (korn + raps, dansk
+# standardbetydning) — SKH's faktaark om virkemidler, 2026. Ikke Majs til
+# modenhed (5, ikke agronomisk "korn") eller bælgsæd (30/31/32, "oliefrø OG
+# bælgsæd" i Bilag 1-mastertabellens Afgrødekategori, men kilden siger kun
+# "korn og raps"). Samme sæt duplikeret i db_calculator.py — hold i sync.
+_KORN_OG_RAPS_KODER = frozenset({1, 2, 3, 10, 11, 14, 15, 22})
+_PRAECISIONSJORDBRUG_EPJ = 0.04
+
 
 def _resolve_w(
     this_params: dict, next_params: dict, udlaeg_kode: int | None
@@ -148,6 +180,7 @@ def evaluate_leaching_position(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
 ) -> dict:
     """Beregn udvaskning for én sædskifte-position (kalder calculate_leaching)."""
     this_params = afgroede_normer.lookup_crop_params(afgrode_kode)
@@ -193,10 +226,25 @@ def evaluate_leaching_position(
         # EEA/EMA/ETS er afledt af rotationens udlægskode (se _UDL_VIRKEMIDDEL
         # ovenfor) — ikke et frit valg. Fdato/precision_dagsbasis er en
         # scenarie-niveau-indstilling (jf. plan Fase 8), gælder ens for alle
-        # år med efterafgrøde. EPJ er fortsat en fast placeholder-værdi.
-        "EEA": _EEA_STRENGTH if vk["eea"] else 0.0,
+        # år med efterafgrøde. EEA-styrken er lavere efter majshelsæd (se
+        # _EEA_STRENGTH_MAJS). EPJ (præcisionsjordbrug) er scenariets eget
+        # praecisionsjordbrug-valg, men kun når DENNE positions afgrøde er
+        # korn/raps (_KORN_OG_RAPS_KODER) — ellers 0 uanset scenarievalget.
+        "EEA": (
+            (_EEA_STRENGTH_MAJS if afgrode_kode == _MAJSHELSAED_KODE else _EEA_STRENGTH)
+            if vk["eea"] else 0.0
+        ),
         "Fdato": fdato, "precision_dagsbasis": precision_dagsbasis,
-        "EMA": 0.0, "ETS": 0.0, "EPJ": 0.0,
+        # EMA/ETS var tidligere hardkodet til 0.0 uanset udlægskode — reelt
+        # ingen udvasknings-effekt af mellemafgrøde/tidlig såning overhovedet,
+        # selvom § 48/§ 49 giver dem hver 20 %. Rettet 2026-09-03.
+        "EMA": _EMA_STRENGTH if vk["ema"] else 0.0,
+        "ETS": _ETS_STRENGTH if vk["ets"] else 0.0,
+        "EPJ": (
+            _PRAECISIONSJORDBRUG_EPJ
+            if praecisionsjordbrug and afgrode_kode in _KORN_OG_RAPS_KODER
+            else 0.0
+        ),
         "mellemafgroede": vk["ema"], "early_sowing": vk["ets"],
     }
     # Sample slås sammen med beregningsresultatet, så leaching_detail bærer

@@ -117,6 +117,12 @@ class Simulation(CamelModel):
     # afhængig af eea_precision_dagsbasis.
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
+    # Præcisionsjordbrug (SKH's faktaark om virkemidler, 2026) — scenarie-
+    # niveau-toggle, uafhængig af sædskiftevalg (samme mønster som driftsform/
+    # eea_precision_dagsbasis). Gælder KUN i år med korn eller raps som
+    # hovedafgrøde (se bridge_v2._KORN_OG_RAPS_KODER/db_calculator's egen
+    # kopi) — anvendes ikke på øvrige afgrøder selv når slået til.
+    praecisionsjordbrug: bool = False
 
 
 class CreateSimulationRequest(CamelModel):
@@ -129,3 +135,4 @@ class CreateSimulationRequest(CamelModel):
     godning: GodningSettings = Field(default_factory=GodningSettings)
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
+    praecisionsjordbrug: bool = False
