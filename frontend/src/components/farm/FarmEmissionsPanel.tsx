@@ -1,7 +1,7 @@
-import { useFarmUdledning } from '@/api/hooks'
+import { useFarmEmissions } from '@/api/hooks'
 import { formatNumber } from '@/lib/farm-totals'
 
-type FarmUdledningPanelProps = {
+type FarmEmissionsPanelProps = {
   farmId: string
 }
 
@@ -10,15 +10,15 @@ type FarmUdledningPanelProps = {
  * catchment rather than as one farm total, so this lists one chip per opland,
  * inline with the nøgletal it has to be read against.
  */
-export const FarmUdledningPanel = ({ farmId }: FarmUdledningPanelProps) => {
-  const { data: udledningPerKystvandopland = [] } = useFarmUdledning(farmId)
+export const FarmEmissionsPanel = ({ farmId }: FarmEmissionsPanelProps) => {
+  const { data: emissionsPerKystvandopland = [] } = useFarmEmissions(farmId)
 
-  if (udledningPerKystvandopland.length === 0) return null
+  if (emissionsPerKystvandopland.length === 0) return null
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
       <span className="text-xs text-muted-foreground">Udledningskvote</span>
-      {udledningPerKystvandopland.map((entry) => {
+      {emissionsPerKystvandopland.map((entry) => {
         const name =
           entry.kystvandNavn ??
           (entry.kystvandId !== null

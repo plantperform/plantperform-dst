@@ -26,7 +26,7 @@ export type CreateFarmInput = {
   cvr: string | null
 }
 
-export type KystvandoplandUdledning = {
+export type KystvandoplandEmissions = {
   kystvandId: number | null
   kystvandNavn: string | null
   udledningskvoteKgN: number

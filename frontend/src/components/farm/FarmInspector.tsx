@@ -6,7 +6,7 @@ import {
   simulationFieldsKey,
   simulationsKey,
   simulationYearlySummaryKey,
-  useFarmUdledning,
+  useFarmEmissions,
   useSimulationFields,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
@@ -282,7 +282,7 @@ const catchmentKey = (kystvandId: number | null) => String(kystvandId ?? 'none')
 // samlet sum (se FarmSidebar's tilsvarende Aktuel-visning) — begge
 // optimerings-dialoger skal derfor selv udlede hvilke oplande scenariets
 // marker faktisk ligger i, og vise ét sæt felter pr. opland i stedet for
-// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmUdledning
+// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmEmissions
 // (samme datakilde som FarmSidebar), med et "Kystvandopland {id}"-fallback
 // hvis en mark hører til et opland uden marker i den nuværende Aktuel-
 // opgørelse (fx et helt nyt scenarie før "Tilføj marker" er kørt igen).
@@ -290,9 +290,9 @@ const useCatchmentOptions = (
   farmId: string,
   fields: FieldRecord[],
 ): CatchmentOption[] => {
-  const { data: udledning = [] } = useFarmUdledning(farmId)
+  const { data: emissions = [] } = useFarmEmissions(farmId)
   return useMemo(() => {
-    const nameById = new Map(udledning.map((u) => [u.kystvandId, u.kystvandNavn]))
+    const nameById = new Map(emissions.map((u) => [u.kystvandId, u.kystvandNavn]))
     const seen = new Map<string, CatchmentOption>()
     for (const field of fields) {
       const key = catchmentKey(field.kystvandId)
@@ -304,7 +304,7 @@ const useCatchmentOptions = (
       seen.set(key, { kystvandId: field.kystvandId, label })
     }
     return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label, 'da'))
-  }, [fields, udledning])
+  }, [fields, emissions])
 }
 
 type CatchmentYearlyInput = {

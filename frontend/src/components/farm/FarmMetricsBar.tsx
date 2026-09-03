@@ -1,5 +1,5 @@
 import type { FieldRecord } from '@/api/types'
-import { FarmUdledningPanel } from '@/components/farm/FarmUdledningPanel'
+import { FarmEmissionsPanel } from '@/components/farm/FarmEmissionsPanel'
 import { formatNumber, getFieldTotals } from '@/lib/farm-totals'
 
 type MetricProps = {
@@ -41,7 +41,7 @@ export const FarmMetricsBar = ({ farmId, fields }: FarmMetricsBarProps) => {
         label="Udvaskning"
         value={`${formatNumber(totals.leaching)} kg N`}
       />
-      <FarmUdledningPanel farmId={farmId} />
+      <FarmEmissionsPanel farmId={farmId} />
     </div>
   )
 }
