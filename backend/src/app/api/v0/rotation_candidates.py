@@ -75,16 +75,13 @@ class GodningPresetOption(CamelModel):
 
 def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
     """Billig afgrødesekvens-forhåndsvisning for én saedskiftevariant — bruger
-    første tilgængelige (variant, N-norm%), ingen NLES5/DB2-beregning. Til
+    første tilgængelige variant, ingen NLES5/DB2-beregning. Til
     kategori-fold-ud-listen i "Nyt scenarie", ikke til reel evaluering."""
     variants = saedskifte_library.list_variants(saedskiftevariant)
     if not variants:
         return None
     variant = variants[0]
-    n_norms = saedskifte_library.list_n_norms(saedskiftevariant, variant)
-    if not n_norms:
-        return None
-    raw = saedskifte_library.get_raw_rotation(saedskiftevariant, variant, n_norms[0])
+    raw = saedskifte_library.get_raw_rotation(saedskiftevariant, variant)
     active_len = saedskifte_library.rotation_active_len(raw)
     names = [
         afgroede_normer.lookup_crop_params(code).get("navn", str(code))
@@ -97,7 +94,7 @@ def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
 def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
-    """De 6 sædskifte-kategorier (driftsform + gødningsniveau), til
+    """De 4 sædskifte-kategorier (driftsform + gødningsniveau), til
     kategori-afkrydsningslisten i "Nyt scenarie" — hver med en liste af dens
     individuelle sædskiftemuligheder (afgrødesekvens-forhåndsvisning), så
     brugeren kan folde kategorien ud og vælge specifikke sædskifter til/fra."""
@@ -120,13 +117,22 @@ def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
     return options
 
 
+# Faste N-norm%-niveauer til N-norm%-afkrydsningslisten i "Nyt scenarie".
+# Var tidligere afledt af sædskifte-lookup-filens egne N-norm%-rækker
+# (Ny_sædskifte_lookup_sammenlagt.csv 2026-09-02 har fjernet den akse fra
+# selve rotationsopslaget, se saedskifte_library.py's moduldocstring) —
+# samme værdisæt som filen tidligere indeholdt, nu en fast liste uafhængig
+# af datafilen, da N-tildeling håndteres som en ren procent-skalering
+# (candidate_evaluator.compute_n_inputs), ikke som en del af rotationsdata.
+_N_NORM_PROCENTER = ["30", "50", "60", "70", "75", "80", "85", "90", "95", "100"]
+
+
 @router.get("/n-norm-procenter", response_model=list[str])
 def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
-    """Alle N-norm%-niveauer der findes i datasættet, til N-norm%-
-    afkrydsningslisten i "Nyt scenarie". Ikke betinget af kategori-valget i
-    denne omgang — en forenkling, jf. planen."""
-    values = {n for _s, _v, n in saedskifte_library.list_all_candidate_refs()}
-    return sorted(values, key=int)
+    """Alle N-norm%-niveauer til N-norm%-afkrydsningslisten i "Nyt
+    scenarie". Ikke betinget af kategori-valget — gælder uniformt for alle
+    sædskifter."""
+    return _N_NORM_PROCENTER
 
 
 @router.get("/godnings-presets", response_model=list[GodningPresetOption])
@@ -138,10 +144,9 @@ def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
     mineralsk_andel_pct/kun-organisk er altid frit justerbare bagefter, jf.
     Fase 13's fulde afkobling. Tallene er et rimeligt udgangspunkt hentet
     fra de konventionelle varianter i saedskifte_kategorier.KATEGORI_GODNING
-    (samme tal som tidligere blev vist bag "Sædskifter med svinegylle
-    (150 N)"/"...kvæggylle (170 kg organisk N)")."""
-    svin = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.SVINEGYLLE_150]
-    kvaeg = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KVAEGGYLLE_170]
+    ("Konv. svin samlet"/"Konv. kvæg")."""
+    svin = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KONV_SVIN_SAMLET]
+    kvaeg = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KONV_KVAEG]
     return [
         GodningPresetOption(
             navn="Svinegylle",
@@ -189,18 +194,19 @@ def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
     udvalgt delmængde.
     """
     options: list[RotationCandidateOption] = []
-    for s, v, n in saedskifte_library.list_all_candidate_refs():
-        raw = saedskifte_library.get_raw_rotation(s, v, n)
+    for s, v in saedskifte_library.list_all_saedskifte_refs():
+        raw = saedskifte_library.get_raw_rotation(s, v)
         active_len = saedskifte_library.rotation_active_len(raw)
         names = [
             afgroede_normer.lookup_crop_params(code).get("navn", str(code))
             for code, _udl, _udl_navn in raw[:active_len]
         ]
-        options.append(RotationCandidateOption(
-            ref=RotationCandidateRef(saedskiftevariant=s, variant=v, n_norm_pct=n),
-            active_len=active_len,
-            crop_sequence=names,
-        ))
+        for n in _N_NORM_PROCENTER:
+            options.append(RotationCandidateOption(
+                ref=RotationCandidateRef(saedskiftevariant=s, variant=v, n_norm_pct=n),
+                active_len=active_len,
+                crop_sequence=names,
+            ))
     return options
 
 
