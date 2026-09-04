@@ -1,10 +1,14 @@
-import { useSimulationYearlySummary } from '@/api/hooks'
+import { useFarmHistoricalYearlySummary, useSimulationYearlySummary } from '@/api/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 
 type YearlyOverviewStripProps = {
   farmId: string
-  simulationId: string
+  // Simulation view: pass simulationId — entry.year is a relative rotation
+  // position (1-8) and gets converted to a calendar year below. Historical
+  // (Afgrødehistorik) view: omit it — entry.year is already the real
+  // calendar year (2019-2026), used as-is.
+  simulationId?: string
 }
 
 const formatNumber = (value: number, digits = 0) =>
@@ -14,7 +18,12 @@ export const YearlyOverviewStrip = ({
   farmId,
   simulationId,
 }: YearlyOverviewStripProps) => {
-  const { data: entries } = useSimulationYearlySummary(farmId, simulationId)
+  const simulationSummary = useSimulationYearlySummary(
+    simulationId ? farmId : undefined,
+    simulationId,
+  )
+  const historicalSummary = useFarmHistoricalYearlySummary(simulationId ? undefined : farmId)
+  const { data: entries } = simulationId ? simulationSummary : historicalSummary
 
   if (!entries || entries.length === 0) return null
 
@@ -32,7 +41,9 @@ export const YearlyOverviewStrip = ({
                 className="w-36 shrink-0 space-y-2 rounded-md border bg-muted/20 p-3"
               >
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {ROTATION_START_CALENDAR_YEAR + entry.year - 1}
+                  {simulationId
+                    ? ROTATION_START_CALENDAR_YEAR + entry.year - 1
+                    : entry.year}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">DB2</div>

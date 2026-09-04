@@ -17,6 +17,11 @@ import {
 const num = (value: unknown): number =>
   typeof value === 'number' ? value : Number(value ?? 0)
 
+// P/S/NT are absent (not 0) when a field has no real per-mark data (see
+// bridge_v2.evaluate_leaching_position's docstring) — num() alone can't
+// tell that apart from a genuine 0, so callers check this first.
+const hasValue = (value: unknown): value is number => typeof value === 'number'
+
 const fmt = (value: unknown, digits = 2) =>
   new Intl.NumberFormat('da-DK', {
     minimumFractionDigits: digits,
@@ -314,15 +319,14 @@ const LeachingDetailSection = ({
         </Callout>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
             Afstrømningskategori <strong>{String(detail.afstromningskategori ?? '—')}</strong>
             {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
-            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Selve
-            P-værdien er stadig én fælles placeholder pr. kategori, indtil
-            rigtige per-mark-værdier findes.
+            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
+            egen perkolationsværdi for denne kategori.
             {detail.afstromningskategori_ukendt ? (
               <span className="text-amber-700">
                 {' '}
@@ -332,20 +336,50 @@ const LeachingDetailSection = ({
             ) : null}
           </p>
           <Callout>
-            P = <strong>{fmt(p, 5)}</strong>
+            {hasValue(detail.P) ? (
+              <>P = <strong>{fmt(p, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">
+                Ingen perkolationsdata for denne mark
+              </span>
+            )}
           </Callout>
         </div>
         <div className="space-y-1.5">
           <SectionHeading>S — Jordfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Midlertidig fælles placeholder-værdi, indtil rigtige
-            per-mark-værdier findes.
+            Markens egen jordfaktor (S_soil).
           </p>
           <Callout>
-            S = <strong>{fmt(s, 5)}</strong>
+            {hasValue(detail.S) ? (
+              <>S = <strong>{fmt(s, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">Ingen jorddata for denne mark</span>
+            )}
+          </Callout>
+        </div>
+        <div className="space-y-1.5">
+          <SectionHeading>NT — Kvælstof i muldlag</SectionHeading>
+          <p className="text-xs text-muted-foreground">
+            Markens egen organiske kvælstof i topjorden (org_n_topsoil),
+            indgår i Nθ ovenfor som β_t · NT.
+          </p>
+          <Callout>
+            {hasValue(detail.NT) ? (
+              <>NT = <strong>{fmt(nt, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">Ingen jorddata for denne mark</span>
+            )}
           </Callout>
         </div>
       </div>
+      {!hasValue(detail.P) || !hasValue(detail.S) || !hasValue(detail.NT) ? (
+        <p className="text-xs text-amber-700">
+          ⚠️ Denne mark mangler rigtige P/S/NT-data (fx en mark uden
+          landbrugsmæssig afgrøde) — udvaskningen for denne position er sat
+          til 0 i stedet for at gætte.
+        </p>
+      ) : null}
 
       <div className="space-y-1.5">
         <SectionHeading>L — Rå NLES5-udvaskning</SectionHeading>
@@ -575,6 +609,18 @@ export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsD
   const year = years[Math.min(selectedYear, years.length - 1)]
   if (!year) return null
 
+  // Prefer the real calendar year (leachingDetail.Y — set for both
+  // simulation candidates, e.g. 2027+, and Afgrødehistorik's real 2019-2026)
+  // over a relative "År N" label, which only means something in a simulation
+  // context. Derived from whichever position's own Y IS present (a position
+  // with no known afgrøde skips the NLES5 call entirely and so has no Y of
+  // its own — see field_history_evaluator.py), so every tab still gets a
+  // consistent calendar year even when some individual position lacks one.
+  const knownYears = years.map((y) => (hasValue(y.leachingDetail.Y) ? y.leachingDetail.Y : null))
+  const firstKnownIndex = knownYears.findIndex((y) => y !== null)
+  const baseCalendarYear =
+    firstKnownIndex >= 0 ? (knownYears[firstKnownIndex] as number) - firstKnownIndex : null
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -589,7 +635,8 @@ export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsD
                 : 'bg-background hover:bg-muted'
             }`}
           >
-            År {index + 1} — {y.year.afgrodeNavn}
+            {baseCalendarYear !== null ? baseCalendarYear + index : `År ${index + 1}`} —{' '}
+            {y.year.afgrodeNavn}
             {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
           </button>
         ))}

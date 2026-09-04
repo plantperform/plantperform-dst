@@ -10,6 +10,7 @@ import type {
   FieldsSortKey,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
+import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
@@ -297,11 +298,9 @@ export const FarmFieldsList = ({
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-muted/60">
               <tr>
-                {isSimulationView ? (
-                  <th className="w-8 px-2 py-3">
-                    <span className="sr-only">Beregningsdetaljer</span>
-                  </th>
-                ) : null}
+                <th className="w-8 px-2 py-3">
+                  <span className="sr-only">Beregningsdetaljer</span>
+                </th>
                 <SortableHeader
                   label="Mark"
                   sortKey="name"
@@ -378,38 +377,42 @@ export const FarmFieldsList = ({
                 const canEdit = isSimulationView && Boolean(simulationId)
                 const isChanged = changedFields.has(field.id)
                 const isExpanded = expandedFieldId === field.id
-                const canShowDetail = isSimulationView && field.rotationId !== null
+                // Simulation view: only once Optimér/Års-optimering has
+                // actually assigned a rotation. Historical (Afgrødehistorik)
+                // view: always — it's the mark's own real crop_history, not
+                // an optimizer assignment, so there's nothing to wait for
+                // (a mark with no usable history just renders an empty
+                // panel, handled inside HistoricalDetailPanel).
+                const canShowDetail = isSimulationView ? field.rotationId !== null : true
                 return (
                   <Fragment key={field.id}>
                   <tr
                     className={`border-t ${isChanged ? 'bg-blue-50' : ''}`}
                   >
-                    {isSimulationView ? (
-                      <td className="px-2 py-3">
-                        {canShowDetail ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={() =>
-                              setExpandedFieldId(isExpanded ? null : field.id)
-                            }
-                            aria-label={
-                              isExpanded
-                                ? 'Skjul beregningsdetaljer'
-                                : 'Vis beregningsdetaljer'
-                            }
-                            title="Vis beregningsgennemgang for udvaskning og dækningsbidrag pr. år"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                            )}
-                          </Button>
-                        ) : null}
-                      </td>
-                    ) : null}
+                    <td className="px-2 py-3">
+                      {canShowDetail ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={() =>
+                            setExpandedFieldId(isExpanded ? null : field.id)
+                          }
+                          aria-label={
+                            isExpanded
+                              ? 'Skjul beregningsdetaljer'
+                              : 'Vis beregningsdetaljer'
+                          }
+                          title="Vis beregningsgennemgang for udvaskning og dækningsbidrag pr. år"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 font-medium">{field.name}</td>
                     <td className="px-4 py-3">
                       {formatNumber(field.areaHa)} ha
@@ -563,17 +566,26 @@ export const FarmFieldsList = ({
                       </div>
                     </td>
                   </tr>
-                  {isExpanded && simulationId ? (
+                  {isExpanded ? (
                     <tr className="border-t">
                       <td colSpan={12 + maxYears} className="p-0">
-                        <RotationDetailPanel
-                          farmId={farmId}
-                          simulationId={simulationId}
-                          fieldId={field.id}
-                          rotationId={field.rotationId}
-                          areaHa={field.areaHa}
-                          retention={field.retention}
-                        />
+                        {isSimulationView && simulationId ? (
+                          <RotationDetailPanel
+                            farmId={farmId}
+                            simulationId={simulationId}
+                            fieldId={field.id}
+                            rotationId={field.rotationId}
+                            areaHa={field.areaHa}
+                            retention={field.retention}
+                          />
+                        ) : (
+                          <HistoricalDetailPanel
+                            farmId={farmId}
+                            fieldId={field.id}
+                            areaHa={field.areaHa}
+                            retention={field.retention}
+                          />
+                        )}
                       </td>
                     </tr>
                   ) : null}
