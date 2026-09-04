@@ -45,6 +45,9 @@ def evaluate_real_history_for_field(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     irrigated: bool = False,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> list[RotationCandidateYearResult]:
     def code_for(year: int) -> int | None:
         value = crop_history.get(str(year))
@@ -87,6 +90,8 @@ def evaluate_real_history_for_field(
                     g1=n1["g0"], g2=n2["g0"],
                     irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     y=this_year,
+                    percolation_by_kategori=percolation_by_kategori,
+                    org_n_topsoil=org_n_topsoil, s_soil=s_soil,
                 )
             except ValueError:
                 leaching = {}

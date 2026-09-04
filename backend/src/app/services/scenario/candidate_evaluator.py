@@ -42,6 +42,35 @@ START_CALENDAR_YEAR = 2027
 _EFTERAFGRODE_UDLAEG_KODER = {968, 9680, 970}
 _EFTERAFGRODE_FORFRUGTSVAERDI_KGN_HA = 21.0
 
+# Tidlig såning og mellemafgrøde er scenarie-niveau til/fra-valg (Fase 13-
+# mønsteret, som praecisionsjordbrug) — IKKE et filter på hvilke sædskifte-
+# varianter der kan vælges. Er en af dem slået fra, fjernes KUN dén
+# virkemiddeltype fra rotationssekvensen (afgrøden og alle andre
+# udlægstyper, inkl. efterafgrøde, er upåvirkede) — positionen bliver en
+# almindelig afgrødeår uden udlæg, som om kilden aldrig havde det der.
+_MELLEMAFGRODE_UDLAEG_KODER = {9682, 9684}
+_TIDLIG_SAANING_UDLAEG_KODER = {9683}
+
+
+def _strip_disabled_virkemidler(
+    raw_rotation: list[tuple[int | None, int | None, str | None]],
+    tidlig_saaning: bool,
+    mellemafgrode: bool,
+) -> list[tuple[int | None, int | None, str | None]]:
+    """Nulstil (udl_kode, udl_navn) til None på positioner hvor udlægget er
+    tidlig såning/mellemafgrøde og den tilhørende indstilling er slået fra.
+    afgr_kode og alle andre udlægstyper (inkl. efterafgrøde) er uændrede."""
+    if tidlig_saaning and mellemafgrode:
+        return raw_rotation
+    stripped = []
+    for afgr, udl, udl_navn in raw_rotation:
+        if not tidlig_saaning and udl in _TIDLIG_SAANING_UDLAEG_KODER:
+            udl, udl_navn = None, None
+        elif not mellemafgrode and udl in _MELLEMAFGRODE_UDLAEG_KODER:
+            udl, udl_navn = None, None
+        stripped.append((afgr, udl, udl_navn))
+    return stripped
+
 
 @lru_cache(maxsize=100_000)
 def compute_n_inputs(
@@ -155,6 +184,9 @@ def evaluate_sequence_for_mark(
     overrides: list[RotationPositionOverride] = (),
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation:
     """Kernen af kandidat-evaluering: 8 positioner, hver med udvaskning + DB,
     samt gennemsnit over én fuld rotationscyklus (active_len). Tager de
@@ -242,21 +274,33 @@ def evaluate_sequence_for_mark(
             else 0.0
         )
 
-        leaching = bridge_v2.evaluate_leaching_position(
-            afgrode_kode=this_code,
-            next_afgrode_kode=next_code,
-            prev_afgrode_kode=prev_code,
-            udlaeg_kode=udl_code,
-            jbnr=jbnr,
-            mncs=n_inputs[i]["mncs"],
-            mnca=n_inputs[i]["mnca"],
-            g0=n_inputs[i]["g0"],
-            m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
-            irrigated=irrigated,
-            fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-            praecisionsjordbrug=praecisionsjordbrug,
-            y=START_CALENDAR_YEAR + i,
-        )
+        # NLES5 kræver mu+Ntheta+C > 0 (engine.nles5) — visse afgrøde-/JB-
+        # kombinationer med en meget lav N-norm (typisk JB 11, den mest
+        # marginale jordgruppe) kan gøre dette udtryk negativt, en kendt
+        # grænseflade i selve NLES5-modellen ved lav N-tildeling, ikke en
+        # fejl i denne kandidat. Samme fallback som field_history_evaluator's
+        # tilsvarende opslag: 0 kg N/ha udvaskning for positionen frem for at
+        # fejle hele kandidaten/scenariet.
+        try:
+            leaching = bridge_v2.evaluate_leaching_position(
+                afgrode_kode=this_code,
+                next_afgrode_kode=next_code,
+                prev_afgrode_kode=prev_code,
+                udlaeg_kode=udl_code,
+                jbnr=jbnr,
+                mncs=n_inputs[i]["mncs"],
+                mnca=n_inputs[i]["mnca"],
+                g0=n_inputs[i]["g0"],
+                m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
+                irrigated=irrigated,
+                fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                praecisionsjordbrug=praecisionsjordbrug,
+                y=START_CALENDAR_YEAR + i,
+                percolation_by_kategori=percolation_by_kategori,
+                org_n_topsoil=org_n_topsoil, s_soil=s_soil,
+            )
+        except ValueError:
+            leaching = {}
         db = calculate_db(
             this_code, driftsform, jbnr,
             mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
@@ -292,7 +336,7 @@ def evaluate_sequence_for_mark(
                 udlaeg_kode=udl_code,
                 udlaeg_navn=udlaeg_navn_seq[i],
             ),
-            leaching_kg_n_ha=leaching["L_nuar"],
+            leaching_kg_n_ha=leaching.get("L_nuar", 0.0),
             leaching_detail=leaching,
             db_kr_ha=db["db"],
             db_detail=db,
@@ -343,7 +387,12 @@ def evaluate_candidate_for_mark(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
     DB, samt gennemsnit over én fuld rotationscyklus (active_len).
@@ -354,6 +403,7 @@ def evaluate_candidate_for_mark(
     raw_rotation = saedskifte_library.generate_rotation(
         ref.saedskiftevariant, ref.variant, start_year
     )
+    raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
         return None
@@ -370,6 +420,8 @@ def evaluate_candidate_for_mark(
         praecisionsjordbrug=praecisionsjordbrug,
         start_year=start_year,
         real_history=real_history,
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil, s_soil=s_soil,
     )
 
 
@@ -386,8 +438,13 @@ def evaluate_with_overrides(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Som evaluate_candidate_for_mark, men overskriver hovedafgrøden i én
     eller flere positioner efter opslag i biblioteket, og/eller forskyder
@@ -407,6 +464,7 @@ def evaluate_with_overrides(
     raw_rotation = saedskifte_library.generate_rotation(
         base_ref.saedskiftevariant, base_ref.variant, start_year
     )
+    raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
         return None
@@ -443,7 +501,10 @@ def evaluate_with_overrides(
         praecisionsjordbrug=praecisionsjordbrug,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
         real_history=real_history,
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil, s_soil=s_soil,
     )
+
 
 
 def generate_candidates_for_field(
@@ -454,7 +515,12 @@ def generate_candidates_for_field(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
     N-norm%-værdier × alle varianter, og evaluer hver resulterende kandidat
@@ -467,12 +533,26 @@ def generate_candidates_for_field(
     rotationsopslaget (se saedskifte_library.py's moduldocstring) — derfor
     er der ikke længere kombinationer at springe over her, alle valgte
     N-norm%-værdier gælder for alle valgte sædskifter/varianter.
+
+    tidlig_saaning/mellemafgrode slået fra fjerner kun den pågældende
+    virkemiddeltype fra rotationssekvensen (se _strip_disabled_virkemidler)
+    — det er IKKE et filter på hvilke sædskiftevarianter der kan vælges,
+    alle forbliver valgbare. To i øvrigt forskellige varianter kan blive
+    identiske efter fjernelsen (fx en variant der havde mellemafgrøde ved
+    position 4 og en anden der aldrig havde noget der); sådanne duplikater
+    inden for samme N-norm% beregnes kun én gang (springes over her, frem
+    for at beregne og derefter kassere dem).
     """
     results: list[RotationCandidateEvaluation] = []
     seen_ref_ids: set[str] = set()
+    seen_rotation_by_n_norm: dict[str, set[tuple]] = {}
 
     for saedskiftevariant in saedskiftevarianter:
         for variant in saedskifte_library.list_variants(saedskiftevariant):
+            raw_rotation = saedskifte_library.generate_rotation(saedskiftevariant, variant)
+            rotation_signature = tuple(
+                _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
+            )
             for n_norm_pct in n_norm_procenter:
                 ref = RotationCandidateRef(
                     saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
@@ -481,6 +561,12 @@ def generate_candidates_for_field(
                 if ref_id in seen_ref_ids:
                     continue
                 seen_ref_ids.add(ref_id)
+
+                seen_for_norm = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
+                if rotation_signature in seen_for_norm:
+                    continue
+                seen_for_norm.add(rotation_signature)
+
                 result = evaluate_candidate_for_mark(
                     ref, jbnr=jbnr,
                     driftsform=godning.driftsform,
@@ -490,7 +576,10 @@ def generate_candidates_for_field(
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     praecisionsjordbrug=praecisionsjordbrug,
+                    tidlig_saaning=tidlig_saaning, mellemafgrode=mellemafgrode,
                     real_history=real_history,
+                    percolation_by_kategori=percolation_by_kategori,
+                    org_n_topsoil=org_n_topsoil, s_soil=s_soil,
                 )
                 if result is not None:
                     results.append(result)

@@ -80,6 +80,8 @@ export const NewScenarioPanel = ({
   const [nIndholdKgPerTon, setNIndholdKgPerTon] = useState('6')
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
   const [praecisionsjordbrug, setPraecisionsjordbrug] = useState(false)
+  const [tidligSaaning, setTidligSaaning] = useState(true)
+  const [mellemafgrode, setMellemafgrode] = useState(true)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
   const [fdatoDate, setFdatoDate] = useState('20/8')
   const [isCreating, setIsCreating] = useState(false)
@@ -182,6 +184,8 @@ export const NewScenarioPanel = ({
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
         praecisionsjordbrug,
+        tidligSaaning,
+        mellemafgrode,
       })
       await mutate(
         simulationsKey(farmId),
@@ -206,6 +210,8 @@ export const NewScenarioPanel = ({
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
       setFdatoDate('20/8')
       setPraecisionsjordbrug(false)
+      setTidligSaaning(true)
+      setMellemafgrode(true)
     } catch {
       onError('Kunne ikke oprette scenariet.')
     } finally {
@@ -524,6 +530,38 @@ export const NewScenarioPanel = ({
                   korn eller raps som hovedafgrøde — ingen effekt eller omkostning
                   (50 kr./ha) i andre år, selv når slået til.
                 </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tidlig såning og mellemafgrøde</Label>
+            <p className="text-xs text-muted-foreground">
+              Slået til som udgangspunkt. Slår du en fra, fjernes kun den virkemiddeltype
+              fra de sædskifter der har den — marken bliver et almindeligt afgrødeår uden
+              udlæg de år. Sædskifter forbliver valgbare uanset — intet filtreres fra.
+              Efterafgrøde er upåvirket af begge.
+            </p>
+            <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={tidligSaaning}
+                onChange={(event) => setTidligSaaning(event.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Tillad tidlig såning</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={mellemafgrode}
+                onChange={(event) => setMellemafgrode(event.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Tillad mellemafgrøde</span>
               </span>
             </label>
           </div>

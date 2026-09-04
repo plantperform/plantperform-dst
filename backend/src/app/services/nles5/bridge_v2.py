@@ -14,14 +14,24 @@ forfrugtskategori). WP følger samme "næste år overstyrer"-idé som W, men ét
 perioden mellem forfrugten og nu reelt optaget af den — ellers falder WP
 tilbage til forrige positions egen statiske WP-felt (se _resolve_wp).
 
-P kommer fra services.soil.percolation_placeholder (midlertidigt ét fælles
-P-sæt for alle marker, jf. planen — IKKE AAa/AAb/APb, som er bridge.py's
-forældede tilgang), men hvilken af de 8 P-værdier der bruges afhænger af
+P/S/NT kommer fra markens egne registry_field-kolonner (percolation_by_
+kategori/s_soil/org_n_topsoil, jf. migration 20260904_0001), sendt ind af
+kalderen — IKKE slået op her, da funktionen er lru_cache'et og derfor ikke
+selv må lave DB-opslag. Hvilken af de 8 P-værdier der bruges afhænger af
 afgrøden: services.rotations.afstromning slår afgrødekoden op i Bilag 7
 tabel 1 (Bilag_1_tabel_1_med_P_noegle.csv, alle 323 koder) og returnerer
 dens afstrømningskategori (1-8), med en alternativ kategori når positionen
-har et vinterdække-ændrende virkemiddel (EEA/efterafgrøde) samme år. S/NT
-er fortsat ét fladt tal, ikke afgrøde-afhængigt.
+har et vinterdække-ændrende virkemiddel (EEA/efterafgrøde) samme år.
+
+Ingen placeholder-fallback (fjernet 2026-09-04, explicit brugerbeslutning):
+mangler marken egne P/S/NT-værdier — fx manuelt tegnede marker uden imk_id,
+eller en af de ca. 410 registrerede marker uden landbrugsmæssig afgrøde
+(permanent græs uden norm, brak, miljøtilsagn, natur/skov — bekræftet
+2026-09-04 at det næsten udelukkende er denne slags arealer, ikke rigtige
+sædskiftemarker) — rejses ValueError i stedet for at gætte. Kaldere (samme
+mønster som NLES5's øvrige "kan ikke beregnes for denne position"-tilfælde,
+jf. candidate_evaluator/field_history_evaluator's except ValueError) fanger
+den og sætter positionens udvaskning til 0 fremfor at fejle hele marken.
 """
 from __future__ import annotations
 
@@ -29,7 +39,6 @@ from functools import lru_cache
 
 from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer, afstromning
-from app.services.soil.percolation_placeholder import percolation_placeholder
 
 # next-year M-kode -> denne positions W (Bilag 2 tabel 6: "hvad sås/pløjes i
 # efteråret afhænger af næste års M"). Samme mapping som bridge.py/streamlit_app.py.
@@ -159,7 +168,18 @@ def _resolve_wp(prev_params: dict, this_params: dict) -> int:
     return prev_params.get("WP") or 1
 
 
-@lru_cache(maxsize=100_000)
+# maxsize kept modest (was 100_000): before 2026-09-04's real per-field P/S/NT,
+# the cache key collapsed across DIFFERENT fields sharing the same crop/jbnr/
+# kategori, since every field shared the same placeholder — a small cache went
+# a long way. Now percolation_by_kategori/org_n_topsoil/s_soil are part of the
+# key and unique per field, so cross-field reuse is gone; only within-field
+# reuse (the same crop/position recurring across a field's own candidate/shift
+# variants) still hits. A 100_000-entry cache under that access pattern grew
+# to multiple GB RSS after viewing one 59-field simulation's candidate details
+# (confirmed 2026-09-04). Kept small enough to bound worst-case memory; if
+# this measurably hurts hit rate for legitimately large scenarios, revisit by
+# restructuring the cache key instead of just raising this number back up.
+@lru_cache(maxsize=20_000)
 def evaluate_leaching_position(
     afgrode_kode: int,
     next_afgrode_kode: int | None,
@@ -181,6 +201,9 @@ def evaluate_leaching_position(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    percolation_by_kategori: tuple[float | None, ...] | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> dict:
     """Beregn udvaskning for én sædskifte-position (kalder calculate_leaching)."""
     this_params = afgroede_normer.lookup_crop_params(afgrode_kode)
@@ -207,7 +230,18 @@ def evaluate_leaching_position(
     # indeholder, uden at beregningen fejler.
     kategori = afstromning.afstromningskategori(afgrode_kode, eea_on=vk["eea"])
     kategori_ukendt = kategori is None
-    perc = percolation_placeholder(kategori if kategori is not None else 1)
+    p_value = (
+        percolation_by_kategori[kategori - 1]
+        if percolation_by_kategori is not None and kategori is not None
+        else None
+    )
+    if p_value is None or org_n_topsoil is None or s_soil is None:
+        raise ValueError(
+            f"Mangler rigtige percolation/org_n_topsoil/s_soil-værdier for "
+            f"afgrødekode {afgrode_kode} (kategori={kategori})"
+        )
+    nt_value = org_n_topsoil
+    s_value = s_soil
 
     sample = {
         "crop_code": afgrode_kode,
@@ -215,12 +249,12 @@ def evaluate_leaching_position(
         "Y": y,
         "M": m, "W": w, "MP": mp, "WP": wp, "WC": wc,
         "jbnr": jbnr,
-        "NT_source": "manual", "NT": perc["NT"],
+        "NT_source": "manual", "NT": nt_value,
         "MNCS": mncs, "MNCA": mnca, "MNudb": 0.0,
         "M1": m1, "M2": m2,
         "F0": f0, "F1": f1, "F2": f2,
         "G0": g0, "G1": g1, "G2": g2,
-        "P_override": perc["P_override"], "S_override": perc["S_override"],
+        "P_override": p_value, "S_override": s_value,
         "afstromningskategori": kategori if kategori is not None else 1,
         "afstromningskategori_ukendt": kategori_ukendt,
         # EEA/EMA/ETS er afledt af rotationens udlægskode (se _UDL_VIRKEMIDDEL

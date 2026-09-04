@@ -123,6 +123,14 @@ class Simulation(CamelModel):
     # hovedafgrøde (se bridge_v2._KORN_OG_RAPS_KODER/db_calculator's egen
     # kopi) — anvendes ikke på øvrige afgrøder selv når slået til.
     praecisionsjordbrug: bool = False
+    # Tidlig såning/mellemafgrøde til/fra (candidate_evaluator's
+    # _strip_disabled_virkemidler) — default True bevarer eksisterende
+    # scenariers opførsel uændret (hele pointen med disse virkemidler var
+    # hidtil styret alene af hvilken sædskiftevariant man valgte). Slået fra
+    # fjerner KUN den pågældende virkemiddeltype fra rotationssekvensen — det
+    # er ikke et filter på hvilke sædskiftevarianter der er valgbare.
+    tidlig_saaning: bool = True
+    mellemafgrode: bool = True
 
 
 class CreateSimulationRequest(CamelModel):
@@ -136,3 +144,5 @@ class CreateSimulationRequest(CamelModel):
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
     praecisionsjordbrug: bool = False
+    tidlig_saaning: bool = True
+    mellemafgrode: bool = True

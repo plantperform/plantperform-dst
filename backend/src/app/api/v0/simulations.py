@@ -4,14 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
+from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data.repository import (
     FieldNotOptimizedError,
     create_simulation,
     delete_simulation,
     get_simulation,
-    get_simulation_field_candidate_detail,
     get_simulation_field_candidates,
+    list_scenario_afgrodekoder,
     list_simulation_field_candidates,
     list_simulation_fields,
     list_simulations,
@@ -37,10 +38,11 @@ from app.services.optimization.orchestrator import (
     OptimizationUnknownError,
     apply_manual_rotation,
     compute_yearly_summary,
+    get_field_candidate_detail,
     run_optimization,
     run_yearly_optimization,
 )
-from app.services.rotations import saedskifte_kategorier
+from app.services.rotations import afgroede_normer, saedskifte_kategorier
 from app.services.scenario.candidate_evaluator import (
     START_CALENDAR_YEAR,
     evaluate_with_overrides,
@@ -54,6 +56,13 @@ CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 class OptimizeSimulationRequest(CamelModel):
     time_limit_seconds: float = Field(default=15, gt=0, le=600)
+    # Afgrødekoder brugeren har fravalgt i denne kørsel (crop-udelukkelses-
+    # listen, vises når dialogen åbnes) — enhver kandidat der indeholder en
+    # af dem ANDET STED i sin rotation udelukkes helt fra optimeringen for
+    # den mark, ikke kun det pågældende år. Rent kørsels-niveau, gemmes
+    # ikke på simuleringen — nulstilles til "alle valgt" næste gang dialogen
+    # åbnes.
+    excluded_afgrodekoder: list[int] = Field(default_factory=list)
 
 
 class RotationAssignmentResponse(CamelModel):
@@ -153,6 +162,30 @@ def patch_farm_simulation_constraints(
     return simulation
 
 
+@router.get("/{simulation_id}/afgroder-i-brug", response_model=list[AfgrodeKodeOption])
+def get_farm_simulation_afgroder_i_brug(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+) -> list[AfgrodeKodeOption]:
+    """Alle distinkte afgrødekoder der forekommer i simuleringens gemte
+    sædskifte-kandidater, på tværs af alle marker — til crop-udelukkelses-
+    listen der vises når "Optimér"/"Års-optimering" åbnes (se
+    excluded_afgrodekoder på begges request-modeller)."""
+    codes = list_scenario_afgrodekoder(farm_id, simulation_id, user.email)
+    if codes is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+
+    options = [
+        AfgrodeKodeOption(
+            code=code,
+            navn=afgroede_normer.lookup_crop_params(code).get("navn", str(code)),
+        )
+        for code in codes
+    ]
+    return sorted(options, key=lambda o: o.navn)
+
+
 @router.post("/{simulation_id}/optimize", response_model=OptimizeSimulationResponse)
 def post_farm_simulation_optimization(
     farm_id: str,
@@ -167,6 +200,7 @@ def post_farm_simulation_optimization(
             farm_id,
             simulation_id,
             optimization_request.time_limit_seconds,
+            frozenset(optimization_request.excluded_afgrodekoder),
             user.email,
         )
     except OptimizationNotFoundError as error:
@@ -193,11 +227,6 @@ def post_farm_simulation_optimization(
     )
 
 
-class SaedskifteVariantRef(CamelModel):
-    saedskiftevariant: str
-    variant: str
-
-
 class KystvandoplandYearlyNLoadCaps(CamelModel):
     """Udledningslofter pr. kalenderår for ét kystvandopland — hvert opland i
     scenariets marker kan sættes uafhængigt (egen "samme for alle år"/
@@ -212,7 +241,8 @@ class YearlyOptimizeSimulationRequest(CamelModel):
     time_limit_seconds: float = Field(default=20, gt=0, le=600)
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
-    selected_saedskifter: list[SaedskifteVariantRef] = Field(default_factory=list)
+    # Se OptimizeSimulationRequest.excluded_afgrodekoder — samme mekanik.
+    excluded_afgrodekoder: list[int] = Field(default_factory=list)
 
 
 class YearlyOptimizeSimulationResponse(CamelModel):
@@ -245,10 +275,6 @@ def post_farm_simulation_yearly_optimization(
         )
         for cap in optimization_request.max_n_load_by_kystvandopland
     }
-    selected_pairs = {
-        (ref.saedskiftevariant, ref.variant)
-        for ref in optimization_request.selected_saedskifter
-    }
 
     try:
         result = run_yearly_optimization(
@@ -257,7 +283,7 @@ def post_farm_simulation_yearly_optimization(
             optimization_request.time_limit_seconds,
             max_n_load_by_kystvandopland,
             optimization_request.db2_swing_pct,
-            selected_pairs,
+            frozenset(optimization_request.excluded_afgrodekoder),
             user.email,
         )
     except OptimizationNotFoundError as error:
@@ -422,7 +448,7 @@ def get_farm_simulation_field_candidate_detail(
     user: CurrentUser,
 ) -> RotationCandidateEvaluation:
     try:
-        detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
+        detail = get_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
     except FieldNotOptimizedError as error:
         raise HTTPException(
             status_code=422, detail="Marken er ikke optimeret endnu",
@@ -481,6 +507,8 @@ def post_farm_simulation_field_preview_rotation(
         fdato=simulation.eea_fdato,
         precision_dagsbasis=simulation.eea_precision_dagsbasis,
         praecisionsjordbrug=simulation.praecisionsjordbrug,
+        tidlig_saaning=simulation.tidlig_saaning,
+        mellemafgrode=simulation.mellemafgrode,
         start_year=request.start_year,
         real_history=candidates_row.real_history,
     )
