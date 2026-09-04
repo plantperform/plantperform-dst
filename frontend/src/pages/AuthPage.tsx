@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { validateFarmBasics } from '@/lib/farm-form'
 import {
+  clearHomeVisitedThisSession,
   setPendingFarm,
   setStoredRole,
   type OnboardingRole,
@@ -81,6 +82,7 @@ export const AuthPage = ({ mode }: { mode: Mode }) => {
         setMessage('Tjek din e-mail og bekræft adressen, før du logger ind.')
       } else {
         await signIn({ email: normalizedEmail, password })
+        clearHomeVisitedThisSession(normalizedEmail)
         const from = (location.state as { from?: string } | null)?.from ?? '/'
         navigate(from)
       }

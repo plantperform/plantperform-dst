@@ -17,7 +17,6 @@ export type Farm = {
   cvr: string | null
   name: string
   ownerName: string
-  udledningskvoteKgN: number
   rotationLibrary: NamedRotation[]
 }
 
@@ -25,11 +24,14 @@ export type CreateFarmInput = {
   name: string
   ownerName: string
   cvr: string | null
-  udledningskvoteKgN?: number
 }
 
-export type UpdateFarmInput = {
+export type KystvandoplandUdledning = {
+  kystvandId: number | null
+  kystvandNavn: string | null
   udledningskvoteKgN: number
+  beregnetUdledningKgN: number
+  overholder: boolean
 }
 
 export type GeoJSONPolygon = {
@@ -41,8 +43,6 @@ export type GeoJSONMultiPolygon = {
   type: 'MultiPolygon'
   coordinates: [number, number][][][]
 }
-
-export type Soil = 'SAND' | 'CLAY'
 
 export type Crop =
   | 'CEREAL_WINTER'
@@ -79,7 +79,6 @@ export type FieldRecord = {
   imkId: number | null
   kystvandId: number | null
   retention: number | null
-  soil: Soil
   jbnr: number | null
   cropRotation: RotationYear[]
   rotationId: string | null
@@ -91,9 +90,10 @@ export type FieldRecord = {
   fen: number
   name: string
   areaHa: number
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
 
@@ -101,15 +101,19 @@ export type RegistryField = {
   imkId: number
   cvr: string | null
   marknr: string | null
+  markblok: string | null
+  journalnr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
-  soilId: number | null
+  jbnr: number | null
   areaHa: number
   cropRotation: string
   cropHistory: Record<string, number | null>
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
+  kvotegivende: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon
 }
 
@@ -118,11 +122,11 @@ export type RegistryFieldSummary = {
   cvr: string | null
   marknr: string | null
   kystvandId: number | null
+  kystvandNavn: string | null
   retention: number | null
-  soilId: number | null
   areaHa: number
   cropRotation: string
-  inTakeoutPlan: boolean
+  inTakeoutPlan: string
   udledningsgraenseKgnHa: number
   udledningskvoteMarkKgn: number
 }
@@ -138,13 +142,12 @@ export type CreateFieldInput = {
   imkId: number | null
   kystvandId?: number | null
   retention: number | null
-  soil: Soil
   cropRotation?: RotationYear[]
   measures?: FieldMeasures
   allowedRotationIds?: string[]
   name: string
   areaHa: number
-  inTakeoutPlan?: boolean
+  inTakeoutPlan?: string
   udledningsgraenseKgnHa?: number
   udledningskvoteMarkKgn?: number
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
@@ -157,8 +160,13 @@ export type CropPercentageConstraint = {
   minimumPercentage: number
 }
 
-export type OptimizationConstraints = {
+export type KystvandoplandNLoadCap = {
+  kystvandId: number | null
   maxNLoadKg: number | null
+}
+
+export type OptimizationConstraints = {
+  maxNLoadByKystvandopland: KystvandoplandNLoadCap[]
   minFen: number | null
   maxFen: number | null
   maxFieldsWithNewRotation: number | null
@@ -227,9 +235,14 @@ export type SaedskifteVariantRef = {
   variant: string
 }
 
+export type KystvandoplandYearlyNLoadCaps = {
+  kystvandId: number | null
+  maxNLoadByYear: Record<number, number>
+}
+
 export type YearlyOptimizeSimulationInput = {
   timeLimitSeconds?: number
-  maxNLoadByYear?: Record<number, number>
+  maxNLoadByKystvandopland?: KystvandoplandYearlyNLoadCaps[]
   db2SwingPct?: number | null
   selectedSaedskifter?: SaedskifteVariantRef[]
 }

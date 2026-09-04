@@ -62,8 +62,8 @@ const comparePrimary = (
       )
     case 'inTakeoutPlan':
       return compareNumber(
-        Number(left.inTakeoutPlan),
-        Number(right.inTakeoutPlan),
+        left.inTakeoutPlan === 'nej' ? 0 : 1,
+        right.inTakeoutPlan === 'nej' ? 0 : 1,
         sort.direction,
       )
     case 'retention':

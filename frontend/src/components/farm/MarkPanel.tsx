@@ -15,6 +15,7 @@ import {
   getFieldQuotaStatus,
   isFieldCalculated,
   QUOTA_WARNING_LEVEL_COLORS,
+  REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
   type QuotaStatus,
   type QuotaStatusLevel,
@@ -32,8 +33,15 @@ const STATUS_CARD_STYLES: Record<
   partial: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
 }
 
-const buildStatusMessage = (status: QuotaStatus): string => {
-  if (status.level === 'uncalculated') return 'Ikke beregnet endnu - kør Optimér'
+const buildStatusMessage = (
+  status: QuotaStatus,
+  isSimulationView: boolean,
+): string => {
+  if (status.level === 'uncalculated') {
+    return isSimulationView
+      ? 'Ikke beregnet endnu - kør Optimér'
+      : 'Ingen beregnet udledning for markens historik'
+  }
   if (status.level === 'noData') return 'Ingen kvote sat for denne mark'
 
   const amount = formatQuotaAmount(status)
@@ -45,7 +53,13 @@ const buildStatusMessage = (status: QuotaStatus): string => {
   return `${amount} - ${pct}% af markens kvote`
 }
 
-const QuotaStatusCard = ({ status }: { status: QuotaStatus }) => {
+const QuotaStatusCard = ({
+  status,
+  isSimulationView,
+}: {
+  status: QuotaStatus
+  isSimulationView: boolean
+}) => {
   const style = STATUS_CARD_STYLES[status.level]
   return (
     <div
@@ -56,7 +70,7 @@ const QuotaStatusCard = ({ status }: { status: QuotaStatus }) => {
         color: style.text,
       }}
     >
-      {buildStatusMessage(status)}
+      {buildStatusMessage(status, isSimulationView)}
     </div>
   )
 }
@@ -90,13 +104,15 @@ const MetricCard = ({
 const RotationYearRow = ({
   year,
   index,
+  startYear,
   cropColorMap,
 }: {
   year: FieldRecord['cropRotation'][number]
   index: number
+  startYear: number
   cropColorMap: Map<number, string>
 }) => {
-  const calendarYear = ROTATION_START_CALENDAR_YEAR + index
+  const calendarYear = startYear + index
   const hasUdlaeg = year.udlaegNavn !== null
   const color = cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
@@ -176,6 +192,9 @@ export const MarkPanel = ({
   }, [farmId, isSimulationView, simulationId])
 
   const calculated = isFieldCalculated(field, isSimulationView)
+  const rotationStartYear = isSimulationView
+    ? ROTATION_START_CALENDAR_YEAR
+    : REAL_HISTORY_START_CALENDAR_YEAR
   const quotaStatus = getFieldQuotaStatus(field, isSimulationView)
   const canShowCalcSection =
     isSimulationView && Boolean(simulationId) && field.rotationId !== null
@@ -232,7 +251,10 @@ export const MarkPanel = ({
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         <div className={calcOpen ? 'space-y-4' : 'max-w-[416px] space-y-4'}>
-          <QuotaStatusCard status={quotaStatus} />
+          <QuotaStatusCard
+            status={quotaStatus}
+            isSimulationView={isSimulationView}
+          />
 
           <div className={`grid gap-3 ${calcOpen ? 'grid-cols-4' : 'grid-cols-2'}`}>
             <MetricCard
@@ -294,10 +316,12 @@ export const MarkPanel = ({
           </div>
 
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Sædskifte år for år</h3>
+            <h3 className="text-sm font-semibold">
+              {isSimulationView ? 'Sædskifte år for år' : 'Afgrødehistorik år for år'}
+            </h3>
             {field.cropRotation.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Intet sædskifte endnu
+                {isSimulationView ? 'Intet sædskifte endnu' : 'Ingen afgrødehistorik endnu'}
               </p>
             ) : (
               (() => {
@@ -314,18 +338,20 @@ export const MarkPanel = ({
                             key={actualIndex}
                             year={year}
                             index={actualIndex}
+                            startYear={rotationStartYear}
                             cropColorMap={cropColorMap}
                           />
                         )
                       })}
                   </ul>
                 ))
-                const restartYear = ROTATION_START_CALENDAR_YEAR + field.cropRotation.length
+                const restartYear = rotationStartYear + field.cropRotation.length
                 return (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      Marken følger en fast plan på {field.cropRotation.length} år,
-                      der gentager sig. Markens tal er gennemsnittet over planens år.
+                      {isSimulationView
+                        ? `Marken følger en fast plan på ${field.cropRotation.length} år, der gentager sig. Markens tal er gennemsnittet over planens år.`
+                        : 'Markens registrerede afgrøder de seneste år, fra markregistret.'}
                     </p>
                     {columns === 2 ? (
                       <div className="grid grid-cols-2 gap-x-8">
@@ -334,13 +360,15 @@ export const MarkPanel = ({
                     ) : (
                       columnLists[0]
                     )}
-                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>
-                        {restartYear}: forfra med{' '}
-                        {field.cropRotation[0].afgrodeNavn}
-                      </span>
-                    </div>
+                    {isSimulationView ? (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>
+                          {restartYear}: forfra med{' '}
+                          {field.cropRotation[0].afgrodeNavn}
+                        </span>
+                      </div>
+                    ) : null}
                   </>
                 )
               })()

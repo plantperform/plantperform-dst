@@ -33,6 +33,8 @@ import {
   getLastOpenedMap,
   getPendingFarm,
   getStoredRole,
+  hasVisitedHomeThisSession,
+  markHomeVisitedThisSession,
   setPendingFarm,
   setStoredRole,
   type OnboardingRole,
@@ -98,11 +100,16 @@ export const HomePage = () => {
     isReady && farmList.length === 0 && pending !== null
   const singleFarmId = isReady && farmList.length === 1 ? farmList[0].id : null
   const autoOpenSingleFarm = email ? getAutoOpenSingleFarm(email) : true
+  const hasVisitedHome = email ? hasVisitedHomeThisSession(email) : false
   const shouldOpenSingleFarm =
-    singleFarmId !== null && !showOverview && autoOpenSingleFarm
+    singleFarmId !== null &&
+    !showOverview &&
+    autoOpenSingleFarm &&
+    !hasVisitedHome
 
   useEffect(() => {
     if (!isReady) return
+    markHomeVisitedThisSession(email)
     if (shouldCreatePendingFarm && pending) {
       if (hasStartedCreate.current) return
       hasStartedCreate.current = true

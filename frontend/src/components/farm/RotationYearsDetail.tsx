@@ -360,7 +360,7 @@ const LeachingDetailSection = ({
 
   const p = num(detail.P)
   const s = num(detail.S)
-  const y = num(detail.Y) || 2024
+  const y = num(detail.Y) || 2027
   const { tau, mu, kappa, rho } = L_FORMULA_CONSTANTS
   const trend = tau * (y - 1991)
   const base = mu + ntheta + num(detail.C)
@@ -459,8 +459,18 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Foreløbigt fællestal for alle marker - rigtige tal pr. mark
-            kommer senere.
+            Afstrømningskategori <strong>{String(detail.afstromningskategori ?? '—')}</strong>
+            {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
+            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Selve
+            P-værdien er stadig én fælles placeholder pr. kategori, indtil
+            rigtige per-mark-værdier findes.
+            {detail.afstromningskategori_ukendt ? (
+              <span className="text-amber-700">
+                {' '}
+                ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1
+                er brugt som et rent gæt, ikke et opslag.
+              </span>
+            ) : null}
           </p>
           <Callout>
             P = <strong>{fmt(p, 5)}</strong>

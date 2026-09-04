@@ -27,11 +27,7 @@ export const FarmCardStats = ({ farm }: { farm: Farm }) => {
   }
 
   const totalAreaHa = fields.reduce((sum, field) => sum + field.areaHa, 0)
-  const summary = computeFarmQuotaSummary(
-    fields,
-    false,
-    farm.udledningskvoteKgN,
-  )
+  const summary = computeFarmQuotaSummary(fields, false)
   const level = aggregateQuotaStatusLevel(
     summary.totalNLoad,
     summary.quota.quotaKgn,

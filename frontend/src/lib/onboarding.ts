@@ -14,6 +14,7 @@ const roleKey = (email: string) => `pp-rolle:${email}`
 const pendingFarmKey = (email: string) => `pp-ny-bedrift:${email}`
 const lastOpenedKey = (email: string) => `pp-sidst-åbnet:${email}`
 const autoOpenKey = (email: string) => `pp-auto-åbn:${email}`
+const homeVisitedKey = (email: string) => `pp-forside-set:${email}`
 
 const readItem = (key: string): string | null => {
   try {
@@ -49,6 +50,30 @@ export const getAutoOpenSingleFarm = (email: string): boolean =>
 
 export const setAutoOpenSingleFarm = (email: string, value: boolean) => {
   writeItem(autoOpenKey(email), value ? '1' : '0')
+}
+
+export const hasVisitedHomeThisSession = (email: string): boolean => {
+  try {
+    return window.sessionStorage.getItem(homeVisitedKey(email)) === '1'
+  } catch {
+    return false
+  }
+}
+
+export const markHomeVisitedThisSession = (email: string) => {
+  try {
+    window.sessionStorage.setItem(homeVisitedKey(email), '1')
+  } catch {
+    return
+  }
+}
+
+export const clearHomeVisitedThisSession = (email: string) => {
+  try {
+    window.sessionStorage.removeItem(homeVisitedKey(email))
+  } catch {
+    return
+  }
 }
 
 export const getPendingFarm = (email: string): PendingFarm | null => {
