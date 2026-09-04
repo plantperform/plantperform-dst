@@ -60,10 +60,16 @@ export const ManualRotationEditor = ({
   onOpenChange,
   onError,
 }: ManualRotationEditorProps) => {
+  // ManualRotationEditor is mounted for every field in the list (its Dialog
+  // is just hidden via `open`), not only the one being edited — fieldId is
+  // withheld while closed so SWR's key builder returns null and skips the
+  // fetch, instead of every closed editor eagerly pulling candidate-detail
+  // for a field the user isn't looking at (2026-09-04: this was firing one
+  // request per field on every simulation view, up to 59 for a large farm).
   const { data: current } = useSimulationFieldCandidateDetail(
     farmId,
     simulationId,
-    field.id,
+    open ? field.id : undefined,
   )
   const { data: kategorier = [] } = useRotationKategorier(farmId)
   const { data: allRefs = [] } = useRotationCandidateOptions(farmId)
