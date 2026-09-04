@@ -1,3 +1,4 @@
+import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -9,8 +10,10 @@ import {
 } from '@/api/hooks'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
+import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import {
   Card,
   CardContent,
@@ -47,6 +50,8 @@ export const FarmDetailPage = () => {
     null,
   )
   const toastTimeoutRef = useRef<number | null>(null)
+  const { width: sidebarWidth, changeWidth: setSidebarWidth } =
+    useSidebarWidth()
 
   useEffect(
     () => () => {
@@ -119,39 +124,42 @@ export const FarmDetailPage = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="grid min-h-screen lg:grid-cols-[320px_1fr]">
-        <FarmSidebar
+    <SidebarProvider
+      className="h-svh overflow-hidden"
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+    >
+      <FarmSidebar
+        farm={farm}
+        fields={fields}
+        simulations={simulations}
+        selection={activeSelection}
+        onSelectionChange={setSelection}
+        onError={showErrorToast}
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
+      />
+      <SidebarInset className="min-w-0 overflow-x-hidden">
+        {toast ? (
+          <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
+            <p role="alert">{toast.message}</p>
+          </div>
+        ) : null}
+        <FarmInspector
           farm={farm}
-          fields={fields}
-          simulations={simulations}
+          fields={
+            activeSelection.kind === 'current' ? fields : simulationFields
+          }
           selection={activeSelection}
-          onSelectionChange={setSelection}
+          selectedSimulation={
+            activeSelection.kind === 'simulation'
+              ? simulations.find(
+                  (simulation) => simulation.id === activeSelection.id,
+                )
+              : undefined
+          }
           onError={showErrorToast}
         />
-        <div>
-          {toast ? (
-            <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
-              <p role="alert">{toast.message}</p>
-            </div>
-          ) : null}
-          <FarmInspector
-            farm={farm}
-            fields={
-              activeSelection.kind === 'current' ? fields : simulationFields
-            }
-            selection={activeSelection}
-            selectedSimulation={
-              activeSelection.kind === 'simulation'
-                ? simulations.find(
-                    (simulation) => simulation.id === activeSelection.id,
-                  )
-                : undefined
-            }
-            onError={showErrorToast}
-          />
-        </div>
-      </div>
-    </main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

@@ -22,4 +22,12 @@ export default defineConfig([
       semi: ['error', 'never'],
     },
   },
+  {
+    // Vendored shadcn/ui primitives: they export hooks and variants next to
+    // their components, which is fine for files we do not hand-edit.
+    files: ['src/components/ui/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
