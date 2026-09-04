@@ -10,6 +10,19 @@ planning. This repository contains the application implementation:
 Deployment infrastructure and environment-specific configuration are
 maintained separately.
 
+## Dev deployment
+
+Every push to this repository's `dev` branch dispatches the private deployment
+workflows in `cordulus/plantperform` at the same public commit SHA. The
+dispatcher has no AWS credentials and does not publish artifacts itself.
+
+Repository administrators must configure
+`PLANTPERFORM_DEPLOY_DISPATCH_TOKEN` as an Actions secret. Use a fine-grained
+token restricted to the secret deployment repository with **Actions: write**
+permission; do not commit or expose the token. The private backend workflow
+uploads the new dev bundle, but replacing an EC2 instance and running database
+migrations remain manual operations.
+
 ## Run locally
 
 ### Prerequisites
