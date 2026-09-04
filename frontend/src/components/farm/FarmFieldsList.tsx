@@ -6,7 +6,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { Columns3 } from 'lucide-react'
+import { Columns3, SlidersHorizontal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -27,7 +27,9 @@ import {
   buildFarmFieldsColumns,
   OPTIONAL_COLUMN_IDS,
 } from '@/components/farm/farm-fields-columns'
+import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { MarkPanel } from '@/components/farm/MarkPanel'
+import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -63,6 +65,7 @@ import {
   buildCropColorMap,
   changedFieldIds,
   isFieldCalculated,
+  isFieldLocked,
   resolveFarmQuota,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
@@ -88,12 +91,15 @@ const buildDefaultColumnVisibility = (isSimulationView: boolean): VisibilityStat
   )
 }
 
+const RULES_SORT_KEYS: FieldsSortKey[] = ['name', 'areaHa']
+
 type FarmFieldsListProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView?: boolean
   simulationId?: string
   simulation?: Simulation
+  mode?: FarmInspectorMode
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
   onSwitchToMap: () => void
@@ -106,6 +112,7 @@ export const FarmFieldsList = ({
   isSimulationView = false,
   simulationId,
   simulation,
+  mode = 'values',
   sort,
   onSortChange,
   onSwitchToMap,
@@ -114,16 +121,26 @@ export const FarmFieldsList = ({
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
+  const [bindFieldId, setBindFieldId] = useState<string | null>(null)
   const [confirmDetachField, setConfirmDetachField] =
     useState<FieldRecord | null>(null)
 
+  const isRules = mode === 'rules'
+  const canEditRules = isRules && isSimulationView && Boolean(simulationId)
+  const effectiveSort =
+    isRules && !RULES_SORT_KEYS.includes(sort.key) ? DEFAULT_FIELDS_SORT : sort
+
   const sortedFields = useMemo(
-    () => [...fields].sort((left, right) => compareFields(left, right, sort)),
-    [fields, sort],
+    () =>
+      [...fields].sort((left, right) =>
+        compareFields(left, right, effectiveSort),
+      ),
+    [fields, effectiveSort],
   )
 
   const selectedField =
     fields.find((field) => field.id === selectedFieldId) ?? null
+  const bindField = fields.find((field) => field.id === bindFieldId) ?? null
 
   const maxYears = Math.max(
     0,
@@ -132,8 +149,8 @@ export const FarmFieldsList = ({
 
   const { data: liveFields = [] } = useFarmFields(farmId)
   const changedFields = useMemo(
-    () => changedFieldIds(fields, liveFields),
-    [fields, liveFields],
+    () => (isRules ? new Set<string>() : changedFieldIds(fields, liveFields)),
+    [isRules, fields, liveFields],
   )
 
   const totals = useMemo(() => {
@@ -179,7 +196,7 @@ export const FarmFieldsList = ({
 
   useEffect(() => {
     setSelectedFieldId(null)
-  }, [isSimulationView])
+  }, [isSimulationView, mode])
 
   const detachFarmField = useCallback(
     async (fieldId: string) => {
@@ -196,14 +213,6 @@ export const FarmFieldsList = ({
       }
     },
     [farmId, onError],
-  )
-
-  const isFieldLocked = useCallback(
-    (field: FieldRecord) =>
-      field.allowedRotationIds.length === 1 &&
-      field.rotationId !== null &&
-      field.allowedRotationIds[0] === field.rotationId,
-    [],
   )
 
   const toggleFieldLock = useCallback(
@@ -236,26 +245,53 @@ export const FarmFieldsList = ({
         setLockingFieldId(null)
       }
     },
-    [farmId, simulationId, isFieldLocked, onError],
+    [farmId, simulationId, onError],
+  )
+
+  const onToggleLock = useCallback(
+    (field: FieldRecord) => void toggleFieldLock(field),
+    [toggleFieldLock],
+  )
+  const onBindRotation = useCallback(
+    (field: FieldRecord) => setBindFieldId(field.id),
+    [],
   )
 
   const columns = useMemo(
     () =>
       buildFarmFieldsColumns({
         isSimulationView,
+        mode,
         maxYears,
         fields,
         cropColorMap,
         totals,
         resolvedQuota,
-        isFieldLocked,
+        canEditRules,
+        lockingFieldId,
+        onToggleLock,
+        onBindRotation,
       }),
-    [isSimulationView, maxYears, fields, cropColorMap, totals, resolvedQuota, isFieldLocked],
+    [
+      isSimulationView,
+      mode,
+      maxYears,
+      fields,
+      cropColorMap,
+      totals,
+      resolvedQuota,
+      canEditRules,
+      lockingFieldId,
+      onToggleLock,
+      onBindRotation,
+    ],
   )
 
   const sorting: SortingState = useMemo(
-    () => [{ id: sort.key, desc: sort.direction === 'desc' }],
-    [sort],
+    () => [
+      { id: effectiveSort.key, desc: effectiveSort.direction === 'desc' },
+    ],
+    [effectiveSort],
   )
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
@@ -307,49 +343,66 @@ export const FarmFieldsList = ({
 
   return (
     <>
-      <Card>
+      <Card className={isRules ? 'border-indigo-300' : undefined}>
         <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
           <div>
-            <CardTitle>Marker</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {isRules ? (
+                <SlidersHorizontal
+                  className="h-4 w-4 text-indigo-600"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {isRules ? 'Regler pr. mark' : 'Marker'}
+            </CardTitle>
             <CardDescription>
-              {isSimulationView
-                ? 'Marker kopieret ind i denne simulering.'
-                : 'Marker, der aktuelt er tilknyttet bedriften.'}
+              {isRules
+                ? 'Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste kørsel - de er ikke tal, marken har.'
+                : isSimulationView
+                  ? 'Sædskifte og tal, som optimeringen har beregnet for denne simulering.'
+                  : 'Marker, der aktuelt er tilknyttet bedriften.'}
             </CardDescription>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
-                Kolonner
-                <span className="text-muted-foreground">
-                  {visibleOptionalCount} af {optionalColumns.length}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {optionalColumns.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  checked={column.getIsVisible()}
-                  onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={(checked) => {
-                    column.toggleVisibility(Boolean(checked))
-                    if (!checked && column.id === sort.key) {
-                      onSortChange(DEFAULT_FIELDS_SORT)
-                    }
-                  }}
-                >
-                  {column.columnDef.meta?.toggleLabel ?? column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {isRules ? null : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Kolonner
+                  <span className="text-muted-foreground">
+                    {visibleOptionalCount} af {optionalColumns.length}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {optionalColumns.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={column.getIsVisible()}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={(checked) => {
+                      column.toggleVisibility(Boolean(checked))
+                      if (!checked && column.id === sort.key) {
+                        onSortChange(DEFAULT_FIELDS_SORT)
+                      }
+                    }}
+                  >
+                    {column.columnDef.meta?.toggleLabel ?? column.id}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-lg border">
+          <div
+            className={cn(
+              'overflow-x-auto rounded-lg border',
+              isRules && 'border-indigo-200',
+            )}
+          >
             <Table className="border-collapse text-left">
-              <TableHeader className="bg-muted/60">
+              <TableHeader className={isRules ? 'bg-indigo-100' : 'bg-muted/60'}>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
@@ -392,17 +445,27 @@ export const FarmFieldsList = ({
                   return (
                     <TableRow
                       key={field.id}
-                      onClick={openPanel}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' && event.key !== ' ') return
-                        event.preventDefault()
-                        openPanel()
-                      }}
-                      tabIndex={0}
-                      aria-label={`Vis detaljer for mark ${field.name}`}
+                      onClick={isRules ? undefined : openPanel}
+                      onKeyDown={
+                        isRules
+                          ? undefined
+                          : (event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ')
+                                return
+                              event.preventDefault()
+                              openPanel()
+                            }
+                      }
+                      tabIndex={isRules ? undefined : 0}
+                      aria-label={
+                        isRules
+                          ? undefined
+                          : `Vis detaljer for mark ${field.name}`
+                      }
                       data-selected={isSelected}
                       className={cn(
-                        'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                        !isRules &&
+                          'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                         isSelected
                           ? 'bg-[#f4f7ef]'
                           : isChanged
@@ -469,6 +532,22 @@ export const FarmFieldsList = ({
           isDetaching={detachingFieldId === selectedField.id}
           onRequestDetach={() => setConfirmDetachField(selectedField)}
           onClose={() => setSelectedFieldId(null)}
+          onError={onError}
+        />
+      ) : null}
+      {bindField && simulationId && simulation ? (
+        <ManualRotationEditor
+          key={bindField.id}
+          farmId={farmId}
+          simulationId={simulationId}
+          simulation={simulation}
+          field={bindField}
+          cropColorMap={cropColorMap}
+          intent="lock"
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setBindFieldId(null)
+          }}
           onError={onError}
         />
       ) : null}

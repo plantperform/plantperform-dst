@@ -30,7 +30,13 @@ type FarmTopBarProps = {
   actions?: ReactNode
   /** Nøgletal for the visning, folded away until the user asks for them. */
   details?: ReactNode
+  tone?: 'default' | 'rules'
   onError: (message: string | null) => void
+}
+
+const HEADER_TONE_CLASSES: Record<'default' | 'rules', string> = {
+  default: 'border-b bg-background',
+  rules: 'border-b border-indigo-300 bg-indigo-50',
 }
 
 /**
@@ -43,6 +49,7 @@ export const FarmTopBar = ({
   visning,
   actions,
   details,
+  tone = 'default',
   onError,
 }: FarmTopBarProps) => {
   const [shareOpen, setShareOpen] = useState(false)
@@ -52,8 +59,8 @@ export const FarmTopBar = ({
   const detailsId = useId()
 
   return (
-    <header className="border-b bg-background">
-      <div className="flex h-13 shrink-0 items-center gap-x-3 px-3">
+    <header className={HEADER_TONE_CLASSES[tone]}>
+      <div className="flex min-h-13 shrink-0 flex-wrap items-center gap-x-3 px-3 py-1">
         {/* The sidebar has its own toggle; on mobile it is a sheet, so it
             cannot be reopened from inside itself. */}
         <SidebarTrigger className="-ml-1 md:hidden" />

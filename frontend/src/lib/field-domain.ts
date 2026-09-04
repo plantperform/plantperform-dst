@@ -108,6 +108,35 @@ export const formatRealRotation = (rotation: RotationYear[]): string => {
   return rotation.map(formatRotationYear).join(' - ')
 }
 
+export const isFieldLocked = (field: FieldRecord): boolean =>
+  field.allowedRotationIds.length === 1 &&
+  field.rotationId !== null &&
+  field.allowedRotationIds[0] === field.rotationId
+
+const tooltipNumber = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 1,
+})
+
+export const formatLockTooltip = (field: FieldRecord): string => {
+  const lines = [`${field.name} - låst sædskifte`]
+
+  if (field.cropRotation.length > 0) {
+    lines.push(field.cropRotation.map(formatRotationYear).join(' - '))
+  }
+
+  if (field.areaHa > 0) {
+    lines.push(
+      `DB2 ${tooltipNumber.format(field.db2 / field.areaHa)} kr/ha · ` +
+        `Udledning ${tooltipNumber.format(field.nLoad / field.areaHa)} kg N/ha · ` +
+        `Udvaskning ${tooltipNumber.format(field.leaching / field.areaHa)} kg N/ha`,
+    )
+  }
+
+  lines.push('Optimér ændrer den ikke. Lås op under Regler.')
+
+  return lines.join('\n')
+}
+
 export const compactCropSequenceLabel = (cropSequence: string[]): string => {
   const parts: string[] = []
   let index = 0
