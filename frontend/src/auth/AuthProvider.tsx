@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { mutate } from 'swr'
 
 import { clearSession, loadCurrentUser, refreshAccessToken, setAccessToken } from '@/api/auth'
 import { postJson } from '@/api/client'
@@ -49,6 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn: async (credentials: Credentials) => {
         const result = await postJson<TokenResponse, Credentials>('/auth/login', credentials)
         setAccessToken(result.accessToken)
+        await mutate(() => true, undefined, { revalidate: false })
         const current = await loadCurrentUser()
         if (!current) throw new Error('Kunne ikke indlæse brugeren.')
         setUser(current)

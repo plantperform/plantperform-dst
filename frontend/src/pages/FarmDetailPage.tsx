@@ -8,6 +8,7 @@ import {
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
+import { useAuth } from '@/auth/context'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
@@ -21,9 +22,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
+  const { user } = useAuth()
+  const email = user?.email ?? ''
   const {
     data: farm,
     error: farmError,
@@ -52,6 +56,14 @@ export const FarmDetailPage = () => {
   const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
+
+  const loadedFarmId = farm?.id
+
+  useEffect(() => {
+    if (email && loadedFarmId) {
+      markFarmOpened(email, loadedFarmId)
+    }
+  }, [email, loadedFarmId])
 
   useEffect(
     () => () => {
@@ -91,7 +103,9 @@ export const FarmDetailPage = () => {
             </CardHeader>
             <CardContent>
               <Button asChild>
-                <Link to="/">Tilbage til bedrifter</Link>
+                <Link to="/" state={HOME_OVERVIEW_STATE}>
+                  Tilbage til bedrifter
+                </Link>
               </Button>
             </CardContent>
           </Card>
