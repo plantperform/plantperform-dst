@@ -347,7 +347,7 @@ export const FarmFieldsList = ({
           </DropdownMenu>
         </CardHeader>
         <CardContent>
-          <div className="overflow-hidden rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border">
             <Table className="border-collapse text-left">
               <TableHeader className="bg-muted/60">
                 {table.getHeaderGroups().map((headerGroup) => (

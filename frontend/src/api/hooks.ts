@@ -7,7 +7,7 @@ import type {
   FarmMember,
   FieldRecord,
   GodningPresetOption,
-  KystvandoplandUdledning,
+  KystvandoplandEmissions,
   RegistryField,
   RegistryFieldSummary,
   RotationCandidateEvaluation,
@@ -48,14 +48,14 @@ export const useFarm = (farmId?: string) =>
 export const useFarmFields = (farmId?: string) =>
   useSWR<FieldRecord[]>(farmFieldsKey(farmId), fetcher)
 
-export const farmUdledningKey = (farmId?: string) => {
+export const farmEmissionsKey = (farmId?: string) => {
   if (!farmId) return null
 
   return `/farms/${encodeURIComponent(farmId)}/udledning-per-kystvandopland`
 }
 
-export const useFarmUdledning = (farmId?: string) =>
-  useSWR<KystvandoplandUdledning[]>(farmUdledningKey(farmId), fetcher)
+export const useFarmEmissions = (farmId?: string) =>
+  useSWR<KystvandoplandEmissions[]>(farmEmissionsKey(farmId), fetcher)
 
 export const simulationsKey = (farmId?: string) => {
   if (!farmId) return null

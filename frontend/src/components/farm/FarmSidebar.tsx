@@ -1,26 +1,25 @@
+import {
+  FlaskConical,
+  PanelLeft,
+  Plus,
+  Sprout,
+  Trash2,
+  Warehouse,
+} from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
-  farmFieldsKey,
-  farmMembersKey,
   simulationFieldsKey,
   simulationsKey,
-  useFarmMembers,
-  useFarmUdledning,
   useSimulationFields,
 } from '@/api/hooks'
-import {
-  addFarmMember,
-  deleteFarm,
-  deleteSimulation,
-  removeFarmMember,
-} from '@/api/mutations'
-import { useAuth } from '@/auth/context'
+import { deleteSimulation } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
+import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,37 +29,27 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
-
-const formatFieldCount = (count: number) =>
-  `${count} ${count === 1 ? 'mark' : 'marker'}`
-
-const getFieldTotals = (fields: FieldRecord[]) => ({
-  area: fields.reduce((sum, field) => sum + field.areaHa, 0),
-  db2: fields.reduce((sum, field) => sum + field.db2, 0),
-  nLoad: fields.reduce((sum, field) => sum + field.nLoad, 0),
-  leaching: fields.reduce((sum, field) => sum + field.leaching, 0),
-})
-
-const formatRelativeTime = (value: string) => {
-  const createdAt = new Date(value).getTime()
-  if (Number.isNaN(createdAt)) return 'oprettet for nylig'
-
-  const diffMinutes = Math.max(0, Math.round((Date.now() - createdAt) / 60_000))
-  if (diffMinutes < 1) return 'oprettet netop nu'
-  if (diffMinutes < 60) return `oprettet for ${diffMinutes} min. siden`
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) return `oprettet for ${diffHours} t. siden`
-
-  const diffDays = Math.round(diffHours / 24)
-  return `oprettet for ${diffDays} d. siden`
-}
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarFooter,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from '@/components/ui/sidebar'
+import {
+  formatFieldCount,
+  formatNumber,
+  formatRelativeTime,
+  getFieldTotals,
+} from '@/lib/farm-totals'
 
 type FarmSidebarProps = {
   farm: Farm
@@ -69,8 +58,16 @@ type FarmSidebarProps = {
   selection: FarmViewSelection
   onSelectionChange: (selection: FarmViewSelection) => void
   onError: (message: string | null) => void
+  width: number
+  onWidthChange: (width: number) => void
 }
 
+/**
+ * Navigation for the bedrift: back to the bedrift list, then the visninger.
+ * Rows are single-line so the list stays dense; only the selected visning
+ * expands to describe itself, which keeps the detail where it is being read.
+ * Collapses to an icon rail, so every visning keeps a row even when minimized.
+ */
 export const FarmSidebar = ({
   farm,
   fields,
@@ -78,34 +75,16 @@ export const FarmSidebar = ({
   selection,
   onSelectionChange,
   onError,
+  width,
+  onWidthChange,
 }: FarmSidebarProps) => {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const [isDeleting, setIsDeleting] = useState(false)
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
+  const [simulationToDelete, setSimulationToDelete] =
+    useState<Simulation | null>(null)
   const [newScenarioOpen, setNewScenarioOpen] = useState(false)
-  const [membersDialogOpen, setMembersDialogOpen] = useState(false)
-  const [memberEmail, setMemberEmail] = useState('')
-  const [isSharing, setIsSharing] = useState(false)
   const totals = getFieldTotals(fields)
-  const { data: members = [], isLoading: membersLoading } = useFarmMembers(farm.id)
-  const { data: udledningPerKystvandopland = [] } = useFarmUdledning(farm.id)
-
-  const confirmDelete = async () => {
-    setIsDeleting(true)
-    try {
-      await deleteFarm(farm.id)
-      await mutate('/farms')
-      await mutate(farmFieldsKey(farm.id))
-      navigate('/')
-    } catch {
-      onError('Kunne ikke slette bedriften.')
-    } finally {
-      setIsDeleting(false)
-    }
-  }
 
   const removeSimulation = async (simulationId: string) => {
     setDeletingSimulationId(simulationId)
@@ -126,282 +105,194 @@ export const FarmSidebar = ({
     }
   }
 
-  const shareFarm = async () => {
-    const email = memberEmail.trim().toLowerCase()
-    if (!email || !email.includes('@')) {
-      onError('Indtast en gyldig e-mailadresse.')
-      return
-    }
-    setIsSharing(true)
-    try {
-      await addFarmMember(farm.id, email)
-      await mutate(farmMembersKey(farm.id))
-      setMemberEmail('')
-      onError(null)
-    } catch {
-      onError('Kunne ikke dele bedriften. Brugeren skal have en bekræftet konto.')
-    } finally {
-      setIsSharing(false)
-    }
-  }
-
-  const revokeMember = async (email: string) => {
-    if (members.length <= 1) return
-    try {
-      await removeFarmMember(farm.id, email)
-      await mutate(farmMembersKey(farm.id))
-      if (user?.email.toLowerCase() === email.toLowerCase()) {
-        await mutate('/farms')
-        navigate('/')
-      }
-      onError(null)
-    } catch {
-      onError('Kunne ikke fjerne brugeren fra bedriften.')
-    }
-  }
-
   return (
-    <aside className="border-b bg-muted/30 p-6 lg:min-h-screen lg:border-b-0 lg:border-r">
-      <Button
-        asChild
-        variant="outline"
-        size="sm"
-        className="mb-6 bg-background/80"
-      >
-        <Link to="/">Tilbage til bedrifter</Link>
-      </Button>
-
-      <div className="space-y-6">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Bedrift</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            {farm.name}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">{farm.ownerName}</p>
-        </div>
-
-        <div className="grid gap-3 text-sm">
-          <div className="rounded-lg border bg-background p-4">
-            <p className="text-muted-foreground">CVR</p>
-            <p className="mt-1 font-medium">{farm.cvr ?? '—'}</p>
-          </div>
-          <div className="rounded-lg border bg-background p-4">
-            <p className="text-muted-foreground">Udledningskvote pr. kystvandopland</p>
-            <div className="mt-3 space-y-2">
-              {udledningPerKystvandopland.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Ingen marker med et kystvandopland endnu.
-                </p>
-              ) : (
-                udledningPerKystvandopland.map((entry) => (
-                  <div
-                    key={entry.kystvandId ?? 'ukendt'}
-                    className="rounded border p-3 text-sm"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">
-                        {entry.kystvandNavn ??
-                          (entry.kystvandId !== null
-                            ? `Kystvandopland ${entry.kystvandId}`
-                            : 'Uden kystvandopland')}
-                      </span>
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${
-                          entry.overholder
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {entry.overholder ? 'Overholder' : 'Overskrider'}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xl font-semibold">
-                      {formatNumber(entry.udledningskvoteKgN)} kg N
-                    </p>
-                    <p className="text-xs text-muted-foreground">Udledningskvote</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Historisk &quot;estimeret&quot; udledning:{' '}
-                      {formatNumber(entry.beregnetUdledningKgN)} kg N
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Marker</p>
-              <p className="mt-1 text-xl font-semibold">{fields.length}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Areal</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.area)} ha
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">DB2</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.db2)} kr
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Udledning</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.nLoad)} kg N
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background p-4">
-              <p className="text-muted-foreground">Udvaskning</p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatNumber(totals.leaching)} kg N
-              </p>
-            </div>
+    <Sidebar collapsible="icon" aria-label="Visninger">
+      <SidebarHeader className="h-13 justify-center border-b border-sidebar-border px-2 py-0">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <img
+            src="/plant-perform-tab-icon.svg"
+            alt=""
+            className="size-8 shrink-0 rounded-md"
+          />
+          <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate text-sm font-semibold">PlantPerform</span>
+            <span className="truncate text-xs text-muted-foreground">
+              Sædskifteplanlægning
+            </span>
           </div>
         </div>
+      </SidebarHeader>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Visninger
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Aktuelle marker og optimeringsalternativer.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-background/80"
-              onClick={() => setNewScenarioOpen(true)}
-            >
-              Ny
-            </Button>
-            <NewScenarioPanel
-              farmId={farm.id}
-              fields={fields}
-              open={newScenarioOpen}
-              onOpenChange={setNewScenarioOpen}
-              onSimulationCreated={(simulation) =>
-                onSelectionChange({ kind: 'simulation', id: simulation.id })
-              }
-              onError={onError}
-            />
-          </div>
+      <SidebarContent>
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Bedrift</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Alle bedrifter">
+                  <Link to="/">
+                    <Warehouse />
+                    <span>Alle bedrifter</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-          <div className="space-y-2">
-            <button
-              type="button"
-              className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
-                selection.kind === 'current'
-                  ? 'border-primary bg-primary/10'
-                  : 'bg-background/70 hover:bg-background'
-              }`}
-              onClick={() => onSelectionChange({ kind: 'current' })}
-            >
-              <span
-                className={
-                  selection.kind === 'current' ? 'font-semibold' : 'font-medium'
-                }
-              >
-                Afgrødehistorik
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {formatFieldCount(fields.length)} · {formatNumber(totals.area)}{' '}
-                ha
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-                {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-                {formatNumber(totals.leaching)} kg N
-              </span>
-            </button>
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Optimeringsalternativer</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {simulations.map((simulation) => (
+                <SimulationMenuItem
+                  key={simulation.id}
+                  farmId={farm.id}
+                  simulation={simulation}
+                  selected={
+                    selection.kind === 'simulation' &&
+                    selection.id === simulation.id
+                  }
+                  deleting={deletingSimulationId === simulation.id}
+                  onSelect={() =>
+                    onSelectionChange({
+                      kind: 'simulation',
+                      id: simulation.id,
+                    })
+                  }
+                  onDelete={() => setSimulationToDelete(simulation)}
+                />
+              ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  className="text-sidebar-foreground/70"
+                  tooltip="Ny simulering"
+                  onClick={() => setNewScenarioOpen(true)}
+                >
+                  <Plus />
+                  <span>Ny simulering</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-            {simulations.map((simulation) => (
-              <SimulationViewRow
-                key={simulation.id}
-                farmId={farm.id}
-                simulation={simulation}
-                selected={
-                  selection.kind === 'simulation' &&
-                  selection.id === simulation.id
-                }
-                deleting={deletingSimulationId === simulation.id}
-                onSelect={() =>
-                  onSelectionChange({ kind: 'simulation', id: simulation.id })
-                }
-                onDelete={() => void removeSimulation(simulation.id)}
-              />
-            ))}
-          </div>
-        </div>
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Visninger</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <ViewMenuButton
+                  icon={<Sprout />}
+                  label="Afgrødehistorik"
+                  selected={selection.kind === 'current'}
+                  onSelect={() => onSelectionChange({ kind: 'current' })}
+                />
+                {selection.kind === 'current' ? (
+                  <ViewDetails
+                    entries={[
+                      ['Marker', formatFieldCount(fields.length)],
+                      ['Areal', `${formatNumber(totals.area)} ha`],
+                    ]}
+                  />
+                ) : null}
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-        <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full bg-background/80">
-                Del bedrift
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Del bedrift</DialogTitle>
-                <DialogDescription>
-                  Alle medlemmer har samme adgang og kan selv dele bedriften videre.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3">
-                {membersLoading ? <p className="text-sm text-muted-foreground">Indlæser medlemmer...</p> : null}
-                {members.map((member) => (
-                  <div key={member.email} className="flex items-center justify-between gap-3 rounded border p-2 text-sm">
-                    <span className="truncate">{member.email}</span>
-                    <Button size="sm" variant="outline" disabled={members.length <= 1} onClick={() => void revokeMember(member.email)}>
-                      Fjern
-                    </Button>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <Input type="email" placeholder="bruger@example.com" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
-                  <Button onClick={() => void shareFarm()} disabled={isSharing}>{isSharing ? '...' : 'Del'}</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+      <SidebarFooter className="p-1 pb-3">
+        <CollapseMenuButton />
+      </SidebarFooter>
 
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-background/80">
-              Slet bedrift
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Slet bedrift?</DialogTitle>
-              <DialogDescription>
-                Dette sletter bedriften og alle marker, der er importeret til
-                den. Handlingen kan ikke fortrydes.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Annuller</Button>
-              </DialogClose>
-              <Button onClick={confirmDelete} disabled={isDeleting}>
-                {isDeleting ? 'Sletter...' : 'Slet bedrift'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </aside>
+      <SidebarWidthHandle width={width} onWidthChange={onWidthChange} />
+
+      <NewScenarioPanel
+        farmId={farm.id}
+        fields={fields}
+        open={newScenarioOpen}
+        onOpenChange={setNewScenarioOpen}
+        onSimulationCreated={(simulation) =>
+          onSelectionChange({ kind: 'simulation', id: simulation.id })
+        }
+        onError={onError}
+      />
+      <DeleteSimulationDialog
+        simulation={simulationToDelete}
+        onOpenChange={(open) => {
+          if (!open) setSimulationToDelete(null)
+        }}
+        onConfirm={(simulationId) => void removeSimulation(simulationId)}
+      />
+    </Sidebar>
   )
 }
 
-type SimulationViewRowProps = {
+/**
+ * Folds the sidebar down to its icon rail. It names what it does while the
+ * sidebar is open; collapsed, the tooltip says how to get back.
+ */
+const CollapseMenuButton = () => {
+  const { toggleSidebar } = useSidebar()
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          className="text-sidebar-foreground/70"
+          tooltip="Vis sidepanel"
+          onClick={toggleSidebar}
+        >
+          <PanelLeft />
+          <span>Skjul sidepanel</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+type ViewMenuButtonProps = {
+  icon: React.ReactNode
+  label: string
+  selected: boolean
+  onSelect: () => void
+}
+
+const ViewMenuButton = ({
+  icon,
+  label,
+  selected,
+  onSelect,
+}: ViewMenuButtonProps) => (
+  <SidebarMenuButton
+    isActive={selected}
+    aria-current={selected ? 'page' : undefined}
+    tooltip={label}
+    onClick={onSelect}
+  >
+    {icon}
+    <span className="truncate">{label}</span>
+  </SidebarMenuButton>
+)
+
+type ViewDetailsProps = {
+  entries: [label: string, value: string][]
+}
+
+/** Description of the selected visning, folded out under its navigation row. */
+const ViewDetails = ({ entries }: ViewDetailsProps) => (
+  <dl className="mt-1 mb-1 ml-4 space-y-0.5 border-l border-sidebar-border pl-3 text-xs group-data-[collapsible=icon]:hidden">
+    {entries.map(([label, value]) => (
+      <div key={label} className="flex items-baseline justify-between gap-2">
+        <dt className="text-sidebar-foreground/60">{label}</dt>
+        <dd className="truncate font-medium">{value}</dd>
+      </div>
+    ))}
+  </dl>
+)
+
+type SimulationMenuItemProps = {
   farmId: string
   simulation: Simulation
   selected: boolean
@@ -410,62 +301,102 @@ type SimulationViewRowProps = {
   onDelete: () => void
 }
 
-const SimulationViewRow = ({
+const SimulationMenuItem = ({
   farmId,
   simulation,
   selected,
   deleting,
   onSelect,
   onDelete,
-}: SimulationViewRowProps) => {
+}: SimulationMenuItemProps) => {
+  // Only the selected simulering describes itself, so only it needs its marker.
   const { data: fields = [], isLoading } = useSimulationFields(
     farmId,
-    simulation.id,
+    selected ? simulation.id : undefined,
   )
   const totals = getFieldTotals(fields)
 
   return (
-    <div
-      className={`flex items-center gap-2 rounded-lg border bg-background/70 p-2 transition-colors ${
-        selected ? 'border-primary bg-primary/10' : 'hover:bg-background'
-      }`}
-    >
-      <button
-        type="button"
-        className="min-w-0 flex-1 text-left"
-        onClick={onSelect}
-      >
-        <span
-          className={`block truncate text-sm ${selected ? 'font-semibold' : 'font-medium'}`}
-        >
-          {simulation.name}
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {formatRelativeTime(simulation.createdAt)}
-        </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
-          {isLoading
-            ? 'Indlæser nøgletal...'
-            : `${formatFieldCount(fields.length)} · ${formatNumber(totals.area)} ha`}
-        </span>
-        {!isLoading ? (
-          <span className="mt-1 block text-xs text-muted-foreground">
-            DB2 {formatNumber(totals.db2)} kr · Udledning{' '}
-            {formatNumber(totals.nLoad)} kg N · Udvaskning{' '}
-            {formatNumber(totals.leaching)} kg N
-          </span>
-        ) : null}
-      </button>
-      <Button
-        size="sm"
-        variant="outline"
-        className="bg-background/80 px-2"
-        onClick={onDelete}
+    <SidebarMenuItem>
+      <ViewMenuButton
+        icon={<FlaskConical />}
+        label={simulation.name}
+        selected={selected}
+        onSelect={onSelect}
+      />
+      <SidebarMenuAction
+        showOnHover
         disabled={deleting}
         aria-label={`Slet ${simulation.name}`}
+        onClick={onDelete}
       >
-        {deleting ? '...' : 'Slet'}
-      </Button>
-    </div>
+        <Trash2 />
+      </SidebarMenuAction>
+      {selected ? (
+        <ViewDetails
+          entries={[
+            ['Marker', isLoading ? '…' : formatFieldCount(fields.length)],
+            ['Areal', isLoading ? '…' : `${formatNumber(totals.area)} ha`],
+            ['DB2', isLoading ? '…' : `${formatNumber(totals.db2)} kr`],
+            ['Oprettet', formatRelativeTime(simulation.createdAt)],
+          ]}
+        />
+      ) : null}
+    </SidebarMenuItem>
   )
+}
+
+type DeleteSimulationDialogProps = {
+  simulation: Simulation | null
+  onOpenChange: (open: boolean) => void
+  onConfirm: (simulationId: string) => void
+}
+
+const DeleteSimulationDialog = ({
+  simulation,
+  onOpenChange,
+  onConfirm,
+}: DeleteSimulationDialogProps) => (
+  <Dialog open={simulation !== null} onOpenChange={onOpenChange}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Slet {simulation?.name}?</DialogTitle>
+        <DialogDescription>
+          Simuleringen og dens kopierede marker slettes. Bedriftens egne marker
+          berøres ikke. Handlingen kan ikke fortrydes.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Annuller</Button>
+        </DialogClose>
+        <DialogClose asChild>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (simulation) onConfirm(simulation.id)
+            }}
+          >
+            Slet simulering
+          </Button>
+        </DialogClose>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+)
+
+type SidebarWidthHandleProps = {
+  width: number
+  onWidthChange: (width: number) => void
+}
+
+/** The drag handle only makes sense while the sidebar shows its full width. */
+const SidebarWidthHandle = ({
+  width,
+  onWidthChange,
+}: SidebarWidthHandleProps) => {
+  const { state, isMobile } = useSidebar()
+  if (isMobile || state !== 'expanded') return null
+
+  return <SidebarResizeHandle width={width} onWidthChange={onWidthChange} />
 }

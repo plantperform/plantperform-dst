@@ -13,7 +13,7 @@ import {
   simulationFieldsKey,
   simulationsKey,
   simulationYearlySummaryKey,
-  useFarmUdledning,
+  useFarmEmissions,
   useSimulationFields,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
@@ -39,6 +39,8 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
+import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
+import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import type { FarmViewSelection } from '@/components/farm/types'
 import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
 import { Button } from '@/components/ui/button'
@@ -298,82 +300,71 @@ export const FarmInspector = ({
   const isSimulationView = selection.kind === 'simulation'
 
   return (
-    <section className="flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <section className="flex min-h-0 flex-1 flex-col">
+      <FarmTopBar
+        farm={farm}
+        visning={
+          selectedSimulation
+            ? `Simulering: ${selectedSimulation.name}`
+            : 'Afgrødehistorik'
+        }
+        onError={onError}
+        details={<FarmMetricsBar farmId={farm.id} fields={fields} />}
+        actions={
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">
-              Markgennemgang
-            </h2>
             {selectedSimulation ? (
-              <span className="rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">
-                Simulering: {selectedSimulation.name}
-              </span>
+              <Button size="sm" onClick={() => setOptimizeDialogOpen(true)}>
+                Optimér
+              </Button>
             ) : null}
+            {selectedSimulation ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setYearlyOptimizeDialogOpen(true)}
+              >
+                Års-optimering
+              </Button>
+            ) : null}
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+              <ViewToggleButton
+                active={view === 'list'}
+                onClick={() => setView('list')}
+              >
+                Liste
+              </ViewToggleButton>
+              <ViewToggleButton
+                active={view === 'map'}
+                onClick={() => setView('map')}
+              >
+                Kort
+              </ViewToggleButton>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {isSimulationView
-              ? 'Gennemgå de kopierede marker for dette optimeringsalternativ.'
-              : 'Gennemgå tilknyttede marker som liste eller direkte på kortet.'}
-          </p>
-          {optimizationSummary && selectedSimulation ? (
-            <p className="mt-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-              Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
-              {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}
-              , Udledning{' '}
-              {optimizationSummary.totalNLoadKg.toLocaleString(undefined, {
-                maximumFractionDigits: 1,
-              })}{' '}
-              kg N, udvaskning{' '}
-              {optimizationSummary.totalLeachingKg.toLocaleString(undefined, {
-                maximumFractionDigits: 1,
-              })}{' '}
-              kg N, foderenheder{' '}
-              {optimizationSummary.totalFen.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}{' '}
-              FE.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {selectedSimulation ? (
-            <Button onClick={() => setOptimizeDialogOpen(true)}>Optimér</Button>
-          ) : null}
-          {selectedSimulation ? (
-            <Button
-              variant="outline"
-              onClick={() => setYearlyOptimizeDialogOpen(true)}
-            >
-              Års-optimering
-            </Button>
-          ) : null}
-          <div className="flex rounded-md border bg-muted/40 p-1">
-            <Button
-              size="sm"
-              variant={view === 'list' ? 'default' : 'outline'}
-              className={
-                view === 'list' ? '' : 'border-transparent bg-transparent'
-              }
-              onClick={() => setView('list')}
-            >
-              Liste
-            </Button>
-            <Button
-              size="sm"
-              variant={view === 'map' ? 'default' : 'outline'}
-              className={
-                view === 'map' ? '' : 'border-transparent bg-transparent'
-              }
-              onClick={() => setView('map')}
-            >
-              Kort
-            </Button>
-          </div>
-        </div>
-      </header>
+        }
+      />
+
+      {optimizationSummary && selectedSimulation ? (
+        <p className="border-b border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
+          {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+          })}
+          , Udledning{' '}
+          {optimizationSummary.totalNLoadKg.toLocaleString(undefined, {
+            maximumFractionDigits: 1,
+          })}{' '}
+          kg N, udvaskning{' '}
+          {optimizationSummary.totalLeachingKg.toLocaleString(undefined, {
+            maximumFractionDigits: 1,
+          })}{' '}
+          kg N, foderenheder{' '}
+          {optimizationSummary.totalFen.toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+          })}{' '}
+          FE.
+        </p>
+      ) : null}
 
       {selectedSimulation ? (
         <OptimizeDialog
@@ -397,7 +388,13 @@ export const FarmInspector = ({
         />
       ) : null}
 
-      <div className="flex-1 space-y-4 p-4">
+      <div
+        className={
+          view === 'list'
+            ? 'min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4'
+            : 'flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4'
+        }
+      >
         <EmissionStatusBar
           fields={fields}
           isSimulationView={isSimulationView}
@@ -445,6 +442,29 @@ export const FarmInspector = ({
   )
 }
 
+type ViewToggleButtonProps = {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}
+
+/** One half of the Liste/Kort segmented control: the track carries the frame. */
+const ViewToggleButton = ({
+  active,
+  onClick,
+  children,
+}: ViewToggleButtonProps) => (
+  <Button
+    size="sm"
+    variant={active ? 'default' : 'ghost'}
+    aria-pressed={active}
+    className="h-8 px-3"
+    onClick={onClick}
+  >
+    {children}
+  </Button>
+)
+
 type OptimizeDialogProps = {
   farmId: string
   simulation: Simulation
@@ -472,7 +492,7 @@ const catchmentKey = (kystvandId: number | null) => String(kystvandId ?? 'none')
 // samlet sum (se FarmSidebar's tilsvarende Aktuel-visning) — begge
 // optimerings-dialoger skal derfor selv udlede hvilke oplande scenariets
 // marker faktisk ligger i, og vise ét sæt felter pr. opland i stedet for
-// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmUdledning
+// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmEmissions
 // (samme datakilde som FarmSidebar), med et "Kystvandopland {id}"-fallback
 // hvis en mark hører til et opland uden marker i den nuværende Aktuel-
 // opgørelse (fx et helt nyt scenarie før "Tilføj marker" er kørt igen).
@@ -480,9 +500,9 @@ const useCatchmentOptions = (
   farmId: string,
   fields: FieldRecord[],
 ): CatchmentOption[] => {
-  const { data: udledning = [] } = useFarmUdledning(farmId)
+  const { data: emissions = [] } = useFarmEmissions(farmId)
   return useMemo(() => {
-    const nameById = new Map(udledning.map((u) => [u.kystvandId, u.kystvandNavn]))
+    const nameById = new Map(emissions.map((u) => [u.kystvandId, u.kystvandNavn]))
     const seen = new Map<string, CatchmentOption>()
     for (const field of fields) {
       const key = catchmentKey(field.kystvandId)
@@ -494,7 +514,7 @@ const useCatchmentOptions = (
       seen.set(key, { kystvandId: field.kystvandId, label })
     }
     return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label, 'da'))
-  }, [fields, udledning])
+  }, [fields, emissions])
 }
 
 type CatchmentYearlyInput = {
