@@ -50,7 +50,7 @@ Rotationslængden bestemmes fra rådata FØR forward-fill.
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache, lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -138,6 +138,7 @@ def get_driftsform(saedskifte: str) -> str | None:
     return values[0] if len(values) else None
 
 
+@cache
 def get_raw_rotation(
     saedskifte: str, variant: str,
 ) -> list[tuple[int | None, int | None, str | None]]:
@@ -148,7 +149,13 @@ def get_raw_rotation(
     udl_code/udl_navn fyldes ALDRIG forward — blank = ingen udlæg det pågældende år.
     Rotationens aktive længde beregnes fra rådata FØR forward-fill, så
     cyklingen i generate_rotation fungerer korrekt.
-    """
+
+    Cachet: kaldes gentagne gange for samme (saedskifte, variant) — pr.
+    N-norm% i generate_candidates_for_field, og igen af dens dedup-tjek
+    (_strip_disabled_virkemidler-signaturen) — hver gang med en fuld,
+    ucachet pandas boolean-mask-filtrering over hele datasættet (~3ms).
+    Nøglerummet er trivielt lille (antal sædskiftevarianter × varianter,
+    et par hundrede kombinationer i alt), maxsize=None er derfor sikkert."""
     df = _df()
     mask = (df["saedskiftevariant"] == str(saedskifte)) & (df["variant"] == str(variant))
     rows = df[mask]
