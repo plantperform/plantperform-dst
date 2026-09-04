@@ -51,3 +51,5 @@ load-retentionskort = "PYTHONPATH=src python database/scripts/load_retentionskor
 load-mars-projekter = "PYTHONPATH=src python database/scripts/load_mars_projekter.py"
 load-historisk-goedningsfordeling = "PYTHONPATH=src python database/scripts/load_historisk_goedningsfordeling.py"
 load-kvotegivende-areal = "PYTHONPATH=src python database/scripts/load_kvotegivende_areal.py"
+load-registry-from-merged-gpkg = "PYTHONPATH=src python database/scripts/load_registry_from_merged_gpkg.py"
+backfill-percolation = "PYTHONPATH=src python database/scripts/backfill_percolation.py"
