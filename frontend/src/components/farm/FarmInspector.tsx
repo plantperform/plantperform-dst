@@ -4,6 +4,11 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  Info,
+  List,
+  Map as MapIcon,
+  SlidersHorizontal,
+  Table2,
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -11,9 +16,7 @@ import { mutate } from 'swr'
 
 import {
   simulationFieldsKey,
-  simulationsKey,
   simulationYearlySummaryKey,
-  useFarmEmissions,
   useSimulationFields,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
@@ -21,18 +24,20 @@ import {
 import {
   runSimulationOptimization,
   runYearlySimulationOptimization,
-  updateSimulationConstraints,
 } from '@/api/mutations'
 import type {
   Farm,
   FieldRecord,
-  KystvandoplandNLoadCap,
   KystvandoplandYearlyNLoadCaps,
   OptimizeSimulationResponse,
   Simulation,
   YearlyOptimizationKategoriOption,
   YearlySummaryEntry,
 } from '@/api/types'
+import {
+  catchmentKey,
+  useCatchmentOptions,
+} from '@/components/farm/catchment-options'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
@@ -41,7 +46,11 @@ import {
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
-import type { FarmViewSelection } from '@/components/farm/types'
+import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
+import type {
+  FarmInspectorMode,
+  FarmViewSelection,
+} from '@/components/farm/types'
 import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,6 +73,7 @@ import {
   YEAR_BAR_OVER_COLOR,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
 // Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
 // opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
@@ -291,6 +301,7 @@ export const FarmInspector = ({
   onError,
 }: FarmInspectorProps) => {
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [mode, setMode] = useState<FarmInspectorMode>('values')
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] = useState(false)
   const [optimizationSummary, setOptimizationSummary] =
@@ -298,6 +309,15 @@ export const FarmInspector = ({
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const isSimulationView = selection.kind === 'simulation'
+
+  const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
+  const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
+  const isRules = effectiveMode === 'rules'
+
+  const openRules = () => {
+    setOptimizeDialogOpen(false)
+    setMode('rules')
+  }
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -308,10 +328,38 @@ export const FarmInspector = ({
             ? `Simulering: ${selectedSimulation.name}`
             : 'Afgrødehistorik'
         }
+        tone={isRules ? 'rules' : 'default'}
         onError={onError}
-        details={<FarmMetricsBar farmId={farm.id} fields={fields} />}
+        details={
+          isRules ? undefined : (
+            <FarmMetricsBar farmId={farm.id} fields={fields} />
+          )
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {canSwitchMode ? (
+              <div className="flex items-center gap-0.5 rounded-lg bg-indigo-100 p-0.5">
+                <ViewToggleButton
+                  active={mode === 'values'}
+                  onClick={() => setMode('values')}
+                  label="Værdier"
+                  icon={Table2}
+                  title="Vis hvad optimeringen har beregnet for markerne"
+                />
+                <ViewToggleButton
+                  active={mode === 'rules'}
+                  onClick={() => setMode('rules')}
+                  label="Regler"
+                  icon={SlidersHorizontal}
+                  title="Sæt hvad optimeringen må gøre"
+                  className={
+                    mode === 'rules'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : undefined
+                  }
+                />
+              </div>
+            ) : null}
             {selectedSimulation ? (
               <Button size="sm" onClick={() => setOptimizeDialogOpen(true)}>
                 Optimér
@@ -330,21 +378,37 @@ export const FarmInspector = ({
               <ViewToggleButton
                 active={view === 'list'}
                 onClick={() => setView('list')}
-              >
-                Liste
-              </ViewToggleButton>
+                label="Liste"
+                icon={List}
+              />
               <ViewToggleButton
                 active={view === 'map'}
                 onClick={() => setView('map')}
-              >
-                Kort
-              </ViewToggleButton>
+                label="Kort"
+                icon={MapIcon}
+              />
             </div>
           </div>
         }
       />
 
-      {optimizationSummary && selectedSimulation ? (
+      {isRules ? (
+        <div className="flex items-start gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900">
+          <SlidersHorizontal
+            className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600"
+            aria-hidden="true"
+          />
+          <div>
+            <span className="font-semibold">Optimeringsregler</span>
+            <span className="ml-2 text-indigo-900/80">
+              Her bestemmer du, hvad optimeringen må gøre. Intet her er tal,
+              marken har - det er rammer for næste kørsel.
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {optimizationSummary && selectedSimulation && !isRules ? (
         <p className="border-b border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
           Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
           {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
@@ -374,6 +438,7 @@ export const FarmInspector = ({
           open={optimizeDialogOpen}
           onOpenChange={setOptimizeDialogOpen}
           onOptimized={setOptimizationSummary}
+          onOpenRules={openRules}
         />
       ) : null}
 
@@ -389,19 +454,31 @@ export const FarmInspector = ({
       ) : null}
 
       <div
-        className={
+        className={cn(
+          'min-h-0 min-w-0 flex-1 p-4',
           view === 'list'
-            ? 'min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4'
-            : 'flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4'
-        }
+            ? 'space-y-4 overflow-y-auto'
+            : 'flex flex-col gap-4',
+          isRules && 'bg-indigo-50/40',
+        )}
       >
-        <EmissionStatusBar
-          fields={fields}
-          isSimulationView={isSimulationView}
-        />
+        {isRules ? null : (
+          <EmissionStatusBar
+            fields={fields}
+            isSimulationView={isSimulationView}
+          />
+        )}
+        {isRules && selectedSimulation ? (
+          <SimulationRulesPanel
+            key={selectedSimulation.id}
+            farmId={farm.id}
+            simulation={selectedSimulation}
+            fields={fields}
+          />
+        ) : null}
         {view === 'list' ? (
           <>
-            {isSimulationView && selection.kind === 'simulation' ? (
+            {isSimulationView && selection.kind === 'simulation' && !isRules ? (
               <YearlyOverviewSection
                 farm={farm}
                 fields={fields}
@@ -418,6 +495,7 @@ export const FarmInspector = ({
               simulation={
                 selection.kind === 'simulation' ? selectedSimulation : undefined
               }
+              mode={effectiveMode}
               sort={fieldsSort}
               onSortChange={setFieldsSort}
               onSwitchToMap={() => setView('map')}
@@ -434,6 +512,7 @@ export const FarmInspector = ({
             farm={farm}
             fields={fields}
             readOnly={isSimulationView}
+            mode={effectiveMode}
             onError={onError}
           />
         )}
@@ -445,23 +524,32 @@ export const FarmInspector = ({
 type ViewToggleButtonProps = {
   active: boolean
   onClick: () => void
-  children: React.ReactNode
+  label: string
+  icon: LucideIcon
+  title?: string
+  className?: string
 }
 
 /** One half of the Liste/Kort segmented control: the track carries the frame. */
 const ViewToggleButton = ({
   active,
   onClick,
-  children,
+  label,
+  icon: Icon,
+  title,
+  className,
 }: ViewToggleButtonProps) => (
   <Button
     size="sm"
     variant={active ? 'default' : 'ghost'}
     aria-pressed={active}
-    className="h-8 px-3"
+    aria-label={label}
+    title={title}
+    className={cn('h-8 px-3', className)}
     onClick={onClick}
   >
-    {children}
+    <Icon className="h-4 w-4" aria-hidden="true" />
+    <span className="hidden sm:inline">{label}</span>
   </Button>
 )
 
@@ -471,51 +559,11 @@ type OptimizeDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onOptimized: (response: OptimizeSimulationResponse) => void
+  onOpenRules: () => void
 }
 
-const numberToInput = (value: number | null) =>
-  value === null ? '' : String(value)
-
-const inputToOptionalNumber = (value: string) => {
-  const trimmed = value.trim()
-  return trimmed === '' ? null : Number(trimmed)
-}
-
-type CatchmentOption = { kystvandId: number | null; label: string }
-
-// Nøgle til React-lister og lokal input-state — kystvandId er ofte null
-// (marker uden et tilknyttet kystvandopland), som ikke er en gyldig
-// objektnøgle i sig selv.
-const catchmentKey = (kystvandId: number | null) => String(kystvandId ?? 'none')
-
-// Bekendtgørelsen håndhæver udledning pr. kystvandopland, aldrig som én
-// samlet sum (se FarmSidebar's tilsvarende Aktuel-visning) — begge
-// optimerings-dialoger skal derfor selv udlede hvilke oplande scenariets
-// marker faktisk ligger i, og vise ét sæt felter pr. opland i stedet for
-// ét globalt "Maks. tilladt udledning". Navnet slås op via useFarmEmissions
-// (samme datakilde som FarmSidebar), med et "Kystvandopland {id}"-fallback
-// hvis en mark hører til et opland uden marker i den nuværende Aktuel-
-// opgørelse (fx et helt nyt scenarie før "Tilføj marker" er kørt igen).
-const useCatchmentOptions = (
-  farmId: string,
-  fields: FieldRecord[],
-): CatchmentOption[] => {
-  const { data: emissions = [] } = useFarmEmissions(farmId)
-  return useMemo(() => {
-    const nameById = new Map(emissions.map((u) => [u.kystvandId, u.kystvandNavn]))
-    const seen = new Map<string, CatchmentOption>()
-    for (const field of fields) {
-      const key = catchmentKey(field.kystvandId)
-      if (seen.has(key)) continue
-      const label =
-        field.kystvandId === null
-          ? 'Uden kystvandopland'
-          : (nameById.get(field.kystvandId) ?? `Kystvandopland ${field.kystvandId}`)
-      seen.set(key, { kystvandId: field.kystvandId, label })
-    }
-    return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label, 'da'))
-  }, [fields, emissions])
-}
+const formatLimit = (value: number | null, unit: string) =>
+  value === null ? 'Ingen grænse' : `${value.toLocaleString('da-DK')} ${unit}`
 
 type CatchmentYearlyInput = {
   sameForAllYears: boolean
@@ -535,59 +583,25 @@ const OptimizeDialog = ({
   open,
   onOpenChange,
   onOptimized,
+  onOpenRules,
 }: OptimizeDialogProps) => {
-  const [constraints, setConstraints] = useState(simulation.constraints)
-  const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      simulation.constraints.maxNLoadByKystvandopland.map((cap) => [
-        catchmentKey(cap.kystvandId),
-        cap.maxNLoadKg === null ? '' : String(cap.maxNLoadKg),
-      ]),
-    ),
-  )
-  const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
 
   const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const catchments = useCatchmentOptions(farmId, fields)
+  const catchmentLabelByKey = new Map(
+    catchments.map((catchment) => [
+      catchmentKey(catchment.kystvandId),
+      catchment.label,
+    ]),
+  )
+  const { constraints } = simulation
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setRunError(null)
     onOpenChange(nextOpen)
-  }
-
-  const saveConstraints = async () => {
-    setIsSaving(true)
-    try {
-      const maxNLoadByKystvandopland: KystvandoplandNLoadCap[] = catchments.map((c) => ({
-        kystvandId: c.kystvandId,
-        maxNLoadKg: inputToOptionalNumber(maxNLoadInputs[catchmentKey(c.kystvandId)] ?? ''),
-      }))
-      const updatedSimulation = await updateSimulationConstraints(
-        farmId,
-        simulation.id,
-        { ...constraints, maxNLoadByKystvandopland },
-      )
-      await mutate(
-        simulationsKey(farmId),
-        (current: Simulation[] = []) =>
-          current.map((currentSimulation) =>
-            currentSimulation.id === updatedSimulation.id
-              ? updatedSimulation
-              : currentSimulation,
-          ),
-        { revalidate: false },
-      )
-      setRunError(null)
-      return true
-    } catch {
-      setRunError('Kunne ikke gemme optimeringskrav.')
-      return false
-    } finally {
-      setIsSaving(false)
-    }
   }
 
   const runOptimization = async () => {
@@ -615,25 +629,71 @@ const OptimizeDialog = ({
     }
   }
 
-  const saveAndRunOptimization = async () => {
-    const saved = await saveConstraints()
-    if (!saved) return
-
-    await runOptimization()
-  }
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Optimér {simulation.name}</DialogTitle>
           <DialogDescription>
-            Konfigurer globale krav for denne simulering, og kør optimeringen
-            direkte bagefter.
+            Kør optimeringen med de regler, der er gemt på scenariet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
+          <div className="space-y-2 rounded-md border border-indigo-200 bg-indigo-50/60 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <SlidersHorizontal
+                className="h-4 w-4 text-indigo-600"
+                aria-hidden="true"
+              />
+              Gældende grænser
+            </div>
+            <dl className="grid gap-2 text-xs sm:grid-cols-3">
+              <div className="sm:col-span-3">
+                <dt className="text-muted-foreground">Maks. udledning</dt>
+                <dd>
+                  {constraints.maxNLoadByKystvandopland.length === 0 ? (
+                    'Ingen grænse'
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {constraints.maxNLoadByKystvandopland.map((cap) => {
+                        const key = catchmentKey(cap.kystvandId)
+                        const label =
+                          catchmentLabelByKey.get(key) ??
+                          (cap.kystvandId === null
+                            ? 'Uden kystvandopland'
+                            : `Kystvandopland ${cap.kystvandId}`)
+                        return (
+                          <li key={key}>
+                            {label}: {formatLimit(cap.maxNLoadKg, 'kg N')}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Min. foderenheder</dt>
+                <dd>{formatLimit(constraints.minFen, 'FE')}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Maks. foderenheder</dt>
+                <dd>{formatLimit(constraints.maxFen, 'FE')}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              Ændres under <strong>Regler</strong> - ikke her.{' '}
+              <button
+                type="button"
+                className="rounded-sm font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                onClick={onOpenRules}
+              >
+                Åbn Regler
+              </button>
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="optimize-time-limit">Tidsgrænse</Label>
             <Input
@@ -649,82 +709,6 @@ const OptimizeDialog = ({
               løsning i tide på en stor bedrift
             </p>
           </div>
-
-          <div className="space-y-2">
-            <Label>Maks. tilladt udledning pr. kystvandopland</Label>
-            {catchments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Ingen marker med et kystvandopland i denne simulering.
-              </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {catchments.map((catchment) => {
-                  const key = catchmentKey(catchment.kystvandId)
-                  return (
-                    <div key={key} className="space-y-1">
-                      <Label
-                        htmlFor={`max-n-load-${key}`}
-                        className="text-xs font-normal text-muted-foreground"
-                      >
-                        {catchment.label}
-                      </Label>
-                      <Input
-                        id={`max-n-load-${key}`}
-                        type="number"
-                        min="0"
-                        value={maxNLoadInputs[key] ?? ''}
-                        placeholder="Ingen grænse"
-                        onChange={(event) =>
-                          setMaxNLoadInputs((current) => ({
-                            ...current,
-                            [key]: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">kg N pr. opland</p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="min-fen">Min. foderenheder</Label>
-              <Input
-                id="min-fen"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.minFen)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    minFen: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="max-fen">Maks. foderenheder</Label>
-              <Input
-                id="max-fen"
-                type="number"
-                min="0"
-                value={numberToInput(constraints.maxFen)}
-                placeholder="Ingen grænse"
-                onChange={(event) =>
-                  setConstraints((current) => ({
-                    ...current,
-                    maxFen: inputToOptionalNumber(event.target.value),
-                  }))
-                }
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-          </div>
         </div>
 
         {runError ? (
@@ -738,17 +722,10 @@ const OptimizeDialog = ({
             Annuller
           </Button>
           <Button
-            variant="outline"
-            onClick={() => void saveConstraints()}
-            disabled={isSaving || isRunning}
+            onClick={() => void runOptimization()}
+            disabled={isRunning}
           >
-            {isSaving ? 'Gemmer...' : 'Gem krav'}
-          </Button>
-          <Button
-            onClick={() => void saveAndRunOptimization()}
-            disabled={isSaving || isRunning}
-          >
-            {isSaving || isRunning ? 'Arbejder...' : 'Gem og kør optimering'}
+            {isRunning ? 'Arbejder...' : 'Kør optimering'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -929,6 +906,19 @@ const YearlyOptimizeDialog = ({
             mange muligheder optimeringen har, og hvor lang tid den tager.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <Info
+            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+            aria-hidden="true"
+          />
+          <p className="text-xs text-amber-900">
+            Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
+            gemmes ikke på scenariet - de nulstilles, når dialogen lukkes, og
+            vises derfor ikke under Regler. Noter dem, hvis du skal kunne
+            gentage kørslen.
+          </p>
+        </div>
 
         <div className="space-y-5">
           <div className="space-y-2">

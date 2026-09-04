@@ -45,12 +45,13 @@ type ManualRotationEditorProps = {
   field: FieldRecord
   simulation: Simulation
   cropColorMap: Map<number, string>
+  intent?: 'edit' | 'lock'
   open: boolean
   onOpenChange: (open: boolean) => void
   onError: (message: string | null) => void
 }
 
-const fmt = (value: number, digits = 1) =>
+const fmt =(value: number, digits = 1) =>
   new Intl.NumberFormat('da-DK', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -76,6 +77,7 @@ export const ManualRotationEditor = ({
   field,
   simulation,
   cropColorMap,
+  intent = 'edit',
   open,
   onOpenChange,
   onError,
@@ -362,11 +364,13 @@ export const ManualRotationEditor = ({
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Rediger sædskifte - {field.name}</DialogTitle>
+          <DialogTitle>
+            {intent === 'lock' ? 'Lås sædskifte' : 'Rediger sædskifte'} - {field.name}
+          </DialogTitle>
           <DialogDescription>
-            Vælg evt. et andet sædskifte, eller ret enkelte års afgrøde direkte -
-            udvaskning og dækningsbidrag genberegnes med det samme. Intet gemmes
-            før du trykker "Gem".
+            {intent === 'lock'
+              ? 'Når du gemmer, låses marken til dette sædskifte, og Optimér ændrer den ikke.'
+              : 'Vælg evt. et andet sædskifte, eller ret enkelte års afgrøde direkte - udvaskning og dækningsbidrag genberegnes med det samme. Intet gemmes før du trykker "Gem".'}
           </DialogDescription>
         </DialogHeader>
 
@@ -669,7 +673,7 @@ export const ManualRotationEditor = ({
                 onClick={() => void save()}
                 disabled={isSaving || !preview || isLoadingCandidates}
               >
-                {isSaving ? 'Gemmer...' : 'Gem'}
+                {isSaving ? 'Gemmer...' : intent === 'lock' ? 'Gem og lås' : 'Gem'}
               </Button>
               <Button variant="outline" onClick={close} disabled={isSaving}>
                 Annuller

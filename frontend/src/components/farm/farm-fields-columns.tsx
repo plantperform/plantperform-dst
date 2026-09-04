@@ -1,19 +1,23 @@
 import type { ColumnDef, RowData } from '@tanstack/react-table'
-import { ChevronRight, Lock } from 'lucide-react'
+import { ChevronRight, Lock, LockOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHeaderContent'
+import type { FarmInspectorMode } from '@/components/farm/types'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   aggregateQuotaStatusLevel,
   CROP_YEAR_FALLBACK_COLOR,
+  formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
   getFieldQuotaStatus,
   isFieldCalculated,
+  isFieldLocked,
   QUOTA_WARNING_LEVEL_COLORS,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
@@ -185,71 +189,296 @@ const numericMetricColumn = (
   }
 }
 
-export type FarmFieldsColumnsArgs = {
-  isSimulationView: boolean
-  maxYears: number
-  fields: FieldRecord[]
-  cropColorMap: Map<number, string>
-  totals: FarmFieldsTotals
-  resolvedQuota: ResolvedFarmQuota
-  isFieldLocked: (field: FieldRecord) => boolean
+const renderRotationSwatches = (
+  rotation: FieldRecord['cropRotation'],
+  rotationStartYear: number,
+  cropColorMap: Map<number, string>,
+) => (
+  <div className="flex items-center gap-2.5">
+    <div className="flex shrink-0 gap-[3px]">
+      {rotation.map((year, index) => {
+        const calendarYear = rotationStartYear + index
+        const hasUdlaeg = year.udlaegNavn !== null
+        const title = hasUdlaeg
+          ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
+          : `${calendarYear}: ${year.afgrodeNavn}`
+        const color =
+          cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+        return (
+          <CropYearSwatch
+            key={index}
+            title={title}
+            color={color}
+            hasUdlaeg={hasUdlaeg}
+            size="14x10"
+          />
+        )
+      })}
+    </div>
+    <span className="text-sm">{uniqueCropNamesLabel(rotation)}</span>
+  </div>
+)
+
+const nameColumn = (
+  footer: () => ReactNode,
+): ColumnDef<FieldRecord, unknown> => ({
+  accessorKey: 'name',
+  header: ({ column }) => (
+    <SortableColumnHeaderContent label="Mark" column={column} />
+  ),
+  cell: ({ row }) => {
+    const rowField = row.original
+    return (
+      <span className="flex items-center gap-1.5">
+        <span>{rowField.name}</span>
+        {isFieldLocked(rowField) ? (
+          <span title={formatLockTooltip(rowField)}>
+            <Lock
+              className="h-3.5 w-3.5 shrink-0 text-amber-600"
+              aria-hidden="true"
+            />
+            <span className="sr-only">Låst</span>
+          </span>
+        ) : null}
+      </span>
+    )
+  },
+  footer,
+  meta: {
+    headerClassName: 'px-4 py-3 font-medium whitespace-normal',
+    cellClassName: 'px-4 py-3 font-medium whitespace-normal',
+  },
+})
+
+const areaColumn = (
+  footer: () => ReactNode,
+): ColumnDef<FieldRecord, unknown> => ({
+  accessorKey: 'areaHa',
+  header: ({ column }) => (
+    <SortableColumnHeaderContent label="Areal" column={column} />
+  ),
+  cell: ({ row }) => `${formatNumber(row.original.areaHa)} ha`,
+  footer,
+  meta: {
+    headerClassName: 'px-4 py-3 font-medium whitespace-normal',
+    cellClassName: 'px-4 py-3 whitespace-normal',
+  },
+})
+
+const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
+  id: 'rowAffordance',
+  header: () => null,
+  cell: () => (
+    <ChevronRight
+      className="h-4 w-4 text-muted-foreground/60"
+      aria-hidden="true"
+    />
+  ),
+  enableSorting: false,
+  meta: {
+    headerClassName: 'w-8 px-2 py-3',
+    cellClassName: 'w-8 px-2 py-3 text-right',
+  },
 }
 
-export const buildFarmFieldsColumns = ({
-  isSimulationView,
-  maxYears,
+type RulesColumnsArgs = {
+  fields: FieldRecord[]
+  cropColorMap: Map<number, string>
+  canEditRules: boolean
+  lockingFieldId: string | null
+  onToggleLock: (field: FieldRecord) => void
+  onBindRotation: (field: FieldRecord) => void
+}
+
+const buildRulesColumns = ({
   fields,
   cropColorMap,
-  totals,
-  resolvedQuota,
-  isFieldLocked,
-}: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
-  const list: ColumnDef<FieldRecord, unknown>[] = []
-
-  list.push(
+  canEditRules,
+  lockingFieldId,
+  onToggleLock,
+  onBindRotation,
+}: RulesColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
+  const lockedCount = fields.filter(isFieldLocked).length
+  const list: ColumnDef<FieldRecord, unknown>[] = [
+    nameColumn(() => `${lockedCount} af ${fields.length} marker låst`),
+    areaColumn(() => null),
     {
-      accessorKey: 'name',
-      header: ({ column }) => (
-        <SortableColumnHeaderContent label="Mark" column={column} />
-      ),
-      cell: ({ row }) => {
-        const rowField = row.original
-        const locked = isFieldLocked(rowField)
-        return (
-          <span className="flex items-center gap-1.5">
-            <span>{rowField.name}</span>
-            {locked ? (
-              <span title="Marken er låst til sit sædskifte - Optimér kan ikke ændre den.">
-                <Lock
-                  className="h-3.5 w-3.5 shrink-0 text-amber-600"
-                  aria-hidden="true"
-                />
-              </span>
-            ) : null}
+      id: 'lockStatus',
+      header: () => 'Status',
+      cell: ({ row }) =>
+        isFieldLocked(row.original) ? (
+          <span
+            title={formatLockTooltip(row.original)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+          >
+            <Lock className="h-3 w-3" aria-hidden="true" />
+            Låst
           </span>
-        )
-      },
-      footer: () =>
-        totals.uncalculatedCount > 0
-          ? `I alt (${totals.uncalculatedCount} ikke beregnet)`
-          : 'I alt',
-      meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 font-medium whitespace-normal',
-      },
-    },
-    {
-      accessorKey: 'areaHa',
-      header: ({ column }) => (
-        <SortableColumnHeaderContent label="Areal" column={column} />
-      ),
-      cell: ({ row }) => `${formatNumber(row.original.areaHa)} ha`,
-      footer: () => `${formatNumber(totals.areaHa)} ha`,
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            <LockOpen className="h-3 w-3" aria-hidden="true" />
+            Fri
+          </span>
+        ),
+      enableSorting: false,
       meta: {
         headerClassName: 'px-4 py-3 font-medium whitespace-normal',
         cellClassName: 'px-4 py-3 whitespace-normal',
       },
     },
+    {
+      id: 'boundRotation',
+      header: () => 'Bundet sædskifte',
+      cell: ({ row }) => {
+        const field = row.original
+        if (!isFieldLocked(field) || field.cropRotation.length === 0) {
+          return (
+            <span className="text-muted-foreground">Optimeringen vælger</span>
+          )
+        }
+        return renderRotationSwatches(
+          field.cropRotation,
+          ROTATION_START_CALENDAR_YEAR,
+          cropColorMap,
+        )
+      },
+      enableSorting: false,
+      meta: {
+        headerClassName:
+          'hidden px-4 py-3 font-medium whitespace-normal md:table-cell',
+        cellClassName: 'hidden px-4 py-3 whitespace-normal md:table-cell',
+      },
+    },
+    {
+      id: 'allowedRotations',
+      header: () => (
+        <span title="Kan ikke ændres endnu - låsning giver 1, ellers alle">
+          Tilladte sædskifter
+        </span>
+      ),
+      cell: ({ row }) =>
+        row.original.allowedRotationIds.length === 0 ? (
+          <span className="text-muted-foreground">Alle i scenariet</span>
+        ) : (
+          `${row.original.allowedRotationIds.length} valgt`
+        ),
+      enableSorting: false,
+      meta: {
+        headerClassName:
+          'hidden px-4 py-3 font-medium whitespace-normal md:table-cell',
+        cellClassName: 'hidden px-4 py-3 whitespace-normal md:table-cell',
+      },
+    },
+  ]
+
+  if (canEditRules) {
+    list.push({
+      id: 'ruleActions',
+      header: () => 'Handlinger',
+      cell: ({ row }) => {
+        const field = row.original
+        const locked = isFieldLocked(field)
+        const noRotation = field.rotationId === null
+        return (
+          <div className="flex flex-nowrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2.5"
+              disabled={noRotation}
+              onClick={() => onBindRotation(field)}
+              title={
+                noRotation
+                  ? 'Kør Optimér for denne mark, før du kan binde et sædskifte.'
+                  : 'Vælg et bestemt sædskifte og lås marken til det, så optimeringen respekterer valget.'
+              }
+            >
+              Vælg og lås sædskifte...
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onToggleLock(field)}
+              disabled={noRotation || lockingFieldId === field.id}
+              className={
+                locked
+                  ? 'h-8 gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
+                  : 'h-8 gap-1.5 px-2.5 text-muted-foreground'
+              }
+              title={
+                locked
+                  ? 'Marken er låst til det valgte sædskifte - Optimér ændrer den ikke. Klik for at låse op.'
+                  : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse til det nuværende sædskifte.'
+              }
+            >
+              {locked ? (
+                <Lock className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <LockOpen className="h-4 w-4" aria-hidden="true" />
+              )}
+              {locked ? 'Lås op' : 'Lås'}
+            </Button>
+          </div>
+        )
+      },
+      enableSorting: false,
+      meta: {
+        headerClassName: 'px-4 py-3 text-right font-medium whitespace-nowrap',
+        cellClassName: 'px-4 py-3 text-right whitespace-nowrap',
+      },
+    })
+  }
+
+  return list
+}
+
+export type FarmFieldsColumnsArgs = {
+  isSimulationView: boolean
+  mode: FarmInspectorMode
+  maxYears: number
+  fields: FieldRecord[]
+  cropColorMap: Map<number, string>
+  totals: FarmFieldsTotals
+  resolvedQuota: ResolvedFarmQuota
+  canEditRules: boolean
+  lockingFieldId: string | null
+  onToggleLock: (field: FieldRecord) => void
+  onBindRotation: (field: FieldRecord) => void
+}
+
+export const buildFarmFieldsColumns = ({
+  isSimulationView,
+  mode,
+  maxYears,
+  fields,
+  cropColorMap,
+  totals,
+  resolvedQuota,
+  canEditRules,
+  lockingFieldId,
+  onToggleLock,
+  onBindRotation,
+}: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
+  if (mode === 'rules') {
+    return buildRulesColumns({
+      fields,
+      cropColorMap,
+      canEditRules,
+      lockingFieldId,
+      onToggleLock,
+      onBindRotation,
+    })
+  }
+
+  const list: ColumnDef<FieldRecord, unknown>[] = []
+
+  list.push(
+    nameColumn(() =>
+      totals.uncalculatedCount > 0
+        ? `I alt (${totals.uncalculatedCount} ikke beregnet)`
+        : 'I alt',
+    ),
+    areaColumn(() => `${formatNumber(totals.areaHa)} ha`),
   )
 
   const rotationStartYear = isSimulationView
@@ -279,31 +508,7 @@ export const buildFarmFieldsColumns = ({
           </span>
         )
       }
-      return (
-        <div className="flex items-center gap-2.5">
-          <div className="flex shrink-0 gap-[3px]">
-            {rotation.map((year, index) => {
-              const calendarYear = rotationStartYear + index
-              const hasUdlaeg = year.udlaegNavn !== null
-              const title = hasUdlaeg
-                ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
-                : `${calendarYear}: ${year.afgrodeNavn}`
-              const color =
-                cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
-              return (
-                <CropYearSwatch
-                  key={index}
-                  title={title}
-                  color={color}
-                  hasUdlaeg={hasUdlaeg}
-                  size="14x10"
-                />
-              )
-            })}
-          </div>
-          <span className="text-sm">{uniqueCropNamesLabel(rotation)}</span>
-        </div>
-      )
+      return renderRotationSwatches(rotation, rotationStartYear, cropColorMap)
     },
     footer: () => {
       if (isSimulationView) return null
@@ -501,21 +706,7 @@ export const buildFarmFieldsColumns = ({
     },
   )
 
-  list.push({
-    id: 'rowAffordance',
-    header: () => null,
-    cell: () => (
-      <ChevronRight
-        className="h-4 w-4 text-muted-foreground/60"
-        aria-hidden="true"
-      />
-    ),
-    enableSorting: false,
-    meta: {
-      headerClassName: 'w-8 px-2 py-3',
-      cellClassName: 'w-8 px-2 py-3 text-right',
-    },
-  })
+  list.push(rowAffordanceColumn)
 
   return list
 }

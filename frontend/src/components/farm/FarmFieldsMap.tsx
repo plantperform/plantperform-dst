@@ -1,10 +1,12 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import type { FeatureCollection } from 'geojson'
+import { Lock } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
   Layer,
+  Marker,
   Popup,
   Source,
   type MapLayerMouseEvent,
@@ -24,6 +26,7 @@ import type {
   RegistryField,
   RegistryFieldSummary,
 } from '@/api/types'
+import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -33,8 +36,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { changedFieldIds, formatRealRotation } from '@/lib/field-domain'
-import { fieldsToFeatureCollection, getFieldsBounds } from '@/lib/geo'
+import {
+  changedFieldIds,
+  formatRealRotation,
+  isFieldLocked,
+} from '@/lib/field-domain'
+import {
+  fieldLabelPoint,
+  fieldsToFeatureCollection,
+  getFieldsBounds,
+} from '@/lib/geo'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
@@ -94,7 +105,16 @@ type FarmFieldsMapProps = {
   farm: Farm
   fields: FieldRecord[]
   readOnly?: boolean
+  mode?: FarmInspectorMode
   onError: (message: string | null) => void
+}
+
+const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
+  mode === 'rules' ? 'fieldLocked' : 'none'
+
+type ColorBySelection = {
+  forMode: FarmInspectorMode
+  value: ColorAttribute
 }
 
 type HoveredField = {
@@ -118,6 +138,7 @@ export const FarmFieldsMap = ({
   farm,
   fields,
   readOnly = false,
+  mode = 'values',
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -135,7 +156,16 @@ export const FarmFieldsMap = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [hoveredField, setHoveredField] = useState<HoveredField | null>(null)
-  const [colorBy, setColorBy] = useState<ColorAttribute>('none')
+  const [colorBySelection, setColorBySelection] = useState<ColorBySelection>(
+    () => ({ forMode: mode, value: defaultColorByForMode(mode) }),
+  )
+  const colorBy =
+    colorBySelection.forMode === mode
+      ? colorBySelection.value
+      : defaultColorByForMode(mode)
+  const setColorBy = (value: ColorAttribute) =>
+    setColorBySelection({ forMode: mode, value })
+  const showLockMarkers = mode === 'rules' || colorBy === 'fieldLocked'
   const [showMars, setShowMars] = useState(false)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
 
@@ -166,9 +196,26 @@ export const FarmFieldsMap = ({
   // Live ("Aktuel") fields are the baseline for the "Ændret sædskifte" scheme.
   // SWR dedupes by key, so this reuses the data already fetched by the page.
   const { data: liveFields = [] } = useFarmFields(farm.id)
-  const changedFields = changedFieldIds(fields, liveFields)
+  const changedFields = useMemo(
+    () => changedFieldIds(fields, liveFields),
+    [fields, liveFields],
+  )
 
-  const farmFieldsGeoJson = fieldsToFeatureCollection(fields, changedFields)
+  const farmFieldsGeoJson = useMemo(
+    () => fieldsToFeatureCollection(fields, changedFields),
+    [fields, changedFields],
+  )
+  const lockedFieldMarkers = useMemo(
+    () =>
+      fields
+        .filter(isFieldLocked)
+        .map((field) => ({ field, point: fieldLabelPoint(field) }))
+        .filter(
+          (entry): entry is { field: FieldRecord; point: [number, number] } =>
+            entry.point !== null,
+        ),
+    [fields],
+  )
   const selectedFarmField = selectedFieldId
     ? fields.find((field) => field.id === selectedFieldId)
     : undefined
@@ -733,6 +780,30 @@ export const FarmFieldsMap = ({
           />
         </Source>
 
+        {showLockMarkers
+          ? lockedFieldMarkers.map(({ field, point }) => (
+            <Marker
+              key={`lock-${field.id}`}
+              longitude={point[0]}
+              latitude={point[1]}
+              anchor="center"
+              style={{ pointerEvents: 'none' }}
+            >
+              <span
+                role="img"
+                aria-label={`Låst mark ${field.name}`}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
+              >
+                <Lock
+                  className="h-4 w-4 text-amber-600"
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                />
+              </span>
+            </Marker>
+          ))
+          : null}
+
         {hoveredField ? (
           <Popup
             longitude={hoveredField.longitude}
@@ -807,9 +878,11 @@ export const FarmFieldsMap = ({
         >
           {addMode
             ? 'Klik på registermarker for at vælge eller fravælge dem.'
-            : readOnly
-              ? 'Klik på en simuleringsmark for at gennemgå den.'
-              : 'Klik på en tilknyttet mark for at gennemgå den.'}
+            : mode === 'rules'
+              ? 'Låste marker er markeret med hængelås. Skift til Liste for at ændre regler.'
+              : readOnly
+                ? 'Klik på en simuleringsmark for at gennemgå den.'
+                : 'Klik på en tilknyttet mark for at gennemgå den.'}
         </span>
       </div>
 
