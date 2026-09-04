@@ -10,7 +10,12 @@ import { Columns3 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
-import { farmFieldsKey, simulationFieldsKey, useFarmFields } from '@/api/hooks'
+import {
+  farmFieldsKey,
+  farmKey,
+  simulationFieldsKey,
+  useFarmFields,
+} from '@/api/hooks'
 import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
 import {
@@ -87,7 +92,6 @@ type FarmFieldsListProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView?: boolean
-  farmQuotaKgN: number
   simulationId?: string
   simulation?: Simulation
   sort: FieldsSortState
@@ -100,7 +104,6 @@ export const FarmFieldsList = ({
   farmId,
   fields,
   isSimulationView = false,
-  farmQuotaKgN,
   simulationId,
   simulation,
   sort,
@@ -156,8 +159,8 @@ export const FarmFieldsList = ({
   }, [fields, isSimulationView])
 
   const resolvedQuota = useMemo(
-    () => resolveFarmQuota(farmQuotaKgN, totals.udledningskvoteMarkKgn),
-    [farmQuotaKgN, totals.udledningskvoteMarkKgn],
+    () => resolveFarmQuota(totals.udledningskvoteMarkKgn),
+    [totals.udledningskvoteMarkKgn],
   )
 
   const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
@@ -184,6 +187,7 @@ export const FarmFieldsList = ({
       try {
         await detachField(farmId, fieldId)
         await mutate(farmFieldsKey(farmId))
+        await mutate(farmKey(farmId))
         onError(null)
       } catch {
         onError('Kunne ikke fjerne marken fra bedriften.')

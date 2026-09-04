@@ -15,6 +15,7 @@ import {
   getFieldQuotaStatus,
   isFieldCalculated,
   QUOTA_WARNING_LEVEL_COLORS,
+  REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
   type QuotaStatus,
   type QuotaStatusLevel,
@@ -251,15 +252,19 @@ export const buildFarmFieldsColumns = ({
     },
   )
 
+  const rotationStartYear = isSimulationView
+    ? ROTATION_START_CALENDAR_YEAR
+    : REAL_HISTORY_START_CALENDAR_YEAR
+
   list.push({
     id: 'cropRotation',
     header: () => (
       <div className="flex flex-col">
-        <span>Sædskifte</span>
+        <span>{isSimulationView ? 'Sædskifte' : 'Afgrødehistorik'}</span>
         <span className="block text-xs font-normal text-muted-foreground">
           {maxYears > 1
-            ? `${ROTATION_START_CALENDAR_YEAR}-${ROTATION_START_CALENDAR_YEAR + maxYears - 1}`
-            : ROTATION_START_CALENDAR_YEAR}
+            ? `${rotationStartYear}-${rotationStartYear + maxYears - 1}`
+            : rotationStartYear}
         </span>
       </div>
     ),
@@ -267,14 +272,18 @@ export const buildFarmFieldsColumns = ({
       const rotation = row.original.cropRotation
       if (rotation.length === 0) {
         return (
-          <span className="text-muted-foreground">Intet sædskifte endnu</span>
+          <span className="text-muted-foreground">
+            {isSimulationView
+              ? 'Intet sædskifte endnu'
+              : 'Ingen afgrødehistorik endnu'}
+          </span>
         )
       }
       return (
         <div className="flex items-center gap-2.5">
           <div className="flex shrink-0 gap-[3px]">
             {rotation.map((year, index) => {
-              const calendarYear = ROTATION_START_CALENDAR_YEAR + index
+              const calendarYear = rotationStartYear + index
               const hasUdlaeg = year.udlaegNavn !== null
               const title = hasUdlaeg
                 ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
@@ -303,7 +312,7 @@ export const buildFarmFieldsColumns = ({
       ).length
       return withoutRotation > 0 ? (
         <span className="text-muted-foreground">
-          {withoutRotation} marker uden sædskifte
+          {withoutRotation} marker uden afgrødehistorik
         </span>
       ) : null
     },
@@ -311,7 +320,7 @@ export const buildFarmFieldsColumns = ({
     meta: {
       headerClassName: 'px-4 py-3 font-medium whitespace-normal',
       cellClassName: 'px-4 py-3 whitespace-normal',
-      toggleLabel: 'Sædskifte',
+      toggleLabel: isSimulationView ? 'Sædskifte' : 'Afgrødehistorik',
     },
   })
 
@@ -408,9 +417,12 @@ export const buildFarmFieldsColumns = ({
         return (
           <>
             <div>{formatNumber(field.udledningskvoteMarkKgn)} kg N</div>
-            <div className="text-xs text-muted-foreground/80">
-              {formatNumber(field.udledningsgraenseKgnHa)} kg N/ha
-            </div>
+            {field.areaHa > 0 ? (
+              <div className="text-xs text-muted-foreground/80">
+                {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg
+                N/ha
+              </div>
+            ) : null}
           </>
         )
       },
@@ -448,15 +460,15 @@ export const buildFarmFieldsColumns = ({
       accessorKey: 'inTakeoutPlan',
       header: ({ column }) => (
         <SortableColumnHeaderContent
-          label="I omlægningsplan"
+          label="Omlægningsplan"
           column={column}
         />
       ),
-      cell: ({ row }) => (row.original.inTakeoutPlan ? 'Ja' : 'Nej'),
+      cell: ({ row }) => row.original.inTakeoutPlan,
       meta: {
         headerClassName: 'px-4 py-3 font-medium whitespace-normal',
         cellClassName: 'px-4 py-3 whitespace-normal',
-        toggleLabel: 'I omlægningsplan',
+        toggleLabel: 'Omlægningsplan',
       },
     },
     {

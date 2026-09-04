@@ -119,13 +119,21 @@ def run_optimization(
                 "genopret scenariet med mindst én kategori og N-norm%."
             )
 
-        field_inputs.append(FieldInput(id=field.id, area_ha=field.area_ha, options=options))
+        field_inputs.append(
+            FieldInput(
+                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+            )
+        )
 
     output = solve(
         input=OptimizationInput(
             fields=tuple(field_inputs),
             constraints=ConstraintsInput(
-                max_n_load_kg=simulation.constraints.max_n_load_kg,
+                max_n_load_by_kystvandopland={
+                    cap.kystvand_id: cap.max_n_load_kg
+                    for cap in simulation.constraints.max_n_load_by_kystvandopland
+                    if cap.max_n_load_kg is not None
+                },
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
             ),
@@ -213,6 +221,7 @@ def apply_manual_rotation(
         n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
         start_year=start_year,
+        real_history=candidates_row.real_history,
     )
     if candidate is None:
         return None
@@ -252,6 +261,7 @@ def _expand_yearly_options(
     fdato: str,
     precision_dagsbasis: bool,
     selected_pairs: set[tuple[str, str]],
+    real_history: dict[str, dict] | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
     """Udvider hver gemt kandidat til op til dens active_len forskudte
     varianter (start_year 1..active_len, jf. Fase 10's evaluate_with_overrides)
@@ -324,6 +334,7 @@ def _expand_yearly_options(
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     start_year=shift,
+                    real_history=real_history,
                 )
             )
             if variant is None:
@@ -356,7 +367,7 @@ def run_yearly_optimization(
     farm_id: str,
     simulation_id: str,
     time_limit_seconds: float,
-    max_n_load_by_year: tuple[float | None, ...],
+    max_n_load_by_kystvandopland: dict[int | None, tuple[float | None, ...]],
     db2_swing_pct: float | None,
     selected_pairs: set[tuple[str, str]],
     email: str,
@@ -389,10 +400,11 @@ def run_yearly_optimization(
         field_candidates_row = candidates_by_field_id.get(field.id)
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
         jbnr = field_candidates_row.jbnr if field_candidates_row else 0
+        real_history = field_candidates_row.real_history if field_candidates_row else None
         options = _expand_yearly_options(
             field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
-            selected_pairs=selected_pairs,
+            selected_pairs=selected_pairs, real_history=real_history,
         )
         if not options:
             raise OptimizationInfeasibleError(
@@ -400,13 +412,17 @@ def run_yearly_optimization(
                 "genopret scenariet med mindst én kategori og N-norm%."
             )
         options_by_field_id[field.id] = options
-        field_inputs.append(YearlyFieldInput(id=field.id, area_ha=field.area_ha, options=options))
+        field_inputs.append(
+            YearlyFieldInput(
+                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+            )
+        )
 
     output = solve_yearly(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
             constraints=YearlyConstraintsInput(
-                max_n_load_by_year=max_n_load_by_year,
+                max_n_load_by_kystvandopland_and_year=max_n_load_by_kystvandopland,
                 db2_swing_pct=db2_swing_pct,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
