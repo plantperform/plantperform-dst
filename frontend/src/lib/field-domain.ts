@@ -85,6 +85,7 @@ export const formatCropRotation = (rotation: Crop[]) =>
 // candidate_evaluator.py::START_CALENDAR_YEAR. Position 1 = dette år,
 // position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
 export const ROTATION_START_CALENDAR_YEAR = 2027
+export const CURRENT_CALENDAR_YEAR = new Date().getFullYear()
 
 // Startkalenderår for "Aktuel"-markoversigtens ægte historik (skal matche
 // backend'ens field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7) — de 8
@@ -105,6 +106,21 @@ export const formatRealRotation = (rotation: RotationYear[]): string => {
   if (rotation.length === 0) return 'Intet sædskifte endnu — opret et scenarie og kør Optimér'
 
   return rotation.map(formatRotationYear).join(' - ')
+}
+
+export const compactCropSequenceLabel = (cropSequence: string[]): string => {
+  const parts: string[] = []
+  let index = 0
+  while (index < cropSequence.length) {
+    const name = cropSequence[index]
+    let count = 1
+    while (index + count < cropSequence.length && cropSequence[index + count] === name) {
+      count += 1
+    }
+    parts.push(count > 1 ? `${name} ×${count}` : name)
+    index += count
+  }
+  return parts.join(' · ')
 }
 
 export const emptyMeasures = (): FieldMeasures => ({
@@ -241,4 +257,158 @@ export const changedFieldIds = (
   }
 
   return changed
+}
+
+export const isFieldCalculated = (
+  field: FieldRecord,
+  isSimulationView: boolean,
+): boolean => {
+  if (isSimulationView) return field.rotationId !== null
+  return (
+    field.db2 !== 0 ||
+    field.nLoad !== 0 ||
+    field.leaching !== 0 ||
+    field.fen !== 0
+  )
+}
+
+export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
+
+export type QuotaStatusLevel =
+  | 'ok'
+  | 'near'
+  | 'over'
+  | 'uncalculated'
+  | 'noData'
+  | 'partial'
+
+export const quotaStatusLevel = (
+  nLoad: number,
+  quotaKgn: number,
+  isCalculated: boolean,
+): QuotaStatusLevel => {
+  if (!isCalculated) return 'uncalculated'
+  if (quotaKgn === 0) return 'noData'
+  const ratio = nLoad / quotaKgn
+  if (ratio > 1) return 'over'
+  if (ratio >= QUOTA_STATUS_NEAR_THRESHOLD) return 'near'
+  return 'ok'
+}
+
+export const aggregateQuotaStatusLevel = (
+  nLoad: number,
+  quotaKgn: number,
+  calculatedCount: number,
+  totalCount: number,
+): QuotaStatusLevel => {
+  if (calculatedCount === 0) return 'uncalculated'
+  if (quotaKgn === 0) return 'noData'
+  if (calculatedCount < totalCount) {
+    return nLoad > quotaKgn ? 'over' : 'partial'
+  }
+  return quotaStatusLevel(nLoad, quotaKgn, true)
+}
+
+export type QuotaStatus = {
+  level: QuotaStatusLevel
+  nLoad: number
+  quotaKgn: number
+}
+
+export type FarmQuotaBasis = 'summen af markernes kvoter'
+
+export type ResolvedFarmQuota = {
+  quotaKgn: number
+  basis: FarmQuotaBasis
+}
+
+export const resolveFarmQuota = (fieldQuotaSum: number): ResolvedFarmQuota => ({
+  quotaKgn: fieldQuotaSum,
+  basis: 'summen af markernes kvoter',
+})
+
+export const getFieldQuotaStatus = (
+  field: FieldRecord,
+  isSimulationView: boolean,
+): QuotaStatus => ({
+  level: quotaStatusLevel(
+    field.nLoad,
+    field.udledningskvoteMarkKgn,
+    isFieldCalculated(field, isSimulationView),
+  ),
+  nLoad: field.nLoad,
+  quotaKgn: field.udledningskvoteMarkKgn,
+})
+
+export const formatNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+
+export const formatWholeNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
+
+export const formatQuotaAmount = (status: QuotaStatus): string =>
+  `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
+
+export const formatFieldCount = (count: number) =>
+  `${count} ${count === 1 ? 'mark' : 'marker'}`
+
+export const QUOTA_WARNING_LEVEL_COLORS: Record<
+  'near' | 'over',
+  { bg: string; border: string; text: string }
+> = {
+  near: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
+  over: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+}
+
+export type FarmQuotaSummary = {
+  totalNLoad: number
+  quota: ResolvedFarmQuota
+  calculatedCount: number
+  uncalculatedCount: number
+}
+
+export const computeFarmQuotaSummary = (
+  fields: FieldRecord[],
+  isSimulationView: boolean,
+): FarmQuotaSummary => {
+  const calculatedFields = fields.filter((field) =>
+    isFieldCalculated(field, isSimulationView),
+  )
+  const calculatedCount = calculatedFields.length
+  const totalNLoad = calculatedFields.reduce(
+    (sum, field) => sum + field.nLoad,
+    0,
+  )
+  const quotaSum = fields.reduce(
+    (sum, field) => sum + field.udledningskvoteMarkKgn,
+    0,
+  )
+  return {
+    totalNLoad,
+    quota: resolveFarmQuota(quotaSum),
+    calculatedCount,
+    uncalculatedCount: fields.length - calculatedCount,
+  }
+}
+
+export const YEAR_BAR_FILL_COLOR = '#cfdfc6'
+export const YEAR_BAR_OVER_COLOR = '#f87171'
+
+export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
+export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
+export const CROP_YEAR_FALLBACK_COLOR = '#a7c69b'
+
+export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> => {
+  const colorByCropCode = new Map<number, string>()
+  for (const field of fields) {
+    for (const year of field.cropRotation) {
+      if (!colorByCropCode.has(year.afgrodeKode)) {
+        colorByCropCode.set(
+          year.afgrodeKode,
+          CROP_YEAR_PALETTE[colorByCropCode.size % CROP_YEAR_PALETTE.length],
+        )
+      }
+    }
+  }
+  return colorByCropCode
 }

@@ -5,6 +5,7 @@ import {
   simulationFieldCandidateDetailKey,
   useSimulationFieldCandidateDetail,
 } from '@/api/hooks'
+import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
 
 type RotationDetailPanelProps = {
@@ -45,11 +46,7 @@ export const RotationDetailPanel = ({
   }, [rotationId, farmId, simulationId, fieldId])
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Henter beregningsdetaljer...
-      </div>
-    )
+    return <LoadingSkeleton message="Henter beregningsdetaljer..." />
   }
 
   if (error) {

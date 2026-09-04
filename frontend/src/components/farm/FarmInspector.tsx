@@ -1,4 +1,11 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleHelp,
+  type LucideIcon,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -8,6 +15,7 @@ import {
   simulationYearlySummaryKey,
   useFarmEmissions,
   useSimulationFields,
+  useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
 import {
@@ -23,6 +31,7 @@ import type {
   OptimizeSimulationResponse,
   Simulation,
   YearlyOptimizationKategoriOption,
+  YearlySummaryEntry,
 } from '@/api/types'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
@@ -33,7 +42,7 @@ import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import type { FarmViewSelection } from '@/components/farm/types'
-import { YearlyOverviewStrip } from '@/components/farm/YearlyOverviewStrip'
+import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -45,7 +54,16 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
+import {
+  aggregateQuotaStatusLevel,
+  computeFarmQuotaSummary,
+  formatFieldCount,
+  formatNumber,
+  ROTATION_START_CALENDAR_YEAR,
+  YEAR_BAR_FILL_COLOR,
+  YEAR_BAR_OVER_COLOR,
+  type QuotaStatusLevel,
+} from '@/lib/field-domain'
 
 // Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
 // opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
@@ -72,6 +90,190 @@ const ROTATION_CALENDAR_YEARS = Array.from(
   { length: NUM_ROTATION_YEARS },
   (_, index) => ROTATION_START_CALENDAR_YEAR + index,
 )
+
+const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
+  ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
+}`
+
+type EmissionStatusTone = 'ok' | 'over' | 'unknown'
+
+const EMISSION_STATUS_TONE_CLASSES: Record<EmissionStatusTone, string> = {
+  ok: 'border-green-200 bg-green-50 text-green-800',
+  over: 'border-red-200 bg-red-50 text-red-800',
+  unknown: 'border-amber-200 bg-amber-50 text-amber-800',
+}
+
+const EMISSION_TONE_BY_QUOTA_LEVEL: Record<QuotaStatusLevel, EmissionStatusTone> = {
+  ok: 'ok',
+  near: 'ok',
+  over: 'over',
+  uncalculated: 'unknown',
+  noData: 'unknown',
+  partial: 'unknown',
+}
+
+const EMISSION_ICON_BY_TONE: Record<EmissionStatusTone, LucideIcon> = {
+  ok: CircleCheck,
+  over: CircleAlert,
+  unknown: CircleHelp,
+}
+
+const EmissionStatusBar = ({
+  fields,
+  isSimulationView,
+}: {
+  fields: FieldRecord[]
+  isSimulationView: boolean
+}) => {
+  const { totalNLoad, quota, calculatedCount, uncalculatedCount } = useMemo(
+    () => computeFarmQuotaSummary(fields, isSimulationView),
+    [fields, isSimulationView],
+  )
+  const { quotaKgn, basis: quotaBasis } = quota
+
+  const level = aggregateQuotaStatusLevel(
+    totalNLoad,
+    quotaKgn,
+    calculatedCount,
+    fields.length,
+  )
+  const tone = EMISSION_TONE_BY_QUOTA_LEVEL[level]
+  const Icon = EMISSION_ICON_BY_TONE[tone]
+
+  let message: string
+
+  if (quotaKgn === 0) {
+    message =
+      'Udledningen kan ikke opgøres endnu - ingen udledningsgrænse på markerne'
+  } else if (calculatedCount === 0) {
+    message =
+      'Udledningen kan ikke opgøres endnu - markerne er ikke beregnet endnu'
+  } else {
+    const over = totalNLoad > quotaKgn
+    const diff = Math.abs(quotaKgn - totalNLoad)
+
+    if (over) {
+      const uncalculatedNote =
+        uncalculatedCount > 0
+          ? `, ${formatFieldCount(uncalculatedCount)} ikke beregnet`
+          : ''
+      message =
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
+        `(${quotaBasis}${uncalculatedNote}) - ${formatNumber(diff)} kg N OVER grænsen`
+    } else if (uncalculatedCount > 0) {
+      message =
+        `${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N (${quotaBasis}) brugt - ` +
+        `${formatFieldCount(uncalculatedCount)} ikke beregnet endnu`
+    } else {
+      message =
+        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
+        `(${quotaBasis}) - ${formatNumber(diff)} kg N under grænsen`
+    }
+  }
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${EMISSION_STATUS_TONE_CLASSES[tone]}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
+const YearlyOverviewMiniBars = ({
+  entries,
+  quotaKgn,
+}: {
+  entries: YearlySummaryEntry[]
+  quotaKgn: number
+}) => {
+  const scale = Math.max(
+    1,
+    quotaKgn,
+    ...entries.map((entry) => entry.totalNLoadKg),
+  )
+
+  return (
+    <div className="flex h-6 items-end gap-0.5" aria-hidden="true">
+      {entries.map((entry) => {
+        const heightPct = Math.max(8, (entry.totalNLoadKg / scale) * 100)
+        const isOver = quotaKgn > 0 && entry.totalNLoadKg > quotaKgn
+        return (
+          <div
+            key={entry.year}
+            className="w-[7px] rounded-t-sm"
+            style={{
+              height: `${heightPct}%`,
+              backgroundColor: isOver ? YEAR_BAR_OVER_COLOR : YEAR_BAR_FILL_COLOR,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+const YearlyOverviewSection = ({
+  farm,
+  fields,
+  simulationId,
+}: {
+  farm: Farm
+  fields: FieldRecord[]
+  simulationId: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const { data: entries } = useSimulationYearlySummary(farm.id, simulationId)
+  const quota = useMemo(
+    () => computeFarmQuotaSummary(fields, true).quota,
+    [fields],
+  )
+
+  if (!entries || entries.length === 0) return null
+
+  const overYearCount =
+    quota.quotaKgn > 0
+      ? entries.filter((entry) => entry.totalNLoadKg > quota.quotaKgn).length
+      : 0
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-2">
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+              isOpen ? 'rotate-90' : ''
+            }`}
+            aria-hidden="true"
+          />
+          <div>
+            <div className="text-sm font-semibold">Årsoversigt</div>
+            <div className="text-xs text-muted-foreground">
+              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - DB2 og udledning år for år
+              {overYearCount > 0 ? (
+                <span className="ml-1 font-medium text-red-700">
+                  · {overYearCount} af {entries.length} år over grænsen
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <YearlyOverviewMiniBars entries={entries} quotaKgn={quota.quotaKgn} />
+      </button>
+      {isOpen ? (
+        <div className="border-t px-4 pb-4 pt-3">
+          <YearlyOverviewTable entries={entries} quota={quota} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 type FarmInspectorProps = {
   farm: Farm
@@ -190,13 +392,21 @@ export const FarmInspector = ({
         className={
           view === 'list'
             ? 'min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4'
-            : 'flex min-h-0 min-w-0 flex-1 flex-col p-4'
+            : 'flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4'
         }
       >
+        <EmissionStatusBar
+          fields={fields}
+          isSimulationView={isSimulationView}
+        />
         {view === 'list' ? (
           <>
             {isSimulationView && selection.kind === 'simulation' ? (
-              <YearlyOverviewStrip farmId={farm.id} simulationId={selection.id} />
+              <YearlyOverviewSection
+                farm={farm}
+                fields={fields}
+                simulationId={selection.id}
+              />
             ) : null}
             <FarmFieldsList
               farmId={farm.id}
