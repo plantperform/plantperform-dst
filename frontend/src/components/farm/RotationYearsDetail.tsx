@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { RotationCandidateYearResult } from '@/api/types'
+import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 import {
   L_FORMULA_CONSTANTS,
   M_LABELS,
@@ -26,6 +27,15 @@ const fmt = (value: unknown, digits = 2) =>
 const fmtSigned = (value: unknown, digits = 3) => {
   const n = num(value)
   return `${n >= 0 ? '+' : ''}${fmt(n, digits)}`
+}
+
+const beregnUdledning = (
+  lNuar: number,
+  retention: number | null,
+  areaHa: number,
+): { udledningPrHa: number; udledningMark: number } => {
+  const udledningPrHa = (lNuar * (100 - (retention ?? 0))) / 100
+  return { udledningPrHa, udledningMark: udledningPrHa * areaHa }
 }
 
 type Row = { label: string; detail?: string; value: string; strong?: boolean }
@@ -66,7 +76,7 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </h4>
 )
 
-const MetricTile = ({
+export const BigMetricTile = ({
   label,
   value,
   caption,
@@ -75,12 +85,40 @@ const MetricTile = ({
   value: string
   caption?: string
 }) => (
-  <div className="rounded-md border bg-background px-2.5 py-1.5">
-    <p className="text-[11px] leading-tight text-muted-foreground">{label}</p>
-    <p className="text-sm font-semibold leading-tight tabular-nums">{value}</p>
+  <div className="rounded-xl border bg-background p-4">
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+    </p>
+    <p className="mt-1 text-[22px] font-bold leading-tight tabular-nums">{value}</p>
     {caption ? (
-      <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{caption}</p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
     ) : null}
+  </div>
+)
+
+const DefinitionRow = ({
+  label,
+  value,
+  title,
+  muted,
+}: {
+  label: string
+  value: string
+  title?: string
+  muted?: boolean
+}) => (
+  <div
+    className="flex items-baseline justify-between gap-3 border-t py-1.5 first:border-t-0"
+    title={title}
+  >
+    <span className={`text-muted-foreground ${muted ? 'text-xs' : 'text-sm'}`}>{label}</span>
+    <span
+      className={`shrink-0 tabular-nums ${
+        muted ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+      }`}
+    >
+      {value}
+    </span>
   </div>
 )
 
@@ -114,56 +152,159 @@ const KeyMetricsSection = ({
   const reduceretNorm = afgrodeNorm !== null ? afgrodeNorm * (year.nNormPct / 100) : null
 
   const udvaskning = year.leachingKgNHa
-  const udledning = udvaskning * (100 - (retention ?? 0)) / 100
+  const { udledningPrHa: udledning } = beregnUdledning(udvaskning, retention, areaHa)
+
+  const retentionTekst =
+    retention === null
+      ? 'retention ikke sat, regner med 0%'
+      : `${fmt(retention, 1)}% tilbageholdes (retention)`
+
+  const tonTotal = year.husdyrgodningTonPrHa * areaHa
+  const tonPrHa = year.husdyrgodningTonPrHa
+  const visFoderenheder = isFoderafgroede && udbytte > 0
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      <MetricTile
-        label="Udledning"
-        value={`${fmt(udledning, 1)} kg N/ha`}
-        caption={
-          retention === null
-            ? 'Retention ikke sat — bruger 0%'
-            : `Efter ${fmt(retention, 1)}% retention`
-        }
-      />
-      <MetricTile label="DB" value={`${fmt(year.dbKrHa, 0)} kr/ha`} />
-      <MetricTile label="Udvaskning" value={`${fmt(udvaskning, 1)} kg N/ha`} />
-      <MetricTile
-        label="Afgrøde-norm"
-        value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '—'}
-        caption={
-          reduceretNorm !== null
-            ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
-            : undefined
-        }
-      />
-      <MetricTile
-        label="Tilgængeligt N"
-        value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
-        caption={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
-      />
-      <MetricTile label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
-      <MetricTile
-        label="Tildelt gødning"
-        value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
-        caption={
-          `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
-          (organiskBundet > 0
-            ? ` — plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
-            : '')
-        }
-      />
-      <MetricTile label="Normudbytte" value={udbytte ? `${fmt(udbytte, 0)} ${udbytteenhed}` : '—'} />
-      <MetricTile
-        label="Foderenheder"
-        value={isFoderafgroede ? `${fmt(udbytte, 0)} FE/ha` : '—'}
-      />
-      <MetricTile
-        label="Ton gødning"
-        value={`${fmt(year.husdyrgodningTonPrHa * areaHa, 1)} ton`}
-        caption={`${fmt(year.husdyrgodningTonPrHa, 2)} ton/ha`}
-      />
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <BigMetricTile
+          label="Udledning"
+          value={`${fmt(udledning, 1)} kg N/ha`}
+          caption={`Udvaskning ${fmt(udvaskning, 1)} kg N/ha - ${retentionTekst}`}
+        />
+        <BigMetricTile
+          label="DB2"
+          value={`${fmt(year.dbKrHa, 0)} kr/ha`}
+          caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte -'}
+        />
+      </div>
+
+      <div className="rounded-md border bg-background px-3 py-2">
+        <SectionHeading>Gødning</SectionHeading>
+        <div className="mt-1">
+          <DefinitionRow
+            label="Afgrøde-norm"
+            value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '-'}
+            title={
+              reduceretNorm !== null
+                ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
+                : undefined
+            }
+          />
+          <DefinitionRow
+            label="Tilgængeligt N"
+            value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
+            title={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
+          />
+          <DefinitionRow label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
+          <DefinitionRow
+            label="Tildelt gødning"
+            value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
+            title={
+              `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
+              (organiskBundet > 0
+                ? ` - plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
+                : '')
+            }
+          />
+          {visFoderenheder ? (
+            <DefinitionRow label="Foderenheder" value={`${fmt(udbytte, 0)} FE/ha`} />
+          ) : null}
+          <DefinitionRow
+            label="Ton gødning"
+            value={`${fmt(tonTotal, 1)} ton - ${fmt(tonPrHa, 2)} ton/ha`}
+            muted
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const StepRow = ({
+  text,
+  value,
+  strong,
+}: {
+  text: React.ReactNode
+  value: React.ReactNode
+  strong?: boolean
+}) => (
+  <div className="flex items-baseline justify-between gap-3">
+    <p className={`text-sm ${strong ? 'font-semibold' : ''}`}>{text}</p>
+    <span className={`shrink-0 tabular-nums text-sm ${strong ? 'font-semibold' : ''}`}>
+      {value}
+    </span>
+  </div>
+)
+
+const CalculationStepsSection = ({
+  detail,
+  areaHa,
+  retention,
+}: {
+  detail: Record<string, unknown>
+  areaHa: number
+  retention: number | null
+}) => {
+  const l = num(detail.L)
+  const lNuar = num(detail.L_nuar)
+  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
+
+  const virkemidler = [
+    { navn: 'Efterafgrøde', pct: num(detail.EEA) * num(detail.Fdato_factor) * 100 },
+    { navn: 'Mellemafgrøde', pct: num(detail.EMA) * 100 },
+    { navn: 'Tidlig såning', pct: num(detail.ETS) * 100 },
+    { navn: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
+  ].filter((v) => v.pct > 0.001)
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <SectionHeading>1. Udvaskning fra rodzonen</SectionHeading>
+        <StepRow
+          text="Ud fra afgrøderne, jordtypen og gødningen er udvaskningen beregnet til"
+          value={`${fmt(l, 1)} kg N pr. ha`}
+        />
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>2. Virkemidler</SectionHeading>
+        {virkemidler.length > 0 ? (
+          <div className="space-y-1">
+            {virkemidler.map((v) => (
+              <StepRow
+                key={v.navn}
+                text={`${v.navn} reducerer med`}
+                value={`${fmt(v.pct, 1)}%`}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Ingen virkemidler på denne mark</p>
+        )}
+        <StepRow
+          text="Udvaskning efter virkemidler"
+          value={`${fmt(lNuar, 1)} kg N pr. ha`}
+          strong
+        />
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>3. Retention</SectionHeading>
+        <p className="text-sm">
+          {retention === null
+            ? 'Retention er ikke sat for marken - der regnes med 0%'
+            : `${fmt(retention, 1)}% af kvælstoffet tilbageholdes naturligt på vejen mod kysten`}
+        </p>
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>4. Markens udledning</SectionHeading>
+        <Callout>
+          {fmt(udledningPrHa, 1)} kg N pr. ha gange arealet på {fmt(areaHa, 1)} ha ={' '}
+          <strong>{fmt(udledningMark, 1)} kg N</strong>
+        </Callout>
+      </div>
     </div>
   )
 }
@@ -228,7 +369,7 @@ const LeachingDetailSection = ({
   const lRaw = Math.max(0, trend + cropSoil)
   const l = num(detail.L)
   const lNuar = num(detail.L_nuar)
-  const udledningPrHa = lNuar * (100 - (retention ?? 0)) / 100
+  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
 
   const m11Applied = Boolean(detail.M11_korrektion_anvendt)
   const eeaRed = num(detail.EEA) * num(detail.Fdato_factor)
@@ -338,8 +479,8 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>S — Jordfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Midlertidig fælles placeholder-værdi, indtil rigtige
-            per-mark-værdier findes.
+            Foreløbigt fællestal for alle marker - rigtige tal pr. mark
+            kommer senere.
           </p>
           <Callout>
             S = <strong>{fmt(s, 5)}</strong>
@@ -447,7 +588,7 @@ const LeachingDetailSection = ({
         />
         <Callout>
           Udledning (mark) = {fmt(udledningPrHa, 3)} × {fmt(areaHa, 2)} ={' '}
-          <strong>{fmt(udledningPrHa * areaHa, 1)} kg N</strong>
+          <strong>{fmt(udledningMark, 1)} kg N</strong>
         </Callout>
       </div>
     </div>
@@ -523,8 +664,13 @@ const EconomicDetailSection = ({
   const linjerFor = (kategori: string) => linjer.filter((l) => l.kategori === kategori)
 
   return (
-    <div className="space-y-1.5">
-      <SectionHeading>Dækningsbidrag (DB2)</SectionHeading>
+    <div className="space-y-1.5 border-t pt-3">
+      <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
+      <p className="text-sm">
+        Indtægt og tilskud, minus omkostninger til gødning, udsæd,
+        planteværn, markarbejde og tørring, giver dækningsbidraget (DB2) pr.
+        hektar - ganget med markens areal til sidst.
+      </p>
       {detail.udbyttenorm_mangler ? (
         <p className="text-xs text-amber-700">
           Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og
@@ -566,34 +712,47 @@ type RotationYearsDetailProps = {
   years: RotationCandidateYearResult[]
   areaHa: number
   retention: number | null
+  selectedYearIndex?: number
+  hideYearSelector?: boolean
 }
 
-export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsDetailProps) => {
-  const [selectedYear, setSelectedYear] = useState(0)
+export const RotationYearsDetail = ({
+  years,
+  areaHa,
+  retention,
+  selectedYearIndex,
+  hideYearSelector = false,
+}: RotationYearsDetailProps) => {
+  const [internalSelectedYear, setInternalSelectedYear] = useState(0)
   const [showFullDetail, setShowFullDetail] = useState(false)
+  const [showFormulas, setShowFormulas] = useState(false)
 
+  const selectedYear = selectedYearIndex ?? internalSelectedYear
   const year = years[Math.min(selectedYear, years.length - 1)]
   if (!year) return null
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {years.map((y, index) => (
-          <button
-            key={index}
-            type="button"
-            onClick={() => setSelectedYear(index)}
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              index === selectedYear
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'bg-background hover:bg-muted'
-            }`}
-          >
-            År {index + 1} — {y.year.afgrodeNavn}
-            {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
-          </button>
-        ))}
-      </div>
+      {!hideYearSelector ? (
+        <div className="flex flex-wrap gap-2">
+          {years.map((y, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => setInternalSelectedYear(index)}
+              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                index === selectedYear
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-muted'
+              }`}
+            >
+              År {index + 1} ({ROTATION_START_CALENDAR_YEAR + index}) -{' '}
+              {y.year.afgrodeNavn}
+              {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <KeyMetricsSection year={year} areaHa={areaHa} retention={retention} />
 
@@ -602,13 +761,36 @@ export const RotationYearsDetail = ({ years, areaHa, retention }: RotationYearsD
         onClick={() => setShowFullDetail((current) => !current)}
         className="text-xs font-medium text-primary hover:underline"
       >
-        {showFullDetail ? '▴ Skjul fuld beregningsgennemgang' : '▾ Vis fuld beregningsgennemgang'}
+        {showFullDetail ? '▴ Skjul beregning' : '▾ Vis beregning'}
       </button>
 
       {showFullDetail ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <LeachingDetailSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold">Sådan er tallet beregnet</h4>
+          <CalculationStepsSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
           <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
+
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              onClick={() => setShowFormulas((current) => !current)}
+              className="text-[11px] text-muted-foreground hover:underline"
+            >
+              {showFormulas
+                ? '▴ Skjul formler og mellemregninger'
+                : '▾ Vis formler og mellemregninger'}
+            </button>
+
+            {showFormulas ? (
+              <div className="mt-3">
+                <LeachingDetailSection
+                  detail={year.leachingDetail}
+                  areaHa={areaHa}
+                  retention={retention}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>
