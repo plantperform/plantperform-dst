@@ -1,5 +1,4 @@
-import { ChevronDown } from 'lucide-react'
-import { useId, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 
 import type { FieldRecord, OptimizeSimulationResponse } from '@/api/types'
 import {
@@ -34,6 +33,13 @@ const CATCHMENT_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
   noData: 'ingen kvote',
   partial: 'delvist beregnet',
 }
+
+const PROGRESS_LEVELS: ReadonlySet<QuotaStatusLevel> = new Set([
+  'ok',
+  'near',
+  'over',
+  'partial',
+])
 
 const buildHeadline = (
   totals: FieldTotals,
@@ -76,7 +82,9 @@ type MetricProps = {
 const Metric = ({ label, value }: MetricProps) => (
   <div className="flex min-w-0 items-baseline gap-1.5">
     <dt className="text-xs text-muted-foreground">{label}</dt>
-    <dd className="truncate text-sm font-medium text-foreground">{value}</dd>
+    <dd className="truncate text-sm font-medium tabular-nums text-foreground">
+      {value}
+    </dd>
   </div>
 )
 
@@ -114,27 +122,34 @@ const CatchmentChip = ({ label, totals }: CatchmentChipProps) => {
   )
 }
 
-type FarmStatusStripProps = {
+const FarmStatusHeaderSkeleton = () => (
+  <section
+    aria-label="Udledning mod kvote"
+    aria-busy="true"
+    className="shrink-0 rounded-lg border border-l-4 border-l-muted-foreground/30 bg-card p-4"
+  >
+    <span className="sr-only">Indlæser udledning</span>
+    <div className="space-y-3" aria-hidden="true">
+      <div className="h-4 w-2/3 rounded bg-muted motion-safe:animate-pulse" />
+      <div className="h-1.5 w-full rounded-full bg-muted motion-safe:animate-pulse" />
+      <div className="h-3 w-1/3 rounded bg-muted motion-safe:animate-pulse" />
+    </div>
+  </section>
+)
+
+type FarmStatusHeaderContentProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView: boolean
   lastRun: OptimizeSimulationResponse | null
 }
 
-export const FarmStatusStrip = ({
+const FarmStatusHeaderContent = ({
   farmId,
   fields,
   isSimulationView,
   lastRun,
-}: FarmStatusStripProps) => {
-  const [open, setOpen] = useState(false)
-  const [openedForRun, setOpenedForRun] =
-    useState<OptimizeSimulationResponse | null>(null)
-  const detailsId = useId()
-  if (lastRun && lastRun !== openedForRun) {
-    setOpenedForRun(lastRun)
-    setOpen(true)
-  }
+}: FarmStatusHeaderContentProps) => {
   const catchmentOptions = useCatchmentOptions(farmId, fields)
 
   const totals = useMemo(
@@ -166,8 +181,8 @@ export const FarmStatusStrip = ({
   const overCatchmentCount = catchments.filter(
     (catchment) => totalsQuotaStatusLevel(catchment.totals) === 'over',
   ).length
-  const stripLevel: QuotaStatusLevel = overCatchmentCount > 0 ? 'over' : level
-  const style = QUOTA_STATUS_STYLES[stripLevel]
+  const headerLevel: QuotaStatusLevel = overCatchmentCount > 0 ? 'over' : level
+  const style = QUOTA_STATUS_STYLES[headerLevel]
   const quota = resolveFarmQuota(totals.udledningskvoteMarkKgn)
   const calculated = totals.calculatedCount > 0
 
@@ -183,49 +198,32 @@ export const FarmStatusStrip = ({
   }
   if (overCatchmentNote && level === 'over') notes.push(overCatchmentNote)
 
+  const showProgress = PROGRESS_LEVELS.has(level) && quota.quotaKgn > 0
+  const progressPct = showProgress
+    ? Math.min(100, (totals.nLoad / quota.quotaKgn) * 100)
+    : 0
+  const showDetails = catchments.length > 0 || lastRun !== null
+
   return (
     <section
       aria-label="Udledning mod kvote"
-      className={cn('shrink-0 border-b', style.surface)}
+      className={cn(
+        'shrink-0 space-y-3 rounded-lg border border-l-4 bg-card p-4',
+        style.accent,
+      )}
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={detailsId}
-        onClick={() => setOpen((current) => !current)}
-        className={cn(
-          'flex w-full items-center gap-3 px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-          style.text,
-        )}
-      >
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <QuotaStatusIndicator
-          level={stripLevel}
+          level={headerLevel}
           badge
-          className="min-w-0 flex-1"
+          className={cn(
+            'min-w-0 flex-1 basis-80 text-sm font-medium',
+            style.text,
+          )}
         >
           {buildHeadline(totals, level, isSimulationView, overCatchmentNote)}
-          {notes.length > 0 ? (
-            <span className="ml-1 text-xs opacity-80">
-              ({notes.join(', ')})
-            </span>
-          ) : null}
         </QuotaStatusIndicator>
-        <span className="hidden shrink-0 text-xs sm:inline">Nøgletal</span>
-        <ChevronDown
-          className={cn(
-            'size-4 shrink-0 transition-transform',
-            open && 'rotate-180',
-          )}
-          aria-hidden="true"
-        />
-      </button>
-
-      <div
-        id={detailsId}
-        hidden={!open}
-        className="space-y-2 border-t bg-background/70 px-3 py-2"
-      >
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <dl className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-1">
           <Metric label="Marker" value={formatFieldCount(totals.fieldCount)} />
           <Metric label="Areal" value={`${formatNumber(totals.areaHa)} ha`} />
           <Metric
@@ -249,32 +247,67 @@ export const FarmStatusStrip = ({
             }
           />
         </dl>
-
-        {catchments.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              Pr. kystvandopland
-            </span>
-            {catchments.map((catchment) => (
-              <CatchmentChip
-                key={catchment.key}
-                label={catchment.label}
-                totals={catchment.totals}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {lastRun ? (
-          <p className="text-xs text-muted-foreground">
-            Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
-            {formatNumber(lastRun.objectiveDb2)} kr, udledning{' '}
-            {formatNumber(lastRun.totalNLoadKg)} kg N, udvaskning{' '}
-            {formatNumber(lastRun.totalLeachingKg)} kg N,{' '}
-            {formatNumber(lastRun.totalFen)} FE
-          </p>
-        ) : null}
       </div>
+
+      {showProgress ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div
+            aria-hidden="true"
+            className="h-1.5 min-w-40 flex-1 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={cn('h-full rounded-full', style.dot)}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          {notes.length > 0 ? (
+            <p className="text-xs text-muted-foreground">{notes.join(', ')}</p>
+          ) : null}
+        </div>
+      ) : notes.length > 0 ? (
+        <p className="text-xs text-muted-foreground">{notes.join(', ')}</p>
+      ) : null}
+
+      {showDetails ? (
+        <div className="space-y-2 text-xs">
+          {catchments.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">Pr. kystvandopland</span>
+              {catchments.map((catchment) => (
+                <CatchmentChip
+                  key={catchment.key}
+                  label={catchment.label}
+                  totals={catchment.totals}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {lastRun ? (
+            <p className="text-muted-foreground">
+              Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
+              {formatNumber(lastRun.objectiveDb2)} kr, udledning{' '}
+              {formatNumber(lastRun.totalNLoadKg)} kg N, udvaskning{' '}
+              {formatNumber(lastRun.totalLeachingKg)} kg N,{' '}
+              {formatNumber(lastRun.totalFen)} FE
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   )
 }
+
+type FarmStatusHeaderProps = FarmStatusHeaderContentProps & {
+  loading: boolean
+}
+
+export const FarmStatusHeader = ({
+  loading,
+  ...props
+}: FarmStatusHeaderProps) =>
+  loading ? (
+    <FarmStatusHeaderSkeleton />
+  ) : (
+    <FarmStatusHeaderContent {...props} />
+  )

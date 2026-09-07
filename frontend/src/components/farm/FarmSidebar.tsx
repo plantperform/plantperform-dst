@@ -1,6 +1,7 @@
 import {
   FlaskConical,
   History,
+  Loader2,
   PanelLeft,
   Plus,
   Trash2,
@@ -13,6 +14,7 @@ import { mutate } from 'swr'
 import { simulationFieldsKey, simulationsKey } from '@/api/hooks'
 import { deleteSimulation } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
+import { useAuth } from '@/auth/context'
 import { BrandMark } from '@/components/BrandMark'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
@@ -46,7 +48,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
+import { getStoredRole, HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 
 const formatCreatedAt = (value: string) => {
   const createdAt = new Date(value).getTime()
@@ -73,6 +75,7 @@ type FarmSidebarProps = {
   fields: FieldRecord[]
   simulations: Simulation[]
   selection: FarmViewSelection
+  loadingSelection?: boolean
   onSelectionChange: (selection: FarmViewSelection) => void
   onError: (message: string | null) => void
   width: number
@@ -84,11 +87,16 @@ export const FarmSidebar = ({
   fields,
   simulations,
   selection,
+  loadingSelection = false,
   onSelectionChange,
   onError,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
+  const { user } = useAuth()
+  const email = user?.email ?? ''
+  const role = email ? getStoredRole(email) : null
+  const showAllFarms = role !== 'landmand'
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
@@ -122,21 +130,23 @@ export const FarmSidebar = ({
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel>Bedrift</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Alle bedrifter">
-                  <Link to="/" state={HOME_OVERVIEW_STATE}>
-                    <Warehouse />
-                    <span>Alle bedrifter</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {showAllFarms ? (
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel>Bedrift</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Alle bedrifter">
+                    <Link to="/" state={HOME_OVERVIEW_STATE}>
+                      <Warehouse />
+                      <span>Alle bedrifter</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
 
         <SidebarGroup className="py-1">
           <SidebarGroupLabel>Visninger</SidebarGroupLabel>
@@ -168,6 +178,11 @@ export const FarmSidebar = ({
                   key={simulation.id}
                   simulation={simulation}
                   selected={
+                    selection.kind === 'simulation' &&
+                    selection.id === simulation.id
+                  }
+                  loading={
+                    loadingSelection &&
                     selection.kind === 'simulation' &&
                     selection.id === simulation.id
                   }
@@ -255,6 +270,7 @@ const CollapseMenuButton = () => {
 type SimulationMenuItemProps = {
   simulation: Simulation
   selected: boolean
+  loading: boolean
   deleting: boolean
   onSelect: () => void
   onDelete: () => void
@@ -263,6 +279,7 @@ type SimulationMenuItemProps = {
 const SimulationMenuItem = ({
   simulation,
   selected,
+  loading,
   deleting,
   onSelect,
   onDelete,
@@ -279,7 +296,11 @@ const SimulationMenuItem = ({
             aria-current={selected ? 'page' : undefined}
             onClick={onSelect}
           >
-            <FlaskConical />
+            {loading ? (
+              <Loader2 className="motion-safe:animate-spin" />
+            ) : (
+              <FlaskConical />
+            )}
             <span className="truncate">{simulation.name}</span>
           </SidebarMenuButton>
         </TooltipTrigger>

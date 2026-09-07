@@ -17,6 +17,7 @@ type SegmentedControlProps<T extends string> = {
   'aria-label': string
   className?: string
   labelClassName?: string
+  disabled?: boolean
 }
 
 export const SegmentedControl = <T extends string>({
@@ -25,6 +26,7 @@ export const SegmentedControl = <T extends string>({
   onValueChange,
   className,
   labelClassName = 'hidden sm:inline',
+  disabled = false,
   ...props
 }: SegmentedControlProps<T>) => (
   <div
@@ -45,8 +47,9 @@ export const SegmentedControl = <T extends string>({
           aria-pressed={active}
           aria-label={option.label}
           title={option.title}
+          disabled={disabled}
           className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
             active
               ? cn(
                   'bg-primary text-primary-foreground shadow-sm',

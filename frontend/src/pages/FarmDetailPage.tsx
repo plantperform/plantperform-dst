@@ -48,8 +48,11 @@ export const FarmDetailPage = () => {
       : selection
   const selectedSimulationId =
     activeSelection.kind === 'simulation' ? activeSelection.id : undefined
-  const { data: simulationFields = [], isLoading: simulationFieldsLoading } =
-    useSimulationFields(farmId, selectedSimulationId)
+  const {
+    data: simulationFields = [],
+    error: simulationFieldsError,
+    isLoading: simulationFieldsLoading,
+  } = useSimulationFields(farmId, selectedSimulationId)
   const [toast, setToast] = useState<{ id: number; message: string } | null>(
     null,
   )
@@ -114,13 +117,7 @@ export const FarmDetailPage = () => {
     )
   }
 
-  if (
-    farmLoading ||
-    !farm ||
-    fieldsLoading ||
-    simulationsLoading ||
-    simulationFieldsLoading
-  ) {
+  if (farmLoading || !farm || fieldsLoading || simulationsLoading) {
     return (
       <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
         <div className="mx-auto max-w-3xl">
@@ -147,6 +144,7 @@ export const FarmDetailPage = () => {
         fields={fields}
         simulations={simulations}
         selection={activeSelection}
+        loadingSelection={simulationFieldsLoading}
         onSelectionChange={setSelection}
         onError={showErrorToast}
         width={sidebarWidth}
@@ -171,6 +169,8 @@ export const FarmDetailPage = () => {
                 )
               : undefined
           }
+          fieldsLoading={simulationFieldsLoading}
+          fieldsError={Boolean(simulationFieldsError)}
           onError={showErrorToast}
         />
       </SidebarInset>
