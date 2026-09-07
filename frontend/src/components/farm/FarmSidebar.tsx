@@ -15,7 +15,6 @@ import { simulationFieldsKey, simulationsKey } from '@/api/hooks'
 import { deleteSimulation } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
-import { BrandMark } from '@/components/BrandMark'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import type { FarmViewSelection } from '@/components/farm/types'
@@ -238,15 +237,21 @@ export const FarmSidebar = ({
   )
 }
 
-const SidebarBrand = () => {
-  const iconRail = useIsIconRail()
-
-  return (
-    <div className="flex min-w-0 items-center group-data-[collapsible=icon]:justify-center">
-      <BrandMark compact={iconRail} />
+const SidebarBrand = () => (
+  <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+    <img
+      src="/plant-perform-tab-icon.svg"
+      alt=""
+      className="size-8 shrink-0 rounded-md"
+    />
+    <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
+      <span className="truncate text-sm font-semibold">PlantPerform</span>
+      <span className="truncate text-xs text-muted-foreground">
+        Sædskifteplanlægning
+      </span>
     </div>
-  )
-}
+  </div>
+)
 
 const CollapseMenuButton = () => {
   const { toggleSidebar } = useSidebar()
