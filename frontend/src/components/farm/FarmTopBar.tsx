@@ -1,4 +1,10 @@
-import { MoreHorizontal, Share2, Trash2 } from 'lucide-react'
+import {
+  ChevronRight,
+  MoreHorizontal,
+  Share2,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -33,6 +39,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 type FarmTopBarProps = {
   farm: Farm
   viewLabel: string
+  viewIcon: LucideIcon
   actions?: ReactNode
   onError: (message: string | null) => void
 }
@@ -40,6 +47,7 @@ type FarmTopBarProps = {
 export const FarmTopBar = ({
   farm,
   viewLabel,
+  viewIcon: ViewIcon,
   actions,
   onError,
 }: FarmTopBarProps) => {
@@ -54,15 +62,17 @@ export const FarmTopBar = ({
       />
       <Separator orientation="vertical" className="h-5 md:hidden" />
 
-      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <h1 className="truncate font-display text-lg tracking-tight">
           {farm.name}
         </h1>
-        <span className="shrink-0 text-muted-foreground" aria-hidden="true">
-          /
-        </span>
-        <span className="truncate text-sm text-muted-foreground">
-          {viewLabel}
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground/60"
+          aria-hidden="true"
+        />
+        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+          <ViewIcon className="size-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{viewLabel}</span>
         </span>
       </div>
 
@@ -72,9 +82,9 @@ export const FarmTopBar = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="size-8"
+              className="size-8 text-muted-foreground hover:text-foreground"
               aria-label="Handlinger for bedriften"
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />

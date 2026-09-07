@@ -2,6 +2,8 @@ import {
   CalendarRange,
   ChevronDown,
   ChevronRight,
+  FlaskConical,
+  History,
   Info,
   List,
   Map as MapIcon,
@@ -320,6 +322,7 @@ export const FarmInspector = ({
             ? `Simulering: ${selectedSimulation.name}`
             : 'Afgrødehistorik'
         }
+        viewIcon={selectedSimulation ? FlaskConical : History}
         onError={onError}
         actions={
           <>
