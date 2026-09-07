@@ -233,7 +233,7 @@ export const HomePage = () => {
 
       <div className="mx-auto max-w-6xl space-y-6 px-6 pb-12 pt-10 sm:px-10">
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm">
               Ved oprettelsen angav du bedriften "{pending.name}". Vil du
               oprette den nu?
@@ -272,7 +272,7 @@ export const HomePage = () => {
               {[0, 1, 2].map((index) => (
                 <div
                   key={index}
-                  className="space-y-3 rounded-xl border bg-card p-5 shadow-sm"
+                  className="space-y-3 rounded-lg border bg-card p-5 shadow-sm"
                 >
                   <div className="h-5 w-2/3 motion-safe:animate-pulse rounded bg-muted" />
                   <div className="h-4 w-1/2 motion-safe:animate-pulse rounded bg-muted" />
@@ -294,7 +294,7 @@ export const HomePage = () => {
         ) : null}
 
         {!isLoading && !error && farmList.length === 0 ? (
-          <div className="rounded-xl border bg-card p-6 shadow-sm sm:p-8">
+          <div className="rounded-lg border bg-card p-6 shadow-sm sm:p-8">
             <p id="kom-i-gang-heading" className="text-lg font-semibold">
               Kom i gang
             </p>
@@ -382,7 +382,7 @@ export const HomePage = () => {
                   <Link
                     key={farm.id}
                     to={`/farms/${farm.id}`}
-                    className="group flex flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="group flex flex-col gap-4 rounded-lg border bg-card p-6 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

@@ -1,4 +1,4 @@
-import { ChevronRight, Lock, LockOpen, Repeat, X } from 'lucide-react'
+import { ChevronRight, Repeat, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
@@ -15,24 +15,12 @@ import {
   formatQuotaAmount,
   getFieldQuotaStatus,
   isFieldCalculated,
-  QUOTA_WARNING_LEVEL_COLORS,
+  QUOTA_STATUS_STYLES,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
   type QuotaStatus,
-  type QuotaStatusLevel,
 } from '@/lib/field-domain'
-
-const STATUS_CARD_STYLES: Record<
-  QuotaStatusLevel,
-  { bg: string; border: string; text: string }
-> = {
-  ok: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
-  near: QUOTA_WARNING_LEVEL_COLORS.near,
-  over: QUOTA_WARNING_LEVEL_COLORS.over,
-  uncalculated: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
-  noData: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
-  partial: { bg: '#f9fafb', border: '#e5e7eb', text: '#4b5563' },
-}
+import { cn } from '@/lib/utils'
 
 const buildStatusMessage = (
   status: QuotaStatus,
@@ -61,15 +49,14 @@ const QuotaStatusCard = ({
   status: QuotaStatus
   isSimulationView: boolean
 }) => {
-  const style = STATUS_CARD_STYLES[status.level]
+  const style = QUOTA_STATUS_STYLES[status.level]
   return (
     <div
-      className="rounded-lg border px-3 py-2.5 text-sm"
-      style={{
-        backgroundColor: style.bg,
-        borderColor: style.border,
-        color: style.text,
-      }}
+      className={cn(
+        'rounded-lg border px-3 py-2.5 text-sm',
+        style.surface,
+        style.text,
+      )}
     >
       {buildStatusMessage(status, isSimulationView)}
     </div>
@@ -87,8 +74,8 @@ const MetricCard = ({
   caption?: string
   muted?: boolean
 }) => (
-  <div className="rounded-xl border p-3">
-    <div className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
+  <div className="rounded-lg border p-3">
+    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </div>
     <div
@@ -127,15 +114,12 @@ const RotationYearRow = ({
         {year.afgrodeNavn}
       </span>
       {isCurrentYear ? (
-        <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
+        <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
           i år
         </span>
       ) : null}
       {hasUdlaeg ? (
-        <span
-          className="rounded-full px-2 py-0.5 text-xs"
-          style={{ backgroundColor: '#e7edda', color: '#0f4a24' }}
-        >
+        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
           efterafgrøde
         </span>
       ) : null}
@@ -150,9 +134,6 @@ type MarkPanelProps = {
   simulationId?: string
   simulation?: Simulation
   cropColorMap: Map<number, string>
-  isLocked: boolean
-  isLockingInProgress: boolean
-  onToggleLock: () => void
   isDetaching: boolean
   onRequestDetach: () => void
   onClose: () => void
@@ -166,9 +147,6 @@ export const MarkPanel = ({
   simulationId,
   simulation,
   cropColorMap,
-  isLocked,
-  isLockingInProgress,
-  onToggleLock,
   isDetaching,
   onRequestDetach,
   onClose,
@@ -214,10 +192,9 @@ export const MarkPanel = ({
 
   return (
     <div
-      className="fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-white"
+      className="absolute right-0 top-0 z-10 m-0 flex h-full flex-col border-l bg-card shadow-xl"
       style={{
-        boxShadow: '-18px 0 40px rgba(27,43,34,0.12)',
-        width: calcOpen ? 'min(950px, 90vw)' : '460px',
+        width: calcOpen ? 'min(950px, 100%)' : 'min(460px, 100%)',
         transition: 'width 250ms ease',
       }}
       role="complementary"
@@ -225,10 +202,8 @@ export const MarkPanel = ({
     >
       <div className="flex items-start justify-between gap-3 border-b p-4">
         <div className="min-w-0">
-          <h2 className="truncate text-[19px] font-semibold">
-            Mark {field.name}
-          </h2>
-          <div className="mt-1 flex flex-wrap items-center text-[12.5px] text-muted-foreground">
+          <h2 className="truncate text-lg font-semibold">Mark {field.name}</h2>
+          <div className="mt-1 flex flex-wrap items-center text-xs text-muted-foreground">
             {metaParts.map((part, index) => (
               <span
                 key={index}
@@ -420,54 +395,27 @@ export const MarkPanel = ({
         ) : null}
       </div>
 
-      <div className="border-t px-4 py-3" style={{ backgroundColor: '#fbfcf8' }}>
+      <div className="border-t bg-muted/30 px-4 py-3">
         {isSimulationView ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canEditRotation || field.rotationId === null}
-              onClick={() => setManualEditorOpen(true)}
-              title={
-                !canEditRotation
-                  ? 'Opret en simulering for at redigere sædskifter.'
-                  : field.rotationId === null
-                    ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
-                    : undefined
-              }
-            >
-              Rediger sædskifte
-            </Button>
-            {canEditRotation ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onToggleLock}
-                disabled={field.rotationId === null || isLockingInProgress}
-                aria-label={isLocked ? 'Lås op' : 'Lås'}
-                className={
-                  isLocked
-                    ? 'h-9 w-9 p-0 bg-amber-100 text-amber-700'
-                    : 'h-9 w-9 p-0 text-muted-foreground'
-                }
-                title={
-                  isLocked
-                    ? 'Marken er låst til det valgte sædskifte - Optimér ændrer den ikke. Klik for at låse op.'
-                    : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse.'
-                }
-              >
-                {isLocked ? (
-                  <Lock className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <LockOpen className="h-4 w-4" aria-hidden="true" />
-                )}
-              </Button>
-            ) : null}
-          </div>
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={!canEditRotation || field.rotationId === null}
+            onClick={() => setManualEditorOpen(true)}
+            title={
+              !canEditRotation
+                ? 'Opret en simulering for at redigere sædskifter.'
+                : field.rotationId === null
+                  ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
+                  : undefined
+            }
+          >
+            Rediger sædskifte
+          </Button>
         ) : (
           <Button
             variant="destructive"
-            size="sm"
+            size="xs"
             onClick={onRequestDetach}
             disabled={isDetaching}
           >

@@ -104,7 +104,7 @@ export const FarmDetailPage = () => {
             <CardContent>
               <Button asChild>
                 <Link to="/" state={HOME_OVERVIEW_STATE}>
-                  Tilbage til bedrifter
+                  Alle bedrifter
                 </Link>
               </Button>
             </CardContent>
