@@ -115,6 +115,20 @@ export const formatWholeNumber = (value: number) =>
 export const formatFieldCount = (count: number) =>
   `${count} ${count === 1 ? 'mark' : 'marker'}`
 
+const compactMillionFormat = new Intl.NumberFormat('da-DK', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
+export const formatCompactKr = (value: number): string => {
+  const magnitude = Math.abs(value)
+  if (magnitude >= 999_500) {
+    return `${compactMillionFormat.format(value / 1_000_000)} mio. kr`
+  }
+  if (magnitude >= 999.5) return `${formatWholeNumber(value / 1_000)} t.kr`
+  return `${formatWholeNumber(value)} kr`
+}
+
 export const formatLockTooltip = (field: FieldRecord): string => {
   const lines = [`${field.name} - låst sædskifte`]
 
@@ -363,6 +377,7 @@ export const formatQuotaAmount = (status: QuotaStatus): string =>
 
 export type QuotaStatusStyle = {
   dot: string
+  accent: string
   surface: string
   text: string
   badgeLabel: string | null
@@ -370,6 +385,7 @@ export type QuotaStatusStyle = {
 
 const QUOTA_STATUS_STYLE_UNKNOWN: QuotaStatusStyle = {
   dot: 'bg-muted-foreground/60',
+  accent: 'border-l-muted-foreground/60',
   surface: 'border-border bg-muted/50',
   text: 'text-muted-foreground',
   badgeLabel: null,
@@ -378,18 +394,21 @@ const QUOTA_STATUS_STYLE_UNKNOWN: QuotaStatusStyle = {
 export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   ok: {
     dot: 'bg-green-600',
+    accent: 'border-l-green-600',
     surface: 'border-green-200 bg-green-50',
     text: 'text-green-800',
     badgeLabel: null,
   },
   near: {
     dot: 'bg-amber-600',
+    accent: 'border-l-amber-600',
     surface: 'border-amber-200 bg-amber-50',
     text: 'text-amber-800',
     badgeLabel: 'tæt på',
   },
   over: {
     dot: 'bg-red-600',
+    accent: 'border-l-red-600',
     surface: 'border-red-200 bg-red-50',
     text: 'text-red-800',
     badgeLabel: 'over',

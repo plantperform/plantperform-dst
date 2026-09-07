@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-export const MIN_SIDEBAR_WIDTH = 220
+export const MIN_SIDEBAR_WIDTH = 272
 export const MAX_SIDEBAR_WIDTH = 560
 export const DEFAULT_SIDEBAR_WIDTH = 320
 export const SIDEBAR_WIDTH_STEP = 16

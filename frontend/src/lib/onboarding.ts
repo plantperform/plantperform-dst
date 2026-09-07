@@ -1,5 +1,10 @@
 export type OnboardingRole = 'landmand' | 'konsulent'
 
+export const ROLE_LABELS: Record<OnboardingRole, string> = {
+  landmand: 'Landmand',
+  konsulent: 'Konsulent',
+}
+
 export type PendingFarm = {
   name: string
   ownerName: string

@@ -12,7 +12,10 @@ import { useAuth } from '@/auth/context'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
-import type { FarmViewSelection } from '@/components/farm/types'
+import type {
+  FarmInspectorMode,
+  FarmViewSelection,
+} from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import {
@@ -48,8 +51,15 @@ export const FarmDetailPage = () => {
       : selection
   const selectedSimulationId =
     activeSelection.kind === 'simulation' ? activeSelection.id : undefined
-  const { data: simulationFields = [], isLoading: simulationFieldsLoading } =
-    useSimulationFields(farmId, selectedSimulationId)
+  const {
+    data: simulationFields = [],
+    error: simulationFieldsError,
+    isLoading: simulationFieldsLoading,
+  } = useSimulationFields(farmId, selectedSimulationId)
+  const [mode, setMode] = useState<FarmInspectorMode>('values')
+  const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
+  const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] =
+    useState(false)
   const [toast, setToast] = useState<{ id: number; message: string } | null>(
     null,
   )
@@ -114,13 +124,7 @@ export const FarmDetailPage = () => {
     )
   }
 
-  if (
-    farmLoading ||
-    !farm ||
-    fieldsLoading ||
-    simulationsLoading ||
-    simulationFieldsLoading
-  ) {
+  if (farmLoading || !farm || fieldsLoading || simulationsLoading) {
     return (
       <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
         <div className="mx-auto max-w-3xl">
@@ -147,7 +151,12 @@ export const FarmDetailPage = () => {
         fields={fields}
         simulations={simulations}
         selection={activeSelection}
+        loadingSelection={simulationFieldsLoading}
         onSelectionChange={setSelection}
+        mode={mode}
+        onModeChange={setMode}
+        onOptimize={() => setOptimizeDialogOpen(true)}
+        onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
         onError={showErrorToast}
         width={sidebarWidth}
         onWidthChange={setSidebarWidth}
@@ -171,6 +180,14 @@ export const FarmDetailPage = () => {
                 )
               : undefined
           }
+          fieldsLoading={simulationFieldsLoading}
+          fieldsError={Boolean(simulationFieldsError)}
+          mode={mode}
+          onModeChange={setMode}
+          optimizeDialogOpen={optimizeDialogOpen}
+          onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+          yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
+          onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
           onError={showErrorToast}
         />
       </SidebarInset>

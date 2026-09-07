@@ -1,12 +1,12 @@
 import {
-  CalendarRange,
   ChevronDown,
   ChevronRight,
+  FlaskConical,
+  History,
   Info,
   List,
   Map as MapIcon,
   SlidersHorizontal,
-  Table2,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
@@ -43,7 +43,8 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
-import { FarmStatusStrip } from '@/components/farm/FarmStatusStrip'
+import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
+import { FarmStatusHeader } from '@/components/farm/FarmStatusHeader'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
@@ -60,12 +61,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -111,22 +106,6 @@ type FarmView = 'list' | 'map'
 const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
   { value: 'list', label: 'Liste', icon: List },
   { value: 'map', label: 'Kort', icon: MapIcon },
-]
-
-const MODE_OPTIONS: SegmentedControlOption<FarmInspectorMode>[] = [
-  {
-    value: 'values',
-    label: 'Værdier',
-    icon: Table2,
-    title: 'Vis hvad optimeringen har beregnet for markerne',
-  },
-  {
-    value: 'rules',
-    label: 'Regler',
-    icon: SlidersHorizontal,
-    title: 'Sæt hvad optimeringen må gøre',
-    activeClassName: 'bg-rules text-rules-foreground hover:bg-rules/90',
-  },
 ]
 
 const YearlyOverviewMiniBars = ({
@@ -274,36 +253,6 @@ const YearlyOverviewSection = ({
   )
 }
 
-type OptimizeButtonProps = {
-  onOptimize: () => void
-  onYearlyOptimize: () => void
-}
-
-const OptimizeButton = ({ onOptimize, onYearlyOptimize }: OptimizeButtonProps) => (
-  <div className="flex shrink-0 items-center">
-    <Button size="xs" className="rounded-r-none" onClick={onOptimize}>
-      Optimér
-    </Button>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          size="xs"
-          className="rounded-l-none border-l border-primary-foreground/25 px-1.5"
-          aria-label="Flere måder at optimere"
-        >
-          <ChevronDown className="size-4" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={onYearlyOptimize}>
-          <CalendarRange className="mr-2 size-4" aria-hidden="true" />
-          Års-optimering...
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </div>
-)
-
 type LastRun = {
   simulationId: string
   response: OptimizeSimulationResponse
@@ -314,6 +263,14 @@ type FarmInspectorProps = {
   fields: FieldRecord[]
   selection: FarmViewSelection
   selectedSimulation?: Simulation
+  fieldsLoading?: boolean
+  fieldsError?: boolean
+  mode: FarmInspectorMode
+  onModeChange: (mode: FarmInspectorMode) => void
+  optimizeDialogOpen: boolean
+  onOptimizeDialogOpenChange: (open: boolean) => void
+  yearlyOptimizeDialogOpen: boolean
+  onYearlyOptimizeDialogOpenChange: (open: boolean) => void
   onError: (message: string | null) => void
 }
 
@@ -322,12 +279,17 @@ export const FarmInspector = ({
   fields,
   selection,
   selectedSimulation,
+  fieldsLoading = false,
+  fieldsError = false,
+  mode,
+  onModeChange,
+  optimizeDialogOpen,
+  onOptimizeDialogOpenChange,
+  yearlyOptimizeDialogOpen,
+  onYearlyOptimizeDialogOpenChange,
   onError,
 }: FarmInspectorProps) => {
   const [view, setView] = useState<FarmView>('list')
-  const [mode, setMode] = useState<FarmInspectorMode>('values')
-  const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
-  const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] = useState(false)
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
@@ -336,13 +298,16 @@ export const FarmInspector = ({
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
+  const loadingMessage = selectedSimulation
+    ? `Indlæser marker for simuleringen ${selectedSimulation.name}...`
+    : 'Indlæser marker...'
   if (lastRun && lastRun.simulationId !== selectedSimulation?.id) {
     setLastRun(null)
   }
 
   const openRules = () => {
-    setOptimizeDialogOpen(false)
-    setMode('rules')
+    onOptimizeDialogOpenChange(false)
+    onModeChange('rules')
   }
 
   const recordRun = (response: OptimizeSimulationResponse) => {
@@ -359,44 +324,17 @@ export const FarmInspector = ({
             ? `Simulering: ${selectedSimulation.name}`
             : 'Afgrødehistorik'
         }
-        onError={onError}
+        viewIcon={selectedSimulation ? FlaskConical : History}
         actions={
-          <>
-            {canSwitchMode ? (
-              <SegmentedControl
-                aria-label="Værdier eller regler"
-                value={effectiveMode}
-                options={MODE_OPTIONS}
-                onValueChange={setMode}
-                className="bg-rules/10"
-                labelClassName="hidden @4xl:inline"
-              />
-            ) : null}
-            {selectedSimulation ? (
-              <OptimizeButton
-                onOptimize={() => setOptimizeDialogOpen(true)}
-                onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
-              />
-            ) : null}
-            <SegmentedControl
-              aria-label="Liste eller kort"
-              value={view}
-              options={VIEW_OPTIONS}
-              onValueChange={setView}
-              labelClassName="hidden @4xl:inline"
-            />
-          </>
+          <SegmentedControl
+            aria-label="Liste eller kort"
+            value={view}
+            options={VIEW_OPTIONS}
+            onValueChange={setView}
+            labelClassName="hidden @4xl:inline"
+          />
         }
       />
-
-      {isRules ? null : (
-        <FarmStatusStrip
-          farmId={farm.id}
-          fields={fields}
-          isSimulationView={isSimulationView}
-          lastRun={lastRun?.response ?? null}
-        />
-      )}
 
       {selectedSimulation ? (
         <OptimizeDialog
@@ -404,7 +342,7 @@ export const FarmInspector = ({
           farmId={farm.id}
           simulation={selectedSimulation}
           open={optimizeDialogOpen}
-          onOpenChange={setOptimizeDialogOpen}
+          onOpenChange={onOptimizeDialogOpenChange}
           onOptimized={recordRun}
           onOpenRules={openRules}
         />
@@ -416,12 +354,18 @@ export const FarmInspector = ({
           farmId={farm.id}
           simulation={selectedSimulation}
           open={yearlyOptimizeDialogOpen}
-          onOpenChange={setYearlyOptimizeDialogOpen}
+          onOpenChange={onYearlyOptimizeDialogOpenChange}
           onOptimized={recordRun}
         />
       ) : null}
 
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div
+        className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+        aria-busy={fieldsLoading}
+      >
+        <p role="status" className="sr-only">
+          {fieldsLoading ? loadingMessage : ''}
+        </p>
         <div
           className={cn(
             'h-full p-3',
@@ -431,7 +375,16 @@ export const FarmInspector = ({
             isRules && 'bg-rules/5',
           )}
         >
-          {isRules && selectedSimulation ? (
+          {isRules || fieldsError ? null : (
+            <FarmStatusHeader
+              farmId={farm.id}
+              fields={fields}
+              isSimulationView={isSimulationView}
+              lastRun={lastRun?.response ?? null}
+              loading={fieldsLoading}
+            />
+          )}
+          {isRules && selectedSimulation && !fieldsLoading ? (
             <SimulationRulesPanel
               key={selectedSimulation.id}
               farmId={farm.id}
@@ -439,7 +392,16 @@ export const FarmInspector = ({
               fields={fields}
             />
           ) : null}
-          {view === 'list' ? (
+          {fieldsLoading ? (
+            <FarmFieldsSkeleton message={loadingMessage} />
+          ) : fieldsError ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            >
+              Kunne ikke hente simuleringens marker. Prøv igen om lidt.
+            </div>
+          ) : view === 'list' ? (
             <>
               {!isRules ? (
                 <YearlyOverviewSection
