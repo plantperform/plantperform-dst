@@ -2,10 +2,10 @@ import { useFarmFields } from '@/api/hooks'
 import type { Farm } from '@/api/types'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import {
-  aggregateQuotaStatusLevel,
-  computeFarmQuotaSummary,
+  computeFieldTotals,
   formatFieldCount,
   formatNumber,
+  totalsQuotaStatusLevel,
 } from '@/lib/field-domain'
 
 export const FarmCardStats = ({ farm }: { farm: Farm }) => {
@@ -26,24 +26,18 @@ export const FarmCardStats = ({ farm }: { farm: Farm }) => {
     return <p className="text-sm text-muted-foreground">Ingen marker endnu</p>
   }
 
-  const totalAreaHa = fields.reduce((sum, field) => sum + field.areaHa, 0)
-  const summary = computeFarmQuotaSummary(fields, false)
-  const level = aggregateQuotaStatusLevel(
-    summary.totalNLoad,
-    summary.quota.quotaKgn,
-    summary.calculatedCount,
-    fields.length,
-  )
+  const totals = computeFieldTotals(fields, false)
+  const level = totalsQuotaStatusLevel(totals)
 
   return (
     <div className="space-y-1.5 text-sm text-muted-foreground">
       <p>
-        {formatFieldCount(fields.length)} · {formatNumber(totalAreaHa)} ha
+        {formatFieldCount(totals.fieldCount)} · {formatNumber(totals.areaHa)} ha
       </p>
-      {summary.quota.quotaKgn > 0 ? (
+      {totals.udledningskvoteMarkKgn > 0 ? (
         <QuotaStatusIndicator level={level}>
-          {formatNumber(summary.totalNLoad)} af{' '}
-          {formatNumber(summary.quota.quotaKgn)} kg N
+          {formatNumber(totals.nLoad)} af{' '}
+          {formatNumber(totals.udledningskvoteMarkKgn)} kg N
         </QuotaStatusIndicator>
       ) : null}
     </div>

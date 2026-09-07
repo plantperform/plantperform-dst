@@ -140,18 +140,19 @@ export const SimulationRulesPanel = ({
   const { godning } = simulation
 
   return (
-    <Card className="border-indigo-300 bg-indigo-50/30">
-      <CardHeader className="border-b border-indigo-200">
+    <Card className="border-rules/40 bg-rules/5">
+      <CardHeader className="border-b border-rules/20">
         <CardTitle className="flex items-center gap-2">
           <SlidersHorizontal
-            className="h-4 w-4 text-indigo-600"
+            className="h-4 w-4 text-rules"
             aria-hidden="true"
           />
           Regler for hele bedriften
         </CardTitle>
         <CardDescription>
-          Gælder alle marker i dette scenarie. Grænserne bruges ved næste
-          Optimér-kørsel.
+          Her bestemmer du, hvad optimeringen må gøre. Reglerne gælder alle
+          marker i denne simulering og bruges ved næste Optimér-kørsel - de er
+          ikke tal, markerne har.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 pt-6">
@@ -254,8 +255,8 @@ export const SimulationRulesPanel = ({
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-indigo-200 pt-4">
-          <h3 className="text-sm font-semibold">Scenariets grundlag</h3>
+        <div className="space-y-3 border-t border-rules/20 pt-4">
+          <h3 className="text-sm font-semibold">Simuleringens grundlag</h3>
           <p className="text-xs text-muted-foreground">
             Låst ved oprettelse - kandidaterne blev genereret ud fra dette.
           </p>
@@ -304,19 +305,11 @@ export const SimulationRulesPanel = ({
           </div>
         </div>
 
-        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-          <Info
-            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
-            aria-hidden="true"
-          />
-          <p className="text-xs text-amber-900">
-            <strong>Års-optimeringens indstillinger vises ikke her.</strong>{' '}
-            Udledningsloft pr. år, maks. DB2-udsving og hvilke sædskifter der må
-            forskydes gemmes ikke på scenariet - de gælder kun den enkelte
-            kørsel og nulstilles, når dialogen lukkes. Noter dem selv, hvis du
-            skal kunne gentage en kørsel.
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Års-optimeringens indstillinger gemmes ikke her - de gælder kun den
+          enkelte kørsel.
+        </p>
       </CardContent>
     </Card>
   )

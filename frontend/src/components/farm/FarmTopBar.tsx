@@ -1,6 +1,6 @@
-import { ChevronDown, MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Share2, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
@@ -8,6 +8,7 @@ import { farmFieldsKey, farmMembersKey, useFarmMembers } from '@/api/hooks'
 import { addFarmMember, deleteFarm, removeFarmMember } from '@/api/mutations'
 import type { Farm } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import { UserMenu } from '@/components/UserMenu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,100 +19,96 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
 type FarmTopBarProps = {
   farm: Farm
-  /** Name of the visning shown below, when it is not the bedrift's own marker. */
-  visning?: string
-  /** Controls for the visning below, kept on the same row to save vertical space. */
+  viewLabel: string
   actions?: ReactNode
-  /** Nøgletal for the visning, folded away until the user asks for them. */
-  details?: ReactNode
-  tone?: 'default' | 'rules'
   onError: (message: string | null) => void
 }
 
-const HEADER_TONE_CLASSES: Record<'default' | 'rules', string> = {
-  default: 'border-b bg-background',
-  rules: 'border-b border-indigo-300 bg-indigo-50',
-}
-
-/**
- * The one header of the bedrift view: identity of the bedrift, which visning is
- * open, and the actions for both. Navigation between visninger lives in the
- * sidebar, so nothing here repeats it.
- */
 export const FarmTopBar = ({
   farm,
-  visning,
+  viewLabel,
   actions,
-  details,
-  tone = 'default',
   onError,
 }: FarmTopBarProps) => {
   const [shareOpen, setShareOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  // Nøgletal start folded: they are a lookup, not something to read on arrival.
-  const [detailsOpen, setDetailsOpen] = useState(false)
-  const detailsId = useId()
 
   return (
-    <header className={HEADER_TONE_CLASSES[tone]}>
-      <div className="flex min-h-13 shrink-0 flex-wrap items-center gap-x-3 px-3 py-1">
-        {/* The sidebar has its own toggle; on mobile it is a sheet, so it
-            cannot be reopened from inside itself. */}
-        <SidebarTrigger className="-ml-1 md:hidden" />
-        <Separator orientation="vertical" className="h-4 md:hidden" />
+    <header className="flex min-h-13 shrink-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-1 @container">
+      <SidebarTrigger
+        className="size-8 shrink-0 md:hidden"
+        aria-label="Vis eller skjul sidepanelet"
+      />
+      <Separator orientation="vertical" className="h-5 md:hidden" />
 
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h1 className="truncate text-base font-semibold tracking-tight">
-            {farm.name}
-          </h1>
-          {visning ? (
-            <span className="truncate rounded-full border bg-muted px-2 py-0.5 text-xs font-medium">
-              {visning}
-            </span>
-          ) : null}
-          <p className="truncate text-xs text-muted-foreground">
-            {farm.ownerName} · CVR {farm.cvr ?? '—'}
-          </p>
-        </div>
-
-        {details ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={detailsOpen}
-            aria-controls={detailsId}
-            onClick={() => setDetailsOpen((current) => !current)}
-          >
-            Nøgletal
-            <ChevronDown
-              className={`size-4 transition-transform ${
-                detailsOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </Button>
-        ) : null}
-
-        <div className="flex-1" />
-
-        {actions}
-
-        <FarmActionsMenu
-          onShare={() => setShareOpen(true)}
-          onDelete={() => setDeleteOpen(true)}
-        />
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <h1 className="truncate font-display text-lg tracking-tight">
+          {farm.name}
+        </h1>
+        <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+          /
+        </span>
+        <span className="truncate text-sm text-muted-foreground">
+          {viewLabel}
+        </span>
       </div>
 
-      {details && detailsOpen ? (
-        <div id={detailsId} className="border-t">
-          {details}
-        </div>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              aria-label="Handlinger for bedriften"
+            >
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-56">
+            <DropdownMenuLabel>
+              <span className="block">Om bedriften</span>
+              <span className="mt-1 block font-normal text-foreground">
+                {farm.ownerName}
+              </span>
+              <span className="block font-normal">
+                CVR {farm.cvr ?? 'ikke angivet'}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+              <Share2 className="mr-2 size-4" aria-hidden="true" />
+              Del bedrift
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="mr-2 size-4" aria-hidden="true" />
+              Slet bedrift
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <UserMenu className="h-8 py-0" />
+      </div>
 
       <ShareFarmDialog
         farm={farm}
@@ -126,78 +123,6 @@ export const FarmTopBar = ({
         onError={onError}
       />
     </header>
-  )
-}
-
-type FarmActionsMenuProps = {
-  onShare: () => void
-  onDelete: () => void
-}
-
-const FarmActionsMenu = ({ onShare, onDelete }: FarmActionsMenuProps) => {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', closeOnOutsideClick)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('mousedown', closeOnOutsideClick)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [open])
-
-  const runAction = (action: () => void) => {
-    setOpen(false)
-    action()
-  }
-
-  return (
-    <div ref={containerRef} className="relative">
-      <Button
-        variant="outline"
-        size="sm"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Handlinger for bedriften"
-        onClick={() => setOpen((current) => !current)}
-      >
-        <MoreHorizontal className="size-4" />
-      </Button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-md border bg-background py-1 shadow-md"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
-            onClick={() => runAction(onShare)}
-          >
-            Del bedrift
-          </button>
-          <div className="my-1 border-t" />
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-            onClick={() => runAction(onDelete)}
-          >
-            Slet bedrift
-          </button>
-        </div>
-      ) : null}
-    </div>
   )
 }
 

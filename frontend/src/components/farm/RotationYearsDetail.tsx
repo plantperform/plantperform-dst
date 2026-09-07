@@ -85,11 +85,11 @@ export const BigMetricTile = ({
   value: string
   caption?: string
 }) => (
-  <div className="rounded-xl border bg-background p-4">
+  <div className="rounded-lg border bg-background p-4">
     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </p>
-    <p className="mt-1 text-[22px] font-bold leading-tight tabular-nums">{value}</p>
+    <p className="mt-1 text-2xl font-bold leading-tight tabular-nums">{value}</p>
     {caption ? (
       <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
     ) : null}

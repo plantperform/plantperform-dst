@@ -80,7 +80,7 @@ export const UserMenu = ({ variant = 'default', className }: UserMenuProps) => {
         <DropdownMenuItem asChild>
           <Link to="/" state={HOME_OVERVIEW_STATE}>
             <Home className="mr-2 h-4 w-4" aria-hidden="true" />
-            Mine bedrifter
+            Alle bedrifter
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

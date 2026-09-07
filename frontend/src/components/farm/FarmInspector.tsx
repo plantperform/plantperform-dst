@@ -1,15 +1,12 @@
 import {
+  CalendarRange,
   ChevronDown,
   ChevronRight,
-  CircleAlert,
-  CircleCheck,
-  CircleHelp,
   Info,
   List,
   Map as MapIcon,
   SlidersHorizontal,
   Table2,
-  type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
@@ -44,7 +41,7 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
-import { FarmMetricsBar } from '@/components/farm/FarmMetricsBar'
+import { FarmStatusStrip } from '@/components/farm/FarmStatusStrip'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
@@ -61,37 +58,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  aggregateQuotaStatusLevel,
-  computeFarmQuotaSummary,
-  formatFieldCount,
+  SegmentedControl,
+  type SegmentedControlOption,
+} from '@/components/ui/segmented-control'
+import {
+  computeFieldTotals,
   formatNumber,
+  resolveFarmQuota,
   ROTATION_START_CALENDAR_YEAR,
   YEAR_BAR_FILL_COLOR,
   YEAR_BAR_OVER_COLOR,
-  type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
-// Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
-// opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
-// Årsoversigt-stripet henter fra en separat SWR-nøgle der ellers ville
-// blive stående med data fra FØR kørslen — usynligt for brugeren, men ser
-// ud som om nye begrænsninger/lofter blev ignoreret. Tving den til at
-// hente igen.
-//
-// "Beregningsgennemgang pr. år"-panelet (candidate-detail) invalideres
-// bevidst IKKE her længere — det blev tidligere gjort med en bredt
-// matchende nøgle-revalidering, der genopfriskede ALLE candidate-detail-
-// nøgler brugeren nogensinde havde åbnet i denne simulering, uanset om
-// marken rent faktisk fik en ny tildeling. På et scenarie med u-optimerede
-// marker gav det en byge af samtidige mislykkede kald (422 "ikke
-// optimeret endnu") for hver tidligere-åbnet mark. SWR genindlæser
-// candidate-detail automatisk, hver gang panelet næste gang åbnes
-// (mount-tids-revalidering) — det er nok i praksis.
-const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
+const invalidateOptimizationDisplays = async (
+  farmId: string,
+  simulationId: string,
+) => {
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
 
@@ -105,91 +97,28 @@ const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
   ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
 }`
 
-type EmissionStatusTone = 'ok' | 'over' | 'unknown'
+type FarmView = 'list' | 'map'
 
-const EMISSION_STATUS_TONE_CLASSES: Record<EmissionStatusTone, string> = {
-  ok: 'border-green-200 bg-green-50 text-green-800',
-  over: 'border-red-200 bg-red-50 text-red-800',
-  unknown: 'border-amber-200 bg-amber-50 text-amber-800',
-}
+const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
+  { value: 'list', label: 'Liste', icon: List },
+  { value: 'map', label: 'Kort', icon: MapIcon },
+]
 
-const EMISSION_TONE_BY_QUOTA_LEVEL: Record<QuotaStatusLevel, EmissionStatusTone> = {
-  ok: 'ok',
-  near: 'ok',
-  over: 'over',
-  uncalculated: 'unknown',
-  noData: 'unknown',
-  partial: 'unknown',
-}
-
-const EMISSION_ICON_BY_TONE: Record<EmissionStatusTone, LucideIcon> = {
-  ok: CircleCheck,
-  over: CircleAlert,
-  unknown: CircleHelp,
-}
-
-const EmissionStatusBar = ({
-  fields,
-  isSimulationView,
-}: {
-  fields: FieldRecord[]
-  isSimulationView: boolean
-}) => {
-  const { totalNLoad, quota, calculatedCount, uncalculatedCount } = useMemo(
-    () => computeFarmQuotaSummary(fields, isSimulationView),
-    [fields, isSimulationView],
-  )
-  const { quotaKgn, basis: quotaBasis } = quota
-
-  const level = aggregateQuotaStatusLevel(
-    totalNLoad,
-    quotaKgn,
-    calculatedCount,
-    fields.length,
-  )
-  const tone = EMISSION_TONE_BY_QUOTA_LEVEL[level]
-  const Icon = EMISSION_ICON_BY_TONE[tone]
-
-  let message: string
-
-  if (quotaKgn === 0) {
-    message =
-      'Udledningen kan ikke opgøres endnu - ingen udledningsgrænse på markerne'
-  } else if (calculatedCount === 0) {
-    message =
-      'Udledningen kan ikke opgøres endnu - markerne er ikke beregnet endnu'
-  } else {
-    const over = totalNLoad > quotaKgn
-    const diff = Math.abs(quotaKgn - totalNLoad)
-
-    if (over) {
-      const uncalculatedNote =
-        uncalculatedCount > 0
-          ? `, ${formatFieldCount(uncalculatedCount)} ikke beregnet`
-          : ''
-      message =
-        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
-        `(${quotaBasis}${uncalculatedNote}) - ${formatNumber(diff)} kg N OVER grænsen`
-    } else if (uncalculatedCount > 0) {
-      message =
-        `${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N (${quotaBasis}) brugt - ` +
-        `${formatFieldCount(uncalculatedCount)} ikke beregnet endnu`
-    } else {
-      message =
-        `Udledning ${formatNumber(totalNLoad)} af ${formatNumber(quotaKgn)} kg N ` +
-        `(${quotaBasis}) - ${formatNumber(diff)} kg N under grænsen`
-    }
-  }
-
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${EMISSION_STATUS_TONE_CLASSES[tone]}`}
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span>{message}</span>
-    </div>
-  )
-}
+const MODE_OPTIONS: SegmentedControlOption<FarmInspectorMode>[] = [
+  {
+    value: 'values',
+    label: 'Værdier',
+    icon: Table2,
+    title: 'Vis hvad optimeringen har beregnet for markerne',
+  },
+  {
+    value: 'rules',
+    label: 'Regler',
+    icon: SlidersHorizontal,
+    title: 'Sæt hvad optimeringen må gøre',
+    activeClassName: 'bg-rules text-rules-foreground hover:bg-rules/90',
+  },
+]
 
 const YearlyOverviewMiniBars = ({
   entries,
@@ -236,7 +165,8 @@ const YearlyOverviewSection = ({
   const [isOpen, setIsOpen] = useState(false)
   const { data: entries } = useSimulationYearlySummary(farm.id, simulationId)
   const quota = useMemo(
-    () => computeFarmQuotaSummary(fields, true).quota,
+    () =>
+      resolveFarmQuota(computeFieldTotals(fields, true).udledningskvoteMarkKgn),
     [fields],
   )
 
@@ -248,7 +178,7 @@ const YearlyOverviewSection = ({
       : 0
 
   return (
-    <div className="rounded-lg border">
+    <div className="rounded-lg border bg-card">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
@@ -265,7 +195,8 @@ const YearlyOverviewSection = ({
           <div>
             <div className="text-sm font-semibold">Årsoversigt</div>
             <div className="text-xs text-muted-foreground">
-              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - DB2 og udledning år for år
+              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - DB2 og udledning pr.
+              kalenderår
               {overYearCount > 0 ? (
                 <span className="ml-1 font-medium text-red-700">
                   · {overYearCount} af {entries.length} år over grænsen
@@ -285,6 +216,41 @@ const YearlyOverviewSection = ({
   )
 }
 
+type OptimizeButtonProps = {
+  onOptimize: () => void
+  onYearlyOptimize: () => void
+}
+
+const OptimizeButton = ({ onOptimize, onYearlyOptimize }: OptimizeButtonProps) => (
+  <div className="flex shrink-0 items-center">
+    <Button size="xs" className="rounded-r-none" onClick={onOptimize}>
+      Optimér
+    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="xs"
+          className="rounded-l-none border-l border-primary-foreground/25 px-1.5"
+          aria-label="Flere måder at optimere"
+        >
+          <ChevronDown className="size-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onYearlyOptimize}>
+          <CalendarRange className="mr-2 size-4" aria-hidden="true" />
+          Års-optimering...
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+)
+
+type LastRun = {
+  simulationId: string
+  response: OptimizeSimulationResponse
+}
+
 type FarmInspectorProps = {
   farm: Farm
   fields: FieldRecord[]
@@ -300,12 +266,11 @@ export const FarmInspector = ({
   selectedSimulation,
   onError,
 }: FarmInspectorProps) => {
-  const [view, setView] = useState<'list' | 'map'>('list')
+  const [view, setView] = useState<FarmView>('list')
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] = useState(false)
-  const [optimizationSummary, setOptimizationSummary] =
-    useState<OptimizeSimulationResponse | null>(null)
+  const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const isSimulationView = selection.kind === 'simulation'
@@ -313,122 +278,67 @@ export const FarmInspector = ({
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
+  if (lastRun && lastRun.simulationId !== selectedSimulation?.id) {
+    setLastRun(null)
+  }
 
   const openRules = () => {
     setOptimizeDialogOpen(false)
     setMode('rules')
   }
 
+  const recordRun = (response: OptimizeSimulationResponse) => {
+    if (!selectedSimulation) return
+    setLastRun({ simulationId: selectedSimulation.id, response })
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <FarmTopBar
         farm={farm}
-        visning={
+        viewLabel={
           selectedSimulation
             ? `Simulering: ${selectedSimulation.name}`
             : 'Afgrødehistorik'
         }
-        tone={isRules ? 'rules' : 'default'}
         onError={onError}
-        details={
-          isRules ? undefined : (
-            <FarmMetricsBar farmId={farm.id} fields={fields} />
-          )
-        }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             {canSwitchMode ? (
-              <div className="flex items-center gap-0.5 rounded-lg bg-indigo-100 p-0.5">
-                <ViewToggleButton
-                  active={mode === 'values'}
-                  onClick={() => setMode('values')}
-                  label="Værdier"
-                  icon={Table2}
-                  title="Vis hvad optimeringen har beregnet for markerne"
-                />
-                <ViewToggleButton
-                  active={mode === 'rules'}
-                  onClick={() => setMode('rules')}
-                  label="Regler"
-                  icon={SlidersHorizontal}
-                  title="Sæt hvad optimeringen må gøre"
-                  className={
-                    mode === 'rules'
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      : undefined
-                  }
-                />
-              </div>
+              <SegmentedControl
+                aria-label="Værdier eller regler"
+                value={effectiveMode}
+                options={MODE_OPTIONS}
+                onValueChange={setMode}
+                className="bg-rules/10"
+                labelClassName="hidden @4xl:inline"
+              />
             ) : null}
             {selectedSimulation ? (
-              <Button size="sm" onClick={() => setOptimizeDialogOpen(true)}>
-                Optimér
-              </Button>
-            ) : null}
-            {selectedSimulation ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setYearlyOptimizeDialogOpen(true)}
-              >
-                Års-optimering
-              </Button>
-            ) : null}
-            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-              <ViewToggleButton
-                active={view === 'list'}
-                onClick={() => setView('list')}
-                label="Liste"
-                icon={List}
+              <OptimizeButton
+                onOptimize={() => setOptimizeDialogOpen(true)}
+                onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
               />
-              <ViewToggleButton
-                active={view === 'map'}
-                onClick={() => setView('map')}
-                label="Kort"
-                icon={MapIcon}
-              />
-            </div>
-          </div>
+            ) : null}
+            <SegmentedControl
+              aria-label="Liste eller kort"
+              value={view}
+              options={VIEW_OPTIONS}
+              onValueChange={setView}
+              labelClassName="hidden @4xl:inline"
+            />
+          </>
         }
       />
 
-      {isRules ? (
-        <div className="flex items-start gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900">
-          <SlidersHorizontal
-            className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600"
-            aria-hidden="true"
-          />
-          <div>
-            <span className="font-semibold">Optimeringsregler</span>
-            <span className="ml-2 text-indigo-900/80">
-              Her bestemmer du, hvad optimeringen må gøre. Intet her er tal,
-              marken har - det er rammer for næste kørsel.
-            </span>
-          </div>
-        </div>
-      ) : null}
-
-      {optimizationSummary && selectedSimulation && !isRules ? (
-        <p className="border-b border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-          Optimering {optimizationSummary.status.toLowerCase()}: DB2{' '}
-          {optimizationSummary.objectiveDb2.toLocaleString(undefined, {
-            maximumFractionDigits: 0,
-          })}
-          , Udledning{' '}
-          {optimizationSummary.totalNLoadKg.toLocaleString(undefined, {
-            maximumFractionDigits: 1,
-          })}{' '}
-          kg N, udvaskning{' '}
-          {optimizationSummary.totalLeachingKg.toLocaleString(undefined, {
-            maximumFractionDigits: 1,
-          })}{' '}
-          kg N, foderenheder{' '}
-          {optimizationSummary.totalFen.toLocaleString(undefined, {
-            maximumFractionDigits: 0,
-          })}{' '}
-          FE.
-        </p>
-      ) : null}
+      {isRules ? null : (
+        <FarmStatusStrip
+          farmId={farm.id}
+          fields={fields}
+          isSimulationView={isSimulationView}
+          lastRun={lastRun?.response ?? null}
+        />
+      )}
 
       {selectedSimulation ? (
         <OptimizeDialog
@@ -437,7 +347,7 @@ export const FarmInspector = ({
           simulation={selectedSimulation}
           open={optimizeDialogOpen}
           onOpenChange={setOptimizeDialogOpen}
-          onOptimized={setOptimizationSummary}
+          onOptimized={recordRun}
           onOpenRules={openRules}
         />
       ) : null}
@@ -449,109 +359,73 @@ export const FarmInspector = ({
           simulation={selectedSimulation}
           open={yearlyOptimizeDialogOpen}
           onOpenChange={setYearlyOptimizeDialogOpen}
-          onOptimized={setOptimizationSummary}
+          onOptimized={recordRun}
         />
       ) : null}
 
-      <div
-        className={cn(
-          'min-h-0 min-w-0 flex-1 p-4',
-          view === 'list'
-            ? 'space-y-4 overflow-y-auto'
-            : 'flex flex-col gap-4',
-          isRules && 'bg-indigo-50/40',
-        )}
-      >
-        {isRules ? null : (
-          <EmissionStatusBar
-            fields={fields}
-            isSimulationView={isSimulationView}
-          />
-        )}
-        {isRules && selectedSimulation ? (
-          <SimulationRulesPanel
-            key={selectedSimulation.id}
-            farmId={farm.id}
-            simulation={selectedSimulation}
-            fields={fields}
-          />
-        ) : null}
-        {view === 'list' ? (
-          <>
-            {isSimulationView && selection.kind === 'simulation' && !isRules ? (
-              <YearlyOverviewSection
-                farm={farm}
-                fields={fields}
-                simulationId={selection.id}
-              />
-            ) : null}
-            <FarmFieldsList
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div
+          className={cn(
+            'h-full p-3',
+            view === 'list'
+              ? 'space-y-3 overflow-y-auto'
+              : 'flex flex-col gap-3',
+            isRules && 'bg-rules/5',
+          )}
+        >
+          {isRules && selectedSimulation ? (
+            <SimulationRulesPanel
+              key={selectedSimulation.id}
               farmId={farm.id}
+              simulation={selectedSimulation}
               fields={fields}
-              isSimulationView={isSimulationView}
-              simulationId={
-                selection.kind === 'simulation' ? selection.id : undefined
+            />
+          ) : null}
+          {view === 'list' ? (
+            <>
+              {isSimulationView && selection.kind === 'simulation' && !isRules ? (
+                <YearlyOverviewSection
+                  farm={farm}
+                  fields={fields}
+                  simulationId={selection.id}
+                />
+              ) : null}
+              <FarmFieldsList
+                farmId={farm.id}
+                fields={fields}
+                isSimulationView={isSimulationView}
+                simulationId={
+                  selection.kind === 'simulation' ? selection.id : undefined
+                }
+                simulation={
+                  selection.kind === 'simulation' ? selectedSimulation : undefined
+                }
+                mode={effectiveMode}
+                sort={fieldsSort}
+                onSortChange={setFieldsSort}
+                onSwitchToMap={() => setView('map')}
+                onError={onError}
+              />
+            </>
+          ) : (
+            <FarmFieldsMap
+              key={
+                selection.kind === 'current'
+                  ? 'current'
+                  : `simulation-${selection.id}`
               }
-              simulation={
-                selection.kind === 'simulation' ? selectedSimulation : undefined
-              }
+              farm={farm}
+              fields={fields}
+              readOnly={isSimulationView}
               mode={effectiveMode}
-              sort={fieldsSort}
-              onSortChange={setFieldsSort}
-              onSwitchToMap={() => setView('map')}
               onError={onError}
             />
-          </>
-        ) : (
-          <FarmFieldsMap
-            key={
-              selection.kind === 'current'
-                ? 'current'
-                : `simulation-${selection.id}`
-            }
-            farm={farm}
-            fields={fields}
-            readOnly={isSimulationView}
-            mode={effectiveMode}
-            onError={onError}
-          />
-        )}
+          )}
+        </div>
       </div>
     </section>
   )
 }
-
-type ViewToggleButtonProps = {
-  active: boolean
-  onClick: () => void
-  label: string
-  icon: LucideIcon
-  title?: string
-  className?: string
-}
-
-/** One half of the Liste/Kort segmented control: the track carries the frame. */
-const ViewToggleButton = ({
-  active,
-  onClick,
-  label,
-  icon: Icon,
-  title,
-  className,
-}: ViewToggleButtonProps) => (
-  <Button
-    size="sm"
-    variant={active ? 'default' : 'ghost'}
-    aria-pressed={active}
-    aria-label={label}
-    title={title}
-    className={cn('h-8 px-3', className)}
-    onClick={onClick}
-  >
-    <Icon className="h-4 w-4" aria-hidden="true" />
-    <span className="hidden sm:inline">{label}</span>
-  </Button>
-)
 
 type OptimizeDialogProps = {
   farmId: string
@@ -563,7 +437,7 @@ type OptimizeDialogProps = {
 }
 
 const formatLimit = (value: number | null, unit: string) =>
-  value === null ? 'Ingen grænse' : `${value.toLocaleString('da-DK')} ${unit}`
+  value === null ? 'Ingen grænse' : `${formatNumber(value)} ${unit}`
 
 type CatchmentYearlyInput = {
   sameForAllYears: boolean
@@ -635,15 +509,15 @@ const OptimizeDialog = ({
         <DialogHeader>
           <DialogTitle>Optimér {simulation.name}</DialogTitle>
           <DialogDescription>
-            Kør optimeringen med de regler, der er gemt på scenariet.
+            Kør optimeringen med de regler, der er gemt på simuleringen.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
-          <div className="space-y-2 rounded-md border border-indigo-200 bg-indigo-50/60 p-3">
+          <div className="space-y-2 rounded-lg border border-rules/30 bg-rules/5 p-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <SlidersHorizontal
-                className="h-4 w-4 text-indigo-600"
+                className="h-4 w-4 text-rules"
                 aria-hidden="true"
               />
               Gældende grænser
@@ -686,7 +560,7 @@ const OptimizeDialog = ({
               Ændres under <strong>Regler</strong> - ikke her.{' '}
               <button
                 type="button"
-                className="rounded-sm font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                className="rounded-sm font-medium text-rules underline underline-offset-2 hover:text-rules/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 onClick={onOpenRules}
               >
                 Åbn Regler
@@ -705,14 +579,14 @@ const OptimizeDialog = ({
               onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
             />
             <p className="text-xs text-muted-foreground">
-              sekunder — sæt højere hvis optimeringen ikke når at finde en
+              sekunder - sæt højere hvis optimeringen ikke når at finde en
               løsning i tide på en stor bedrift
             </p>
           </div>
         </div>
 
         {runError ? (
-          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
             {runError}
           </p>
         ) : null}
@@ -815,10 +689,6 @@ const YearlyOptimizeDialog = ({
     })
   }
 
-  // Estimat, ikke en garanti — baseret på ~2ms pr. forskudt (mark × valgt
-  // sædskifte × år-position), målt empirisk under denne funktions
-  // performance-arbejde. Vokser med både antal marker og antal valgte
-  // sædskifter, som brugeren selv styrer.
   const estimatedSeconds = useMemo(() => {
     const activeLenByPair = new Map<string, number>()
     for (const kategori of kategorier) {
@@ -897,24 +767,24 @@ const YearlyOptimizeDialog = ({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Års-optimering — {simulation.name}</DialogTitle>
+          <DialogTitle>Års-optimering - {simulation.name}</DialogTitle>
           <DialogDescription>
             Optimér med udledningsloft pr. kalenderår og en grænse for hvor
             meget dækningsbidraget må svinge år til år. Vælg herunder hvilke
             sædskifter der må rykkes frem/tilbage i deres cyklus for at
-            overholde grænserne — du styrer selv afvejningen mellem hvor
+            overholde grænserne - du styrer selv afvejningen mellem hvor
             mange muligheder optimeringen har, og hvor lang tid den tager.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <Info
             className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
             aria-hidden="true"
           />
           <p className="text-xs text-amber-900">
             Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
-            gemmes ikke på scenariet - de nulstilles, når dialogen lukkes, og
+            gemmes ikke på simuleringen - de nulstilles, når dialogen lukkes, og
             vises derfor ikke under Regler. Noter dem, hvis du skal kunne
             gentage kørslen.
           </p>
@@ -1011,8 +881,8 @@ const YearlyOptimizeDialog = ({
               onChange={(event) => setDb2SwingPct(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              % — intet års samlede DB2 må afvige mere end dette fra
-              gennemsnittet af scenariets år
+              % - intet års samlede DB2 må afvige mere end dette fra
+              gennemsnittet af simuleringens år
             </p>
           </div>
 
@@ -1020,7 +890,7 @@ const YearlyOptimizeDialog = ({
             <Label>Sædskifter der må forskydes</Label>
             <p className="text-xs text-muted-foreground">
               Kun sædskifter du vælger her kan rykkes frem/tilbage i deres
-              cyklus for at overholde grænserne ovenfor — resten indgår
+              cyklus for at overholde grænserne ovenfor - resten indgår
               stadig i optimeringen, men fastholder deres nuværende
               års-fordeling. Ingen valgt = ingen forskydning, optimeringen
               vælger da kun blandt de allerede gemte kandidater.
@@ -1105,7 +975,7 @@ const YearlyOptimizeDialog = ({
         </div>
 
         {runError ? (
-          <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
             {runError}
           </p>
         ) : null}
