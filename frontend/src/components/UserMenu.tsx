@@ -10,7 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { getStoredRole, HOME_OVERVIEW_STATE } from '@/lib/onboarding'
+import {
+  getStoredRole,
+  HOME_OVERVIEW_STATE,
+  ROLE_LABELS,
+} from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
 
 type UserMenuProps = {
@@ -18,13 +22,53 @@ type UserMenuProps = {
   className?: string
 }
 
-const ROLE_LABELS = { landmand: 'Landmand', konsulent: 'Konsulent' } as const
-
-export const UserMenu = ({ variant = 'default', className }: UserMenuProps) => {
+export const UserMenuContent = () => {
   const { user, signOut } = useAuth()
   const email = user?.email ?? ''
-  const initial = email.charAt(0).toUpperCase()
   const role = email ? getStoredRole(email) : null
+
+  return (
+    <>
+      <DropdownMenuLabel>
+        <span className="block">{email}</span>
+        {role ? (
+          <span className="block text-xs font-normal text-muted-foreground">
+            {ROLE_LABELS[role]}
+          </span>
+        ) : null}
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem asChild>
+        <Link to="/profil">
+          <User className="mr-2 h-4 w-4" aria-hidden="true" />
+          Profil
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/" state={HOME_OVERVIEW_STATE}>
+          <Home className="mr-2 h-4 w-4" aria-hidden="true" />
+          Bedrifter
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/farms/new">
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+          Opret ny bedrift
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onSelect={() => void signOut()}>
+        <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+        Log ud
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+export const UserMenu = ({ variant = 'default', className }: UserMenuProps) => {
+  const { user } = useAuth()
+  const email = user?.email ?? ''
+  const initial = email.charAt(0).toUpperCase()
 
   return (
     <DropdownMenu>
@@ -62,38 +106,7 @@ export const UserMenu = ({ variant = 'default', className }: UserMenuProps) => {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>
-          <span className="block">{email}</span>
-          {role ? (
-            <span className="block text-xs font-normal text-muted-foreground">
-              {ROLE_LABELS[role]}
-            </span>
-          ) : null}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/profil">
-            <User className="mr-2 h-4 w-4" aria-hidden="true" />
-            Profil
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/" state={HOME_OVERVIEW_STATE}>
-            <Home className="mr-2 h-4 w-4" aria-hidden="true" />
-            Alle bedrifter
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/farms/new">
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            Opret ny bedrift
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void signOut()}>
-          <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
-          Log ud
-        </DropdownMenuItem>
+        <UserMenuContent />
       </DropdownMenuContent>
     </DropdownMenu>
   )

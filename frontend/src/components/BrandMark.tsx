@@ -1,5 +1,3 @@
-import { Sprout } from 'lucide-react'
-
 import { cn } from '@/lib/utils'
 
 type BrandMarkProps = {
@@ -18,17 +16,15 @@ export const BrandMark = ({
     role={compact ? 'img' : undefined}
     aria-label={compact ? 'PlantPerform' : undefined}
   >
-    <span
+    <img
+      src="/plantperform-mark.svg"
+      alt=""
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-lg',
+        'shrink-0 rounded-sm',
         compact ? 'size-8' : 'size-9',
-        variant === 'onDark'
-          ? 'bg-primary-foreground/10 ring-1 ring-primary-foreground/25'
-          : 'bg-primary text-primary-foreground',
+        variant === 'onDark' && 'ring-1 ring-primary-foreground/25',
       )}
-    >
-      <Sprout className={compact ? 'size-4' : 'size-5'} aria-hidden="true" />
-    </span>
+    />
     {compact ? null : (
       <span className="truncate text-lg font-semibold tracking-tight">
         PlantPerform
