@@ -151,15 +151,15 @@ export const NewScenarioPanel = ({
   const createScenario = async () => {
     const name = scenarioName.trim()
     if (!name) {
-      onError('Indtast et navn til scenariet.')
+      onError('Indtast et navn til simuleringen.')
       return
     }
     if (!hasAnySelection) {
-      onError('Vælg mindst ét sædskifte i mindst én kategori.')
+      onError('Vælg mindst et sædskifte i mindst en kategori.')
       return
     }
     if (selectedNNorm.size === 0) {
-      onError('Vælg mindst én N-norm%.')
+      onError('Vælg mindst en N-norm%.')
       return
     }
 
@@ -213,7 +213,7 @@ export const NewScenarioPanel = ({
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
       setFdatoDate('20/8')
     } catch {
-      onError('Kunne ikke oprette scenariet.')
+      onError('Kunne ikke oprette simuleringen.')
     } finally {
       setIsCreating(false)
     }
@@ -223,21 +223,21 @@ export const NewScenarioPanel = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nyt scenarie</DialogTitle>
+          <DialogTitle>Ny simulering</DialogTitle>
           <DialogDescription>
-            Scenariet oprettes med de {fields.length}{' '}
-            {fields.length === 1 ? 'mark, der er valgt' : 'marker, der er valgt'} under "Aktuel".
-            Alle sædskifte-kandidater der matcher dine valg beregnes og gøres klar i baggrunden —
-            du bruger derefter "Optimér" til at vælge det bedste sædskifte pr. mark.
+            Simuleringen oprettes med de {fields.length}{' '}
+            {fields.length === 1 ? 'mark, der er valgt' : 'marker, der er valgt'} under Afgrødehistorik.
+            Alle sædskifte-kandidater der matcher dine valg beregnes og gøres klar i baggrunden -
+            du bruger derefter Optimér til at vælge det bedste sædskifte pr. mark.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="scenario-name">Scenarie-navn</Label>
+            <Label htmlFor="scenario-name">Simuleringens navn</Label>
             <Input
               id="scenario-name"
-              placeholder="Reduceret kvælstofscenarie"
+              placeholder="Reduceret kvælstof"
               value={scenarioName}
               onChange={(event) => setScenarioName(event.target.value)}
             />
@@ -263,9 +263,9 @@ export const NewScenarioPanel = ({
           <div className="space-y-2">
             <Label>Sædskifter</Label>
             <p className="text-xs text-muted-foreground">
-              Grupperet efter sædskifte-type til overblik — gødning vælges separat
+              Grupperet efter sædskifte-type til overblik - gødning vælges separat
               nedenfor og er uafhængig af hvilke sædskifter du vælger her. Fold en
-              gruppe ud for at vælge specifikke sædskifter til/fra — ellers indgår alle.
+              gruppe ud for at vælge specifikke sædskifter til/fra - ellers indgår alle.
             </p>
             <div className="space-y-1">
               {kategorier.map((option) => {
@@ -343,8 +343,8 @@ export const NewScenarioPanel = ({
           <div className="space-y-3">
             <Label>Gødning</Label>
             <p className="text-xs text-muted-foreground">
-              Uafhængig af hvilke sædskifter du har valgt ovenfor — samme
-              gødningsvalg bruges for alle valgte sædskifter i scenariet.
+              Uafhængig af hvilke sædskifter du har valgt ovenfor - samme
+              gødningsvalg bruges for alle valgte sædskifter i simuleringen.
             </p>
             <label className="space-y-1 text-sm">
               <span className="text-xs text-muted-foreground">Gødningstype</span>
@@ -426,7 +426,7 @@ export const NewScenarioPanel = ({
                   checked={onlyOrganic}
                   onChange={(event) => setOnlyOrganic(event.target.checked)}
                 />
-                Kun organisk gødning (ingen handelsgødnings-optopning) — typisk økologisk
+                Kun organisk gødning (ingen handelsgødnings-optopning) - typisk økologisk
               </label>
             ) : null}
           </div>
@@ -434,7 +434,7 @@ export const NewScenarioPanel = ({
           <div className="space-y-2">
             <Label>N-norm%</Label>
             <p className="text-xs text-muted-foreground">
-              Hvor stor en andel af den fulde N-norm der skal indgå — vælg ét eller flere niveauer.
+              Hvor stor en andel af den fulde N-norm der skal indgå - vælg et eller flere niveauer.
             </p>
             <div className="flex flex-wrap gap-2">
               {nNormProcenter.map((value) => (
@@ -461,8 +461,8 @@ export const NewScenarioPanel = ({
           <div className="space-y-2">
             <Label>Efterafgrøde-etablering</Label>
             <p className="text-xs text-muted-foreground">
-              Sådato/etableringsinterval for efterafgrøde (EEA) — gælder for alle år med
-              efterafgrøde på tværs af scenariets marker.
+              Sådato/etableringsinterval for efterafgrøde (EEA) - gælder for alle år med
+              efterafgrøde på tværs af simuleringens marker.
             </p>
             <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
               <input
@@ -473,7 +473,7 @@ export const NewScenarioPanel = ({
               />
               <span>
                 <span className="font-medium">
-                  Etableret med præcisionsteknologi (§38 — dagsbasis-effekt)
+                  Etableret med præcisionsteknologi (§38 - dagsbasis-effekt)
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   Kun hvis udstyr med autostyring udfører positions- og datobestemt såning.
@@ -558,11 +558,11 @@ export const NewScenarioPanel = ({
 
           <div className="flex items-center gap-3">
             <Button onClick={() => void createScenario()} disabled={!canCreate || isCreating}>
-              {isCreating ? 'Opretter scenarie...' : 'Opret scenarie'}
+              {isCreating ? 'Opretter simulering...' : 'Opret simulering'}
             </Button>
             {isCreating ? (
               <p className="text-sm text-muted-foreground">
-                Beregner sædskifte-kandidater for alle marker — kan tage et øjeblik.
+                Beregner sædskifte-kandidater for alle marker - kan tage et øjeblik.
               </p>
             ) : null}
           </div>

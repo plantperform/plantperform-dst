@@ -6,7 +6,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { Columns3, SlidersHorizontal } from 'lucide-react'
+import { Columns3 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -64,9 +64,8 @@ import {
 import {
   buildCropColorMap,
   changedFieldIds,
-  isFieldCalculated,
+  computeFieldTotals,
   isFieldLocked,
-  resolveFarmQuota,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
 import { cn } from '@/lib/utils'
@@ -153,31 +152,9 @@ export const FarmFieldsList = ({
     [isRules, fields, liveFields],
   )
 
-  const totals = useMemo(() => {
-    const calculatedFields = fields.filter((field) =>
-      isFieldCalculated(field, isSimulationView),
-    )
-    return {
-      areaHa: fields.reduce((sum, field) => sum + field.areaHa, 0),
-      db2: calculatedFields.reduce((sum, field) => sum + field.db2, 0),
-      nLoad: calculatedFields.reduce((sum, field) => sum + field.nLoad, 0),
-      leaching: calculatedFields.reduce(
-        (sum, field) => sum + field.leaching,
-        0,
-      ),
-      fen: calculatedFields.reduce((sum, field) => sum + field.fen, 0),
-      udledningskvoteMarkKgn: fields.reduce(
-        (sum, field) => sum + field.udledningskvoteMarkKgn,
-        0,
-      ),
-      calculatedCount: calculatedFields.length,
-      uncalculatedCount: fields.length - calculatedFields.length,
-    }
-  }, [fields, isSimulationView])
-
-  const resolvedQuota = useMemo(
-    () => resolveFarmQuota(totals.udledningskvoteMarkKgn),
-    [totals.udledningskvoteMarkKgn],
+  const totals = useMemo(
+    () => computeFieldTotals(fields, isSimulationView),
+    [fields, isSimulationView],
   )
 
   const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
@@ -266,7 +243,6 @@ export const FarmFieldsList = ({
         fields,
         cropColorMap,
         totals,
-        resolvedQuota,
         canEditRules,
         lockingFieldId,
         onToggleLock,
@@ -279,7 +255,6 @@ export const FarmFieldsList = ({
       fields,
       cropColorMap,
       totals,
-      resolvedQuota,
       canEditRules,
       lockingFieldId,
       onToggleLock,
@@ -343,30 +318,17 @@ export const FarmFieldsList = ({
 
   return (
     <>
-      <Card className={isRules ? 'border-indigo-300' : undefined}>
-        <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              {isRules ? (
-                <SlidersHorizontal
-                  className="h-4 w-4 text-indigo-600"
-                  aria-hidden="true"
-                />
-              ) : null}
-              {isRules ? 'Regler pr. mark' : 'Marker'}
-            </CardTitle>
-            <CardDescription>
-              {isRules
-                ? 'Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste kørsel - de er ikke tal, marken har.'
-                : isSimulationView
-                  ? 'Sædskifte og tal, som optimeringen har beregnet for denne simulering.'
-                  : 'Marker, der aktuelt er tilknyttet bedriften.'}
-            </CardDescription>
-          </div>
-          {isRules ? null : (
+      <div className="space-y-2">
+        {isRules ? (
+          <p className="text-xs text-muted-foreground">
+            Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste
+            kørsel - de er ikke tal, marken har.
+          </p>
+        ) : (
+          <div className="flex items-center justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
+                <Button variant="outline" size="xs" className="gap-1.5">
                   <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
                   Kolonner
                   <span className="text-muted-foreground">
@@ -392,131 +354,129 @@ export const FarmFieldsList = ({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+        )}
+        <div
+          className={cn(
+            'overflow-x-auto rounded-lg border bg-card',
+            isRules && 'border-rules/30',
           )}
-        </CardHeader>
-        <CardContent>
-          <div
-            className={cn(
-              'overflow-x-auto rounded-lg border',
-              isRules && 'border-indigo-200',
-            )}
-          >
-            <Table className="border-collapse text-left">
-              <TableHeader className={isRules ? 'bg-indigo-100' : 'bg-muted/60'}>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => {
-                      const meta = header.column.columnDef.meta
-                      const sortable = header.column.getCanSort()
-                      const sorted = header.column.getIsSorted()
-                      return (
-                        <TableHead
-                          key={header.id}
-                          aria-sort={
-                            sortable
-                              ? sorted === 'asc'
-                                ? 'ascending'
-                                : sorted === 'desc'
-                                  ? 'descending'
-                                  : 'none'
-                              : undefined
-                          }
-                          className={meta?.headerClassName}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                        </TableHead>
-                      )
-                    })}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => {
-                  const field = row.original
-                  const isChanged = changedFields.has(field.id)
-                  const isSelected = selectedFieldId === field.id
-                  const openPanel = () =>
-                    setSelectedFieldId(isSelected ? null : field.id)
+        >
+        <Table className="border-collapse text-left">
+          <TableHeader className={isRules ? 'bg-rules/10' : 'bg-muted/60'}>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const meta = header.column.columnDef.meta
+                  const sortable = header.column.getCanSort()
+                  const sorted = header.column.getIsSorted()
                   return (
-                    <TableRow
-                      key={field.id}
-                      onClick={isRules ? undefined : openPanel}
-                      onKeyDown={
-                        isRules
-                          ? undefined
-                          : (event) => {
-                              if (event.key !== 'Enter' && event.key !== ' ')
-                                return
-                              event.preventDefault()
-                              openPanel()
-                            }
+                    <TableHead
+                      key={header.id}
+                      aria-sort={
+                        sortable
+                          ? sorted === 'asc'
+                            ? 'ascending'
+                            : sorted === 'desc'
+                              ? 'descending'
+                              : 'none'
+                          : undefined
                       }
-                      tabIndex={isRules ? undefined : 0}
-                      aria-label={
-                        isRules
-                          ? undefined
-                          : `Vis detaljer for mark ${field.name}`
-                      }
-                      data-selected={isSelected}
-                      className={cn(
-                        !isRules &&
-                          'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                        isSelected
-                          ? 'bg-[#f4f7ef]'
-                          : isChanged
-                            ? 'bg-blue-50'
-                            : undefined,
-                      )}
+                      className={meta?.headerClassName}
                     >
-                      {row.getVisibleCells().map((cell) => {
-                        const meta = cell.column.columnDef.meta
-                        return (
-                          <TableCell
-                            key={cell.id}
-                            className={meta?.cellClassName}
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext(),
-                            )}
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </TableHead>
                   )
                 })}
-              </TableBody>
-              <TableFooter>
-                {table.getFooterGroups().map((footerGroup) => (
-                  <TableRow key={footerGroup.id}>
-                    {footerGroup.headers.map((footer) => {
-                      const meta = footer.column.columnDef.meta
-                      return (
-                        <TableCell
-                          key={footer.id}
-                          className={meta?.cellClassName}
-                        >
-                          {footer.isPlaceholder
-                            ? null
-                            : flexRender(
-                                footer.column.columnDef.footer,
-                                footer.getContext(),
-                              )}
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                ))}
-              </TableFooter>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => {
+              const field = row.original
+              const isChanged = changedFields.has(field.id)
+              const isSelected = selectedFieldId === field.id
+              const openPanel = () =>
+                setSelectedFieldId(isSelected ? null : field.id)
+              return (
+                <TableRow
+                  key={field.id}
+                  onClick={isRules ? undefined : openPanel}
+                  onKeyDown={
+                    isRules
+                      ? undefined
+                      : (event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ')
+                            return
+                          event.preventDefault()
+                          openPanel()
+                        }
+                  }
+                  tabIndex={isRules ? undefined : 0}
+                  aria-label={
+                    isRules
+                      ? undefined
+                      : `Vis detaljer for mark ${field.name}`
+                  }
+                  data-selected={isSelected}
+                  className={cn(
+                    !isRules &&
+                      'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                    isSelected
+                      ? 'bg-secondary/50'
+                      : isChanged
+                        ? 'bg-blue-50'
+                        : undefined,
+                  )}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const meta = cell.column.columnDef.meta
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={meta?.cellClassName}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              )
+            })}
+          </TableBody>
+          <TableFooter>
+            {table.getFooterGroups().map((footerGroup) => (
+              <TableRow key={footerGroup.id}>
+                {footerGroup.headers.map((footer) => {
+                  const meta = footer.column.columnDef.meta
+                  return (
+                    <TableCell
+                      key={footer.id}
+                      className={meta?.cellClassName}
+                    >
+                      {footer.isPlaceholder
+                        ? null
+                        : flexRender(
+                            footer.column.columnDef.footer,
+                            footer.getContext(),
+                          )}
+                    </TableCell>
+                  )
+                })}
+              </TableRow>
+            ))}
+          </TableFooter>
+        </Table>
+        </div>
+      </div>
       {selectedField ? (
         <MarkPanel
           key={selectedField.id}
@@ -526,9 +486,6 @@ export const FarmFieldsList = ({
           simulationId={simulationId}
           simulation={simulation}
           cropColorMap={cropColorMap}
-          isLocked={isFieldLocked(selectedField)}
-          isLockingInProgress={lockingFieldId === selectedField.id}
-          onToggleLock={() => void toggleFieldLock(selectedField)}
           isDetaching={detachingFieldId === selectedField.id}
           onRequestDetach={() => setConfirmDetachField(selectedField)}
           onClose={() => setSelectedFieldId(null)}

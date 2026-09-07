@@ -10,7 +10,6 @@ import type { FarmInspectorMode } from '@/components/farm/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  aggregateQuotaStatusLevel,
   CROP_YEAR_FALLBACK_COLOR,
   formatLockTooltip,
   formatNumber,
@@ -18,12 +17,10 @@ import {
   getFieldQuotaStatus,
   isFieldCalculated,
   isFieldLocked,
-  QUOTA_WARNING_LEVEL_COLORS,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
+  type FieldTotals,
   type QuotaStatus,
-  type QuotaStatusLevel,
-  type ResolvedFarmQuota,
 } from '@/lib/field-domain'
 
 declare module '@tanstack/react-table' {
@@ -33,17 +30,6 @@ declare module '@tanstack/react-table' {
     cellClassName?: string
     toggleLabel?: string
   }
-}
-
-export type FarmFieldsTotals = {
-  areaHa: number
-  db2: number
-  nLoad: number
-  leaching: number
-  fen: number
-  udledningskvoteMarkKgn: number
-  calculatedCount: number
-  uncalculatedCount: number
 }
 
 export const OPTIONAL_COLUMN_IDS = [
@@ -71,70 +57,34 @@ const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => 
   return seenNames.length > 2 ? `${firstWords.join(' + ')} m.fl.` : firstWords.join(' + ')
 }
 
-const QUOTA_STATUS_BADGE: Partial<
-  Record<QuotaStatusLevel, { label: string; bg: string; border: string; color: string }>
-> = {
-  near: {
-    label: 'tæt på',
-    bg: QUOTA_WARNING_LEVEL_COLORS.near.bg,
-    border: QUOTA_WARNING_LEVEL_COLORS.near.border,
-    color: QUOTA_WARNING_LEVEL_COLORS.near.text,
-  },
-  over: {
-    label: 'over',
-    bg: QUOTA_WARNING_LEVEL_COLORS.over.bg,
-    border: QUOTA_WARNING_LEVEL_COLORS.over.border,
-    color: QUOTA_WARNING_LEVEL_COLORS.over.text,
-  },
-}
-
-const renderQuotaStatus = (
-  status: QuotaStatus,
-  options: {
-    bold?: boolean
-    uncalculatedCount?: number
-    basisLabel?: string
-  } = {},
-) => {
-  const { bold = false, uncalculatedCount = 0, basisLabel } = options
-  const badge = QUOTA_STATUS_BADGE[status.level]
-
+const renderQuotaStatus = (status: QuotaStatus) => {
   if (status.level === 'uncalculated') {
     return (
-      <QuotaStatusIndicator level={status.level} bold={bold} badge={badge}>
+      <QuotaStatusIndicator level={status.level}>
         <span className="text-muted-foreground">Ikke beregnet</span>
       </QuotaStatusIndicator>
     )
   }
   if (status.level === 'noData') {
     return (
-      <QuotaStatusIndicator level={status.level} bold={bold} badge={badge}>
+      <QuotaStatusIndicator level={status.level}>
         <span className="text-muted-foreground">Ingen data</span>
       </QuotaStatusIndicator>
     )
   }
 
-  const notes: string[] = []
-  if (basisLabel) notes.push(basisLabel)
-  if (
-    (status.level === 'over' || status.level === 'partial') &&
-    uncalculatedCount > 0
-  ) {
-    notes.push(`${uncalculatedCount} ikke beregnet`)
-  }
-  const noteText = notes.length > 0 ? ` (${notes.join(', ')})` : ''
-  const amountText = `${formatQuotaAmount(status)}${noteText}`
+  const amountText = formatQuotaAmount(status)
 
   if (status.level === 'partial') {
     return (
-      <QuotaStatusIndicator level={status.level} bold={bold} badge={badge}>
+      <QuotaStatusIndicator level={status.level}>
         <span className="text-muted-foreground">{amountText}</span>
       </QuotaStatusIndicator>
     )
   }
 
   return (
-    <QuotaStatusIndicator level={status.level} bold={bold} badge={badge}>
+    <QuotaStatusIndicator level={status.level} badge>
       {amountText}
     </QuotaStatusIndicator>
   )
@@ -150,7 +100,7 @@ type NumericMetricColumnConfig = {
 const numericMetricColumn = (
   config: NumericMetricColumnConfig,
   isSimulationView: boolean,
-  totals: FarmFieldsTotals,
+  totals: FieldTotals,
 ): ColumnDef<FieldRecord, unknown> => {
   const { key, label, unit, emptyCell } = config
   return {
@@ -358,7 +308,7 @@ const buildRulesColumns = ({
       ),
       cell: ({ row }) =>
         row.original.allowedRotationIds.length === 0 ? (
-          <span className="text-muted-foreground">Alle i scenariet</span>
+          <span className="text-muted-foreground">Alle i simuleringen</span>
         ) : (
           `${row.original.allowedRotationIds.length} valgt`
         ),
@@ -382,9 +332,9 @@ const buildRulesColumns = ({
         return (
           <div className="flex flex-nowrap items-center justify-end gap-2">
             <Button
-              size="sm"
+              size="xs"
               variant="outline"
-              className="h-8 px-2.5"
+              className="px-2.5"
               disabled={noRotation}
               onClick={() => onBindRotation(field)}
               title={
@@ -396,14 +346,14 @@ const buildRulesColumns = ({
               Vælg og lås sædskifte...
             </Button>
             <Button
-              size="sm"
+              size="xs"
               variant="ghost"
               onClick={() => onToggleLock(field)}
               disabled={noRotation || lockingFieldId === field.id}
               className={
                 locked
-                  ? 'h-8 gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
-                  : 'h-8 gap-1.5 px-2.5 text-muted-foreground'
+                  ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
+                  : 'gap-1.5 px-2.5 text-muted-foreground'
               }
               title={
                 locked
@@ -438,8 +388,7 @@ export type FarmFieldsColumnsArgs = {
   maxYears: number
   fields: FieldRecord[]
   cropColorMap: Map<number, string>
-  totals: FarmFieldsTotals
-  resolvedQuota: ResolvedFarmQuota
+  totals: FieldTotals
   canEditRules: boolean
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
@@ -453,7 +402,6 @@ export const buildFarmFieldsColumns = ({
   fields,
   cropColorMap,
   totals,
-  resolvedQuota,
   canEditRules,
   lockingFieldId,
   onToggleLock,
@@ -554,24 +502,7 @@ export const buildFarmFieldsColumns = ({
         renderQuotaStatus(
           getFieldQuotaStatus(row.original, isSimulationView),
         ),
-      footer: () =>
-        renderQuotaStatus(
-          {
-            level: aggregateQuotaStatusLevel(
-              totals.nLoad,
-              resolvedQuota.quotaKgn,
-              totals.calculatedCount,
-              fields.length,
-            ),
-            nLoad: totals.nLoad,
-            quotaKgn: resolvedQuota.quotaKgn,
-          },
-          {
-            bold: true,
-            uncalculatedCount: totals.uncalculatedCount,
-            basisLabel: resolvedQuota.basis,
-          },
-        ),
+      footer: () => null,
       enableSorting: false,
       meta: {
         headerClassName: 'px-4 py-3 font-medium whitespace-normal',

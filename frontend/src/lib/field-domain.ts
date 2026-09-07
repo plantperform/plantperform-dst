@@ -23,9 +23,6 @@ export const CROP_VALUES: Crop[] = [
   'CEREAL_VEG_BEAN',
 ]
 
-// NLES 13-class aggregation. Code 0 ("NotInNLESAgg") and missing values are
-// intentionally absent here; parseRegistryRotation falls back to CEREAL_WINTER
-// until the agronomic mapping for these is decided.
 const cropByRegistryId = new Map<number, Crop>([
   [1, 'CEREAL_WINTER'],
   [2, 'CEREAL_SPRING'],
@@ -42,10 +39,6 @@ const cropByRegistryId = new Map<number, Crop>([
   [13, 'CEREAL_VEG_BEAN'],
 ])
 
-// TODO: Stop substituting CEREAL_WINTER for unknown / NotInNLESAgg / missing
-// registry crop ids. Empty positions in Rot_vec (e.g. "2_2_1_1__4_8") and the
-// explicit "0" NotInNLESAgg code both fall through to CEREAL_WINTER until
-// agronomic guidance is settled.
 export const cropFromRegistryNumber = (value: number): Crop =>
   cropByRegistryId.get(value) ?? 'CEREAL_WINTER'
 
@@ -103,7 +96,7 @@ export const formatRotationYear = (year: RotationYear): string =>
 // "Virkemidler: ..." line for marker with a calculated sædskifte (from
 // "Optimér").
 export const formatRealRotation = (rotation: RotationYear[]): string => {
-  if (rotation.length === 0) return 'Intet sædskifte endnu — opret et scenarie og kør Optimér'
+  if (rotation.length === 0) return 'Intet sædskifte endnu - opret en simulering og kør Optimér'
 
   return rotation.map(formatRotationYear).join(' - ')
 }
@@ -113,9 +106,14 @@ export const isFieldLocked = (field: FieldRecord): boolean =>
   field.rotationId !== null &&
   field.allowedRotationIds[0] === field.rotationId
 
-const tooltipNumber = new Intl.NumberFormat('da-DK', {
-  maximumFractionDigits: 1,
-})
+export const formatNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+
+export const formatWholeNumber = (value: number) =>
+  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
+
+export const formatFieldCount = (count: number) =>
+  `${count} ${count === 1 ? 'mark' : 'marker'}`
 
 export const formatLockTooltip = (field: FieldRecord): string => {
   const lines = [`${field.name} - låst sædskifte`]
@@ -126,9 +124,9 @@ export const formatLockTooltip = (field: FieldRecord): string => {
 
   if (field.areaHa > 0) {
     lines.push(
-      `DB2 ${tooltipNumber.format(field.db2 / field.areaHa)} kr/ha · ` +
-        `Udledning ${tooltipNumber.format(field.nLoad / field.areaHa)} kg N/ha · ` +
-        `Udvaskning ${tooltipNumber.format(field.leaching / field.areaHa)} kg N/ha`,
+      `DB2 ${formatNumber(field.db2 / field.areaHa)} kr/ha · ` +
+        `Udledning ${formatNumber(field.nLoad / field.areaHa)} kg N/ha · ` +
+        `Udvaskning ${formatNumber(field.leaching / field.areaHa)} kg N/ha`,
     )
   }
 
@@ -214,10 +212,6 @@ export const formatMeasures = (measures: FieldMeasures) => {
   return labels.length > 0 ? labels.join(' · ') : 'Ingen'
 }
 
-// Rotation names follow the pattern "<Category> <nr>" (e.g. "Konventionel
-// Kvæg 201"), except single-category rotations like "Brak". The category is the
-// name with a trailing number stripped, used to group rotations in the
-// selection UIs.
 export const rotationCategory = (name: string): string => {
   const match = name.match(/^(.+?)\s+\d+$/)
   return match ? match[1] : name
@@ -228,7 +222,6 @@ export type RotationCategoryGroup = {
   rotations: NamedRotation[]
 }
 
-// Groups rotations by their derived category, preserving first-seen order.
 export const groupRotationsByCategory = (
   rotations: NamedRotation[],
 ): RotationCategoryGroup[] => {
@@ -257,10 +250,6 @@ export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>
       year.udlaegKode === right[index].udlaegKode,
   )
 
-// Returns the ids of the view fields whose crop rotation differs from the live
-// ("Aktuel") field it was snapshotted from. The snapshot regenerates `id`, so
-// the join key is `imkId`. Manually-added fields (imkId === null) have no live
-// original to compare against and are treated as unchanged.
 export const changedFieldIds = (
   viewFields: FieldRecord[],
   liveFields: FieldRecord[],
@@ -369,55 +358,118 @@ export const getFieldQuotaStatus = (
   quotaKgn: field.udledningskvoteMarkKgn,
 })
 
-export const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
-
-export const formatWholeNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
-
 export const formatQuotaAmount = (status: QuotaStatus): string =>
   `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
 
-export const formatFieldCount = (count: number) =>
-  `${count} ${count === 1 ? 'mark' : 'marker'}`
-
-export const QUOTA_WARNING_LEVEL_COLORS: Record<
-  'near' | 'over',
-  { bg: string; border: string; text: string }
-> = {
-  near: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
-  over: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+export type QuotaStatusStyle = {
+  dot: string
+  surface: string
+  text: string
+  badgeLabel: string | null
 }
 
-export type FarmQuotaSummary = {
-  totalNLoad: number
-  quota: ResolvedFarmQuota
+const QUOTA_STATUS_STYLE_UNKNOWN: QuotaStatusStyle = {
+  dot: 'bg-muted-foreground/60',
+  surface: 'border-border bg-muted/50',
+  text: 'text-muted-foreground',
+  badgeLabel: null,
+}
+
+export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
+  ok: {
+    dot: 'bg-green-600',
+    surface: 'border-green-200 bg-green-50',
+    text: 'text-green-800',
+    badgeLabel: null,
+  },
+  near: {
+    dot: 'bg-amber-600',
+    surface: 'border-amber-200 bg-amber-50',
+    text: 'text-amber-800',
+    badgeLabel: 'tæt på',
+  },
+  over: {
+    dot: 'bg-red-600',
+    surface: 'border-red-200 bg-red-50',
+    text: 'text-red-800',
+    badgeLabel: 'over',
+  },
+  uncalculated: QUOTA_STATUS_STYLE_UNKNOWN,
+  noData: QUOTA_STATUS_STYLE_UNKNOWN,
+  partial: QUOTA_STATUS_STYLE_UNKNOWN,
+}
+
+export type FieldTotals = {
+  fieldCount: number
   calculatedCount: number
   uncalculatedCount: number
+  areaHa: number
+  db2: number
+  nLoad: number
+  leaching: number
+  fen: number
+  udledningskvoteMarkKgn: number
 }
 
-export const computeFarmQuotaSummary = (
+export const computeFieldTotals = (
   fields: FieldRecord[],
   isSimulationView: boolean,
-): FarmQuotaSummary => {
-  const calculatedFields = fields.filter((field) =>
-    isFieldCalculated(field, isSimulationView),
-  )
-  const calculatedCount = calculatedFields.length
-  const totalNLoad = calculatedFields.reduce(
-    (sum, field) => sum + field.nLoad,
-    0,
-  )
-  const quotaSum = fields.reduce(
-    (sum, field) => sum + field.udledningskvoteMarkKgn,
-    0,
-  )
-  return {
-    totalNLoad,
-    quota: resolveFarmQuota(quotaSum),
-    calculatedCount,
-    uncalculatedCount: fields.length - calculatedCount,
+): FieldTotals => {
+  const totals: FieldTotals = {
+    fieldCount: fields.length,
+    calculatedCount: 0,
+    uncalculatedCount: 0,
+    areaHa: 0,
+    db2: 0,
+    nLoad: 0,
+    leaching: 0,
+    fen: 0,
+    udledningskvoteMarkKgn: 0,
   }
+
+  for (const field of fields) {
+    totals.areaHa += field.areaHa
+    totals.udledningskvoteMarkKgn += field.udledningskvoteMarkKgn
+    if (!isFieldCalculated(field, isSimulationView)) continue
+    totals.calculatedCount += 1
+    totals.db2 += field.db2
+    totals.nLoad += field.nLoad
+    totals.leaching += field.leaching
+    totals.fen += field.fen
+  }
+
+  totals.uncalculatedCount = fields.length - totals.calculatedCount
+  return totals
+}
+
+export const totalsQuotaStatusLevel = (totals: FieldTotals): QuotaStatusLevel =>
+  aggregateQuotaStatusLevel(
+    totals.nLoad,
+    totals.udledningskvoteMarkKgn,
+    totals.calculatedCount,
+    totals.fieldCount,
+  )
+
+export type CatchmentTotals = {
+  kystvandId: number | null
+  totals: FieldTotals
+}
+
+export const groupFieldsByCatchment = (
+  fields: FieldRecord[],
+  isSimulationView: boolean,
+): CatchmentTotals[] => {
+  const fieldsByCatchment = new Map<number | null, FieldRecord[]>()
+  for (const field of fields) {
+    const group = fieldsByCatchment.get(field.kystvandId)
+    if (group) group.push(field)
+    else fieldsByCatchment.set(field.kystvandId, [field])
+  }
+
+  return Array.from(fieldsByCatchment, ([kystvandId, group]) => ({
+    kystvandId,
+    totals: computeFieldTotals(group, isSimulationView),
+  }))
 }
 
 export const YEAR_BAR_FILL_COLOR = '#cfdfc6'

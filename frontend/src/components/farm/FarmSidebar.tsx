@@ -1,8 +1,8 @@
 import {
   FlaskConical,
+  History,
   PanelLeft,
   Plus,
-  Sprout,
   Trash2,
   Warehouse,
 } from 'lucide-react'
@@ -10,16 +10,13 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mutate } from 'swr'
 
-import {
-  simulationFieldsKey,
-  simulationsKey,
-  useSimulationFields,
-} from '@/api/hooks'
+import { simulationFieldsKey, simulationsKey } from '@/api/hooks'
 import { deleteSimulation } from '@/api/mutations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
-import type { FarmViewSelection } from '@/components/farm/types'
+import { BrandMark } from '@/components/BrandMark'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
+import type { FarmViewSelection } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,9 +30,9 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarFooter,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
@@ -45,11 +42,31 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import {
-  formatFieldCount,
-  formatNumber,
-  formatRelativeTime,
-  getFieldTotals,
-} from '@/lib/farm-totals'
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
+
+const formatCreatedAt = (value: string) => {
+  const createdAt = new Date(value).getTime()
+  if (Number.isNaN(createdAt)) return 'Oprettet for nylig'
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - createdAt) / 60_000))
+  if (diffMinutes < 1) return 'Oprettet netop nu'
+  if (diffMinutes < 60) return `Oprettet for ${diffMinutes} min. siden`
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (diffHours < 24) return `Oprettet for ${diffHours} t. siden`
+
+  const diffDays = Math.round(diffHours / 24)
+  return `Oprettet for ${diffDays} d. siden`
+}
+
+const useIsIconRail = () => {
+  const { state, isMobile } = useSidebar()
+  return !isMobile && state === 'collapsed'
+}
 
 type FarmSidebarProps = {
   farm: Farm
@@ -83,8 +100,7 @@ export const FarmSidebar = ({
   >(null)
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
-  const [newScenarioOpen, setNewScenarioOpen] = useState(false)
-  const totals = getFieldTotals(fields)
+  const [newSimulationOpen, setNewSimulationOpen] = useState(false)
 
   const removeSimulation = async (simulationId: string) => {
     setDeletingSimulationId(simulationId)
@@ -106,21 +122,9 @@ export const FarmSidebar = ({
   }
 
   return (
-    <Sidebar collapsible="icon" aria-label="Visninger">
+    <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
       <SidebarHeader className="h-13 justify-center border-b border-sidebar-border px-2 py-0">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <img
-            src="/plant-perform-tab-icon.svg"
-            alt=""
-            className="size-8 shrink-0 rounded-md"
-          />
-          <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-sm font-semibold">PlantPerform</span>
-            <span className="truncate text-xs text-muted-foreground">
-              Sædskifteplanlægning
-            </span>
-          </div>
-        </div>
+        <SidebarBrand />
       </SidebarHeader>
 
       <SidebarContent>
@@ -130,7 +134,7 @@ export const FarmSidebar = ({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Alle bedrifter">
-                  <Link to="/">
+                  <Link to="/" state={HOME_OVERVIEW_STATE}>
                     <Warehouse />
                     <span>Alle bedrifter</span>
                   </Link>
@@ -141,13 +145,33 @@ export const FarmSidebar = ({
         </SidebarGroup>
 
         <SidebarGroup className="py-1">
-          <SidebarGroupLabel>Optimeringsalternativer</SidebarGroupLabel>
+          <SidebarGroupLabel>Visninger</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={selection.kind === 'current'}
+                  aria-current={
+                    selection.kind === 'current' ? 'page' : undefined
+                  }
+                  tooltip="Afgrødehistorik"
+                  onClick={() => onSelectionChange({ kind: 'current' })}
+                >
+                  <History />
+                  <span className="truncate">Afgrødehistorik</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel>Simuleringer</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {simulations.map((simulation) => (
                 <SimulationMenuItem
                   key={simulation.id}
-                  farmId={farm.id}
                   simulation={simulation}
                   selected={
                     selection.kind === 'simulation' &&
@@ -167,35 +191,11 @@ export const FarmSidebar = ({
                 <SidebarMenuButton
                   className="text-sidebar-foreground/70"
                   tooltip="Ny simulering"
-                  onClick={() => setNewScenarioOpen(true)}
+                  onClick={() => setNewSimulationOpen(true)}
                 >
                   <Plus />
                   <span>Ny simulering</span>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel>Visninger</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <ViewMenuButton
-                  icon={<Sprout />}
-                  label="Afgrødehistorik"
-                  selected={selection.kind === 'current'}
-                  onSelect={() => onSelectionChange({ kind: 'current' })}
-                />
-                {selection.kind === 'current' ? (
-                  <ViewDetails
-                    entries={[
-                      ['Marker', formatFieldCount(fields.length)],
-                      ['Areal', `${formatNumber(totals.area)} ha`],
-                    ]}
-                  />
-                ) : null}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
@@ -211,8 +211,8 @@ export const FarmSidebar = ({
       <NewScenarioPanel
         farmId={farm.id}
         fields={fields}
-        open={newScenarioOpen}
-        onOpenChange={setNewScenarioOpen}
+        open={newSimulationOpen}
+        onOpenChange={setNewSimulationOpen}
         onSimulationCreated={(simulation) =>
           onSelectionChange({ kind: 'simulation', id: simulation.id })
         }
@@ -229,10 +229,16 @@ export const FarmSidebar = ({
   )
 }
 
-/**
- * Folds the sidebar down to its icon rail. It names what it does while the
- * sidebar is open; collapsed, the tooltip says how to get back.
- */
+const SidebarBrand = () => {
+  const iconRail = useIsIconRail()
+
+  return (
+    <div className="flex min-w-0 items-center group-data-[collapsible=icon]:justify-center">
+      <BrandMark compact={iconRail} />
+    </div>
+  )
+}
+
 const CollapseMenuButton = () => {
   const { toggleSidebar } = useSidebar()
 
@@ -252,48 +258,7 @@ const CollapseMenuButton = () => {
   )
 }
 
-type ViewMenuButtonProps = {
-  icon: React.ReactNode
-  label: string
-  selected: boolean
-  onSelect: () => void
-}
-
-const ViewMenuButton = ({
-  icon,
-  label,
-  selected,
-  onSelect,
-}: ViewMenuButtonProps) => (
-  <SidebarMenuButton
-    isActive={selected}
-    aria-current={selected ? 'page' : undefined}
-    tooltip={label}
-    onClick={onSelect}
-  >
-    {icon}
-    <span className="truncate">{label}</span>
-  </SidebarMenuButton>
-)
-
-type ViewDetailsProps = {
-  entries: [label: string, value: string][]
-}
-
-/** Description of the selected visning, folded out under its navigation row. */
-const ViewDetails = ({ entries }: ViewDetailsProps) => (
-  <dl className="mt-1 mb-1 ml-4 space-y-0.5 border-l border-sidebar-border pl-3 text-xs group-data-[collapsible=icon]:hidden">
-    {entries.map(([label, value]) => (
-      <div key={label} className="flex items-baseline justify-between gap-2">
-        <dt className="text-sidebar-foreground/60">{label}</dt>
-        <dd className="truncate font-medium">{value}</dd>
-      </div>
-    ))}
-  </dl>
-)
-
 type SimulationMenuItemProps = {
-  farmId: string
   simulation: Simulation
   selected: boolean
   deleting: boolean
@@ -302,28 +267,32 @@ type SimulationMenuItemProps = {
 }
 
 const SimulationMenuItem = ({
-  farmId,
   simulation,
   selected,
   deleting,
   onSelect,
   onDelete,
 }: SimulationMenuItemProps) => {
-  // Only the selected simulering describes itself, so only it needs its marker.
-  const { data: fields = [], isLoading } = useSimulationFields(
-    farmId,
-    selected ? simulation.id : undefined,
-  )
-  const totals = getFieldTotals(fields)
+  const iconRail = useIsIconRail()
+  const createdLabel = formatCreatedAt(simulation.createdAt)
 
   return (
     <SidebarMenuItem>
-      <ViewMenuButton
-        icon={<FlaskConical />}
-        label={simulation.name}
-        selected={selected}
-        onSelect={onSelect}
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SidebarMenuButton
+            isActive={selected}
+            aria-current={selected ? 'page' : undefined}
+            onClick={onSelect}
+          >
+            <FlaskConical />
+            <span className="truncate">{simulation.name}</span>
+          </SidebarMenuButton>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="center">
+          {iconRail ? `${simulation.name} · ${createdLabel}` : createdLabel}
+        </TooltipContent>
+      </Tooltip>
       <SidebarMenuAction
         showOnHover
         disabled={deleting}
@@ -332,16 +301,6 @@ const SimulationMenuItem = ({
       >
         <Trash2 />
       </SidebarMenuAction>
-      {selected ? (
-        <ViewDetails
-          entries={[
-            ['Marker', isLoading ? '…' : formatFieldCount(fields.length)],
-            ['Areal', isLoading ? '…' : `${formatNumber(totals.area)} ha`],
-            ['DB2', isLoading ? '…' : `${formatNumber(totals.db2)} kr`],
-            ['Oprettet', formatRelativeTime(simulation.createdAt)],
-          ]}
-        />
-      ) : null}
     </SidebarMenuItem>
   )
 }
@@ -390,7 +349,6 @@ type SidebarWidthHandleProps = {
   onWidthChange: (width: number) => void
 }
 
-/** The drag handle only makes sense while the sidebar shows its full width. */
 const SidebarWidthHandle = ({
   width,
   onWidthChange,
