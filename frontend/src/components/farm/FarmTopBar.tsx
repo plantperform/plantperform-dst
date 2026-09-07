@@ -23,7 +23,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -82,16 +81,6 @@ export const FarmTopBar = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-56">
-            <DropdownMenuLabel>
-              <span className="block">Om bedriften</span>
-              <span className="mt-1 block font-normal text-foreground">
-                {farm.ownerName}
-              </span>
-              <span className="block font-normal">
-                CVR {farm.cvr ?? 'ikke angivet'}
-              </span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setShareOpen(true)}>
               <Share2 className="mr-2 size-4" aria-hidden="true" />
               Del bedrift
