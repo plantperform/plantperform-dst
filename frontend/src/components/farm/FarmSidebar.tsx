@@ -97,6 +97,7 @@ import {
   formatCompactKr,
   formatFieldCount,
   formatNumber,
+  formatQuotaAmount,
   formatWholeNumber,
   isFieldLocked,
   QUOTA_STATUS_STYLES,
@@ -159,10 +160,7 @@ const describeKeyFigures = (
     quota > 0
       ? `${formatWholeNumber(totals.nLoad)} / ${formatWholeNumber(quota)} kg N`
       : `${formatWholeNumber(totals.nLoad)} kg N`
-  const fullEmission =
-    quota > 0
-      ? `${formatNumber(totals.nLoad)} af ${formatNumber(quota)} kg N`
-      : `${formatNumber(totals.nLoad)} kg N`
+  const fullEmission = formatQuotaAmount(totals.nLoad, quota)
 
   return {
     level,

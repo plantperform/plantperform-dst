@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 
 import type { FieldRecord } from '@/api/types'
-import { classifyCrop, CROP_GROUPS, type CropGroup } from '@/lib/crop-groups'
-import { coverCropShadow } from '@/lib/field-domain'
+import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { presentCropGroups } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
 
 type CropGroupLegendProps = {
@@ -15,17 +15,10 @@ export const CropGroupLegend = ({
   className,
 }: CropGroupLegendProps) => {
   const { groups, hasUdlaeg } = useMemo(() => {
-    const present = new Set<CropGroup>()
-    let anyUdlaeg = false
-    for (const field of fields) {
-      for (const year of field.cropRotation) {
-        present.add(classifyCrop(year.afgrodeKode, year.afgrodeNavn))
-        if (year.udlaegNavn !== null) anyUdlaeg = true
-      }
-    }
+    const years = fields.flatMap((field) => field.cropRotation)
     return {
-      groups: CROP_GROUPS.filter((group) => present.has(group.id)),
-      hasUdlaeg: anyUdlaeg,
+      groups: presentCropGroups(years),
+      hasUdlaeg: years.some((year) => year.udlaegNavn !== null),
     }
   }, [fields])
 
@@ -41,21 +34,13 @@ export const CropGroupLegend = ({
       <span>Afgrøder</span>
       {groups.map((group) => (
         <span key={group.id} className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="h-2 w-3 shrink-0 rounded-xs outline-1 -outline-offset-1 outline-foreground/10"
-            style={{ backgroundColor: group.color }}
-          />
+          <CropYearSwatch color={group.color} hasUdlaeg={false} size="8x12" />
           <span>{group.label}</span>
         </span>
       ))}
       {hasUdlaeg ? (
         <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="box-border h-2 w-3 shrink-0 rounded-xs bg-muted outline-1 -outline-offset-1 outline-foreground/10"
-            style={{ boxShadow: coverCropShadow(true) }}
-          />
+          <CropYearSwatch color="var(--color-muted)" hasUdlaeg size="8x12" />
           <span>med udlæg</span>
         </span>
       ) : null}

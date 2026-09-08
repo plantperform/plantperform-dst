@@ -9,8 +9,9 @@ import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHea
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cropGroupColor } from '@/lib/crop-groups'
 import {
-  CROP_YEAR_FALLBACK_COLOR,
+  describeUncalculatedCount,
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
@@ -71,23 +72,26 @@ const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => 
   return firstWords.length > 2 ? `${shown} m.fl.` : shown
 }
 
-const renderQuotaStatus = (status: QuotaStatus) => {
-  if (status.level === 'uncalculated') {
-    return (
-      <QuotaStatusIndicator level={status.level}>
-        <span className="text-muted-foreground">Ikke beregnet</span>
-      </QuotaStatusIndicator>
-    )
-  }
-  if (status.level === 'noData') {
-    return (
-      <QuotaStatusIndicator level={status.level}>
-        <span className="text-muted-foreground">Ingen data</span>
-      </QuotaStatusIndicator>
-    )
-  }
+const QUOTA_PLACEHOLDER_LABELS: Partial<Record<QuotaStatusLevel, string>> = {
+  uncalculated: 'Ikke beregnet',
+  noData: 'Ingen data',
+}
 
-  const amountText = formatQuotaAmount(status)
+const renderQuotaPlaceholder = (level: QuotaStatusLevel) => {
+  const label = QUOTA_PLACEHOLDER_LABELS[level]
+  if (!label) return null
+  return (
+    <QuotaStatusIndicator level={level}>
+      <span className="font-normal text-muted-foreground">{label}</span>
+    </QuotaStatusIndicator>
+  )
+}
+
+const renderQuotaStatus = (status: QuotaStatus) => {
+  const placeholder = renderQuotaPlaceholder(status.level)
+  if (placeholder) return placeholder
+
+  const amountText = formatQuotaAmount(status.nLoad, status.quotaKgn)
 
   if (status.level === 'partial') {
     return (
@@ -109,26 +113,13 @@ const renderQuotaStatusFooter = (
   level: QuotaStatusLevel,
   catchmentNote: string | null,
 ) => {
-  if (level === 'uncalculated') {
-    return (
-      <QuotaStatusIndicator level={level}>
-        <span className="font-normal text-muted-foreground">Ikke beregnet</span>
-      </QuotaStatusIndicator>
-    )
-  }
-  if (level === 'noData') {
-    return (
-      <QuotaStatusIndicator level={level}>
-        <span className="font-normal text-muted-foreground">Ingen data</span>
-      </QuotaStatusIndicator>
-    )
-  }
+  const placeholder = renderQuotaPlaceholder(level)
+  if (placeholder) return placeholder
 
   const quota = resolveFarmQuota(totals.udledningskvoteMarkKgn)
   const notes: string[] = [quota.basis]
-  if (totals.calculatedCount > 0 && totals.uncalculatedCount > 0) {
-    notes.push(`${totals.uncalculatedCount} ikke beregnet`)
-  }
+  const uncalculatedNote = describeUncalculatedCount(totals)
+  if (uncalculatedNote) notes.push(uncalculatedNote)
   if (catchmentNote) notes.push(catchmentNote)
 
   return (
@@ -138,11 +129,7 @@ const renderQuotaStatusFooter = (
         badge={level !== 'partial'}
         className={level === 'partial' ? 'text-muted-foreground' : undefined}
       >
-        {formatQuotaAmount({
-          level,
-          nLoad: totals.nLoad,
-          quotaKgn: quota.quotaKgn,
-        })}
+        {formatQuotaAmount(totals.nLoad, quota.quotaKgn)}
       </QuotaStatusIndicator>
       <div className="text-xs font-normal text-muted-foreground">
         {notes.join(', ')}
@@ -203,7 +190,6 @@ const numericMetricColumn = (
 const renderRotationSwatches = (
   rotation: FieldRecord['cropRotation'],
   rotationStartYear: number,
-  cropColorMap: Map<number, string>,
   highlightIndex: number | null = null,
 ) => (
   <div className="flex items-center gap-2.5">
@@ -214,8 +200,7 @@ const renderRotationSwatches = (
         const title = hasUdlaeg
           ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
           : `${calendarYear}: ${year.afgrodeNavn}`
-        const color =
-          cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+        const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
         const isHighlighted = highlightIndex === index
         return (
           <span
@@ -306,7 +291,6 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
 
 type RulesColumnsArgs = {
   fields: FieldRecord[]
-  cropColorMap: Map<number, string>
   canEditRules: boolean
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
@@ -315,7 +299,6 @@ type RulesColumnsArgs = {
 
 const buildRulesColumns = ({
   fields,
-  cropColorMap,
   canEditRules,
   lockingFieldId,
   onToggleLock,
@@ -362,7 +345,6 @@ const buildRulesColumns = ({
         return renderRotationSwatches(
           field.cropRotation,
           ROTATION_START_CALENDAR_YEAR,
-          cropColorMap,
         )
       },
       enableSorting: false,
@@ -461,7 +443,6 @@ export type FarmFieldsColumnsArgs = {
   maxYears: number
   selectedYearIndex: number | null
   fields: FieldRecord[]
-  cropColorMap: Map<number, string>
   totals: FieldTotals
   quotaFooterLevel: QuotaStatusLevel
   quotaFooterNote: string | null
@@ -477,7 +458,6 @@ export const buildFarmFieldsColumns = ({
   maxYears,
   selectedYearIndex,
   fields,
-  cropColorMap,
   totals,
   quotaFooterLevel,
   quotaFooterNote,
@@ -489,7 +469,6 @@ export const buildFarmFieldsColumns = ({
   if (mode === 'rules') {
     return buildRulesColumns({
       fields,
-      cropColorMap,
       canEditRules,
       lockingFieldId,
       onToggleLock,
@@ -540,12 +519,7 @@ export const buildFarmFieldsColumns = ({
           </span>
         )
       }
-      return renderRotationSwatches(
-        rotation,
-        rotationStartYear,
-        cropColorMap,
-        highlightIndex,
-      )
+      return renderRotationSwatches(rotation, rotationStartYear, highlightIndex)
     },
     footer: () => {
       if (isSimulationView) return null

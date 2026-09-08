@@ -1,11 +1,6 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 
-import {
-  classifyCrop,
-  CROP_GROUP_INDEX,
-  CROP_GROUPS,
-  type CropGroup,
-} from '@/lib/crop-groups'
+import { CROP_GROUP_INDEX, presentCropGroups } from '@/lib/crop-groups'
 
 export type ColorAttribute =
   | 'none'
@@ -326,15 +321,13 @@ const YEAR_N_LOAD: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
+export const yearQuotaStatusLabel = (status: number | null): string | null =>
+  YEAR_N_LOAD.bins.find((bin) => bin.value === status)?.label ?? null
+
 export const buildYearCropSpec = (
   crops: { afgrodeKode: number; afgrodeNavn: string }[],
 ): CategorySpec => {
-  const present = new Set<CropGroup>(
-    crops.map((crop) => classifyCrop(crop.afgrodeKode, crop.afgrodeNavn)),
-  )
-  const bins: CategoryBin[] = CROP_GROUPS.filter((group) =>
-    present.has(group.id),
-  ).map((group) => ({
+  const bins: CategoryBin[] = presentCropGroups(crops).map((group) => ({
     value: CROP_GROUP_INDEX[group.id],
     color: group.color,
     label: group.label,

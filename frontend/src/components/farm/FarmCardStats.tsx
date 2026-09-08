@@ -5,6 +5,7 @@ import {
   computeFieldTotals,
   formatFieldCount,
   formatNumber,
+  formatQuotaAmount,
   totalsQuotaStatusLevel,
 } from '@/lib/field-domain'
 
@@ -36,8 +37,7 @@ export const FarmCardStats = ({ farm }: { farm: Farm }) => {
       </p>
       {totals.udledningskvoteMarkKgn > 0 ? (
         <QuotaStatusIndicator level={level}>
-          {formatNumber(totals.nLoad)} af{' '}
-          {formatNumber(totals.udledningskvoteMarkKgn)} kg N
+          {formatQuotaAmount(totals.nLoad, totals.udledningskvoteMarkKgn)}
         </QuotaStatusIndicator>
       ) : null}
     </div>

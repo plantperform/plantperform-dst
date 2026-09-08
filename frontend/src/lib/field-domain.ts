@@ -6,7 +6,6 @@ import type {
   NamedRotation,
   RotationYear,
 } from '@/api/types'
-import { cropGroupColor, cropGroupDefinition } from '@/lib/crop-groups'
 
 export const CROP_VALUES: Crop[] = [
   'CEREAL_WINTER',
@@ -383,8 +382,14 @@ export const getFieldQuotaStatus = (
   quotaKgn: field.udledningskvoteMarkKgn,
 })
 
-export const formatQuotaAmount = (status: QuotaStatus): string =>
-  `${formatNumber(status.nLoad)} af ${formatNumber(status.quotaKgn)} kg N`
+export const formatQuotaAmount = (
+  nLoad: number,
+  quotaKgn: number,
+  format: (value: number) => string = formatNumber,
+): string =>
+  quotaKgn > 0
+    ? `${format(nLoad)} af ${format(quotaKgn)} kg N`
+    : `${format(nLoad)} kg N`
 
 export type QuotaStatusStyle = {
   dot: string
@@ -480,6 +485,13 @@ export const totalsQuotaStatusLevel = (totals: FieldTotals): QuotaStatusLevel =>
     totals.fieldCount,
   )
 
+export const describeUncalculatedCount = (
+  totals: FieldTotals,
+): string | null =>
+  totals.calculatedCount > 0 && totals.uncalculatedCount > 0
+    ? `${totals.uncalculatedCount} ikke beregnet`
+    : null
+
 export type CatchmentTotals = {
   kystvandId: number | null
   totals: FieldTotals
@@ -507,6 +519,12 @@ export const describeCatchmentsOverQuota = (
     ? `${overview.over} af ${overview.total} oplande over grænsen`
     : null
 
+export const farmQuotaStatusLevel = (
+  totals: FieldTotals,
+  overview: CatchmentOverview,
+): QuotaStatusLevel =>
+  overview.over > 0 ? 'over' : totalsQuotaStatusLevel(totals)
+
 export const groupFieldsByCatchment = (
   fields: FieldRecord[],
   isSimulationView: boolean,
@@ -531,19 +549,3 @@ export const coverCropShadow = (hasUdlaeg: boolean): string | undefined =>
   hasUdlaeg
     ? `inset 0 -3px 0 ${CROP_YEAR_COVER_CROP_BORDER}, inset 0 -4px 0 ${CROP_YEAR_COVER_CROP_SEPARATOR}`
     : undefined
-export const CROP_YEAR_FALLBACK_COLOR = cropGroupDefinition('other').color
-
-export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> => {
-  const colorByCropCode = new Map<number, string>()
-  for (const field of fields) {
-    for (const year of field.cropRotation) {
-      if (!colorByCropCode.has(year.afgrodeKode)) {
-        colorByCropCode.set(
-          year.afgrodeKode,
-          cropGroupColor(year.afgrodeKode, year.afgrodeNavn),
-        )
-      }
-    }
-  }
-  return colorByCropCode
-}

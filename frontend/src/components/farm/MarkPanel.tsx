@@ -1,4 +1,4 @@
-import { ChevronRight, Repeat, X } from 'lucide-react'
+import { Repeat, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
@@ -12,8 +12,9 @@ import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
+import { DisclosureButton } from '@/components/ui/disclosure-button'
+import { cropGroupColor } from '@/lib/crop-groups'
 import {
-  CROP_YEAR_FALLBACK_COLOR,
   CURRENT_CALENDAR_YEAR,
   formatNumber,
   formatQuotaAmount,
@@ -39,7 +40,7 @@ const buildStatusMessage = (
   }
   if (status.level === 'noData') return 'Ingen kvote sat for denne mark'
 
-  const amount = formatQuotaAmount(status)
+  const amount = formatQuotaAmount(status.nLoad, status.quotaKgn)
   const pct =
     status.quotaKgn > 0 ? Math.round((status.nLoad / status.quotaKgn) * 100) : 0
 
@@ -99,18 +100,16 @@ const RotationYearRow = ({
   year,
   index,
   startYear,
-  cropColorMap,
   isSelected = false,
 }: {
   year: FieldRecord['cropRotation'][number]
   index: number
   startYear: number
-  cropColorMap: Map<number, string>
   isSelected?: boolean
 }) => {
   const calendarYear = startYear + index
   const hasUdlaeg = year.udlaegNavn !== null
-  const color = cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+  const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   return (
     <li
@@ -154,7 +153,6 @@ type MarkPanelProps = {
   isSimulationView: boolean
   simulationId?: string
   simulation?: Simulation
-  cropColorMap: Map<number, string>
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
   yearValues?: RotationCandidateYearResult[]
@@ -170,7 +168,6 @@ export const MarkPanel = ({
   isSimulationView,
   simulationId,
   simulation,
-  cropColorMap,
   selectedYearIndex = null,
   onSelectedYearIndexChange,
   yearValues,
@@ -357,7 +354,6 @@ export const MarkPanel = ({
                             year={year}
                             index={actualIndex}
                             startYear={rotationStartYear}
-                            cropColorMap={cropColorMap}
                             isSelected={highlightIndex === actualIndex}
                           />
                         )
@@ -416,22 +412,12 @@ export const MarkPanel = ({
 
         {canShowCalcSection ? (
           <div className="rounded-lg border">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-              onClick={() => setCalcOpen((current) => !current)}
-              aria-expanded={calcOpen}
-            >
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <ChevronRight
-                  className={`h-4 w-4 text-muted-foreground transition-transform ${
-                    calcOpen ? 'rotate-90' : ''
-                  }`}
-                  aria-hidden="true"
-                />
-                Sådan er tallene beregnet
-              </span>
-            </button>
+            <DisclosureButton
+              open={calcOpen}
+              onToggle={() => setCalcOpen((current) => !current)}
+              label="Sådan er tallene beregnet"
+              className="w-full px-3 py-2.5"
+            />
             {calcOpen ? (
               <div className="border-t">
                 {isSimulationView ? (

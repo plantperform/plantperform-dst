@@ -9,6 +9,7 @@ import {
   getStoredRole,
   setAutoOpenSingleFarm,
   setStoredRole,
+  ROLE_LABELS,
   type OnboardingRole,
 } from '@/lib/onboarding'
 
@@ -61,9 +62,7 @@ export const ProfilePage = () => {
                   )}
                 </span>
                 <span>
-                  <span className="block font-medium">
-                    {role === 'landmand' ? 'Landmand' : 'Konsulent'}
-                  </span>
+                  <span className="block font-medium">{ROLE_LABELS[role]}</span>
                   <span className="block text-sm text-muted-foreground">
                     {role === 'landmand'
                       ? 'Jeg driver en bedrift'

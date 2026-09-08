@@ -6,6 +6,7 @@ import {
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
 import {
+  describeUncalculatedCount,
   formatNumber,
   groupFieldsByCatchment,
   QUOTA_STATUS_STYLES,
@@ -41,14 +42,11 @@ const CatchmentChip = ({ label, totals }: CatchmentChipProps) => {
   const level = totalsQuotaStatusLevel(totals)
   const style = QUOTA_STATUS_STYLES[level]
   const amount = formatCatchmentAmount(totals)
-  const uncalculatedNote =
-    totals.calculatedCount > 0 && totals.uncalculatedCount > 0
-      ? `, ${totals.uncalculatedCount} ikke beregnet`
-      : ''
+  const uncalculatedNote = describeUncalculatedCount(totals)
 
   return (
     <span
-      title={`${label}: ${amount}${uncalculatedNote}`}
+      title={`${label}: ${amount}${uncalculatedNote ? `, ${uncalculatedNote}` : ''}`}
       className={cn(
         'inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs',
         style.surface,

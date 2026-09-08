@@ -1,4 +1,3 @@
-import { ChevronRight } from 'lucide-react'
 import {
   useId,
   useMemo,
@@ -15,11 +14,14 @@ import type {
 } from '@/api/types'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { Button } from '@/components/ui/button'
+import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
   computeFieldTotals,
   describeCatchmentsOverQuota,
   type CatchmentOverview,
+  farmQuotaStatusLevel,
   formatCompactKr,
+  formatQuotaAmount,
   formatWholeNumber,
   QUOTA_STATUS_STYLES,
   quotaStatusLevel,
@@ -40,6 +42,11 @@ const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
     FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
   }
 
+const describeQuotaDiff = (nLoadKg: number, quotaKgn: number): string => {
+  const diff = Math.abs(Math.round(nLoadKg) - Math.round(quotaKgn))
+  return `${formatWholeNumber(diff)} ${nLoadKg > quotaKgn ? 'over' : 'under'} grænsen`
+}
+
 const buildHeadline = (
   totals: FieldTotals,
   level: QuotaStatusLevel,
@@ -52,12 +59,10 @@ const buildHeadline = (
     return 'Kan ikke opgøres endnu - kør Optimér for at beregne markerne'
   }
   const quotaKgn = totals.udledningskvoteMarkKgn
-  const diff = Math.abs(Math.round(quotaKgn) - Math.round(totals.nLoad))
-  const relation = totals.nLoad > quotaKgn ? 'over' : 'under'
   const headline =
-    `${formatWholeNumber(totals.nLoad)} af ${formatWholeNumber(quotaKgn)} kg N` +
-    ` - ${formatWholeNumber(diff)} ${relation} grænsen`
-  return overCatchmentNote && relation === 'under'
+    formatQuotaAmount(totals.nLoad, quotaKgn, formatWholeNumber) +
+    ` - ${describeQuotaDiff(totals.nLoad, quotaKgn)}`
+  return overCatchmentNote && totals.nLoad <= quotaKgn
     ? `${headline} samlet, men ${overCatchmentNote}`
     : headline
 }
@@ -73,11 +78,6 @@ type QuotaRelation = {
   text: string
 }
 
-const describeQuotaDiff = (nLoadKg: number, quotaKgn: number): string => {
-  const diff = Math.abs(Math.round(nLoadKg) - Math.round(quotaKgn))
-  return `${formatWholeNumber(diff)} ${nLoadKg > quotaKgn ? 'over' : 'under'} grænsen`
-}
-
 const describeQuotaRelation = (
   nLoadKg: number,
   quotaKgn: number,
@@ -88,20 +88,12 @@ const describeQuotaRelation = (
 }
 
 const formatNLoadAmount = (nLoadKg: number, quotaKgn: number): string =>
-  quotaKgn > 0
-    ? `Udledning ${formatWholeNumber(nLoadKg)} af ${formatWholeNumber(quotaKgn)} kg N`
-    : `Udledning ${formatWholeNumber(nLoadKg)} kg N`
+  `Udledning ${formatQuotaAmount(nLoadKg, quotaKgn, formatWholeNumber)}`
 
 const QUOTA_LINE_POSITION = 0.6
 
 const barHeightPct = (value: number, scale: number): number =>
   Math.min(100, (value / scale) * 100)
-
-const nLoadBarColor = (level: QuotaStatusLevel): string => {
-  if (level === 'over') return 'bg-red-600'
-  if (level === 'near') return 'bg-amber-500'
-  return 'bg-green-600'
-}
 
 const columnTitle = (
   column: YearColumn,
@@ -188,8 +180,7 @@ const renderYearSummary = ({
     const calculated = totals.calculatedCount > 0
     const overLevel = overYears.length > 0 ? 'over' : 'ok'
     const totalsLevel = totalsQuotaStatusLevel(totals)
-    const averageLevel: QuotaStatusLevel =
-      catchmentOverview.over > 0 ? 'over' : totalsLevel
+    const averageLevel = farmQuotaStatusLevel(totals, catchmentOverview)
     return (
       <>
         <div className="font-display text-2xl leading-none">Alle år</div>
@@ -385,15 +376,12 @@ export const YearWalkthrough = ({
   const entryValues = columns.flatMap((column) =>
     column.entry ? [column.entry] : [],
   )
-  const overYears =
-    quotaKgn > 0
-      ? columns
-          .filter(
-            (column) =>
-              column.entry !== null && column.entry.totalNLoadKg > quotaKgn,
-          )
-          .map((column) => column.calendarYear)
-      : []
+  const overYears = columns.flatMap((column) =>
+    column.entry !== null &&
+    quotaStatusLevel(column.entry.totalNLoadKg, quotaKgn, true) === 'over'
+      ? [column.calendarYear]
+      : [],
+  )
   const maxNLoad = Math.max(
     0,
     ...entryValues.map((entry) => entry.totalNLoadKg),
@@ -425,29 +413,17 @@ export const YearWalkthrough = ({
       >
         <div className="flex items-center gap-3">
           {collapsible ? (
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-expanded={open}
+            <DisclosureButton
+              open={open}
+              onToggle={() => setOpen((current) => !current)}
               aria-controls={bodyId}
-              onClick={() => setOpen((current) => !current)}
-            >
-              <ChevronRight
-                className={cn(
-                  'size-4 shrink-0 text-muted-foreground motion-safe:transition-transform',
-                  open && 'rotate-90',
-                )}
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium">Årsgennemgang</span>
-              {!open ? (
-                <span className="text-xs text-muted-foreground">
-                  {selectedColumn
-                    ? `${selectedColumn.calendarYear} valgt`
-                    : 'Alle år'}
-                </span>
-              ) : null}
-            </button>
+              label="Årsgennemgang"
+              hint={
+                selectedColumn
+                  ? `${selectedColumn.calendarYear} valgt`
+                  : 'Alle år'
+              }
+            />
           ) : (
             <h2 className="text-sm font-medium">Årsgennemgang</h2>
           )}
@@ -523,6 +499,8 @@ export const YearWalkthrough = ({
                         position % PLACEHOLDER_BAR_HEIGHTS.length
                       ]
                     : nLoadPct
+                  const barColor =
+                    QUOTA_STATUS_STYLES[relation?.level ?? 'ok'].dot
                   const title = columnTitle(column, relation, loading)
                   const tabIndex =
                     isSelected || (selectedPosition < 0 && position === 0)
@@ -572,7 +550,7 @@ export const YearWalkthrough = ({
                               'w-5 rounded-t-xs motion-safe:transition-[height,opacity,background-color] motion-safe:duration-300',
                               loading
                                 ? 'bg-muted-foreground/20 motion-safe:animate-pulse'
-                                : nLoadBarColor(relation?.level ?? 'ok'),
+                                : barColor,
                               !loading && nLoadPct > 0 && 'min-h-0.5',
                               dimmed && 'opacity-60',
                             )}
