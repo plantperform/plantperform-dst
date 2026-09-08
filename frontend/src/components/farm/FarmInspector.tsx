@@ -1,5 +1,4 @@
 import {
-  ChevronDown,
   ChevronRight,
   FlaskConical,
   History,
@@ -49,6 +48,7 @@ import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
   FarmInspectorMode,
+  FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
 import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
@@ -101,7 +101,6 @@ const ROTATION_CALENDAR_YEARS = Array.from(
   (_, index) => ROTATION_START_CALENDAR_YEAR + index,
 )
 
-type FarmView = 'list' | 'map'
 
 const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
   { value: 'list', label: 'Liste', icon: List },
@@ -267,6 +266,10 @@ type FarmInspectorProps = {
   fieldsError?: boolean
   mode: FarmInspectorMode
   onModeChange: (mode: FarmInspectorMode) => void
+  view: FarmView
+  onViewChange: (view: FarmView) => void
+  selectedFieldId: string | null
+  onSelectedFieldChange: (fieldId: string | null) => void
   optimizeDialogOpen: boolean
   onOptimizeDialogOpenChange: (open: boolean) => void
   yearlyOptimizeDialogOpen: boolean
@@ -283,13 +286,16 @@ export const FarmInspector = ({
   fieldsError = false,
   mode,
   onModeChange,
+  view,
+  onViewChange,
+  selectedFieldId,
+  onSelectedFieldChange,
   optimizeDialogOpen,
   onOptimizeDialogOpenChange,
   yearlyOptimizeDialogOpen,
   onYearlyOptimizeDialogOpenChange,
   onError,
 }: FarmInspectorProps) => {
-  const [view, setView] = useState<FarmView>('list')
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
@@ -330,7 +336,7 @@ export const FarmInspector = ({
             aria-label="Liste eller kort"
             value={view}
             options={VIEW_OPTIONS}
-            onValueChange={setView}
+            onValueChange={onViewChange}
             labelClassName="hidden @4xl:inline"
           />
         }
@@ -425,7 +431,9 @@ export const FarmInspector = ({
                 mode={effectiveMode}
                 sort={fieldsSort}
                 onSortChange={setFieldsSort}
-                onSwitchToMap={() => setView('map')}
+                selectedFieldId={selectedFieldId}
+                onSelectedFieldChange={onSelectedFieldChange}
+                onSwitchToMap={() => onViewChange('map')}
                 onError={onError}
               />
             </>

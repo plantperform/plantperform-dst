@@ -3,3 +3,5 @@ export type FarmViewSelection =
   | { kind: 'simulation'; id: string }
 
 export type FarmInspectorMode = 'values' | 'rules'
+
+export type FarmView = 'list' | 'map'

@@ -101,6 +101,8 @@ type FarmFieldsListProps = {
   mode?: FarmInspectorMode
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
+  selectedFieldId: string | null
+  onSelectedFieldChange: (fieldId: string | null) => void
   onSwitchToMap: () => void
   onError: (message: string | null) => void
 }
@@ -114,12 +116,13 @@ export const FarmFieldsList = ({
   mode = 'values',
   sort,
   onSortChange,
+  selectedFieldId,
+  onSelectedFieldChange,
   onSwitchToMap,
   onError,
 }: FarmFieldsListProps) => {
   const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [bindFieldId, setBindFieldId] = useState<string | null>(null)
   const [confirmDetachField, setConfirmDetachField] =
     useState<FieldRecord | null>(null)
@@ -170,10 +173,6 @@ export const FarmFieldsList = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSimulationView])
-
-  useEffect(() => {
-    setSelectedFieldId(null)
-  }, [isSimulationView, mode])
 
   const detachFarmField = useCallback(
     async (fieldId: string) => {
@@ -402,7 +401,7 @@ export const FarmFieldsList = ({
               const isChanged = changedFields.has(field.id)
               const isSelected = selectedFieldId === field.id
               const openPanel = () =>
-                setSelectedFieldId(isSelected ? null : field.id)
+                onSelectedFieldChange(isSelected ? null : field.id)
               return (
                 <TableRow
                   key={field.id}
@@ -488,7 +487,7 @@ export const FarmFieldsList = ({
           cropColorMap={cropColorMap}
           isDetaching={detachingFieldId === selectedField.id}
           onRequestDetach={() => setConfirmDetachField(selectedField)}
-          onClose={() => setSelectedFieldId(null)}
+          onClose={() => onSelectedFieldChange(null)}
           onError={onError}
         />
       ) : null}
