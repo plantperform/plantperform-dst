@@ -14,6 +14,7 @@ import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import type {
   FarmInspectorMode,
+  FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,11 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
+
+const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
+  left.kind === 'simulation'
+    ? right.kind === 'simulation' && left.id === right.id
+    : right.kind === 'current'
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
@@ -57,6 +63,8 @@ export const FarmDetailPage = () => {
     isLoading: simulationFieldsLoading,
   } = useSimulationFields(farmId, selectedSimulationId)
   const [mode, setMode] = useState<FarmInspectorMode>('values')
+  const [view, setView] = useState<FarmView>('list')
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] =
     useState(false)
@@ -66,6 +74,19 @@ export const FarmDetailPage = () => {
   const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
+
+  const activeFields =
+    activeSelection.kind === 'current' ? fields : simulationFields
+  const activeFieldsLoading =
+    activeSelection.kind === 'simulation' && simulationFieldsLoading
+
+  if (
+    selectedFieldId !== null &&
+    !activeFieldsLoading &&
+    !activeFields.some((field) => field.id === selectedFieldId)
+  ) {
+    setSelectedFieldId(null)
+  }
 
   const loadedFarmId = farm?.id
 
@@ -100,6 +121,28 @@ export const FarmDetailPage = () => {
       setToast((current) => (current?.id === toastId ? null : current))
       toastTimeoutRef.current = null
     }, 4000)
+  }
+
+  const changeSelection = (next: FarmViewSelection) => {
+    setSelection(next)
+    if (!isSameSelection(next, activeSelection)) setSelectedFieldId(null)
+  }
+
+  const changeMode = (next: FarmInspectorMode) => {
+    setMode(next)
+    if (next !== mode) setSelectedFieldId(null)
+  }
+
+  const changeView = (next: FarmView) => {
+    setView(next)
+    if (next === 'map') setSelectedFieldId(null)
+  }
+
+  const selectFieldFromSearch = (fieldId: string) => {
+    if (!activeFields.some((field) => field.id === fieldId)) return
+    setSelectedFieldId(fieldId)
+    if (view === 'map') setView('list')
+    if (mode === 'rules') setMode('values')
   }
 
   if (farmError) {
@@ -149,12 +192,14 @@ export const FarmDetailPage = () => {
       <FarmSidebar
         farm={farm}
         fields={fields}
+        activeFields={activeFields}
         simulations={simulations}
         selection={activeSelection}
         loadingSelection={simulationFieldsLoading}
-        onSelectionChange={setSelection}
+        onSelectionChange={changeSelection}
         mode={mode}
-        onModeChange={setMode}
+        onModeChange={changeMode}
+        onSelectField={selectFieldFromSearch}
         onOptimize={() => setOptimizeDialogOpen(true)}
         onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
         onError={showErrorToast}
@@ -169,9 +214,7 @@ export const FarmDetailPage = () => {
         ) : null}
         <FarmInspector
           farm={farm}
-          fields={
-            activeSelection.kind === 'current' ? fields : simulationFields
-          }
+          fields={activeFields}
           selection={activeSelection}
           selectedSimulation={
             activeSelection.kind === 'simulation'
@@ -183,7 +226,11 @@ export const FarmDetailPage = () => {
           fieldsLoading={simulationFieldsLoading}
           fieldsError={Boolean(simulationFieldsError)}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={changeMode}
+          view={view}
+          onViewChange={changeView}
+          selectedFieldId={selectedFieldId}
+          onSelectedFieldChange={setSelectedFieldId}
           optimizeDialogOpen={optimizeDialogOpen}
           onOptimizeDialogOpenChange={setOptimizeDialogOpen}
           yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
