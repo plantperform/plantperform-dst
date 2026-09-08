@@ -1,5 +1,4 @@
 import {
-  ChevronRight,
   FlaskConical,
   History,
   Info,
@@ -11,12 +10,11 @@ import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
-  useFarmHistoricalYearlySummary,
-  useFarmEmissions,
   simulationFieldsKey,
   simulationYearlySummaryKey,
   useScenarioAfgrodeKoder,
   useSimulationFields,
+  useSimulationFieldYearValues,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
@@ -30,7 +28,6 @@ import type {
   KystvandoplandYearlyNLoadCaps,
   OptimizeSimulationResponse,
   Simulation,
-  YearlySummaryEntry,
 } from '@/api/types'
 import {
   catchmentKey,
@@ -43,7 +40,6 @@ import {
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
-import { FarmStatusHeader } from '@/components/farm/FarmStatusHeader'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
@@ -51,7 +47,7 @@ import type {
   FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
-import { YearlyOverviewTable } from '@/components/farm/YearlyOverviewTable'
+import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -68,12 +64,9 @@ import {
   type SegmentedControlOption,
 } from '@/components/ui/segmented-control'
 import {
-  computeFieldTotals,
   formatNumber,
-  resolveFarmQuota,
-  ROTATION_START_CALENDAR_YEAR,
-  YEAR_BAR_FILL_COLOR,
-  YEAR_BAR_OVER_COLOR,
+  countCatchmentsOverQuota,
+  ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
@@ -95,162 +88,10 @@ const invalidateOptimizationDisplays = async (farmId: string, simulationId: stri
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
 
-const NUM_ROTATION_YEARS = 8
-const ROTATION_CALENDAR_YEARS = Array.from(
-  { length: NUM_ROTATION_YEARS },
-  (_, index) => ROTATION_START_CALENDAR_YEAR + index,
-)
-
-
 const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
   { value: 'list', label: 'Liste', icon: List },
   { value: 'map', label: 'Kort', icon: MapIcon },
 ]
-
-const YearlyOverviewMiniBars = ({
-  entries,
-  quotaKgn,
-}: {
-  entries: YearlySummaryEntry[]
-  quotaKgn: number
-}) => {
-  const scale = Math.max(
-    1,
-    quotaKgn,
-    ...entries.map((entry) => entry.totalNLoadKg),
-  )
-
-  return (
-    <div className="flex h-6 items-end gap-0.5" aria-hidden="true">
-      {entries.map((entry) => {
-        const heightPct = Math.max(8, (entry.totalNLoadKg / scale) * 100)
-        const isOver = quotaKgn > 0 && entry.totalNLoadKg > quotaKgn
-        return (
-          <div
-            key={entry.year}
-            className="w-[7px] rounded-t-sm"
-            style={{
-              height: `${heightPct}%`,
-              backgroundColor: isOver ? YEAR_BAR_OVER_COLOR : YEAR_BAR_FILL_COLOR,
-            }}
-          />
-        )
-      })}
-    </div>
-  )
-}
-
-const YearlyOverviewSection = ({
-  farm,
-  fields,
-  simulationId,
-}: {
-  farm: Farm
-  fields: FieldRecord[]
-  simulationId?: string
-}) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const simulationSummary = useSimulationYearlySummary(
-    simulationId ? farm.id : undefined,
-    simulationId,
-  )
-  const historicalSummary = useFarmHistoricalYearlySummary(
-    simulationId ? undefined : farm.id,
-  )
-  const { data: historicalEmissionsByCatchment = [] } = useFarmEmissions(
-    simulationId ? undefined : farm.id,
-  )
-  const { data: entries, error } = simulationId
-    ? simulationSummary
-    : historicalSummary
-  const quota = useMemo(
-    () =>
-      resolveFarmQuota(
-        computeFieldTotals(fields, Boolean(simulationId)).udledningskvoteMarkKgn,
-      ),
-    [fields, simulationId],
-  )
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        Kunne ikke hente årsoversigten: {error.message}
-      </div>
-    )
-  }
-  if (!entries || entries.length === 0) return null
-
-  const firstYear = simulationId
-    ? ROTATION_START_CALENDAR_YEAR + entries[0].year - 1
-    : entries[0].year
-  const lastYear = simulationId
-    ? ROTATION_START_CALENDAR_YEAR + entries[entries.length - 1].year - 1
-    : entries[entries.length - 1].year
-
-  const overYearCount =
-    quota.quotaKgn > 0
-      ? entries.filter((entry) => entry.totalNLoadKg > quota.quotaKgn).length
-      : 0
-  const overCatchmentCount = historicalEmissionsByCatchment.filter(
-    (entry) => !entry.overholder,
-  ).length
-  const compliantCatchmentCount =
-    historicalEmissionsByCatchment.length - overCatchmentCount
-
-  return (
-    <div className="rounded-lg border bg-card">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
-        onClick={() => setIsOpen((current) => !current)}
-        aria-expanded={isOpen}
-      >
-        <div className="flex items-center gap-2">
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-              isOpen ? 'rotate-90' : ''
-            }`}
-            aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-semibold">Årsoversigt</div>
-            <div className="text-xs text-muted-foreground">
-              {firstYear}-{lastYear} - DB2 og udledning år for år
-              {overYearCount > 0 ? (
-                <span className="ml-1 font-medium text-red-700">
-                  · {overYearCount} af {entries.length} år over grænsen
-                </span>
-              ) : null}
-              {!simulationId && historicalEmissionsByCatchment.length > 0 ? (
-                <span className="ml-1">
-                  · Vandoplande: {compliantCatchmentCount} overholder,{' '}
-                  {overCatchmentCount} overskrider
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        <YearlyOverviewMiniBars entries={entries} quotaKgn={quota.quotaKgn} />
-      </button>
-      {isOpen ? (
-        <div className="border-t px-4 pb-4 pt-3">
-          {!simulationId ? (
-            <p className="mb-3 text-xs text-muted-foreground">
-              Årsoversigten er samlet for bedriften. Historisk udledning og
-              kvote for hvert Vandopland vises under Nøgletal; de tal viser
-              historikken, ikke et optimeringsresultat.
-            </p>
-          ) : null}
-          <YearlyOverviewTable
-            entries={entries}
-            quota={quota}
-            yearsAreCalendarYears={!simulationId}
-          />
-        </div>
-      ) : null}
-    </div>
-  )
-}
 
 type LastRun = {
   simulationId: string
@@ -270,6 +111,8 @@ type FarmInspectorProps = {
   onViewChange: (view: FarmView) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
+  selectedYearIndex: number | null
+  onSelectedYearIndexChange: (index: number | null) => void
   optimizeDialogOpen: boolean
   onOptimizeDialogOpenChange: (open: boolean) => void
   yearlyOptimizeDialogOpen: boolean
@@ -290,6 +133,8 @@ export const FarmInspector = ({
   onViewChange,
   selectedFieldId,
   onSelectedFieldChange,
+  selectedYearIndex,
+  onSelectedYearIndexChange,
   optimizeDialogOpen,
   onOptimizeDialogOpenChange,
   yearlyOptimizeDialogOpen,
@@ -310,6 +155,28 @@ export const FarmInspector = ({
   if (lastRun && lastRun.simulationId !== selectedSimulation?.id) {
     setLastRun(null)
   }
+
+  const catchmentOverview = useMemo(
+    () => countCatchmentsOverQuota(fields, isSimulationView),
+    [fields, isSimulationView],
+  )
+
+  const showYearWalkthrough = isSimulationView && !isRules && !fieldsError
+  const effectiveSelectedYearIndex = showYearWalkthrough
+    ? selectedYearIndex
+    : null
+  const yearValuesEnabled =
+    effectiveSelectedYearIndex !== null &&
+    (view === 'map' || selectedFieldId !== null)
+  const { data: yearValues, isLoading: yearValuesLoading } =
+    useSimulationFieldYearValues(
+      farm.id,
+      selectedSimulation?.id,
+      fields,
+      yearValuesEnabled,
+    )
+  const { data: yearlySummary, isLoading: yearlySummaryLoading } =
+    useSimulationYearlySummary(farm.id, selectedSimulation?.id)
 
   const openRules = () => {
     onOptimizeDialogOpenChange(false)
@@ -381,15 +248,19 @@ export const FarmInspector = ({
             isRules && 'bg-rules/5',
           )}
         >
-          {isRules || fieldsError ? null : (
-            <FarmStatusHeader
-              farmId={farm.id}
+          {showYearWalkthrough && selection.kind === 'simulation' ? (
+            <YearWalkthrough
+              key={selection.id}
+              entries={yearlySummary}
+              loading={fieldsLoading || yearlySummaryLoading}
               fields={fields}
-              isSimulationView={isSimulationView}
+              selectedYearIndex={selectedYearIndex}
+              onSelectedYearIndexChange={onSelectedYearIndexChange}
+              catchmentOverview={catchmentOverview}
               lastRun={lastRun?.response ?? null}
-              loading={fieldsLoading}
+              collapsible={view === 'list'}
             />
-          )}
+          ) : null}
           {isRules && selectedSimulation && !fieldsLoading ? (
             <SimulationRulesPanel
               key={selectedSimulation.id}
@@ -409,15 +280,6 @@ export const FarmInspector = ({
             </div>
           ) : view === 'list' ? (
             <>
-              {!isRules ? (
-                <YearlyOverviewSection
-                  farm={farm}
-                  fields={fields}
-                  simulationId={
-                    selection.kind === 'simulation' ? selection.id : undefined
-                  }
-                />
-              ) : null}
               <FarmFieldsList
                 farmId={farm.id}
                 fields={fields}
@@ -433,6 +295,9 @@ export const FarmInspector = ({
                 onSortChange={setFieldsSort}
                 selectedFieldId={selectedFieldId}
                 onSelectedFieldChange={onSelectedFieldChange}
+                selectedYearIndex={effectiveSelectedYearIndex}
+                onSelectedYearIndexChange={onSelectedYearIndexChange}
+                yearValues={yearValues}
                 onSwitchToMap={() => onViewChange('map')}
                 onError={onError}
               />
@@ -448,6 +313,9 @@ export const FarmInspector = ({
               fields={fields}
               readOnly={isSimulationView}
               mode={effectiveMode}
+              selectedYearIndex={effectiveSelectedYearIndex}
+              yearValues={yearValues}
+              yearValuesLoading={yearValuesEnabled && yearValuesLoading}
               onError={onError}
             />
           )}
