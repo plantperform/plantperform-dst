@@ -14,14 +14,18 @@ import {
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
+  formatRotationYear,
   getFieldQuotaStatus,
   isFieldCalculated,
   isFieldLocked,
   REAL_HISTORY_START_CALENDAR_YEAR,
+  resolveFarmQuota,
   ROTATION_START_CALENDAR_YEAR,
   type FieldTotals,
   type QuotaStatus,
+  type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -90,6 +94,53 @@ const renderQuotaStatus = (status: QuotaStatus) => {
   )
 }
 
+const renderQuotaStatusFooter = (
+  totals: FieldTotals,
+  level: QuotaStatusLevel,
+  catchmentNote: string | null,
+) => {
+  if (level === 'uncalculated') {
+    return (
+      <QuotaStatusIndicator level={level}>
+        <span className="font-normal text-muted-foreground">Ikke beregnet</span>
+      </QuotaStatusIndicator>
+    )
+  }
+  if (level === 'noData') {
+    return (
+      <QuotaStatusIndicator level={level}>
+        <span className="font-normal text-muted-foreground">Ingen data</span>
+      </QuotaStatusIndicator>
+    )
+  }
+
+  const quota = resolveFarmQuota(totals.udledningskvoteMarkKgn)
+  const notes: string[] = [quota.basis]
+  if (totals.calculatedCount > 0 && totals.uncalculatedCount > 0) {
+    notes.push(`${totals.uncalculatedCount} ikke beregnet`)
+  }
+  if (catchmentNote) notes.push(catchmentNote)
+
+  return (
+    <div className="space-y-0.5">
+      <QuotaStatusIndicator
+        level={level}
+        badge={level !== 'partial'}
+        className={level === 'partial' ? 'text-muted-foreground' : undefined}
+      >
+        {formatQuotaAmount({
+          level,
+          nLoad: totals.nLoad,
+          quotaKgn: quota.quotaKgn,
+        })}
+      </QuotaStatusIndicator>
+      <div className="text-xs font-normal text-muted-foreground">
+        {notes.join(', ')}
+      </div>
+    </div>
+  )
+}
+
 type NumericMetricColumnConfig = {
   key: 'db2' | 'nLoad' | 'leaching' | 'fen'
   label: string
@@ -143,6 +194,7 @@ const renderRotationSwatches = (
   rotation: FieldRecord['cropRotation'],
   rotationStartYear: number,
   cropColorMap: Map<number, string>,
+  highlightIndex: number | null = null,
 ) => (
   <div className="flex items-center gap-2.5">
     <div className="flex shrink-0 gap-[3px]">
@@ -154,14 +206,23 @@ const renderRotationSwatches = (
           : `${calendarYear}: ${year.afgrodeNavn}`
         const color =
           cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+        const isHighlighted = highlightIndex === index
         return (
-          <CropYearSwatch
+          <span
             key={index}
-            title={title}
-            color={color}
-            hasUdlaeg={hasUdlaeg}
-            size="14x10"
-          />
+            className={cn(
+              'inline-flex rounded-sm motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
+              isHighlighted && 'ring-2 ring-primary ring-offset-1',
+              highlightIndex !== null && !isHighlighted && 'opacity-60',
+            )}
+          >
+            <CropYearSwatch
+              title={title}
+              color={color}
+              hasUdlaeg={hasUdlaeg}
+              size="14x10"
+            />
+          </span>
         )
       })}
     </div>
@@ -386,9 +447,12 @@ export type FarmFieldsColumnsArgs = {
   isSimulationView: boolean
   mode: FarmInspectorMode
   maxYears: number
+  selectedYearIndex: number | null
   fields: FieldRecord[]
   cropColorMap: Map<number, string>
   totals: FieldTotals
+  quotaFooterLevel: QuotaStatusLevel
+  quotaFooterNote: string | null
   canEditRules: boolean
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
@@ -399,9 +463,12 @@ export const buildFarmFieldsColumns = ({
   isSimulationView,
   mode,
   maxYears,
+  selectedYearIndex,
   fields,
   cropColorMap,
   totals,
+  quotaFooterLevel,
+  quotaFooterNote,
   canEditRules,
   lockingFieldId,
   onToggleLock,
@@ -432,6 +499,9 @@ export const buildFarmFieldsColumns = ({
   const rotationStartYear = isSimulationView
     ? ROTATION_START_CALENDAR_YEAR
     : REAL_HISTORY_START_CALENDAR_YEAR
+  const highlightIndex = isSimulationView ? selectedYearIndex : null
+  const selectedCalendarYear =
+    highlightIndex !== null ? rotationStartYear + highlightIndex : null
 
   list.push({
     id: 'cropRotation',
@@ -439,9 +509,11 @@ export const buildFarmFieldsColumns = ({
       <div className="flex flex-col">
         <span>{isSimulationView ? 'Sædskifte' : 'Afgrødehistorik'}</span>
         <span className="block text-xs font-normal text-muted-foreground">
-          {maxYears > 1
-            ? `${rotationStartYear}-${rotationStartYear + maxYears - 1}`
-            : rotationStartYear}
+          {selectedCalendarYear !== null
+            ? `${selectedCalendarYear} valgt`
+            : maxYears > 1
+              ? `${rotationStartYear}-${rotationStartYear + maxYears - 1}`
+              : rotationStartYear}
         </span>
       </div>
     ),
@@ -456,7 +528,12 @@ export const buildFarmFieldsColumns = ({
           </span>
         )
       }
-      return renderRotationSwatches(rotation, rotationStartYear, cropColorMap)
+      return renderRotationSwatches(
+        rotation,
+        rotationStartYear,
+        cropColorMap,
+        highlightIndex,
+      )
     },
     footer: () => {
       if (isSimulationView) return null
@@ -476,6 +553,39 @@ export const buildFarmFieldsColumns = ({
       toggleLabel: isSimulationView ? 'Sædskifte' : 'Afgrødehistorik',
     },
   })
+
+  if (isSimulationView) {
+    list.push({
+      id: 'cropYear',
+      header: () => (
+        <div className="flex flex-col">
+          <span>Afgrøde</span>
+          <span className="block text-xs font-normal text-muted-foreground">
+            {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
+          </span>
+        </div>
+      ),
+      cell: ({ row }) => {
+        const year =
+          highlightIndex !== null
+            ? row.original.cropRotation[highlightIndex]
+            : undefined
+        if (!year) return <span className="text-muted-foreground">-</span>
+        const label = formatRotationYear(year)
+        return (
+          <span className="block max-w-40 truncate" title={label}>
+            {label}
+          </span>
+        )
+      },
+      footer: () => null,
+      enableSorting: false,
+      meta: {
+        headerClassName: 'w-44 px-4 py-3 font-medium whitespace-nowrap',
+        cellClassName: 'w-44 px-4 py-3 whitespace-nowrap',
+      },
+    })
+  }
 
   list.push(
     numericMetricColumn(
@@ -502,7 +612,8 @@ export const buildFarmFieldsColumns = ({
         renderQuotaStatus(
           getFieldQuotaStatus(row.original, isSimulationView),
         ),
-      footer: () => null,
+      footer: () =>
+        renderQuotaStatusFooter(totals, quotaFooterLevel, quotaFooterNote),
       enableSorting: false,
       meta: {
         headerClassName: 'px-4 py-3 font-medium whitespace-normal',

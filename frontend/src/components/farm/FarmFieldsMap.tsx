@@ -16,7 +16,13 @@ import { mutate } from 'swr'
 
 import { getAccessToken } from '@/api/auth'
 import { API_BASE, fetcher } from '@/api/client'
-import { farmFieldsKey, farmKey, registryFieldsBulkKey, useFarmFields } from '@/api/hooks'
+import {
+  farmFieldsKey,
+  farmKey,
+  registryFieldsBulkKey,
+  useFarmFields,
+  type SimulationFieldYearValues,
+} from '@/api/hooks'
 import { createFields, detachField } from '@/api/mutations'
 import type {
   CreateFieldInput,
@@ -37,22 +43,31 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
+  buildCropColorMap,
   changedFieldIds,
+  CROP_YEAR_FALLBACK_COLOR,
   formatRealRotation,
   isFieldLocked,
+  ROTATION_START_CALENDAR_YEAR,
+  yearNLoadKgHa,
 } from '@/lib/field-domain'
 import {
   fieldLabelPoint,
   fieldsToFeatureCollection,
   getFieldsBounds,
+  type FieldYearProperties,
 } from '@/lib/geo'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
   buildFillColor,
+  buildYearCropSpec,
+  isYearColorAttribute,
   legendEntries,
   registryPropertyFor,
+  YEAR_QUOTA_STATUS_VALUES,
   type ColorAttribute,
+  type ColorSpec,
 } from '@/lib/map-coloring'
 
 const formatNumber = (value: number) =>
@@ -66,6 +81,10 @@ const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
+const paintTransitionMs = window.matchMedia('(prefers-reduced-motion: reduce)')
+  .matches
+  ? 0
+  : 300
 
 type SavedMapViewState = typeof defaultMapViewState & {
   bearing: number
@@ -106,7 +125,17 @@ type FarmFieldsMapProps = {
   fields: FieldRecord[]
   readOnly?: boolean
   mode?: FarmInspectorMode
+  selectedYearIndex?: number | null
+  yearValues?: SimulationFieldYearValues
+  yearValuesLoading?: boolean
   onError: (message: string | null) => void
+}
+
+const describeYearQuotaStatus = (status: number | null): string => {
+  if (status === YEAR_QUOTA_STATUS_VALUES.over) return ' - over markens kvote'
+  if (status === YEAR_QUOTA_STATUS_VALUES.near) return ' - tæt på markens kvote'
+  if (status === YEAR_QUOTA_STATUS_VALUES.ok) return ' - under markens kvote'
+  return ''
 }
 
 const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
@@ -122,6 +151,10 @@ type HoveredField = {
   latitude: number
   primary: string
   vandopland: string | null
+  hasRotation: boolean
+  yearCrop: string | null
+  yearNLoadKgHa: number | null
+  yearQuotaStatus: number | null
 }
 
 type HoveredMars = {
@@ -139,6 +172,9 @@ export const FarmFieldsMap = ({
   fields,
   readOnly = false,
   mode = 'values',
+  selectedYearIndex = null,
+  yearValues,
+  yearValuesLoading = false,
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -159,17 +195,63 @@ export const FarmFieldsMap = ({
   const [colorBySelection, setColorBySelection] = useState<ColorBySelection>(
     () => ({ forMode: mode, value: defaultColorByForMode(mode) }),
   )
+  const [previousHasSelectedYear, setPreviousHasSelectedYear] = useState(false)
+  const [colorByBeforeYear, setColorByBeforeYear] =
+    useState<ColorAttribute | null>(null)
+  const hasSelectedYear = mode !== 'rules' && selectedYearIndex !== null
+  const yearIndex = hasSelectedYear ? selectedYearIndex : null
+  const selectedCalendarYear =
+    yearIndex !== null ? ROTATION_START_CALENDAR_YEAR + yearIndex : null
   const colorBy =
     colorBySelection.forMode === mode
       ? colorBySelection.value
       : defaultColorByForMode(mode)
+  if (previousHasSelectedYear !== hasSelectedYear) {
+    setPreviousHasSelectedYear(hasSelectedYear)
+    if (hasSelectedYear) {
+      setColorByBeforeYear(isYearColorAttribute(colorBy) ? null : colorBy)
+      setColorBySelection({ forMode: mode, value: 'yearNLoad' })
+    } else {
+      if (isYearColorAttribute(colorBy)) {
+        setColorBySelection({
+          forMode: mode,
+          value: colorByBeforeYear ?? 'none',
+        })
+      }
+      setColorByBeforeYear(null)
+    }
+  }
   const setColorBy = (value: ColorAttribute) =>
     setColorBySelection({ forMode: mode, value })
   const showLockMarkers = mode === 'rules' || colorBy === 'fieldLocked'
   const [showMars, setShowMars] = useState(false)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
 
-  const activeColorSpec = colorBy === 'none' ? null : COLOR_SPECS[colorBy]
+  const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
+  const yearCropSpec = useMemo(
+    () =>
+      yearIndex === null
+        ? null
+        : buildYearCropSpec(
+            fields.flatMap((field) => {
+              const year = field.cropRotation[yearIndex]
+              return year ? [year] : []
+            }),
+            cropColorMap,
+            CROP_YEAR_FALLBACK_COLOR,
+          ),
+    [fields, cropColorMap, yearIndex],
+  )
+  const colorOptions = hasSelectedYear
+    ? ATTRIBUTE_OPTIONS
+    : ATTRIBUTE_OPTIONS.filter((option) => !isYearColorAttribute(option.value))
+
+  const activeColorSpec: ColorSpec | null =
+    colorBy === 'none'
+      ? null
+      : colorBy === 'yearCrop'
+        ? yearCropSpec
+        : COLOR_SPECS[colorBy]
   const farmThemedColor = activeColorSpec
     ? buildFillColor(activeColorSpec)
     : null
@@ -201,9 +283,29 @@ export const FarmFieldsMap = ({
     [fields, liveFields],
   )
 
+  const yearProperties = useMemo((): FieldYearProperties | undefined => {
+    if (yearIndex === null) return undefined
+    const nLoadKgHaByFieldId: Record<string, number> = {}
+    for (const field of fields) {
+      const yearResult = yearValues?.[field.id]?.[yearIndex]
+      if (!yearResult) continue
+      nLoadKgHaByFieldId[field.id] = yearNLoadKgHa(
+        yearResult.leachingKgNHa,
+        field.retention,
+      )
+    }
+    return { yearIndex, nLoadKgHaByFieldId }
+  }, [fields, yearValues, yearIndex])
+  const yearValuesFieldCount = yearProperties
+    ? Object.keys(yearProperties.nLoadKgHaByFieldId).length
+    : 0
+  const rotationFieldCount = fields.filter(
+    (field) => field.rotationId !== null,
+  ).length
+
   const farmFieldsGeoJson = useMemo(
-    () => fieldsToFeatureCollection(fields, changedFields),
-    [fields, changedFields],
+    () => fieldsToFeatureCollection(fields, changedFields, yearProperties),
+    [fields, changedFields, yearProperties],
   )
   const lockedFieldMarkers = useMemo(
     () =>
@@ -504,12 +606,34 @@ export const FarmFieldsMap = ({
           : imkId
             ? `IMK ${imkId}`
             : 'Manuel mark'
+    const yearCropRaw = addMode ? null : feature.properties?.yearAfgrodeNavn
+    const yearNLoadRaw = addMode ? null : feature.properties?.yearNLoadKgHa
+    const yearQuotaStatusRaw = addMode
+      ? null
+      : feature.properties?.yearQuotaStatus
+    const hoveredFieldId = addMode ? null : feature.properties?.fieldId
+    const hasRotation =
+      typeof hoveredFieldId === 'string' &&
+      fields.some(
+        (field) => field.id === hoveredFieldId && field.rotationId !== null,
+      )
     mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
     setHoveredField({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
       primary,
       vandopland: kystvand,
+      hasRotation,
+      yearCrop:
+        typeof yearCropRaw === 'string' && yearCropRaw.length > 0
+          ? yearCropRaw
+          : null,
+      yearNLoadKgHa:
+        typeof yearNLoadRaw === 'number' && Number.isFinite(yearNLoadRaw)
+          ? yearNLoadRaw
+          : null,
+      yearQuotaStatus:
+        typeof yearQuotaStatusRaw === 'number' ? yearQuotaStatusRaw : null,
     })
   }
 
@@ -570,6 +694,7 @@ export const FarmFieldsMap = ({
             paint={{
               'fill-color': farmThemedColor ?? '#16a34a',
               'fill-opacity': addMode ? 0.28 : farmThemedColor ? 0.7 : 0.5,
+              'fill-opacity-transition': { duration: paintTransitionMs },
             }}
           />
           <Layer
@@ -820,6 +945,23 @@ export const FarmFieldsMap = ({
                   ? `Vandopland ${hoveredField.vandopland}`
                   : 'Vandopland ukendt'}
               </span>
+              {selectedCalendarYear !== null ? (
+                <>
+                  <span>
+                    {selectedCalendarYear}:{' '}
+                    {hoveredField.yearCrop ?? 'ingen afgrøde for året'}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {hoveredField.yearNLoadKgHa !== null
+                      ? `Udledning ${formatNumber(hoveredField.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hoveredField.yearQuotaStatus)}`
+                      : yearValuesLoading
+                        ? 'Henter udledning for året...'
+                        : hoveredField.hasRotation
+                          ? 'Uden for markens rotationscyklus'
+                          : 'Ingen udledning beregnet for året'}
+                  </span>
+                </>
+              ) : null}
             </div>
           </Popup>
         ) : null}
@@ -1069,12 +1211,24 @@ export const FarmFieldsMap = ({
               setColorBy(event.target.value as ColorAttribute)
             }
           >
-            {ATTRIBUTE_OPTIONS.map((option) => (
+            {colorOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
+
+          {selectedCalendarYear !== null && yearValuesLoading ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              Henter årstal for markerne...
+            </p>
+          ) : selectedCalendarYear !== null &&
+            yearValuesFieldCount < rotationFieldCount ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              {yearValuesFieldCount} af {rotationFieldCount} marker har årstal
+              for {selectedCalendarYear}
+            </p>
+          ) : null}
 
           {activeColorSpec ? (
             <div className="space-y-2">

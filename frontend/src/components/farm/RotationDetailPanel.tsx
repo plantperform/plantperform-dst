@@ -21,6 +21,8 @@ type RotationDetailPanelProps = {
   rotationId: string | null
   areaHa: number
   retention: number | null
+  selectedYearIndex?: number
+  onSelectedYearIndexChange?: (index: number) => void
 }
 
 export const RotationDetailPanel = ({
@@ -30,6 +32,8 @@ export const RotationDetailPanel = ({
   rotationId,
   areaHa,
   retention,
+  selectedYearIndex,
+  onSelectedYearIndexChange,
 }: RotationDetailPanelProps) => {
   const {
     data: detail,
@@ -60,10 +64,20 @@ export const RotationDetailPanel = ({
   if (!detail) return null
 
   const years = detail.years.slice(0, detail.activeLen)
+  const highlightIndex =
+    selectedYearIndex !== undefined && selectedYearIndex < years.length
+      ? selectedYearIndex
+      : undefined
 
   return (
     <div className="border-t bg-muted/20 p-4">
-      <RotationYearsDetail years={years} areaHa={areaHa} retention={retention} />
+      <RotationYearsDetail
+        years={years}
+        areaHa={areaHa}
+        retention={retention}
+        selectedYearIndex={highlightIndex}
+        onSelectedYearIndexChange={onSelectedYearIndexChange}
+      />
     </div>
   )
 }

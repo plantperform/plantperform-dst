@@ -78,7 +78,17 @@ export const formatCropRotation = (rotation: Crop[]) =>
 // candidate_evaluator.py::START_CALENDAR_YEAR in the backend. Position 1 is
 // this year, position 2 is +1, etc. (position 1 maps to RotationYear index 0).
 export const ROTATION_START_CALENDAR_YEAR = 2027
+export const NUM_ROTATION_YEARS = 8
+export const ROTATION_CALENDAR_YEARS = Array.from(
+  { length: NUM_ROTATION_YEARS },
+  (_, index) => ROTATION_START_CALENDAR_YEAR + index,
+)
 export const CURRENT_CALENDAR_YEAR = new Date().getFullYear()
+
+export const yearNLoadKgHa = (
+  leachingKgNHa: number,
+  retention: number | null,
+): number => leachingKgNHa * (1 - (retention ?? 0) / 100)
 
 // Starting calendar year for the actual history in the "Aktuel" mark overview
 // (must match field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7 in the
@@ -474,6 +484,28 @@ export type CatchmentTotals = {
   totals: FieldTotals
 }
 
+export type CatchmentOverview = { over: number; total: number }
+
+export const countCatchmentsOverQuota = (
+  fields: FieldRecord[],
+  isSimulationView: boolean,
+): CatchmentOverview => {
+  const groups = groupFieldsByCatchment(fields, isSimulationView)
+  return {
+    over: groups.filter(
+      (entry) => totalsQuotaStatusLevel(entry.totals) === 'over',
+    ).length,
+    total: groups.length,
+  }
+}
+
+export const describeCatchmentsOverQuota = (
+  overview: CatchmentOverview,
+): string | null =>
+  overview.over > 0 && overview.total > 1
+    ? `${overview.over} af ${overview.total} oplande over grænsen`
+    : null
+
 export const groupFieldsByCatchment = (
   fields: FieldRecord[],
   isSimulationView: boolean,
@@ -490,9 +522,6 @@ export const groupFieldsByCatchment = (
     totals: computeFieldTotals(group, isSimulationView),
   }))
 }
-
-export const YEAR_BAR_FILL_COLOR = '#cfdfc6'
-export const YEAR_BAR_OVER_COLOR = '#f87171'
 
 export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'

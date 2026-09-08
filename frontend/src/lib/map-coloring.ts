@@ -13,6 +13,16 @@ export type ColorAttribute =
   | 'inTakeoutPlan'
   | 'kvotegivende'
   | 'fieldLocked'
+  | 'yearNLoad'
+  | 'yearCrop'
+
+export const YEAR_COLOR_ATTRIBUTES: ReadonlySet<ColorAttribute> = new Set([
+  'yearNLoad',
+  'yearCrop',
+])
+
+export const isYearColorAttribute = (attribute: ColorAttribute) =>
+  YEAR_COLOR_ATTRIBUTES.has(attribute)
 
 export type ColorSource = 'both' | 'farm'
 
@@ -293,7 +303,53 @@ const FIELD_LOCKED: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
+export const YEAR_QUOTA_STATUS_VALUES = { ok: 1, near: 2, over: 3 } as const
+
+const YEAR_N_LOAD: CategorySpec = {
+  kind: 'category',
+  label: 'Udledning (valgt år)',
+  unit: '',
+  source: 'farm',
+  property: 'yearQuotaStatus',
+  bins: [
+    { value: YEAR_QUOTA_STATUS_VALUES.ok, color: '#16a34a', label: 'Under markens kvote' },
+    { value: YEAR_QUOTA_STATUS_VALUES.near, color: '#d97706', label: 'Tæt på markens kvote' },
+    { value: YEAR_QUOTA_STATUS_VALUES.over, color: '#dc2626', label: 'Over markens kvote' },
+  ],
+  fallbackColor: NEUTRAL_FALLBACK,
+}
+
+export const buildYearCropSpec = (
+  crops: { afgrodeKode: number; afgrodeNavn: string }[],
+  cropColorMap: Map<number, string>,
+  fallbackColor: string,
+): CategorySpec => {
+  const seen = new Set<number>()
+  const bins: CategoryBin[] = []
+  for (const crop of crops) {
+    if (seen.has(crop.afgrodeKode)) continue
+    seen.add(crop.afgrodeKode)
+    bins.push({
+      value: crop.afgrodeKode,
+      color: cropColorMap.get(crop.afgrodeKode) ?? fallbackColor,
+      label: crop.afgrodeNavn,
+    })
+  }
+  return {
+    kind: 'category',
+    label: 'Afgrøde (valgt år)',
+    unit: '',
+    source: 'farm',
+    property: 'yearAfgrodeKode',
+    bins,
+    fallbackColor: NEUTRAL_FALLBACK,
+  }
+}
+
+export const COLOR_SPECS: Record<
+  Exclude<ColorAttribute, 'none' | 'yearCrop'>,
+  ColorSpec
+> = {
   retention: RETENTION,
   jbnr: JB_NR,
   udledningsgraenseKgnHa: UDLEDNINGSGRAENSE,
@@ -305,6 +361,7 @@ export const COLOR_SPECS: Record<Exclude<ColorAttribute, 'none'>, ColorSpec> = {
   inTakeoutPlan: TAKEOUT,
   kvotegivende: KVOTEGIVENDE,
   fieldLocked: FIELD_LOCKED,
+  yearNLoad: YEAR_N_LOAD,
 }
 
 export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
@@ -320,6 +377,8 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'inTakeoutPlan', label: 'Omlægning' },
   { value: 'kvotegivende', label: 'Kvotegivende areal' },
   { value: 'fieldLocked', label: 'Låst sædskifte' },
+  { value: 'yearNLoad', label: 'Udledning (valgt år)' },
+  { value: 'yearCrop', label: 'Afgrøde (valgt år)' },
 ]
 
 // Farm GeoJSON properties use camelCase (matching FieldRecord).
@@ -386,9 +445,10 @@ const HASHED_COLORS_BY_PROPERTY: Record<string, Map<number, string> | undefined>
 export const buildFillColor = (
   spec: ColorSpec,
   propertyOverride?: string,
-): ExpressionSpecification => {
+): ExpressionSpecification | string => {
   const property = propertyOverride ?? spec.property
   if (spec.kind === 'category') {
+    if (spec.bins.length === 0) return spec.fallbackColor
     const matchExpr: unknown[] = ['match', ['get', property]]
     spec.bins.forEach((bin) => {
       matchExpr.push(bin.value, bin.color)

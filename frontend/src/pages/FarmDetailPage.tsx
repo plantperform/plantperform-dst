@@ -65,6 +65,9 @@ export const FarmDetailPage = () => {
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const [view, setView] = useState<FarmView>('list')
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
+  const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(
+    null,
+  )
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] =
     useState(false)
@@ -86,6 +89,10 @@ export const FarmDetailPage = () => {
     !activeFields.some((field) => field.id === selectedFieldId)
   ) {
     setSelectedFieldId(null)
+  }
+
+  if (selectedYearIndex !== null && activeSelection.kind === 'current') {
+    setSelectedYearIndex(null)
   }
 
   const loadedFarmId = farm?.id
@@ -125,7 +132,10 @@ export const FarmDetailPage = () => {
 
   const changeSelection = (next: FarmViewSelection) => {
     setSelection(next)
-    if (!isSameSelection(next, activeSelection)) setSelectedFieldId(null)
+    if (!isSameSelection(next, activeSelection)) {
+      setSelectedFieldId(null)
+      setSelectedYearIndex(null)
+    }
   }
 
   const changeMode = (next: FarmInspectorMode) => {
@@ -231,6 +241,8 @@ export const FarmDetailPage = () => {
           onViewChange={changeView}
           selectedFieldId={selectedFieldId}
           onSelectedFieldChange={setSelectedFieldId}
+          selectedYearIndex={selectedYearIndex}
+          onSelectedYearIndexChange={setSelectedYearIndex}
           optimizeDialogOpen={optimizeDialogOpen}
           onOptimizeDialogOpenChange={setOptimizeDialogOpen}
           yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}

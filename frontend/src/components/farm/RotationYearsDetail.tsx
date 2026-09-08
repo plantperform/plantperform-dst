@@ -735,6 +735,7 @@ type RotationYearsDetailProps = {
   areaHa: number
   retention: number | null
   selectedYearIndex?: number
+  onSelectedYearIndexChange?: (index: number) => void
   hideYearSelector?: boolean
   startCalendarYear?: number
 }
@@ -744,6 +745,7 @@ export const RotationYearsDetail = ({
   areaHa,
   retention,
   selectedYearIndex,
+  onSelectedYearIndexChange,
   hideYearSelector = false,
   startCalendarYear = ROTATION_START_CALENDAR_YEAR,
 }: RotationYearsDetailProps) => {
@@ -763,7 +765,11 @@ export const RotationYearsDetail = ({
             <button
               key={index}
               type="button"
-              onClick={() => setInternalSelectedYear(index)}
+              onClick={() =>
+                onSelectedYearIndexChange
+                  ? onSelectedYearIndexChange(index)
+                  : setInternalSelectedYear(index)
+              }
               className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
                 index === selectedYear
                   ? 'border-primary bg-primary text-primary-foreground'

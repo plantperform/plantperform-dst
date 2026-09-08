@@ -35,6 +35,7 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+  --animate-rise-in: rise-in 250ms ease-out both;
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
     serif;
@@ -83,8 +84,10 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  border-color: hsl(var(--border));
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
 body {

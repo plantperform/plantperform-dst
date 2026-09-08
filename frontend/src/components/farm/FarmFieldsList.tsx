@@ -15,9 +15,11 @@ import {
   farmKey,
   simulationFieldsKey,
   useFarmFields,
+  type SimulationFieldYearValues,
 } from '@/api/hooks'
 import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
+import { CatchmentChips } from '@/components/farm/CatchmentChips'
 import {
   DEFAULT_FIELDS_SORT,
   type FieldsSortKey,
@@ -65,7 +67,11 @@ import {
   buildCropColorMap,
   changedFieldIds,
   computeFieldTotals,
+  countCatchmentsOverQuota,
+  describeCatchmentsOverQuota,
   isFieldLocked,
+  totalsQuotaStatusLevel,
+  type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
 import { cn } from '@/lib/utils'
@@ -77,6 +83,7 @@ const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
 ])
 const CURRENT_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
+  'quotaStatus',
   'udledningskvoteMarkKgn',
   'soilSummary',
 ])
@@ -103,6 +110,9 @@ type FarmFieldsListProps = {
   onSortChange: (sort: FieldsSortState) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
+  selectedYearIndex?: number | null
+  onSelectedYearIndexChange?: (index: number | null) => void
+  yearValues?: SimulationFieldYearValues
   onSwitchToMap: () => void
   onError: (message: string | null) => void
 }
@@ -118,6 +128,9 @@ export const FarmFieldsList = ({
   onSortChange,
   selectedFieldId,
   onSelectedFieldChange,
+  selectedYearIndex = null,
+  onSelectedYearIndexChange,
+  yearValues,
   onSwitchToMap,
   onError,
 }: FarmFieldsListProps) => {
@@ -159,6 +172,14 @@ export const FarmFieldsList = ({
     () => computeFieldTotals(fields, isSimulationView),
     [fields, isSimulationView],
   )
+
+  const catchmentOverview = useMemo(
+    () => countCatchmentsOverQuota(fields, isSimulationView),
+    [fields, isSimulationView],
+  )
+  const quotaFooterLevel: QuotaStatusLevel =
+    catchmentOverview.over > 0 ? 'over' : totalsQuotaStatusLevel(totals)
+  const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
 
   const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
 
@@ -239,9 +260,12 @@ export const FarmFieldsList = ({
         isSimulationView,
         mode,
         maxYears,
+        selectedYearIndex,
         fields,
         cropColorMap,
         totals,
+        quotaFooterLevel,
+        quotaFooterNote,
         canEditRules,
         lockingFieldId,
         onToggleLock,
@@ -251,9 +275,12 @@ export const FarmFieldsList = ({
       isSimulationView,
       mode,
       maxYears,
+      selectedYearIndex,
       fields,
       cropColorMap,
       totals,
+      quotaFooterLevel,
+      quotaFooterNote,
       canEditRules,
       lockingFieldId,
       onToggleLock,
@@ -324,10 +351,15 @@ export const FarmFieldsList = ({
             kørsel - de er ikke tal, marken har.
           </p>
         ) : (
-          <div className="flex items-center justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CatchmentChips
+              farmId={farmId}
+              fields={fields}
+              isSimulationView={isSimulationView}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="xs" className="gap-1.5">
+                <Button variant="outline" size="xs" className="ml-auto gap-1.5">
                   <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
                   Kolonner
                   <span className="text-muted-foreground">
@@ -485,6 +517,9 @@ export const FarmFieldsList = ({
           simulationId={simulationId}
           simulation={simulation}
           cropColorMap={cropColorMap}
+          selectedYearIndex={selectedYearIndex}
+          onSelectedYearIndexChange={onSelectedYearIndexChange}
+          yearValues={yearValues?.[selectedField.id]}
           isDetaching={detachingFieldId === selectedField.id}
           onRequestDetach={() => setConfirmDetachField(selectedField)}
           onClose={() => onSelectedFieldChange(null)}

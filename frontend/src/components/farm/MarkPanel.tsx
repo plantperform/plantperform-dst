@@ -2,7 +2,11 @@ import { ChevronRight, Repeat, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
-import type { FieldRecord, Simulation } from '@/api/types'
+import type {
+  FieldRecord,
+  RotationCandidateYearResult,
+  Simulation,
+} from '@/api/types'
 import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
@@ -13,11 +17,13 @@ import {
   CURRENT_CALENDAR_YEAR,
   formatNumber,
   formatQuotaAmount,
+  formatWholeNumber,
   getFieldQuotaStatus,
   isFieldCalculated,
   QUOTA_STATUS_STYLES,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
+  yearNLoadKgHa,
   type QuotaStatus,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -94,25 +100,40 @@ const RotationYearRow = ({
   index,
   startYear,
   cropColorMap,
+  isSelected = false,
 }: {
   year: FieldRecord['cropRotation'][number]
   index: number
   startYear: number
   cropColorMap: Map<number, string>
+  isSelected?: boolean
 }) => {
   const calendarYear = startYear + index
   const hasUdlaeg = year.udlaegNavn !== null
   const color = cropColorMap.get(year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   return (
-    <li className="flex items-center gap-2.5">
+    <li
+      className={cn(
+        'flex items-center gap-2.5 rounded-md -mx-1.5 -my-0.5 px-1.5 py-0.5',
+        isSelected && 'bg-muted ring-1 ring-primary/40',
+      )}
+      aria-current={isSelected ? 'true' : undefined}
+    >
       <span className="w-9 shrink-0 text-xs text-muted-foreground">
         {calendarYear}
       </span>
       <CropYearSwatch color={color} hasUdlaeg={hasUdlaeg} size="14x10" />
-      <span className={`text-sm ${isCurrentYear ? 'font-medium' : ''}`}>
+      <span
+        className={`text-sm ${isCurrentYear || isSelected ? 'font-medium' : ''}`}
+      >
         {year.afgrodeNavn}
       </span>
+      {isSelected ? (
+        <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+          valgt år
+        </span>
+      ) : null}
       {isCurrentYear ? (
         <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
           i år
@@ -134,6 +155,9 @@ type MarkPanelProps = {
   simulationId?: string
   simulation?: Simulation
   cropColorMap: Map<number, string>
+  selectedYearIndex?: number | null
+  onSelectedYearIndexChange?: (index: number | null) => void
+  yearValues?: RotationCandidateYearResult[]
   isDetaching: boolean
   onRequestDetach: () => void
   onClose: () => void
@@ -147,6 +171,9 @@ export const MarkPanel = ({
   simulationId,
   simulation,
   cropColorMap,
+  selectedYearIndex = null,
+  onSelectedYearIndexChange,
+  yearValues,
   isDetaching,
   onRequestDetach,
   onClose,
@@ -178,6 +205,21 @@ export const MarkPanel = ({
   const canShowCalcSection =
     !isSimulationView || (Boolean(simulationId) && field.rotationId !== null)
   const canEditRotation = isSimulationView && Boolean(simulationId)
+  const rotationYearCount = yearValues?.length ?? field.cropRotation.length
+  const highlightIndex =
+    isSimulationView &&
+    selectedYearIndex !== null &&
+    selectedYearIndex < rotationYearCount
+      ? selectedYearIndex
+      : null
+  const selectedYearValue =
+    highlightIndex !== null ? (yearValues?.[highlightIndex] ?? null) : null
+  const selectedCalendarYear =
+    isSimulationView && selectedYearIndex !== null
+      ? rotationStartYear + selectedYearIndex
+      : null
+  const yearOutsideRotation =
+    selectedCalendarYear !== null && highlightIndex === null
 
   const metaParts = [
     `${formatNumber(field.areaHa)} ha`,
@@ -304,7 +346,7 @@ export const MarkPanel = ({
                 const columns = calcOpen ? 2 : 1
                 const columnSize = Math.ceil(field.cropRotation.length / columns)
                 const columnLists = Array.from({ length: columns }, (_, columnIndex) => (
-                  <ul key={columnIndex} className="space-y-1.5">
+                  <ul key={columnIndex} className="flex flex-col gap-1.5">
                     {field.cropRotation
                       .slice(columnIndex * columnSize, (columnIndex + 1) * columnSize)
                       .map((year, index) => {
@@ -316,6 +358,7 @@ export const MarkPanel = ({
                             index={actualIndex}
                             startYear={rotationStartYear}
                             cropColorMap={cropColorMap}
+                            isSelected={highlightIndex === actualIndex}
                           />
                         )
                       })}
@@ -336,6 +379,25 @@ export const MarkPanel = ({
                     ) : (
                       columnLists[0]
                     )}
+                    {selectedYearValue && selectedCalendarYear !== null ? (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedCalendarYear}: DB2{' '}
+                        {formatWholeNumber(selectedYearValue.dbKrHa * field.areaHa)}{' '}
+                        kr, udledning{' '}
+                        {formatNumber(
+                          yearNLoadKgHa(
+                            selectedYearValue.leachingKgNHa,
+                            field.retention,
+                          ) * field.areaHa,
+                        )}{' '}
+                        kg N
+                      </p>
+                    ) : null}
+                    {yearOutsideRotation ? (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedCalendarYear} ligger uden for markens sædskifte ({rotationYearCount} år)
+                      </p>
+                    ) : null}
                     {isSimulationView ? (
                       <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                         <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
@@ -380,6 +442,12 @@ export const MarkPanel = ({
                     rotationId={field.rotationId}
                     areaHa={field.areaHa}
                     retention={field.retention}
+                    selectedYearIndex={highlightIndex ?? undefined}
+                    onSelectedYearIndexChange={
+                      selectedCalendarYear !== null && onSelectedYearIndexChange
+                        ? onSelectedYearIndexChange
+                        : undefined
+                    }
                   />
                 ) : (
                   <HistoricalDetailPanel

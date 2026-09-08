@@ -1,4 +1,4 @@
-import useSWR, { preload } from 'swr'
+import useSWR, { mutate, preload } from 'swr'
 
 import { fetcher } from '@/api/client'
 import type {
@@ -125,6 +125,104 @@ export const useFieldHistoricalDetail = (farmId?: string, fieldId?: string) =>
     fieldHistoricalDetailKey(farmId, fieldId),
     fetcher,
   )
+export type SimulationFieldYearValues = Record<
+  string,
+  RotationCandidateYearResult[]
+>
+
+const YEAR_VALUES_CONCURRENCY = 6
+
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await run(items[index])
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  )
+  return results
+}
+
+const yearValuesByFieldRotation = new Map<
+  string,
+  RotationCandidateYearResult[]
+>()
+
+const fetchSimulationFieldYearValues = async (
+  farmId: string,
+  simulationId: string,
+  fieldEntries: string[],
+): Promise<SimulationFieldYearValues> => {
+  const result: SimulationFieldYearValues = {}
+  const missing: { fieldId: string; cacheKey: string }[] = []
+  for (const entry of fieldEntries) {
+    const fieldId = entry.split(':')[0]
+    const cacheKey = `${farmId}/${simulationId}/${entry}`
+    const cached = yearValuesByFieldRotation.get(cacheKey)
+    if (cached) {
+      result[fieldId] = cached
+    } else {
+      missing.push({ fieldId, cacheKey })
+    }
+  }
+  await mapWithConcurrency(
+    missing,
+    YEAR_VALUES_CONCURRENCY,
+    async ({ fieldId, cacheKey }) => {
+      const key = simulationFieldCandidateDetailKey(farmId, simulationId, fieldId)
+      if (!key) return
+      try {
+        const detail = await mutate<RotationCandidateEvaluation>(
+          key,
+          fetcher<RotationCandidateEvaluation>(key),
+          { revalidate: false },
+        )
+        if (!detail) return
+        const years = detail.years.slice(0, detail.activeLen)
+        yearValuesByFieldRotation.set(cacheKey, years)
+        result[fieldId] = years
+      } catch {
+        return
+      }
+    },
+  )
+  return result
+}
+
+export const useSimulationFieldYearValues = (
+  farmId: string | undefined,
+  simulationId: string | undefined,
+  fields: FieldRecord[],
+  enabled: boolean,
+) => {
+  const fieldIds = fields
+    .filter((field) => field.rotationId !== null)
+    .map((field) => `${field.id}:${field.rotationId}`)
+    .sort()
+  const key =
+    enabled && farmId && simulationId && fieldIds.length > 0
+      ? ['simulation-field-year-values', farmId, simulationId, fieldIds.join(',')]
+      : null
+  return useSWR<SimulationFieldYearValues>(
+    key,
+    ([, keyFarmId, keySimulationId, joinedIds]: string[]) =>
+      fetchSimulationFieldYearValues(
+        keyFarmId,
+        keySimulationId,
+        joinedIds.split(','),
+      ),
+    { revalidateOnFocus: false, revalidateIfStale: false },
+  )
+}
 
 export const simulationYearlySummaryKey = (
   farmId?: string,

@@ -1,7 +1,13 @@
-import type { FeatureCollection } from 'geojson'
+import type { Feature, FeatureCollection } from 'geojson'
 
 import type { FieldRecord, GeoJSONMultiPolygon, GeoJSONPolygon } from '@/api/types'
-import { isFieldLocked } from '@/lib/field-domain'
+import { isFieldLocked, quotaStatusLevel } from '@/lib/field-domain'
+import { YEAR_QUOTA_STATUS_VALUES } from '@/lib/map-coloring'
+
+export type FieldYearProperties = {
+  yearIndex: number
+  nLoadKgHaByFieldId: Record<string, number>
+}
 
 type Bounds = [number, number, number, number]
 
@@ -54,29 +60,53 @@ export const fieldLabelPoint = (
 export const fieldsToFeatureCollection = (
   fields: FieldRecord[],
   changedFieldIds?: Set<string>,
+  yearProperties?: FieldYearProperties,
 ): FeatureCollection => ({
   type: 'FeatureCollection',
   features: fields
     .filter((field): field is FieldRecord & { geometry: GeoJSONPolygon | GeoJSONMultiPolygon } => field.geometry !== null)
-    .map((field) => ({
-      type: 'Feature',
-      properties: {
-        fieldId: field.id,
-        imkId: field.imkId,
-        kystvandId: field.kystvandId,
-        name: field.name,
-        retention: field.retention,
-        jbnr: field.jbnr,
-        udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
-        udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
-        leaching: field.leaching,
-        nLoad: field.nLoad,
-        db2: field.db2,
-        rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
-        inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
-        kvotegivende: field.kvotegivende ? 1 : 0,
-        fieldLocked: isFieldLocked(field) ? 1 : 0,
-      },
-      geometry: field.geometry,
-    })),
+    .map((field): Feature => {
+      const yearRotation =
+        yearProperties !== undefined
+          ? (field.cropRotation[yearProperties.yearIndex] ?? null)
+          : null
+      const yearNLoadKgHa = yearProperties?.nLoadKgHaByFieldId[field.id] ?? null
+      const yearQuotaLevel =
+        yearNLoadKgHa === null
+          ? null
+          : quotaStatusLevel(
+              yearNLoadKgHa * field.areaHa,
+              field.udledningskvoteMarkKgn,
+              true,
+            )
+      const yearQuotaStatus =
+        yearQuotaLevel === 'ok' || yearQuotaLevel === 'near' || yearQuotaLevel === 'over'
+          ? YEAR_QUOTA_STATUS_VALUES[yearQuotaLevel]
+          : null
+      return {
+        type: 'Feature',
+        properties: {
+          fieldId: field.id,
+          imkId: field.imkId,
+          kystvandId: field.kystvandId,
+          name: field.name,
+          retention: field.retention,
+          jbnr: field.jbnr,
+          udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
+          udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+          leaching: field.leaching,
+          nLoad: field.nLoad,
+          db2: field.db2,
+          rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
+          inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
+          kvotegivende: field.kvotegivende ? 1 : 0,
+          fieldLocked: isFieldLocked(field) ? 1 : 0,
+          yearAfgrodeKode: yearRotation?.afgrodeKode ?? null,
+          yearAfgrodeNavn: yearRotation?.afgrodeNavn ?? null,
+          yearNLoadKgHa,
+          yearQuotaStatus,
+        },
+        geometry: field.geometry,
+      }
+    }),
 })
