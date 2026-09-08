@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { RotationCandidateYearResult } from '@/api/types'
-import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
+import { ROTATION_START_CALENDAR_YEAR, yearNLoadKgHa } from '@/lib/field-domain'
 import {
   L_FORMULA_CONSTANTS,
   M_LABELS,
@@ -36,7 +36,7 @@ const beregnUdledning = (
   retention: number | null,
   areaHa: number,
 ): { udledningPrHa: number; udledningMark: number } => {
-  const udledningPrHa = (lNuar * (100 - (retention ?? 0))) / 100
+  const udledningPrHa = yearNLoadKgHa(lNuar, retention)
   return { udledningPrHa, udledningMark: udledningPrHa * areaHa }
 }
 

@@ -65,14 +65,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  buildCropColorMap,
   changedFieldIds,
   computeFieldTotals,
-  countCatchmentsOverQuota,
   describeCatchmentsOverQuota,
+  farmQuotaStatusLevel,
   isFieldLocked,
-  totalsQuotaStatusLevel,
-  type QuotaStatusLevel,
+  type CatchmentOverview,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
 import { cn } from '@/lib/utils'
@@ -104,6 +102,7 @@ type FarmFieldsListProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView?: boolean
+  catchmentOverview: CatchmentOverview
   simulationId?: string
   simulation?: Simulation
   mode?: FarmInspectorMode
@@ -122,6 +121,7 @@ export const FarmFieldsList = ({
   farmId,
   fields,
   isSimulationView = false,
+  catchmentOverview,
   simulationId,
   simulation,
   mode = 'values',
@@ -174,15 +174,8 @@ export const FarmFieldsList = ({
     [fields, isSimulationView],
   )
 
-  const catchmentOverview = useMemo(
-    () => countCatchmentsOverQuota(fields, isSimulationView),
-    [fields, isSimulationView],
-  )
-  const quotaFooterLevel: QuotaStatusLevel =
-    catchmentOverview.over > 0 ? 'over' : totalsQuotaStatusLevel(totals)
+  const quotaFooterLevel = farmQuotaStatusLevel(totals, catchmentOverview)
   const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
-
-  const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => buildDefaultColumnVisibility(isSimulationView),
@@ -263,7 +256,6 @@ export const FarmFieldsList = ({
         maxYears,
         selectedYearIndex,
         fields,
-        cropColorMap,
         totals,
         quotaFooterLevel,
         quotaFooterNote,
@@ -278,7 +270,6 @@ export const FarmFieldsList = ({
       maxYears,
       selectedYearIndex,
       fields,
-      cropColorMap,
       totals,
       quotaFooterLevel,
       quotaFooterNote,
@@ -518,7 +509,6 @@ export const FarmFieldsList = ({
           isSimulationView={isSimulationView}
           simulationId={simulationId}
           simulation={simulation}
-          cropColorMap={cropColorMap}
           selectedYearIndex={selectedYearIndex}
           onSelectedYearIndexChange={onSelectedYearIndexChange}
           yearValues={yearValues?.[selectedField.id]}

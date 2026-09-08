@@ -133,6 +133,15 @@ export const cropGroupLabel = (
   afgrodeNavn: string,
 ): string => cropGroupDefinition(classifyCrop(afgrodeKode, afgrodeNavn)).label
 
+export const presentCropGroups = (
+  crops: { afgrodeKode: number; afgrodeNavn: string }[],
+): CropGroupDefinition[] => {
+  const present = new Set<CropGroup>(
+    crops.map((crop) => classifyCrop(crop.afgrodeKode, crop.afgrodeNavn)),
+  )
+  return CROP_GROUPS.filter((group) => present.has(group.id))
+}
+
 const DARK_TEXT = '#1a2821'
 const LIGHT_TEXT = '#faf9f5'
 

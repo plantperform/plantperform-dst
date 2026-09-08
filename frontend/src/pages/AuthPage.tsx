@@ -172,7 +172,7 @@ export const AuthPage = ({ mode }: { mode: Mode }) => {
           />
         </div>
         {mode === 'register' && role === 'landmand' ? (
-          <div className="space-y-5 rounded-lg border bg-muted/30 p-4 motion-safe:animate-[rise-in_280ms_ease-out] sm:p-5">
+          <div className="space-y-5 rounded-lg border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
             <div>
               <p className="text-sm font-medium leading-none">Om din bedrift</p>
               <p className="mt-1.5 text-sm text-muted-foreground">

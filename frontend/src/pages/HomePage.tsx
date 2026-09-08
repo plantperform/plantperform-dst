@@ -335,7 +335,7 @@ export const HomePage = () => {
             {selectedRole ? (
               <div
                 key={selectedRole}
-                className="mt-5 motion-safe:animate-[rise-in_280ms_ease-out]"
+                className="mt-5 motion-safe:animate-rise-in"
               >
                 <p className="text-sm text-muted-foreground">
                   {selectedRole === 'landmand'

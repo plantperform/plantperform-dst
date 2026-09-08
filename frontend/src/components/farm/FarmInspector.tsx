@@ -13,7 +13,6 @@ import {
   simulationFieldsKey,
   simulationYearlySummaryKey,
   useScenarioAfgrodeKoder,
-  useSimulationFields,
   useSimulationFieldYearValues,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
@@ -214,6 +213,7 @@ export const FarmInspector = ({
           key={selectedSimulation.id}
           farmId={farm.id}
           simulation={selectedSimulation}
+          fields={fields}
           open={optimizeDialogOpen}
           onOpenChange={onOptimizeDialogOpenChange}
           onOptimized={recordRun}
@@ -226,6 +226,7 @@ export const FarmInspector = ({
           key={`yearly-${selectedSimulation.id}`}
           farmId={farm.id}
           simulation={selectedSimulation}
+          fields={fields}
           open={yearlyOptimizeDialogOpen}
           onOpenChange={onYearlyOptimizeDialogOpenChange}
           onOptimized={recordRun}
@@ -284,6 +285,7 @@ export const FarmInspector = ({
                 farmId={farm.id}
                 fields={fields}
                 isSimulationView={isSimulationView}
+                catchmentOverview={catchmentOverview}
                 simulationId={
                   selection.kind === 'simulation' ? selection.id : undefined
                 }
@@ -328,6 +330,7 @@ export const FarmInspector = ({
 type OptimizeDialogProps = {
   farmId: string
   simulation: Simulation
+  fields: FieldRecord[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onOptimized: (response: OptimizeSimulationResponse) => void
@@ -392,6 +395,7 @@ const AfgrodeExclusionList = ({
 const OptimizeDialog = ({
   farmId,
   simulation,
+  fields,
   open,
   onOpenChange,
   onOptimized,
@@ -402,7 +406,6 @@ const OptimizeDialog = ({
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
   const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
 
-  const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const catchments = useCatchmentOptions(farmId, fields)
   const catchmentLabelByKey = new Map(
     catchments.map((catchment) => [
@@ -569,6 +572,7 @@ const OptimizeDialog = ({
 type YearlyOptimizeDialogProps = {
   farmId: string
   simulation: Simulation
+  fields: FieldRecord[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onOptimized: (response: OptimizeSimulationResponse) => void
@@ -577,6 +581,7 @@ type YearlyOptimizeDialogProps = {
 const YearlyOptimizeDialog = ({
   farmId,
   simulation,
+  fields,
   open,
   onOpenChange,
   onOptimized,
@@ -607,7 +612,6 @@ const YearlyOptimizeDialog = ({
     })
   }
 
-  const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
   const catchments = useCatchmentOptions(farmId, fields)
 

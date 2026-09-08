@@ -71,7 +71,7 @@ import {
   isYearColorAttribute,
   legendEntries,
   registryPropertyFor,
-  YEAR_QUOTA_STATUS_VALUES,
+  yearQuotaStatusLabel,
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
@@ -140,10 +140,9 @@ type FarmFieldsMapProps = {
 }
 
 const describeYearQuotaStatus = (status: number | null): string => {
-  if (status === YEAR_QUOTA_STATUS_VALUES.over) return ' - over markens kvote'
-  if (status === YEAR_QUOTA_STATUS_VALUES.near) return ' - tæt på markens kvote'
-  if (status === YEAR_QUOTA_STATUS_VALUES.ok) return ' - under markens kvote'
-  return ''
+  const label = yearQuotaStatusLabel(status)
+  if (label === null) return ''
+  return ` - ${label.charAt(0).toLowerCase()}${label.slice(1)}`
 }
 
 const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
