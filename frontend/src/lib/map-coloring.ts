@@ -1,5 +1,12 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 
+import {
+  classifyCrop,
+  CROP_GROUP_INDEX,
+  CROP_GROUPS,
+  type CropGroup,
+} from '@/lib/crop-groups'
+
 export type ColorAttribute =
   | 'none'
   | 'retention'
@@ -321,26 +328,23 @@ const YEAR_N_LOAD: CategorySpec = {
 
 export const buildYearCropSpec = (
   crops: { afgrodeKode: number; afgrodeNavn: string }[],
-  cropColorMap: Map<number, string>,
-  fallbackColor: string,
 ): CategorySpec => {
-  const seen = new Set<number>()
-  const bins: CategoryBin[] = []
-  for (const crop of crops) {
-    if (seen.has(crop.afgrodeKode)) continue
-    seen.add(crop.afgrodeKode)
-    bins.push({
-      value: crop.afgrodeKode,
-      color: cropColorMap.get(crop.afgrodeKode) ?? fallbackColor,
-      label: crop.afgrodeNavn,
-    })
-  }
+  const present = new Set<CropGroup>(
+    crops.map((crop) => classifyCrop(crop.afgrodeKode, crop.afgrodeNavn)),
+  )
+  const bins: CategoryBin[] = CROP_GROUPS.filter((group) =>
+    present.has(group.id),
+  ).map((group) => ({
+    value: CROP_GROUP_INDEX[group.id],
+    color: group.color,
+    label: group.label,
+  }))
   return {
     kind: 'category',
     label: 'Afgrøde (valgt år)',
     unit: '',
     source: 'farm',
-    property: 'yearAfgrodeKode',
+    property: 'yearCropGroup',
     bins,
     fallbackColor: NEUTRAL_FALLBACK,
   }

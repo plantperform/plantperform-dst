@@ -34,17 +34,16 @@ import {
 import { Label } from '@/components/ui/label'
 import {
   compactCropSequenceLabel,
-  CROP_YEAR_FALLBACK_COLOR,
   formatRotationYear,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
+import { cropGroupColor } from '@/lib/crop-groups'
 
 type ManualRotationEditorProps = {
   farmId: string
   simulationId: string
   field: FieldRecord
   simulation: Simulation
-  cropColorMap: Map<number, string>
   intent?: 'edit' | 'lock'
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -76,7 +75,6 @@ export const ManualRotationEditor = ({
   simulationId,
   field,
   simulation,
-  cropColorMap,
   intent = 'edit',
   open,
   onOpenChange,
@@ -190,7 +188,7 @@ export const ManualRotationEditor = ({
   )
 
   const colorForCropName = (name: string) =>
-    cropColorMap.get(codeByCropName.get(name) ?? -1) ?? CROP_YEAR_FALLBACK_COLOR
+    cropGroupColor(codeByCropName.get(name) ?? 0, name)
 
   const kategoriPickerItems = useMemo(
     () =>
@@ -202,7 +200,7 @@ export const ManualRotationEditor = ({
         meta: `${s.cropSequence.length} år`,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedKategori, codeByCropName, cropColorMap],
+    [selectedKategori, codeByCropName],
   )
 
   const afgrodePickerItems = useMemo(
@@ -211,9 +209,9 @@ export const ManualRotationEditor = ({
         key: String(a.code),
         label: a.navn,
         title: a.navn,
-        colors: [cropColorMap.get(a.code) ?? CROP_YEAR_FALLBACK_COLOR],
+        colors: [cropGroupColor(a.code, a.navn)],
       })),
-    [afgrodeKoder, cropColorMap],
+    [afgrodeKoder],
   )
 
   const runPreview = (
@@ -532,8 +530,10 @@ export const ManualRotationEditor = ({
                             const isOverridden = overrides.some((o) => o.position === index)
                             const isActive = activeYearIndex === index
                             const cellWrap = wrapCell && wrapCell.index === index ? wrapCell : null
-                            const color =
-                              cropColorMap.get(y.year.afgrodeKode) ?? CROP_YEAR_FALLBACK_COLOR
+                            const color = cropGroupColor(
+                              y.year.afgrodeKode,
+                              y.year.afgrodeNavn,
+                            )
                             const cellTitle = cellWrap
                               ? `Afgrøden rullede rundt fra ${cellWrap.fromYear}`
                               : formatRotationYear(y.year)

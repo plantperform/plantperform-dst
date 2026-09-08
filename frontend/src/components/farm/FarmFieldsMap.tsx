@@ -43,20 +43,26 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
-  buildCropColorMap,
   changedFieldIds,
-  CROP_YEAR_FALLBACK_COLOR,
+  formatFieldCount,
   formatRealRotation,
   isFieldLocked,
   ROTATION_START_CALENDAR_YEAR,
   yearNLoadKgHa,
 } from '@/lib/field-domain'
 import {
+  clusterByPixelDistance,
   fieldLabelPoint,
   fieldsToFeatureCollection,
   getFieldsBounds,
   type FieldYearProperties,
 } from '@/lib/geo'
+import { cn } from '@/lib/utils'
+import {
+  cropGroupColor,
+  readableTextColor,
+  shortCropName,
+} from '@/lib/crop-groups'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
@@ -80,6 +86,8 @@ const emptyFeatureCollection: FeatureCollection = {
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
+const CROP_LABEL_MIN_ZOOM = 12
+const CROP_LABEL_CLUSTER_PX = 48
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
 const paintTransitionMs = window.matchMedia('(prefers-reduced-motion: reduce)')
   .matches
@@ -225,9 +233,10 @@ export const FarmFieldsMap = ({
     setColorBySelection({ forMode: mode, value })
   const showLockMarkers = mode === 'rules' || colorBy === 'fieldLocked'
   const [showMars, setShowMars] = useState(false)
+  const [showCropLabels, setShowCropLabels] = useState(true)
+  const [mapZoom, setMapZoom] = useState(initialViewState.zoom)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
 
-  const cropColorMap = useMemo(() => buildCropColorMap(fields), [fields])
   const yearCropSpec = useMemo(
     () =>
       yearIndex === null
@@ -237,10 +246,8 @@ export const FarmFieldsMap = ({
               const year = field.cropRotation[yearIndex]
               return year ? [year] : []
             }),
-            cropColorMap,
-            CROP_YEAR_FALLBACK_COLOR,
           ),
-    [fields, cropColorMap, yearIndex],
+    [fields, yearIndex],
   )
   const colorOptions = hasSelectedYear
     ? ATTRIBUTE_OPTIONS
@@ -318,6 +325,52 @@ export const FarmFieldsMap = ({
         ),
     [fields],
   )
+  const cropLabelMarkers = useMemo(() => {
+    if (yearIndex === null) return []
+    const labels = fields.flatMap((field) => {
+      const year = field.cropRotation[yearIndex]
+      const point = fieldLabelPoint(field)
+      if (!year || point === null) return []
+      return [
+        {
+          field,
+          point,
+          name: shortCropName(year.afgrodeNavn),
+          fullName: year.afgrodeNavn,
+          color: cropGroupColor(year.afgrodeKode, year.afgrodeNavn),
+        },
+      ]
+    })
+    return clusterByPixelDistance(
+      labels,
+      (label) => label.point,
+      mapZoom,
+      CROP_LABEL_CLUSTER_PX,
+    ).map((cluster) => {
+      const names = new Set(cluster.items.map((label) => label.name))
+      const first = cluster.items[0]
+      const sameCrop = names.size === 1
+      const count = cluster.items.length
+      const color = sameCrop ? first.color : null
+      return {
+        key: cluster.items.map((label) => label.field.id).join('+'),
+        point: cluster.center,
+        label:
+          count === 1
+            ? first.name
+            : sameCrop
+              ? `${first.name} · ${formatFieldCount(count)}`
+              : formatFieldCount(count),
+        title: cluster.items
+          .map((label) => `${label.field.name}: ${label.fullName}`)
+          .join(', '),
+        color,
+        textColor: color ? readableTextColor(color) : null,
+      }
+    })
+  }, [fields, yearIndex, mapZoom])
+  const cropLabelsVisible =
+    showCropLabels && yearIndex !== null && mapZoom >= CROP_LABEL_MIN_ZOOM
   const selectedFarmField = selectedFieldId
     ? fields.find((field) => field.id === selectedFieldId)
     : undefined
@@ -373,6 +426,7 @@ export const FarmFieldsMap = ({
       bearing: map.getBearing(),
       pitch: map.getPitch(),
     })
+    setMapZoom(map.getZoom())
   }
 
   useEffect(() => {
@@ -928,6 +982,35 @@ export const FarmFieldsMap = ({
             </Marker>
           ))
           : null}
+        {cropLabelsVisible
+          ? cropLabelMarkers.map((marker) => (
+            <Marker
+              key={`crop-${marker.key}`}
+              longitude={marker.point[0]}
+              latitude={marker.point[1]}
+              anchor="top"
+              offset={[0, 4]}
+              style={{ pointerEvents: 'none' }}
+            >
+              <span
+                role="img"
+                aria-label={marker.title}
+                title={marker.title}
+                className={cn(
+                  'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
+                  marker.color === null && 'bg-background text-foreground',
+                )}
+                style={
+                  marker.color !== null
+                    ? { backgroundColor: marker.color, color: marker.textColor ?? undefined }
+                    : undefined
+                }
+              >
+                {marker.label}
+              </span>
+            </Marker>
+          ))
+          : null}
 
         {hoveredField ? (
           <Popup
@@ -1258,6 +1341,24 @@ export const FarmFieldsMap = ({
             </div>
           ) : null}
 
+          {hasSelectedYear ? (
+            <div className="space-y-1 border-t pt-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showCropLabels}
+                  onChange={(event) => setShowCropLabels(event.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                Vis afgrødenavne for {selectedCalendarYear}
+              </label>
+              {showCropLabels && mapZoom < CROP_LABEL_MIN_ZOOM ? (
+                <p className="pl-6 text-xs text-muted-foreground">
+                  Zoom ind for at se navnene.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="space-y-2 border-t pt-3">
             <label className="flex items-center gap-2 text-sm">
               <input

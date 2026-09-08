@@ -498,7 +498,6 @@ export const MarkPanel = ({
           simulationId={simulationId}
           simulation={simulation}
           field={field}
-          cropColorMap={cropColorMap}
           open
           onOpenChange={setManualEditorOpen}
           onError={onError}
