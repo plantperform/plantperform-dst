@@ -20,6 +20,7 @@ import {
 import { detachField, updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { CatchmentChips } from '@/components/farm/CatchmentChips'
+import { CropGroupLegend } from '@/components/farm/CropGroupLegend'
 import {
   DEFAULT_FIELDS_SORT,
   type FieldsSortKey,
@@ -387,6 +388,7 @@ export const FarmFieldsList = ({
             </DropdownMenu>
           </div>
         )}
+        {isRules ? null : <CropGroupLegend fields={fields} />}
         <div
           className={cn(
             'overflow-x-auto rounded-lg border bg-card',
@@ -533,7 +535,6 @@ export const FarmFieldsList = ({
           simulationId={simulationId}
           simulation={simulation}
           field={bindField}
-          cropColorMap={cropColorMap}
           intent="lock"
           open
           onOpenChange={(nextOpen) => {

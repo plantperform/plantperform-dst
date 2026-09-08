@@ -6,6 +6,7 @@ import type {
   NamedRotation,
   RotationYear,
 } from '@/api/types'
+import { cropGroupColor, cropGroupDefinition } from '@/lib/crop-groups'
 
 export const CROP_VALUES: Crop[] = [
   'CEREAL_WINTER',
@@ -523,9 +524,14 @@ export const groupFieldsByCatchment = (
   }))
 }
 
-export const CROP_YEAR_PALETTE = ['#c9973f', '#a7c69b', '#7fb5a8', '#c9b27f']
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
-export const CROP_YEAR_FALLBACK_COLOR = '#a7c69b'
+export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
+
+export const coverCropShadow = (hasUdlaeg: boolean): string | undefined =>
+  hasUdlaeg
+    ? `inset 0 -3px 0 ${CROP_YEAR_COVER_CROP_BORDER}, inset 0 -4px 0 ${CROP_YEAR_COVER_CROP_SEPARATOR}`
+    : undefined
+export const CROP_YEAR_FALLBACK_COLOR = cropGroupDefinition('other').color
 
 export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> => {
   const colorByCropCode = new Map<number, string>()
@@ -534,7 +540,7 @@ export const buildCropColorMap = (fields: FieldRecord[]): Map<number, string> =>
       if (!colorByCropCode.has(year.afgrodeKode)) {
         colorByCropCode.set(
           year.afgrodeKode,
-          CROP_YEAR_PALETTE[colorByCropCode.size % CROP_YEAR_PALETTE.length],
+          cropGroupColor(year.afgrodeKode, year.afgrodeNavn),
         )
       }
     }

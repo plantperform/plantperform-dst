@@ -50,15 +50,25 @@ export const OPTIONAL_COLUMN_IDS = [
   'jbnr',
 ]
 
-const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => {
+const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
   for (const year of rotation) {
     if (!seenNames.includes(year.afgrodeNavn)) seenNames.push(year.afgrodeNavn)
   }
-  const firstWords = seenNames
-    .slice(0, 2)
-    .map((name) => name.trim().split(/\s+/)[0])
-  return seenNames.length > 2 ? `${firstWords.join(' + ')} m.fl.` : firstWords.join(' + ')
+  return seenNames
+}
+
+const cropFirstWord = (name: string): string =>
+  name.trim().split(/\s+/)[0].replace(/[,.-]+$/, '')
+
+const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => {
+  const firstWords: string[] = []
+  for (const name of uniqueCropNames(rotation)) {
+    const word = cropFirstWord(name)
+    if (word && !firstWords.includes(word)) firstWords.push(word)
+  }
+  const shown = firstWords.slice(0, 2).join(' + ')
+  return firstWords.length > 2 ? `${shown} m.fl.` : shown
 }
 
 const renderQuotaStatus = (status: QuotaStatus) => {
@@ -197,7 +207,7 @@ const renderRotationSwatches = (
   highlightIndex: number | null = null,
 ) => (
   <div className="flex items-center gap-2.5">
-    <div className="flex shrink-0 gap-[3px]">
+    <div className="flex shrink-0 gap-0.5">
       {rotation.map((year, index) => {
         const calendarYear = rotationStartYear + index
         const hasUdlaeg = year.udlaegNavn !== null
@@ -211,7 +221,7 @@ const renderRotationSwatches = (
           <span
             key={index}
             className={cn(
-              'inline-flex rounded-sm motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
+              'inline-flex rounded-xs motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
               isHighlighted && 'ring-2 ring-primary ring-offset-1',
               highlightIndex !== null && !isHighlighted && 'opacity-60',
             )}
@@ -220,13 +230,15 @@ const renderRotationSwatches = (
               title={title}
               color={color}
               hasUdlaeg={hasUdlaeg}
-              size="14x10"
+              size="12x16"
             />
           </span>
         )
       })}
     </div>
-    <span className="text-sm">{uniqueCropNamesLabel(rotation)}</span>
+    <span className="text-sm" title={uniqueCropNames(rotation).join(' · ')}>
+      {uniqueCropNamesLabel(rotation)}
+    </span>
   </div>
 )
 
