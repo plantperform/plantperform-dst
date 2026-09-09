@@ -108,20 +108,25 @@ def compute_dominant_kystvand_id(dsn: str) -> None:
         with connection.cursor() as cursor:
             cursor.execute(
                 f"""
-                WITH overlap_candidates AS (
+                WITH candidates AS (
                     SELECT
                         rf.imk_id,
                         s.kystvand_id,
                         s.kystvand_navn,
-                        ST_Area(ST_Intersection(rf.geom, s.geom)) AS overlap_area
+                        rf.geom AS field_geom,
+                        s.geom AS catchment_geom,
+                        COUNT(*) OVER (PARTITION BY rf.imk_id) AS candidate_count
                     FROM registry_field rf
                     JOIN {STAGING_TABLE} s ON ST_Intersects(rf.geom, s.geom)
                 ),
                 best AS (
                     SELECT DISTINCT ON (imk_id) imk_id, kystvand_id, kystvand_navn
-                    FROM overlap_candidates
-                    WHERE overlap_area > 0
-                    ORDER BY imk_id, overlap_area DESC
+                    FROM candidates
+                    ORDER BY imk_id,
+                        CASE
+                            WHEN candidate_count = 1 THEN 1.0
+                            ELSE ST_Area(ST_Intersection(field_geom, catchment_geom))
+                        END DESC
                 )
                 UPDATE registry_field rf
                 SET kystvand_id = best.kystvand_id, kystvand_navn = best.kystvand_navn

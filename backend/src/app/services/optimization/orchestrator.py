@@ -20,6 +20,7 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
 )
 from app.domain.simulation import GodningSettings
+from app.domain.soil import PercolationByKategori
 from app.services.optimization.engine import solve
 from app.services.optimization.yearly_engine import solve_yearly
 from app.services.scenario import candidate_evaluator
@@ -219,21 +220,24 @@ def apply_manual_rotation(
     så en senere Optimér-kørsel ikke overskriver den manuelle rettelse
     igen, før brugeren selv låser op."""
     simulation = repository.get_simulation(farm_id, simulation_id, email)
-    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-    if simulation is None or fields is None:
+    field = repository.get_simulation_field(farm_id, simulation_id, field_id, email)
+    if simulation is None or field is None:
         raise ManualRotationNotFoundError
 
-    field = next((f for f in fields if f.id == field_id), None)
     candidates_row = repository.get_simulation_field_candidates(
         farm_id,
         simulation_id,
         field_id,
         email,
     )
-    if field is None or candidates_row is None:
+    if candidates_row is None:
         raise ManualRotationNotFoundError
 
     godning = simulation.godning
+    soil_data = repository.get_registry_soil_data(field.imk_id)
+    percolation, org_n_topsoil, s_soil = (
+        soil_data if soil_data is not None else (None, None, None)
+    )
     candidate = candidate_evaluator.evaluate_with_overrides(
         base_ref, overrides, jbnr=candidates_row.jbnr,
         driftsform=godning.driftsform,
@@ -247,6 +251,9 @@ def apply_manual_rotation(
         mellemafgrode=simulation.mellemafgrode,
         start_year=start_year,
         real_history=candidates_row.real_history,
+        percolation_by_kategori=percolation,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
     )
     if candidate is None:
         return None
@@ -290,6 +297,9 @@ def _expand_yearly_options(
     mellemafgrode: bool,
     excluded_afgrodekoder: frozenset[int] = frozenset(),
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
     """Udvider hver gemt kandidat til op til dens active_len forskudte
     varianter (start_year 1..active_len, jf. Fase 10's evaluate_with_overrides)
@@ -350,6 +360,9 @@ def _expand_yearly_options(
                     mellemafgrode=mellemafgrode,
                     start_year=shift,
                     real_history=real_history,
+                    percolation_by_kategori=percolation_by_kategori,
+                    org_n_topsoil=org_n_topsoil,
+                    s_soil=s_soil,
                 )
             )
             if variant is None:
@@ -407,6 +420,9 @@ def run_yearly_optimization(
         raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc for fc in field_candidates}
+    soil_data_by_imk_id = repository.get_registry_soil_data_batch(
+        [field.imk_id for field in fields if field.imk_id is not None]
+    )
 
     field_inputs = []
     options_by_field_id: dict[str, tuple[YearlyRotationOption, ...]] = {}
@@ -415,6 +431,10 @@ def run_yearly_optimization(
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
         jbnr = field_candidates_row.jbnr if field_candidates_row else 0
         real_history = field_candidates_row.real_history if field_candidates_row else None
+        soil_data = soil_data_by_imk_id.get(field.imk_id)
+        percolation, org_n_topsoil, s_soil = (
+            soil_data if soil_data is not None else (None, None, None)
+        )
         options = _expand_yearly_options(
             field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
@@ -423,6 +443,9 @@ def run_yearly_optimization(
             mellemafgrode=simulation.mellemafgrode,
             excluded_afgrodekoder=excluded_afgrodekoder,
             real_history=real_history,
+            percolation_by_kategori=percolation,
+            org_n_topsoil=org_n_topsoil,
+            s_soil=s_soil,
         )
         if not options:
             raise OptimizationInfeasibleError(

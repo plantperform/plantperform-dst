@@ -10,7 +10,9 @@ from app.data.repository import (
     FieldNotOptimizedError,
     create_simulation,
     delete_simulation,
+    get_registry_soil_data,
     get_simulation,
+    get_simulation_field,
     get_simulation_field_candidate_detail,
     get_simulation_field_candidates,
     list_scenario_afgrodekoder,
@@ -483,6 +485,13 @@ def post_farm_simulation_field_preview_rotation(
     )
     if candidates_row is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
+    field = get_simulation_field(farm_id, simulation_id, field_id, user.email)
+    if field is None:
+        raise HTTPException(status_code=404, detail="Mark ikke fundet")
+    soil_data = get_registry_soil_data(field.imk_id)
+    percolation, org_n_topsoil, s_soil = (
+        soil_data if soil_data is not None else (None, None, None)
+    )
 
     godning = simulation.godning
     candidate = evaluate_with_overrides(
@@ -501,6 +510,9 @@ def post_farm_simulation_field_preview_rotation(
         mellemafgrode=simulation.mellemafgrode,
         start_year=request.start_year,
         real_history=candidates_row.real_history,
+        percolation_by_kategori=percolation,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")

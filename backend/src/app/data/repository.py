@@ -31,6 +31,7 @@ from app.domain.simulation import (
     OptimizationConstraints,
     Simulation,
 )
+from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import generate_candidates_for_field
 from app.services.scenario.field_history_evaluator import evaluate_real_history_for_field
@@ -49,15 +50,6 @@ def _load[ModelT: BaseModel](model_type: type[ModelT], data: dict) -> ModelT:
     return model_type.model_validate(data)
 
 
-def _jbnr_for_imk_id(session: Session, imk_id: int | None) -> int:
-    if imk_id is None:
-        return FALLBACK_JBNR
-    jbnr = session.execute(
-        select(registry_field_table.c.jbnr).where(registry_field_table.c.imk_id == imk_id),
-    ).scalar_one_or_none()
-    return jbnr if jbnr is not None else FALLBACK_JBNR
-
-
 def _registry_context_for_imk_id(session: Session, imk_id: int | None):
     """Rå registry_field-kontekst (jbnr/goedningsregion/oeko/crop_history) for
     en imk_id — delt grundlag for både "Aktuel"-beregningen og
@@ -73,40 +65,78 @@ def _registry_context_for_imk_id(session: Session, imk_id: int | None):
             registry_field_table.c.oeko,
             registry_field_table.c.kvotegivende,
             registry_field_table.c.crop_history,
-        ).where(registry_field_table.c.imk_id == imk_id),
+            registry_field_table.c.percolation_by_kategori,
+            registry_field_table.c.org_n_topsoil,
+            registry_field_table.c.s_soil,
+        ).where(
+            registry_field_table.c.imk_id == imk_id,
+            registry_field_table.c.banned.is_(False),
+        ),
     ).first()
 
 
-def _real_history_for_imk_id(session: Session, imk_id: int | None) -> dict | None:
-    """real_history-dict (jf. historisk_goedning.real_history_lookback) for en
-    imk_id, eller None hvis marken ikke findes/mangler imk_id — kaldere skal
-    da falde tilbage til uændret cyklisk ombukning (real_history=None)."""
-    row = _registry_context_for_imk_id(session, imk_id)
+def _registry_contexts_for_imk_ids(session: Session, imk_ids: list[int]) -> dict[int, object]:
+    if not imk_ids:
+        return {}
+    rows = session.execute(
+        select(
+            registry_field_table.c.imk_id,
+            registry_field_table.c.jbnr,
+            registry_field_table.c.goedningsregion,
+            registry_field_table.c.oeko,
+            registry_field_table.c.kvotegivende,
+            registry_field_table.c.crop_history,
+            registry_field_table.c.percolation_by_kategori,
+            registry_field_table.c.org_n_topsoil,
+            registry_field_table.c.s_soil,
+        ).where(
+            registry_field_table.c.imk_id.in_(imk_ids),
+            registry_field_table.c.banned.is_(False),
+        )
+    ).all()
+    return {row.imk_id: row for row in rows}
+
+
+def _soil_data_for_context(row) -> RegistrySoilData | None:
     if row is None:
         return None
-    jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
-    return real_history_lookback(row.crop_history or {}, jbnr, row.goedningsregion, bool(row.oeko))
+    return registry_soil_data(row.percolation_by_kategori, row.org_n_topsoil, row.s_soil)
 
 
-def _aktuel_field_state(
-    session: Session, imk_id: int | None, area_ha: float, retention: float | None
-) -> dict:
+def get_registry_soil_data(imk_id: int | None) -> RegistrySoilData | None:
+    with SessionLocal() as session:
+        return _soil_data_for_context(_registry_context_for_imk_id(session, imk_id))
+
+
+def get_registry_soil_data_batch(imk_ids: list[int]) -> dict[int, RegistrySoilData]:
+    with SessionLocal() as session:
+        contexts = _registry_contexts_for_imk_ids(session, imk_ids)
+    return {
+        imk_id: soil_data
+        for imk_id, row in contexts.items()
+        if (soil_data := _soil_data_for_context(row)) is not None
+    }
+
+
+def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
     """"Aktuel"-tilstand (db2/n_load/leaching/fen) beregnet ud fra markens
     egen ægte crop_history og den historiske gødningstildeling (Bilag 3) —
     ingen scenarie/gødnings-slider involveret. Bruges ved "Tilføj marker" i
     stedet for de hidtidige hardkodede 0'er.
     """
-    fallback = {
-        "jbnr": FALLBACK_JBNR, "db2": 0.0, "n_load": 0.0, "leaching": 0.0, "fen": 0.0,
-        "crop_rotation": [], "kvotegivende": False,
-    }
-    row = _registry_context_for_imk_id(session, imk_id)
     if row is None:
-        return fallback
+        raise MissingSoilDataError("Registry field is missing or banned")
 
     jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
+    soil_data = _soil_data_for_context(row)
+    if soil_data is None:
+        raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
+    percolation_by_kategori, org_n_topsoil, s_soil = soil_data
     years = evaluate_real_history_for_field(
         row.crop_history or {}, jbnr, row.goedningsregion, bool(row.oeko),
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
     )
     avg_leaching = sum(y.leaching_kg_n_ha for y in years) / len(years)
     avg_db = sum(y.db_kr_ha for y in years) / len(years)
@@ -154,7 +184,7 @@ def get_farm_udledning_per_kystvandopland(
                     COALESCE(SUM((f.data->>'n_load')::float), 0) AS udledning
                 FROM field f
                 JOIN registry_field rf ON rf.imk_id = (f.data->>'imk_id')::bigint
-                WHERE f.farm_id = :farm_id
+                WHERE f.farm_id = :farm_id AND NOT rf.banned
                 GROUP BY rf.kystvand_id, rf.kystvand_navn
                 ORDER BY rf.kystvand_navn NULLS LAST, rf.kystvand_id NULLS LAST
                 """
@@ -306,8 +336,9 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> Field
         field_id = existing.id if existing is not None else str(uuid4())
         field_data = request.model_dump()
 
+        registry_row = _registry_context_for_imk_id(session, request.imk_id)
         aktuel = _aktuel_field_state(
-            session, request.imk_id, field_data["area_ha"], field_data.get("retention"),
+            registry_row, field_data["area_ha"], field_data.get("retention"),
         )
         field_data["crop_rotation"] = aktuel["crop_rotation"]
         field = FieldRecord(
@@ -398,13 +429,17 @@ def create_simulation(
             ),
         )
 
-        rows = session.execute(
+        field_rows = session.execute(
             select(field_table.c.data)
             .where(field_table.c.farm_id == farm_id)
             .order_by(field_table.c.created_at),
-        ).scalars()
-        for data in rows:
-            current_field = _load(FieldRecord, data)
+        ).scalars().all()
+        current_fields = [_load(FieldRecord, data) for data in field_rows]
+        registry_contexts = _registry_contexts_for_imk_ids(
+            session,
+            [field.imk_id for field in current_fields if field.imk_id is not None],
+        )
+        for current_field in current_fields:
             field_id = str(uuid4())
             copied_field = current_field.model_copy(
                 update={"id": field_id, "geometry": deepcopy(current_field.geometry)},
@@ -419,8 +454,26 @@ def create_simulation(
             )
 
             if request.saedskiftevarianter and request.n_norm_procenter:
-                jbnr = _jbnr_for_imk_id(session, copied_field.imk_id)
-                real_history = _real_history_for_imk_id(session, copied_field.imk_id)
+                registry_row = registry_contexts.get(copied_field.imk_id)
+                jbnr = (
+                    registry_row.jbnr
+                    if registry_row is not None and registry_row.jbnr is not None
+                    else FALLBACK_JBNR
+                )
+                real_history = (
+                    real_history_lookback(
+                        registry_row.crop_history or {},
+                        jbnr,
+                        registry_row.goedningsregion,
+                        bool(registry_row.oeko),
+                    )
+                    if registry_row is not None
+                    else None
+                )
+                soil_data = _soil_data_for_context(registry_row)
+                percolation, org_n_topsoil, s_soil = (
+                    soil_data if soil_data is not None else (None, None, None)
+                )
                 candidates = generate_candidates_for_field(
                     request.saedskiftevarianter, request.n_norm_procenter, jbnr,
                     request.godning,
@@ -429,6 +482,9 @@ def create_simulation(
                     tidlig_saaning=request.tidlig_saaning,
                     mellemafgrode=request.mellemafgrode,
                     real_history=real_history,
+                    percolation_by_kategori=percolation,
+                    org_n_topsoil=org_n_topsoil,
+                    s_soil=s_soil,
                 )
                 field_candidates = SimulationFieldCandidates(
                     field_id=copied_field.id, jbnr=jbnr, candidates=candidates,
@@ -680,6 +736,24 @@ def list_simulation_fields(
             .order_by(simulation_field_table.c.created_at),
         ).scalars()
         return [_load(FieldRecord, data) for data in rows]
+
+
+def get_simulation_field(
+    farm_id: str,
+    simulation_id: str,
+    field_id: str,
+    email: str,
+) -> FieldRecord | None:
+    with SessionLocal() as session:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
+            return None
+        data = session.execute(
+            select(simulation_field_table.c.data).where(
+                simulation_field_table.c.id == field_id,
+                simulation_field_table.c.simulation_id == simulation_id,
+            )
+        ).scalar_one_or_none()
+        return _load(FieldRecord, data) if data is not None else None
 
 
 def update_simulation_field(

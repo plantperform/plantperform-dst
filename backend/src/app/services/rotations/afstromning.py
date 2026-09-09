@@ -16,8 +16,7 @@ Hver afgrødekode har en standard-afstrømningskategori (1-8), og for en
 del afgrøder også en alternativ kategori der gælder når marken samme år
 får et vinterdække-ændrende virkemiddel (EEA/efterafgrøde, mellemafgrøde,
 tidlig såning) — "P_afstrømningskategori_med_W" i kilden. Kategorien
-bestemmer hvilken af de 8 P-værdier (jf. services.soil.percolation_
-placeholder, midlertidigt ét fælles sæt for alle marker) der skal bruges.
+bestemmer hvilken af markens 8 P-værdier der skal bruges.
 """
 from __future__ import annotations
 

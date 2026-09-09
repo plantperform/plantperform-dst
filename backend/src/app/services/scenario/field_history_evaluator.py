@@ -22,8 +22,10 @@ som candidate_evaluator.py's evaluate_sequence_for_mark, men:
 from __future__ import annotations
 
 from app.domain.rotation_candidate import RotationCandidateYearResult, RotationYear
+from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
+from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer
 from app.services.rotations.historisk_goedning import lookup_historisk_n_input
 
@@ -45,6 +47,9 @@ def evaluate_real_history_for_field(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     irrigated: bool = False,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> list[RotationCandidateYearResult]:
     def code_for(year: int) -> int | None:
         value = crop_history.get(str(year))
@@ -107,8 +112,11 @@ def evaluate_real_history_for_field(
                     g1=n1["g0"], g2=n2["g0"],
                     irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     y=this_year,
+                    percolation_by_kategori=percolation_by_kategori,
+                    org_n_topsoil=org_n_topsoil,
+                    s_soil=s_soil,
                 )
-            except ValueError:
+            except LowNitrogenModelError:
                 leaching = {}
         db = (
             calculate_db(

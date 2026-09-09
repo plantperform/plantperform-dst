@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import AuthenticatedUser, current_user
 from app.data.db import get_db
 from app.data.registry_repository import get_registry_fields
-from app.data.repository import get_farm, list_fields
+from app.data.repository import get_farm, get_registry_soil_data_batch, list_fields
 from app.domain.base import CamelModel
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
 from app.domain.simulation import GodningSettings
@@ -235,6 +235,7 @@ def evaluate_rotation_candidates(
         if imk_ids
         else {}
     )
+    soil_data_by_imk_id = get_registry_soil_data_batch(imk_ids)
 
     results: list[FieldRotationCandidates] = []
     for field in selected:
@@ -246,6 +247,10 @@ def evaluate_rotation_candidates(
             )
             if registry is not None
             else None
+        )
+        soil_data = soil_data_by_imk_id.get(field.imk_id)
+        percolation, org_n_topsoil, s_soil = (
+            soil_data if soil_data is not None else (None, None, None)
         )
         candidates = [
             evaluate_candidate_for_mark(
@@ -259,6 +264,9 @@ def evaluate_rotation_candidates(
                 start_year=request.start_year,
                 irrigated=request.irrigated,
                 real_history=real_history,
+                percolation_by_kategori=percolation,
+                org_n_topsoil=org_n_topsoil,
+                s_soil=s_soil,
             )
             for ref in request.candidate_refs
         ]

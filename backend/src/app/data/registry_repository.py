@@ -100,7 +100,7 @@ def search_registry_fields(
     limit: int = 100,
 ) -> list[RegistryFieldSummary]:
     limit = max(1, min(limit, 500))
-    where_clause = "WHERE cvr = :cvr" if cvr is not None else ""
+    where_clause = "WHERE NOT banned AND cvr = :cvr" if cvr is not None else "WHERE NOT banned"
     query = f"""
         SELECT
             imk_id,
@@ -146,7 +146,7 @@ def get_registry_field(db: Session, imk_id: int) -> RegistryField | None:
             udledningskvote_mark_kgn,
             ST_AsGeoJSON(geom)::json AS geometry
         FROM registry_field
-        WHERE imk_id = :imk_id
+        WHERE imk_id = :imk_id AND NOT banned
     """
     row = db.execute(text(query), {"imk_id": imk_id}).mappings().first()
     return _field_from_row(row) if row is not None else None
@@ -178,7 +178,7 @@ def get_registry_fields(db: Session, imk_ids: list[int]) -> list[RegistryField]:
             udledningskvote_mark_kgn,
             ST_AsGeoJSON(geom)::json AS geometry
         FROM registry_field
-        WHERE imk_id = ANY(:imk_ids)
+        WHERE imk_id = ANY(:imk_ids) AND NOT banned
         ORDER BY imk_id
     """
     rows = db.execute(text(query), {"imk_ids": imk_ids}).mappings().all()
@@ -205,7 +205,7 @@ def get_registry_bounds(
         FROM (
             SELECT ST_Extent(geom) AS extent
             FROM registry_field
-            WHERE {cvr_clause} OR {imk_clause}
+            WHERE NOT banned AND ({cvr_clause} OR {imk_clause})
         ) AS bounds
         WHERE extent IS NOT NULL
     """
@@ -309,6 +309,7 @@ def _regular_fields_tile_query(cvr_clause: str, focus_clause: str) -> str:
         FROM registry_field AS f, bounds
         WHERE f.geom && bounds.geom_4326
           AND ST_Intersects(f.geom, bounds.geom_4326)
+          AND NOT f.banned
           {cvr_clause}
           AND NOT ({focus_clause})
     """
@@ -335,6 +336,7 @@ def _focus_fields_tile_query(focus_clause: str) -> str:
         FROM registry_field AS f, bounds
         WHERE f.geom && bounds.geom_4326
           AND ST_Intersects(f.geom, bounds.geom_4326)
+          AND NOT f.banned
           AND ({focus_clause})
     """
 
@@ -360,6 +362,7 @@ def _regular_points_tile_query(cvr_clause: str, focus_clause: str) -> str:
         FROM registry_field AS f, bounds
         WHERE f.centroid && bounds.geom_4326
           AND f.sample_bucket < :bucket_cutoff
+          AND NOT f.banned
           {cvr_clause}
           AND NOT ({focus_clause})
     """
@@ -384,5 +387,6 @@ def _focus_points_tile_query(focus_clause: str) -> str:
             ST_AsMVTGeom(ST_Transform(f.centroid, 3857), bounds.geom_3857, 4096, 64, true) AS geom
         FROM registry_field AS f, bounds
         WHERE f.centroid && bounds.geom_4326
+          AND NOT f.banned
           AND ({focus_clause})
     """

@@ -21,8 +21,10 @@ from app.domain.rotation_candidate import (
     RotationYear,
 )
 from app.domain.simulation import GodningSettings
+from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
+from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
 
 # Den viste/beregnede 8-årige rotation starter ved 2027 (nye simuleringer) —
@@ -160,6 +162,9 @@ def evaluate_sequence_for_mark(
     overrides: list[RotationPositionOverride] = (),
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation:
     """Kernen af kandidat-evaluering: 8 positioner, hver med udvaskning + DB,
     samt gennemsnit over én fuld rotationscyklus (active_len). Tager de
@@ -247,21 +252,29 @@ def evaluate_sequence_for_mark(
             else 0.0
         )
 
-        leaching = bridge_v2.evaluate_leaching_position(
-            afgrode_kode=this_code,
-            next_afgrode_kode=next_code,
-            prev_afgrode_kode=prev_code,
-            udlaeg_kode=udl_code,
-            jbnr=jbnr,
-            mncs=n_inputs[i]["mncs"],
-            mnca=n_inputs[i]["mnca"],
-            g0=n_inputs[i]["g0"],
-            m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
-            irrigated=irrigated,
-            fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-            praecisionsjordbrug=praecisionsjordbrug,
-            y=START_CALENDAR_YEAR + i,
-        )
+        try:
+            leaching = bridge_v2.evaluate_leaching_position(
+                afgrode_kode=this_code,
+                next_afgrode_kode=next_code,
+                prev_afgrode_kode=prev_code,
+                udlaeg_kode=udl_code,
+                jbnr=jbnr,
+                mncs=n_inputs[i]["mncs"],
+                mnca=n_inputs[i]["mnca"],
+                g0=n_inputs[i]["g0"],
+                m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
+                irrigated=irrigated,
+                fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                praecisionsjordbrug=praecisionsjordbrug,
+                y=START_CALENDAR_YEAR + i,
+                percolation_by_kategori=percolation_by_kategori,
+                org_n_topsoil=org_n_topsoil,
+                s_soil=s_soil,
+            )
+        except LowNitrogenModelError:
+            # Known NLES5 low-N edge: a negative fractional-power base has no
+            # real result. Missing soil data raises a different exception.
+            leaching = {}
         db = calculate_db(
             this_code, driftsform, jbnr,
             mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
@@ -297,7 +310,7 @@ def evaluate_sequence_for_mark(
                 udlaeg_kode=udl_code,
                 udlaeg_navn=udlaeg_navn_seq[i],
             ),
-            leaching_kg_n_ha=leaching["L_nuar"],
+            leaching_kg_n_ha=leaching.get("L_nuar", 0.0),
             leaching_detail=leaching,
             db_kr_ha=db["db"],
             db_detail=db,
@@ -351,6 +364,9 @@ def evaluate_candidate_for_mark(
     tidlig_saaning: bool = True,
     mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
     DB, samt gennemsnit over én fuld rotationscyklus (active_len).
@@ -378,6 +394,9 @@ def evaluate_candidate_for_mark(
         praecisionsjordbrug=praecisionsjordbrug,
         start_year=start_year,
         real_history=real_history,
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
     )
 
 
@@ -398,6 +417,9 @@ def evaluate_with_overrides(
     mellemafgrode: bool = True,
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Som evaluate_candidate_for_mark, men overskriver hovedafgrøden i én
     eller flere positioner efter opslag i biblioteket, og/eller forskyder
@@ -454,6 +476,9 @@ def evaluate_with_overrides(
         praecisionsjordbrug=praecisionsjordbrug,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
         real_history=real_history,
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
     )
 
 
@@ -468,6 +493,9 @@ def generate_candidates_for_field(
     tidlig_saaning: bool = True,
     mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
     N-norm%-værdier × alle varianter, og evaluer hver resulterende kandidat
@@ -515,6 +543,9 @@ def generate_candidates_for_field(
                     tidlig_saaning=tidlig_saaning,
                     mellemafgrode=mellemafgrode,
                     real_history=real_history,
+                    percolation_by_kategori=percolation_by_kategori,
+                    org_n_topsoil=org_n_topsoil,
+                    s_soil=s_soil,
                 )
                 if result is not None:
                     results.append(result)

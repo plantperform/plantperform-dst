@@ -1,6 +1,10 @@
 import math
 
 
+class LowNitrogenModelError(ValueError):
+    """NLES5 cannot apply its fractional power to a non-positive base term."""
+
+
 def S_func(cu, p_ler=0.001849):
     """Soil factor S based on clay content (Ligning 7: S = exp(-p_ler * lerprocent))."""
     return math.exp(-p_ler * cu)
@@ -346,7 +350,7 @@ def nles5(Y,
     
     # Validate that base_term is positive (as required by NLES5)
     if base_term <= 0:
-        raise ValueError(
+        raise LowNitrogenModelError(
             f"NLES5 base term must be positive. "
             f"Got mu + Ntheta + C = {base_term} "
             f"(mu={mu}, Ntheta={Ntheta}, C={C})"

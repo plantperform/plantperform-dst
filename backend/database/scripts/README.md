@@ -34,6 +34,24 @@ data, del enten:
 
 ```
 pixi run db-migrate
+pixi run load-registry-from-merged-gpkg
+pixi run load-kystvandoplande   # genberegner sammenhørende id + navn
+pixi run load-mars-projekter    # genberegner MARS-felter og mars_projekt
+```
+
+Den samlede loader er den foretrukne vej med datasættet
+`V1_1_IMK2026_n604144_gpkg_merged.gpkg` placeret direkte i
+`backend/database/data/raw/`. Den erstatter basis-, jordbunds-, retention-,
+udledningsgrænse-, økologi/HNV- og kvotegivende-loaderne nedenfor. Den
+bevarer kildefilens egne `IMK_ID`; der udføres ingen crosswalk til gemte id'er.
+Eksisterende bedrifter/scenarier med gamle id'er kan derfor blive forældreløse
+efter en fuld reload. Kystvand- og MARS-loaderne skal altid køres bagefter,
+fordi de genberegner de autoritative rumlige koblinger.
+
+Den tidligere flertrinssekvens er bevaret som reference:
+
+```
+pixi run db-migrate
 pixi run load-dataimk2026       # basis: geometri, id'er, crop_history
 pixi run load-jordbundskort     # jbnr
 pixi run load-kystvandoplande   # kystvand_id
