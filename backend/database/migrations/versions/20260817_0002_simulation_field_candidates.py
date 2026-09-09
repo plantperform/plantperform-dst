@@ -29,8 +29,18 @@ def upgrade() -> None:
         ),
         sa.Column("field_id", sa.Text(), nullable=False),
         sa.Column("data", JSONB(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_index(
         "ix_simulation_field_candidates_simulation_id",
@@ -45,6 +55,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_simulation_field_candidates_field_id", table_name="simulation_field_candidates")
-    op.drop_index("ix_simulation_field_candidates_simulation_id", table_name="simulation_field_candidates")
+    op.drop_index(
+        "ix_simulation_field_candidates_field_id",
+        table_name="simulation_field_candidates",
+    )
+    op.drop_index(
+        "ix_simulation_field_candidates_simulation_id",
+        table_name="simulation_field_candidates",
+    )
     op.drop_table("simulation_field_candidates")

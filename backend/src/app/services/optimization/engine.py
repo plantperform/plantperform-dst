@@ -41,7 +41,6 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
     total_n_load_by_kystvand = {
         kystvand_id: sum(terms) for kystvand_id, terms in n_load_terms_by_kystvand.items()
     }
-    total_n_load = sum(total_n_load_by_kystvand.values())
     total_fen = sum(fen_terms)
     constraints = input.constraints
 
