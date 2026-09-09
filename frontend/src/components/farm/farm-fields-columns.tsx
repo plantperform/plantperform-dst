@@ -38,23 +38,9 @@ declare module '@tanstack/react-table' {
   }
 }
 
-const CELL_PADDING = 'px-2 py-3 @4xl:px-4'
+const CELL_PADDING = 'px-2 py-3 full:px-4'
 const HEADER_CELL_CLASS = `${CELL_PADDING} font-medium whitespace-normal`
-const BODY_CELL_CLASS = `${CELL_PADDING} whitespace-nowrap @4xl:whitespace-normal`
-
-export const OPTIONAL_COLUMN_IDS = [
-  'cropRotation',
-  'db2',
-  'quotaStatus',
-  'nLoad',
-  'leaching',
-  'fen',
-  'udledningskvoteMarkKgn',
-  'soilSummary',
-  'inTakeoutPlan',
-  'retention',
-  'jbnr',
-]
+const BODY_CELL_CLASS = `${CELL_PADDING} whitespace-nowrap`
 
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
@@ -110,8 +96,8 @@ const renderQuotaStatus = (status: QuotaStatus) => {
     <QuotaStatusIndicator
       level={status.level}
       badge
-      className="flex-nowrap @4xl:flex-wrap"
-      badgeClassName="sr-only @4xl:not-sr-only"
+      className="flex-nowrap full:flex-wrap"
+      badgeClassName="sr-only full:not-sr-only"
     >
       {amountText}
     </QuotaStatusIndicator>
@@ -138,10 +124,10 @@ const renderQuotaStatusFooter = (
         level={level}
         badge={level !== 'partial'}
         className={cn(
-          'flex-nowrap @4xl:flex-wrap',
+          'flex-nowrap full:flex-wrap',
           level === 'partial' && 'text-muted-foreground',
         )}
-        badgeClassName="sr-only @4xl:not-sr-only"
+        badgeClassName="sr-only full:not-sr-only"
       >
         {formatQuotaAmount(totals.nLoad, quota.quotaKgn)}
       </QuotaStatusIndicator>
@@ -155,6 +141,7 @@ const renderQuotaStatusFooter = (
 type NumericMetricColumnConfig = {
   key: 'db2' | 'nLoad' | 'leaching' | 'fen'
   label: string
+  heading: string
   unit: string
   emptyCell: (placement: 'cell' | 'footer') => ReactNode
   compactValue?: (value: number) => string
@@ -169,8 +156,8 @@ const renderMetricValue = (
   if (!compactValue) return <div>{full}</div>
   return (
     <div>
-      <span className="@4xl:hidden">{compactValue(value)}</span>
-      <span className="hidden @4xl:inline">{full}</span>
+      <span className="full:hidden">{compactValue(value)}</span>
+      <span className="hidden full:inline">{full}</span>
     </div>
   )
 }
@@ -180,11 +167,11 @@ const numericMetricColumn = (
   isSimulationView: boolean,
   totals: FieldTotals,
 ): ColumnDef<FieldRecord, unknown> => {
-  const { key, label, unit, emptyCell, compactValue } = config
+  const { key, label, heading, unit, emptyCell, compactValue } = config
   return {
     accessorKey: key,
     header: ({ column }) => (
-      <SortableColumnHeaderContent label={label} column={column} />
+      <SortableColumnHeaderContent label={heading} unit={unit} column={column} />
     ),
     cell: ({ row }) => {
       const field = row.original
@@ -196,7 +183,7 @@ const numericMetricColumn = (
         <>
           {renderMetricValue(value, unit, compactValue)}
           {field.areaHa > 0 ? (
-            <div className="hidden text-xs text-muted-foreground/80 @4xl:block">
+            <div className="hidden text-xs text-muted-foreground/80 full:block">
               {`${formatNumber(value / field.areaHa)} ${unit}/ha`}
             </div>
           ) : null}
@@ -244,14 +231,14 @@ const renderRotationSwatches = (
               color={color}
               hasUdlaeg={hasUdlaeg}
               size="12x16"
-              className="w-3 @4xl:w-4"
+              className="w-3 full:w-4"
             />
           </span>
         )
       })}
     </div>
     <span
-      className="hidden text-sm @4xl:inline"
+      className="hidden min-w-0 max-w-40 truncate text-sm full:block"
       title={uniqueCropNames(rotation).join(' · ')}
     >
       {uniqueCropNamesLabel(rotation)}
@@ -316,8 +303,8 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
   ),
   enableSorting: false,
   meta: {
-    headerClassName: 'hidden w-8 px-2 py-3 @4xl:table-cell',
-    cellClassName: 'hidden w-8 px-2 py-3 text-right @4xl:table-cell',
+    headerClassName: 'hidden w-8 px-2 py-3 full:table-cell',
+    cellClassName: 'hidden w-8 px-2 py-3 text-right full:table-cell',
   },
 }
 
@@ -516,7 +503,7 @@ export const buildFarmFieldsColumns = ({
       totals.uncalculatedCount > 0 ? (
         <>
           I alt
-          <span className="hidden @4xl:inline">
+          <span className="hidden full:inline">
             {` (${totals.uncalculatedCount} ikke beregnet)`}
           </span>
         </>
@@ -599,7 +586,7 @@ export const buildFarmFieldsColumns = ({
         if (!year) return <span className="text-muted-foreground">-</span>
         const label = formatRotationYear(year)
         return (
-          <span className="block max-w-24 truncate @4xl:max-w-40" title={label}>
+          <span className="block max-w-24 truncate full:max-w-40" title={label}>
             {label}
           </span>
         )
@@ -609,13 +596,13 @@ export const buildFarmFieldsColumns = ({
       meta: {
         headerClassName: cn(
           CELL_PADDING,
-          'font-medium whitespace-nowrap @4xl:w-44',
-          highlightIndex === null && 'hidden @4xl:table-cell',
+          'font-medium whitespace-nowrap full:w-44',
+          highlightIndex === null && 'hidden full:table-cell',
         ),
         cellClassName: cn(
           CELL_PADDING,
-          'whitespace-nowrap @4xl:w-44',
-          highlightIndex === null && 'hidden @4xl:table-cell',
+          'whitespace-nowrap full:w-44',
+          highlightIndex === null && 'hidden full:table-cell',
         ),
       },
     })
@@ -626,6 +613,7 @@ export const buildFarmFieldsColumns = ({
       {
         key: 'db2',
         label: 'DB2 (kr)',
+        heading: 'DB2',
         unit: 'kr',
         emptyCell: (placement) =>
           placement === 'cell' ? (
@@ -660,6 +648,7 @@ export const buildFarmFieldsColumns = ({
       {
         key: 'nLoad',
         label: 'Kvælstofudledning (kg N)',
+        heading: 'Kvælstofudledning',
         unit: 'kg N',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
       },
@@ -670,6 +659,7 @@ export const buildFarmFieldsColumns = ({
       {
         key: 'leaching',
         label: 'Udvaskning (kg N)',
+        heading: 'Udvaskning',
         unit: 'kg N',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
       },
@@ -680,6 +670,7 @@ export const buildFarmFieldsColumns = ({
       {
         key: 'fen',
         label: 'Foderenheder (FE)',
+        heading: 'Foderenheder',
         unit: 'FE',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
       },
@@ -689,7 +680,7 @@ export const buildFarmFieldsColumns = ({
     {
       accessorKey: 'udledningskvoteMarkKgn',
       header: ({ column }) => (
-        <SortableColumnHeaderContent label="Kvote (kg N)" column={column} />
+        <SortableColumnHeaderContent label="Kvote" unit="kg N" column={column} />
       ),
       cell: ({ row }) => {
         const field = row.original
@@ -700,7 +691,7 @@ export const buildFarmFieldsColumns = ({
           <>
             <div>{formatNumber(field.udledningskvoteMarkKgn)} kg N</div>
             {field.areaHa > 0 ? (
-              <div className="hidden text-xs text-muted-foreground/80 @4xl:block">
+              <div className="hidden text-xs text-muted-foreground/80 full:block">
                 {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg
                 N/ha
               </div>

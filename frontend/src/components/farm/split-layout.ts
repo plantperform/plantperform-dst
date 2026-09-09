@@ -9,22 +9,31 @@ export const SPLIT_SNAP_FRACTIONS = [1 / 3, 1 / 2, 2 / 3]
 export const SPLIT_SNAP_TOLERANCE = 24
 export const MIN_SPLIT_INNER_WIDTH = 800
 export const SPLIT_DIVIDER_WIDTH = 8
-export const DEFAULT_LIST_FRACTION = 1 / 2
+export const DEFAULT_LIST_SLACK = 0
 export const PANEL_WIDTH = 460
 export const PANEL_WIDE_WIDTH = 950
 
 const VIEW_STORAGE_KEY = 'plantperform.farmView'
-const FRACTION_STORAGE_KEY = 'plantperform.farmSplitFraction'
+const SLACK_STORAGE_KEY = 'plantperform.farmListSlack'
 const DEFAULT_VIEW: FarmView = 'split'
 
 const isFarmView = (value: string): value is FarmView =>
   value === 'list' || value === 'split' || value === 'map'
 
-export const clampListFraction = (fraction: number) =>
-  Math.min(1, Math.max(0, fraction))
+export const clampListSlack = (slack: number) =>
+  Math.min(1, Math.max(-1, slack))
 
 export const splitPaneSpace = (innerWidth: number) =>
   Math.max(0, innerWidth - SPLIT_DIVIDER_WIDTH)
+
+export const clampListPaneWidth = (width: number, innerWidth: number) =>
+  Math.max(
+    MIN_LIST_PANE_WIDTH,
+    Math.min(
+      splitPaneSpace(innerWidth) - MIN_MAP_PANE_WIDTH,
+      Math.round(width),
+    ),
+  )
 
 export const snapListPaneWidth = (width: number, innerWidth: number) => {
   const space = splitPaneSpace(innerWidth)
@@ -36,10 +45,7 @@ export const snapListPaneWidth = (width: number, innerWidth: number) => {
       break
     }
   }
-  return Math.max(
-    MIN_LIST_PANE_WIDTH,
-    Math.min(space - MIN_MAP_PANE_WIDTH, snapped),
-  )
+  return clampListPaneWidth(snapped, innerWidth)
 }
 
 export const resolveEffectiveView = (
@@ -47,9 +53,13 @@ export const resolveEffectiveView = (
   splitAvailable: boolean,
 ): FarmView => (view === 'split' && !splitAvailable ? 'list' : view)
 
-export const resolveListPaneWidth = (fraction: number, innerWidth: number) =>
-  snapListPaneWidth(
-    clampListFraction(fraction) * splitPaneSpace(innerWidth),
+export const resolveListPaneWidth = (
+  requiredWidth: number,
+  slack: number,
+  innerWidth: number,
+) =>
+  clampListPaneWidth(
+    requiredWidth + clampListSlack(slack) * splitPaneSpace(innerWidth),
     innerWidth,
   )
 
@@ -62,22 +72,20 @@ const readStoredView = (): FarmView => {
   }
 }
 
-const readStoredFraction = () => {
+const readStoredSlack = () => {
   try {
-    const stored = window.localStorage.getItem(FRACTION_STORAGE_KEY)
-    if (!stored) return DEFAULT_LIST_FRACTION
+    const stored = window.localStorage.getItem(SLACK_STORAGE_KEY)
+    if (!stored) return DEFAULT_LIST_SLACK
     const parsed = Number(stored)
-    return Number.isFinite(parsed)
-      ? clampListFraction(parsed)
-      : DEFAULT_LIST_FRACTION
+    return Number.isFinite(parsed) ? clampListSlack(parsed) : DEFAULT_LIST_SLACK
   } catch {
-    return DEFAULT_LIST_FRACTION
+    return DEFAULT_LIST_SLACK
   }
 }
 
 export const useSplitLayout = () => {
   const [view, setView] = useState(readStoredView)
-  const [listFraction, setListFraction] = useState(readStoredFraction)
+  const [listSlack, setListSlack] = useState(readStoredSlack)
 
   const changeView = useCallback((next: FarmView) => {
     setView(next)
@@ -88,15 +96,15 @@ export const useSplitLayout = () => {
     }
   }, [])
 
-  const changeListFraction = useCallback((next: number) => {
-    const clamped = clampListFraction(next)
-    setListFraction(clamped)
+  const changeListSlack = useCallback((next: number) => {
+    const clamped = clampListSlack(next)
+    setListSlack(clamped)
     try {
-      window.localStorage.setItem(FRACTION_STORAGE_KEY, String(clamped))
+      window.localStorage.setItem(SLACK_STORAGE_KEY, String(clamped))
     } catch {
       return
     }
   }, [])
 
-  return { view, changeView, listFraction, changeListFraction }
+  return { view, changeView, listSlack, changeListSlack }
 }
