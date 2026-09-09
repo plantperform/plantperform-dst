@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import type { RotationCandidateYearResult } from '@/api/types'
+import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
+import { shortCropName } from '@/lib/crop-groups'
 import { ROTATION_START_CALENDAR_YEAR, yearNLoadKgHa } from '@/lib/field-domain'
 import {
   L_FORMULA_CONSTANTS,
@@ -30,6 +31,30 @@ const fmtSigned = (value: unknown, digits = 3) => {
   const n = num(value)
   return `${n >= 0 ? '+' : ''}${fmt(n, digits)}`
 }
+
+const SHORT_TAB_LABEL_MAX_LENGTH = 24
+const UDLAEG_ABBREVIATION_LENGTH = 10
+
+const abbreviate = (name: string) =>
+  name.length > UDLAEG_ABBREVIATION_LENGTH
+    ? `${name.slice(0, UDLAEG_ABBREVIATION_LENGTH - 1)}.`
+    : name
+
+const shortTabLabel = (year: RotationYear): string => {
+  const crop = shortCropName(year.afgrodeNavn)
+  if (!year.udlaegNavn) return crop
+  const withUdlaeg = `${crop} (${abbreviate(shortCropName(year.udlaegNavn))})`
+  return withUdlaeg.length <= SHORT_TAB_LABEL_MAX_LENGTH ? withUdlaeg : crop
+}
+
+const fullTabLabel = (
+  year: RotationYear,
+  index: number,
+  calendarYear: number,
+): string =>
+  `År ${index + 1} (${calendarYear}) - ${year.afgrodeNavn}${
+    year.udlaegNavn ? ` (${year.udlaegNavn})` : ''
+  }`
 
 const beregnUdledning = (
   lNuar: number,
@@ -87,11 +112,11 @@ export const BigMetricTile = ({
   value: string
   caption?: string
 }) => (
-  <div className="rounded-lg border bg-background p-4">
+  <div className="rounded-lg border bg-background p-3.5">
     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </p>
-    <p className="mt-1 text-2xl font-bold leading-tight tabular-nums">{value}</p>
+    <p className="mt-1 text-2xl font-bold leading-tight tabular-nums text-foreground">{value}</p>
     {caption ? (
       <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
     ) : null}
@@ -103,20 +128,24 @@ const DefinitionRow = ({
   value,
   title,
   muted,
+  strong,
 }: {
   label: string
   value: string
   title?: string
   muted?: boolean
+  strong?: boolean
 }) => (
   <div
-    className="flex items-baseline justify-between gap-3 border-t py-1.5 first:border-t-0"
+    className="flex items-baseline justify-between gap-3 border-t py-1.5 text-xs first:border-t-0"
     title={title}
   >
-    <span className={`text-muted-foreground ${muted ? 'text-xs' : 'text-sm'}`}>{label}</span>
+    <span className={strong ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+      {label}
+    </span>
     <span
       className={`shrink-0 tabular-nums ${
-        muted ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+        muted ? 'text-muted-foreground' : strong ? 'font-semibold' : 'font-medium'
       }`}
     >
       {value}
@@ -131,12 +160,16 @@ const DefinitionRow = ({
 // expanded from here rather than shown by default.
 const KeyMetricsSection = ({
   year,
+  calendarYear,
   areaHa,
   retention,
+  footer,
 }: {
   year: RotationCandidateYearResult
+  calendarYear: number
   areaHa: number
   retention: number | null
+  footer?: React.ReactNode
 }) => {
   const udbytte = num(year.dbDetail.udbytte)
   const udbytteenhed = String(year.dbDetail.udbytteenhed ?? '')
@@ -167,23 +200,28 @@ const KeyMetricsSection = ({
   const visFoderenheder = isFoderafgroede && udbytte > 0
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-4 @2xl:grid-cols-12">
+      <div className="space-y-3 @2xl:col-span-5">
         <BigMetricTile
-          label="Udledning"
+          label={`Udledning (${calendarYear})`}
           value={`${fmt(udledning, 1)} kg N/ha`}
           caption={`Udvaskning ${fmt(udvaskning, 1)} kg N/ha - ${retentionTekst}`}
         />
         <BigMetricTile
-          label="DB2"
+          label={`DB2 (${calendarYear})`}
           value={`${fmt(year.dbKrHa, 0)} kr/ha`}
           caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte -'}
         />
       </div>
 
-      <div className="rounded-md border bg-background px-3 py-2">
-        <SectionHeading>Gødning</SectionHeading>
-        <div className="mt-1">
+      <div className="rounded-lg border bg-background p-3.5 @2xl:col-span-7">
+        <div className="flex items-center justify-between gap-3 border-b pb-2">
+          <SectionHeading>Gødning</SectionHeading>
+          <span className="text-xs text-muted-foreground">
+            {shortCropName(year.year.afgrodeNavn)} {calendarYear}
+          </span>
+        </div>
+        <div>
           <DefinitionRow
             label="Afgrøde-norm"
             value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '-'}
@@ -202,6 +240,7 @@ const KeyMetricsSection = ({
           <DefinitionRow
             label="Tildelt gødning"
             value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
+            strong
             title={
               `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
               (organiskBundet > 0
@@ -218,6 +257,7 @@ const KeyMetricsSection = ({
             muted
           />
         </div>
+        {footer ? <div className="border-t pt-2">{footer}</div> : null}
       </div>
     </div>
   )
@@ -754,44 +794,81 @@ export const RotationYearsDetail = ({
   const [showFormulas, setShowFormulas] = useState(false)
 
   const selectedYear = selectedYearIndex ?? internalSelectedYear
-  const year = years[Math.min(selectedYear, years.length - 1)]
+  const tabRowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const row = tabRowRef.current
+    if (!row) return
+    const selected = row.querySelector<HTMLElement>('[aria-pressed="true"]')
+    if (!selected) return
+    const margin = 8
+    const left = selected.offsetLeft - margin
+    const right = selected.offsetLeft + selected.offsetWidth + margin
+    if (left < row.scrollLeft) {
+      row.scrollLeft = Math.max(0, left)
+    } else if (right > row.scrollLeft + row.clientWidth) {
+      row.scrollLeft = right - row.clientWidth
+    }
+  }, [selectedYear])
+
+  const yearIndex = Math.min(selectedYear, years.length - 1)
+  const year = years[yearIndex]
   if (!year) return null
 
   return (
     <div className="space-y-4">
       {!hideYearSelector ? (
-        <div className="flex flex-wrap gap-2">
-          {years.map((y, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() =>
-                onSelectedYearIndexChange
-                  ? onSelectedYearIndexChange(index)
-                  : setInternalSelectedYear(index)
-              }
-              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                index === selectedYear
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'bg-background hover:bg-muted'
-              }`}
-            >
-              {startCalendarYear + index} - {y.year.afgrodeNavn}
-              {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
-            </button>
-          ))}
+        <div
+          ref={tabRowRef}
+          className="relative flex gap-1.5 overflow-x-auto scroll-px-1 pb-1 text-xs"
+        >
+          {years.map((y, index) => {
+            const isSelected = index === selectedYear
+            return (
+              <button
+                key={index}
+                type="button"
+                onClick={() =>
+                  onSelectedYearIndexChange
+                    ? onSelectedYearIndexChange(index)
+                    : setInternalSelectedYear(index)
+                }
+                title={fullTabLabel(y.year, index, startCalendarYear + index)}
+                aria-pressed={isSelected}
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 tabular-nums transition-colors ${
+                  isSelected
+                    ? 'border-primary bg-primary font-medium text-primary-foreground'
+                    : 'bg-background hover:bg-muted'
+                }`}
+              >
+                {isSelected ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-primary-foreground/70"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {startCalendarYear + index} {shortTabLabel(y.year)}
+              </button>
+            )
+          })}
         </div>
       ) : null}
 
-      <KeyMetricsSection year={year} areaHa={areaHa} retention={retention} />
-
-      <button
-        type="button"
-        onClick={() => setShowFullDetail((current) => !current)}
-        className="text-xs font-medium text-primary hover:underline"
-      >
-        {showFullDetail ? '▴ Skjul beregning' : '▾ Vis beregning'}
-      </button>
+      <KeyMetricsSection
+        year={year}
+        calendarYear={startCalendarYear + yearIndex}
+        areaHa={areaHa}
+        retention={retention}
+        footer={
+          <button
+            type="button"
+            onClick={() => setShowFullDetail((current) => !current)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            {showFullDetail ? '▴ Skjul beregning' : '▾ Vis beregning'}
+          </button>
+        }
+      />
 
       {showFullDetail ? (
         <div className="space-y-4">

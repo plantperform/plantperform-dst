@@ -9,7 +9,6 @@ import {
 
 import {
   DEFAULT_LIST_FRACTION,
-  DOCKED_PANEL_MIN_INNER_WIDTH,
   MIN_LIST_PANE_WIDTH,
   MIN_MAP_PANE_WIDTH,
   MIN_SPLIT_INNER_WIDTH,
@@ -17,7 +16,6 @@ import {
   PANEL_WIDTH,
   SPLIT_DIVIDER_WIDTH,
   SPLIT_SNAP_TOLERANCE,
-  resolveDockedPanelWidth,
   resolveEffectiveView,
   resolveListPaneWidth,
   snapListPaneWidth,
@@ -35,7 +33,6 @@ type FarmSplitViewProps = {
   list: ReactNode
   map: ReactNode
   renderPanel?: (options: {
-    overlay: boolean
     listBehind: boolean
     mapVisible: boolean
   }) => ReactNode
@@ -80,28 +77,23 @@ export const FarmSplitView = ({
 
   const effectiveView = resolveEffectiveView(view, splitAvailable)
   const width = innerWidth ?? 0
-  const panelDocked =
-    renderPanel !== undefined &&
-    effectiveView === 'split' &&
-    width >= DOCKED_PANEL_MIN_INNER_WIDTH
-  const reservedWidth = panelDocked ? PANEL_WIDTH : 0
-  const space = splitPaneSpace(width, reservedWidth)
+  const space = splitPaneSpace(width)
   const maxSplitListWidth = Math.max(
     MIN_LIST_PANE_WIDTH,
     space - MIN_MAP_PANE_WIDTH,
   )
   const listWidth =
     effectiveView === 'split'
-      ? (dragWidth ?? resolveListPaneWidth(listFraction, width, reservedWidth))
+      ? (dragWidth ?? resolveListPaneWidth(listFraction, width))
       : effectiveView === 'list'
         ? space
         : 0
-  const dockedPanelWidth = resolveDockedPanelWidth(listWidth, panelWide)
-  const panelOverhang = panelDocked ? dockedPanelWidth - PANEL_WIDTH : 0
-  const overlayPanelWidth = Math.min(
-    panelWide ? PANEL_WIDE_WIDTH : PANEL_WIDTH,
-    width,
-  )
+  const panelWidth =
+    effectiveView === 'split'
+      ? panelWide
+        ? Math.max(listWidth, Math.min(PANEL_WIDE_WIDTH, width))
+        : listWidth
+      : Math.min(panelWide ? PANEL_WIDE_WIDTH : PANEL_WIDTH, width)
   const dividerMovable = maxSplitListWidth > MIN_LIST_PANE_WIDTH
 
   const changeView = (next: FarmView) => {
@@ -119,7 +111,7 @@ export const FarmSplitView = ({
       return null
     }
     changeView('split')
-    return snapListPaneWidth(next, width, reservedWidth)
+    return snapListPaneWidth(next, width)
   }
 
   const dragListWidth = (next: number) => setDragWidth(placeDivider(next))
@@ -149,7 +141,7 @@ export const FarmSplitView = ({
     while (
       next >= MIN_LIST_PANE_WIDTH &&
       next <= maxSplitListWidth &&
-      snapListPaneWidth(next, width, reservedWidth) === listWidth
+      snapListPaneWidth(next, width) === listWidth
     ) {
       next += delta
     }
@@ -172,12 +164,12 @@ export const FarmSplitView = ({
 
   const showList = effectiveView !== 'map'
   const showMap = effectiveView !== 'list'
+  const panelFromRight = effectiveView !== 'split'
   const dividerCovered =
     renderPanel !== undefined &&
     !isDragging &&
-    (panelDocked
-      ? panelOverhang >= SPLIT_DIVIDER_WIDTH
-      : listWidth + SPLIT_DIVIDER_WIDTH <= overlayPanelWidth)
+    !panelFromRight &&
+    listWidth + SPLIT_DIVIDER_WIDTH <= panelWidth
 
   return (
     <div
@@ -217,24 +209,15 @@ export const FarmSplitView = ({
           {renderPanel ? (
             <div
               className={cn(
-                'flex min-h-0 flex-col border-r bg-card',
-                panelDocked
-                  ? 'relative z-20 shrink-0'
-                  : 'panel-slide-in absolute inset-y-0 left-0 z-30 shadow-xl',
-                panelOverhang > 0 && 'border-l shadow-xl',
+                'absolute inset-y-0 z-30 flex min-h-0 flex-col bg-card shadow-xl',
+                panelFromRight
+                  ? 'panel-slide-in-right right-0 border-l'
+                  : 'panel-slide-in left-0 border-r',
                 !isDragging && 'panel-width-transition',
               )}
-              style={{
-                width: panelDocked
-                  ? dockedPanelWidth
-                  : panelWide
-                    ? `min(${PANEL_WIDE_WIDTH}px, 100%)`
-                    : `min(${PANEL_WIDTH}px, 100%)`,
-                marginLeft: panelOverhang > 0 ? -panelOverhang : undefined,
-              }}
+              style={{ width: panelWidth }}
             >
               {renderPanel({
-                overlay: !panelDocked,
                 listBehind: showList,
                 mapVisible: showMap,
               })}

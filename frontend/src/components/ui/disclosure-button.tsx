@@ -9,6 +9,7 @@ type DisclosureButtonProps = {
   label: ReactNode
   'aria-controls'?: string
   hint?: ReactNode
+  hintAlign?: 'start' | 'end'
   className?: string
 }
 
@@ -18,6 +19,7 @@ export const DisclosureButton = ({
   label,
   'aria-controls': ariaControls,
   hint,
+  hintAlign = 'start',
   className,
 }: DisclosureButtonProps) => (
   <button
@@ -39,7 +41,14 @@ export const DisclosureButton = ({
     />
     <span className="text-sm font-medium">{label}</span>
     {!open && hint ? (
-      <span className="text-xs text-muted-foreground">{hint}</span>
+      <span
+        className={cn(
+          'text-xs text-muted-foreground',
+          hintAlign === 'end' && 'ml-auto',
+        )}
+      >
+        {hint}
+      </span>
     ) : null}
   </button>
 )

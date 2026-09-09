@@ -473,7 +473,7 @@ export const FarmInspector = ({
               panelWide={panelCalcOpen}
               renderPanel={
                 panelField
-                  ? ({ overlay, listBehind, mapVisible }) => (
+                  ? ({ listBehind, mapVisible }) => (
                       <FieldDetailPanel
                         farmId={farm.id}
                         field={panelField}
@@ -492,7 +492,6 @@ export const FarmInspector = ({
                         selectedYearIndex={effectiveSelectedYearIndex}
                         onSelectedYearIndexChange={onSelectedYearIndexChange}
                         yearValues={yearValues?.[panelField.id]}
-                        overlay={overlay}
                         listBehind={listBehind}
                         mapVisible={mapVisible}
                         onSelectFieldId={onSelectedFieldChange}

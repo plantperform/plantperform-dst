@@ -17,7 +17,7 @@ Liste og kort ligger side om side under årsgennemgangen, adskilt af en skilleli
 - Skillelinjen: pointer-træk, snap inden for 24 px til 1/3, 1/2 og 2/3, dobbeltklik nulstiller til 1/2, piletaster flytter 16 px, `role="separator"` med `aria-valuenow`. Under træk lægges et gennemsigtigt lag over kortet, så canvas ikke sluger pointer-events. Minimum: liste 420 px, kort 360 px. Trækkes en rude under sit minimum, snapper den lukket, og visningen følger med (Liste eller Kort), så der er en tilstand, ikke to.
 - Topbarens kontrol får tre valg: Liste | Delt | Kort. Delt genskaber den gemte delingsgrad. Delt er slået fra under 800 px indre bredde med titlen "Skærmen er for smal til delt visning".
 - Visning og listens andel af den delte flade gemmes pr. browser (`plantperform.farmView`, `plantperform.farmSplitFraction`) efter mønstret i `sidebar-width.ts`. Første gang er Delt standard, hvis der er plads.
-- Fra 1280 px indre bredde dokkes markpanelet som en 460 px kolonne mellem liste og kort. Under det lægger panelet sig over listeruden med glid ind fra venstre, en "Liste"-tilbageknap, forrige/næste mark i sorteringsrækkefølgen og "Zoom til mark". Listen forbliver monteret bagved, så scroll og sortering overlever. Beregningsgennemgangen udvider panelet til `min(950px, 100%)` af den delte flade hen over listeruden; kortet kollapser aldrig til 0 px.
+- Vælges en mark, lægger markpanelet sig over hele listeruden med glid ind fra venstre, en "Liste"-tilbageknap, forrige/næste mark i sorteringsrækkefølgen og "Zoom til mark", uanset skærmbredde. Listen forbliver monteret bagved, så scroll og sortering overlever. Beregningsgennemgangen udvider panelet til `min(950px, 100%)` af den delte flade hen over skillelinjen og ind over kortet; kortet kollapser aldrig til 0 px.
 
 ## Fælles tilstand
 
@@ -72,7 +72,7 @@ FarmTopBar (bortset fra kontrollen), FarmSidebar, SimulationRulesPanel, ManualRo
 
 1. `FarmView` får 'split', `FarmSplitView`, `SplitDivider`, `useSplitLayout` med persistens, tre-valgs kontrol, list og kort side om side.
 2. Kortet kontrolleret: `selectedFieldId` som prop, hover-source, `zoomRequest`, panorering kun uden for viewport, FieldStat-kortet fjernes; `changeView` og Find mark nulstiller/tvinger ikke længere.
-3. Markpanelet ud af `FarmFieldsList` og ind i `FarmSplitView`: overlay under 1280 px, dokket fra 1280 px; tilbage, forrige/næste, Zoom til mark; Fjern mark-dialog og sædskifte-editor følger med.
+3. Markpanelet ud af `FarmFieldsList` og ind i `FarmSplitView`: panelet over hele listeruden; tilbage, forrige/næste, Zoom til mark; Fjern mark-dialog og sædskifte-editor følger med.
 4. `MapToolbar`, legendestribe, Lag-popover, `NavigationControl`, tilføj-kortet indsnævret og Kort-snap i add mode.
 5. Tabellen: kompakt tæthed, sticky header/footer, `scrollIntoView` ved valg, hover-rækker, memoiseret række, dobbeltklik til zoom.
 6. Kystvandopland-striben med fremhævning, årsgennemgangens sammenfoldede chips, kompakt tæthed og standard efter højde.
@@ -87,7 +87,7 @@ Med sidepanelet i sin standardbredde og delingen på det halve, målt på den by
 | 1366x768 | 1046 px | 507 / 507 | ingen vandret scroll | 8 / 4 | over listen |
 | 1440x900 | 1120 px | 544 / 544 | ingen vandret scroll | 11 / 7 | over listen |
 | 1536x864 | 1216 px | 592 / 592 | ingen vandret scroll | 10 / 7 | over listen |
-| 1920x1080 | 1600 px | 784 / 784 | ingen vandret scroll | 15 / 11 | egen kolonne |
+| 1920x1080 | 1600 px | 784 / 784 | ingen vandret scroll | 15 / 11 | over listen |
 
 Med et år valgt kommer Afgrøde-kolonnen til, og tabellen kræver 575 px. Det giver vandret scroll på 1366 og 1440, ikke på 1536 og 1920.
 

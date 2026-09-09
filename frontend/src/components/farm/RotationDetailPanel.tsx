@@ -70,7 +70,7 @@ export const RotationDetailPanel = ({
       : undefined
 
   return (
-    <div className="border-t bg-muted/20 p-4">
+    <div className="p-4">
       <RotationYearsDetail
         years={years}
         areaHa={areaHa}
