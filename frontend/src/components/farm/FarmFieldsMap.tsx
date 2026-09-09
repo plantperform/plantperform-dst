@@ -23,7 +23,7 @@ import {
   useFarmFields,
   type SimulationFieldYearValues,
 } from '@/api/hooks'
-import { createFields, detachField } from '@/api/mutations'
+import { createFields } from '@/api/mutations'
 import type {
   CreateFieldInput,
   Farm,
@@ -45,7 +45,6 @@ import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
   formatFieldCount,
-  formatRealRotation,
   isFieldLocked,
   ROTATION_START_CALENDAR_YEAR,
   yearNLoadKgHa,
@@ -66,6 +65,8 @@ import {
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
+  HOVER_FIELD_FILL_COLOR,
+  HOVER_FIELD_LINE_COLOR,
   buildFillColor,
   buildYearCropSpec,
   isYearColorAttribute,
@@ -88,6 +89,7 @@ const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
 const CROP_LABEL_MIN_ZOOM = 12
 const CROP_LABEL_CLUSTER_PX = 48
+const VIEWPORT_INSET_FRACTION = 0.1
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
 const paintTransitionMs = window.matchMedia('(prefers-reduced-motion: reduce)')
   .matches
@@ -136,6 +138,11 @@ type FarmFieldsMapProps = {
   selectedYearIndex?: number | null
   yearValues?: SimulationFieldYearValues
   yearValuesLoading?: boolean
+  selectedFieldId: string | null
+  onSelectedFieldChange: (fieldId: string | null) => void
+  hoveredFieldId: string | null
+  onHoveredFieldChange: (fieldId: string | null) => void
+  zoomRequest?: { fieldId: string; nonce: number }
   onError: (message: string | null) => void
 }
 
@@ -182,14 +189,23 @@ export const FarmFieldsMap = ({
   selectedYearIndex = null,
   yearValues,
   yearValuesLoading = false,
+  selectedFieldId,
+  onSelectedFieldChange,
+  hoveredFieldId,
+  onHoveredFieldChange,
+  zoomRequest,
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
   const initialViewState =
     savedMapViewStates.get(farm.id) ?? defaultMapViewState
   const hasFitBounds = useRef(savedMapViewStates.has(farm.id))
+  const hoverFrame = useRef<number | null>(null)
+  const pendingHoveredFieldId = useRef<string | null>(null)
+  const reportedHoveredFieldId = useRef<string | null>(null)
+  const pannedFieldId = useRef<string | null>(null)
+  const appliedZoomNonce = useRef<number | null>(zoomRequest?.nonce ?? null)
   const [addMode, setAddMode] = useState(false)
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [selectedImkIds, setSelectedImkIds] = useState<number[]>([])
   const [cvrInput, setCvrInput] = useState(farm.cvr ?? '')
   const [highlightedCvr, setHighlightedCvr] = useState<string | null>(null)
@@ -197,7 +213,6 @@ export const FarmFieldsMap = ({
   const [isAttaching, setIsAttaching] = useState(false)
   const [isLoadingCvrFields, setIsLoadingCvrFields] = useState(false)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
-  const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
   const [hoveredField, setHoveredField] = useState<HoveredField | null>(null)
   const [colorBySelection, setColorBySelection] = useState<ColorBySelection>(
     () => ({ forMode: mode, value: defaultColorByForMode(mode) }),
@@ -385,6 +400,22 @@ export const FarmFieldsMap = ({
       ],
     }
     : emptyFeatureCollection
+  const hoveredFarmField =
+    hoveredFieldId !== null && hoveredFieldId !== selectedFieldId
+      ? fields.find((field) => field.id === hoveredFieldId)
+      : undefined
+  const hoverFarmGeoJson: FeatureCollection = hoveredFarmField?.geometry
+    ? {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: hoveredFarmField.geometry,
+        },
+      ],
+    }
+    : emptyFeatureCollection
   const attachedImkIds = fields
     .map((field) => field.imkId)
     .filter((imkId): imkId is number => imkId !== null)
@@ -443,16 +474,103 @@ export const FarmFieldsMap = ({
       { padding: 56, maxZoom: 14, duration: 700 },
     )
     hasFitBounds.current = true
-  }, [fields, isMapLoaded])
+    pannedFieldId.current = selectedFieldId
+  }, [fields, isMapLoaded, selectedFieldId])
 
-  const clearSelection = () => {
-    setSelectedFieldId(null)
+  useEffect(
+    () => () => {
+      if (hoverFrame.current !== null) {
+        window.cancelAnimationFrame(hoverFrame.current)
+        hoverFrame.current = null
+      }
+      if (reportedHoveredFieldId.current !== null) {
+        reportedHoveredFieldId.current = null
+        onHoveredFieldChange(null)
+      }
+    },
+    [onHoveredFieldChange],
+  )
+
+  useEffect(() => {
+    if (!isMapLoaded) return
+    if (pannedFieldId.current === selectedFieldId) return
+    if (selectedFieldId === null) {
+      pannedFieldId.current = null
+      return
+    }
+
+    const field = fields.find((item) => item.id === selectedFieldId)
+    const map = mapRef.current
+    if (!field || !map) return
+    pannedFieldId.current = selectedFieldId
+
+    const bounds = getFieldsBounds([field])
+    if (!bounds) return
+
+    const viewport = map.getBounds()
+    const west = viewport.getWest()
+    const east = viewport.getEast()
+    const south = viewport.getSouth()
+    const north = viewport.getNorth()
+    const insetX = (east - west) * VIEWPORT_INSET_FRACTION
+    const insetY = (north - south) * VIEWPORT_INSET_FRACTION
+    const isVisible =
+      bounds[0] <= east - insetX &&
+      bounds[2] >= west + insetX &&
+      bounds[1] <= north - insetY &&
+      bounds[3] >= south + insetY
+    if (isVisible) return
+
+    map.easeTo({
+      center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+      duration: 500,
+    })
+  }, [fields, isMapLoaded, selectedFieldId])
+
+  useEffect(() => {
+    if (!isMapLoaded || !zoomRequest) return
+    if (appliedZoomNonce.current === zoomRequest.nonce) return
+
+    const field = fields.find((item) => item.id === zoomRequest.fieldId)
+    if (!field) return
+
+    const bounds = getFieldsBounds([field])
+    if (!bounds) return
+
+    appliedZoomNonce.current = zoomRequest.nonce
+    pannedFieldId.current = zoomRequest.fieldId
+    mapRef.current?.fitBounds(
+      [
+        [bounds[0], bounds[1]],
+        [bounds[2], bounds[3]],
+      ],
+      { padding: 64, maxZoom: 16, duration: 500 },
+    )
+  }, [fields, isMapLoaded, zoomRequest])
+
+  const reportHoveredField = (fieldId: string | null) => {
+    pendingHoveredFieldId.current = fieldId
+    if (fieldId === null) {
+      if (hoverFrame.current !== null) {
+        window.cancelAnimationFrame(hoverFrame.current)
+        hoverFrame.current = null
+      }
+      reportedHoveredFieldId.current = null
+      onHoveredFieldChange(null)
+      return
+    }
+    if (hoverFrame.current !== null) return
+    hoverFrame.current = window.requestAnimationFrame(() => {
+      hoverFrame.current = null
+      reportedHoveredFieldId.current = pendingHoveredFieldId.current
+      onHoveredFieldChange(pendingHoveredFieldId.current)
+    })
   }
 
   const toggleAddMode = () => {
     if (readOnly) return
 
-    clearSelection()
+    onSelectedFieldChange(null)
     setSelectedImkIds([])
     setHighlightedCvr(null)
     setHighlightedCvrImkIds([])
@@ -571,7 +689,7 @@ export const FarmFieldsMap = ({
           : [...current, imkId],
       )
 
-      setSelectedFieldId(null)
+      onSelectedFieldChange(null)
       onError(null)
       return
     }
@@ -580,9 +698,10 @@ export const FarmFieldsMap = ({
       (feature) => feature.layer.id === 'farm-fields-fill',
     )
     const fieldId = farmField?.properties?.fieldId
+    const clickedFieldId = typeof fieldId === 'string' ? fieldId : null
 
-    if (typeof fieldId !== 'string') return
-    setSelectedFieldId(fieldId)
+    pannedFieldId.current = clickedFieldId
+    onSelectedFieldChange(clickedFieldId)
     onError(null)
   }
 
@@ -596,6 +715,7 @@ export const FarmFieldsMap = ({
     if (marsFeature) {
       mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
       setHoveredField(null)
+      reportHoveredField(null)
       setHoveredMars({
         longitude: event.lngLat.lng,
         latitude: event.lngLat.lat,
@@ -630,6 +750,7 @@ export const FarmFieldsMap = ({
 
     if (!feature) {
       setHoveredField(null)
+      reportHoveredField(null)
       mapRef.current?.getCanvas().style.setProperty('cursor', '')
       return
     }
@@ -664,13 +785,16 @@ export const FarmFieldsMap = ({
     const yearQuotaStatusRaw = addMode
       ? null
       : feature.properties?.yearQuotaStatus
-    const hoveredFieldId = addMode ? null : feature.properties?.fieldId
+    const hoveredFarmFieldId = addMode ? null : feature.properties?.fieldId
     const hasRotation =
-      typeof hoveredFieldId === 'string' &&
+      typeof hoveredFarmFieldId === 'string' &&
       fields.some(
-        (field) => field.id === hoveredFieldId && field.rotationId !== null,
+        (field) => field.id === hoveredFarmFieldId && field.rotationId !== null,
       )
     mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
+    reportHoveredField(
+      typeof hoveredFarmFieldId === 'string' ? hoveredFarmFieldId : null,
+    )
     setHoveredField({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
@@ -688,23 +812,6 @@ export const FarmFieldsMap = ({
       yearQuotaStatus:
         typeof yearQuotaStatusRaw === 'number' ? yearQuotaStatusRaw : null,
     })
-  }
-
-  const detachSelectedField = async () => {
-    if (!selectedFarmField) return
-
-    setDetachingFieldId(selectedFarmField.id)
-    try {
-      await detachField(farm.id, selectedFarmField.id)
-      await mutate(farmFieldsKey(farm.id))
-      await mutate(farmKey(farm.id))
-      setSelectedFieldId(null)
-      onError(null)
-    } catch {
-      onError('Kunne ikke fjerne marken fra bedriften.')
-    } finally {
-      setDetachingFieldId(null)
-    }
   }
 
   return (
@@ -735,6 +842,7 @@ export const FarmFieldsMap = ({
         onMouseMove={handleMapHover}
         onMouseLeave={() => {
           setHoveredField(null)
+          reportHoveredField(null)
           setHoveredMars(null)
           mapRef.current?.getCanvas().style.setProperty('cursor', '')
         }}
@@ -940,6 +1048,26 @@ export const FarmFieldsMap = ({
             />
           </Source>
         ) : null}
+
+        <Source id="hover-farm-field" type="geojson" data={hoverFarmGeoJson}>
+          <Layer
+            id="hover-farm-field-fill"
+            type="fill"
+            paint={{
+              'fill-color': HOVER_FIELD_FILL_COLOR,
+              'fill-opacity': 0.15,
+            }}
+          />
+          <Layer
+            id="hover-farm-field-outline"
+            type="line"
+            paint={{
+              'line-color': HOVER_FIELD_LINE_COLOR,
+              'line-width': 2,
+              'line-opacity': 0.9,
+            }}
+          />
+        </Source>
 
         <Source
           id="selected-farm-field"
@@ -1183,101 +1311,6 @@ export const FarmFieldsMap = ({
         </Card>
       ) : null}
 
-      {selectedFarmField ? (
-        <Card className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] bg-background/95 shadow-lg">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>{selectedFarmField.name}</CardTitle>
-                <CardDescription>
-                  {selectedFarmField.imkId
-                    ? `IMK ${selectedFarmField.imkId}`
-                    : 'Manuel mark'}
-                </CardDescription>
-              </div>
-              <Button size="sm" variant="outline" onClick={clearSelection}>
-                Luk
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-3">
-              {(() => {
-                const areaHa = selectedFarmField.areaHa
-                const perHa = (raw: number, unit: string) =>
-                  areaHa > 0
-                    ? `${formatNumber(raw / areaHa)} ${unit}`
-                    : undefined
-                return (
-                  <>
-                    <FieldStat
-                      label="Areal"
-                      value={`${formatNumber(areaHa)} ha`}
-                    />
-                    <FieldStat
-                      label="Retention"
-                      value={
-                        selectedFarmField.retention === null
-                          ? 'Ukendt'
-                          : formatNumber(selectedFarmField.retention)
-                      }
-                    />
-                    <FieldStat
-                      label="JB nr."
-                      value={
-                        selectedFarmField.jbnr === null
-                          ? 'Ukendt'
-                          : String(selectedFarmField.jbnr)
-                      }
-                    />
-                    <FieldStat
-                      label="Sædskifte"
-                      value={formatRealRotation(selectedFarmField.cropRotation)}
-                    />
-                    <FieldStat
-                      label="DB2"
-                      value={`${formatNumber(selectedFarmField.db2)} kr`}
-                      subValue={perHa(selectedFarmField.db2, 'kr/ha')}
-                    />
-                    <FieldStat
-                      label="Udledning"
-                      value={`${formatNumber(selectedFarmField.nLoad)} kg N`}
-                      subValue={perHa(selectedFarmField.nLoad, 'kg N/ha')}
-                    />
-                    <FieldStat
-                      label="Udvaskning"
-                      value={`${formatNumber(selectedFarmField.leaching)} kg N`}
-                      subValue={perHa(selectedFarmField.leaching, 'kg N/ha')}
-                    />
-                    <FieldStat
-                      label="Indgår i omlægningsplan"
-                      value={selectedFarmField.inTakeoutPlan}
-                    />
-                    <FieldStat
-                      label="Udledningskvote"
-                      value={`${formatNumber(selectedFarmField.udledningskvoteMarkKgn)} kg N`}
-                      subValue={perHa(selectedFarmField.udledningskvoteMarkKgn, 'kg N/ha')}
-                    />
-                  </>
-                )
-              })()}
-            </div>
-            {!readOnly ? (
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => void detachSelectedField()}
-                disabled={detachingFieldId === selectedFarmField.id}
-              >
-                {detachingFieldId === selectedFarmField.id
-                  ? 'Fjerner...'
-                  : 'Fjern mark'}
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card className="absolute bottom-4 left-4 z-10 w-[min(18rem,calc(100%-2rem))] bg-background/95 shadow-lg">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Farvelæg marker</CardTitle>
@@ -1393,19 +1426,3 @@ export const FarmFieldsMap = ({
     </div>
   )
 }
-
-type FieldStatProps = {
-  label: string
-  value: string | number
-  subValue?: string
-}
-
-const FieldStat = ({ label, value, subValue }: FieldStatProps) => (
-  <div className="rounded-md bg-muted/70 p-3">
-    <p className="text-muted-foreground">{label}</p>
-    <p className="mt-1 break-words font-medium">{value}</p>
-    {subValue ? (
-      <p className="mt-0.5 text-xs text-muted-foreground/80">{subValue}</p>
-    ) : null}
-  </div>
-)

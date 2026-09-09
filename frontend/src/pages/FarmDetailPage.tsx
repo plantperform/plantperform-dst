@@ -12,9 +12,9 @@ import { useAuth } from '@/auth/context'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
+import { useSplitLayout } from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
-  FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
@@ -63,7 +63,8 @@ export const FarmDetailPage = () => {
     isLoading: simulationFieldsLoading,
   } = useSimulationFields(farmId, selectedSimulationId)
   const [mode, setMode] = useState<FarmInspectorMode>('values')
-  const [view, setView] = useState<FarmView>('list')
+  const { view, changeView, listFraction, changeListFraction } =
+    useSplitLayout()
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(
     null,
@@ -143,15 +144,9 @@ export const FarmDetailPage = () => {
     if (next !== mode) setSelectedFieldId(null)
   }
 
-  const changeView = (next: FarmView) => {
-    setView(next)
-    if (next === 'map') setSelectedFieldId(null)
-  }
-
   const selectFieldFromSearch = (fieldId: string) => {
     if (!activeFields.some((field) => field.id === fieldId)) return
     setSelectedFieldId(fieldId)
-    if (view === 'map') setView('list')
     if (mode === 'rules') setMode('values')
   }
 
@@ -239,6 +234,8 @@ export const FarmDetailPage = () => {
           onModeChange={changeMode}
           view={view}
           onViewChange={changeView}
+          listFraction={listFraction}
+          onListFractionChange={changeListFraction}
           selectedFieldId={selectedFieldId}
           onSelectedFieldChange={setSelectedFieldId}
           selectedYearIndex={selectedYearIndex}

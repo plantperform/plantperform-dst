@@ -4,4 +4,4 @@ export type FarmViewSelection =
 
 export type FarmInspectorMode = 'values' | 'rules'
 
-export type FarmView = 'list' | 'map'
+export type FarmView = 'list' | 'split' | 'map'
