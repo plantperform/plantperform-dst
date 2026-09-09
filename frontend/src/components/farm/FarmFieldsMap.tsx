@@ -1,12 +1,13 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import type { FeatureCollection } from 'geojson'
-import { Lock } from 'lucide-react'
+import { Layers, Lock, Maximize } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
   Layer,
   Marker,
+  NavigationControl,
   Popup,
   Source,
   type MapLayerMouseEvent,
@@ -32,6 +33,7 @@ import type {
   RegistryField,
   RegistryFieldSummary,
 } from '@/api/types'
+import { catchmentKey } from '@/components/farm/catchment-options'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,6 +43,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { DisclosureButton } from '@/components/ui/disclosure-button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
@@ -67,8 +78,10 @@ import {
   COLOR_SPECS,
   HOVER_FIELD_FILL_COLOR,
   HOVER_FIELD_LINE_COLOR,
+  buildCatchmentFillOpacity,
   buildFillColor,
   buildYearCropSpec,
+  formatLegendUnit,
   isYearColorAttribute,
   legendEntries,
   registryPropertyFor,
@@ -123,6 +136,10 @@ const MARS_LEGEND: { label: string; color: string; virkemidler: string[] }[] = [
   },
 ]
 const MARS_OTHER_COLOR = '#94a3b8'
+const MARS_LEGEND_ENTRIES: { label: string; color: string }[] = [
+  ...MARS_LEGEND.map(({ label, color }) => ({ label, color })),
+  { label: 'Andet', color: MARS_OTHER_COLOR },
+]
 const marsFillColor = [
   'match',
   ['get', 'virkemiddel'],
@@ -142,7 +159,9 @@ type FarmFieldsMapProps = {
   onSelectedFieldChange: (fieldId: string | null) => void
   hoveredFieldId: string | null
   onHoveredFieldChange: (fieldId: string | null) => void
+  highlightedCatchmentKey?: string | null
   zoomRequest?: { fieldId: string; nonce: number }
+  onAddModeChange?: (active: boolean) => void
   onError: (message: string | null) => void
 }
 
@@ -193,7 +212,9 @@ export const FarmFieldsMap = ({
   onSelectedFieldChange,
   hoveredFieldId,
   onHoveredFieldChange,
+  highlightedCatchmentKey = null,
   zoomRequest,
+  onAddModeChange,
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -204,12 +225,15 @@ export const FarmFieldsMap = ({
   const pendingHoveredFieldId = useRef<string | null>(null)
   const reportedHoveredFieldId = useRef<string | null>(null)
   const pannedFieldId = useRef<string | null>(null)
+  const fittedCatchmentKey = useRef<string | null>(highlightedCatchmentKey)
   const appliedZoomNonce = useRef<number | null>(zoomRequest?.nonce ?? null)
+  const legendStripRef = useRef<HTMLDivElement>(null)
   const [addMode, setAddMode] = useState(false)
   const [selectedImkIds, setSelectedImkIds] = useState<number[]>([])
   const [cvrInput, setCvrInput] = useState(farm.cvr ?? '')
   const [highlightedCvr, setHighlightedCvr] = useState<string | null>(null)
   const [highlightedCvrImkIds, setHighlightedCvrImkIds] = useState<number[]>([])
+  const [isCvrOpen, setIsCvrOpen] = useState(false)
   const [isAttaching, setIsAttaching] = useState(false)
   const [isLoadingCvrFields, setIsLoadingCvrFields] = useState(false)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
@@ -250,6 +274,7 @@ export const FarmFieldsMap = ({
   const [showCropLabels, setShowCropLabels] = useState(true)
   const [mapZoom, setMapZoom] = useState(initialViewState.zoom)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
+  const [overflowingLegend, setOverflowingLegend] = useState<string | null>(null)
 
   const yearCropSpec = useMemo(
     () =>
@@ -323,6 +348,20 @@ export const FarmFieldsMap = ({
   const rotationFieldCount = fields.filter(
     (field) => field.rotationId !== null,
   ).length
+  const yearStatusText =
+    selectedCalendarYear === null
+      ? null
+      : yearValuesLoading
+        ? 'Henter årstal for markerne...'
+        : yearValuesFieldCount < rotationFieldCount
+          ? `${yearValuesFieldCount} af ${rotationFieldCount} marker har årstal for ${selectedCalendarYear}`
+          : null
+  const legendStripVisible = activeColorSpec !== null || yearStatusText !== null
+  const legendBins =
+    activeColorSpec === null ? [] : legendEntries(activeColorSpec)
+  const legendSignature = `${activeColorSpec?.label ?? ''}|${legendBins.length}|${yearStatusText ?? ''}`
+  const legendOverflows = overflowingLegend === legendSignature
+  const hasFieldGeometry = fields.some((field) => field.geometry !== null)
 
   const farmFieldsGeoJson = useMemo(
     () => fieldsToFeatureCollection(fields, changedFields, yearProperties),
@@ -459,12 +498,9 @@ export const FarmFieldsMap = ({
     setMapZoom(map.getZoom())
   }
 
-  useEffect(() => {
-    if (!isMapLoaded) return
-    if (hasFitBounds.current) return
-
+  const fitAllFields = useCallback(() => {
     const bounds = getFieldsBounds(fields)
-    if (!bounds) return
+    if (!bounds) return false
 
     mapRef.current?.fitBounds(
       [
@@ -473,9 +509,17 @@ export const FarmFieldsMap = ({
       ],
       { padding: 56, maxZoom: 14, duration: 700 },
     )
+    return true
+  }, [fields])
+
+  useEffect(() => {
+    if (!isMapLoaded) return
+    if (hasFitBounds.current) return
+    if (!fitAllFields()) return
+
     hasFitBounds.current = true
     pannedFieldId.current = selectedFieldId
-  }, [fields, isMapLoaded, selectedFieldId])
+  }, [fitAllFields, isMapLoaded, selectedFieldId])
 
   useEffect(
     () => () => {
@@ -528,6 +572,28 @@ export const FarmFieldsMap = ({
   }, [fields, isMapLoaded, selectedFieldId])
 
   useEffect(() => {
+    if (!isMapLoaded) return
+    if (fittedCatchmentKey.current === highlightedCatchmentKey) return
+    fittedCatchmentKey.current = highlightedCatchmentKey
+    if (highlightedCatchmentKey === null) return
+
+    const bounds = getFieldsBounds(
+      fields.filter(
+        (field) => catchmentKey(field.kystvandId) === highlightedCatchmentKey,
+      ),
+    )
+    if (!bounds) return
+
+    mapRef.current?.fitBounds(
+      [
+        [bounds[0], bounds[1]],
+        [bounds[2], bounds[3]],
+      ],
+      { padding: 56, maxZoom: 14, duration: 700 },
+    )
+  }, [fields, isMapLoaded, highlightedCatchmentKey])
+
+  useEffect(() => {
     if (!isMapLoaded || !zoomRequest) return
     if (appliedZoomNonce.current === zoomRequest.nonce) return
 
@@ -547,6 +613,30 @@ export const FarmFieldsMap = ({
       { padding: 64, maxZoom: 16, duration: 500 },
     )
   }, [fields, isMapLoaded, zoomRequest])
+
+  useEffect(() => {
+    const strip = legendStripRef.current
+    if (!strip) {
+      setOverflowingLegend(null)
+      return
+    }
+
+    const measure = () =>
+      setOverflowingLegend(
+        strip.scrollWidth - strip.clientWidth > 1 ? legendSignature : null,
+      )
+    measure()
+
+    const observer = new ResizeObserver(measure)
+    observer.observe(strip)
+    return () => observer.disconnect()
+  }, [legendSignature])
+
+  useEffect(() => {
+    if (!addMode) return
+    onAddModeChange?.(true)
+    return () => onAddModeChange?.(false)
+  }, [addMode, onAddModeChange])
 
   const reportHoveredField = (fieldId: string | null) => {
     pendingHoveredFieldId.current = fieldId
@@ -815,404 +905,146 @@ export const FarmFieldsMap = ({
   }
 
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border bg-muted">
-      <Map
-        ref={mapRef}
-        initialViewState={initialViewState}
-        mapStyle="https://tiles.openfreemap.org/styles/liberty"
-        transformRequest={(url) => {
-          const token = getAccessToken()
-          if (!token || !url.includes('/api/v0/')) return { url }
-          return { url, headers: { Authorization: `Bearer ${token}` } }
-        }}
-        interactiveLayerIds={[
-          ...(addMode
-            ? [
-              'registry-selected-fill',
-              'registry-cvr-highlight-fill',
-              'registry-candidate-fill',
-              'registry-owned-fill',
-            ]
-            : ['farm-fields-fill']),
-          ...(showMars ? ['mars-fill', 'mars-points'] : []),
-        ]}
-        onLoad={() => setIsMapLoaded(true)}
-        onMoveEnd={saveMapViewState}
-        onClick={handleMapClick}
-        onMouseMove={handleMapHover}
-        onMouseLeave={() => {
-          setHoveredField(null)
-          reportHoveredField(null)
-          setHoveredMars(null)
-          mapRef.current?.getCanvas().style.setProperty('cursor', '')
-        }}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <Source id="farm-fields" type="geojson" data={farmFieldsGeoJson}>
-          <Layer
-            id="farm-fields-fill"
-            type="fill"
-            paint={{
-              'fill-color': farmThemedColor ?? '#16a34a',
-              'fill-opacity': addMode ? 0.28 : farmThemedColor ? 0.7 : 0.5,
-              'fill-opacity-transition': { duration: paintTransitionMs },
-            }}
-          />
-          <Layer
-            id="farm-fields-outline"
-            type="line"
-            paint={{
-              'line-color': '#15803d',
-              'line-width': 1.8,
-              'line-opacity': 0.9,
-            }}
-          />
-        </Source>
-
-        {addMode ? (
-          <Source
-            key={tileUrl}
-            id="registry-fields"
-            type="vector"
-            tiles={[tileUrl]}
-            minzoom={registryPointMinZoom}
-            maxzoom={16}
-          >
-            <Layer
-              id="registry-points-candidate"
-              source-layer="fields"
-              type="circle"
-              minzoom={registryPointMinZoom}
-              maxzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], false] as FilterSpecification}
-              paint={{
-                'circle-color': registryThemedColor ?? '#64748b',
-                'circle-opacity': 0.85,
-                'circle-radius': registryPointRadius,
-              }}
-            />
-            <Layer
-              id="registry-points-cvr-highlight"
-              source-layer="fields"
-              type="circle"
-              minzoom={registryPointMinZoom}
-              maxzoom={registryPolygonMinZoom}
-              filter={highlightedCvrFilter}
-              paint={{
-                'circle-color': '#facc15',
-                'circle-radius': registryPointRadius,
-                'circle-stroke-color': '#ca8a04',
-                'circle-stroke-width': 0.8,
-              }}
-            />
-            <Layer
-              id="registry-points-owned"
-              source-layer="fields"
-              type="circle"
-              minzoom={registryPointMinZoom}
-              maxzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], true] as FilterSpecification}
-              paint={{
-                'circle-color': registryThemedColor ?? '#16a34a',
-                'circle-opacity': 0.9,
-                'circle-radius': registryPointRadius,
-                'circle-stroke-color': '#1f2937',
-                'circle-stroke-width': 0.8,
-              }}
-            />
-            <Layer
-              id="registry-candidate-fill"
-              source-layer="fields"
-              type="fill"
-              minzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], false] as FilterSpecification}
-              paint={{
-                'fill-color': registryThemedColor ?? '#64748b',
-                'fill-opacity': registryThemedColor ? 0.6 : 0.3,
-              }}
-            />
-            <Layer
-              id="registry-candidate-outline"
-              source-layer="fields"
-              type="line"
-              minzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], false] as FilterSpecification}
-              paint={{
-                'line-color': '#475569',
-                'line-width': 1,
-                'line-opacity': 0.7,
-              }}
-            />
-            <Layer
-              id="registry-cvr-highlight-fill"
-              source-layer="fields"
-              type="fill"
-              minzoom={registryPolygonMinZoom}
-              filter={highlightedCvrFilter}
-              paint={{ 'fill-color': '#facc15', 'fill-opacity': 0.48 }}
-            />
-            <Layer
-              id="registry-cvr-highlight-outline"
-              source-layer="fields"
-              type="line"
-              minzoom={registryPolygonMinZoom}
-              filter={highlightedCvrFilter}
-              paint={{
-                'line-color': '#ca8a04',
-                'line-width': 1.8,
-                'line-opacity': 0.9,
-              }}
-            />
-            <Layer
-              id="registry-selected-fill"
-              source-layer="fields"
-              type="fill"
-              minzoom={registryPolygonMinZoom}
-              filter={selectedRegistryFilter}
-              paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.55 }}
-            />
-            <Layer
-              id="registry-selected-outline"
-              source-layer="fields"
-              type="line"
-              minzoom={registryPolygonMinZoom}
-              filter={selectedRegistryFilter}
-              paint={{
-                'line-color': '#1d4ed8',
-                'line-width': 2.5,
-                'line-opacity': 0.95,
-              }}
-            />
-            <Layer
-              id="registry-owned-fill"
-              source-layer="fields"
-              type="fill"
-              minzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], true] as FilterSpecification}
-              paint={{
-                'fill-color': registryThemedColor ?? '#64748b',
-                'fill-opacity': registryThemedColor ? 0.55 : 0.2,
-              }}
-            />
-            <Layer
-              id="registry-owned-outline"
-              source-layer="fields"
-              type="line"
-              minzoom={registryPolygonMinZoom}
-              filter={['==', ['get', 'owned'], true] as FilterSpecification}
-              paint={{
-                'line-color': '#475569',
-                'line-width': 0.8,
-                'line-opacity': 0.5,
-              }}
-            />
-          </Source>
-        ) : null}
-
-        {showMars ? (
-          <Source
-            key={marsTileUrl}
-            id="mars-projekter"
-            type="vector"
-            tiles={[marsTileUrl]}
-            maxzoom={16}
-          >
-            <Layer
-              id="mars-points"
-              source-layer="mars"
-              type="circle"
-              maxzoom={marsPolygonMinZoom}
-              paint={{
-                'circle-color': marsFillColor,
-                'circle-opacity': 0.85,
-                'circle-radius': registryPointRadius,
-              }}
-            />
-            <Layer
-              id="mars-fill"
-              source-layer="mars"
-              type="fill"
-              minzoom={marsPolygonMinZoom}
-              paint={{ 'fill-color': marsFillColor, 'fill-opacity': 0.45 }}
-            />
-            <Layer
-              id="mars-outline"
-              source-layer="mars"
-              type="line"
-              minzoom={marsPolygonMinZoom}
-              paint={{
-                'line-color': marsFillColor,
-                'line-width': 1.5,
-                'line-opacity': 0.9,
-              }}
-            />
-          </Source>
-        ) : null}
-
-        <Source id="hover-farm-field" type="geojson" data={hoverFarmGeoJson}>
-          <Layer
-            id="hover-farm-field-fill"
-            type="fill"
-            paint={{
-              'fill-color': HOVER_FIELD_FILL_COLOR,
-              'fill-opacity': 0.15,
-            }}
-          />
-          <Layer
-            id="hover-farm-field-outline"
-            type="line"
-            paint={{
-              'line-color': HOVER_FIELD_LINE_COLOR,
-              'line-width': 2,
-              'line-opacity': 0.9,
-            }}
-          />
-        </Source>
-
-        <Source
-          id="selected-farm-field"
-          type="geojson"
-          data={selectedFarmGeoJson}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-background px-2 @container">
+        <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
+          Farvelæg
+        </span>
+        <select
+          aria-label="Farvelæg marker"
+          title="Farvelæg marker"
+          className="h-8 w-full min-w-0 max-w-40 rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          value={colorBy}
+          onChange={(event) =>
+            setColorBy(event.target.value as ColorAttribute)
+          }
         >
-          <Layer
-            id="selected-farm-field-fill"
-            type="fill"
-            paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.2 }}
-          />
-          <Layer
-            id="selected-farm-field-outline"
-            type="line"
-            paint={{ 'line-color': '#1d4ed8', 'line-width': 3 }}
-          />
-        </Source>
+          {colorOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
-        {showLockMarkers
-          ? lockedFieldMarkers.map(({ field, point }) => (
-            <Marker
-              key={`lock-${field.id}`}
-              longitude={point[0]}
-              latitude={point[1]}
-              anchor="center"
-              style={{ pointerEvents: 'none' }}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="xs"
+              className="shrink-0 gap-1.5"
+              aria-label="Lag på kortet"
+              title="Lag på kortet"
             >
-              <span
-                role="img"
-                aria-label={`Låst mark ${field.name}`}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
-              >
-                <Lock
-                  className="h-4 w-4 text-amber-600"
-                  strokeWidth={2.5}
-                  aria-hidden="true"
-                />
-              </span>
-            </Marker>
-          ))
-          : null}
-        {cropLabelsVisible
-          ? cropLabelMarkers.map((marker) => (
-            <Marker
-              key={`crop-${marker.key}`}
-              longitude={marker.point[0]}
-              latitude={marker.point[1]}
-              anchor="top"
-              offset={[0, 4]}
-              style={{ pointerEvents: 'none' }}
+              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden @lg:inline">Lag</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            {activeColorSpec !== null ? (
+              <>
+                <DropdownMenuLabel>
+                  {activeColorSpec.label}
+                  {formatLegendUnit(activeColorSpec)
+                    ? ` (${formatLegendUnit(activeColorSpec)})`
+                    : ''}
+                </DropdownMenuLabel>
+                <ul className="max-h-64 space-y-1 overflow-y-auto px-2 pb-1">
+                  {legendBins.map((entry) => (
+                    <li
+                      key={entry.label}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span
+                        className="inline-block h-3 w-4 shrink-0 rounded-sm border border-black/10"
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span>{entry.label}</span>
+                    </li>
+                  ))}
+                </ul>
+                {isFarmOnlyAttribute ? (
+                  <p className="px-2 pb-1 text-xs italic text-muted-foreground">
+                    Vises kun for tilknyttede marker.
+                  </p>
+                ) : null}
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
+            {hasSelectedYear ? (
+              <>
+                <DropdownMenuCheckboxItem
+                  checked={showCropLabels}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={(checked) =>
+                    setShowCropLabels(Boolean(checked))
+                  }
+                >
+                  Vis afgrødenavne for {selectedCalendarYear}
+                </DropdownMenuCheckboxItem>
+                {showCropLabels && mapZoom < CROP_LABEL_MIN_ZOOM ? (
+                  <p className="pb-1 pl-8 pr-2 text-xs text-muted-foreground">
+                    Zoom ind for at se navnene.
+                  </p>
+                ) : null}
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
+            <DropdownMenuCheckboxItem
+              checked={showMars}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(checked) => setShowMars(Boolean(checked))}
             >
-              <span
-                role="img"
-                aria-label={marker.title}
-                title={marker.title}
-                className={cn(
-                  'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
-                  marker.color === null && 'bg-background text-foreground',
-                )}
-                style={
-                  marker.color !== null
-                    ? { backgroundColor: marker.color, color: marker.textColor ?? undefined }
-                    : undefined
-                }
-              >
-                {marker.label}
-              </span>
-            </Marker>
-          ))
-          : null}
+              Grøn Trepart - Omlægningsplan
+            </DropdownMenuCheckboxItem>
+            {showMars ? (
+              <ul className="space-y-1 pb-1 pl-8 pr-2">
+                {MARS_LEGEND_ENTRIES.map((entry) => (
+                  <li
+                    key={entry.label}
+                    className="flex items-center gap-2 text-xs"
+                  >
+                    <span
+                      className="inline-block h-3 w-4 shrink-0 rounded-sm border border-black/10"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span>{entry.label}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {hoveredField ? (
-          <Popup
-            longitude={hoveredField.longitude}
-            latitude={hoveredField.latitude}
-            closeButton={false}
-            closeOnClick={false}
-            anchor="top"
-            offset={8}
-          >
-            <div className="flex flex-col gap-0.5 text-xs">
-              <span className="font-medium">{hoveredField.primary}</span>
-              <span className="text-muted-foreground">
-                {hoveredField.vandopland !== null
-                  ? `Vandopland ${hoveredField.vandopland}`
-                  : 'Vandopland ukendt'}
-              </span>
-              {selectedCalendarYear !== null ? (
-                <>
-                  <span>
-                    {selectedCalendarYear}:{' '}
-                    {hoveredField.yearCrop ?? 'ingen afgrøde for året'}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {hoveredField.yearNLoadKgHa !== null
-                      ? `Udledning ${formatNumber(hoveredField.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hoveredField.yearQuotaStatus)}`
-                      : yearValuesLoading
-                        ? 'Henter udledning for året...'
-                        : hoveredField.hasRotation
-                          ? 'Uden for markens rotationscyklus'
-                          : 'Ingen udledning beregnet for året'}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          </Popup>
+        <Button
+          variant="outline"
+          size="xs"
+          className="shrink-0 gap-1.5"
+          aria-label="Vis alle marker"
+          title={
+            hasFieldGeometry ? 'Vis alle marker' : 'Ingen marker at vise endnu'
+          }
+          disabled={!hasFieldGeometry}
+          onClick={() => {
+            fitAllFields()
+          }}
+        >
+          <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="hidden @lg:inline">Vis alle</span>
+        </Button>
+
+        {readOnly ? (
+          <span className="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground @2xl:block">
+            {mode === 'rules'
+              ? 'Klik på en mark for at gå til dens række i listen.'
+              : 'Klik på en simuleringsmark for at gennemgå den.'}
+          </span>
         ) : null}
 
-        {hoveredMars ? (
-          <Popup
-            longitude={hoveredMars.longitude}
-            latitude={hoveredMars.latitude}
-            closeButton={false}
-            closeOnClick={false}
-            anchor="top"
-            offset={8}
-          >
-            <div className="flex flex-col gap-0.5 text-xs">
-              <span className="font-medium">
-                {hoveredMars.titel ?? 'MARS-projekt'}
-              </span>
-              {hoveredMars.virkemiddel ? (
-                <span>{hoveredMars.virkemiddel}</span>
-              ) : null}
-              {hoveredMars.tilskudsordning ? (
-                <span className="text-muted-foreground">
-                  {hoveredMars.tilskudsordning}
-                </span>
-              ) : null}
-              <span className="text-muted-foreground">
-                {hoveredMars.status ?? 'Status ukendt'}
-                {hoveredMars.arealHa !== null
-                  ? ` · ${formatNumber(hoveredMars.arealHa)} ha`
-                  : ''}
-              </span>
-            </div>
-          </Popup>
-        ) : null}
-      </Map>
-
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border bg-background/95 p-2 shadow-sm">
         {!readOnly ? (
           <Button
+            className="ml-auto shrink-0"
             onClick={() => void (addMode ? finishAddMode() : toggleAddMode())}
-            size="sm"
+            size="xs"
             variant={addMode ? 'default' : 'outline'}
             disabled={isAttaching}
           >
@@ -1225,204 +1057,545 @@ export const FarmFieldsMap = ({
                 : 'Tilføj marker'}
           </Button>
         ) : null}
-        <span
-          className={`${readOnly ? '' : 'hidden sm:inline'} text-xs text-muted-foreground`}
-        >
-          {addMode
-            ? 'Klik på registermarker for at vælge eller fravælge dem.'
-            : mode === 'rules'
-              ? 'Låste marker er markeret med hængelås. Skift til Liste for at ændre regler.'
-              : readOnly
-                ? 'Klik på en simuleringsmark for at gennemgå den.'
-                : 'Klik på en tilknyttet mark for at gennemgå den.'}
-        </span>
       </div>
 
-      {addMode ? (
-        <Card className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] bg-background/95 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle>{selectedImkIds.length} valgt</CardTitle>
-            <CardDescription>Blå marker tilføjes samlet.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="space-y-2 rounded-md border bg-background/80 p-3">
-              <p className="font-medium">CVR-fremhævelse</p>
-              <Input
-                value={cvrInput}
-                inputMode="numeric"
-                placeholder="12345678"
-                onChange={(event) => setCvrInput(event.target.value)}
+      <div
+        className={cn(
+          'relative min-h-0 flex-1',
+          legendStripVisible && 'map-legend-inset',
+        )}
+      >
+        <Map
+          ref={mapRef}
+          initialViewState={initialViewState}
+          mapStyle="https://tiles.openfreemap.org/styles/liberty"
+          transformRequest={(url) => {
+            const token = getAccessToken()
+            if (!token || !url.includes('/api/v0/')) return { url }
+            return { url, headers: { Authorization: `Bearer ${token}` } }
+          }}
+          interactiveLayerIds={[
+            ...(addMode
+              ? [
+                'registry-selected-fill',
+                'registry-cvr-highlight-fill',
+                'registry-candidate-fill',
+                'registry-owned-fill',
+              ]
+              : ['farm-fields-fill']),
+            ...(showMars ? ['mars-fill', 'mars-points'] : []),
+          ]}
+          onLoad={() => setIsMapLoaded(true)}
+          onMoveEnd={saveMapViewState}
+          onClick={handleMapClick}
+          onMouseMove={handleMapHover}
+          onMouseLeave={() => {
+            setHoveredField(null)
+            reportHoveredField(null)
+            setHoveredMars(null)
+            mapRef.current?.getCanvas().style.setProperty('cursor', '')
+          }}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <NavigationControl
+            position="top-right"
+            showCompass={false}
+            showZoom={true}
+          />
+
+          <Source id="farm-fields" type="geojson" data={farmFieldsGeoJson}>
+            <Layer
+              id="farm-fields-fill"
+              type="fill"
+              paint={{
+                'fill-color': farmThemedColor ?? '#16a34a',
+                'fill-opacity': buildCatchmentFillOpacity(
+                  addMode ? 0.28 : farmThemedColor ? 0.7 : 0.5,
+                  highlightedCatchmentKey,
+                  catchmentKey(null),
+                ),
+                'fill-opacity-transition': { duration: paintTransitionMs },
+              }}
+            />
+            <Layer
+              id="farm-fields-outline"
+              type="line"
+              paint={{
+                'line-color': '#15803d',
+                'line-width': 1.8,
+                'line-opacity': 0.9,
+              }}
+            />
+          </Source>
+
+          {addMode ? (
+            <Source
+              key={tileUrl}
+              id="registry-fields"
+              type="vector"
+              tiles={[tileUrl]}
+              minzoom={registryPointMinZoom}
+              maxzoom={16}
+            >
+              <Layer
+                id="registry-points-candidate"
+                source-layer="fields"
+                type="circle"
+                minzoom={registryPointMinZoom}
+                maxzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], false] as FilterSpecification}
+                paint={{
+                  'circle-color': registryThemedColor ?? '#64748b',
+                  'circle-opacity': 0.85,
+                  'circle-radius': registryPointRadius,
+                }}
               />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void highlightFieldsForCvr()}
-                  disabled={isLoadingCvrFields}
+              <Layer
+                id="registry-points-cvr-highlight"
+                source-layer="fields"
+                type="circle"
+                minzoom={registryPointMinZoom}
+                maxzoom={registryPolygonMinZoom}
+                filter={highlightedCvrFilter}
+                paint={{
+                  'circle-color': '#facc15',
+                  'circle-radius': registryPointRadius,
+                  'circle-stroke-color': '#ca8a04',
+                  'circle-stroke-width': 0.8,
+                }}
+              />
+              <Layer
+                id="registry-points-owned"
+                source-layer="fields"
+                type="circle"
+                minzoom={registryPointMinZoom}
+                maxzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], true] as FilterSpecification}
+                paint={{
+                  'circle-color': registryThemedColor ?? '#16a34a',
+                  'circle-opacity': 0.9,
+                  'circle-radius': registryPointRadius,
+                  'circle-stroke-color': '#1f2937',
+                  'circle-stroke-width': 0.8,
+                }}
+              />
+              <Layer
+                id="registry-candidate-fill"
+                source-layer="fields"
+                type="fill"
+                minzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], false] as FilterSpecification}
+                paint={{
+                  'fill-color': registryThemedColor ?? '#64748b',
+                  'fill-opacity': registryThemedColor ? 0.6 : 0.3,
+                }}
+              />
+              <Layer
+                id="registry-candidate-outline"
+                source-layer="fields"
+                type="line"
+                minzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], false] as FilterSpecification}
+                paint={{
+                  'line-color': '#475569',
+                  'line-width': 1,
+                  'line-opacity': 0.7,
+                }}
+              />
+              <Layer
+                id="registry-cvr-highlight-fill"
+                source-layer="fields"
+                type="fill"
+                minzoom={registryPolygonMinZoom}
+                filter={highlightedCvrFilter}
+                paint={{ 'fill-color': '#facc15', 'fill-opacity': 0.48 }}
+              />
+              <Layer
+                id="registry-cvr-highlight-outline"
+                source-layer="fields"
+                type="line"
+                minzoom={registryPolygonMinZoom}
+                filter={highlightedCvrFilter}
+                paint={{
+                  'line-color': '#ca8a04',
+                  'line-width': 1.8,
+                  'line-opacity': 0.9,
+                }}
+              />
+              <Layer
+                id="registry-selected-fill"
+                source-layer="fields"
+                type="fill"
+                minzoom={registryPolygonMinZoom}
+                filter={selectedRegistryFilter}
+                paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.55 }}
+              />
+              <Layer
+                id="registry-selected-outline"
+                source-layer="fields"
+                type="line"
+                minzoom={registryPolygonMinZoom}
+                filter={selectedRegistryFilter}
+                paint={{
+                  'line-color': '#1d4ed8',
+                  'line-width': 2.5,
+                  'line-opacity': 0.95,
+                }}
+              />
+              <Layer
+                id="registry-owned-fill"
+                source-layer="fields"
+                type="fill"
+                minzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], true] as FilterSpecification}
+                paint={{
+                  'fill-color': registryThemedColor ?? '#64748b',
+                  'fill-opacity': registryThemedColor ? 0.55 : 0.2,
+                }}
+              />
+              <Layer
+                id="registry-owned-outline"
+                source-layer="fields"
+                type="line"
+                minzoom={registryPolygonMinZoom}
+                filter={['==', ['get', 'owned'], true] as FilterSpecification}
+                paint={{
+                  'line-color': '#475569',
+                  'line-width': 0.8,
+                  'line-opacity': 0.5,
+                }}
+              />
+            </Source>
+          ) : null}
+
+          {showMars ? (
+            <Source
+              key={marsTileUrl}
+              id="mars-projekter"
+              type="vector"
+              tiles={[marsTileUrl]}
+              maxzoom={16}
+            >
+              <Layer
+                id="mars-points"
+                source-layer="mars"
+                type="circle"
+                maxzoom={marsPolygonMinZoom}
+                paint={{
+                  'circle-color': marsFillColor,
+                  'circle-opacity': 0.85,
+                  'circle-radius': registryPointRadius,
+                }}
+              />
+              <Layer
+                id="mars-fill"
+                source-layer="mars"
+                type="fill"
+                minzoom={marsPolygonMinZoom}
+                paint={{ 'fill-color': marsFillColor, 'fill-opacity': 0.45 }}
+              />
+              <Layer
+                id="mars-outline"
+                source-layer="mars"
+                type="line"
+                minzoom={marsPolygonMinZoom}
+                paint={{
+                  'line-color': marsFillColor,
+                  'line-width': 1.5,
+                  'line-opacity': 0.9,
+                }}
+              />
+            </Source>
+          ) : null}
+
+          <Source id="hover-farm-field" type="geojson" data={hoverFarmGeoJson}>
+            <Layer
+              id="hover-farm-field-fill"
+              type="fill"
+              paint={{
+                'fill-color': HOVER_FIELD_FILL_COLOR,
+                'fill-opacity': 0.15,
+              }}
+            />
+            <Layer
+              id="hover-farm-field-outline"
+              type="line"
+              paint={{
+                'line-color': HOVER_FIELD_LINE_COLOR,
+                'line-width': 2,
+                'line-opacity': 0.9,
+              }}
+            />
+          </Source>
+
+          <Source
+            id="selected-farm-field"
+            type="geojson"
+            data={selectedFarmGeoJson}
+          >
+            <Layer
+              id="selected-farm-field-fill"
+              type="fill"
+              paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.2 }}
+            />
+            <Layer
+              id="selected-farm-field-outline"
+              type="line"
+              paint={{ 'line-color': '#1d4ed8', 'line-width': 3 }}
+            />
+          </Source>
+
+          {showLockMarkers
+            ? lockedFieldMarkers.map(({ field, point }) => (
+              <Marker
+                key={`lock-${field.id}`}
+                longitude={point[0]}
+                latitude={point[1]}
+                anchor="center"
+                style={{ pointerEvents: 'none' }}
+              >
+                <span
+                  role="img"
+                  aria-label={`Låst mark ${field.name}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
                 >
-                  {isLoadingCvrFields ? 'Indlæser...' : 'Fremhæv marker'}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={selectHighlightedCvrFields}
-                  disabled={
-                    !highlightedCvr || highlightedCvrImkIds.length === 0
+                  <Lock
+                    className="h-4 w-4 text-amber-600"
+                    strokeWidth={2.5}
+                    aria-hidden="true"
+                  />
+                </span>
+              </Marker>
+            ))
+            : null}
+          {cropLabelsVisible
+            ? cropLabelMarkers.map((marker) => (
+              <Marker
+                key={`crop-${marker.key}`}
+                longitude={marker.point[0]}
+                latitude={marker.point[1]}
+                anchor="top"
+                offset={[0, 4]}
+                style={{ pointerEvents: 'none' }}
+              >
+                <span
+                  role="img"
+                  aria-label={marker.title}
+                  title={marker.title}
+                  className={cn(
+                    'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
+                    marker.color === null && 'bg-background text-foreground',
+                  )}
+                  style={
+                    marker.color !== null
+                      ? { backgroundColor: marker.color, color: marker.textColor ?? undefined }
+                      : undefined
                   }
                 >
-                  Tilføj marker for CVR
-                </Button>
+                  {marker.label}
+                </span>
+              </Marker>
+            ))
+            : null}
+
+          {hoveredField ? (
+            <Popup
+              longitude={hoveredField.longitude}
+              latitude={hoveredField.latitude}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="top"
+              offset={8}
+            >
+              <div className="flex flex-col gap-0.5 text-xs">
+                <span className="font-medium">{hoveredField.primary}</span>
+                <span className="text-muted-foreground">
+                  {hoveredField.vandopland !== null
+                    ? `Vandopland ${hoveredField.vandopland}`
+                    : 'Vandopland ukendt'}
+                </span>
+                {selectedCalendarYear !== null ? (
+                  <>
+                    <span>
+                      {selectedCalendarYear}:{' '}
+                      {hoveredField.yearCrop ?? 'ingen afgrøde for året'}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {hoveredField.yearNLoadKgHa !== null
+                        ? `Udledning ${formatNumber(hoveredField.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hoveredField.yearQuotaStatus)}`
+                        : yearValuesLoading
+                          ? 'Henter udledning for året...'
+                          : hoveredField.hasRotation
+                            ? 'Uden for markens rotationscyklus'
+                            : 'Ingen udledning beregnet for året'}
+                    </span>
+                  </>
+                ) : null}
               </div>
-              {highlightedCvr ? (
-                <p className="text-xs text-muted-foreground">
-                  Fremhæver {highlightedCvrImkIds.length}{' '}
-                  {highlightedCvrImkIds.length === 1 ? 'mark' : 'marker'} for
-                  CVR {highlightedCvr}.
-                </p>
-              ) : null}
-            </div>
-            {selectedImkIds.length > 0 ? (
-              <p className="text-muted-foreground">
-                {selectedImkIds.length}{' '}
-                {selectedImkIds.length === 1 ? 'mark' : 'marker'} valgt til
-                tilføjelse.
-              </p>
-            ) : (
-              <p className="text-muted-foreground">
-                Klik på grå eller gule registermarker for at vælge dem.
-              </p>
+            </Popup>
+          ) : null}
+
+          {hoveredMars ? (
+            <Popup
+              longitude={hoveredMars.longitude}
+              latitude={hoveredMars.latitude}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="top"
+              offset={8}
+            >
+              <div className="flex flex-col gap-0.5 text-xs">
+                <span className="font-medium">
+                  {hoveredMars.titel ?? 'MARS-projekt'}
+                </span>
+                {hoveredMars.virkemiddel ? (
+                  <span>{hoveredMars.virkemiddel}</span>
+                ) : null}
+                {hoveredMars.tilskudsordning ? (
+                  <span className="text-muted-foreground">
+                    {hoveredMars.tilskudsordning}
+                  </span>
+                ) : null}
+                <span className="text-muted-foreground">
+                  {hoveredMars.status ?? 'Status ukendt'}
+                  {hoveredMars.arealHa !== null
+                    ? ` · ${formatNumber(hoveredMars.arealHa)} ha`
+                    : ''}
+                </span>
+              </div>
+            </Popup>
+          ) : null}
+        </Map>
+
+        {legendStripVisible ? (
+          <div
+            ref={legendStripRef}
+            role="group"
+            aria-label="Legende"
+            tabIndex={legendOverflows ? 0 : undefined}
+            className={cn(
+              'map-legend-strip absolute inset-x-0 bottom-0 z-10 flex h-6 items-center gap-3 overflow-x-auto border-t bg-background/85 px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              legendOverflows && 'map-legend-strip-fade',
             )}
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                onClick={() => void finishAddMode()}
-                disabled={isAttaching || selectedImkIds.length === 0}
-              >
-                {isAttaching ? 'Tilføjer...' : 'Tilføj valgte'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={toggleAddMode}
-                disabled={isAttaching}
-              >
-                Annuller
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card className="absolute bottom-4 left-4 z-10 w-[min(18rem,calc(100%-2rem))] bg-background/95 shadow-lg">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Farvelæg marker</CardTitle>
-          <CardDescription>
-            Vælg en variabel at visualisere på kortet.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            value={colorBy}
-            onChange={(event) =>
-              setColorBy(event.target.value as ColorAttribute)
-            }
           >
-            {colorOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          {selectedCalendarYear !== null && yearValuesLoading ? (
-            <p role="status" className="text-xs text-muted-foreground">
-              Henter årstal for markerne...
-            </p>
-          ) : selectedCalendarYear !== null &&
-            yearValuesFieldCount < rotationFieldCount ? (
-            <p role="status" className="text-xs text-muted-foreground">
-              {yearValuesFieldCount} af {rotationFieldCount} marker har årstal
-              for {selectedCalendarYear}
-            </p>
-          ) : null}
-
-          {activeColorSpec ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                Legende
-                {activeColorSpec.unit ? ` (${activeColorSpec.unit})` : ''}
-              </p>
-              <ul className="space-y-1">
-                {legendEntries(activeColorSpec).map((entry) => (
-                  <li
+            {activeColorSpec !== null ? (
+              <>
+                <span className="shrink-0 font-medium text-muted-foreground">
+                  {activeColorSpec.label}
+                  {formatLegendUnit(activeColorSpec)
+                    ? ` (${formatLegendUnit(activeColorSpec)})`
+                    : ''}
+                </span>
+                {legendBins.map((entry) => (
+                  <span
                     key={entry.label}
-                    className="flex items-center gap-2 text-xs"
+                    className="flex shrink-0 items-center gap-1"
                   >
                     <span
-                      className="inline-block h-3 w-4 flex-shrink-0 rounded-sm border border-black/10"
+                      className="inline-block h-3 w-4 rounded-sm border border-black/10"
                       style={{ backgroundColor: entry.color }}
                     />
                     <span>{entry.label}</span>
-                  </li>
+                  </span>
                 ))}
-              </ul>
-              {isFarmOnlyAttribute ? (
-                <p className="text-xs italic text-muted-foreground">
-                  Vises kun for tilknyttede marker.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {hasSelectedYear ? (
-            <div className="space-y-1 border-t pt-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showCropLabels}
-                  onChange={(event) => setShowCropLabels(event.target.checked)}
-                  className="h-4 w-4 rounded border-input"
-                />
-                Vis afgrødenavne for {selectedCalendarYear}
-              </label>
-              {showCropLabels && mapZoom < CROP_LABEL_MIN_ZOOM ? (
-                <p className="pl-6 text-xs text-muted-foreground">
-                  Zoom ind for at se navnene.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="space-y-2 border-t pt-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={showMars}
-                onChange={(event) => setShowMars(event.target.checked)}
-                className="h-4 w-4 rounded border-input"
-              />
-              Grøn Trepart - Omlægningsplan
-            </label>
-            {showMars ? (
-              <ul className="space-y-1 pl-6">
-                {[
-                  ...MARS_LEGEND,
-                  { label: 'Andet', color: MARS_OTHER_COLOR, virkemidler: [] },
-                ].map((entry) => (
-                  <li
-                    key={entry.label}
-                    className="flex items-center gap-2 text-xs"
-                  >
-                    <span
-                      className="inline-block h-3 w-4 flex-shrink-0 rounded-sm border border-black/10"
-                      style={{ backgroundColor: entry.color }}
-                    />
-                    <span>{entry.label}</span>
-                  </li>
-                ))}
-              </ul>
+              </>
+            ) : null}
+            {yearStatusText !== null ? (
+              <span
+                role="status"
+                title={yearStatusText}
+                className="min-w-24 truncate text-muted-foreground"
+              >
+                {yearStatusText}
+              </span>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
+        ) : null}
+
+        {addMode ? (
+          <Card className="absolute left-4 top-4 z-10 w-[min(18rem,calc(100%-2rem))] bg-background/95 shadow-lg">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle>{selectedImkIds.length} valgt</CardTitle>
+              <CardDescription>Blå marker tilføjes samlet.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-0 text-sm">
+              <div className="rounded-md border bg-background/80">
+                <DisclosureButton
+                  open={isCvrOpen}
+                  onToggle={() => setIsCvrOpen((current) => !current)}
+                  label="CVR-fremhævelse"
+                  aria-controls="add-mode-cvr"
+                  hint={highlightedCvr ? `CVR ${highlightedCvr}` : undefined}
+                  className="w-full px-3 py-2"
+                />
+                {isCvrOpen ? (
+                  <div id="add-mode-cvr" className="space-y-2 border-t p-3">
+                    <Input
+                      value={cvrInput}
+                      inputMode="numeric"
+                      placeholder="12345678"
+                      onChange={(event) => setCvrInput(event.target.value)}
+                    />
+                    <div className="grid gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void highlightFieldsForCvr()}
+                        disabled={isLoadingCvrFields}
+                      >
+                        {isLoadingCvrFields ? 'Indlæser...' : 'Fremhæv marker'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={selectHighlightedCvrFields}
+                        disabled={
+                          !highlightedCvr || highlightedCvrImkIds.length === 0
+                        }
+                      >
+                        Tilføj marker for CVR
+                      </Button>
+                    </div>
+                    {highlightedCvr ? (
+                      <p className="text-xs text-muted-foreground">
+                        Fremhæver {highlightedCvrImkIds.length}{' '}
+                        {highlightedCvrImkIds.length === 1 ? 'mark' : 'marker'}{' '}
+                        for CVR {highlightedCvr}.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              {selectedImkIds.length > 0 ? (
+                <p className="text-muted-foreground">
+                  {selectedImkIds.length}{' '}
+                  {selectedImkIds.length === 1 ? 'mark' : 'marker'} valgt til
+                  tilføjelse.
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  Klik på grå eller gule registermarker for at vælge dem.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={() => void finishAddMode()}
+                  disabled={isAttaching || selectedImkIds.length === 0}
+                >
+                  {isAttaching ? 'Tilføjer...' : 'Tilføj valgte'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={toggleAddMode}
+                  disabled={isAttaching}
+                >
+                  Annuller
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </div>
   )
 }

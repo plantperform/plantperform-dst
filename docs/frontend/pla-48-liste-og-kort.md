@@ -48,7 +48,7 @@ Kortet bliver kontrolleret: `selectedFieldId`/`onSelectedFieldChange` som props,
 
 ## Tabellen
 
-- To tætheder styret af listerudens bredde (container query): fuld (dagens) og kompakt. Kompakt: `px-3`, sædskifte-tern uden afgrødenavne, Afgrøde-kolonnen kun når et år er valgt, DB2 forkortet med "t.kr". Enheder og Areal beholdes altid. Vandret scroll inde i tabelcontaineren, hvis kolonner ikke kan være der.
+- To tætheder styret af listerudens bredde (container query, skift ved 896 px, målt som den bredde fuld tæthed kræver): fuld (dagens) og kompakt. Kompakt: `px-2`, sædskifte-tern uden afgrødenavne, Afgrøde-kolonnen kun når et år er valgt, DB2 forkortet med "t.kr", statusbadge kun for skærmlæsere. Enheder og Areal beholdes altid. Vandret scroll inde i tabelcontaineren, hvis kolonner ikke kan være der.
 - Sticky header og footer; tabelcontaineren er den lodrette scroller.
 - Rækker er en memoiseret `FieldRow` med `isHovered`/`isSelected`, så hover på 200 rækker ikke re-renderer tabellen.
 - Kolonner-menuen og legenden bliver i listeruden; kystvandopland-chips flytter op i striben over den delte flade.
@@ -77,6 +77,19 @@ FarmTopBar (bortset fra kontrollen), FarmSidebar, SimulationRulesPanel, ManualRo
 5. Tabellen: kompakt tæthed, sticky header/footer, `scrollIntoView` ved valg, hover-rækker, memoiseret række, dobbeltklik til zoom.
 6. Kystvandopland-striben med fremhævning, årsgennemgangens sammenfoldede chips, kompakt tæthed og standard efter højde.
 7. Regler-tilstandens kortklik, Escape-rækkefølge, Delt slået fra under 800 px, QA på 1366, 1440, 1536 og 1920.
+
+## Målt resultat
+
+Med sidepanelet i sin standardbredde og delingen på det halve, målt på den byggede stilart:
+
+| Skærm | Indre bredde | Liste og kort | Tabel | Rækker foldet / udfoldet | Markpanel |
+|---|---|---|---|---|---|
+| 1366x768 | 1046 px | 507 / 507 | ingen vandret scroll | 8 / 4 | over listen |
+| 1440x900 | 1120 px | 544 / 544 | ingen vandret scroll | 11 / 7 | over listen |
+| 1536x864 | 1216 px | 592 / 592 | ingen vandret scroll | 10 / 7 | over listen |
+| 1920x1080 | 1600 px | 784 / 784 | ingen vandret scroll | 15 / 11 | egen kolonne |
+
+Med et år valgt kommer Afgrøde-kolonnen til, og tabellen kræver 575 px. Det giver vandret scroll på 1366 og 1440, ikke på 1536 og 1920.
 
 ## Kendte risici
 

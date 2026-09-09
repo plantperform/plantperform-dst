@@ -73,9 +73,15 @@ type HashedSpec = {
 
 export type ColorSpec = NumericSpec | CategorySpec | HashedSpec
 
-const formatNumber = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 })
+const formatNumber = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 0,
+})
 
-const numericLegend = (bins: NumericBin[], aboveLabel: string, aboveColor: string) => {
+const numericLegend = (
+  bins: NumericBin[],
+  aboveLabel: string,
+  aboveColor: string,
+) => {
   const entries = [
     ...bins.map((bin) => ({ color: bin.color, label: bin.label })),
     { color: aboveColor, label: aboveLabel },
@@ -93,6 +99,26 @@ const NEUTRAL_FALLBACK = '#cbd5e1'
 
 export const HOVER_FIELD_FILL_COLOR = '#0f172a'
 export const HOVER_FIELD_LINE_COLOR = '#334155'
+
+export const DIMMED_FIELD_FILL_OPACITY = 0.12
+
+const CATCHMENT_PROPERTY = 'kystvandId'
+
+export const buildCatchmentFillOpacity = (
+  baseOpacity: number,
+  highlightedCatchmentKey: string | null,
+  noneKey: string,
+): ExpressionSpecification | number => {
+  if (highlightedCatchmentKey === null) return baseOpacity
+  const matchValue =
+    highlightedCatchmentKey === noneKey ? '' : highlightedCatchmentKey
+  return [
+    'case',
+    ['==', ['to-string', ['get', CATCHMENT_PROPERTY]], matchValue],
+    baseOpacity,
+    DIMMED_FIELD_FILL_OPACITY,
+  ] as ExpressionSpecification
+}
 
 const RETENTION: NumericSpec = {
   kind: 'numeric',
@@ -151,7 +177,11 @@ const JB_NR: CategorySpec = {
   property: 'jbnr',
   bins: Array.from({ length: 12 }, (_, i) => {
     const jbnr = i + 1
-    return { value: jbnr, color: JB_COLORS[jbnr], label: `JB ${jbnr} — ${JB_LABELS[jbnr]}` }
+    return {
+      value: jbnr,
+      color: JB_COLORS[jbnr],
+      label: `JB ${jbnr} — ${JB_LABELS[jbnr]}`,
+    }
   }),
   fallbackColor: NEUTRAL_FALLBACK,
 }
@@ -317,9 +347,21 @@ const YEAR_N_LOAD: CategorySpec = {
   source: 'farm',
   property: 'yearQuotaStatus',
   bins: [
-    { value: YEAR_QUOTA_STATUS_VALUES.ok, color: '#16a34a', label: 'Under markens kvote' },
-    { value: YEAR_QUOTA_STATUS_VALUES.near, color: '#d97706', label: 'Tæt på markens kvote' },
-    { value: YEAR_QUOTA_STATUS_VALUES.over, color: '#dc2626', label: 'Over markens kvote' },
+    {
+      value: YEAR_QUOTA_STATUS_VALUES.ok,
+      color: '#16a34a',
+      label: 'Under markens kvote',
+    },
+    {
+      value: YEAR_QUOTA_STATUS_VALUES.near,
+      color: '#d97706',
+      label: 'Tæt på markens kvote',
+    },
+    {
+      value: YEAR_QUOTA_STATUS_VALUES.over,
+      color: '#dc2626',
+      label: 'Over markens kvote',
+    },
   ],
   fallbackColor: NEUTRAL_FALLBACK,
 }
@@ -404,11 +446,11 @@ export const registryPropertyFor = (spec: ColorSpec): string | null => {
 const KYSTVAND_IDS: readonly number[] = [
   1, 2, 6, 16, 17, 18, 24, 25, 28, 29, 34, 35, 36, 37, 38, 44, 45, 46, 47, 48,
   49, 56, 59, 62, 68, 72, 74, 80, 82, 83, 84, 85, 86, 87, 89, 90, 92, 93, 95,
-  96, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 113, 114, 119,
-  120, 121, 122, 123, 124, 125, 127, 128, 129, 130, 131, 132, 133, 136, 137,
-  138, 139, 140, 141, 142, 144, 145, 146, 147, 154, 157, 158, 159, 160, 165,
-  200, 201, 204, 206, 207, 208, 209, 212, 214, 216, 217, 219, 221, 222, 224,
-  225, 231, 232, 233, 234, 235, 236, 238,
+  96, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 113, 114, 119, 120,
+  121, 122, 123, 124, 125, 127, 128, 129, 130, 131, 132, 133, 136, 137, 138,
+  139, 140, 141, 142, 144, 145, 146, 147, 154, 157, 158, 159, 160, 165, 200,
+  201, 204, 206, 207, 208, 209, 212, 214, 216, 217, 219, 221, 222, 224, 225,
+  231, 232, 233, 234, 235, 236, 238,
 ]
 
 const hslToHex = (h: number, s: number, l: number): string => {
@@ -419,7 +461,9 @@ const hslToHex = (h: number, s: number, l: number): string => {
   const f = (n: number) =>
     lN - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))
   const toHex = (x: number) =>
-    Math.round(255 * x).toString(16).padStart(2, '0')
+    Math.round(255 * x)
+      .toString(16)
+      .padStart(2, '0')
   return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`
 }
 
@@ -437,7 +481,10 @@ const buildKystvandColors = (): Map<number, string> => {
   return colors
 }
 
-const HASHED_COLORS_BY_PROPERTY: Record<string, Map<number, string> | undefined> = {
+const HASHED_COLORS_BY_PROPERTY: Record<
+  string,
+  Map<number, string> | undefined
+> = {
   kystvandId: buildKystvandColors(),
   kystvand_id: buildKystvandColors(),
 }

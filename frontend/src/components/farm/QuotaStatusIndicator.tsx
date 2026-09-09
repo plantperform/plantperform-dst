@@ -8,6 +8,7 @@ type QuotaStatusIndicatorProps = {
   children: ReactNode
   badge?: boolean
   className?: string
+  badgeClassName?: string
 }
 
 export const QuotaStatusIndicator = ({
@@ -15,6 +16,7 @@ export const QuotaStatusIndicator = ({
   children,
   badge = false,
   className,
+  badgeClassName,
 }: QuotaStatusIndicatorProps) => {
   const style = QUOTA_STATUS_STYLES[level]
   return (
@@ -30,6 +32,7 @@ export const QuotaStatusIndicator = ({
             'rounded-full border px-2 py-0.5 text-xs font-normal',
             style.surface,
             style.text,
+            badgeClassName,
           )}
         >
           {style.badgeLabel}

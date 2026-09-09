@@ -1,4 +1,5 @@
 import { coverCropShadow } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
 type CropYearSwatchSize = '12x16' | '8x12' | '14x10' | '10x8'
 
@@ -16,6 +17,7 @@ type CropYearSwatchProps = {
   hasUdlaeg: boolean
   size: CropYearSwatchSize
   title?: string
+  className?: string
 }
 
 export const CropYearSwatch = ({
@@ -23,10 +25,11 @@ export const CropYearSwatch = ({
   hasUdlaeg,
   size,
   title,
+  className,
 }: CropYearSwatchProps) => (
   <span
     title={title}
-    className={SIZE_CLASSES[size]}
+    className={cn(SIZE_CLASSES[size], className)}
     style={{
       backgroundColor: color,
       boxShadow: coverCropShadow(hasUdlaeg),

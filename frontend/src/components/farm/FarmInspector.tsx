@@ -7,7 +7,7 @@ import {
   Map as MapIcon,
   SlidersHorizontal,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -29,6 +29,7 @@ import type {
   OptimizeSimulationResponse,
   Simulation,
 } from '@/api/types'
+import { CatchmentChips } from '@/components/farm/CatchmentChips'
 import {
   catchmentKey,
   useCatchmentOptions,
@@ -36,12 +37,14 @@ import {
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
+  resolveEffectiveFieldsSort,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
 import { FarmSplitView } from '@/components/farm/FarmSplitView'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
+import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import { resolveEffectiveView } from '@/components/farm/split-layout'
 import type {
@@ -70,6 +73,8 @@ import {
   countCatchmentsOverQuota,
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
+import { compareFields } from '@/lib/field-sort'
+import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
 
 // After an "Optimér" or "Års-optimering" run, simulationFieldsKey has already
@@ -162,8 +167,20 @@ export const FarmInspector = ({
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const [splitAvailable, setSplitAvailable] = useState(true)
+  const [panelCalcOpen, setPanelCalcOpen] = useState(false)
+  const [addModeSnap, setAddModeSnap] = useState(false)
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
+  const [highlightedCatchmentKey, setHighlightedCatchmentKey] = useState<
+    string | null
+  >(null)
+  const [walkthroughOpenOverride, setWalkthroughOpenOverride] = useState<
+    boolean | null
+  >(null)
   const [zoomRequest, setZoomRequest] = useState<{
+    fieldId: string
+    nonce: number
+  } | null>(null)
+  const [rowFocusRequest, setRowFocusRequest] = useState<{
     fieldId: string
     nonce: number
   } | null>(null)
@@ -171,14 +188,22 @@ export const FarmInspector = ({
     () => buildViewOptions(splitAvailable),
     [splitAvailable],
   )
-  const effectiveView = resolveEffectiveView(view, splitAvailable)
+  const snappedView: FarmView = addModeSnap ? 'map' : view
+  const effectiveView = resolveEffectiveView(snappedView, splitAvailable)
+  const changeView = (next: FarmView) => {
+    setAddModeSnap(false)
+    onViewChange(next)
+  }
   const isSimulationView = selection.kind === 'simulation'
   const selectionKey =
-    selection.kind === 'simulation' ? `simulation-${selection.id}` : 'current'
+    selection.kind === 'simulation'
+      ? `${farm.id}:simulation-${selection.id}`
+      : `${farm.id}:current`
   const [hoveredSelectionKey, setHoveredSelectionKey] = useState(selectionKey)
   if (hoveredSelectionKey !== selectionKey) {
     setHoveredSelectionKey(selectionKey)
     setHoveredFieldId(null)
+    setHighlightedCatchmentKey(null)
   }
 
   const requestZoomToField = (fieldId: string) =>
@@ -187,9 +212,20 @@ export const FarmInspector = ({
       nonce: (current?.nonce ?? 0) + 1,
     }))
 
+  const requestRowFocus = (fieldId: string) =>
+    setRowFocusRequest((current) => ({
+      fieldId,
+      nonce: (current?.nonce ?? 0) + 1,
+    }))
+
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
+  const [highlightedMode, setHighlightedMode] = useState(effectiveMode)
+  if (highlightedMode !== effectiveMode) {
+    setHighlightedMode(effectiveMode)
+    setHighlightedCatchmentKey(null)
+  }
   const loadingMessage = selectedSimulation
     ? `Indlæser marker for simuleringen ${selectedSimulation.name}...`
     : 'Indlæser marker...'
@@ -201,6 +237,44 @@ export const FarmInspector = ({
     () => countCatchmentsOverQuota(fields, isSimulationView),
     [fields, isSimulationView],
   )
+
+  const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
+  const sortedFields = useMemo(
+    () =>
+      [...fields].sort((left, right) =>
+        compareFields(left, right, effectiveSort),
+      ),
+    [fields, effectiveSort],
+  )
+  const panelField = isRules
+    ? null
+    : (fields.find((field) => field.id === selectedFieldId) ?? null)
+
+  const effectiveHighlightedCatchmentKey = useMemo(() => {
+    if (isRules || highlightedCatchmentKey === null) return null
+    const stillPresent = fields.some(
+      (field) => catchmentKey(field.kystvandId) === highlightedCatchmentKey,
+    )
+    return stillPresent ? highlightedCatchmentKey : null
+  }, [fields, isRules, highlightedCatchmentKey])
+
+  const selectFieldFromMap = (fieldId: string | null) => {
+    onSelectedFieldChange(fieldId)
+    if (isRules && fieldId !== null) requestRowFocus(fieldId)
+  }
+
+  const handleEscape = useCallback(() => {
+    if (panelField !== null) {
+      onSelectedFieldChange(null)
+      return true
+    }
+    if (effectiveHighlightedCatchmentKey !== null) {
+      setHighlightedCatchmentKey(null)
+      return true
+    }
+    return false
+  }, [panelField, effectiveHighlightedCatchmentKey, onSelectedFieldChange])
+  useEscapeKey(handleEscape)
 
   const showYearWalkthrough = isSimulationView && !isRules && !fieldsError
   const effectiveSelectedYearIndex = showYearWalkthrough
@@ -255,7 +329,7 @@ export const FarmInspector = ({
             value={effectiveView}
             options={viewOptions}
             onValueChange={(next) => {
-              if (next !== effectiveView) onViewChange(next)
+              if (next !== effectiveView) changeView(next)
             }}
             labelClassName="hidden @4xl:inline"
           />
@@ -311,6 +385,17 @@ export const FarmInspector = ({
               catchmentOverview={catchmentOverview}
               lastRun={lastRun?.response ?? null}
               collapsible
+              openOverride={walkthroughOpenOverride}
+              onOpenOverrideChange={setWalkthroughOpenOverride}
+            />
+          ) : null}
+          {!isRules && !fieldsLoading && !fieldsError && fields.length > 0 ? (
+            <CatchmentChips
+              farmId={farm.id}
+              fields={fields}
+              isSimulationView={isSimulationView}
+              highlightedKey={effectiveHighlightedCatchmentKey}
+              onHighlightedKeyChange={setHighlightedCatchmentKey}
             />
           ) : null}
           {fieldsLoading ? (
@@ -327,17 +412,17 @@ export const FarmInspector = ({
             </>
           ) : (
             <FarmSplitView
-              view={view}
-              onViewChange={onViewChange}
+              view={snappedView}
+              onViewChange={changeView}
               listFraction={listFraction}
               onListFractionChange={onListFractionChange}
               onSplitAvailableChange={setSplitAvailable}
               list={
-                <div className="space-y-3">
+                <div className="flex h-full min-h-0 flex-col gap-3">
                   {rulesPanel}
                   <FarmFieldsList
                     farmId={farm.id}
-                    fields={fields}
+                    sortedFields={sortedFields}
                     isSimulationView={isSimulationView}
                     catchmentOverview={catchmentOverview}
                     simulationId={
@@ -355,11 +440,12 @@ export const FarmInspector = ({
                     onSelectedFieldChange={onSelectedFieldChange}
                     hoveredFieldId={hoveredFieldId}
                     onHoveredFieldChange={setHoveredFieldId}
-                    onZoomToField={requestZoomToField}
+                    highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
+                    onZoomToField={
+                      effectiveView === 'list' ? undefined : requestZoomToField
+                    }
+                    focusRequest={rowFocusRequest ?? undefined}
                     selectedYearIndex={effectiveSelectedYearIndex}
-                    onSelectedYearIndexChange={onSelectedYearIndexChange}
-                    yearValues={yearValues}
-                    onSwitchToMap={() => onViewChange('map')}
                     onError={onError}
                   />
                 </div>
@@ -375,12 +461,48 @@ export const FarmInspector = ({
                   yearValues={yearValues}
                   yearValuesLoading={yearValuesEnabled && yearValuesLoading}
                   selectedFieldId={selectedFieldId}
-                  onSelectedFieldChange={onSelectedFieldChange}
+                  onSelectedFieldChange={selectFieldFromMap}
                   hoveredFieldId={hoveredFieldId}
                   onHoveredFieldChange={setHoveredFieldId}
+                  highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                   zoomRequest={zoomRequest ?? undefined}
+                  onAddModeChange={setAddModeSnap}
                   onError={onError}
                 />
+              }
+              panelWide={panelCalcOpen}
+              renderPanel={
+                panelField
+                  ? ({ overlay, listBehind, mapVisible }) => (
+                      <FieldDetailPanel
+                        farmId={farm.id}
+                        field={panelField}
+                        sortedFields={sortedFields}
+                        isSimulationView={isSimulationView}
+                        simulationId={
+                          selection.kind === 'simulation'
+                            ? selection.id
+                            : undefined
+                        }
+                        simulation={
+                          selection.kind === 'simulation'
+                            ? selectedSimulation
+                            : undefined
+                        }
+                        selectedYearIndex={effectiveSelectedYearIndex}
+                        onSelectedYearIndexChange={onSelectedYearIndexChange}
+                        yearValues={yearValues?.[panelField.id]}
+                        overlay={overlay}
+                        listBehind={listBehind}
+                        mapVisible={mapVisible}
+                        onSelectFieldId={onSelectedFieldChange}
+                        onClose={() => onSelectedFieldChange(null)}
+                        onZoomToField={requestZoomToField}
+                        onCalcOpenChange={setPanelCalcOpen}
+                        onError={onError}
+                      />
+                    )
+                  : undefined
               }
             />
           )}

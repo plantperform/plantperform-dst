@@ -36,21 +36,32 @@ const formatCatchmentAmount = (totals: FieldTotals): string => {
 type CatchmentChipProps = {
   label: string
   totals: FieldTotals
+  highlighted: boolean
+  onToggle: () => void
 }
 
-const CatchmentChip = ({ label, totals }: CatchmentChipProps) => {
+const CatchmentChip = ({
+  label,
+  totals,
+  highlighted,
+  onToggle,
+}: CatchmentChipProps) => {
   const level = totalsQuotaStatusLevel(totals)
   const style = QUOTA_STATUS_STYLES[level]
   const amount = formatCatchmentAmount(totals)
   const uncalculatedNote = describeUncalculatedCount(totals)
 
   return (
-    <span
+    <button
+      type="button"
+      aria-pressed={highlighted}
+      onClick={onToggle}
       title={`${label}: ${amount}${uncalculatedNote ? `, ${uncalculatedNote}` : ''}`}
       className={cn(
-        'inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs',
+        'inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs motion-safe:transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         style.surface,
         style.text,
+        highlighted && 'ring-2 ring-ring',
       )}
     >
       <span
@@ -59,8 +70,11 @@ const CatchmentChip = ({ label, totals }: CatchmentChipProps) => {
       />
       <span className="max-w-40 truncate font-medium">{label}</span>
       <span className="shrink-0 tabular-nums">{amount}</span>
-      <span className="sr-only">{CATCHMENT_STATUS_LABELS[level]}</span>
-    </span>
+      <span className="sr-only">
+        {CATCHMENT_STATUS_LABELS[level]}
+        {highlighted ? ', fremhævet på kortet' : ''}
+      </span>
+    </button>
   )
 }
 
@@ -68,12 +82,16 @@ type CatchmentChipsProps = {
   farmId: string
   fields: FieldRecord[]
   isSimulationView: boolean
+  highlightedKey: string | null
+  onHighlightedKeyChange: (key: string | null) => void
 }
 
 export const CatchmentChips = ({
   farmId,
   fields,
   isSimulationView,
+  highlightedKey,
+  onHighlightedKeyChange,
 }: CatchmentChipsProps) => {
   const catchmentOptions = useCatchmentOptions(farmId, fields)
 
@@ -96,13 +114,21 @@ export const CatchmentChips = ({
   if (catchments.length === 0) return null
 
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs">
-      <span className="text-muted-foreground">Pr. kystvandopland</span>
+    <div
+      className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto text-xs"
+    >
+      <span className="shrink-0 text-muted-foreground">Pr. kystvandopland</span>
       {catchments.map((catchment) => (
         <CatchmentChip
           key={catchment.key}
           label={catchment.label}
           totals={catchment.totals}
+          highlighted={highlightedKey === catchment.key}
+          onToggle={() =>
+            onHighlightedKeyChange(
+              highlightedKey === catchment.key ? null : catchment.key,
+            )
+          }
         />
       ))}
     </div>

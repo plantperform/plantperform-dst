@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { cropGroupColor } from '@/lib/crop-groups'
 import {
   describeUncalculatedCount,
+  formatCompactKr,
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
@@ -36,6 +37,10 @@ declare module '@tanstack/react-table' {
     toggleLabel?: string
   }
 }
+
+const CELL_PADDING = 'px-2 py-3 @4xl:px-4'
+const HEADER_CELL_CLASS = `${CELL_PADDING} font-medium whitespace-normal`
+const BODY_CELL_CLASS = `${CELL_PADDING} whitespace-nowrap @4xl:whitespace-normal`
 
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
@@ -102,7 +107,12 @@ const renderQuotaStatus = (status: QuotaStatus) => {
   }
 
   return (
-    <QuotaStatusIndicator level={status.level} badge>
+    <QuotaStatusIndicator
+      level={status.level}
+      badge
+      className="flex-nowrap @4xl:flex-wrap"
+      badgeClassName="sr-only @4xl:not-sr-only"
+    >
       {amountText}
     </QuotaStatusIndicator>
   )
@@ -127,11 +137,15 @@ const renderQuotaStatusFooter = (
       <QuotaStatusIndicator
         level={level}
         badge={level !== 'partial'}
-        className={level === 'partial' ? 'text-muted-foreground' : undefined}
+        className={cn(
+          'flex-nowrap @4xl:flex-wrap',
+          level === 'partial' && 'text-muted-foreground',
+        )}
+        badgeClassName="sr-only @4xl:not-sr-only"
       >
         {formatQuotaAmount(totals.nLoad, quota.quotaKgn)}
       </QuotaStatusIndicator>
-      <div className="text-xs font-normal text-muted-foreground">
+      <div className="text-xs font-normal whitespace-normal text-muted-foreground">
         {notes.join(', ')}
       </div>
     </div>
@@ -143,6 +157,22 @@ type NumericMetricColumnConfig = {
   label: string
   unit: string
   emptyCell: (placement: 'cell' | 'footer') => ReactNode
+  compactValue?: (value: number) => string
+}
+
+const renderMetricValue = (
+  value: number,
+  unit: string,
+  compactValue?: (value: number) => string,
+): ReactNode => {
+  const full = `${formatNumber(value)} ${unit}`
+  if (!compactValue) return <div>{full}</div>
+  return (
+    <div>
+      <span className="@4xl:hidden">{compactValue(value)}</span>
+      <span className="hidden @4xl:inline">{full}</span>
+    </div>
+  )
 }
 
 const numericMetricColumn = (
@@ -150,7 +180,7 @@ const numericMetricColumn = (
   isSimulationView: boolean,
   totals: FieldTotals,
 ): ColumnDef<FieldRecord, unknown> => {
-  const { key, label, unit, emptyCell } = config
+  const { key, label, unit, emptyCell, compactValue } = config
   return {
     accessorKey: key,
     header: ({ column }) => (
@@ -164,9 +194,9 @@ const numericMetricColumn = (
       const value = field[key]
       return (
         <>
-          <div>{`${formatNumber(value)} ${unit}`}</div>
+          {renderMetricValue(value, unit, compactValue)}
           {field.areaHa > 0 ? (
-            <div className="text-xs text-muted-foreground/80">
+            <div className="hidden text-xs text-muted-foreground/80 @4xl:block">
               {`${formatNumber(value / field.areaHa)} ${unit}/ha`}
             </div>
           ) : null}
@@ -174,14 +204,12 @@ const numericMetricColumn = (
       )
     },
     footer: () =>
-      totals.calculatedCount === 0 ? (
-        emptyCell('footer')
-      ) : (
-        <div>{`${formatNumber(totals[key])} ${unit}`}</div>
-      ),
+      totals.calculatedCount === 0
+        ? emptyCell('footer')
+        : renderMetricValue(totals[key], unit, compactValue),
     meta: {
-      headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-      cellClassName: 'px-4 py-3 whitespace-normal',
+      headerClassName: HEADER_CELL_CLASS,
+      cellClassName: BODY_CELL_CLASS,
       toggleLabel: label,
     },
   }
@@ -216,12 +244,16 @@ const renderRotationSwatches = (
               color={color}
               hasUdlaeg={hasUdlaeg}
               size="12x16"
+              className="w-3 @4xl:w-4"
             />
           </span>
         )
       })}
     </div>
-    <span className="text-sm" title={uniqueCropNames(rotation).join(' · ')}>
+    <span
+      className="hidden text-sm @4xl:inline"
+      title={uniqueCropNames(rotation).join(' · ')}
+    >
       {uniqueCropNamesLabel(rotation)}
     </span>
   </div>
@@ -253,8 +285,8 @@ const nameColumn = (
   },
   footer,
   meta: {
-    headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-    cellClassName: 'px-4 py-3 font-medium whitespace-normal',
+    headerClassName: HEADER_CELL_CLASS,
+    cellClassName: cn(BODY_CELL_CLASS, 'font-medium'),
   },
 })
 
@@ -268,8 +300,8 @@ const areaColumn = (
   cell: ({ row }) => `${formatNumber(row.original.areaHa)} ha`,
   footer,
   meta: {
-    headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-    cellClassName: 'px-4 py-3 whitespace-normal',
+    headerClassName: HEADER_CELL_CLASS,
+    cellClassName: BODY_CELL_CLASS,
   },
 })
 
@@ -284,8 +316,8 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
   ),
   enableSorting: false,
   meta: {
-    headerClassName: 'w-8 px-2 py-3',
-    cellClassName: 'w-8 px-2 py-3 text-right',
+    headerClassName: 'hidden w-8 px-2 py-3 @4xl:table-cell',
+    cellClassName: 'hidden w-8 px-2 py-3 text-right @4xl:table-cell',
   },
 }
 
@@ -328,8 +360,8 @@ const buildRulesColumns = ({
         ),
       enableSorting: false,
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
       },
     },
     {
@@ -349,9 +381,8 @@ const buildRulesColumns = ({
       },
       enableSorting: false,
       meta: {
-        headerClassName:
-          'hidden px-4 py-3 font-medium whitespace-normal md:table-cell',
-        cellClassName: 'hidden px-4 py-3 whitespace-normal md:table-cell',
+        headerClassName: cn('hidden md:table-cell', HEADER_CELL_CLASS),
+        cellClassName: cn('hidden md:table-cell', BODY_CELL_CLASS),
       },
     },
     {
@@ -369,9 +400,8 @@ const buildRulesColumns = ({
         ),
       enableSorting: false,
       meta: {
-        headerClassName:
-          'hidden px-4 py-3 font-medium whitespace-normal md:table-cell',
-        cellClassName: 'hidden px-4 py-3 whitespace-normal md:table-cell',
+        headerClassName: cn('hidden md:table-cell', HEADER_CELL_CLASS),
+        cellClassName: cn('hidden md:table-cell', BODY_CELL_CLASS),
       },
     },
   ]
@@ -428,8 +458,11 @@ const buildRulesColumns = ({
       },
       enableSorting: false,
       meta: {
-        headerClassName: 'px-4 py-3 text-right font-medium whitespace-nowrap',
-        cellClassName: 'px-4 py-3 text-right whitespace-nowrap',
+        headerClassName: cn(
+          CELL_PADDING,
+          'text-right font-medium whitespace-nowrap',
+        ),
+        cellClassName: cn(CELL_PADDING, 'text-right whitespace-nowrap'),
       },
     })
   }
@@ -480,9 +513,16 @@ export const buildFarmFieldsColumns = ({
 
   list.push(
     nameColumn(() =>
-      totals.uncalculatedCount > 0
-        ? `I alt (${totals.uncalculatedCount} ikke beregnet)`
-        : 'I alt',
+      totals.uncalculatedCount > 0 ? (
+        <>
+          I alt
+          <span className="hidden @4xl:inline">
+            {` (${totals.uncalculatedCount} ikke beregnet)`}
+          </span>
+        </>
+      ) : (
+        'I alt'
+      ),
     ),
     areaColumn(() => `${formatNumber(totals.areaHa)} ha`),
   )
@@ -534,8 +574,8 @@ export const buildFarmFieldsColumns = ({
     },
     enableSorting: false,
     meta: {
-      headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-      cellClassName: 'px-4 py-3 whitespace-normal',
+      headerClassName: HEADER_CELL_CLASS,
+      cellClassName: BODY_CELL_CLASS,
       toggleLabel: isSimulationView ? 'Sædskifte' : 'Afgrødehistorik',
     },
   })
@@ -559,7 +599,7 @@ export const buildFarmFieldsColumns = ({
         if (!year) return <span className="text-muted-foreground">-</span>
         const label = formatRotationYear(year)
         return (
-          <span className="block max-w-40 truncate" title={label}>
+          <span className="block max-w-24 truncate @4xl:max-w-40" title={label}>
             {label}
           </span>
         )
@@ -567,8 +607,16 @@ export const buildFarmFieldsColumns = ({
       footer: () => null,
       enableSorting: false,
       meta: {
-        headerClassName: 'w-44 px-4 py-3 font-medium whitespace-nowrap',
-        cellClassName: 'w-44 px-4 py-3 whitespace-nowrap',
+        headerClassName: cn(
+          CELL_PADDING,
+          'font-medium whitespace-nowrap @4xl:w-44',
+          highlightIndex === null && 'hidden @4xl:table-cell',
+        ),
+        cellClassName: cn(
+          CELL_PADDING,
+          'whitespace-nowrap @4xl:w-44',
+          highlightIndex === null && 'hidden @4xl:table-cell',
+        ),
       },
     })
   }
@@ -587,6 +635,7 @@ export const buildFarmFieldsColumns = ({
           ) : (
             <span className="font-normal text-muted-foreground">Ikke beregnet</span>
           ),
+        compactValue: formatCompactKr,
       },
       isSimulationView,
       totals,
@@ -602,8 +651,8 @@ export const buildFarmFieldsColumns = ({
         renderQuotaStatusFooter(totals, quotaFooterLevel, quotaFooterNote),
       enableSorting: false,
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Udledning mod kvote',
       },
     },
@@ -651,7 +700,7 @@ export const buildFarmFieldsColumns = ({
           <>
             <div>{formatNumber(field.udledningskvoteMarkKgn)} kg N</div>
             {field.areaHa > 0 ? (
-              <div className="text-xs text-muted-foreground/80">
+              <div className="hidden text-xs text-muted-foreground/80 @4xl:block">
                 {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg
                 N/ha
               </div>
@@ -663,8 +712,8 @@ export const buildFarmFieldsColumns = ({
         <div>{formatNumber(totals.udledningskvoteMarkKgn)} kg N</div>
       ),
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Kvote (kg N)',
       },
     },
@@ -684,8 +733,8 @@ export const buildFarmFieldsColumns = ({
       },
       enableSorting: false,
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Jord',
       },
     },
@@ -699,8 +748,8 @@ export const buildFarmFieldsColumns = ({
       ),
       cell: ({ row }) => row.original.inTakeoutPlan,
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Omlægningsplan',
       },
     },
@@ -714,8 +763,8 @@ export const buildFarmFieldsColumns = ({
           ? 'Ukendt'
           : formatNumber(row.original.retention),
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Retention',
       },
     },
@@ -727,8 +776,8 @@ export const buildFarmFieldsColumns = ({
       cell: ({ row }) =>
         row.original.jbnr === null ? 'Ukendt' : row.original.jbnr,
       meta: {
-        headerClassName: 'px-4 py-3 font-medium whitespace-normal',
-        cellClassName: 'px-4 py-3 whitespace-normal',
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'JB nr.',
       },
     },

@@ -103,6 +103,44 @@ body {
   }
 }
 
+.panel-slide-in {
+  --slide-from: -100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel-slide-in {
+    animation: slide-in 240ms ease-out;
+  }
+
+  .panel-width-transition {
+    transition:
+      width 250ms ease,
+      margin-left 250ms ease;
+  }
+}
+
+.map-legend-strip {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.map-legend-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.map-legend-strip-fade {
+  mask-image: linear-gradient(
+    to right,
+    black calc(100% - 1.5rem),
+    transparent 100%
+  );
+}
+
+.map-legend-inset .maplibregl-ctrl-bottom-left,
+.map-legend-inset .maplibregl-ctrl-bottom-right {
+  bottom: 1.5rem;
+}
+
 @keyframes rise-in {
   from {
     transform: translateY(0.5rem);
