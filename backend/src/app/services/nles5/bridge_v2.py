@@ -30,6 +30,7 @@ from functools import lru_cache
 from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer, afstromning
 from app.services.soil.percolation_placeholder import percolation_placeholder
+from app.services.virkemidler import KORN_OG_RAPS_KODER
 
 # next-year M-kode -> denne positions W (Bilag 2 tabel 6: "hvad sås/pløjes i
 # efteråret afhænger af næste års M"). Samme mapping som bridge.py/streamlit_app.py.
@@ -82,6 +83,11 @@ _NO_VIRKEMIDDEL: dict[str, bool] = {"eea": False, "ema": False, "ets": False}
 # NUAR-fast EEA-styrke når efterafgrøde/udlæg er til stede (streamlit_app.py:
 # `EEA = 0.45 if eea_on else 0.0`).
 _EEA_STRENGTH = 0.45
+_EEA_STRENGTH_MAJS = 0.10
+_MAJSHELSAED_KODE = 216
+_EMA_STRENGTH = 0.20
+_ETS_STRENGTH = 0.20
+_PRAECISIONSJORDBRUG_EPJ = 0.04
 
 
 def _resolve_w(
@@ -148,6 +154,7 @@ def evaluate_leaching_position(
     irrigated: bool = False,
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
+    praecisionsjordbrug: bool = False,
 ) -> dict:
     """Beregn udvaskning for én sædskifte-position (kalder calculate_leaching)."""
     this_params = afgroede_normer.lookup_crop_params(afgrode_kode)
@@ -193,10 +200,21 @@ def evaluate_leaching_position(
         # EEA/EMA/ETS er afledt af rotationens udlægskode (se _UDL_VIRKEMIDDEL
         # ovenfor) — ikke et frit valg. Fdato/precision_dagsbasis er en
         # scenarie-niveau-indstilling (jf. plan Fase 8), gælder ens for alle
-        # år med efterafgrøde. EPJ er fortsat en fast placeholder-værdi.
-        "EEA": _EEA_STRENGTH if vk["eea"] else 0.0,
+        # år med efterafgrøde. Efterafgrøde in maize has the lower statutory
+        # 10 % effect; EMA and ETS each have a flat 20 % effect.
+        "EEA": (
+            (_EEA_STRENGTH_MAJS if afgrode_kode == _MAJSHELSAED_KODE else _EEA_STRENGTH)
+            if vk["eea"]
+            else 0.0
+        ),
         "Fdato": fdato, "precision_dagsbasis": precision_dagsbasis,
-        "EMA": 0.0, "ETS": 0.0, "EPJ": 0.0,
+        "EMA": _EMA_STRENGTH if vk["ema"] else 0.0,
+        "ETS": _ETS_STRENGTH if vk["ets"] else 0.0,
+        "EPJ": (
+            _PRAECISIONSJORDBRUG_EPJ
+            if praecisionsjordbrug and afgrode_kode in KORN_OG_RAPS_KODER
+            else 0.0
+        ),
         "mellemafgroede": vk["ema"], "early_sowing": vk["ets"],
     }
     # Sample slås sammen med beregningsresultatet, så leaching_detail bærer

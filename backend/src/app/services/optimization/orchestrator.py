@@ -220,6 +220,7 @@ def apply_manual_rotation(
         only_organic=godning.only_organic,
         n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
+        praecisionsjordbrug=simulation.praecisionsjordbrug,
         start_year=start_year,
         real_history=candidates_row.real_history,
     )
@@ -260,6 +261,7 @@ def _expand_yearly_options(
     godning: GodningSettings,
     fdato: str,
     precision_dagsbasis: bool,
+    praecisionsjordbrug: bool,
     selected_pairs: set[tuple[str, str]],
     real_history: dict[str, dict] | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
@@ -333,6 +335,7 @@ def _expand_yearly_options(
                     only_organic=godning.only_organic,
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                    praecisionsjordbrug=praecisionsjordbrug,
                     start_year=shift,
                     real_history=real_history,
                 )
@@ -404,6 +407,7 @@ def run_yearly_optimization(
         options = _expand_yearly_options(
             field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
+            praecisionsjordbrug=simulation.praecisionsjordbrug,
             selected_pairs=selected_pairs, real_history=real_history,
         )
         if not options:

@@ -117,6 +117,7 @@ class Simulation(CamelModel):
     # afhængig af eea_precision_dagsbasis.
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
+    praecisionsjordbrug: bool = False
 
 
 class CreateSimulationRequest(CamelModel):
@@ -129,3 +130,4 @@ class CreateSimulationRequest(CamelModel):
     godning: GodningSettings = Field(default_factory=GodningSettings)
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
+    praecisionsjordbrug: bool = False

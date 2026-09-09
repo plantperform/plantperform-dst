@@ -386,6 +386,7 @@ def create_simulation(
             godning=request.godning,
             eea_fdato=request.eea_fdato,
             eea_precision_dagsbasis=request.eea_precision_dagsbasis,
+            praecisionsjordbrug=request.praecisionsjordbrug,
         )
         session.execute(
             insert(simulation_table).values(
@@ -422,6 +423,7 @@ def create_simulation(
                     request.saedskiftevarianter, request.n_norm_procenter, jbnr,
                     request.godning,
                     fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
+                    praecisionsjordbrug=request.praecisionsjordbrug,
                     real_history=real_history,
                 )
                 field_candidates = SimulationFieldCandidates(

@@ -198,6 +198,7 @@ export type Simulation = {
   godning: GodningSettings
   eeaFdato: string
   eeaPrecisionDagsbasis: boolean
+  praecisionsjordbrug: boolean
 }
 
 export type CreateSimulationInput = {
@@ -207,6 +208,7 @@ export type CreateSimulationInput = {
   godning?: GodningSettings
   eeaFdato?: string
   eeaPrecisionDagsbasis?: boolean
+  praecisionsjordbrug?: boolean
 }
 
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
