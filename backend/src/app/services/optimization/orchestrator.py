@@ -58,9 +58,26 @@ class YearlySummaryEntry:
     field_count: int
 
 
+def _exclude_afgrodekoder(
+    candidates: list[RotationCandidateEvaluation],
+    excluded_afgrodekoder: frozenset[int],
+) -> list[RotationCandidateEvaluation]:
+    if not excluded_afgrodekoder:
+        return candidates
+    return [
+        candidate
+        for candidate in candidates
+        if not any(
+            year.year.afgrode_kode in excluded_afgrodekoder
+            for year in candidate.years[: candidate.active_len]
+        )
+    ]
+
+
 def _build_options(
     field: FieldRecord,
     candidates: list[RotationCandidateEvaluation],
+    excluded_afgrodekoder: frozenset[int] = frozenset(),
 ) -> tuple[RotationOption, ...]:
     """Ét RotationOption pr. gemt, usynligt beregnet sædskifte-kandidat (jf.
     "Opret scenarie") — ingen 2^n virkemiddel-udfoldning her (beslutning 7:
@@ -74,6 +91,7 @@ def _build_options(
     if field.allowed_rotation_ids:
         allowed = set(field.allowed_rotation_ids)
         candidates = [c for c in candidates if c.ref.to_id() in allowed]
+    candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
     options = []
     for candidate in candidates:
         ref_id = candidate.ref.to_id()
@@ -96,6 +114,7 @@ def run_optimization(
     farm_id: str,
     simulation_id: str,
     time_limit_seconds: float,
+    excluded_afgrodekoder: frozenset[int],
     email: str,
 ) -> OptimizationRunResult:
     simulation = repository.get_simulation(farm_id, simulation_id, email)
@@ -112,11 +131,14 @@ def run_optimization(
 
     field_inputs = []
     for field in fields:
-        options = _build_options(field, candidates_by_field_id.get(field.id, []))
+        options = _build_options(
+            field, candidates_by_field_id.get(field.id, []), excluded_afgrodekoder,
+        )
         if not options:
             raise OptimizationInfeasibleError(
-                f"Marken {field.name} har ingen beregnede sædskifte-kandidater — "
-                "genopret scenariet med mindst én kategori og N-norm%."
+                f"Marken {field.name} har ingen beregnede sædskifte-kandidater tilbage — "
+                "genopret scenariet med mindst én kategori og N-norm%, eller fravælg "
+                "færre afgrøder."
             )
 
         field_inputs.append(
@@ -221,6 +243,8 @@ def apply_manual_rotation(
         n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
         fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
         praecisionsjordbrug=simulation.praecisionsjordbrug,
+        tidlig_saaning=simulation.tidlig_saaning,
+        mellemafgrode=simulation.mellemafgrode,
         start_year=start_year,
         real_history=candidates_row.real_history,
     )
@@ -262,7 +286,9 @@ def _expand_yearly_options(
     fdato: str,
     precision_dagsbasis: bool,
     praecisionsjordbrug: bool,
-    selected_pairs: set[tuple[str, str]],
+    tidlig_saaning: bool,
+    mellemafgrode: bool,
+    excluded_afgrodekoder: frozenset[int] = frozenset(),
     real_history: dict[str, dict] | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
     """Udvider hver gemt kandidat til op til dens active_len forskudte
@@ -273,21 +299,13 @@ def _expand_yearly_options(
     allowed_rotation_ids-lås som _build_options respekteres — en låst marks
     kandidatmængde begrænses til kun dens låste kandidat, før den forskydes.
 
-    Hvilke kandidater der reelt forskydes styres EKSPLICIT af brugeren
-    (Fase 12) via `selected_pairs` — et sæt af (saedskiftevariant, variant)
-    brugeren har valgt i "Års-optimering"-dialogen, ikke en automatisk
-    heuristik. En tidligere DB2-/udlednings-baseret rangering blev afprøvet
-    (Fase 11) og forkastet: en marks retention afkobler dens reelle
-    udlednings-bidrag fuldstændigt fra dens DB2, så en automatisk rangering
-    efter ét (eller to) kriterier kan uforvarende udelukke netop den
-    kandidat en given mark reelt havde brug for — brugeren ser og styrer nu
-    selv den afvejning, inkl. det deraf følgende tidsforbrug. Kandidater
-    der ikke matcher et valgt par bidrager stadig med deres uforskudte
-    (shift=1) variant, så ingen kandidat udelukkes helt fra optimeringen."""
+    Alle kandidater kan forskydes; kørselsniveauets afgrødefravalgsfilter
+    afgør alene, hvilke kandidater der fjernes helt."""
     retention_factor = 1 - (field.retention or 0) / 100
     if field.allowed_rotation_ids:
         allowed = set(field.allowed_rotation_ids)
         candidates = [c for c in candidates if c.ref.to_id() in allowed]
+    candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
 
     # En kandidat med base_ref sat og ingen overrides er en tidligere
     # kørsels efterladte rene forskydning af en anden kandidat — at
@@ -309,26 +327,18 @@ def _expand_yearly_options(
         or c.base_ref.to_id() not in present_ids
     ]
 
-    shift_eligible_ids = {
-        c.ref.to_id()
-        for c in candidates
-        if (c.ref.saedskiftevariant, c.ref.variant) in selected_pairs
-    }
-
     options: list[YearlyRotationOption] = []
     for candidate in candidates:
         if candidate.active_len == 0:
             continue
 
-        max_shift = (
-            candidate.active_len if candidate.ref.to_id() in shift_eligible_ids else 1
-        )
-        for shift in range(1, max_shift + 1):
+        source_ref = candidate.base_ref or candidate.ref
+        for shift in range(1, candidate.active_len + 1):
             variant = (
                 candidate
-                if shift == 1
+                if shift == 1 and candidate.base_ref is None
                 else candidate_evaluator.evaluate_with_overrides(
-                    candidate.ref, [], jbnr=jbnr,
+                    source_ref, candidate.overrides, jbnr=jbnr,
                     driftsform=godning.driftsform,
                     org_mineral_n=godning.org_mineral_n,
                     mineralsk_andel_pct=godning.mineralsk_andel_pct,
@@ -336,6 +346,8 @@ def _expand_yearly_options(
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     praecisionsjordbrug=praecisionsjordbrug,
+                    tidlig_saaning=tidlig_saaning,
+                    mellemafgrode=mellemafgrode,
                     start_year=shift,
                     real_history=real_history,
                 )
@@ -372,7 +384,7 @@ def run_yearly_optimization(
     time_limit_seconds: float,
     max_n_load_by_kystvandopland: dict[int | None, tuple[float | None, ...]],
     db2_swing_pct: float | None,
-    selected_pairs: set[tuple[str, str]],
+    excluded_afgrodekoder: frozenset[int],
     email: str,
 ) -> YearlyOptimizationRunResult:
     """"Års-optimering" (Fase 11) — som run_optimization, men lader solveren
@@ -383,8 +395,7 @@ def run_yearly_optimization(
     låser IKKE marken — et Års-optimering-resultat skal fortsat kunne
     overskrives af en senere almindelig Optimér- eller Års-optimering-kørsel.
 
-    `selected_pairs` — (saedskiftevariant, variant)-par brugeren eksplicit
-    har valgt skal kunne forskydes (Fase 12) — se _expand_yearly_options."""
+    Alle tilbageværende kandidater kan forskydes — se _expand_yearly_options."""
     simulation = repository.get_simulation(farm_id, simulation_id, email)
     fields = repository.list_simulation_fields(farm_id, simulation_id, email)
     field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
@@ -408,12 +419,16 @@ def run_yearly_optimization(
             field, base_candidates, jbnr=jbnr, godning=simulation.godning,
             fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
             praecisionsjordbrug=simulation.praecisionsjordbrug,
-            selected_pairs=selected_pairs, real_history=real_history,
+            tidlig_saaning=simulation.tidlig_saaning,
+            mellemafgrode=simulation.mellemafgrode,
+            excluded_afgrodekoder=excluded_afgrodekoder,
+            real_history=real_history,
         )
         if not options:
             raise OptimizationInfeasibleError(
-                f"Marken {field.name} har ingen beregnede sædskifte-kandidater — "
-                "genopret scenariet med mindst én kategori og N-norm%."
+                f"Marken {field.name} har ingen beregnede sædskifte-kandidater tilbage — "
+                "genopret scenariet med mindst én kategori og N-norm%, eller fravælg "
+                "færre afgrøder."
             )
         options_by_field_id[field.id] = options
         field_inputs.append(

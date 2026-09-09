@@ -199,6 +199,8 @@ export type Simulation = {
   eeaFdato: string
   eeaPrecisionDagsbasis: boolean
   praecisionsjordbrug: boolean
+  tidligSaaning: boolean
+  mellemafgrode: boolean
 }
 
 export type CreateSimulationInput = {
@@ -209,12 +211,15 @@ export type CreateSimulationInput = {
   eeaFdato?: string
   eeaPrecisionDagsbasis?: boolean
   praecisionsjordbrug?: boolean
+  tidligSaaning?: boolean
+  mellemafgrode?: boolean
 }
 
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
 
 export type OptimizeSimulationInput = {
   timeLimitSeconds?: number
+  excludedAfgrodekoder?: number[]
 }
 
 export type RotationAssignment = {
@@ -232,11 +237,6 @@ export type OptimizeSimulationResponse = {
   assignments: RotationAssignment[]
 }
 
-export type SaedskifteVariantRef = {
-  saedskiftevariant: string
-  variant: string
-}
-
 export type KystvandoplandYearlyNLoadCaps = {
   kystvandId: number | null
   maxNLoadByYear: Record<number, number>
@@ -246,7 +246,7 @@ export type YearlyOptimizeSimulationInput = {
   timeLimitSeconds?: number
   maxNLoadByKystvandopland?: KystvandoplandYearlyNLoadCaps[]
   db2SwingPct?: number | null
-  selectedSaedskifter?: SaedskifteVariantRef[]
+  excludedAfgrodekoder?: number[]
 }
 
 export type YearlyOptimizationSaedskifteOption = {

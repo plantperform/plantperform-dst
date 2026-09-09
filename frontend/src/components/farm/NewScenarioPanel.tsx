@@ -80,6 +80,8 @@ export const NewScenarioPanel = ({
   const [nIndholdKgPerTon, setNIndholdKgPerTon] = useState('6')
   const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
   const [praecisionsjordbrug, setPraecisionsjordbrug] = useState(false)
+  const [tidligSaaning, setTidligSaaning] = useState(true)
+  const [mellemafgrode, setMellemafgrode] = useState(true)
   const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
   const [fdatoDate, setFdatoDate] = useState('20/8')
   const [isCreating, setIsCreating] = useState(false)
@@ -182,6 +184,8 @@ export const NewScenarioPanel = ({
         eeaFdato,
         eeaPrecisionDagsbasis: precisionDagsbasis,
         praecisionsjordbrug,
+        tidligSaaning,
+        mellemafgrode,
       })
       await mutate(
         simulationsKey(farmId),
@@ -204,6 +208,8 @@ export const NewScenarioPanel = ({
       setOnlyOrganic(false)
       setPrecisionDagsbasis(false)
       setPraecisionsjordbrug(false)
+      setTidligSaaning(true)
+      setMellemafgrode(true)
       setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
       setFdatoDate('20/8')
     } catch {
@@ -523,6 +529,30 @@ export const NewScenarioPanel = ({
                   Gælder kun år med korn eller raps som hovedafgrøde.
                 </span>
               </span>
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tidlig såning og mellemafgrøde</Label>
+            <p className="text-xs text-muted-foreground">
+              Slået til som udgangspunkt. Når en mulighed slås fra, fjernes kun
+              den udlægstype fra rotationerne. Efterafgrøder påvirkes ikke.
+            </p>
+            <label className="flex items-center gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={tidligSaaning}
+                onChange={(event) => setTidligSaaning(event.target.checked)}
+              />
+              <span className="font-medium">Tillad tidlig såning</span>
+            </label>
+            <label className="flex items-center gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={mellemafgrode}
+                onChange={(event) => setMellemafgrode(event.target.checked)}
+              />
+              <span className="font-medium">Tillad mellemafgrøde</span>
             </label>
           </div>
 

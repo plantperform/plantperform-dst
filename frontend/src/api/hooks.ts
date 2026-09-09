@@ -75,6 +75,24 @@ export const useSimulations = (farmId?: string) =>
 export const useSimulationFields = (farmId?: string, simulationId?: string) =>
   useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
 
+export const scenarioAfgrodeKoderKey = (
+  farmId?: string,
+  simulationId?: string,
+) => {
+  if (!farmId || !simulationId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/afgroder-i-brug`
+}
+
+export const useScenarioAfgrodeKoder = (
+  farmId?: string,
+  simulationId?: string,
+) =>
+  useSWR<AfgrodeKodeOption[]>(
+    scenarioAfgrodeKoderKey(farmId, simulationId),
+    fetcher,
+  )
+
 export const simulationFieldCandidateDetailKey = (
   farmId?: string,
   simulationId?: string,

@@ -33,6 +33,26 @@ START_CALENDAR_YEAR = 2027
 
 _EFTERAFGROEDE_UDLAEG_KODER = frozenset({968, 9680, 970})
 _EFTERAFGROEDE_FORFRUGTSVAERDI_KGN_HA = 21.0
+_MELLEMAFGROEDE_UDLAEG_KODER = frozenset({9682, 9684})
+_TIDLIG_SAANING_UDLAEG_KODER = frozenset({9683})
+
+
+def _strip_disabled_virkemidler(
+    raw_rotation: list[tuple[int | None, int | None, str | None]],
+    tidlig_saaning: bool,
+    mellemafgrode: bool,
+) -> list[tuple[int | None, int | None, str | None]]:
+    if tidlig_saaning and mellemafgrode:
+        return raw_rotation
+
+    stripped = []
+    for afgrode_kode, udlaeg_kode, udlaeg_navn in raw_rotation:
+        if not tidlig_saaning and udlaeg_kode in _TIDLIG_SAANING_UDLAEG_KODER:
+            udlaeg_kode, udlaeg_navn = None, None
+        elif not mellemafgrode and udlaeg_kode in _MELLEMAFGROEDE_UDLAEG_KODER:
+            udlaeg_kode, udlaeg_navn = None, None
+        stripped.append((afgrode_kode, udlaeg_kode, udlaeg_navn))
+    return stripped
 
 
 @lru_cache(maxsize=100_000)
@@ -328,6 +348,8 @@ def evaluate_candidate_for_mark(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
     """Evaluer en sædskifte-kandidat: 8 års positioner, hver med udvaskning +
@@ -339,6 +361,7 @@ def evaluate_candidate_for_mark(
     raw_rotation = saedskifte_library.generate_rotation(
         ref.saedskiftevariant, ref.variant, start_year
     )
+    raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
         return None
@@ -371,6 +394,8 @@ def evaluate_with_overrides(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     start_year: int = 1,
     real_history: dict[str, dict] | None = None,
 ) -> RotationCandidateEvaluation | None:
@@ -392,6 +417,7 @@ def evaluate_with_overrides(
     raw_rotation = saedskifte_library.generate_rotation(
         base_ref.saedskiftevariant, base_ref.variant, start_year
     )
+    raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:
         return None
@@ -439,6 +465,8 @@ def generate_candidates_for_field(
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
+    tidlig_saaning: bool = True,
+    mellemafgrode: bool = True,
     real_history: dict[str, dict] | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Kryds de eksplicit valgte saedskiftevariant-id'er med valgte
@@ -455,9 +483,14 @@ def generate_candidates_for_field(
     """
     results: list[RotationCandidateEvaluation] = []
     seen_ref_ids: set[str] = set()
+    seen_rotation_by_n_norm: dict[str, set[tuple]] = {}
 
     for saedskiftevariant in saedskiftevarianter:
         for variant in saedskifte_library.list_variants(saedskiftevariant):
+            raw_rotation = saedskifte_library.generate_rotation(saedskiftevariant, variant)
+            rotation_signature = tuple(
+                _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
+            )
             for n_norm_pct in n_norm_procenter:
                 ref = RotationCandidateRef(
                     saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
@@ -466,6 +499,10 @@ def generate_candidates_for_field(
                 if ref_id in seen_ref_ids:
                     continue
                 seen_ref_ids.add(ref_id)
+                seen_for_norm = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
+                if rotation_signature in seen_for_norm:
+                    continue
+                seen_for_norm.add(rotation_signature)
                 result = evaluate_candidate_for_mark(
                     ref, jbnr=jbnr,
                     driftsform=godning.driftsform,
@@ -475,6 +512,8 @@ def generate_candidates_for_field(
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
                     fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                     praecisionsjordbrug=praecisionsjordbrug,
+                    tidlig_saaning=tidlig_saaning,
+                    mellemafgrode=mellemafgrode,
                     real_history=real_history,
                 )
                 if result is not None:

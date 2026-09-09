@@ -387,6 +387,8 @@ def create_simulation(
             eea_fdato=request.eea_fdato,
             eea_precision_dagsbasis=request.eea_precision_dagsbasis,
             praecisionsjordbrug=request.praecisionsjordbrug,
+            tidlig_saaning=request.tidlig_saaning,
+            mellemafgrode=request.mellemafgrode,
         )
         session.execute(
             insert(simulation_table).values(
@@ -424,6 +426,8 @@ def create_simulation(
                     request.godning,
                     fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
                     praecisionsjordbrug=request.praecisionsjordbrug,
+                    tidlig_saaning=request.tidlig_saaning,
+                    mellemafgrode=request.mellemafgrode,
                     real_history=real_history,
                 )
                 field_candidates = SimulationFieldCandidates(
@@ -459,6 +463,28 @@ def list_simulation_field_candidates(
             .where(simulation_field_candidates_table.c.simulation_id == simulation_id),
         ).scalars()
         return [_load(SimulationFieldCandidates, data) for data in rows]
+
+
+def list_scenario_afgrodekoder(
+    farm_id: str, simulation_id: str, email: str,
+) -> set[int] | None:
+    with SessionLocal() as session:
+        if _get_simulation(session, farm_id, simulation_id, email) is None:
+            return None
+
+        rows = session.execute(
+            select(simulation_field_candidates_table.c.data)
+            .where(simulation_field_candidates_table.c.simulation_id == simulation_id),
+        ).scalars()
+        codes: set[int] = set()
+        for data in rows:
+            field_candidates = _load(SimulationFieldCandidates, data)
+            for candidate in field_candidates.candidates:
+                codes.update(
+                    year.year.afgrode_kode
+                    for year in candidate.years[: candidate.active_len]
+                )
+        return codes
 
 
 def get_simulation_field_candidates(

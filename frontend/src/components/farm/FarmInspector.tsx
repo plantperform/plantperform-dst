@@ -1,5 +1,4 @@
 import {
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   CircleCheck,
@@ -17,6 +16,7 @@ import { mutate } from 'swr'
 import {
   simulationFieldsKey,
   simulationYearlySummaryKey,
+  useScenarioAfgrodeKoder,
   useSimulationFields,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
@@ -31,7 +31,6 @@ import type {
   KystvandoplandYearlyNLoadCaps,
   OptimizeSimulationResponse,
   Simulation,
-  YearlyOptimizationKategoriOption,
   YearlySummaryEntry,
 } from '@/api/types'
 import {
@@ -577,6 +576,46 @@ const DEFAULT_CATCHMENT_YEARLY_INPUT: CatchmentYearlyInput = {
   perYear: {},
 }
 
+const AfgrodeExclusionList = ({
+  farmId,
+  simulationId,
+  excludedCodes,
+  onToggle,
+}: {
+  farmId: string
+  simulationId: string
+  excludedCodes: Set<number>
+  onToggle: (code: number) => void
+}) => {
+  const { data: afgroder = [] } = useScenarioAfgrodeKoder(farmId, simulationId)
+  if (afgroder.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <Label>Afgrøder</Label>
+      <p className="text-xs text-muted-foreground">
+        Fravælg en afgrøde for at udelukke alle sædskifter, der indeholder den
+        et eller flere steder. Valget gælder kun denne kørsel.
+      </p>
+      <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+        {afgroder.map((afgrode) => (
+          <label
+            key={afgrode.code}
+            className="flex items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"
+          >
+            <input
+              type="checkbox"
+              checked={!excludedCodes.has(afgrode.code)}
+              onChange={() => onToggle(afgrode.code)}
+            />
+            <span>{afgrode.navn}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const OptimizeDialog = ({
   farmId,
   simulation,
@@ -588,6 +627,7 @@ const OptimizeDialog = ({
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
+  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
 
   const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
   const catchments = useCatchmentOptions(farmId, fields)
@@ -600,8 +640,20 @@ const OptimizeDialog = ({
   const { constraints } = simulation
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) setRunError(null)
+    if (!nextOpen) {
+      setRunError(null)
+      setExcludedAfgrodekoder(new Set())
+    }
     onOpenChange(nextOpen)
+  }
+
+  const toggleAfgrode = (code: number) => {
+    setExcludedAfgrodekoder((current) => {
+      const next = new Set(current)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
   }
 
   const runOptimization = async () => {
@@ -609,6 +661,7 @@ const OptimizeDialog = ({
     try {
       const response = await runSimulationOptimization(farmId, simulation.id, {
         timeLimitSeconds,
+        excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
       })
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
@@ -709,6 +762,13 @@ const OptimizeDialog = ({
               løsning i tide på en stor bedrift
             </p>
           </div>
+
+          <AfgrodeExclusionList
+            farmId={farmId}
+            simulationId={simulation.id}
+            excludedCodes={excludedAfgrodekoder}
+            onToggle={toggleAfgrode}
+          />
         </div>
 
         {runError ? (
@@ -753,14 +813,25 @@ const YearlyOptimizeDialog = ({
     Record<string, CatchmentYearlyInput>
   >({})
   const [db2SwingPct, setDb2SwingPct] = useState('')
-  const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
-  const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(new Set())
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
+  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) setRunError(null)
+    if (!nextOpen) {
+      setRunError(null)
+      setExcludedAfgrodekoder(new Set())
+    }
     onOpenChange(nextOpen)
+  }
+
+  const toggleAfgrode = (code: number) => {
+    setExcludedAfgrodekoder((current) => {
+      const next = new Set(current)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
   }
 
   const { data: fields = [] } = useSimulationFields(farmId, simulation.id)
@@ -780,61 +851,16 @@ const YearlyOptimizeDialog = ({
     }))
   }
 
-  const togglePair = (saedskiftevariant: string, variant: string) => {
-    const key = `${saedskiftevariant}:${variant}`
-    setSelectedPairs((current) => {
-      const next = new Set(current)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const toggleExpanded = (kategori: string) => {
-    setExpandedKategorier((current) => {
-      const next = new Set(current)
-      if (next.has(kategori)) next.delete(kategori)
-      else next.add(kategori)
-      return next
-    })
-  }
-
-  const toggleKategoriAll = (kategori: YearlyOptimizationKategoriOption) => {
-    const keys = kategori.saedskifter.map(
-      (s) => `${s.saedskiftevariant}:${s.variant}`,
-    )
-    const allSelected = keys.length > 0 && keys.every((k) => selectedPairs.has(k))
-    setSelectedPairs((current) => {
-      const next = new Set(current)
-      if (allSelected) {
-        for (const key of keys) next.delete(key)
-      } else {
-        for (const key of keys) next.add(key)
-      }
-      return next
-    })
-  }
-
-  // Estimat, ikke en garanti — baseret på ~2ms pr. forskudt (mark × valgt
-  // sædskifte × år-position), målt empirisk under denne funktions
-  // performance-arbejde. Vokser med både antal marker og antal valgte
-  // sædskifter, som brugeren selv styrer.
+  // Estimat, ikke en garanti. Alle kandidater kan forskydes.
   const estimatedSeconds = useMemo(() => {
-    const activeLenByPair = new Map<string, number>()
+    let totalShiftUnits = 0
     for (const kategori of kategorier) {
       for (const option of kategori.saedskifter) {
-        activeLenByPair.set(
-          `${option.saedskiftevariant}:${option.variant}`,
-          option.activeLen,
-        )
+        totalShiftUnits += option.activeLen
       }
     }
-    let totalShiftUnits = 0
-    for (const pair of selectedPairs) {
-      totalShiftUnits += activeLenByPair.get(pair) ?? 8
-    }
     return fields.length * totalShiftUnits * 0.002
-  }, [fields.length, kategorier, selectedPairs])
+  }, [fields.length, kategorier])
 
   const runYearlyOptimization = async () => {
     const maxNLoadByKystvandopland: KystvandoplandYearlyNLoadCaps[] = catchments.map(
@@ -861,18 +887,13 @@ const YearlyOptimizeDialog = ({
       },
     )
     const trimmedSwing = db2SwingPct.trim()
-    const selectedSaedskifter = Array.from(selectedPairs).map((pair) => {
-      const [saedskiftevariant, variant] = pair.split(':')
-      return { saedskiftevariant, variant }
-    })
-
     setIsRunning(true)
     try {
       const response = await runYearlySimulationOptimization(farmId, simulation.id, {
         timeLimitSeconds,
         maxNLoadByKystvandopland,
         db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
-        selectedSaedskifter,
+        excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
       })
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
@@ -900,10 +921,8 @@ const YearlyOptimizeDialog = ({
           <DialogTitle>Års-optimering — {simulation.name}</DialogTitle>
           <DialogDescription>
             Optimér med udledningsloft pr. kalenderår og en grænse for hvor
-            meget dækningsbidraget må svinge år til år. Vælg herunder hvilke
-            sædskifter der må rykkes frem/tilbage i deres cyklus for at
-            overholde grænserne — du styrer selv afvejningen mellem hvor
-            mange muligheder optimeringen har, og hvor lang tid den tager.
+            meget dækningsbidraget må svinge år til år. Alle sædskifter kan
+            rykkes frem eller tilbage i deres cyklus.
           </DialogDescription>
         </DialogHeader>
 
@@ -1016,92 +1035,18 @@ const YearlyOptimizeDialog = ({
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label>Sædskifter der må forskydes</Label>
-            <p className="text-xs text-muted-foreground">
-              Kun sædskifter du vælger her kan rykkes frem/tilbage i deres
-              cyklus for at overholde grænserne ovenfor — resten indgår
-              stadig i optimeringen, men fastholder deres nuværende
-              års-fordeling. Ingen valgt = ingen forskydning, optimeringen
-              vælger da kun blandt de allerede gemte kandidater.
-            </p>
-            <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
-              {kategorier.map((kategori) => {
-                const isExpanded = expandedKategorier.has(kategori.kategori)
-                const selectedCount = kategori.saedskifter.filter((s) =>
-                  selectedPairs.has(`${s.saedskiftevariant}:${s.variant}`),
-                ).length
-                const allSelected =
-                  kategori.saedskifter.length > 0 &&
-                  selectedCount === kategori.saedskifter.length
-                const partiallySelected = selectedCount > 0 && !allSelected
-                return (
-                  <div key={kategori.kategori} className="rounded-md">
-                    <div className="flex items-center gap-2 px-2 py-1.5">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        ref={(element) => {
-                          if (element) element.indeterminate = partiallySelected
-                        }}
-                        onChange={() => toggleKategoriAll(kategori)}
-                      />
-                      <button
-                        type="button"
-                        className="flex flex-1 items-center justify-between gap-2 rounded-md text-left text-sm hover:bg-muted/50"
-                        onClick={() => toggleExpanded(kategori.kategori)}
-                      >
-                        <span>
-                          {kategori.kategori}
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {selectedCount}/{kategori.saedskifter.length} valgt
-                          </span>
-                        </span>
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
-                    {isExpanded ? (
-                      <div className="space-y-1 border-t px-2 py-1.5">
-                        {kategori.saedskifter.map((option) => {
-                          const key = `${option.saedskiftevariant}:${option.variant}`
-                          return (
-                            <label
-                              key={key}
-                              className="flex items-start gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"
-                            >
-                              <input
-                                type="checkbox"
-                                className="mt-0.5"
-                                checked={selectedPairs.has(key)}
-                                onChange={() =>
-                                  togglePair(option.saedskiftevariant, option.variant)
-                                }
-                              />
-                              <span>
-                                {option.cropSequence.join(' - ')}{' '}
-                                <span className="text-muted-foreground">
-                                  (variant {option.variant})
-                                </span>
-                              </span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {selectedPairs.size} sædskifter valgt · {fields.length} marker ·
-              ~{estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
-              (estimat, ikke en garanti)
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Alle sædskifter kan forskydes · {fields.length} marker ·
+            ~{estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
+            (estimat, ikke en garanti)
+          </p>
+
+          <AfgrodeExclusionList
+            farmId={farmId}
+            simulationId={simulation.id}
+            excludedCodes={excludedAfgrodekoder}
+            onToggle={toggleAfgrode}
+          />
         </div>
 
         {runError ? (

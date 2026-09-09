@@ -118,6 +118,8 @@ class Simulation(CamelModel):
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
     praecisionsjordbrug: bool = False
+    tidlig_saaning: bool = True
+    mellemafgrode: bool = True
 
 
 class CreateSimulationRequest(CamelModel):
@@ -131,3 +133,5 @@ class CreateSimulationRequest(CamelModel):
     eea_fdato: str = "20/8"
     eea_precision_dagsbasis: bool = False
     praecisionsjordbrug: bool = False
+    tidlig_saaning: bool = True
+    mellemafgrode: bool = True
