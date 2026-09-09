@@ -633,7 +633,7 @@ export const ManualRotationEditor = ({
                         ) : null}
 
                         {activeYearIndex !== null && activeYear ? (
-                          <div className="rounded-md border bg-muted/20 p-4">
+                          <div className="@container rounded-md border bg-muted/20 p-4">
                             <RotationYearsDetail
                               years={years}
                               areaHa={field.areaHa}

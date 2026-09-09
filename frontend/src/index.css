@@ -107,8 +107,13 @@ body {
   --slide-from: -100%;
 }
 
+.panel-slide-in-right {
+  --slide-from: 100%;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .panel-slide-in {
+  .panel-slide-in,
+  .panel-slide-in-right {
     animation: slide-in 240ms ease-out;
   }
 
