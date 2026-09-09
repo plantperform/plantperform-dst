@@ -69,8 +69,8 @@ def get_farm_udledning(
     farm_id: str,
     user: CurrentUser,
 ) -> list[KystvandoplandUdledning]:
-    """Udledningskvote og beregnet udledning ("Aktuel") pr. kystvandopland —
-    bekendtgørelsens faktiske opgørelsesenhed, jf. KystvandoplandUdledning."""
+    """Udledningskvote and calculated udledning ("Aktuel") per kystvandopland,
+    the bekendtgørelse's actual unit of accounting; see KystvandoplandUdledning."""
     result = get_farm_udledning_per_kystvandopland(farm_id, user.email)
 
     if result is None:

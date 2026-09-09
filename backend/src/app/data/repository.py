@@ -58,10 +58,11 @@ def _load[ModelT: BaseModel](model_type: type[ModelT], data: dict) -> ModelT:
 
 
 def _registry_context_for_imk_id(session: Session, imk_id: int | None):
-    """Rå registry_field-kontekst (jbnr/goedningsregion/oeko/crop_history) for
-    en imk_id — delt grundlag for både "Aktuel"-beregningen og
-    real_history-opslaget til 2027/2028's bagudkig i sædskifte-scenarier.
-    Returnerer None hvis imk_id mangler eller ikke findes.
+    """Return raw registry_field context for an imk_id.
+
+    The jbnr/goedningsregion/oeko/crop_history context is shared by both the
+    "Aktuel" calculation and the real_history lookup for the 2027/2028 lookback
+    in sædskifte simuleringer. Returns None if imk_id is absent or not found.
     """
     if imk_id is None:
         return None
@@ -126,10 +127,11 @@ def get_registry_soil_data_batch(imk_ids: list[int]) -> dict[int, RegistrySoilDa
 
 
 def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
-    """"Aktuel"-tilstand (db2/n_load/leaching/fen) beregnet ud fra markens
-    egen ægte crop_history og den historiske gødningstildeling (Bilag 3) —
-    ingen scenarie/gødnings-slider involveret. Bruges ved "Tilføj marker" i
-    stedet for de hidtidige hardkodede 0'er.
+    """Calculate a mark's "Aktuel" state (db2/n_load/leaching/fen).
+
+    Uses the mark's actual crop_history and historical gødning allocation
+    (Bilag 3), without involving a scenarie/gødning slider. Used by "Tilføj
+    marker" instead of the former hard-coded zeros.
     """
     if row is None:
         raise MissingSoilDataError("Registry field is missing or banned")
@@ -160,9 +162,9 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
         "n_load": leaching_total * retention_factor,
         "leaching": leaching_total,
         "fen": avg_fen * area_ha,
-        # Ægte 2019-2026-afgrøder (samme 8 positioner som beregningen ovenfor)
-        # — vist i "Aktuel"-markoversigten med rigtige kalenderår, jf. bruger-
-        # ønske om at se historikken ligesom scenariernes fremadrettede år.
+        # Actual 2019-2026 afgrøder (the same eight positions as the calculation
+        # above), shown in the "Aktuel" mark overview with real calendar years
+        # per the request to show history like the scenarier's forward years.
         "crop_rotation": [y.year for y in years],
         "kvotegivende": bool(row.kvotegivende),
     }
@@ -171,11 +173,12 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
 def get_farm_udledning_per_kystvandopland(
     farm_id: str, email: str,
 ) -> list[KystvandoplandUdledning] | None:
-    """Udledningskvote og beregnet udledning ("Aktuel", dvs. FieldRecord.n_load)
-    grupperet pr. kystvandopland — bekendtgørelsen opgør begge dele pr. opland,
-    aldrig samlet på tværs (se KystvandoplandUdledning). Marker uden imk_id
-    (fx manuelt tegnede) matcher ingen registry_field-række og indgår derfor
-    ikke i nogen gruppe, samme afgrænsning som den tidligere flade sum havde.
+    """Group udledningskvote and calculated udledning by kystvandopland.
+
+    "Aktuel" means FieldRecord.n_load. The bekendtgørelse calculates both values per
+    kystvandopland, never across oplande (see KystvandoplandUdledning). Marker
+    without imk_id, such as manually drawn marks, match no registry_field row
+    and are therefore excluded from all groups, as in the previous flat total.
     """
     with SessionLocal() as session:
         if not _farm_exists(session, farm_id, email):
@@ -646,12 +649,15 @@ def get_simulation_field_candidates(
     field_id: str,
     email: str,
 ) -> SimulationFieldCandidates | None:
-    """Én marks gemte kandidatmængde — filtreret direkte i SQL'en, i
-    modsætning til list_simulation_field_candidates som henter ALLE marker i
-    simuleringens fulde kandidatmængder (inkl. hver kandidats år-for-år
-    udvasknings-/DB-detalje). Brug denne når kun én mark er relevant (fx
-    "Rediger manuelt"s preview/apply, som kun læser candidates_row.jbnr) —
-    undgår at hente og deserialisere resten af simuleringens marker forgæves."""
+    """Return one mark's stored candidate set, filtered directly in SQL.
+
+    Unlike list_simulation_field_candidates, this does not fetch every mark's
+    complete candidate set, including each candidate's year-by-year
+    udvaskning/DB details. Use it when only one mark is relevant, such as the
+    "Rediger manuelt" preview/apply operations that read only
+    candidates_row.jbnr. This avoids needlessly fetching and deserializing the
+    simulering's other marker.
+    """
     with SessionLocal() as session:
         if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None
@@ -672,10 +678,12 @@ def append_manual_field_candidate(
     candidate: RotationCandidateEvaluation,
     email: str,
 ) -> bool:
-    """Føjer en manuelt genberegnet kandidat (Fase 10 — "Rediger manuelt")
-    til markens gemte kandidatmængde. Erstatter en evt. tidligere kandidat
-    med samme ref-id i stedet for at ophobe en historik — kun "seneste
-    manuelle rettelse for denne mark" er meningsfuld at beholde."""
+    """Add a manually recalculated Phase 10 candidate to the mark's stored set.
+
+    Replaces any previous candidate with the same reference ID rather than
+    accumulating history. Only the latest manual correction for this mark is
+    meaningful to retain.
+    """
     with SessionLocal.begin() as session:
         if _get_simulation(session, farm_id, simulation_id, email) is None:
             return False
@@ -704,7 +712,7 @@ def append_manual_field_candidate(
 
 
 class FieldNotOptimizedError(Exception):
-    """Marken har endnu ikke et vindende sædskifte (rotation_id) — kør Optimér først."""
+    """The mark has no winning sædskifte (rotation_id); run Optimér first."""
 
 
 def get_simulation_field_candidate_detail(
@@ -713,10 +721,12 @@ def get_simulation_field_candidate_detail(
     field_id: str,
     email: str,
 ) -> RotationCandidateEvaluation | None:
-    """Den fulde beregningsdetalje (leaching_detail/db_detail pr. år) for den
-    kandidat Optimér har valgt til denne mark. Returnerer None hvis
-    marken/simuleringen ikke findes; rejser FieldNotOptimizedError hvis marken
-    endnu ikke er blevet optimeret (intet rotation_id sat)."""
+    """Return full annual calculation details for the candidate Optimér chose.
+
+    Returns None if the mark or simulering does not exist. Raises
+    FieldNotOptimizedError if the mark has not yet been optimized and therefore
+    has no rotation_id.
+    """
     with SessionLocal() as session:
         if _get_simulation(session, farm_id, simulation_id, email) is None:
             return None

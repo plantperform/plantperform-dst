@@ -81,26 +81,26 @@ export const formatCrop = (crop: Crop) => {
 export const formatCropRotation = (rotation: Crop[]) =>
   rotation.length > 0 ? rotation.map(formatCrop).join(' - ') : 'Ukendt'
 
-// Startkalenderår for den 8-årige rotation — skal matche backend'ens
-// candidate_evaluator.py::START_CALENDAR_YEAR. Position 1 = dette år,
-// position 2 = +1, osv. (position 1 svarer til RotationYear-index 0).
+// Starting calendar year for the eight-year rotation. This must match
+// candidate_evaluator.py::START_CALENDAR_YEAR in the backend. Position 1 is
+// this year, position 2 is +1, etc. (position 1 maps to RotationYear index 0).
 export const ROTATION_START_CALENDAR_YEAR = 2027
 export const CURRENT_CALENDAR_YEAR = new Date().getFullYear()
 
-// Startkalenderår for "Aktuel"-markoversigtens ægte historik (skal matche
-// backend'ens field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7) — de 8
-// positioner er markens egne rigtige 2019-2026-afgrøder, ikke en fremadrettet
-// scenarie-rotation.
+// Starting calendar year for the actual history in the "Aktuel" mark overview
+// (must match field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7 in the
+// backend). The eight positions are the mark's actual 2019-2026 afgrøder, not a
+// forward-looking scenarie rotation.
 export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
 
-// Ét års afgrøde — afgrødenavn og, når der er et udlæg/efterafgrøde det år,
-// navnet i parentes lige efter.
+// One year's afgrøde: the afgrødenavn followed by the udlæg/efterafgrøde name in
+// parentheses when that year has one.
 export const formatRotationYear = (year: RotationYear): string =>
   year.udlaegNavn ? `${year.afgrodeNavn} (${year.udlaegNavn})` : year.afgrodeNavn
 
-// Rigtigt sædskifte (afgrødekode-baseret), som én sammenhængende streng.
-// Erstatter både den gamle formatCropRotation-brug og den separate
-// "Virkemidler: ..."-linje for marker der har et beregnet sædskifte (fra
+// Actual sædskifte (based on afgrødekoder), formatted as one continuous string.
+// Replaces both the old formatCropRotation usage and the separate
+// "Virkemidler: ..." line for marker with a calculated sædskifte (from
 // "Optimér").
 export const formatRealRotation = (rotation: RotationYear[]): string => {
   if (rotation.length === 0) return 'Intet sædskifte endnu — opret et scenarie og kør Optimér'

@@ -76,22 +76,20 @@ import {
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
-// Efter en Optimér-/Års-optimering-kørsel er simulationFieldsKey allerede
-// opdateret direkte fra respons'en (ingen ny hentning nødvendig), men
-// Årsoversigt-stripet henter fra en separat SWR-nøgle der ellers ville
-// blive stående med data fra FØR kørslen — usynligt for brugeren, men ser
-// ud som om nye begrænsninger/lofter blev ignoreret. Tving den til at
-// hente igen.
+// After an "Optimér" or "Års-optimering" run, simulationFieldsKey has already
+// been updated directly from the response (no refetch needed). The yearly
+// overview strip uses a separate SWR key, however, and would otherwise retain
+// data from before the run. That is invisible to the user but makes new
+// constraints or caps appear to have been ignored, so force a refetch.
 //
-// "Beregningsgennemgang pr. år"-panelet (candidate-detail) invalideres
-// bevidst IKKE her længere — det blev tidligere gjort med en bredt
-// matchende nøgle-revalidering, der genopfriskede ALLE candidate-detail-
-// nøgler brugeren nogensinde havde åbnet i denne simulering, uanset om
-// marken rent faktisk fik en ny tildeling. På et scenarie med u-optimerede
-// marker gav det en byge af samtidige mislykkede kald (422 "ikke
-// optimeret endnu") for hver tidligere-åbnet mark. SWR genindlæser
-// candidate-detail automatisk, hver gang panelet næste gang åbnes
-// (mount-tids-revalidering) — det er nok i praksis.
+// The "Beregningsgennemgang pr. år" panel (candidate detail) is deliberately no
+// longer invalidated here. A broadly matching key revalidation previously
+// refreshed every candidate-detail key the user had ever opened in this
+// simulering, regardless of whether the mark actually received a new
+// assignment. In scenarier with unoptimised marker, this caused a burst of
+// concurrent failed requests (422 "ikke optimeret endnu") for every previously
+// opened mark. SWR automatically reloads candidate detail the next time the
+// panel opens (revalidation on mount), which is sufficient in practice.
 const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
@@ -899,7 +897,7 @@ const YearlyOptimizeDialog = ({
     }))
   }
 
-  // Estimat, ikke en garanti. Alle kandidater kan forskydes.
+  // Estimate, not a guarantee. Every candidate may be shifted.
   const estimatedSeconds = useMemo(() => {
     let totalShiftUnits = 0
     for (const kategori of kategorier) {

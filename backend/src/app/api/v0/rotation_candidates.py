@@ -74,9 +74,11 @@ class GodningPresetOption(CamelModel):
 
 
 def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
-    """Billig afgrødesekvens-forhåndsvisning for én saedskiftevariant — bruger
-    første tilgængelige variant, ingen NLES5/DB2-beregning. Til
-    kategori-fold-ud-listen i "Nyt scenarie", ikke til reel evaluering."""
+    """Provide a cheap afgrøde-sequence preview for one saedskiftevariant.
+
+    Uses the first available variant without NLES5/DB2 calculation. Intended
+    for the expandable category list in "Nyt scenarie", not actual evaluation.
+    """
     variants = saedskifte_library.list_variants(saedskiftevariant)
     if not variants:
         return None
@@ -94,10 +96,12 @@ def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
 def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
-    """De 4 sædskifte-kategorier (driftsform + gødningsniveau), til
-    kategori-afkrydsningslisten i "Nyt scenarie" — hver med en liste af dens
-    individuelle sædskiftemuligheder (afgrødesekvens-forhåndsvisning), så
-    brugeren kan folde kategorien ud og vælge specifikke sædskifter til/fra."""
+    """Return the four sædskifte categories (driftsform + gødning level).
+
+    Each category contains its individual sædskifte options with afgrøde-sequence
+    previews, allowing users to expand it and select specific sædskifter in
+    "Nyt scenarie".
+    """
     options = []
     for kategori in saedskifte_kategorier.list_kategorier():
         saedskiftevarianter = saedskifte_kategorier.saedskifter_for_kategori(kategori)
@@ -117,34 +121,38 @@ def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
     return options
 
 
-# Faste N-norm%-niveauer til N-norm%-afkrydsningslisten i "Nyt scenarie".
-# Var tidligere afledt af sædskifte-lookup-filens egne N-norm%-rækker
-# (Ny_sædskifte_lookup_sammenlagt.csv 2026-09-02 har fjernet den akse fra
-# selve rotationsopslaget, se saedskifte_library.py's moduldocstring) —
-# samme værdisæt som filen tidligere indeholdt, nu en fast liste uafhængig
-# af datafilen, da N-tildeling håndteres som en ren procent-skalering
-# (candidate_evaluator.compute_n_inputs), ikke som en del af rotationsdata.
+# Fixed N-norm% levels for the N-norm% checklist in "Nyt scenarie".
+# These were previously derived from the sædskifte lookup file's N-norm% rows
+# (Ny_sædskifte_lookup_sammenlagt.csv removed that axis from the rotation lookup
+# on 2026-09-02; see saedskifte_library.py's module docstring). This is the same
+# value set that the file previously contained, now fixed independently of the
+# data file because N allocation is handled as pure percentage scaling in
+# candidate_evaluator.compute_n_inputs, not as part of the rotation data.
 _N_NORM_PROCENTER = ["30", "50", "60", "70", "75", "80", "85", "90", "95", "100"]
 
 
 @router.get("/n-norm-procenter", response_model=list[str])
 def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
-    """Alle N-norm%-niveauer til N-norm%-afkrydsningslisten i "Nyt
-    scenarie". Ikke betinget af kategori-valget — gælder uniformt for alle
-    sædskifter."""
+    """Return all N-norm% levels for the checklist in "Nyt scenarie".
+
+    They are not conditional on the category selection and apply uniformly to
+    all sædskifter.
+    """
     return _N_NORM_PROCENTER
 
 
 @router.get("/godnings-presets", response_model=list[GodningPresetOption])
 def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
-    """Gødningstype-presets til "Nyt scenarie"s gødnings-sektion (Fase 13,
-    forenklet) — navngivet efter selve gødningstypen (Svinegylle/Kvæggylle),
-    ikke efter en driftsform- eller N-mængde-specifik variant. Samme preset
-    bruges uanset om marken er konventionel eller økologisk — org_mineral_n/
-    mineralsk_andel_pct/kun-organisk er altid frit justerbare bagefter, jf.
-    Fase 13's fulde afkobling. Tallene er et rimeligt udgangspunkt hentet
-    fra de konventionelle varianter i saedskifte_kategorier.KATEGORI_GODNING
-    ("Konv. svin samlet"/"Konv. kvæg")."""
+    """Return gødning-type presets for "Nyt scenarie" (simplified Phase 13).
+
+    They are named for the gødning type itself (Svinegylle/Kvæggylle), not for
+    a driftsform- or N-quantity-specific variant. The same preset is used
+    whether the mark is konventionel or økologisk; org_mineral_n,
+    mineralsk_andel_pct, and only_organic remain freely adjustable, in line
+    with Phase 13's complete decoupling. The values are reasonable starting
+    points taken from the konventionelle variants in
+    saedskifte_kategorier.KATEGORI_GODNING ("Konv. svin samlet"/"Konv. kvæg").
+    """
     svin = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KONV_SVIN_SAMLET]
     kvaeg = saedskifte_kategorier.KATEGORI_GODNING[saedskifte_kategorier.KONV_KVAEG]
     return [
@@ -171,11 +179,13 @@ def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
 def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
-    """Alle rigtige afgrødekoder (Bilag 1/NUAR) med en gyldig NUAR M-kode
-    (dvs. reelt brugbare som hovedafgrøde i en NLES5-beregning), til
-    afgrøde-dropdownen i "Rediger manuelt" (Fase 10 — levende beregning),
-    sorteret på navn. Et lille mindretal koder uden M-kode (fx administrative
-    arealtyper) udelades, da de ikke kan indgå i en beregning."""
+    """Return real afgrødekoder (Bilag 1/NUAR) with a valid NUAR M code.
+
+    These can actually be used as hovedafgrøde in an NLES5 calculation. They
+    are sorted by name for the afgrøde dropdown in the live Phase 10 "Rediger
+    manuelt" calculation. The small minority without an M code, such as
+    administrative area types, are omitted because they cannot be calculated.
+    """
     names = afgroede_normer.crop_names_from_normer()
     options = [
         AfgrodeKodeOption(code=code, navn=navn)
@@ -187,11 +197,11 @@ def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
 
 @router.get("", response_model=list[RotationCandidateOption])
 def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
-    """Alle tilgængelige sædskifte-kandidater (til fejlsøgning/debugging),
-    med en kort afgrødesekvens-forhåndsvisning pr. kandidat.
+    """Return all available sædskifte candidates for troubleshooting/debugging,
+    with a short afgrøde-sequence preview for each candidate.
 
-    Ingen udvaskning/DB-beregning her — brug POST .../evaluate for det, på en
-    udvalgt delmængde.
+    No udvaskning/DB calculation is performed here; use POST .../evaluate on a
+    selected subset instead.
     """
     options: list[RotationCandidateOption] = []
     for s, v in saedskifte_library.list_all_saedskifte_refs():
@@ -217,10 +227,12 @@ def evaluate_rotation_candidates(
     db: DbSession,
     user: FarmMember,
 ) -> list[FieldRotationCandidates]:
-    """Beregn udvaskning + DB for en udvalgt delmængde sædskifte-kandidater,
-    for et udvalg af marker. Stateless — bruges til fejlsøgning/enkeltopslag,
-    IKKE af "Nyt scenarie"-flowet (som beregner og gemmer usynligt ved
-    oprettelse, jf. planen)."""
+    """Calculate udvaskning + DB for selected sædskifte candidates and marker.
+
+    This stateless operation is for troubleshooting/individual lookups, not the
+    "Nyt scenarie" flow, which calculates and stores results in the background during
+    creation as specified in the plan.
+    """
     fields = list_fields(farm_id, user.email)
     if fields is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")

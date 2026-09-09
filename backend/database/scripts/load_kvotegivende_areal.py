@@ -1,18 +1,18 @@
-"""Sæt registry_field.kvotegivende ud fra markens 2026-afgrødekode og Bilag 1
-tabel 1's "Kvotegivende areal" ja/nej-liste.
+"""Set registry_field.kvotegivende from the mark's 2026 afgrødekode and the
+"Kvotegivende areal" yes/no list in Bilag 1, table 1.
 
 Source: database/data/raw/ANGJ-data/Bilag_1_tabel_1_Kvotegivende_areal_og_aktivitet.csv
 Columns: Afgrødekode, Navn, Kvotegivende aktivitet, Kvotegivende areal
 
-Bruger bevidst "Kvotegivende areal"-kolonnen, ikke "Kvotegivende aktivitet"
-(de er identiske for 322 af 323 koder; afgrødekode 271 "Rekreative formål"
-er den eneste forskel — areal=Ja, aktivitet=Nej).
+Intentionally uses the "Kvotegivende areal" column, not "Kvotegivende aktivitet"
+(they are identical for 322 of 323 codes; afgrødekode 271, "Rekreative formål",
+is the only difference: areal=Ja, aktivitet=Nej).
 
-Marker uden en 2026-afgrødekode (crop_history mangler nøglen, eller
-lookuplisten ikke dækker koden) sættes til kvotegivende=false.
+Marker without a 2026 afgrødekode (crop_history lacks the key or the lookup list
+does not cover the code) are set to kvotegivende=false.
 
-Nulstiller desuden udledningskvote_mark_kgn til 0 for alle ikke-kvotegivende
-marker — et sådant areal bidrager intet til en bedrifts udledningskvote.
+Also resets udledningskvote_mark_kgn to 0 for all non-kvotegivende marker because
+such an area contributes nothing to a bedrift's udledningskvote.
 """
 
 import csv
@@ -72,10 +72,10 @@ def load_kvotegivende_areal() -> None:
             )
             unmatched = cursor.rowcount
 
-            # Et ikke-kvotegivende areal bidrager intet til udledningskvoten —
-            # nulstil den fysiske kvote for disse marker, så den ikke fejlagtigt
-            # viser areal × udledningsgrænse for et areal der reelt ikke
-            # tæller med (både i kortvisning og i farmens samlede kvote).
+            # A non-kvotegivende area contributes nothing to the udledningskvote.
+            # Reset the physical udledningskvote for these marker so it does not
+            # incorrectly show area × udledningsgrænse for an area that does not count
+            # (both in the kortvisning and in the bedrift's total udledningskvote).
             cursor.execute(
                 "UPDATE registry_field SET udledningskvote_mark_kgn = 0 WHERE kvotegivende = false"
             )

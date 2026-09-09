@@ -1,25 +1,25 @@
-"""Bridge mellem rigtige afgrødekoder og NLES5-motoren (engine.py).
+"""Bridge between real afgrødekoder and the NLES5 engine (engine.py).
 
-Erstatter bridge.py's grove M-klasse-heuristikker (AUTO_W_BY_M, NEXT_M_TO_W,
-WP-altid-1-stub) med rigtige per-afgrødekode M/W/MP/WP fra
-services.rotations.afgroede_normer.lookup_crop_params(), samme kilde som
-NUAR_koder-arket i Bilag 1-mastertabellen.
+Replaces bridge.py's coarse M-class heuristics (AUTO_W_BY_M, NEXT_M_TO_W, and
+the WP-always-1 stub) with real per-afgrødekode M/W/MP/WP values from
+services.rotations.afgroede_normer.lookup_crop_params(), the same source as the
+NUAR_koder sheet in the Bilag 1 master table.
 
-W-bestemmelsen er porteret fra c:\\plantperform-nles\\streamlit_app.py
-(linje ~344-369): W for en given position afhænger af hvad der sås/pløjes
-i efteråret — altså af NÆSTE positions afgrøde, ikke kun af afgrøden selv.
-MP for en given position er FORRIGE positions egen MP-felt (forfrugtens
-forfrugtskategori). WP følger samme "næste år overstyrer"-idé som W, men ét
-år forskudt: er DENNE positions egen afgrøde en vinterafgrøde, er vinter-
-perioden mellem forfrugten og nu reelt optaget af den — ellers falder WP
-tilbage til forrige positions egen statiske WP-felt (se _resolve_wp).
+The W calculation is ported from c:\\plantperform-nles\\streamlit_app.py
+(lines ~344-369). W for a position depends on what is sown/ploughed in autumn,
+hence on the NEXT position's afgrøde rather than only the current afgrøde. MP
+for a position is the PREVIOUS position's own MP field (the forfrugt's
+category). WP uses the same "next year overrides" principle as W, shifted by
+one year. If the CURRENT position's afgrøde is a vinterafgrøde, it occupies the
+winter period between the forfrugt and the current year; otherwise WP falls
+back to the previous position's static WP field (see _resolve_wp).
 
-P/S/NT kommer fra markens egne registry_field-værdier, sendt ind af kalderen.
-Hvilken af de 8 P-værdier der bruges afhænger af
-afgrøden: services.rotations.afstromning slår afgrødekoden op i Bilag 7
-tabel 1 (Bilag_1_tabel_1_med_P_noegle.csv, alle 323 koder) og returnerer
-dens afstrømningskategori (1-8), med en alternativ kategori når positionen
-har et vinterdække-ændrende virkemiddel (EEA/efterafgrøde) samme år.
+P/S/NT come from the mark's own registry_field values supplied by the caller.
+The afgrøde determines which of the eight P values is used:
+services.rotations.afstromning looks up the afgrødekode in Bilag 7, table 1
+(Bilag_1_tabel_1_med_P_noegle.csv, all 323 codes), and returns its
+afstrømningskategori (1-8), with an alternative category when the position has
+a winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
 """
 from __future__ import annotations
 
@@ -30,40 +30,41 @@ from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer, afstromning
 from app.services.virkemidler import KORN_OG_RAPS_KODER
 
-# next-year M-kode -> denne positions W (Bilag 2 tabel 6: "hvad sås/pløjes i
-# efteråret afhænger af næste års M"). Samme mapping som bridge.py/streamlit_app.py.
+# Next-year M code -> this position's W (Bilag 2, table 6: what is sown/ploughed
+# in autumn depends on next year's M). Same mapping as bridge.py/streamlit_app.py.
 _NEXT_M_TO_W: dict[int, int] = {1: 1, 9: 6, 10: 7, 11: 8, 12: 8}
 _AUTUMNSOWN_M = frozenset({1, 9, 10})
 
-# Udlægskode -> W, når udlægget selv bestemmer vinterdækket (fx efterafgrøde,
-# mellemafgrøde, udlæg til frø). Porteret fra streamlit_app.py's UDL_W_MAPPING.
+# Udlægskode -> W when the udlæg itself determines the winter cover, such as
+# efterafgrøde, mellemafgrøde, or udlæg til frø. Ported from UDL_W_MAPPING in
+# streamlit_app.py.
 _UDL_W_MAPPING: dict[int, int | None] = {
     960: 4, 961: 4, 962: 4, 963: 4, 964: 4, 965: 4, 966: 4,
-    968: 5,     # Efterafgrøde, pligtig
-    9680: 4,    # Efterafgrøde e. frøgræs
+    968: 5,     # "Efterafgrøde, pligtig"
+    9680: 4,    # "Efterafgrøde e. frøgræs"
     9682: 4,    # Mellemafgrøde
-    9683: None, # Tidlig såning — W bestemmes af selve afgrøden
-    9684: 4,    # Mellemafgrøde e. frøgræs
-    970: 5,     # Øvrige udlæg og efterafgrøder
-    2000: 4,    # Udlæg til frø
-    3000: 3,    # Jordbearbejdning efterår
-    0: None,    # Eksplicit ingen udlæg
+    9683: None, # "Tidlig såning"; W is determined by the afgrøde itself
+    9684: 4,    # "Mellemafgrøde e. frøgræs"
+    970: 5,     # "Øvrige udlæg og efterafgrøder"
+    2000: 4,    # "Udlæg til frø"
+    3000: 3,    # "Jordbearbejdning efterår"
+    0: None,    # Explicitly no udlæg
 }
 
-# Udlægskode -> hvilket NUAR-virkemiddel positionen automatisk får. Porteret
-# fra streamlit_app.py's UDL_VIRKEMIDDEL — i "vælg sædskifte fra lookup"-flowet
-# (som candidate_evaluator.py bruger) er EEA/EMA/ETS IKKE et frit brugervalg,
-# de er en direkte konsekvens af rotationens egen udlægskode. Forskellige
-# `variant`-værdier for samme saedskiftevariant er netop forskellige
-# virkemiddel-kombinationer på samme afgrødesekvens (bekræftet empirisk:
-# saedskiftevariant 315, variant 1/2/4 har identisk afgrødesekvens, men
-# udl_kode 3000/None/968 i position 4).
+# Udlægskode -> the NUAR virkemiddel automatically assigned to the position.
+# Ported from streamlit_app.py's UDL_VIRKEMIDDEL. In the "select sædskifte from
+# lookup" flow used by candidate_evaluator.py, EEA/EMA/ETS are not free user
+# choices but direct consequences of the rotation's own udlægskode. Different
+# `variant` values for one saedskiftevariant represent different virkemiddel
+# combinations on the same afgrøde sequence (empirically confirmed:
+# saedskiftevariant 315 variants 1/2/4 have identical afgrøde sequences but
+# udl_kode 3000/None/968 in position 4).
 _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
-    968:  {"eea": True,  "ema": False, "ets": False},  # Efterafgrøde, pligtig
-    9680: {"eea": True,  "ema": False, "ets": False},  # Efterafgrøde e. frøgræs
+    968:  {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde, pligtig"
+    9680: {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde e. frøgræs"
     9682: {"eea": False, "ema": True,  "ets": False},  # Mellemafgrøde
-    9683: {"eea": False, "ema": False, "ets": True},   # Tidlig såning
-    9684: {"eea": False, "ema": True,  "ets": False},  # Mellemafgrøde e. frøgræs
+    9683: {"eea": False, "ema": False, "ets": True},   # "Tidlig såning"
+    9684: {"eea": False, "ema": True,  "ets": False},  # "Mellemafgrøde e. frøgræs"
     960:  {"eea": False, "ema": False, "ets": False},
     961:  {"eea": False, "ema": False, "ets": False},
     962:  {"eea": False, "ema": False, "ets": False},
@@ -71,14 +72,14 @@ _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
     964:  {"eea": False, "ema": False, "ets": False},
     965:  {"eea": False, "ema": False, "ets": False},
     966:  {"eea": False, "ema": False, "ets": False},
-    970:  {"eea": True,  "ema": False, "ets": False},  # Øvrige udlæg og efterafgrøder
-    2000: {"eea": False, "ema": False, "ets": False},  # Udlæg til frø
-    3000: {"eea": False, "ema": False, "ets": False},  # Jordbearbejdning efterår
+    970:  {"eea": True,  "ema": False, "ets": False},  # "Øvrige udlæg og efterafgrøder"
+    2000: {"eea": False, "ema": False, "ets": False},  # "Udlæg til frø"
+    3000: {"eea": False, "ema": False, "ets": False},  # "Jordbearbejdning efterår"
     0:    {"eea": False, "ema": False, "ets": False},
 }
 _NO_VIRKEMIDDEL: dict[str, bool] = {"eea": False, "ema": False, "ets": False}
 
-# NUAR-fast EEA-styrke når efterafgrøde/udlæg er til stede (streamlit_app.py:
+# Fixed NUAR EEA strength when efterafgrøde/udlæg is present (streamlit_app.py:
 # `EEA = 0.45 if eea_on else 0.0`).
 _EEA_STRENGTH = 0.45
 _EEA_STRENGTH_MAJS = 0.10
@@ -109,21 +110,24 @@ def _resolve_w(
     return auto_w if auto_w is not None else 5
 
 
-# Næste-års M-kode -> WP, når dette års vinterperiode reelt er optaget af NÆSTE
-# års vinterafgrøde (samme "næste år overstyrer" idé som _NEXT_M_TO_W, men på
-# WP's egen, rigere kategoriskala — WP har fx en selvstændig Vinterraps-kategori
-# (8), som W's bredere "græs/kløvergræs/vinterraps/roer"-kategori (6) ikke har).
-# Kun de to entydige tilfælde er kortlagt (M=1 Vintersæd, M=9 Vinterraps) — M=10/
-# 11/12 ("... efter græs") har ingen entydig WP-modpart og falder derfor tilbage
-# til den statiske pr.-afgrødekode WP-tabel, ikke en gættet kortlægning.
+# Next-year M code -> WP when this year's winter period is occupied by the NEXT
+# year's winter afgrøde. This uses the same "next year overrides" principle as
+# _NEXT_M_TO_W, but on WP's richer category scale. For example, WP has a
+# separate Vinterraps category (8), unlike W's broader
+# "græs/kløvergræs/vinterraps/roer" category (6). Only the two unambiguous cases
+# are mapped (M=1 Vintersæd, M=9 Vinterraps). M=10/11/12 ("... after græs") have
+# no unambiguous WP counterpart and therefore fall back to the static
+# per-afgrødekode WP table rather than a guessed mapping.
 _NEXT_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
 
 
 def _resolve_wp(prev_params: dict, this_params: dict) -> int:
-    """WP for indeværende position = vinterdækket mellem forrige og denne
-    afgrøde. Hvis DENNE afgrødes M er en vinterafgrøde, er den vinterperiode
-    reelt optaget af denne afgrøde selv (den er allerede sået om efteråret) —
-    ikke af forrige afgrødes egen statiske WP-klassificering."""
+    """Resolve WP as the winter cover between the previous and current afgrøde.
+
+    If the CURRENT afgrøde's M is a vinterafgrøde, that afgrøde itself occupies
+    the winter period because it was already sown in autumn. The previous
+    afgrøde's static WP classification does not apply.
+    """
     this_m = this_params.get("M")
     wp_from_next = _NEXT_M_TO_WP.get(this_m) if this_m is not None else None
     if wp_from_next is not None:
@@ -157,7 +161,7 @@ def evaluate_leaching_position(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
 ) -> dict:
-    """Beregn udvaskning for én sædskifte-position (kalder calculate_leaching)."""
+    """Calculate udvaskning for one sædskifte position via calculate_leaching."""
     this_params = afgroede_normer.lookup_crop_params(afgrode_kode)
     next_params = afgroede_normer.lookup_crop_params(next_afgrode_kode) if next_afgrode_kode else {}
     prev_params = afgroede_normer.lookup_crop_params(prev_afgrode_kode) if prev_afgrode_kode else {}
@@ -174,12 +178,12 @@ def evaluate_leaching_position(
         else _NO_VIRKEMIDDEL
     )
 
-    # Hvilken af de 8 P-værdier der bruges afhænger af afgrøden (og af om
-    # positionen har et vinterdække-ændrende virkemiddel samme år, jf.
-    # afstromning.py, som dækker alle 323 afgrødekoder med ingen huller).
-    # kategori_ukendt er derfor i praksis altid False — bevaret som en ren
-    # sikkerhedsnet-flag for en fremtidig afgrødekode filen ikke (endnu)
-    # indeholder, uden at beregningen fejler.
+    # The afgrøde determines which of the eight P values is used, including
+    # whether the position has a winter-cover-changing virkemiddel that year;
+    # see afstromning.py, which covers all 323 afgrødekoder without gaps.
+    # kategori_ukendt is therefore effectively always False and remains only as
+    # a safety flag for a future afgrødekode absent from the file, allowing the
+    # calculation to continue.
     kategori = afstromning.afstromningskategori(afgrode_kode, eea_on=vk["eea"])
     kategori_ukendt = kategori is None
     p_value = (
@@ -206,10 +210,10 @@ def evaluate_leaching_position(
         "P_override": p_value, "S_override": s_soil,
         "afstromningskategori": kategori if kategori is not None else 1,
         "afstromningskategori_ukendt": kategori_ukendt,
-        # EEA/EMA/ETS er afledt af rotationens udlægskode (se _UDL_VIRKEMIDDEL
-        # ovenfor) — ikke et frit valg. Fdato/precision_dagsbasis er en
-        # scenarie-niveau-indstilling (jf. plan Fase 8), gælder ens for alle
-        # år med efterafgrøde. Efterafgrøde in maize has the lower statutory
+        # EEA/EMA/ETS are derived from the rotation's udlægskode (see
+        # _UDL_VIRKEMIDDEL above), not freely selected. Fdato/precision_dagsbasis
+        # is a scenarie-level Phase 8 setting applied equally to every year with
+        # efterafgrøde. Efterafgrøde in maize has the lower statutory
         # 10 % effect; EMA and ETS each have a flat 20 % effect.
         "EEA": (
             (_EEA_STRENGTH_MAJS if afgrode_kode == _MAJSHELSAED_KODE else _EEA_STRENGTH)
@@ -226,8 +230,8 @@ def evaluate_leaching_position(
         ),
         "mellemafgroede": vk["ema"], "early_sowing": vk["ets"],
     }
-    # Sample slås sammen med beregningsresultatet, så leaching_detail bærer
-    # både rå input (M, W, MP, WP, MNCS, ...) og udledte værdier (L, Ntheta,
-    # C, ...) — nødvendigt for at kunne vise en fuld beregningsgennemgang
-    # pr. år i UI'en (jf. streamlit_app.py's "Beregningsdetaljer pr. år").
+    # Merge the sample with the result so leaching_detail carries both raw
+    # inputs (M, W, MP, WP, MNCS, ...) and derived values (L, Ntheta, C, ...).
+    # This is required for a full annual calculation walkthrough in the UI (see
+    # streamlit_app.py's "Beregningsdetaljer pr. år").
     return {**sample, **calculate_leaching(sample)}

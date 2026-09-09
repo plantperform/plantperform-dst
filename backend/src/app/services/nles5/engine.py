@@ -91,10 +91,10 @@ def P_func(jbnr, AAa, AAb, APb,
 def C_func(M, W, MP, WP):
     """Crop effect C based on crop group codes (Bilag 2, tabel 3/5/8).
 
-    § 23, stk. 4-bekendtgørelsens faste 2027-parameterværdi (7,2595 for
-    vinterplantedække til forfrugt, uanset hvad forfrugten faktisk var) er bevidst
-    IKKE implementeret her — reglen er uafklaret og forventes ændret, så WP
-    kategoriopslås som for alle andre år (jf. WP_p nedenfor).
+    The bekendtgørelse's fixed 2027 parameter value under § 23(4) (7.2595 for
+    vinterplantedække for the forfrugt, regardless of the actual forfrugt) is
+    intentionally not implemented. The rule is unresolved and expected to
+    change, so WP uses the category lookup as in every other year (see WP_p).
     """
     M_p = {
         1: 0,
@@ -173,7 +173,7 @@ def N_func(NT,
            theta_2=1.205144):
     """Nitrogen effect Ntheta based on mineral, fixation, organic, and historical N.
 
-    Beta-værdier jf. Bilag 2, tabel 9.
+    Beta values are from Bilag 2, table 9.
     """
     N = (
         beta_t * NT
@@ -189,11 +189,11 @@ def N_func(NT,
     return N if WC == 1 else N * theta_2
 
 
-# Bilag 8 tabulerer kun den daglige §38-dagsbasis-kurve fra 9/8 til og med 7/9
-# (fristen i §33 stk. 1 nr. 2). Datoer efter 7/9 har intet officielt kildebelæg
-# og er bevidst UDELADT her — Fdato_factor() falder tilbage til 1.0 (ingen
-# EEA-effekt-justering) for datoer uden for tabellen. UI'et (streamlit_app.py,
-# FDATO_OPTIONS) begrænser tilsvarende sådato-vælgeren til dette interval.
+# Bilag 8 tabulates the daily §38 curve only from 9 August through 7 September
+# (the deadline in §33(1)(2)). Dates after 7 September have no official source
+# basis and are intentionally omitted. Fdato_factor() falls back to 1.0 (no EEA
+# effect adjustment) for dates outside the table. The UI (streamlit_app.py,
+# FDATO_OPTIONS) likewise limits the sowing-date selector to this interval.
 FDATO_EFFECT_BY_DATE = {
     "9/8": 1.16,
     "10/8": 1.15,
@@ -246,9 +246,9 @@ def Fdato_factor(value):
         return 1
 
 
-# §37: standard (ikke-præcision) EEA-effekt — trappefunktion 45/42/40/33%,
-# gyldig til og med de datointervaller lovbekendtgørelsen angiver.
-# Efter 7/9 (fristen i §33 stk. 1 nr. 2) er der ingen effekt uden præcisionsteknologi.
+# §37: standard (non-precision) EEA effect, a 45/42/40/33% step function valid
+# through the date intervals specified by the lovbekendtgørelse. After 7 September
+# (the deadline in §33(1)(2)), there is no effect without precision technology.
 FDATO_STEP_RATES = [
     ((8, 20), 45),
     ((8, 24), 42),
@@ -258,10 +258,11 @@ FDATO_STEP_RATES = [
 
 
 def fdato_step_factor(value):
-    """Standard EEA-effekt jf. §37 (trappefunktion), som andel af fuld sats (45%).
+    """Return the standard §37 EEA effect as a share of the full 45% rate.
 
-    Bruges når efterafgrøden IKKE er etableret med præcisionsteknologi (§38).
-    Ved præcisionsteknologi bruges i stedet den daglige Bilag 8-kurve, `Fdato_factor`.
+    This step function applies when the efterafgrøde was not established using
+    precision technology (§38). With precision technology, the daily Bilag 8
+    curve in `Fdato_factor` is used instead.
     """
     if isinstance(value, str):
         normalized = value.strip().replace(' ', '')
@@ -287,11 +288,12 @@ _MAIZE_M_CODES = {8, 11}
 
 
 def reference_w_for_eea(M, crop_name=""):
-    """Reference-efterårsplantedække (W) for NUAR EEA-beregning (Tabel 1.3).
+    """Return reference autumn plant cover (W) for NUAR EEA (Table 1.3).
 
-    Majshelsæd (M=8/11) og kartofler bruger W3 (bar jord efter majshelsæd/kartofler).
-    Frøgræs (M=5) er ekskluderet fra standardreferencen — returnerer None (brug brugerens W).
-    Alle andre afgrøder bruger W5 (spildkorn og ukrudt).
+    Majshelsæd (M=8/11) and potatoes use W3 (bare soil after
+    majshelsæd/potatoes). Frøgræs (M=5) is excluded from the standard reference,
+    so None is returned and the user's W is used. All other afgrøder use W5
+    (volunteer cereals and weeds).
     """
     if M in _MAIZE_M_CODES or "kartofl" in (crop_name or "").lower():
         return 3
@@ -378,8 +380,9 @@ def nles5(Y,
 
 _KARTOFFEL_KODER = frozenset({149, 150, 151, 152, 154, 155, 156})
 
-# M11-korrektion: korrektionsfaktor til nitratudvaskning i majs (forfrugt græs/kløvergræs)
-# som funktion af tilført mineralsk N om foråret (MNCS, kg N/ha). Trin på 10 kg N/ha.
+# M11 correction factor for nitrate udvaskning in maize (forfrugt
+# græs/kløvergræs) as a function of spring-applied mineral N (MNCS, kg N/ha),
+# in increments of 10 kg N/ha.
 _MAJS_M11_KORREKTION = {
     0: 0.56, 10: 0.59, 20: 0.61, 30: 0.64, 40: 0.67, 50: 0.69, 60: 0.72,
     70: 0.76, 80: 0.78, 90: 0.82, 100: 0.86, 110: 0.91, 120: 0.94,
@@ -390,11 +393,12 @@ _MAJS_M11_MNCS_POINTS = sorted(_MAJS_M11_KORREKTION)
 
 
 def majs_m11_korrektionsfaktor(mncs):
-    """Korrektionsfaktor for M=11 (majshelsæd, forfrugt græs/kløvergræs) baseret på MNCS.
+    """Return the MNCS-based correction factor for M=11.
 
-    Bilag 2, tabel 1 definerer diskrete 10 kg N/ha-intervaller (0-9, 10-19, ...,
-    190-199, 200), hver med sin egen faste faktor — IKKE et sæt punkter til
-    interpolation. MNCS over 200 klampes til slutværdien for 200.
+    M=11 is majshelsæd with a græs/kløvergræs forfrugt. Bilag 2, table 1
+    defines discrete 10 kg N/ha intervals (0-9, 10-19, ..., 190-199, 200), each
+    with a fixed factor, not points to interpolate. MNCS above 200 is clamped
+    to the final value for 200.
     """
     mncs = max(0.0, float(mncs))
     pts = _MAJS_M11_MNCS_POINTS
@@ -406,7 +410,7 @@ def majs_m11_korrektionsfaktor(mncs):
 
 def calculate_leaching(sample):
     """Calculate leaching from a sample dictionary of inputs."""
-    # Kartoffelregel: M=2 for disse koder uanset brugervalg (NUAR AU-anbefaling 2027)
+    # Potato rule: M=2 for these codes regardless of user choice (NUAR AU 2027 recommendation)
     if sample.get("crop_code") in _KARTOFFEL_KODER:
         sample = {**sample, "M": 2}
 
@@ -416,11 +420,11 @@ def calculate_leaching(sample):
     else:
         nt_value = sample.get("NT", 0)
 
-    # §24 stk. 7-9: kvælstoffiksering fra efterafgrødeblanding med kvælstoffikserende
-    # arter (kløver, lucerne, vikke m.fl., jf. §40 nr. 2) giver en flad bonus på 35 kg N.
-    # Bonussen skal foldes ind i F0 AF KALDEREN (så den er synlig og videreføres til
-    # F1/F2 i efterfølgende år) — her bruges den kun til at annotere resultatet, IKKE
-    # til at justere F0 igen (undgår dobbelt-tælling).
+    # §24(7-9): N fixation from an efterafgrøde mixture with N-fixing species
+    # (clover, lucerne, vetch, etc.; see §40(2)) gives a flat 35 kg N bonus. The
+    # CALLER must include the bonus in F0 so it remains visible and carries into
+    # F1/F2 in later years. Here it only annotates the result and does not adjust
+    # F0 again, avoiding double counting.
     efa_nfiks_bonus = 35.0 if sample.get("efterafgroede_nfiks", False) else 0.0
 
     ntheta = N_func(
@@ -469,8 +473,8 @@ def calculate_leaching(sample):
     else:
         s = S_func(sample.get("CU", 0))
     fdato_input = sample.get("Fdato", 1)
-    # §38: kun ved dokumenteret præcisionsteknologi bruges den daglige Bilag 8-kurve.
-    # Standard (§37) er en trappefunktion med fire faste satser.
+    # §38: use the daily Bilag 8 curve only with documented precision technology.
+    # The §37 standard is a step function with four fixed rates.
     if sample.get("precision_dagsbasis", False):
         fdato = Fdato_factor(fdato_input)
     else:
@@ -490,7 +494,7 @@ def calculate_leaching(sample):
         ETS=ets,
         EPJ=sample.get("EPJ", 0.04),
     )
-    # M11-korrektion: majshelsæd (forfrugt græs/kløvergræs) — korriger udvaskning ud fra MNCS
+    # M11 correction: adjust udvaskning for majshelsæd with a græs/kløvergræs forfrugt by MNCS
     m11_anvendt = sample.get("M") == 11
     m11_mncs = sample.get("MNCS", 0)
     m11_faktor = majs_m11_korrektionsfaktor(m11_mncs) if m11_anvendt else None

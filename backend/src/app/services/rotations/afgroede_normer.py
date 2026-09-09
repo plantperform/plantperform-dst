@@ -1,7 +1,7 @@
-"""Afgrødenormer (udbytte, N-norm, M/W/MP/WP) fra Bilag 1-mastertabellen.
+"""Afgrøde norms (udbytte, N norm, M/W/MP/WP) from the Bilag 1 master table.
 
-Porteret verbatim fra c:\\plantperform-nles\\src\\afgroede_normer.py — samme
-logik, sti tilpasset DST2's database/data/raw/ANGJ-data/.
+Ported verbatim from c:\\plantperform-nles\\src\\afgroede_normer.py with the
+same logic and a path adjusted for DST2's database/data/raw/ANGJ-data/.
 """
 from __future__ import annotations
 
@@ -16,17 +16,17 @@ EXCEL_PATH = (
     / "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx"
 )
 
-# Kartofler anvender M2 (Vårsæd) i NLES5 — NUAR AU-anbefaling gældende fra 2027-regulering.
-# W ændres IKKE (typisk W3). Reglen gælder altid og overskriver eventuelle andre M-værdier.
+# Potatoes use M2 (Vårsæd) in NLES5 per the NUAR AU recommendation applicable
+# from the 2027 regulering. W is not changed (typically W3). The rule always
+# applies and overrides any other M values.
 KARTOFFEL_KODER: frozenset = frozenset({149, 150, 151, 152, 154, 155, 156})
 
 
 def apply_kartoffel_regel(sample: dict) -> dict:
-    """Returnerer sample med M=2 for kartoffelkoder; alle andre felter uændret.
+    """Return the sample with M=2 for potato codes and other fields unchanged.
 
-    Kartoffelkoder: 149, 150, 151, 152, 154, 155, 156.
-    Reglen overskriver M uanset hvad brugeren har valgt i UI'en.
-    W ændres ikke.
+    Potato codes: 149, 150, 151, 152, 154, 155, 156. The rule overrides M
+    regardless of the user's UI selection. W is unchanged.
     """
     if sample.get("crop_code") in KARTOFFEL_KODER:
         return {**sample, "M": 2}
@@ -212,7 +212,7 @@ def lookup_norm(crop_code, jb_nr, irrigated=False):
 def lookup_nfix(crop_code, jb_nr, irrigated=False):
     """Return Nfix_kgN_ha for (crop_code, jb_nr, irrigated), or 0.0 if not found.
 
-    Nfix er biologisk kvælstoffiksering til NUAR F0/F1/F2 — NOT forfrugtsværdi.
+    Nfix is biological N fixation for NUAR F0/F1/F2, not forfrugtsværdi.
     """
     if crop_code is None or jb_nr is None:
         return 0.0

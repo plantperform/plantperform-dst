@@ -1,35 +1,34 @@
-"""Sædskifte-kategorier — binder hver saedskiftevariant til én af 4
-kategorier (driftsform + gødningsniveau), læst direkte fra
-saedskifte_library's "Sammenlagt kategori"-kolonne (Ny_sædskifte_lookup_
-sammenlagt.csv, 2026-09-02). Erstatter den tidligere separate
-saedskifte_kategorier_uden_E_F.csv (6 kategorier), som er UDGÅET —
-kildefilen selv har konsolideret dens gamle 6 kategorier ned til 4 ved at
-fjerne N-norm%-varianter (fx "Økologiske sædskifter med kvæggylle (107 N)"
-og "...(65 N)" er nu begge "Øko samlet") og gruppere de to konventionelle
-svinegylle-niveauer (150 N/80 N) under ét "Konv. svin samlet".
+"""Sædskifte categories mapping every saedskiftevariant to one of four
+categories (driftsform + gødning level), read directly from the "Sammenlagt
+kategori" column in saedskifte_library (Ny_sædskifte_lookup_sammenlagt.csv,
+2026-09-02). This replaces the former separate
+saedskifte_kategorier_uden_E_F.csv with six categories, which is retired. The
+source file consolidated its six old categories into four by removing N-norm%
+variants (for example, "Økologiske sædskifter med kvæggylle (107 N)" and
+"...(65 N)" are now both "Øko samlet") and grouping the two konventionelle
+svinegylle levels (150 N/80 N) under "Konv. svin samlet".
 
-saedskiftevariant="1" (ren brak) hører til alle 4 kategorier på én gang,
-ligesom i den gamle CSV — brak kræver ingen gødning uanset kategori.
+saedskiftevariant="1" (pure brak) belongs to all four categories at once, as in
+the old CSV, because brak requires no gødning regardless of category.
 
-KATEGORI_GODNING binder hver kategori til de gødningsparametre
-candidate_evaluator.compute_n_inputs() skal bruge, som PRESET-standardværdier
-(altid frit justerbare bagefter i UI'en, jf. Fase 13's fulde afkobling af
-gødningsvalg fra sædskiftevalg — se GodningSettings).
+KATEGORI_GODNING maps each category to the gødning parameters required by
+candidate_evaluator.compute_n_inputs() as PRESET defaults. They remain freely
+adjustable in the UI, in line with Phase 13's complete decoupling of gødning
+selection from sædskifte selection; see GodningSettings.
 
-De to konsoliderede kategorier ("Konv. svin samlet", "Øko samlet") har
-MISTET deres tidligere niveau-opdeling i selve kildedata (Husdyr-gødning
-kg N/ha-kolonnen er tom for alle konsoliderede rækker, verificeret
-2026-09-02) — der er derfor IKKE længere et kildetal at vælge mellem. Her
-bruges det tidligere HØJESTE niveau i hvert par som preset-standard (150 for
-svin, 107 for øko), med den begrundelse at det lavere niveau i praksis
-allerede er nået via scenariets egen N-norm%-vælger (fx svarer økologisk
-65N ≈ 107N × 61 %, tæt på den eksisterende 60 %-værdi i N-norm%-listen) —
-IKKE en ny kildeværdi, en bevidst forenkling.
+The two consolidated categories ("Konv. svin samlet", "Øko samlet") have lost
+their previous level subdivision in the source data itself. The Husdyr-gødning
+kg N/ha column is empty for every consolidated row (verified 2026-09-02), so no
+source value remains to choose between. The previous HIGHEST level in each pair
+is used as the preset default (150 for pigs, 107 for økologisk), because the lower
+level is effectively available through the scenarie's own N-norm% selector.
+For example, økologisk 65N ≈ 107N × 61%, close to the existing 60% N-norm% value.
+This is an intentional simplification, not a new source value.
 
-Svinegylle/kvæggylle-udnyttelsesprocenterne for de KONVENTIONELLE
-gylle-kategorier er fortsat IKKE angivet i nogen kildefil — her genbruges
-samme officielle danske standardsatser for førsteårs-udnyttelse som før
-(kvæggylle 70 %, svinegylle 75 %), en tydeligt mærket antagelse.
+The svinegylle/kvæggylle utilization percentages for the konventionelle gylle
+categories remain absent from every source file. The same official Danish
+standard first-year utilization rates as before are reused (kvæggylle 70%,
+svinegylle 75%), explicitly identified as an assumption.
 """
 from __future__ import annotations
 
@@ -40,17 +39,17 @@ from app.services.rotations import saedskifte_library
 KONVENTIONEL = "Konventionel"
 OEKOLOGISK = "Økologisk"
 
-# Kategorinavne, som de forekommer i kildefilens "Sammenlagt kategori"-kolonne.
+# Category names as they appear in the source file's "Sammenlagt kategori" column.
 PLANTE = "Plante"
 KONV_SVIN_SAMLET = "Konv. svin samlet"
 KONV_KVAEG = "Konv. kvæg"
 OEKO_SAMLET = "Øko samlet"
 
 # {kategori: {org_mineral_n, mineralsk_andel_pct, only_organic, dyrkningssystem}}
-# org_mineral_n = kg udnyttet N/ha organisk gødning (0 = ren kunstgødning).
-# mineralsk_andel_pct = andel af org_mineral_n der regnes som straks-udnyttet
-#   (resten går i G0-puljen).
-# only_organic = True betyder ingen handelsgødnings-optopning (økologisk regel).
+# org_mineral_n = kg utilized N/ha from organisk gødning (0 = pure kunstgødning).
+# mineralsk_andel_pct = share of org_mineral_n considered immediately utilized
+#   (the remainder enters the G0 pool).
+# only_organic = True means no handelsgødning top-up (økologisk rule).
 KATEGORI_GODNING: dict[str, dict] = {
     PLANTE: {
         "org_mineral_n": 0.0, "mineralsk_andel_pct": None,
@@ -73,7 +72,7 @@ KATEGORI_GODNING: dict[str, dict] = {
 
 @lru_cache(maxsize=1)
 def _reverse() -> dict[str, list[str]]:
-    """kategori -> liste af saedskiftevariant-værdier, sorteret numerisk."""
+    """Map kategori to numerically sorted saedskiftevariant values."""
     reverse: dict[str, list[str]] = {k: [] for k in KATEGORI_GODNING}
     for nr in saedskifte_library.list_saedskifter():
         for kategori in saedskifte_library.get_kategori(nr):
@@ -84,17 +83,17 @@ def _reverse() -> dict[str, list[str]]:
 
 
 def list_kategorier() -> list[str]:
-    """De 4 kategorinavne."""
+    """Return the four category names."""
     return list(KATEGORI_GODNING.keys())
 
 
 def kategorier_for_saedskifte(saedskiftevariant: str) -> list[str]:
-    """Hvilke(n) kategori(er) en given saedskiftevariant hører til."""
+    """Return the categories to which a saedskiftevariant belongs."""
     return saedskifte_library.get_kategori(saedskiftevariant)
 
 
 def saedskifter_for_kategori(kategori: str) -> list[str]:
-    """Alle saedskiftevariant-værdier der hører til en given kategori."""
+    """Return every saedskiftevariant value belonging to a kategori."""
     return _reverse().get(kategori, [])
 
 

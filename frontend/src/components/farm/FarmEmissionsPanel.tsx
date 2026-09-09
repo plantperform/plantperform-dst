@@ -7,7 +7,7 @@ type FarmEmissionsPanelProps = {
 
 /**
  * Udledningskvote per kystvandopland. The bekendtgørelse enforces the quota per
- * catchment rather than as one farm total, so this lists one chip per opland,
+ * opland rather than as one bedrift total, so this lists one chip per opland,
  * inline with the nøgletal it has to be read against.
  */
 export const FarmEmissionsPanel = ({ farmId }: FarmEmissionsPanelProps) => {

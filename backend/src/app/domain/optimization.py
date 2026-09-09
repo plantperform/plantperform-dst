@@ -27,11 +27,11 @@ class FieldInput:
 
 @dataclass(frozen=True)
 class ConstraintsInput:
-    # Udledningsloft pr. kystvandopland (nøgle=kystvand_id, None for marker
-    # uden et tilknyttet opland) — bekendtgørelsen opgør udledning pr. opland,
-    # aldrig samlet på tværs, jf. FarmSidebar's tilsvarende Aktuel-visning.
-    # Et opland uden nøgle her er ubegrænset. Kun oplande der faktisk har
-    # marker i denne simulering får en håndhævet grænse.
+    # Udledning cap per kystvandopland (key=kystvand_id, None for marker without
+    # an associated opland). The bekendtgørelse calculates udledning per opland,
+    # never across oplande; see FarmSidebar's corresponding Aktuel visning. An
+    # opland absent here is unlimited. A cap is enforced only for oplande that
+    # actually contain marker in this simulering.
     max_n_load_by_kystvandopland: dict[int | None, float]
     min_fen: float | None
     max_fen: float | None
@@ -65,10 +65,10 @@ class OptimizationOutput:
     total_fen: float
 
 
-# ── Fase 11 — "Års-optimering": pr.-kalenderår udledningsloft, DB-udsvings-
-# grænse, og automatisk rotations-forskydning (start_year) som ekstra
-# beslutningsvariabel. Additivt sideordnet system til RotationOption/
-# ConstraintsInput/solve() ovenfor — rører intet af det eksisterende.
+# Phase 11, "Års-optimering": per-calendar-year udledning cap, DB fluctuation
+# limit, and automatic rotation offset (start_year) as an additional decision
+# variable. This is an additive peer system to RotationOption,
+# ConstraintsInput, and solve() above; it does not alter the existing system.
 
 @dataclass(frozen=True)
 class YearlyRotationOption:
@@ -92,8 +92,8 @@ class YearlyFieldInput:
 
 @dataclass(frozen=True)
 class YearlyConstraintsInput:
-    # Samme pr.-kystvandopland-princip som ConstraintsInput, men med et
-    # 8-langt (pr. kalenderår) loft-tuple pr. opland i stedet for ét tal.
+    # Same per-kystvandopland principle as ConstraintsInput, but with an
+    # eight-item per-calendar-year cap tuple per opland instead of one value.
     max_n_load_by_kystvandopland_and_year: dict[int | None, tuple[float | None, ...]]
     db2_swing_pct: float | None
     min_fen: float | None

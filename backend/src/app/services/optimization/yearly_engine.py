@@ -1,7 +1,8 @@
-"""CP-SAT-model for "Års-optimering" (Fase 11) — parallel til engine.py's
-solve(), men arbejder med pr.-kalenderår udledning/DB2 i stedet for
-scenarie-totaler. Se domain/optimization.py's YearlyRotationOption m.fl.
-for hvorfor dette er et sideordnet system, ikke en ombygning af solve().
+"""CP-SAT model for "Års-optimering" (Phase 11), parallel to engine.py's solve().
+
+It operates on per-calendar-year udledning/DB2 instead of scenarie totals. See
+YearlyRotationOption and related types in domain/optimization.py for why this is
+a peer system rather than a rewrite of solve().
 """
 from collections import defaultdict
 

@@ -1,34 +1,32 @@
-"""Sædskifte rotation lookup fra CSV (sammenlagt, semikolon-separeret).
+"""Sædskifte rotation lookup from a consolidated, semicolon-separated CSV.
 
-Kilde: Ny_sædskifte_lookup_sammenlagt.csv (2026-09-02) — erstatter
-PlantPerform_saedskifte_lookup_v4_uden_normgruppe_dedup (1).xlsx. Den nye
-fil har fjernet N-norm%-aksen fra selve rotationsopslaget (tidligere fandtes
-fx "Økologisk 107N" og "Økologisk 65N" som separate rækker for samme
-afgrødesekvens); N-tildeling håndteres nu udelukkende via scenariets egen
-N-norm%-vælger (rotation_candidates.py's /n-norm-procenter,
-candidate_evaluator.compute_n_inputs' n_norm_pct-skalering), IKKE længere som
-en del af selve rotationsopslaget. Rotation er derfor nøglet på
-(saedskiftevariant, variant) alene — ikke længere en tredelt
-(saedskiftevariant, variant, n_norm)-nøgle.
+Source: Ny_sædskifte_lookup_sammenlagt.csv (2026-09-02), replacing
+PlantPerform_saedskifte_lookup_v4_uden_normgruppe_dedup (1).xlsx. The new file
+removed the N-norm% axis from the rotation lookup itself. Previously, for
+example, "Økologisk 107N" and "Økologisk 65N" were separate rows for the same
+afgrøde sequence. N allocation is now handled exclusively by the scenarie's
+own N-norm% selector (rotation_candidates.py's /n-norm-procenter and the
+n_norm_pct scaling in candidate_evaluator.compute_n_inputs), not as part of the
+rotation lookup. Rotations are therefore keyed only by (saedskiftevariant,
+variant), no longer by a three-part (saedskiftevariant, variant, n_norm) key.
 
-Driftsform/Husdyr-gødningstype/Husdyr-gødning kg N/ha-kolonnerne beskriver
-hvordan kildedata oprindelig blev beregnet for DENNE specifikke række — de er
-IKKE en adgangsbegrænsning ved sædskiftevalg. Både konventionelle og
-økologiske brugere kan vælge ethvert sædskifte (jf. den eksisterende, fulde
-afkobling af driftsform fra sædskiftevalg, Fase 13's GodningSettings — se
-candidate_evaluator.py's modul-docstring). Kolonnerne bruges her kun til at
-udlede "Sammenlagt kategori" (get_kategori/get_driftsform, forbrugt af
-saedskifte_kategorier.py) — en ren UI-grupperingsetiket, ikke en filtrering
-af hvilke rotationer der kan vælges.
+The Driftsform/Husdyr-gødningstype/Husdyr-gødning kg N/ha columns describe how
+the source data was originally calculated for THIS specific row. They do not
+restrict access during sædskifte selection. Both konventionelle and økologiske
+users can select any sædskifte, following the existing full decoupling of
+driftsform from sædskifte selection in Phase 13's GodningSettings; see the
+candidate_evaluator.py module docstring. The columns are used only to derive
+"Sammenlagt kategori" (get_kategori/get_driftsform, consumed by
+saedskifte_kategorier.py), a UI grouping label rather than a filter on the
+available rotations.
 
-Verificeret 2026-09-02: for de få (saedskiftevariant, variant)-par hvor
-kildefilen har flere rækker (kun ren brak, saedskiftevariant "1"), er
-afgrøde-/udlægssekvensen identisk på tværs af alle rækker — kun
-driftsform-/kategori-mærkningen varierer. Det er derfor sikkert at bruge
-første match uden yderligere disambiguering.
+Verified 2026-09-02: for the few (saedskiftevariant, variant) pairs with several
+source rows (only pure brak, saedskiftevariant "1"), the afgrøde/udlæg sequence
+is identical across all rows. Only the driftsform/category labeling varies, so
+using the first match without further disambiguation is safe.
 
-Kolonnestruktur (41 kolonner, semikolon-separeret; kildefilens 4 indledende
-titel-/nummererings-/header-/underheader-rækker springes over):
+Column structure (41 semicolon-separated columns; the source file's first four
+title/numbering/header/subheader rows are skipped):
   0  Ident
   1  Sædskifte nr.  (= saedskiftevariant)
   2  Variant
@@ -40,13 +38,13 @@ titel-/nummererings-/header-/underheader-rækker springes over):
   36 Husdyr-gødningstype
   37 Husdyr-gødning kg N/ha
   38 Sammenlagt kategori
-  39 Oprindelige N-kategorier   (kun sporbarhed, ikke brugt her)
-  40 Oprindelige sædskifte nr.  (kun sporbarhed, ikke brugt her)
+  39 Oprindelige N-kategorier   (traceability only, not used here)
+  40 Oprindelige sædskifte nr.  (traceability only, not used here)
 
-Forward-fill på afgr_kode inden for rotationens aktive længde:
-  blank afgr = gentag foregående års afgrøde.
-udl_kode fyldes IKKE forward — blank = ingen udlæg det år.
-Rotationslængden bestemmes fra rådata FØR forward-fill.
+Forward-fill afgr_kode within the rotation's active length:
+  blank afgr = repeat the previous year's afgrøde.
+udl_kode is not forward-filled; blank = no udlæg that year.
+The rotation length is determined from raw data before forward-filling.
 """
 from __future__ import annotations
 
@@ -103,18 +101,18 @@ def _to_str(v) -> str | None:
 
 
 def list_saedskifter() -> list[str]:
-    """Sorteret liste af unikke saedskiftevariant-værdier (str)."""
+    """Return a sorted list of unique saedskiftevariant values (str)."""
     return sorted(_df()["saedskiftevariant"].dropna().unique(), key=lambda x: int(x))
 
 
 def list_variants(saedskifte: str) -> list[str]:
-    """Sorterede variant-værdier for et givet saedskiftevariant."""
+    """Return sorted variant values for a saedskiftevariant."""
     sub = _df()[_df()["saedskiftevariant"] == str(saedskifte)]
     return sorted(sub["variant"].dropna().unique(), key=lambda x: int(x))
 
 
 def list_all_saedskifte_refs() -> list[tuple[str, str]]:
-    """Alle (saedskiftevariant, variant)-kombinationer i datasættet."""
+    """Return all (saedskiftevariant, variant) combinations in the dataset."""
     df = _df()
     sub = df[["saedskiftevariant", "variant"]].dropna(how="any")
     pairs = {tuple(row) for row in sub.itertuples(index=False, name=None)}
@@ -122,17 +120,21 @@ def list_all_saedskifte_refs() -> list[tuple[str, str]]:
 
 
 def get_kategori(saedskifte: str) -> list[str]:
-    """"Sammenlagt kategori"-værdi(er) for et givet saedskiftevariant —
-    normalt netop én, men saedskiftevariant "1" (ren brak) hører til alle 4
-    kategorier på én gang, ligesom i den gamle kategori-CSV."""
+    """Return "Sammenlagt kategori" values for a saedskiftevariant.
+
+    Normally there is exactly one, but saedskiftevariant "1" (pure brak)
+    belongs to all four categories at once, as in the old category CSV.
+    """
     sub = _df()[_df()["saedskiftevariant"] == str(saedskifte)]
     return sorted(v for v in sub["kategori"].dropna().unique())
 
 
 def get_driftsform(saedskifte: str) -> str | None:
-    """Kildedataets EGEN driftsform-mærkning for dette saedskiftevariant —
-    bruges kun til kategori-udledning, IKKE som adgangsbegrænsning ved
-    sædskiftevalg (se moduldocstring)."""
+    """Return the source data's own driftsform label for a saedskiftevariant.
+
+    It is used only to derive the category, not to restrict access during
+    sædskifte selection; see the module docstring.
+    """
     sub = _df()[_df()["saedskiftevariant"] == str(saedskifte)]
     values = sub["driftsform"].dropna().unique()
     return values[0] if len(values) else None
@@ -142,20 +144,21 @@ def get_driftsform(saedskifte: str) -> str | None:
 def get_raw_rotation(
     saedskifte: str, variant: str,
 ) -> list[tuple[int | None, int | None, str | None]]:
-    """8-element liste af (afgr_code, udl_code, udl_navn).
+    """Return an eight-item list of (afgr_code, udl_code, udl_navn).
 
-    afgr_code forward-fyldes inden for rotationens aktive længde:
-      blank = gentag foregående års afgrøde.
-    udl_code/udl_navn fyldes ALDRIG forward — blank = ingen udlæg det pågældende år.
-    Rotationens aktive længde beregnes fra rådata FØR forward-fill, så
-    cyklingen i generate_rotation fungerer korrekt.
+    afgr_code is forward-filled within the rotation's active length:
+      blank = repeat the previous year's afgrøde.
+    udl_code/udl_navn are never forward-filled; blank = no udlæg that year.
+    The active rotation length is calculated from raw data before
+    forward-filling so generate_rotation cycles correctly.
 
-    Cachet: kaldes gentagne gange for samme (saedskifte, variant) — pr.
-    N-norm% i generate_candidates_for_field, og igen af dens dedup-tjek
-    (_strip_disabled_virkemidler-signaturen) — hver gang med en fuld,
-    ucachet pandas boolean-mask-filtrering over hele datasættet (~3ms).
-    Nøglerummet er trivielt lille (antal sædskiftevarianter × varianter,
-    et par hundrede kombinationer i alt), maxsize=None er derfor sikkert."""
+    Cached because it is called repeatedly for the same (saedskifte, variant),
+    once per N-norm% in generate_candidates_for_field and again by its dedup
+    check (_strip_disabled_virkemidler signature). Without caching, each call
+    performs a full pandas Boolean-mask filter over the dataset (~3 ms). The
+    key space is trivially small (number of sædskifte variants × variants, a
+    few hundred combinations total), so maxsize=None is safe.
+    """
     df = _df()
     mask = (df["saedskiftevariant"] == str(saedskifte)) & (df["variant"] == str(variant))
     rows = df[mask]
@@ -172,14 +175,14 @@ def get_raw_rotation(
         for i in range(1, 9)
     ]
 
-    # Beregn aktiv længde fra rådata FØR forward-fill
+    # Calculate active length from raw data before forward-filling
     raw_act_len = 0
     for i in range(7, -1, -1):
         if triples[i][0] is not None or triples[i][1] is not None:
             raw_act_len = i + 1
             break
 
-    # Forward-fill afgr KUN inden for aktiv længde; udl fyldes ikke
+    # Forward-fill afgr only within the active length; do not fill udl
     last_afgr = None
     result = []
     for i, (afgr, udl, udl_navn) in enumerate(triples):
@@ -194,7 +197,7 @@ def get_raw_rotation(
 
 
 def rotation_active_len(rotation: list[tuple[int | None, int | None, str | None]]) -> int:
-    """1-baseret indeks for sidste ikke-None position; 0 hvis alt er tomt."""
+    """Return the one-based index of the last non-None position, or 0 if empty."""
     for i in range(7, -1, -1):
         if rotation[i][0] is not None or rotation[i][1] is not None:
             return i + 1
@@ -204,11 +207,11 @@ def rotation_active_len(rotation: list[tuple[int | None, int | None, str | None]
 def generate_rotation(
     saedskifte: str, variant: str, start_year: int = 1
 ) -> list[tuple[int | None, int | None, str | None]]:
-    """Generer 8-årig rotation fra start_year (1-baseret), cyklisk hvis nødvendigt.
+    """Generate an eight-year rotation from one-based start_year, cycling as needed.
 
-    Eksempel:
+    Example:
         rotation = [A, B, C, D, E]  (active_len=5), start_year=3
-        resultat  = [C, D, E, A, B, C, D, E]
+        result    = [C, D, E, A, B, C, D, E]
     """
     base = get_raw_rotation(saedskifte, variant)
     act = rotation_active_len(base)

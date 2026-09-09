@@ -222,10 +222,12 @@ def post_farm_simulation_optimization(
 
 
 class KystvandoplandYearlyNLoadCaps(CamelModel):
-    """Udledningslofter pr. kalenderår for ét kystvandopland — hvert opland i
-    scenariets marker kan sættes uafhængigt (egen "samme for alle år"/
-    "pr. år"-tilstand i UI'en), jf. KystvandoplandNLoadCap for hvorfor
-    oplande ikke må blandes."""
+    """Per-calendar-year udledning caps for one kystvandopland.
+
+    Each kystvandopland containing the scenarie's marker can be configured
+    independently, with its own "same for all years"/"per year" UI state. See
+    KystvandoplandNLoadCap for why oplande must not be combined.
+    """
 
     kystvand_id: int | None = None
     max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
@@ -257,9 +259,10 @@ def post_farm_simulation_yearly_optimization(
     user: CurrentUser,
     request: YearlyOptimizeSimulationRequest | None = None,
 ) -> YearlyOptimizeSimulationResponse:
-    """"Års-optimering" (Fase 11) — som /optimize, men med pr.-kalenderår
-    udledningslofter og en DB-udsvingsgrænse i stedet for scenarie-totaler;
-    solveren vælger selv hvor meget hvert felts sædskifte forskydes."""
+    """"Års-optimering" (Phase 11) works like /optimize but uses per-calendar-
+    year udledning caps and a DB fluctuation limit instead of scenarie totals.
+    The solver chooses how far to offset each mark's sædskifte.
+    """
     optimization_request = request or YearlyOptimizeSimulationRequest()
     max_n_load_by_kystvandopland = {
         cap.kystvand_id: tuple(
@@ -331,11 +334,13 @@ def get_farm_simulation_yearly_optimization_candidates(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlyOptimizationKategoriOption]:
-    """Fase 12 — de (saedskiftevariant, variant)-par der reelt er gemt for
-    denne simulerings marker (fra "Opret scenarie"), til "Års-optimering"s
-    eksplicitte sædskifte-vælger. Kun rigtige biblioteks-refs vises
-    (base_ref er None) — tidligere Fase 10/11-efterladte "+manuel"-varianter
-    filtreres fra, samme mønster som _expand_yearly_options's dedup."""
+    """Return the (saedskiftevariant, variant) pairs stored for the marker.
+
+    These Phase 12 options come from "Opret scenarie" and populate the explicit
+    sædskifte selector in "Års-optimering". Only real library references are
+    shown (base_ref is None); "+manuel" variants left by earlier Phase 10/11
+    runs are filtered out using the same pattern as _expand_yearly_options.
+    """
     field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
     if field_candidates is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -348,19 +353,18 @@ def get_farm_simulation_yearly_optimization_candidates(
             pair = (candidate.ref.saedskiftevariant, candidate.ref.variant)
             by_pair.setdefault(pair, candidate)
 
-    # Kategorier er normalt gensidigt udelukkende for en given
-    # saedskiftevariant — undtagelsen er "ren brak" (saedskiftevariant "1"),
-    # som hører til alle kategorier i kildedataen (beslutning 15; 4
-    # kategorier pr. 2026-09-02, tidligere 6). Uden særbehandling ville
-    # brak-varianterne dukke op — og blive markeret valgt — identisk under
-    # alle kategorier i vælgeren, så en "vælg alt" på blot én lille kategori
-    # kunne se ud som om den valgte på tværs af dem alle. Brak får derfor
-    # sin egen kategori i stedet.
+    # Categories are normally mutually exclusive for a saedskiftevariant. The
+    # exception is "ren brak" (saedskiftevariant "1"), which belongs to every
+    # source-data category (decision 15; four categories as of 2026-09-02,
+    # previously six). Without special handling, the brak variants would appear
+    # identically, and be marked selected, under every selector category. A
+    # "select all" in one small category could then appear to select across all
+    # of them. Brak therefore receives its own category.
     BRAK_KATEGORI = "Brak"
-    # Brak-variant-id'erne (1-4, evt. flere) er alle den samme rene brak
-    # gentaget hele vejen igennem — ingen virkemiddel- eller afgrødeforskel
-    # dem imellem, kun forskellige interne normgruppe-id'er uden betydning
-    # her. Vis kun ét repræsentativt eksemplar i stedet for ét pr. variant-id.
+    # The brak variant IDs (1-4, possibly more) all repeat the same pure brak
+    # throughout. There is no virkemiddel or afgrøde difference between them,
+    # only different internal norm-group IDs that do not matter here. Show one
+    # representative example rather than one per variant ID.
     seen_brak_sequences: set[tuple[str, ...]] = set()
 
     by_kategori: dict[str, list[YearlyOptimizationSaedskifteOption]] = {}
@@ -469,10 +473,12 @@ def post_farm_simulation_field_preview_rotation(
     request: RecomputeFieldRotationRequest,
     user: CurrentUser,
 ) -> RotationCandidateEvaluation:
-    """Levende beregning (Fase 10) — genberegner en rotation for én mark ud
-    fra base_ref + evt. enkelt-positions-overskrivninger, uden at gemme
-    noget. Bruges af "Rediger manuelt"-panelet til at vise resultatet af en
-    ændring, før brugeren trykker "Gem"."""
+    """Live Phase 10 calculation of a rotation for one mark.
+
+    Recalculates from base_ref plus any single-position overrides without
+    storing anything. The "Rediger manuelt" panel uses it to show the result of
+    a change before the user selects "Gem".
+    """
     simulation = get_simulation(farm_id, simulation_id, user.email)
     if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -531,9 +537,12 @@ def post_farm_simulation_field_apply_rotation(
     request: RecomputeFieldRotationRequest,
     user: CurrentUser,
 ) -> FieldRecord:
-    """Gemmer resultatet af en manuel rettelse (samme genberegning som
-    preview-rotation), skriver den til marken som Optimér ville, og låser
-    marken til dette valg (allowed_rotation_ids) indtil brugeren låser op."""
+    """Store the result of a manual correction.
+
+    Uses the same recalculation as preview-rotation, writes it to the mark as
+    Optimér would, and locks the mark to this selection (allowed_rotation_ids)
+    until the user unlocks it.
+    """
     try:
         field = apply_manual_rotation(
             farm_id, simulation_id, field_id,

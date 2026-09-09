@@ -1,6 +1,6 @@
-// Koefficienter og labels til "Beregningsdetaljer pr. år" — porteret fra
-// c:\plantperform-nles\streamlit_app.py (linje ~1250-1281), som igen afspejler
-// NLES5-motorens Bilag 2-koefficienter (services/nles5/engine.py).
+// Coefficients and labels for "Beregningsdetaljer pr. år", ported from
+// c:\plantperform-nles\streamlit_app.py (lines ~1250-1281), which in turn
+// reflects the NLES5 engine's Bilag 2 coefficients (services/nles5/engine.py).
 
 export const M_LABELS: Record<number, string> = {
   1: 'Vintersæd',
@@ -66,7 +66,7 @@ export const WP_P: Record<number, number> = {
   6: 5.483, 7: -1.572, 8: 7.413, 9: 7.396, 10: 10.975,
 }
 
-// Nθ-formlens koefficienter (β-værdier) og θ₂-korrektionen.
+// Coefficients (beta values) for the N-theta formula and the theta2 correction.
 export const NTHETA_COEFFICIENTS = {
   bt: 0.456793,
   bCS: 0.04957,
@@ -80,7 +80,7 @@ export const NTHETA_COEFFICIENTS = {
   theta2: 1.205144,
 }
 
-// L-formlens konstanter (NLES5: L = τ·(Y−1991) + (μ+Nθ+C)^κ · (P·S)^ρ).
+// Constants for the L formula (NLES5: L = τ·(Y−1991) + (μ+Nθ+C)^κ · (P·S)^ρ).
 export const L_FORMULA_CONSTANTS = {
   tau: -0.1108,
   mu: 23.51,
@@ -88,12 +88,12 @@ export const L_FORMULA_CONSTANTS = {
   rho: 1.085,
 }
 
-// Sådato/etableringsinterval for efterafgrøde (EEA) — porteret fra
-// streamlit_app.py (linje 75-92) og engine.py's FDATO_EFFECT_BY_DATE/
-// FDATO_STEP_RATES, som backend'en (bridge_v2.py) rent faktisk bruger.
-// Gælder som scenarie-global indstilling for alle år med efterafgrøde.
+// Sowing date/establishment interval for efterafgrøde (EEA), ported from
+// streamlit_app.py (lines 75-92) and engine.py's FDATO_EFFECT_BY_DATE/
+// FDATO_STEP_RATES, which the backend (bridge_v2.py) actually uses.
+// Applies as a scenarie-wide setting to every year with efterafgrøde.
 
-// §37: standard (ikke-præcision) etableringsintervaller — label -> repræsentativ dato.
+// Section 37: standard (non-precision) establishment intervals, label -> representative date.
 export const FDATO_STANDARD_INTERVALS: { label: string; date: string }[] = [
   { label: 'Til og med 20. august (45%)', date: '20/8' },
   { label: '21.-24. august (42%)', date: '24/8' },
@@ -101,7 +101,7 @@ export const FDATO_STANDARD_INTERVALS: { label: string; date: string }[] = [
   { label: '29. august - 7. september (33%)', date: '7/9' },
 ]
 
-// §38: Bilag 8's daglige dagsbasis-kurve, kun tabuleret 9/8-7/9 (fristen i §33 stk. 1 nr. 2).
+// Section 38: Bilag 8's daily curve, tabulated only for 9/8-7/9 (the deadline in section 33(1)(2)).
 export const FDATO_OPTIONS: string[] = [
   '9/8', '10/8', '11/8', '12/8', '13/8', '14/8', '15/8', '16/8', '17/8', '18/8',
   '19/8', '20/8', '21/8', '22/8', '23/8', '24/8', '25/8', '26/8', '27/8', '28/8',
@@ -140,12 +140,12 @@ const fdatoStepFactor = (value: string): number => {
   return 0
 }
 
-// EEA's faste styrke (matcher bridge_v2.py's _EEA_STRENGTH).
+// EEA's fixed strength (matches bridge_v2.py's _EEA_STRENGTH).
 const EEA_STRENGTH = 0.45
 
-// Beregnet NUAR EEA-effekt i procent for det valgte sådato/interval — samme
-// formel som streamlit_app.py's _fdato_effect_pct, til forhåndsvisning i
-// "Nyt scenarie"-wizarden.
+// Calculated NUAR EEA effect as a percentage for the selected sowing date or
+// interval. Uses the same formula as streamlit_app.py's _fdato_effect_pct for
+// the preview in the "Nyt scenarie" wizard.
 export const fdatoEffectPercent = (fdato: string, precision: boolean): number => {
   const factor = precision ? (FDATO_EFFECT_BY_DATE[fdato] ?? 1) : fdatoStepFactor(fdato)
   return EEA_STRENGTH * factor * 100

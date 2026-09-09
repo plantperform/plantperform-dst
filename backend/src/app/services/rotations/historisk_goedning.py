@@ -1,12 +1,12 @@
-"""Historisk (2025+2026 gennemsnit) gødningstildeling pr. afgrødekode, region,
-JB-nr og driftsform (Bilag 3) — bruges til at genskabe ægte N-input (MNCS/G0)
-for marker og rotationspositioner ud fra hvad der faktisk er tildelt
-historisk, i stedet for scenariets gødnings-slider (org_mineral_n/
-mineralsk_andel_pct).
+"""Historical average 2025+2026 gødning allocation per afgrødekode, region,
+JB-nr, and driftsform (Bilag 3).
 
-Loader direkte fra kilde-CSV'en (samme mønster som afgroede_normer's
-Excel-opslag) — ikke fra DB-tabellen historisk_goedningsfordeling, som kun
-findes for at gøre dataene tilgængelige for andre ad hoc-forespørgsler.
+It reconstructs actual N inputs (MNCS/G0) for marker and rotation positions from
+historical allocations rather than the scenarie's gødning slider
+(org_mineral_n/mineralsk_andel_pct). Data loads directly from the source CSV
+using the same pattern as afgroede_normer's Excel lookup, not from the
+historisk_goedningsfordeling DB table, which exists only to expose the data to
+other ad hoc queries.
 """
 from __future__ import annotations
 
@@ -23,8 +23,9 @@ _CSV_PATH = (
     / "Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv"
 )
 
-# CSV'en har 6 regioner (Øst- og Nordjylland slået sammen); vores 7-delte
-# goedningsregion-kolonne på registry_field splitter dem — kollaps ved opslag.
+# The CSV has six regions (Øst- and Nordjylland combined), while the
+# seven-region goedningsregion column on registry_field separates them. Collapse
+# them during lookup.
 _REGION_ALIASES = {
     "Østjylland": "Øst og Nordjylland",
     "Nordjylland": "Øst og Nordjylland",
@@ -52,11 +53,11 @@ def lookup_historisk_n_input(
     goedningsregion: str | None,
     oeko: bool,
 ) -> dict[str, float]:
-    """{"mncs": ..., "g0": ...} for én afgrøde/mark, historisk gennemsnit.
+    """Return historical average {"mncs": ..., "g0": ...} for an afgrøde/mark.
 
-    Falder tilbage til {"mncs": 0.0, "g0": 0.0} (ingen bidrag) når afgrøden,
-    JB-nr'et eller regionen ikke findes i opslaget — fx en administrativ
-    arealtype uden historisk gødningsdata, eller en mark uden tildelt region.
+    Falls back to {"mncs": 0.0, "g0": 0.0} (no contribution) when the afgrøde,
+    JB-nr, or region is not found, such as an administrative area type without
+    historical gødning data or a mark without an assigned region.
     """
     if afgrode_kode is None or jbnr is None or goedningsregion is None:
         return {"mncs": 0.0, "g0": 0.0}
@@ -72,14 +73,14 @@ def real_history_lookback(
     goedningsregion: str | None,
     oeko: bool,
 ) -> dict[str, dict]:
-    """{"2025": {"code", "mncs", "mnca", "g0"}, "2026": {...}} — markens egen
-    ægte 2025/26-afgrøde og dens historiske N-input, til at seede f1/f2/g1/g2/
-    m1/m2 for position 0 (2027) og 1 (2028) af en NY rotationsevaluering, i
-    stedet for at ombukke cyklisk til en hypotetisk fremtidig position i
-    samme kandidat — se candidate_evaluator.evaluate_sequence_for_mark.
-    String-nøgler (ikke int) så det ruller uændret gennem JSON-lagring
-    (SimulationFieldCandidates.real_history), samme konvention som
-    crop_history selv.
+    """Return the mark's actual 2025/26 afgrøde and historical N inputs.
+
+    The shape is {"2025": {"code", "mncs", "mnca", "g0"}, "2026": {...}}. It
+    seeds f1/f2/g1/g2/m1/m2 for positions 0 (2027) and 1 (2028) in a new
+    rotation evaluation rather than cycling to a hypothetical future position
+    in the same candidate; see candidate_evaluator.evaluate_sequence_for_mark.
+    String keys rather than integers pass unchanged through JSON storage in
+    SimulationFieldCandidates.real_history, following crop_history's convention.
     """
     result: dict[str, dict] = {}
     for year in (2025, 2026):

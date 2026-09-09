@@ -71,12 +71,12 @@ AUTO_W_BY_M: dict[int, int] = {
     5: 6,  # GRASS_SEED -> W6 (frøgræs)
     6: 5,  # FALLOW -> W5 (brak/udtagning)
     7: 6,  # BEET -> W6 (sukkerroer, hamp)
-    8: 3,  # MAIZE_POTATO -> W3 (bar jord efter majshelsæd/kartofler)
-    9: 6,  # RAPE -> W6 (vinterraps er selv en del af W6-definitionen)
+    8: 3,  # MAIZE_POTATO -> W3 (bare soil after majshelsæd/kartofler)
+    9: 6,  # RAPE -> W6 (vinterraps is itself part of the W6 definition)
 }
 
 # next-year M-code -> this year's W (mirrors streamlit_app.py's _NEXT_M_TO_W,
-# i.e. Bilag 2 tabel 6, "hvad sås/pløjes i efteråret afhænger af næste års M").
+# i.e. Bilag 2 table 6, "what is sown/ploughed in autumn depends on next year's M").
 NEXT_M_TO_W: dict[int, int] = {1: 1, 9: 6, 10: 7, 11: 8, 12: 8}
 AUTUMN_SOWN_M = frozenset({1, 9, 10})
 

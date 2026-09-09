@@ -80,14 +80,17 @@ def _build_options(
     candidates: list[RotationCandidateEvaluation],
     excluded_afgrodekoder: frozenset[int] = frozenset(),
 ) -> tuple[RotationOption, ...]:
-    """Ét RotationOption pr. gemt, usynligt beregnet sædskifte-kandidat (jf.
-    "Opret scenarie") — ingen 2^n virkemiddel-udfoldning her (beslutning 7:
-    virkemidler er en fremtidig ekstra kandidat-facet, ikke bygget endnu).
+    """Build one RotationOption per stored, invisibly calculated candidate.
 
-    Hvis marken har `allowed_rotation_ids` sat (fx en manuel rettelse gemt
-    via Fase 10's "Rediger manuelt", som låser marken til netop det valg),
-    begrænses kandidatmængden til kun disse — Optimér kan så ikke overskrive
-    en bevidst manuel rettelse igen, før brugeren selv låser op."""
+    These candidates come from "Opret scenarie". There is no 2^n virkemiddel
+    expansion here; decision 7 reserves virkemidler as a future candidate
+    facet that has not yet been built.
+
+    If the mark has `allowed_rotation_ids`, for example after Phase 10's
+    "Rediger manuelt" locks a manual adjustment to that choice, restrict the
+    candidate set to those IDs. "Optimér" then cannot overwrite an intentional
+    manual adjustment until the user unlocks it.
+    """
     retention_factor = 1 - (field.retention or 0) / 100
     if field.allowed_rotation_ids:
         allowed = set(field.allowed_rotation_ids)
@@ -200,7 +203,7 @@ def run_optimization(
 
 
 class ManualRotationNotFoundError(Exception):
-    """Simulering, mark eller markens gemte kandidatmængde (jbnr-kilden) findes ikke."""
+    """The simulering, mark, or its stored candidate set (jbnr source) is missing."""
 
 
 def apply_manual_rotation(
@@ -212,13 +215,15 @@ def apply_manual_rotation(
     email: str,
     start_year: int = 1,
 ) -> FieldRecord | None:
-    """"Rediger manuelt" (Fase 10) — genberegner markens rotation ud fra
-    base_ref + evt. enkelt-positions-overskrivninger, gemmer resultatet som
-    en ekstra (erstattelig) kandidat på marken, skriver det tilbage til
-    marken præcis som Optimér ville (samme areal-/retentionsskalering som
-    _build_options), og låser marken til dette valg (allowed_rotation_ids)
-    så en senere Optimér-kørsel ikke overskriver den manuelle rettelse
-    igen, før brugeren selv låser op."""
+    """Apply a Phase 10 "Rediger manuelt" adjustment to a mark's rotation.
+
+    Recalculate from base_ref plus any single-position overrides, store the
+    result as an additional replaceable candidate on the mark, and write it
+    back exactly as "Optimér" would, with the same area/retention scaling as
+    _build_options. Lock the mark to this choice through allowed_rotation_ids
+    so a later "Optimér" run cannot overwrite the manual adjustment until the
+    user unlocks it.
+    """
     simulation = repository.get_simulation(farm_id, simulation_id, email)
     field = repository.get_simulation_field(farm_id, simulation_id, field_id, email)
     if simulation is None or field is None:
@@ -301,33 +306,34 @@ def _expand_yearly_options(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
-    """Udvider hver gemt kandidat til op til dens active_len forskudte
-    varianter (start_year 1..active_len, jf. Fase 10's evaluate_with_overrides)
-    — den ekstra beslutningsvariabel "Års-optimering" (Fase 11) bruger til at
-    rykke et felts sædskifte frem/tilbage for bedre at kunne overholde
-    pr.-års-udledningslofter og DB-udsvingsgrænsen. Samme
-    allowed_rotation_ids-lås som _build_options respekteres — en låst marks
-    kandidatmængde begrænses til kun dens låste kandidat, før den forskydes.
+    """Expand each stored candidate to at most active_len shifted variants.
 
-    Alle kandidater kan forskydes; kørselsniveauets afgrødefravalgsfilter
-    afgør alene, hvilke kandidater der fjernes helt."""
+    start_year ranges from 1 through active_len, as in Phase 10's
+    evaluate_with_overrides. Phase 11's additional "Års-optimering" decision
+    variable uses these variants to shift a mark's sædskifte forward or
+    backward to better satisfy annual udledning caps and the DB fluctuation
+    limit. The allowed_rotation_ids lock from _build_options still applies: a
+    locked mark's candidate set is restricted to its locked candidate before
+    shifting.
+
+    Every candidate can be shifted. The run-level afgrøde exclusion filter
+    alone determines which candidates are removed entirely.
+    """
     retention_factor = 1 - (field.retention or 0) / 100
     if field.allowed_rotation_ids:
         allowed = set(field.allowed_rotation_ids)
         candidates = [c for c in candidates if c.ref.to_id() in allowed]
     candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
 
-    # En kandidat med base_ref sat og ingen overrides er en tidligere
-    # kørsels efterladte rene forskydning af en anden kandidat — at
-    # forskyde den IGEN ville blot genskabe de samme sekvenser dens
-    # base_ref's egen forskydnings-udvidelse allerede dækker. Springes over
-    # for at undgå at kandidatmængden (og dermed CP-SAT-model-størrelsen)
-    # vokser for hver gentagen kørsel — men KUN når base_ref rent faktisk
-    # stadig er til stede (fx efter allowed_rotation_ids-filtret ovenfor
-    # kan en låst marks eneste tilbageværende kandidat selv være en ren
-    # forskydning, og skal så beholdes, ellers bliver marken uløseligt).
-    # En kandidat med reelle overrides (Fase 10 "Rediger manuelt") er unik
-    # og beholdes altid.
+    # A candidate with base_ref and no overrides is a pure shift of another
+    # candidate left by an earlier run. Shifting it again would only recreate
+    # sequences already covered by its base_ref's shift expansion. Skip it to
+    # prevent the candidate set, and thus the CP-SAT model, from growing on
+    # every repeated run, but only while base_ref is still present. After the
+    # allowed_rotation_ids filter above, a locked mark's only remaining
+    # candidate may itself be a pure shift and must then remain to keep the
+    # mark solvable. A candidate with actual Phase 10 "Rediger manuelt"
+    # overrides is unique and is always retained.
     present_ids = {c.ref.to_id() for c in candidates}
     candidates = [
         c
@@ -400,15 +406,17 @@ def run_yearly_optimization(
     excluded_afgrodekoder: frozenset[int],
     email: str,
 ) -> YearlyOptimizationRunResult:
-    """"Års-optimering" (Fase 11) — som run_optimization, men lader solveren
-    også vælge hvor meget hvert felts sædskifte forskydes (start_year), for
-    at kunne overholde pr.-kalenderår-udledningslofter og en grænse for hvor
-    meget den samlede DB2 må svinge år-til-år. Vindende kandidater gemmes
-    som en manuel kandidat (samme mønster som apply_manual_rotation), men
-    låser IKKE marken — et Års-optimering-resultat skal fortsat kunne
-    overskrives af en senere almindelig Optimér- eller Års-optimering-kørsel.
+    """Run Phase 11 "Års-optimering" with annual rotation shifting.
 
-    Alle tilbageværende kandidater kan forskydes — se _expand_yearly_options."""
+    This works like run_optimization but also lets the solver choose how far
+    each mark's sædskifte is shifted (start_year), allowing it to satisfy
+    calendar-year udledning caps and a limit on total DB2 fluctuation between
+    years. Winning candidates are stored as manual candidates following the
+    apply_manual_rotation pattern, but do not lock the mark. A later regular
+    "Optimér" or "Års-optimering" run may overwrite the result.
+
+    Every remaining candidate can be shifted; see _expand_yearly_options.
+    """
     simulation = repository.get_simulation(farm_id, simulation_id, email)
     fields = repository.list_simulation_fields(farm_id, simulation_id, email)
     field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
@@ -526,13 +534,15 @@ def compute_yearly_summary(
     simulation_id: str,
     email: str,
 ) -> tuple[YearlySummaryEntry, ...] | None:
-    """Summér kvælstofudledning (retentionskorrigeret)/DB2/foderenheder pr. år
-    (position i den enkelte marks
-    egen rotationscyklus) på tværs af alle optimerede marker i simuleringen —
-    til "Årsoversigt"-stripen øverst i Liste-visningen. Marker uden vindende
-    kandidat (endnu ikke optimeret) bidrager ikke. Rotationer med kortere
-    cyklus end andre marker bidrager kun til de år de reelt dækker (field_count
-    afspejler hvor mange marker der har data for det pågældende år)."""
+    """Summarize annual udledning, DB2, and foderenheder for optimized marks.
+
+    udledning is retention-corrected. Each year is a position in the individual
+    mark's own rotation cycle. The result feeds the "Årsoversigt" strip at the
+    top of the Liste-visning. Marker without a winning candidate, which have not yet
+    been optimized, do not contribute. Rotations shorter than those of other
+    marker contribute only to the years they actually cover; field_count shows
+    how many marker have data for each year.
+    """
     fields = repository.list_simulation_fields(farm_id, simulation_id, email)
     field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
     if fields is None or field_candidates is None:

@@ -1,10 +1,12 @@
-"""Finkornede sædskifte-kandidater — reference til en (saedskiftevariant,
-variant, N-norm %)-kombination i services.rotations.saedskifte_library, samt
-en enkelt års-position (rigtig afgrødekode) i en genereret rotation.
+"""Fine-grained sædskifte candidates.
 
-RotationCandidateRef serialiseres som ét komposit-id ("11:1:100"), så den kan
-genbruge det eksisterende FieldRecord.allowed_rotation_ids: list[str]-felt
-uændret (jf. planen for Fase 5-cutover).
+References a (saedskiftevariant, variant, N-norm %) combination in
+services.rotations.saedskifte_library and a single year position (a real
+afgrødekode) in a generated rotation.
+
+RotationCandidateRef is serialized as one composite ID ("11:1:100"), allowing
+the existing FieldRecord.allowed_rotation_ids: list[str] field to be reused
+unchanged (see the Phase 5 cutover plan).
 """
 from __future__ import annotations
 
@@ -40,39 +42,38 @@ class RotationCandidateYearResult(CamelModel):
     leaching_detail: dict
     db_kr_ha: float
     db_detail: dict
-    # Nøgletal til "nøgletal"-laget i markens beregningsgennemgang (jf. den
-    # gamle app) — allerede beregnet af compute_n_inputs, men tidligere kasseret
-    # efter brug i selve NLES5-/DB-kaldet, ikke gjort tilgængelig for UI'en.
-    # Husdyrgødning består af en udnyttet/mineralsk del (tæller med i normen,
-    # ligesom handelsgødning) og en organisk bundet del (tæller IKKE med i
-    # normen, men indgår i NLES5-udvaskningen via G0/G1/G2).
+    # Nøgletal for the "nøgletal" layer in the mark's calculation walkthrough
+    # (see the old app). Already calculated by compute_n_inputs, these were
+    # previously discarded after the NLES5/DB call and not exposed to the UI.
+    # Husdyrgødning consists of a utilized/mineral part (counts toward the norm,
+    # like handelsgødning) and an organically bound part (does not count toward
+    # the norm but contributes to NLES5 udvaskning through G0/G1/G2).
     forfrugtsvaerdi_kgn_ha: float = 0.0
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0.0
     tildelt_handelsgodning_kgn_ha: float = 0.0
     husdyrgodning_organisk_bundet_kgn_ha: float = 0.0
-    # Ton-overblik (streamlit_app.py's "Reference — ton-overblik") — den
-    # udlagte mængde husdyrgødning i ton/ha (scenariets "Maks tilladt
-    # udnyttet N"-indstilling ÷ gødningens N-indhold kg N/ton), samme for
-    # alle positioner i rotationen (jf. Fase 13: én gødningsindstilling for
-    # hele scenariet). IKKE opdelt i udnyttet/organisk bundet — det er kun
-    # relevant for selve NLES5-/DB-beregningen, ikke for hvor meget gødning
-    # der fysisk køres ud. Rent opgørelsestal, ingen beregningseffekt — til
-    # senere brug som optimeringsparameter (min/maks ton gødning brugt
-    # pr. år).
+    # Tonnage overview (streamlit_app.py's "Reference — ton-overblik"): the
+    # norm-limited quantity of husdyrgødning allocated at this rotation position
+    # (the position's utilized N from husdyrgødning divided by the gødning's N
+    # content in kg N/tonne). It may vary by position because the afgrøde norm
+    # caps the allocation; the scenarie's "Maks tilladt udnyttet N" setting is
+    # an upper limit, not a fixed applied quantity. This reporting value has no
+    # calculation effect and is intended for later use as an optimization
+    # parameter (minimum/maximum tonnes of gødning used per year).
     husdyrgodning_ton_pr_ha: float = 0.0
-    # Afgrødens fulde Bilag 1-N-norm (kg N/ha), FØR forfrugtsværdi trækkes fra
-    # og FØR N-norm%-reduktionen — None hvis afgrøden ikke har en norm i
-    # datasættet (fx en administrativ arealtype). n_norm_pct er reduktionen
-    # scenariet reelt gøder til (fx "80" = 80% af normen) — samme værdi som
-    # candidate.ref.n_norm_pct, men som tal i stedet for streng, til direkte
-    # visning ("100% gødet til norm"/"80% gødet til norm").
+    # The afgrøde's full Bilag 1 N norm (kg N/ha), before deducting
+    # forfrugtsværdi and before the N-norm% reduction. None when the afgrøde has
+    # no norm in the dataset (e.g. an administrative area type). n_norm_pct is
+    # the level to which the scenarie actually applies gødning (e.g. "80" = 80%
+    # of the norm), matching candidate.ref.n_norm_pct but stored as a number for
+    # direct display ("100% gødet til norm"/"80% gødet til norm").
     afgrode_norm_kgn_ha: float | None = None
     n_norm_pct: float = 100.0
 
 
 class RotationPositionOverride(CamelModel):
-    """Manuel overskrivning af hovedafgrøden i én position (0-7) af en
-    ellers biblioteksgenereret rotation — jf. Fase 10 (levende beregning)."""
+    """Manual hovedafgrøde override in one position (0-7) of an otherwise
+    library-generated rotation; see Phase 10 (live calculation)."""
 
     position: int = Field(ge=0, le=7)
     afgrode_kode: int
@@ -91,14 +92,14 @@ class RotationCandidateEvaluation(CamelModel):
 
 
 class SimulationFieldCandidates(CamelModel):
-    """Den fulde, usynligt beregnede kandidatmængde for én mark i en
-    simulering — gemt ved "Opret scenarie", læst af optimeringen senere."""
+    """The complete, invisibly calculated candidate set for a mark in a
+    simulering, stored by "Opret scenarie" and read later by the optimizer."""
 
     field_id: str
     jbnr: int
     candidates: list[RotationCandidateEvaluation]
-    # Markens egen ægte 2025/26-historik (afgrøde + historisk N-input,
-    # jf. historisk_goedning.real_history_lookback) — cachet her ved
-    # "Opret scenarie" så optimeringen/"Rediger manuelt" senere kan seede
-    # 2027/2028's bagudkig uden en ekstra DB-slå-op pr. mark pr. kald.
+    # The mark's own actual 2025/26 history (afgrøde + historical N input; see
+    # historisk_goedning.real_history_lookback), cached here by "Opret scenarie"
+    # so the optimizer/"Rediger manuelt" can later seed the 2027/2028 lookback
+    # without an additional DB lookup per mark per call.
     real_history: dict[str, dict] | None = None

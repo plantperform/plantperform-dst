@@ -38,8 +38,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Ikke reversibel — de nulstillede/slettede data (gamle Crop-baserede
-    # rotationer, simuleringer) er ikke bevaret nogen steder.
+    # Not reversible: the reset/deleted data (old Crop-based rotations and
+    # simuleringer) was not preserved anywhere.
     raise NotImplementedError(
         "This migration is not reversible: old crop_rotation values and all "
         "simulations were discarded, not preserved."

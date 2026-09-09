@@ -1,23 +1,24 @@
-"""Evaluerer en marks "Aktuel"-tilstand (DB2/udvaskning/FEN) ud fra dens egen
-ægte crop_history (2017-2026) og den historiske gødningstildeling (Bilag 3) —
-ingen scenarie/gødnings-slider involveret. Bruges til at udfylde
-FieldRecord.db2/n_load/leaching/fen ved "Tilføj marker", i stedet for de
-hidtidige hardkodede 0'er.
+"""Evaluate a mark's "Aktuel" state (DB2/udvaskning/FEN) from its actual
+crop_history (2017-2026) and historical gødning allocation (Bilag 3), without a
+scenarie/gødning slider. Used to populate FieldRecord.db2/n_load/leaching/fen
+through "Tilføj marker" instead of the former hard-coded zeros.
 
-Samme beregningskerne (bridge_v2.evaluate_leaching_position, calculate_db)
-som candidate_evaluator.py's evaluate_sequence_for_mark, men:
-  - MNCS/G0 kommer fra historisk_goedning.lookup_historisk_n_input (afgrøde x
-    region x JB-nr x driftsform), ikke fra compute_n_inputs's norm-formel.
-  - f1/f2/g1/g2/m1/m2 (forrige 2 års bidrag) kommer fra markens EGNE forrige
-    2 reelle år, ikke fra en cyklisk ombukning af en hypotetisk rotation.
-  - Manglende år (uden for historikkens range, eller ingen registreret
-    afgrøde) behandles som intet bidrag for det år (bekræftet fallback).
-    Samme fallback gælder afgrøder uden meningsfuld N-norm (fx permanent
-    græs uden norm) hvor det historiske MNCS/G0-opslag er ~0 og NLES5's
-    basisled derfor bliver matematisk ugyldigt — position sat til 0 i
-    stedet for at fejle hele markens beregning.
-  - Ton gødning udelades bevidst (ingen n_indhold_kg_per_ton-basis findes
-    uden for et scenarie) — sat til 0.0.
+It uses the same calculation core as candidate_evaluator.py's
+evaluate_sequence_for_mark (bridge_v2.evaluate_leaching_position and
+calculate_db), with these differences:
+  - MNCS/G0 comes from historisk_goedning.lookup_historisk_n_input (afgrøde x
+    region x JB-nr x driftsform), not the norm formula in compute_n_inputs.
+  - f1/f2/g1/g2/m1/m2 (the previous two years' contributions) comes from the
+    mark's own previous two actual years, not a cyclic wrap of a hypothetical
+    rotation.
+  - Missing years (outside the history range or without a registered afgrøde)
+    contribute nothing for that year. The same fallback applies to afgrøder
+    without a meaningful N norm, such as permanent græs without a norm, where
+    the historical MNCS/G0 lookup is ~0 and the NLES5 base term becomes
+    mathematically invalid. The position is set to 0 rather than failing the
+    entire mark calculation.
+  - Gødning tonnage is intentionally omitted because no n_indhold_kg_per_ton
+    basis exists outside a scenarie, and is set to 0.0.
 """
 from __future__ import annotations
 
@@ -29,9 +30,9 @@ from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer
 from app.services.rotations.historisk_goedning import lookup_historisk_n_input
 
-# Nyeste år med ægte crop_history; de 8 positioner er de 8 år op til og med
-# dette (2019-2026), så position 0 (2019) stadig har to ægte forudgående år
-# (2018, 2017) til f1/f2/g1/g2/m1/m2.
+# Latest year with actual crop_history. The eight positions are the eight years
+# through this year (2019-2026), so position 0 (2019) still has two actual prior
+# years (2018, 2017) for f1/f2/g1/g2/m1/m2.
 REAL_HISTORY_END_YEAR = 2026
 
 

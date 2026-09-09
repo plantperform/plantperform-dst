@@ -12,12 +12,12 @@ type RotationDetailPanelProps = {
   farmId: string
   simulationId: string
   fieldId: string
-  // Markens AKTUELLE tildelte kandidat (fra den allerede-friske markliste) —
-  // panelet kan stå åbent hen over en Optimér-/Års-optimering-kørsel, og
-  // SWR genindlæser kun candidate-detail ved (gen)mount, ikke automatisk når
-  // marken får en ny tildeling undervejs. Skift i denne værdi er signalet om
-  // at genindlæse — uden at skulle revalidere ALLE tidligere-åbnede panelers
-  // nøgler på én gang (det var netop den byge af 422'ere, der blev rettet).
+  // The mark's CURRENT assigned candidate (from the already-fresh mark list).
+  // The panel can remain open during an "Optimér" or "Års-optimering" run, and
+  // SWR reloads candidate detail only on mount/remount, not automatically when
+  // the mark receives a new assignment. A change in this value triggers the
+  // reload without revalidating all previously opened panels' keys at once
+  // (which was the source of the fixed burst of 422 responses).
   rotationId: string | null
   areaHa: number
   retention: number | null

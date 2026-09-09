@@ -19,14 +19,16 @@ class CreateFarmRequest(CamelModel):
 
 
 class KystvandoplandUdledning(CamelModel):
-    """Udledningskvote og beregnet udledning for ét kystvandopland, for en
-    bedrifts nuværende ("Aktuel") marker. Bekendtgørelsen opgør en bedrifts
-    kvote og udledning PR. kystvandopland, ikke samlet — en bedrift med
-    overskydende kvote i ét opland kan ikke bruge den til at dække en
-    overskridelse i et andet, så kvote og udledning må aldrig lægges sammen
-    på tværs af oplande. `kystvand_id`/`kystvand_navn` er None for marker
-    uden et tilknyttet kystvandopland (fx manuelt tegnede marker uden
-    imk_id, eller det ~0,02% af registret uden overlap)."""
+    """Udledningskvote and calculated udledning for a kystvandopland.
+
+    This covers a bedrift's current ("Aktuel") marker. The bekendtgørelse calculates
+    a bedrift's udledningskvote and udledning per kystvandopland, not as a
+    combined total. Surplus udledningskvote in one opland cannot cover excess
+    udledning in another, so the values must never be added across oplande.
+    `kystvand_id` and `kystvand_navn` are None for marker without an associated
+    kystvandopland, such as manually drawn marker without imk_id or the ~0.02% of the registry
+    without an overlap.
+    """
 
     kystvand_id: int | None
     kystvand_navn: str | None

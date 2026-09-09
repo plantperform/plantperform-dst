@@ -23,9 +23,9 @@ type FarmMetricsBarProps = {
  * Nøgletal for the visning currently selected in the sidebar, on one line with
  * the udledningskvote per kystvandopland. They are folded away inside the
  * topbar until asked for: they are looked up now and then, not read on every
- * screen, so they should not cost a strip of the marker view permanently.
+ * screen, so they should not permanently occupy a strip of the marker visning.
  *
- * There is deliberately no farm-total udledningskvote here: the bekendtgørelse
+ * There is deliberately no bedrift-wide udledningskvote here: the bekendtgørelse
  * enforces the quota per kystvandopland, so the quota is listed per opland.
  */
 export const FarmMetricsBar = ({ farmId, fields }: FarmMetricsBarProps) => {

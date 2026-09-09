@@ -66,7 +66,7 @@ type FarmSidebarProps = {
  * Navigation for the bedrift: back to the bedrift list, then the visninger.
  * Rows are single-line so the list stays dense; only the selected visning
  * expands to describe itself, which keeps the detail where it is being read.
- * Collapses to an icon rail, so every visning keeps a row even when minimized.
+ * Collapses to an icon rail, so every visning keeps a row even when minimised.
  */
 export const FarmSidebar = ({
   farm,

@@ -97,7 +97,7 @@ const RETENTION: NumericSpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-// Officielle JB-nummer-farver (Bilag 1-klassifikation), ikke en beregnet gradient.
+// Official JB-number colours (Bilag 1 classification), not a calculated gradient.
 const JB_LABELS: Record<number, string> = {
   1: 'Grovsandet jord',
   2: 'Finsandet jord',
@@ -263,10 +263,10 @@ const TAKEOUT: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-// Om markens 2026-afgrødekode er kvotegivende areal (Bilag 1 tabel 1).
-// Samme mønster som TAKEOUT — kategorisk 1/0, virker på begge lag (farm
-// GeoJSON emitter kvotegivende som 1/0, registry MVT eksponerer kolonnen
-// direkte som kvotegivende::int).
+// Whether the mark's 2026 afgrødekode is kvotegivende areal (Bilag 1,
+// table 1). Uses the same pattern as TAKEOUT: categorical 1/0 on both layers.
+// Farm GeoJSON emits kvotegivende as 1/0, while registry MVT exposes the column
+// directly as kvotegivende::int.
 const KVOTEGIVENDE: CategorySpec = {
   kind: 'category',
   label: 'Kvotegivende areal',

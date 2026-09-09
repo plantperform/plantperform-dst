@@ -98,12 +98,12 @@ export const NewScenarioPanel = ({
 
     const preset = godningsPresets.find((p) => p.navn === value)
     if (!preset) return
-    // Driftsform sættes IKKE fra preset'et — samme gødningstype (fx
-    // Kvæggylle) bruges uanset om marken er konventionel eller økologisk;
-    // driftsform styres udelukkende af den separate vælger ovenfor. Men
-    // "kun organisk gødning" skal altid følge driftsform frem for
-    // preset'ets egen (konventionelt formede) værdi, uanset i hvilken
-    // rækkefølge brugeren vælger driftsform/gødningstype.
+    // Do NOT set driftsform from the preset: the same gødningstype (for example,
+    // Kvæggylle) is used whether the mark is konventionel or økologisk.
+    // Driftsform is controlled solely by the separate selector above. However,
+    // "kun organisk gødning" must always follow driftsform rather than the
+    // preset's own conventionally shaped value, regardless of the order in
+    // which the user selects driftsform and gødningstype.
     setOrgMineralN(String(preset.godning.orgMineralN))
     setMineralskAndelPct(String(preset.godning.mineralskAndelPct))
     setOnlyOrganic(driftsform === 'Økologisk' ? true : preset.godning.onlyOrganic)

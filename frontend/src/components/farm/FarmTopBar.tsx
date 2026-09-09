@@ -24,7 +24,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 
 type FarmTopBarProps = {
   farm: Farm
-  /** Name of the visning shown below, when it is not the bedrift's own marker. */
+  /** Name of the visning shown below when it is not the bedrift's own marker. */
   visning?: string
   /** Controls for the visning below, kept on the same row to save vertical space. */
   actions?: ReactNode
@@ -40,8 +40,8 @@ const HEADER_TONE_CLASSES: Record<'default' | 'rules', string> = {
 }
 
 /**
- * The one header of the bedrift view: identity of the bedrift, which visning is
- * open, and the actions for both. Navigation between visninger lives in the
+ * The bedrift visning's single header: the bedrift identity, the open visning,
+ * and the actions for both. Navigation between visninger lives in the
  * sidebar, so nothing here repeats it.
  */
 export const FarmTopBar = ({

@@ -1,16 +1,16 @@
-"""Rigtigt JB-nr (1-12) pr. mark, fra registry_field.jbnr (udfyldt af
-load_registry.py's ETL fra GeoPackagets JB_Kode-kolonne).
+"""Real JB-nr (1-12) per mark from registry_field.jbnr.
 
-Kun marker uden registreringslink (fx manuelt tegnede marker uden imk_id,
-eller ældre rækker fra før ETL'en blev rettet) falder tilbage til et fast
-standard-JB. Det er en edge case, ikke hovedvejen — de allerfleste marker
-har et rigtigt JB_Kode-baseret jbnr.
+The value is populated by load_registry.py's ETL from the GeoPackage's JB_Kode
+column. Only marker without a registry link, such as manually drawn marker
+without imk_id or older rows from before the ETL was fixed, fall back to a
+fixed default JB. This is an edge case, not the primary path: almost all marker
+have a real JB_Kode-based jbnr.
 """
 from __future__ import annotations
 
 from app.domain.registry import RegistryField
 
-FALLBACK_JBNR = 6  # groft midterskøn for landbrugsjord, kun brugt uden registreringslink
+FALLBACK_JBNR = 6  # Rough midpoint estimate for farmland, used only without a registry link
 
 
 def jbnr_for_registry(registry: RegistryField | None) -> int:

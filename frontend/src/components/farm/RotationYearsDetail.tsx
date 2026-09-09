@@ -124,10 +124,11 @@ const DefinitionRow = ({
   </div>
 )
 
-// Nøgletal-laget — samme metrics som den gamle app viste pr. år (Normudbytte,
-// Forfrugt FV, Tildelt N) plus DB og foderenheder, som DST2 allerede beregner
-// men ikke tidligere samlede ét sted. Det fulde formel-gennemgang (M/W/MP/WP,
-// Nθ, L_nuar, DB2-poster) er lag 2, foldet ud herfra, ikke vist som standard.
+// The nøgletal layer shows the same annual metrics as the old app
+// (Normudbytte, Forfrugt FV, Tildelt N), plus DB and foderenheder, which DST2
+// already calculates but did not previously collect in one place. The full
+// formula walkthrough (M/W/MP/WP, N-theta, L_nuar, DB2 items) is layer 2,
+// expanded from here rather than shown by default.
 const KeyMetricsSection = ({
   year,
   areaHa,
@@ -141,9 +142,9 @@ const KeyMetricsSection = ({
   const udbytteenhed = String(year.dbDetail.udbytteenhed ?? '')
   const isFoderafgroede = udbytteenhed === 'FE/ha'
   const forfrugt = year.forfrugtsvaerdiKgnHa
-  // Husdyrgødning har to dele: en udnyttet/mineralsk del, der tæller med i
-  // normopfyldelsen ligesom handelsgødning, og en organisk bundet del, der
-  // ikke gør (men stadig indgår i selve udvaskningsberegningen som G0).
+  // Husdyrgødning has two parts: a utilised/mineral part that counts toward
+  // satisfying the norm like handelsgødning, and an organically bound part that
+  // does not (but still enters the udvaskning calculation as G0).
   const husdyrUdnyttet = year.tildeltHusdyrgodningUdnyttetKgnHa
   const handelsgodning = year.tildeltHandelsgodningKgnHa
   const organiskBundet = year.husdyrgodningOrganiskBundetKgnHa
@@ -618,8 +619,8 @@ const LeachingDetailSection = ({
 
 type Linje = { kategori: string; behandling: string; udgift_kr_ha: number }
 
-// Én kategori-total (fx "Gødning") med de enkeltposter der summer til den —
-// foldet ud på klik, i stedet for kun at vise den allerede sammenlagte sum.
+// One category total (for example, "Gødning") with the line items that add up
+// to it, expanded on click instead of showing only the aggregated sum.
 const CategoryBreakdownRow = ({
   label,
   total,

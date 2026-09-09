@@ -1,22 +1,23 @@
-"""Afstrømningskategori pr. afgrødekode, jf. Bilag 7 tabel 1 til
-bekendtgørelse om udledningsbaseret markregulering:
+"""Afstrømningskategori per afgrødekode under Bilag 7, table 1 of the
+bekendtgørelse on udledningsbaseret markregulering:
 
-  "Afstrømningskategorien fastsættes på grundlag af afstrømningsafgrøden,
-  der er markens hovedafgrøde. Afstrømningskategorien følger af bilag 7,
-  tabel 1."
+  English translation: "The afstrømningskategori is determined from the
+  afstrømningsafgrøde, which is the mark's hovedafgrøde. The
+  afstrømningskategori follows from Bilag 7, table 1."
 
-Loader direkte fra kilde-CSV'en (samme load-once-fra-fil-mønster som
-historisk_goedning/afgroede_normer) — Bilag_1_tabel_1_med_P_noegle.csv
-dækker alle 323 afgrødekoder med ingen huller (verificeret), så der er
-ingen "estimeret"/gættet fallback-liste længere — kun en (sjælden, i
-praksis ikke-forekommende) "ukendt" tilstand for en afgrødekode filen
-slet ikke indeholder, fx en helt ny kode tilføjet efter denne fil.
+Loads directly from the source CSV using the same load-once-from-file pattern
+as historisk_goedning/afgroede_normer. Bilag_1_tabel_1_med_P_noegle.csv covers
+all 323 afgrødekoder without gaps (verified), so there is no longer an
+"estimated"/guessed fallback list. The only remaining "unknown" state is the
+rare, effectively nonexistent case of an afgrødekode absent from the file,
+such as a new code added after the file was created.
 
-Hver afgrødekode har en standard-afstrømningskategori (1-8), og for en
-del afgrøder også en alternativ kategori der gælder når marken samme år
-får et vinterdække-ændrende virkemiddel (EEA/efterafgrøde, mellemafgrøde,
-tidlig såning) — "P_afstrømningskategori_med_W" i kilden. Kategorien
-bestemmer hvilken af markens 8 P-værdier der skal bruges.
+Each afgrødekode has a default afstrømningskategori (1-8). Some afgrøder also
+have an alternative category that applies when the mark receives a
+winter-cover-changing virkemiddel in the same year (EEA/efterafgrøde,
+mellemafgrøde, early sowing), represented by
+"P_afstrømningskategori_med_W" in the source. The category determines which of
+the mark's eight P values is used.
 """
 from __future__ import annotations
 
@@ -48,13 +49,12 @@ def _load() -> dict[int, tuple[int, int | None]]:
 
 
 def afstromningskategori(crop_code: int | None, eea_on: bool = False) -> int | None:
-    """Return afstrømningskategori (1-8) for crop_code, eller None hvis
-    afgrødekoden ikke findes i kilden overhovedet (bør i praksis ikke ske,
-    da alle 323 koder er dækket).
+    """Return afstrømningskategori (1-8), or None if crop_code is absent.
 
-    Bruger alt_kategori når `eea_on` er True (marken har efterafgrøde/
-    virkemiddel der ændrer vinterdækket det år) og en alt_kategori findes
-    for afgrøden — ellers standard_kategori.
+    Absence should not occur in practice because all 323 codes are covered.
+    Uses alt_kategori when `eea_on` is True (the mark has an efterafgrøde or
+    another virkemiddel changing winter cover that year) and the afgrøde has an
+    alt_kategori; otherwise uses standard_kategori.
     """
     entry = _load().get(crop_code) if crop_code is not None else None
     if entry is None:

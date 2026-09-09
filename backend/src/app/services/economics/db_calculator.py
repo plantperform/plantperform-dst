@@ -42,26 +42,26 @@ def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
         return ["JB1-4", "JB1-3", "JB5-6"] if irrigated else ["JB1-3", "JB1-4", "JB5-6"]
     return ["JB5-6", "JB1-4", "JB1-3"]
 
-# Tilskud der automatisk matches ind i DB (kr/ha) — resten af prislistens
-# tilskud er tilvalgsordninger, se moduldocstring.
+# Subsidies automatically included in DB (DKK/ha). The remaining subsidies in
+# the price list are optional schemes; see the module docstring.
 _GRUNDBETALING_POST = "Grundbetaling (estimat)"
 _OEKO_AREALSTOETTE_POST = "Grundbeløb (basis)"
 _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
-# Placeholder: gylle-udbringning har ingen ha-norm i prislisten (kun kr/ton),
-# så vi genbruger handelsgødningens flade udbringningssats indtil videre.
+# Placeholder: gylle application has no per-ha rate in the price list (only
+# DKK/tonne), so use handelsgødning's flat application rate for now.
 _GYLLE_UDBRINGNING_PLACEHOLDER_POST = "Handelsgødning, udbringning"
 
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
 
-# Udlægskode -> hvilken pris-kategori i prislisten dækker udsæd/etablering af
-# dette udlæg. Samme kode-familie som bridge_v2.py's _UDL_VIRKEMIDDEL, men
-# her grupperet efter hvilken FYSISK afgrøde der sås (ikke NUAR-virkemiddel-
-# eligibilitet) — fx er 960-966 ("udlæg/eftersslæt" klovergræs) og 2000
-# ("udlæg til frø") ikke NUAR-virkemidler, men koster stadig rigtig udsæd.
-# 3000 (jordbearbejdning efterår) er ikke en sået afgrøde og har ingen post her.
+# Udlægskode -> the price-list category covering seed/establishment for this
+# udlæg. This uses the same code family as bridge_v2.py's _UDL_VIRKEMIDDEL but
+# groups by the PHYSICAL afgrøde being sown, not NUAR virkemiddel eligibility.
+# For example, 960-966 ("udlæg/eftersslæt" clover grass) and 2000 ("udlæg til
+# frø") are not NUAR virkemidler but still incur actual seed costs. Code 3000
+# (autumn tillage) is not a sown afgrøde and has no entry here.
 _UDL_KOSTKATEGORI: dict[int, str] = {
     968: "Efterafgrøde", 970: "Efterafgrøde",
     9680: "Efterafgrøde, frøgræs",
@@ -260,7 +260,7 @@ def _migrerede_afgrodekoder() -> frozenset[int]:
 
 @lru_cache(maxsize=1)
 def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
-    """(afgrodekode, driftsform) -> linjer, EKSKL. kategori "Gødning" (genberegnes dynamisk)."""
+    """Map (afgrodekode, driftsform) to rows excluding dynamically recalculated Gødning."""
     lookup: dict[tuple[int, str], list[dict]] = {}
     with open(_DYRKNINGSOMKOSTNINGER_PATH, encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f, delimiter=","):
@@ -307,7 +307,7 @@ def _lookup_omkostningslinjer(
 
 @lru_cache(maxsize=1)
 def _load_prisliste() -> dict[str, dict]:
-    """post -> {kategori, type, pris, enhed} fra prislisten (både Omkostning og Tilskud)."""
+    """Map post to price-list data for both Omkostning and Tilskud."""
     lookup: dict[str, dict] = {}
     with open(_PRISLISTE_PATH, encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f, delimiter=";"):
@@ -336,9 +336,12 @@ def _udlaeg_omkostning(
     udlaeg_kode: int | None,
     afgrodekode: int | None = None,
 ) -> tuple[float, float]:
-    """(udsæd, etablering) kr/ha for et efterafgrøde-/mellemafgrøde-/udlæg-
-    udlæg på denne position — (0, 0) hvis intet udlæg eller en kode uden
-    prissat kategori (fx 3000, jordbearbejdning)."""
+    """Return (seed, establishment) DKK/ha for the position's udlæg.
+
+    Covers efterafgrøde, mellemafgrøde, and other udlæg. Returns (0, 0) when
+    there is no udlæg or its code has no priced category, such as 3000 for
+    tillage.
+    """
     kategori = _UDL_KOSTKATEGORI.get(udlaeg_kode) if udlaeg_kode is not None else None
     if kategori is None:
         return 0.0, 0.0
@@ -375,30 +378,30 @@ def calculate_db(
     kvalitet: str = "",
     praecisionsjordbrug: bool = False,
 ) -> dict:
-    """Beregn dækningsbidrag (kr/ha) for én (afgrødekode, driftsform, JB-nr).
+    """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
-    mncs: kg N/ha total tilført forårs-mineral-N (handelsgødning + evt.
-    udnyttet organisk N). Default = afgrødens egen Bilag 1 N-norm (100 %) for
-    det givne JB-nr — erstattes senere af den faktiske MNCS fra en konkret
-    sædskifte-position.
+    mncs: Total spring-applied mineral N in kg N/ha (handelsgødning plus any
+    utilized organisk N). The default is the afgrøde's own 100% Bilag 1 N norm
+    for the given JB-nr and is later replaced by the actual MNCS for a specific
+    sædskifte position.
 
-    org_mineral_n_applied: hvor meget af `mncs` der kommer fra organisk
-    gødning (gylle) frem for handelsgødning — kun den resterende del
-    (`mncs - org_mineral_n_applied`) prissættes til handelsgødningens N-pris;
-    gylle-delen koster kun udbringning (jf. "gylle skal kun koste
-    udbringningsprisen"). Gælder også for KONVENTIONELLE gylle-kategorier
-    (fx svinegylle/kvæggylle-sædskifter), ikke kun økologisk.
+    org_mineral_n_applied: The portion of `mncs` supplied by organisk gødning
+    (gylle) rather than handelsgødning. Only the remainder
+    (`mncs - org_mineral_n_applied`) is priced at the N price of
+    handelsgødning; the gylle portion incurs only application costs. This also
+    applies to konventionelle gylle categories, such as svinegylle/kvæggylle
+    sædskifter, not only økologiske ones.
 
-    only_organic: scenariets gødningsvalg (Fase 13's GodningSettings) —
-    IKKE det samme som driftsform. Om handelsgødning må toppe MNCS op ud
-    over den organiske tildeling afgøres af denne, ikke af driftsform (en
-    Økologisk-mærket simulering kan sagtens have only_organic=False, og skal
-    så også prissættes for den resterende handelsgødning).
+    only_organic: The scenarie's gødning selection (Phase 13 GodningSettings),
+    not the same as driftsform. This value, not driftsform, determines whether
+    handelsgødning may top MNCS up beyond the organisk allocation. A simulering
+    marked Økologisk can have only_organic=False and must then include the cost
+    of the remaining handelsgødning.
 
-    udlaeg_kode: rotationspositionens udlægskode (samme kode som
-    bridge_v2.evaluate_leaching_position modtager) — bestemmer om der lægges
-    en ekstra udsæds-/etableringsomkostning oveni for efterafgrøde/
-    mellemafgrøde/udlæg (se _udlaeg_omkostning).
+    udlaeg_kode: The rotation position's udlægskode, also passed to
+    bridge_v2.evaluate_leaching_position. It determines whether an additional
+    seed/establishment cost is added for efterafgrøde, mellemafgrøde, or another
+    udlæg (see _udlaeg_omkostning).
     """
     norm, er_reel_oeko_norm = _lookup_udbyttenorm(
         afgrodekode, jbnr, irrigated, driftsform,
@@ -413,14 +416,14 @@ def calculate_db(
         udbytteenhed = norm["udbytteenhed"]
         norm_mangler = False
     elif salgspris == 0.0:
-        # Ingen udbyttenorm nødvendig når der ikke er nogen salgsværdi (fx brak).
+        # No udbyttenorm is needed when there is no sales value (e.g. brak).
         udbytte = 0.0
         udbytteenhed = ""
         norm_mangler = False
     else:
         udbytte = 0.0
         udbytteenhed = ""
-        norm_mangler = True  # afgrødekode findes ikke i Bilag 1-mastertabellen for dette JB-nr
+        norm_mangler = True  # afgrødekode is absent from the Bilag 1 master table for this JB-nr
 
     if driftsform == OEKOLOGISK and not er_reel_oeko_norm:
         udbytte *= 1 - _OEKO_UDBYTTE_REDUKTION
@@ -430,12 +433,12 @@ def calculate_db(
     if mncs is None:
         mncs = (norm["n_norm"] if norm else None) or 0.0
 
-    # Itemiserede linjer bag hver kategori-sum, til UI'ens beregningsgennemgang
-    # (hvilke enkeltposter der reelt summer til fx "Gødning" eller "Markarbejde").
-    # Om handelsgødning må toppe MNCS op afgøres af only_organic — IKKE af
-    # driftsform. En Økologisk-mærket simulering kan sagtens have
-    # only_organic=False (Fase 13 afkoblede de to indstillinger), og skal så
-    # også prissættes for den resterende handelsgødning, ligesom konventionel.
+    # Itemized rows behind each category total for the UI calculation
+    # walkthrough, showing which entries actually total categories such as
+    # "Gødning" or "Markarbejde". only_organic, not driftsform, determines
+    # whether handelsgødning may top MNCS up. A simulering marked Økologisk can
+    # have only_organic=False (Phase 13 decoupled the settings) and must then
+    # price the remaining handelsgødning just like a konventionel simulering.
     goedning_linjer: list[dict] = []
     goedning = 0.0
     handelsgodning_n = 0.0 if only_organic else max(0.0, mncs - org_mineral_n_applied) + mnca
