@@ -8,7 +8,7 @@ import {
 } from 'react'
 
 import {
-  DEFAULT_LIST_FRACTION,
+  DEFAULT_LIST_SLACK,
   MIN_LIST_PANE_WIDTH,
   MIN_MAP_PANE_WIDTH,
   MIN_SPLIT_INNER_WIDTH,
@@ -28,9 +28,10 @@ import { cn } from '@/lib/utils'
 type FarmSplitViewProps = {
   view: FarmView
   onViewChange: (view: FarmView) => void
-  listFraction: number
-  onListFractionChange: (fraction: number) => void
-  list: ReactNode
+  listSlack: number
+  onListSlackChange: (slack: number) => void
+  listRequiredWidth: number | null
+  list: (options: { width: number }) => ReactNode
   map: ReactNode
   renderPanel?: (options: {
     listBehind: boolean
@@ -43,8 +44,9 @@ type FarmSplitViewProps = {
 export const FarmSplitView = ({
   view,
   onViewChange,
-  listFraction,
-  onListFractionChange,
+  listSlack,
+  onListSlackChange,
+  listRequiredWidth,
   list,
   map,
   renderPanel,
@@ -55,6 +57,13 @@ export const FarmSplitView = ({
   const [innerWidth, setInnerWidth] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragWidth, setDragWidth] = useState<number | null>(null)
+  const [widthSettled, setWidthSettled] = useState(false)
+
+  useEffect(() => {
+    if (listRequiredWidth === null) return
+    const frame = window.requestAnimationFrame(() => setWidthSettled(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [listRequiredWidth])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -82,9 +91,10 @@ export const FarmSplitView = ({
     MIN_LIST_PANE_WIDTH,
     space - MIN_MAP_PANE_WIDTH,
   )
+  const requiredWidth = listRequiredWidth ?? maxSplitListWidth
   const listWidth =
     effectiveView === 'split'
-      ? (dragWidth ?? resolveListPaneWidth(listFraction, width))
+      ? (dragWidth ?? resolveListPaneWidth(requiredWidth, listSlack, width))
       : effectiveView === 'list'
         ? space
         : 0
@@ -118,13 +128,13 @@ export const FarmSplitView = ({
 
   const endDrag = () => {
     if (dragWidth === null) return
-    onListFractionChange(dragWidth / space)
+    onListSlackChange((dragWidth - requiredWidth) / space)
     setDragWidth(null)
   }
 
   const applyListWidth = (next: number) => {
     const placed = placeDivider(next)
-    if (placed !== null) onListFractionChange(placed / space)
+    if (placed !== null) onListSlackChange((placed - requiredWidth) / space)
   }
 
   const stepListWidth = (delta: number) => {
@@ -153,7 +163,7 @@ export const FarmSplitView = ({
   }
 
   const resetSplit = () => {
-    onListFractionChange(DEFAULT_LIST_FRACTION)
+    onListSlackChange(DEFAULT_LIST_SLACK)
     changeView('split')
   }
 
@@ -183,12 +193,15 @@ export const FarmSplitView = ({
               className={cn(
                 'relative flex min-h-0 min-w-0 flex-col @container',
                 effectiveView === 'split' ? 'shrink-0' : 'flex-1',
+                widthSettled && !isDragging && 'pane-width-transition',
               )}
               style={
                 effectiveView === 'split' ? { width: listWidth } : undefined
               }
             >
-              <div className="min-h-0 flex-1 overflow-y-auto">{list}</div>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {list({ width: listWidth })}
+              </div>
             </div>
           ) : null}
           {!splitAvailable ? null : dividerCovered ? (
@@ -213,7 +226,7 @@ export const FarmSplitView = ({
                 panelFromRight
                   ? 'panel-slide-in-right right-0 border-l'
                   : 'panel-slide-in left-0 border-r',
-                !isDragging && 'panel-width-transition',
+                !isDragging && 'pane-width-transition',
               )}
               style={{ width: panelWidth }}
             >

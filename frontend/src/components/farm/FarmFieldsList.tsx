@@ -8,7 +8,15 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table'
 import { Columns3 } from 'lucide-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { mutate } from 'swr'
 
 import { simulationFieldsKey, useFarmFields } from '@/api/hooks'
@@ -18,14 +26,14 @@ import { catchmentKey } from '@/components/farm/catchment-options'
 import { CropGroupLegend } from '@/components/farm/CropGroupLegend'
 import {
   DEFAULT_FIELDS_SORT,
+  OPTIONAL_COLUMN_IDS,
+  readStoredColumnVisibility,
   resolveEffectiveFieldsSort,
+  storeColumnVisibility,
   type FieldsSortKey,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
-import {
-  buildFarmFieldsColumns,
-  OPTIONAL_COLUMN_IDS,
-} from '@/components/farm/farm-fields-columns'
+import { buildFarmFieldsColumns } from '@/components/farm/farm-fields-columns'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
@@ -59,27 +67,6 @@ import {
   type CatchmentOverview,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
-
-const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
-  'cropRotation',
-  'db2',
-  'quotaStatus',
-])
-const CURRENT_DEFAULT_VISIBLE_COLUMNS = new Set([
-  'cropRotation',
-  'quotaStatus',
-  'udledningskvoteMarkKgn',
-  'soilSummary',
-])
-
-const buildDefaultColumnVisibility = (isSimulationView: boolean): VisibilityState => {
-  const visible = isSimulationView
-    ? SIMULATION_DEFAULT_VISIBLE_COLUMNS
-    : CURRENT_DEFAULT_VISIBLE_COLUMNS
-  return Object.fromEntries(
-    OPTIONAL_COLUMN_IDS.map((id) => [id, visible.has(id)]),
-  )
-}
 
 type FieldRowProps = {
   field: FieldRecord
@@ -182,6 +169,8 @@ type FarmFieldsListProps = {
   onZoomToField?: (fieldId: string) => void
   focusRequest?: { fieldId: string; nonce: number }
   selectedYearIndex?: number | null
+  paneWidth?: number
+  onRequiredWidthChange?: (width: number) => void
   onError: (message: string | null) => void
 }
 
@@ -203,6 +192,8 @@ export const FarmFieldsList = ({
   onZoomToField,
   focusRequest,
   selectedYearIndex = null,
+  paneWidth,
+  onRequiredWidthChange,
   onError,
 }: FarmFieldsListProps) => {
   const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
@@ -210,6 +201,10 @@ export const FarmFieldsList = ({
   const rowElements = useRef(new Map<string, HTMLTableRowElement>())
   const scrolledFieldId = useRef<string | null>(null)
   const focusedNonce = useRef(focusRequest?.nonce ?? null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [requiredWidth, setRequiredWidth] = useState<number | null>(null)
+  const [rootWidth, setRootWidth] = useState<number | null>(null)
 
   const isRules = mode === 'rules'
   const canEditRules = isRules && isSimulationView && Boolean(simulationId)
@@ -239,10 +234,10 @@ export const FarmFieldsList = ({
   const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    () => buildDefaultColumnVisibility(isSimulationView),
+    () => readStoredColumnVisibility(isSimulationView),
   )
   useEffect(() => {
-    const nextVisibility = buildDefaultColumnVisibility(isSimulationView)
+    const nextVisibility = readStoredColumnVisibility(isSimulationView)
     setColumnVisibility(nextVisibility)
     if (OPTIONAL_COLUMN_IDS.includes(sort.key) && !nextVisibility[sort.key]) {
       onSortChange(DEFAULT_FIELDS_SORT)
@@ -390,12 +385,21 @@ export const FarmFieldsList = ({
     })
   }
 
+  const handleColumnVisibilityChange: OnChangeFn<VisibilityState> = (
+    updater,
+  ) => {
+    const next =
+      typeof updater === 'function' ? updater(columnVisibility) : updater
+    setColumnVisibility(next)
+    storeColumnVisibility(isSimulationView, next)
+  }
+
   const table = useReactTable({
     data: sortedFields,
     columns,
     state: { sorting, columnVisibility },
     onSortingChange: handleSortingChange,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: handleColumnVisibilityChange,
     manualSorting: true,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -406,6 +410,53 @@ export const FarmFieldsList = ({
   const visibleOptionalCount = optionalColumns.filter((column) =>
     column.getIsVisible(),
   ).length
+
+  const hasFields = sortedFields.length > 0
+
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    const table = tableRef.current
+    const container = table?.parentElement
+    if (!root || !table || !container) return
+    let cancelled = false
+    const measure = () => {
+      const previousDensity = root.getAttribute('data-density')
+      root.setAttribute('data-density', 'full')
+      table.style.width = '0px'
+      const naturalWidth = Math.ceil(table.getBoundingClientRect().width)
+      table.style.width = ''
+      if (previousDensity === null) root.removeAttribute('data-density')
+      else root.setAttribute('data-density', previousDensity)
+      const required = naturalWidth + root.offsetWidth - container.clientWidth
+      setRequiredWidth(required)
+      setRootWidth(root.offsetWidth)
+      onRequiredWidthChange?.(required)
+    }
+    measure()
+    void document.fonts.ready.then(() => {
+      if (!cancelled) measure()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [columns, columnVisibility, onRequiredWidthChange])
+
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const observer = new ResizeObserver(() => setRootWidth(root.offsetWidth))
+    observer.observe(root)
+    return () => observer.disconnect()
+  }, [hasFields])
+
+  const availableWidth = Math.min(
+    paneWidth ?? Number.POSITIVE_INFINITY,
+    rootWidth ?? Number.POSITIVE_INFINITY,
+  )
+  const density =
+    requiredWidth !== null && availableWidth >= requiredWidth
+      ? 'full'
+      : 'compact'
 
   if (sortedFields.length === 0) {
     return (
@@ -424,7 +475,11 @@ export const FarmFieldsList = ({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div
+        ref={rootRef}
+        data-density={density}
+        className="flex min-h-0 flex-1 flex-col gap-2"
+      >
         {isRules ? (
           <p className="text-xs text-muted-foreground">
             Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste
@@ -470,6 +525,7 @@ export const FarmFieldsList = ({
           )}
         >
           <Table
+            ref={tableRef}
             containerClassName="min-h-0 flex-1 scroll-pt-10 scroll-pb-24"
             className="border-separate border-spacing-0 text-left"
           >

@@ -1,6 +1,6 @@
 # PLA-48: Liste og kort på samme side
 
-Status: design valgt 09-09-2026 (Retning A, "Delt visning", 50/50 som standard). Bygges på `feat/pla-48-liste-og-kort` oven på PLA-51. Kun frontend.
+Status: design valgt 09-09-2026 (Retning A, "Delt visning", listen to tredjedele og kortet en tredjedel som standard). Bygges på `feat/pla-48-liste-og-kort` oven på PLA-51. Kun frontend.
 
 ## Problem
 
@@ -14,9 +14,10 @@ Liste og kort ligger side om side under årsgennemgangen, adskilt af en skilleli
 
 - Indholdskolonnen (under topbaren, med 12 px luft) rummer oppefra: årsgennemgang (kun simulering), en stribe med kystvandopland-chips, og den delte flade.
 - Den delte flade er en ny `FarmSplitView`: listerude (egen lodret scroll, `@container`), `SplitDivider`, kortrude (fast højde via `flex-1 min-h-0`).
-- Skillelinjen: pointer-træk, snap inden for 24 px til 1/3, 1/2 og 2/3, dobbeltklik nulstiller til 1/2, piletaster flytter 16 px, `role="separator"` med `aria-valuenow`. Under træk lægges et gennemsigtigt lag over kortet, så canvas ikke sluger pointer-events. Minimum: liste 420 px, kort 360 px. Trækkes en rude under sit minimum, snapper den lukket, og visningen følger med (Liste eller Kort), så der er en tilstand, ikke to.
+- Skillelinjen: pointer-træk, snap inden for 24 px til 1/3, 1/2 og 2/3, dobbeltklik nulstiller slækket, så listen fylder præcis det, tabellen skal bruge, piletaster flytter 16 px, `role="separator"` med `aria-valuenow`. Under træk lægges et gennemsigtigt lag over kortet, så canvas ikke sluger pointer-events. Minimum: liste 420 px, kort 360 px. Trækkes en rude under sit minimum, snapper den lukket, og visningen følger med (Liste eller Kort), så der er en tilstand, ikke to.
 - Topbarens kontrol får tre valg: Liste | Delt | Kort. Delt genskaber den gemte delingsgrad. Delt er slået fra under 800 px indre bredde med titlen "Skærmen er for smal til delt visning".
-- Visning og listens andel af den delte flade gemmes pr. browser (`plantperform.farmView`, `plantperform.farmSplitFraction`) efter mønstret i `sidebar-width.ts`. Første gang er Delt standard, hvis der er plads.
+- Visning og listens slæk gemmes pr. browser (`plantperform.farmView`, `plantperform.farmListSlack`) efter mønstret i `sidebar-width.ts`. Slækket er, hvor meget bredere (eller smallere, negativt) end tabellens behov listeruden skal være, som andel af den delte flade. Standard er 0, så ruden fylder præcis det, tabellen skal bruge. Første gang er Delt standard, hvis der er plads.
+- Listeruden følger tabellen. Listen måler tabellens mindste bredde i fuld tæthed (i en layout-effekt lægges tabellen kortvarigt ud med bredde 0 og `data-density="full"`, og bredden aflæses inkl. ramme og lodret scrollbar) og melder den til den delte flade, som sætter rudens bredde til behovet plus slækket. Slås en kolonne til, vokser ruden med præcis kolonnens bredde, og kortet får tilsvarende mindre; slås den fra, går bredden tilbage. Et træk i skillelinjen sætter slækket, så trækket altid vinder. Kolonnevalget gemmes pr. browser og visningstype (`plantperform.farmColumns.simulation`, `plantperform.farmColumns.current`), så bredde og kolonner passer sammen efter genindlæsning. Bredden glider 250 ms, når den ikke trækkes, dog ikke ved første måling.
 - Vælges en mark, lægger markpanelet sig over hele listeruden med glid ind fra venstre, en "Liste"-tilbageknap, forrige/næste mark i sorteringsrækkefølgen og "Zoom til mark", uanset skærmbredde. Listen forbliver monteret bagved, så scroll og sortering overlever. Beregningsgennemgangen udvider panelet til `min(950px, 100%)` af den delte flade hen over skillelinjen og ind over kortet; kortet kollapser aldrig til 0 px.
 
 ## Fælles tilstand
@@ -26,7 +27,7 @@ Liste og kort ligger side om side under årsgennemgangen, adskilt af en skilleli
 | `selectedFieldId` | FarmDetailPage | uændret, men nulstilles ikke længere ved skift til Kort |
 | `selectedYearIndex` | FarmDetailPage | uændret |
 | `view` ('list' / 'split' / 'map') | FarmDetailPage via `useSplitLayout` | gemmes pr. browser |
-| `listFraction` (0-1) | `useSplitLayout` | listens andel af den delte flade, gemmes pr. browser |
+| `listSlack` (-1 til 1) | `useSplitLayout` | listens slæk i forhold til tabellens målte behov, som andel af den delte flade, gemmes pr. browser |
 | `hoveredFieldId` | FarmInspector | ikke i siden, så sidebaren ikke re-renderes |
 | `highlightedCatchmentKey` | FarmInspector | toggle fra opland-chips |
 | `zoomRequest` {fieldId, nonce} | FarmInspector | fra markpanel og dobbeltklik på række |
@@ -48,7 +49,7 @@ Kortet bliver kontrolleret: `selectedFieldId`/`onSelectedFieldChange` som props,
 
 ## Tabellen
 
-- To tætheder styret af listerudens bredde (container query, skift ved 896 px, målt som den bredde fuld tæthed kræver): fuld (dagens) og kompakt. Kompakt: `px-2`, sædskifte-tern uden afgrødenavne, Afgrøde-kolonnen kun når et år er valgt, DB2 forkortet med "t.kr", statusbadge kun for skærmlæsere. Enheder og Areal beholdes altid. Vandret scroll inde i tabelcontaineren, hvis kolonner ikke kan være der.
+- To tætheder: fuld (dagens) og kompakt. Skiftet styres af, om tabellen kan være der i fuld tæthed: listen sammenligner rudens bredde med den målte bredde, ikke med et fast tal, og sætter `data-density` på sin rod; kolonnerne bruger varianten `full:` i stedet for en container query. Celler ombryder aldrig, afgrødenavne afkortes med ellipse ved 160 px, og sorterbare overskrifter har enheden på egen linje, så rækkerne ikke bliver højere af flere kolonner. Kompakt: `px-2`, sædskifte-tern uden afgrødenavne, Afgrøde-kolonnen kun når et år er valgt, DB2 forkortet med "t.kr", statusbadge kun for skærmlæsere. Enheder og Areal beholdes altid. Vandret scroll inde i tabelcontaineren, hvis kolonner ikke kan være der.
 - Sticky header og footer; tabelcontaineren er den lodrette scroller.
 - Rækker er en memoiseret `FieldRow` med `isHovered`/`isSelected`, så hover på 200 rækker ikke re-renderer tabellen.
 - Kolonner-menuen og legenden bliver i listeruden; kystvandopland-chips flytter op i striben over den delte flade.
@@ -80,7 +81,7 @@ FarmTopBar (bortset fra kontrollen), FarmSidebar, SimulationRulesPanel, ManualRo
 
 ## Målt resultat
 
-Med sidepanelet i sin standardbredde og delingen på det halve, målt på den byggede stilart:
+Med sidepanelet i sin standardbredde og delingen på det halve (målt før standarden blev to tredjedele til listen), målt på den byggede stilart:
 
 | Skærm | Indre bredde | Liste og kort | Tabel | Rækker foldet / udfoldet | Markpanel |
 |---|---|---|---|---|---|

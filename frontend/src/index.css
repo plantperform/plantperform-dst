@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant full (&:where([data-density='full'], [data-density='full'] *));
 
 @theme {
   --color-background: hsl(var(--background));
@@ -117,7 +118,7 @@ body {
     animation: slide-in 240ms ease-out;
   }
 
-  .panel-width-transition {
+  .pane-width-transition {
     transition:
       width 250ms ease,
       margin-left 250ms ease;

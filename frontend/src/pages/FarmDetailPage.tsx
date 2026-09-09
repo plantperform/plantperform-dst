@@ -63,8 +63,7 @@ export const FarmDetailPage = () => {
     isLoading: simulationFieldsLoading,
   } = useSimulationFields(farmId, selectedSimulationId)
   const [mode, setMode] = useState<FarmInspectorMode>('values')
-  const { view, changeView, listFraction, changeListFraction } =
-    useSplitLayout()
+  const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(
     null,
@@ -234,8 +233,8 @@ export const FarmDetailPage = () => {
           onModeChange={changeMode}
           view={view}
           onViewChange={changeView}
-          listFraction={listFraction}
-          onListFractionChange={changeListFraction}
+          listSlack={listSlack}
+          onListSlackChange={changeListSlack}
           selectedFieldId={selectedFieldId}
           onSelectedFieldChange={setSelectedFieldId}
           selectedYearIndex={selectedYearIndex}

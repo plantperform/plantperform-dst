@@ -127,8 +127,8 @@ type FarmInspectorProps = {
   onModeChange: (mode: FarmInspectorMode) => void
   view: FarmView
   onViewChange: (view: FarmView) => void
-  listFraction: number
-  onListFractionChange: (fraction: number) => void
+  listSlack: number
+  onListSlackChange: (slack: number) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
   selectedYearIndex: number | null
@@ -151,8 +151,8 @@ export const FarmInspector = ({
   onModeChange,
   view,
   onViewChange,
-  listFraction,
-  onListFractionChange,
+  listSlack,
+  onListSlackChange,
   selectedFieldId,
   onSelectedFieldChange,
   selectedYearIndex,
@@ -167,6 +167,9 @@ export const FarmInspector = ({
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const [splitAvailable, setSplitAvailable] = useState(true)
+  const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
+    null,
+  )
   const [panelCalcOpen, setPanelCalcOpen] = useState(false)
   const [addModeSnap, setAddModeSnap] = useState(false)
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
@@ -414,10 +417,11 @@ export const FarmInspector = ({
             <FarmSplitView
               view={snappedView}
               onViewChange={changeView}
-              listFraction={listFraction}
-              onListFractionChange={onListFractionChange}
+              listSlack={listSlack}
+              onListSlackChange={onListSlackChange}
+              listRequiredWidth={listRequiredWidth}
               onSplitAvailableChange={setSplitAvailable}
-              list={
+              list={({ width }) => (
                 <div className="flex h-full min-h-0 flex-col gap-3">
                   {rulesPanel}
                   <FarmFieldsList
@@ -446,10 +450,12 @@ export const FarmInspector = ({
                     }
                     focusRequest={rowFocusRequest ?? undefined}
                     selectedYearIndex={effectiveSelectedYearIndex}
+                    paneWidth={width}
+                    onRequiredWidthChange={setListRequiredWidth}
                     onError={onError}
                   />
                 </div>
-              }
+              )}
               map={
                 <FarmFieldsMap
                   key={selectionKey}
