@@ -15,6 +15,7 @@ import { mutate } from 'swr'
 
 import {
   useFarmHistoricalYearlySummary,
+  useFarmEmissions,
   simulationFieldsKey,
   simulationYearlySummaryKey,
   useScenarioAfgrodeKoder,
@@ -237,6 +238,9 @@ const YearlyOverviewSection = ({
   const historicalSummary = useFarmHistoricalYearlySummary(
     simulationId ? undefined : farm.id,
   )
+  const { data: historicalEmissionsByCatchment = [] } = useFarmEmissions(
+    simulationId ? undefined : farm.id,
+  )
   const { data: entries, error } = simulationId
     ? simulationSummary
     : historicalSummary
@@ -265,6 +269,11 @@ const YearlyOverviewSection = ({
     quota.quotaKgn > 0
       ? entries.filter((entry) => entry.totalNLoadKg > quota.quotaKgn).length
       : 0
+  const overCatchmentCount = historicalEmissionsByCatchment.filter(
+    (entry) => !entry.overholder,
+  ).length
+  const compliantCatchmentCount =
+    historicalEmissionsByCatchment.length - overCatchmentCount
 
   return (
     <div className="rounded-lg border">
@@ -290,6 +299,12 @@ const YearlyOverviewSection = ({
                   · {overYearCount} af {entries.length} år over grænsen
                 </span>
               ) : null}
+              {!simulationId && historicalEmissionsByCatchment.length > 0 ? (
+                <span className="ml-1">
+                  · Vandoplande: {compliantCatchmentCount} overholder,{' '}
+                  {overCatchmentCount} overskrider
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -297,6 +312,13 @@ const YearlyOverviewSection = ({
       </button>
       {isOpen ? (
         <div className="border-t px-4 pb-4 pt-3">
+          {!simulationId ? (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Årsoversigten er samlet for bedriften. Historisk udledning og
+              kvote for hvert Vandopland vises under Nøgletal; de tal viser
+              historikken, ikke et optimeringsresultat.
+            </p>
+          ) : null}
           <YearlyOverviewTable
             entries={entries}
             quota={quota}

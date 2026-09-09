@@ -17,7 +17,7 @@ export const FarmEmissionsPanel = ({ farmId }: FarmEmissionsPanelProps) => {
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
-      <span className="text-xs text-muted-foreground">Udledningskvote</span>
+      <span className="text-xs text-muted-foreground">Historik pr. Vandopland</span>
       {emissionsPerKystvandopland.map((entry) => {
         const name =
           entry.kystvandNavn ??
