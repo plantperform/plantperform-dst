@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
@@ -197,7 +198,7 @@ export const MarkPanel = ({
     : REAL_HISTORY_START_CALENDAR_YEAR
   const quotaStatus = getFieldQuotaStatus(field, isSimulationView)
   const canShowCalcSection =
-    isSimulationView && Boolean(simulationId) && field.rotationId !== null
+    !isSimulationView || (Boolean(simulationId) && field.rotationId !== null)
   const canEditRotation = isSimulationView && Boolean(simulationId)
 
   const metaParts = [
@@ -396,14 +397,23 @@ export const MarkPanel = ({
             </button>
             {calcOpen ? (
               <div className="border-t">
-                <RotationDetailPanel
-                  farmId={farmId}
-                  simulationId={simulationId as string}
-                  fieldId={field.id}
-                  rotationId={field.rotationId}
-                  areaHa={field.areaHa}
-                  retention={field.retention}
-                />
+                {isSimulationView ? (
+                  <RotationDetailPanel
+                    farmId={farmId}
+                    simulationId={simulationId as string}
+                    fieldId={field.id}
+                    rotationId={field.rotationId}
+                    areaHa={field.areaHa}
+                    retention={field.retention}
+                  />
+                ) : (
+                  <HistoricalDetailPanel
+                    farmId={farmId}
+                    fieldId={field.id}
+                    areaHa={field.areaHa}
+                    retention={field.retention}
+                  />
+                )}
               </div>
             ) : null}
           </div>

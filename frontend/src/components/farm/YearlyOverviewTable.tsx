@@ -22,6 +22,7 @@ import {
 type YearlyOverviewTableProps = {
   entries: YearlySummaryEntry[]
   quota: ResolvedFarmQuota
+  yearsAreCalendarYears?: boolean
 }
 
 const clampPct = (value: number) => Math.min(100, Math.max(0, value))
@@ -83,6 +84,7 @@ const MetricCell = ({
 export const YearlyOverviewTable = ({
   entries,
   quota,
+  yearsAreCalendarYears = false,
 }: YearlyOverviewTableProps) => {
   const { quotaKgn } = quota
   const maxDb2 = Math.max(1, ...entries.map((entry) => entry.totalDb2))
@@ -104,13 +106,16 @@ export const YearlyOverviewTable = ({
     entries.reduce((sum, entry) => sum + entry.totalNLoadKg, 0) / entries.length
   const averageFen =
     entries.reduce((sum, entry) => sum + entry.totalFen, 0) / entries.length
-  const lastCalendarYear = ROTATION_START_CALENDAR_YEAR + entries.length - 1
+  const lastCalendarYear = yearsAreCalendarYears
+    ? entries[entries.length - 1].year
+    : ROTATION_START_CALENDAR_YEAR + entries.length - 1
 
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Summen for de beregnede marker i det enkelte år. Sædskifterne gentager
-        sig, så mønsteret fortsætter efter {lastCalendarYear}.
+        {yearsAreCalendarYears
+          ? 'Summen for markerne ud fra deres registrerede afgrødehistorik i det enkelte kalenderår.'
+          : `Summen for de beregnede marker i det enkelte år. Sædskifterne gentager sig, så mønsteret fortsætter efter ${lastCalendarYear}.`}
       </p>
       <Table className="table-fixed min-w-[36rem]">
         <TableHeader>
@@ -125,7 +130,9 @@ export const YearlyOverviewTable = ({
         </TableHeader>
         <TableBody>
           {entries.map((entry) => {
-            const calendarYear = ROTATION_START_CALENDAR_YEAR + entry.year - 1
+            const calendarYear = yearsAreCalendarYears
+              ? entry.year
+              : ROTATION_START_CALENDAR_YEAR + entry.year - 1
             const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
             const isOverQuota = quotaKgn > 0 && entry.totalNLoadKg > quotaKgn
             return (

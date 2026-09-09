@@ -24,7 +24,11 @@ from app.domain.field import (
     UpdateFieldRequest,
     validate_measures_for_rotation,
 )
-from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
+from app.domain.rotation_candidate import (
+    RotationCandidateEvaluation,
+    RotationCandidateYearResult,
+    SimulationFieldCandidates,
+)
 from app.domain.rotation_library import ROTATION_LIBRARY
 from app.domain.simulation import (
     CreateSimulationRequest,
@@ -34,7 +38,10 @@ from app.domain.simulation import (
 from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import generate_candidates_for_field
-from app.services.scenario.field_history_evaluator import evaluate_real_history_for_field
+from app.services.scenario.field_history_evaluator import (
+    REAL_HISTORY_END_YEAR,
+    evaluate_real_history_for_field,
+)
 from app.services.soil.jbnr import FALLBACK_JBNR
 
 
@@ -313,6 +320,96 @@ def list_fields(farm_id: str, email: str) -> list[FieldRecord] | None:
             .order_by(field_table.c.created_at),
         ).scalars()
         return [_load(FieldRecord, data) for data in rows]
+
+
+def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
+    if row is None:
+        raise MissingSoilDataError("Registry field is missing or banned")
+
+    soil_data = _soil_data_for_context(row)
+    if soil_data is None:
+        raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
+
+    jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
+    percolation_by_kategori, org_n_topsoil, s_soil = soil_data
+    return evaluate_real_history_for_field(
+        row.crop_history or {},
+        jbnr,
+        row.goedningsregion,
+        bool(row.oeko),
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
+    )
+
+
+def get_field_historical_years(
+    farm_id: str, field_id: str, email: str,
+) -> list[RotationCandidateYearResult] | None:
+    with SessionLocal() as session:
+        if not _farm_exists(session, farm_id, email):
+            return None
+
+        data = session.execute(
+            select(field_table.c.data).where(
+                field_table.c.id == field_id,
+                field_table.c.farm_id == farm_id,
+            )
+        ).scalar_one_or_none()
+        if data is None:
+            return None
+
+        field = _load(FieldRecord, data)
+        row = _registry_context_for_imk_id(session, field.imk_id)
+
+    return _historical_years_for_context(row)
+
+
+def get_farm_historical_yearly_summary(farm_id: str, email: str) -> list[dict] | None:
+    with SessionLocal() as session:
+        if not _farm_exists(session, farm_id, email):
+            return None
+
+        field_rows = session.execute(
+            select(field_table.c.data)
+            .where(field_table.c.farm_id == farm_id)
+            .order_by(field_table.c.created_at)
+        ).scalars().all()
+        fields = [_load(FieldRecord, data) for data in field_rows]
+        contexts = _registry_contexts_for_imk_ids(
+            session,
+            list({field.imk_id for field in fields if field.imk_id is not None}),
+        )
+
+    start_year = REAL_HISTORY_END_YEAR - 7
+    totals: dict[int, dict[str, float]] = {}
+    for field in fields:
+        context = contexts.get(field.imk_id) if field.imk_id is not None else None
+        years = _historical_years_for_context(context)
+        retention_factor = 1 - (field.retention or 0) / 100
+        for index, year_result in enumerate(years):
+            bucket = totals.setdefault(
+                start_year + index,
+                {"n_load": 0.0, "db2": 0.0, "fen": 0.0, "count": 0},
+            )
+            bucket["n_load"] += (
+                year_result.leaching_kg_n_ha * field.area_ha * retention_factor
+            )
+            bucket["db2"] += year_result.db_kr_ha * field.area_ha
+            if year_result.db_detail.get("udbytteenhed") == "FE/ha":
+                bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha
+            bucket["count"] += 1
+
+    return [
+        {
+            "year": year,
+            "total_n_load_kg": data["n_load"],
+            "total_db2": data["db2"],
+            "total_fen": data["fen"],
+            "field_count": int(data["count"]),
+        }
+        for year, data in sorted(totals.items())
+    ]
 
 
 def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> FieldRecord | None:

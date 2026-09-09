@@ -18,6 +18,8 @@ import {
 const num = (value: unknown): number =>
   typeof value === 'number' ? value : Number(value ?? 0)
 
+const hasValue = (value: unknown): value is number => typeof value === 'number'
+
 const fmt = (value: unknown, digits = 2) =>
   new Intl.NumberFormat('da-DK', {
     minimumFractionDigits: digits,
@@ -455,15 +457,14 @@ const LeachingDetailSection = ({
         </Callout>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
             Afstrømningskategori <strong>{String(detail.afstromningskategori ?? '—')}</strong>
             {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
-            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Selve
-            P-værdien er stadig én fælles placeholder pr. kategori, indtil
-            rigtige per-mark-værdier findes.
+            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
+            egen perkolationsværdi for denne kategori.
             {detail.afstromningskategori_ukendt ? (
               <span className="text-amber-700">
                 {' '}
@@ -473,17 +474,37 @@ const LeachingDetailSection = ({
             ) : null}
           </p>
           <Callout>
-            P = <strong>{fmt(p, 5)}</strong>
+            {hasValue(detail.P) ? (
+              <>P = <strong>{fmt(p, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">Ingen perkolationsdata</span>
+            )}
           </Callout>
         </div>
         <div className="space-y-1.5">
           <SectionHeading>S — Jordfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Foreløbigt fællestal for alle marker - rigtige tal pr. mark
-            kommer senere.
+            Markens egen jordfaktor (S_soil).
           </p>
           <Callout>
-            S = <strong>{fmt(s, 5)}</strong>
+            {hasValue(detail.S) ? (
+              <>S = <strong>{fmt(s, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">Ingen jorddata</span>
+            )}
+          </Callout>
+        </div>
+        <div className="space-y-1.5">
+          <SectionHeading>NT — Kvælstof i muldlag</SectionHeading>
+          <p className="text-xs text-muted-foreground">
+            Markens organiske kvælstof i topjorden (org_n_topsoil).
+          </p>
+          <Callout>
+            {hasValue(detail.NT) ? (
+              <>NT = <strong>{fmt(nt, 5)}</strong></>
+            ) : (
+              <span className="text-muted-foreground">Ingen jorddata</span>
+            )}
           </Callout>
         </div>
       </div>
@@ -714,6 +735,7 @@ type RotationYearsDetailProps = {
   retention: number | null
   selectedYearIndex?: number
   hideYearSelector?: boolean
+  startCalendarYear?: number
 }
 
 export const RotationYearsDetail = ({
@@ -722,6 +744,7 @@ export const RotationYearsDetail = ({
   retention,
   selectedYearIndex,
   hideYearSelector = false,
+  startCalendarYear = ROTATION_START_CALENDAR_YEAR,
 }: RotationYearsDetailProps) => {
   const [internalSelectedYear, setInternalSelectedYear] = useState(0)
   const [showFullDetail, setShowFullDetail] = useState(false)
@@ -746,8 +769,7 @@ export const RotationYearsDetail = ({
                   : 'bg-background hover:bg-muted'
               }`}
             >
-              År {index + 1} ({ROTATION_START_CALENDAR_YEAR + index}) -{' '}
-              {y.year.afgrodeNavn}
+              {startCalendarYear + index} - {y.year.afgrodeNavn}
               {y.year.udlaegNavn ? ` (${y.year.udlaegNavn})` : ''}
             </button>
           ))}

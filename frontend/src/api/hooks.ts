@@ -12,6 +12,7 @@ import type {
   RegistryFieldSummary,
   RotationCandidateEvaluation,
   RotationCandidateOption,
+  RotationCandidateYearResult,
   RotationKategoriOption,
   Simulation,
   YearlyOptimizationKategoriOption,
@@ -113,6 +114,18 @@ export const useSimulationFieldCandidateDetail = (
     fetcher,
   )
 
+export const fieldHistoricalDetailKey = (farmId?: string, fieldId?: string) => {
+  if (!farmId || !fieldId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/fields/${encodeURIComponent(fieldId)}/historical-detail`
+}
+
+export const useFieldHistoricalDetail = (farmId?: string, fieldId?: string) =>
+  useSWR<RotationCandidateYearResult[]>(
+    fieldHistoricalDetailKey(farmId, fieldId),
+    fetcher,
+  )
+
 export const simulationYearlySummaryKey = (
   farmId?: string,
   simulationId?: string,
@@ -130,6 +143,15 @@ export const useSimulationYearlySummary = (
     simulationYearlySummaryKey(farmId, simulationId),
     fetcher,
   )
+
+export const farmHistoricalYearlySummaryKey = (farmId?: string) => {
+  if (!farmId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/fields/historical-yearly-summary`
+}
+
+export const useFarmHistoricalYearlySummary = (farmId?: string) =>
+  useSWR<YearlySummaryEntry[]>(farmHistoricalYearlySummaryKey(farmId), fetcher)
 
 export const useRegistryFieldsByCvr = (cvr?: string, limit = 100) =>
   useSWR<RegistryFieldSummary[]>(

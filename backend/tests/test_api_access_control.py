@@ -10,8 +10,9 @@ os.environ.setdefault(
 
 from fastapi import HTTPException
 
-from app.api.v0 import registry, rotation_candidates, simulations
+from app.api.v0 import farm_fields, registry, rotation_candidates, simulations
 from app.auth import AuthenticatedUser, current_user
+from app.domain.soil import MissingSoilDataError
 
 MEMBER = AuthenticatedUser(email="member@example.com")
 
@@ -143,6 +144,46 @@ class SimulationAccessControlTests(unittest.TestCase):
             )
 
         self.assertEqual(yearly_summary.call_args.args[-1], MEMBER.email)
+
+
+class FarmFieldAccessControlTests(unittest.TestCase):
+    def test_historical_routes_require_authentication(self) -> None:
+        suffixes = (
+            "/historical-yearly-summary",
+            "/{field_id}/historical-detail",
+        )
+
+        for suffix in suffixes:
+            route = next(
+                route for route in farm_fields.router.routes if route.path.endswith(suffix)
+            )
+            self.assertIn(current_user, dependency_calls(route), suffix)
+
+    def test_historical_detail_forwards_member_email(self) -> None:
+        with patch.object(
+            farm_fields,
+            "get_field_historical_years",
+            return_value=[],
+        ) as get_detail:
+            result = farm_fields.get_farm_field_historical_detail(
+                "farm-1",
+                "field-1",
+                MEMBER,
+            )
+
+        self.assertEqual(result, [])
+        get_detail.assert_called_once_with("farm-1", "field-1", MEMBER.email)
+
+    def test_historical_summary_rejects_missing_soil_data(self) -> None:
+        with patch.object(
+            farm_fields,
+            "get_farm_historical_yearly_summary",
+            side_effect=MissingSoilDataError,
+        ):
+            with self.assertRaises(HTTPException) as context:
+                farm_fields.get_farm_historical_yearly_summary_route("farm-1", MEMBER)
+
+        self.assertEqual(context.exception.status_code, 422)
 
 
 class RotationCandidateAccessControlTests(unittest.TestCase):

@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
+  useFarmHistoricalYearlySummary,
   simulationFieldsKey,
   simulationYearlySummaryKey,
   useScenarioAfgrodeKoder,
@@ -99,10 +100,6 @@ const ROTATION_CALENDAR_YEARS = Array.from(
   { length: NUM_ROTATION_YEARS },
   (_, index) => ROTATION_START_CALENDAR_YEAR + index,
 )
-
-const YEARLY_OVERVIEW_YEAR_RANGE_LABEL = `${ROTATION_CALENDAR_YEARS[0]}-${
-  ROTATION_CALENDAR_YEARS[ROTATION_CALENDAR_YEARS.length - 1]
-}`
 
 type EmissionStatusTone = 'ok' | 'over' | 'unknown'
 
@@ -230,16 +227,39 @@ const YearlyOverviewSection = ({
 }: {
   farm: Farm
   fields: FieldRecord[]
-  simulationId: string
+  simulationId?: string
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const { data: entries } = useSimulationYearlySummary(farm.id, simulationId)
+  const simulationSummary = useSimulationYearlySummary(
+    simulationId ? farm.id : undefined,
+    simulationId,
+  )
+  const historicalSummary = useFarmHistoricalYearlySummary(
+    simulationId ? undefined : farm.id,
+  )
+  const { data: entries, error } = simulationId
+    ? simulationSummary
+    : historicalSummary
   const quota = useMemo(
-    () => computeFarmQuotaSummary(fields, true).quota,
-    [fields],
+    () => computeFarmQuotaSummary(fields, Boolean(simulationId)).quota,
+    [fields, simulationId],
   )
 
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        Kunne ikke hente årsoversigten: {error.message}
+      </div>
+    )
+  }
   if (!entries || entries.length === 0) return null
+
+  const firstYear = simulationId
+    ? ROTATION_START_CALENDAR_YEAR + entries[0].year - 1
+    : entries[0].year
+  const lastYear = simulationId
+    ? ROTATION_START_CALENDAR_YEAR + entries[entries.length - 1].year - 1
+    : entries[entries.length - 1].year
 
   const overYearCount =
     quota.quotaKgn > 0
@@ -264,7 +284,7 @@ const YearlyOverviewSection = ({
           <div>
             <div className="text-sm font-semibold">Årsoversigt</div>
             <div className="text-xs text-muted-foreground">
-              {YEARLY_OVERVIEW_YEAR_RANGE_LABEL} - DB2 og udledning år for år
+              {firstYear}-{lastYear} - DB2 og udledning år for år
               {overYearCount > 0 ? (
                 <span className="ml-1 font-medium text-red-700">
                   · {overYearCount} af {entries.length} år over grænsen
@@ -277,7 +297,11 @@ const YearlyOverviewSection = ({
       </button>
       {isOpen ? (
         <div className="border-t px-4 pb-4 pt-3">
-          <YearlyOverviewTable entries={entries} quota={quota} />
+          <YearlyOverviewTable
+            entries={entries}
+            quota={quota}
+            yearsAreCalendarYears={!simulationId}
+          />
         </div>
       ) : null}
     </div>
@@ -477,11 +501,13 @@ export const FarmInspector = ({
         ) : null}
         {view === 'list' ? (
           <>
-            {isSimulationView && selection.kind === 'simulation' && !isRules ? (
+            {!isRules ? (
               <YearlyOverviewSection
                 farm={farm}
                 fields={fields}
-                simulationId={selection.id}
+                simulationId={
+                  selection.kind === 'simulation' ? selection.id : undefined
+                }
               />
             ) : null}
             <FarmFieldsList
