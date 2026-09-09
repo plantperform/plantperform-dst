@@ -16,7 +16,7 @@ Liste og kort ligger side om side under årsgennemgangen, adskilt af en skilleli
 - Den delte flade er en ny `FarmSplitView`: listerude (egen lodret scroll, `@container`), `SplitDivider`, kortrude (fast højde via `flex-1 min-h-0`).
 - Skillelinjen: pointer-træk, snap inden for 24 px til 1/3, 1/2 og 2/3, dobbeltklik nulstiller til 1/2, piletaster flytter 16 px, `role="separator"` med `aria-valuenow`. Under træk lægges et gennemsigtigt lag over kortet, så canvas ikke sluger pointer-events. Minimum: liste 420 px, kort 360 px. Trækkes en rude under sit minimum, snapper den lukket, og visningen følger med (Liste eller Kort), så der er en tilstand, ikke to.
 - Topbarens kontrol får tre valg: Liste | Delt | Kort. Delt genskaber den gemte delingsgrad. Delt er slået fra under 800 px indre bredde med titlen "Skærmen er for smal til delt visning".
-- Visning og listens bredde gemmes pr. browser (`plantperform.farmView`, `plantperform.farmSplitWidth`) efter mønstret i `sidebar-width.ts`. Første gang er Delt standard, hvis der er plads.
+- Visning og listens andel af den delte flade gemmes pr. browser (`plantperform.farmView`, `plantperform.farmSplitFraction`) efter mønstret i `sidebar-width.ts`. Første gang er Delt standard, hvis der er plads.
 - Fra 1280 px indre bredde dokkes markpanelet som en 460 px kolonne mellem liste og kort. Under det lægger panelet sig over listeruden med glid ind fra venstre, en "Liste"-tilbageknap, forrige/næste mark i sorteringsrækkefølgen og "Zoom til mark". Listen forbliver monteret bagved, så scroll og sortering overlever. Beregningsgennemgangen udvider panelet til `min(950px, 100%)` af den delte flade hen over listeruden; kortet kollapser aldrig til 0 px.
 
 ## Fælles tilstand
@@ -26,7 +26,7 @@ Liste og kort ligger side om side under årsgennemgangen, adskilt af en skilleli
 | `selectedFieldId` | FarmDetailPage | uændret, men nulstilles ikke længere ved skift til Kort |
 | `selectedYearIndex` | FarmDetailPage | uændret |
 | `view` ('list' / 'split' / 'map') | FarmDetailPage via `useSplitLayout` | gemmes pr. browser |
-| listens bredde | `useSplitLayout` | gemmes pr. browser |
+| `listFraction` (0-1) | `useSplitLayout` | listens andel af den delte flade, gemmes pr. browser |
 | `hoveredFieldId` | FarmInspector | ikke i siden, så sidebaren ikke re-renderes |
 | `highlightedCatchmentKey` | FarmInspector | toggle fra opland-chips |
 | `zoomRequest` {fieldId, nonce} | FarmInspector | fra markpanel og dobbeltklik på række |

@@ -7,6 +7,7 @@ export type SegmentedControlOption<T extends string> = {
   label: string
   icon: LucideIcon
   title?: string
+  disabled?: boolean
   activeClassName?: string
 }
 
@@ -39,6 +40,7 @@ export const SegmentedControl = <T extends string>({
   >
     {options.map((option) => {
       const active = option.value === value
+      const optionDisabled = disabled || Boolean(option.disabled)
       const Icon = option.icon
       return (
         <button
@@ -47,12 +49,16 @@ export const SegmentedControl = <T extends string>({
           aria-pressed={active}
           aria-label={option.label}
           title={option.title}
-          disabled={disabled}
+          disabled={optionDisabled}
           className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+            'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             active
               ? cn('bg-card text-foreground shadow-sm', option.activeClassName)
-              : 'text-muted-foreground hover:bg-background/80 hover:text-foreground',
+              : cn(
+                  'text-muted-foreground',
+                  !optionDisabled &&
+                    'hover:bg-background/80 hover:text-foreground',
+                ),
           )}
           onClick={() => onValueChange(option.value)}
         >

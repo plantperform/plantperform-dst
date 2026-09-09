@@ -91,6 +91,9 @@ const numericLegend = (bins: NumericBin[], aboveLabel: string, aboveColor: strin
 
 const NEUTRAL_FALLBACK = '#cbd5e1'
 
+export const HOVER_FIELD_FILL_COLOR = '#0f172a'
+export const HOVER_FIELD_LINE_COLOR = '#334155'
+
 const RETENTION: NumericSpec = {
   kind: 'numeric',
   label: 'Retention',

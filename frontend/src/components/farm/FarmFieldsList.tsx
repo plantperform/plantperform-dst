@@ -7,7 +7,7 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table'
 import { Columns3 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -110,6 +110,9 @@ type FarmFieldsListProps = {
   onSortChange: (sort: FieldsSortState) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
+  hoveredFieldId: string | null
+  onHoveredFieldChange: (fieldId: string | null) => void
+  onZoomToField?: (fieldId: string) => void
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
   yearValues?: SimulationFieldYearValues
@@ -129,6 +132,9 @@ export const FarmFieldsList = ({
   onSortChange,
   selectedFieldId,
   onSelectedFieldChange,
+  hoveredFieldId,
+  onHoveredFieldChange,
+  onZoomToField,
   selectedYearIndex = null,
   onSelectedYearIndexChange,
   yearValues,
@@ -140,6 +146,8 @@ export const FarmFieldsList = ({
   const [bindFieldId, setBindFieldId] = useState<string | null>(null)
   const [confirmDetachField, setConfirmDetachField] =
     useState<FieldRecord | null>(null)
+  const rowElements = useRef(new Map<string, HTMLTableRowElement>())
+  const scrolledFieldId = useRef<string | null>(null)
 
   const isRules = mode === 'rules'
   const canEditRules = isRules && isSimulationView && Boolean(simulationId)
@@ -188,6 +196,15 @@ export const FarmFieldsList = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSimulationView])
+
+  useEffect(() => {
+    if (scrolledFieldId.current === selectedFieldId) return
+    scrolledFieldId.current = selectedFieldId
+    if (selectedFieldId === null) return
+    rowElements.current.get(selectedFieldId)?.scrollIntoView({
+      block: 'nearest',
+    })
+  }, [selectedFieldId])
 
   const detachFarmField = useCallback(
     async (fieldId: string) => {
@@ -425,12 +442,24 @@ export const FarmFieldsList = ({
               const field = row.original
               const isChanged = changedFields.has(field.id)
               const isSelected = selectedFieldId === field.id
+              const isHovered = hoveredFieldId === field.id
               const openPanel = () =>
                 onSelectedFieldChange(isSelected ? null : field.id)
+              const zoomToField = () => {
+                onSelectedFieldChange(field.id)
+                onZoomToField?.(field.id)
+              }
               return (
                 <TableRow
                   key={field.id}
+                  ref={(element) => {
+                    if (element) rowElements.current.set(field.id, element)
+                    else rowElements.current.delete(field.id)
+                  }}
                   onClick={isRules ? undefined : openPanel}
+                  onDoubleClick={isRules ? undefined : zoomToField}
+                  onMouseEnter={() => onHoveredFieldChange(field.id)}
+                  onMouseLeave={() => onHoveredFieldChange(null)}
                   onKeyDown={
                     isRules
                       ? undefined
@@ -453,9 +482,11 @@ export const FarmFieldsList = ({
                       'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                     isSelected
                       ? 'bg-secondary/50'
-                      : isChanged
-                        ? 'bg-blue-50'
-                        : undefined,
+                      : isHovered
+                        ? 'bg-muted/60'
+                        : isChanged
+                          ? 'bg-blue-50'
+                          : undefined,
                   )}
                 >
                   {row.getVisibleCells().map((cell) => {
@@ -501,7 +532,7 @@ export const FarmFieldsList = ({
         </Table>
         </div>
       </div>
-      {selectedField ? (
+      {!isRules && selectedField ? (
         <MarkPanel
           key={selectedField.id}
           farmId={farmId}

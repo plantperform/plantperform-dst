@@ -271,7 +271,7 @@ export const MarkPanel = ({
             isSimulationView={isSimulationView}
           />
 
-          <div className={`grid gap-3 ${calcOpen ? 'grid-cols-4' : 'grid-cols-2'}`}>
+          <div className={`grid gap-3 ${calcOpen ? 'grid-cols-2 @2xl:grid-cols-4' : 'grid-cols-2'}`}>
             <MetricCard
               label="DB2"
               value={calculated ? `${formatNumber(field.db2)} kr` : 'Ikke beregnet'}

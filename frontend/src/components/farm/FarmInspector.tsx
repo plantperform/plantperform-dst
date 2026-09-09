@@ -1,4 +1,5 @@
 import {
+  Columns2,
   FlaskConical,
   History,
   Info,
@@ -39,8 +40,10 @@ import {
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
+import { FarmSplitView } from '@/components/farm/FarmSplitView'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
+import { resolveEffectiveView } from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
   FarmView,
@@ -87,8 +90,19 @@ const invalidateOptimizationDisplays = async (farmId: string, simulationId: stri
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
 
-const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
+const SPLIT_UNAVAILABLE_TITLE = 'Skærmen er for smal til delt visning'
+
+const buildViewOptions = (
+  splitAvailable: boolean,
+): SegmentedControlOption<FarmView>[] => [
   { value: 'list', label: 'Liste', icon: List },
+  {
+    value: 'split',
+    label: 'Delt',
+    icon: Columns2,
+    disabled: !splitAvailable,
+    title: splitAvailable ? undefined : SPLIT_UNAVAILABLE_TITLE,
+  },
   { value: 'map', label: 'Kort', icon: MapIcon },
 ]
 
@@ -108,6 +122,8 @@ type FarmInspectorProps = {
   onModeChange: (mode: FarmInspectorMode) => void
   view: FarmView
   onViewChange: (view: FarmView) => void
+  listFraction: number
+  onListFractionChange: (fraction: number) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
   selectedYearIndex: number | null
@@ -130,6 +146,8 @@ export const FarmInspector = ({
   onModeChange,
   view,
   onViewChange,
+  listFraction,
+  onListFractionChange,
   selectedFieldId,
   onSelectedFieldChange,
   selectedYearIndex,
@@ -143,7 +161,31 @@ export const FarmInspector = ({
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
+  const [splitAvailable, setSplitAvailable] = useState(true)
+  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
+  const [zoomRequest, setZoomRequest] = useState<{
+    fieldId: string
+    nonce: number
+  } | null>(null)
+  const viewOptions = useMemo(
+    () => buildViewOptions(splitAvailable),
+    [splitAvailable],
+  )
+  const effectiveView = resolveEffectiveView(view, splitAvailable)
   const isSimulationView = selection.kind === 'simulation'
+  const selectionKey =
+    selection.kind === 'simulation' ? `simulation-${selection.id}` : 'current'
+  const [hoveredSelectionKey, setHoveredSelectionKey] = useState(selectionKey)
+  if (hoveredSelectionKey !== selectionKey) {
+    setHoveredSelectionKey(selectionKey)
+    setHoveredFieldId(null)
+  }
+
+  const requestZoomToField = (fieldId: string) =>
+    setZoomRequest((current) => ({
+      fieldId,
+      nonce: (current?.nonce ?? 0) + 1,
+    }))
 
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
@@ -166,7 +208,7 @@ export const FarmInspector = ({
     : null
   const yearValuesEnabled =
     effectiveSelectedYearIndex !== null &&
-    (view === 'map' || selectedFieldId !== null)
+    (effectiveView !== 'list' || selectedFieldId !== null)
   const { data: yearValues, isLoading: yearValuesLoading } =
     useSimulationFieldYearValues(
       farm.id,
@@ -187,6 +229,16 @@ export const FarmInspector = ({
     setLastRun({ simulationId: selectedSimulation.id, response })
   }
 
+  const rulesPanel =
+    isRules && selectedSimulation && !fieldsLoading ? (
+      <SimulationRulesPanel
+        key={selectedSimulation.id}
+        farmId={farm.id}
+        simulation={selectedSimulation}
+        fields={fields}
+      />
+    ) : null
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <FarmTopBar
@@ -199,10 +251,12 @@ export const FarmInspector = ({
         viewIcon={selectedSimulation ? FlaskConical : History}
         actions={
           <SegmentedControl
-            aria-label="Liste eller kort"
-            value={view}
-            options={VIEW_OPTIONS}
-            onValueChange={onViewChange}
+            aria-label="Liste, delt eller kort"
+            value={effectiveView}
+            options={viewOptions}
+            onValueChange={(next) => {
+              if (next !== effectiveView) onViewChange(next)
+            }}
             labelClassName="hidden @4xl:inline"
           />
         }
@@ -242,10 +296,7 @@ export const FarmInspector = ({
         </p>
         <div
           className={cn(
-            'h-full p-3',
-            view === 'list'
-              ? 'space-y-3 overflow-y-auto'
-              : 'flex flex-col gap-3',
+            'flex h-full flex-col gap-3 overflow-y-auto p-3',
             isRules && 'bg-rules/5',
           )}
         >
@@ -259,66 +310,78 @@ export const FarmInspector = ({
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentOverview={catchmentOverview}
               lastRun={lastRun?.response ?? null}
-              collapsible={view === 'list'}
-            />
-          ) : null}
-          {isRules && selectedSimulation && !fieldsLoading ? (
-            <SimulationRulesPanel
-              key={selectedSimulation.id}
-              farmId={farm.id}
-              simulation={selectedSimulation}
-              fields={fields}
+              collapsible
             />
           ) : null}
           {fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
           ) : fieldsError ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-            >
-              Kunne ikke hente simuleringens marker. Prøv igen om lidt.
-            </div>
-          ) : view === 'list' ? (
             <>
-              <FarmFieldsList
-                farmId={farm.id}
-                fields={fields}
-                isSimulationView={isSimulationView}
-                catchmentOverview={catchmentOverview}
-                simulationId={
-                  selection.kind === 'simulation' ? selection.id : undefined
-                }
-                simulation={
-                  selection.kind === 'simulation' ? selectedSimulation : undefined
-                }
-                mode={effectiveMode}
-                sort={fieldsSort}
-                onSortChange={setFieldsSort}
-                selectedFieldId={selectedFieldId}
-                onSelectedFieldChange={onSelectedFieldChange}
-                selectedYearIndex={effectiveSelectedYearIndex}
-                onSelectedYearIndexChange={onSelectedYearIndexChange}
-                yearValues={yearValues}
-                onSwitchToMap={() => onViewChange('map')}
-                onError={onError}
-              />
+              {rulesPanel}
+              <div
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+              >
+                Kunne ikke hente simuleringens marker. Prøv igen om lidt.
+              </div>
             </>
           ) : (
-            <FarmFieldsMap
-              key={
-                selection.kind === 'current'
-                  ? 'current'
-                  : `simulation-${selection.id}`
+            <FarmSplitView
+              view={view}
+              onViewChange={onViewChange}
+              listFraction={listFraction}
+              onListFractionChange={onListFractionChange}
+              onSplitAvailableChange={setSplitAvailable}
+              list={
+                <div className="space-y-3">
+                  {rulesPanel}
+                  <FarmFieldsList
+                    farmId={farm.id}
+                    fields={fields}
+                    isSimulationView={isSimulationView}
+                    catchmentOverview={catchmentOverview}
+                    simulationId={
+                      selection.kind === 'simulation' ? selection.id : undefined
+                    }
+                    simulation={
+                      selection.kind === 'simulation'
+                        ? selectedSimulation
+                        : undefined
+                    }
+                    mode={effectiveMode}
+                    sort={fieldsSort}
+                    onSortChange={setFieldsSort}
+                    selectedFieldId={selectedFieldId}
+                    onSelectedFieldChange={onSelectedFieldChange}
+                    hoveredFieldId={hoveredFieldId}
+                    onHoveredFieldChange={setHoveredFieldId}
+                    onZoomToField={requestZoomToField}
+                    selectedYearIndex={effectiveSelectedYearIndex}
+                    onSelectedYearIndexChange={onSelectedYearIndexChange}
+                    yearValues={yearValues}
+                    onSwitchToMap={() => onViewChange('map')}
+                    onError={onError}
+                  />
+                </div>
               }
-              farm={farm}
-              fields={fields}
-              readOnly={isSimulationView}
-              mode={effectiveMode}
-              selectedYearIndex={effectiveSelectedYearIndex}
-              yearValues={yearValues}
-              yearValuesLoading={yearValuesEnabled && yearValuesLoading}
-              onError={onError}
+              map={
+                <FarmFieldsMap
+                  key={selectionKey}
+                  farm={farm}
+                  fields={fields}
+                  readOnly={isSimulationView}
+                  mode={effectiveMode}
+                  selectedYearIndex={effectiveSelectedYearIndex}
+                  yearValues={yearValues}
+                  yearValuesLoading={yearValuesEnabled && yearValuesLoading}
+                  selectedFieldId={selectedFieldId}
+                  onSelectedFieldChange={onSelectedFieldChange}
+                  hoveredFieldId={hoveredFieldId}
+                  onHoveredFieldChange={setHoveredFieldId}
+                  zoomRequest={zoomRequest ?? undefined}
+                  onError={onError}
+                />
+              }
             />
           )}
         </div>
