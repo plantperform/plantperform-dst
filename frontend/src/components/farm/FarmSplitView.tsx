@@ -9,9 +9,15 @@ import {
 
 import {
   DEFAULT_LIST_FRACTION,
+  DOCKED_PANEL_MIN_INNER_WIDTH,
   MIN_LIST_PANE_WIDTH,
   MIN_MAP_PANE_WIDTH,
   MIN_SPLIT_INNER_WIDTH,
+  PANEL_WIDE_WIDTH,
+  PANEL_WIDTH,
+  SPLIT_DIVIDER_WIDTH,
+  SPLIT_SNAP_TOLERANCE,
+  resolveDockedPanelWidth,
   resolveEffectiveView,
   resolveListPaneWidth,
   snapListPaneWidth,
@@ -28,6 +34,12 @@ type FarmSplitViewProps = {
   onListFractionChange: (fraction: number) => void
   list: ReactNode
   map: ReactNode
+  renderPanel?: (options: {
+    overlay: boolean
+    listBehind: boolean
+    mapVisible: boolean
+  }) => ReactNode
+  panelWide?: boolean
   onSplitAvailableChange?: (available: boolean) => void
 }
 
@@ -38,6 +50,8 @@ export const FarmSplitView = ({
   onListFractionChange,
   list,
   map,
+  renderPanel,
+  panelWide = false,
   onSplitAvailableChange,
 }: FarmSplitViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -66,33 +80,46 @@ export const FarmSplitView = ({
 
   const effectiveView = resolveEffectiveView(view, splitAvailable)
   const width = innerWidth ?? 0
-  const space = splitPaneSpace(width)
+  const panelDocked =
+    renderPanel !== undefined &&
+    effectiveView === 'split' &&
+    width >= DOCKED_PANEL_MIN_INNER_WIDTH
+  const reservedWidth = panelDocked ? PANEL_WIDTH : 0
+  const space = splitPaneSpace(width, reservedWidth)
   const maxSplitListWidth = Math.max(
     MIN_LIST_PANE_WIDTH,
     space - MIN_MAP_PANE_WIDTH,
   )
   const listWidth =
     effectiveView === 'split'
-      ? (dragWidth ?? resolveListPaneWidth(listFraction, width))
+      ? (dragWidth ?? resolveListPaneWidth(listFraction, width, reservedWidth))
       : effectiveView === 'list'
         ? space
         : 0
+  const dockedPanelWidth = resolveDockedPanelWidth(listWidth, panelWide)
+  const panelOverhang = panelDocked ? dockedPanelWidth - PANEL_WIDTH : 0
+  const overlayPanelWidth = Math.min(
+    panelWide ? PANEL_WIDE_WIDTH : PANEL_WIDTH,
+    width,
+  )
+  const dividerMovable = maxSplitListWidth > MIN_LIST_PANE_WIDTH
 
   const changeView = (next: FarmView) => {
     if (next !== view) onViewChange(next)
   }
 
   const placeDivider = (next: number) => {
-    if (next < MIN_LIST_PANE_WIDTH) {
+    if (!dividerMovable) return null
+    if (next < MIN_LIST_PANE_WIDTH - SPLIT_SNAP_TOLERANCE) {
       changeView('map')
       return null
     }
-    if (next > maxSplitListWidth) {
+    if (next > maxSplitListWidth + SPLIT_SNAP_TOLERANCE) {
       changeView('list')
       return null
     }
     changeView('split')
-    return snapListPaneWidth(next, width)
+    return snapListPaneWidth(next, width, reservedWidth)
   }
 
   const dragListWidth = (next: number) => setDragWidth(placeDivider(next))
@@ -117,11 +144,12 @@ export const FarmSplitView = ({
       changeView('split')
       return
     }
+    if (!dividerMovable) return
     let next = listWidth + delta
     while (
       next >= MIN_LIST_PANE_WIDTH &&
       next <= maxSplitListWidth &&
-      snapListPaneWidth(next, width) === listWidth
+      snapListPaneWidth(next, width, reservedWidth) === listWidth
     ) {
       next += delta
     }
@@ -144,11 +172,17 @@ export const FarmSplitView = ({
 
   const showList = effectiveView !== 'map'
   const showMap = effectiveView !== 'list'
+  const dividerCovered =
+    renderPanel !== undefined &&
+    !isDragging &&
+    (panelDocked
+      ? panelOverhang >= SPLIT_DIVIDER_WIDTH
+      : listWidth + SPLIT_DIVIDER_WIDTH <= overlayPanelWidth)
 
   return (
     <div
       ref={containerRef}
-      className="flex min-h-80 min-w-0 flex-1 items-stretch"
+      className="relative flex min-h-80 min-w-0 flex-1 items-stretch"
     >
       {innerWidth === null ? null : (
         <>
@@ -165,7 +199,9 @@ export const FarmSplitView = ({
               <div className="min-h-0 flex-1 overflow-y-auto">{list}</div>
             </div>
           ) : null}
-          {splitAvailable ? (
+          {!splitAvailable ? null : dividerCovered ? (
+            <div aria-hidden="true" className="w-2 shrink-0 self-stretch" />
+          ) : (
             <SplitDivider
               listWidth={listWidth}
               minListWidth={0}
@@ -177,6 +213,32 @@ export const FarmSplitView = ({
               onReset={resetSplit}
               onDraggingChange={handleDraggingChange}
             />
+          )}
+          {renderPanel ? (
+            <div
+              className={cn(
+                'flex min-h-0 flex-col border-r bg-card',
+                panelDocked
+                  ? 'relative z-20 shrink-0'
+                  : 'panel-slide-in absolute inset-y-0 left-0 z-30 shadow-xl',
+                panelOverhang > 0 && 'border-l shadow-xl',
+                !isDragging && 'panel-width-transition',
+              )}
+              style={{
+                width: panelDocked
+                  ? dockedPanelWidth
+                  : panelWide
+                    ? `min(${PANEL_WIDE_WIDTH}px, 100%)`
+                    : `min(${PANEL_WIDTH}px, 100%)`,
+                marginLeft: panelOverhang > 0 ? -panelOverhang : undefined,
+              }}
+            >
+              {renderPanel({
+                overlay: !panelDocked,
+                listBehind: showList,
+                mapVisible: showMap,
+              })}
+            </div>
           ) : null}
           {showMap ? (
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

@@ -159,6 +159,7 @@ type MarkPanelProps = {
   isDetaching: boolean
   onRequestDetach: () => void
   onClose: () => void
+  onCalcOpenChange?: (open: boolean) => void
   onError: (message: string | null) => void
 }
 
@@ -174,20 +175,16 @@ export const MarkPanel = ({
   isDetaching,
   onRequestDetach,
   onClose,
+  onCalcOpenChange,
   onError,
 }: MarkPanelProps) => {
   const [calcOpen, setCalcOpen] = useState(false)
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (event.defaultPrevented) return
-      onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+    onCalcOpenChange?.(calcOpen)
+    return () => onCalcOpenChange?.(false)
+  }, [calcOpen, onCalcOpenChange])
 
   useEffect(() => {
     if (!isSimulationView || !simulationId) return
@@ -230,15 +227,7 @@ export const MarkPanel = ({
   ]
 
   return (
-    <div
-      className="absolute right-0 top-0 z-10 m-0 flex h-full flex-col border-l bg-card shadow-xl"
-      style={{
-        width: calcOpen ? 'min(950px, 100%)' : 'min(460px, 100%)',
-        transition: 'width 250ms ease',
-      }}
-      role="complementary"
-      aria-label={`Markdetaljer: ${field.name}`}
-    >
+    <div className="@container flex min-h-0 flex-1 flex-col">
       <div className="flex items-start justify-between gap-3 border-b p-4">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold">Mark {field.name}</h2>

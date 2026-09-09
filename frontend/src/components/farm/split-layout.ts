@@ -10,6 +10,9 @@ export const SPLIT_SNAP_TOLERANCE = 24
 export const MIN_SPLIT_INNER_WIDTH = 800
 export const SPLIT_DIVIDER_WIDTH = 8
 export const DEFAULT_LIST_FRACTION = 1 / 2
+export const DOCKED_PANEL_MIN_INNER_WIDTH = 1280
+export const PANEL_WIDTH = 460
+export const PANEL_WIDE_WIDTH = 950
 
 const VIEW_STORAGE_KEY = 'plantperform.farmView'
 const FRACTION_STORAGE_KEY = 'plantperform.farmSplitFraction'
@@ -21,11 +24,20 @@ const isFarmView = (value: string): value is FarmView =>
 export const clampListFraction = (fraction: number) =>
   Math.min(1, Math.max(0, fraction))
 
-export const splitPaneSpace = (innerWidth: number) =>
-  Math.max(0, innerWidth - SPLIT_DIVIDER_WIDTH)
+export const splitPaneSpace = (innerWidth: number, reservedWidth = 0) =>
+  Math.max(0, innerWidth - SPLIT_DIVIDER_WIDTH - reservedWidth)
 
-export const snapListPaneWidth = (width: number, innerWidth: number) => {
-  const space = splitPaneSpace(innerWidth)
+export const resolveDockedPanelWidth = (listWidth: number, wide: boolean) =>
+  wide
+    ? Math.min(PANEL_WIDE_WIDTH, listWidth + SPLIT_DIVIDER_WIDTH + PANEL_WIDTH)
+    : PANEL_WIDTH
+
+export const snapListPaneWidth = (
+  width: number,
+  innerWidth: number,
+  reservedWidth = 0,
+) => {
+  const space = splitPaneSpace(innerWidth, reservedWidth)
   let snapped = Math.round(width)
   for (const fraction of SPLIT_SNAP_FRACTIONS) {
     const stop = Math.round(fraction * space)
@@ -45,10 +57,15 @@ export const resolveEffectiveView = (
   splitAvailable: boolean,
 ): FarmView => (view === 'split' && !splitAvailable ? 'list' : view)
 
-export const resolveListPaneWidth = (fraction: number, innerWidth: number) =>
+export const resolveListPaneWidth = (
+  fraction: number,
+  innerWidth: number,
+  reservedWidth = 0,
+) =>
   snapListPaneWidth(
-    clampListFraction(fraction) * splitPaneSpace(innerWidth),
+    clampListFraction(fraction) * splitPaneSpace(innerWidth, reservedWidth),
     innerWidth,
+    reservedWidth,
   )
 
 const readStoredView = (): FarmView => {

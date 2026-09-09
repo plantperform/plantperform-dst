@@ -32,9 +32,15 @@ import {
   type FieldTotals,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { useViewportShorterThan } from '@/hooks/use-viewport-height'
 import { cn } from '@/lib/utils'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
+
+type YearGroup = 'bars' | 'chips'
+
+const COMPACT_VIEWPORT_HEIGHT = 960
+const COLLAPSED_VIEWPORT_HEIGHT = 800
 
 const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
   {
@@ -301,6 +307,8 @@ type YearWalkthroughProps = {
   catchmentOverview: CatchmentOverview
   lastRun: OptimizeSimulationResponse | null
   collapsible?: boolean
+  openOverride?: boolean | null
+  onOpenOverrideChange?: (open: boolean) => void
 }
 
 export const YearWalkthrough = ({
@@ -312,10 +320,15 @@ export const YearWalkthrough = ({
   catchmentOverview,
   lastRun,
   collapsible = false,
+  openOverride = null,
+  onOpenOverrideChange,
 }: YearWalkthroughProps) => {
-  const [open, setOpen] = useState(true)
+  const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
+  const shortViewport = useViewportShorterThan(COLLAPSED_VIEWPORT_HEIGHT)
+  const open = openOverride ?? !shortViewport
   const bodyId = useId()
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const chipRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [lastSelectedPosition, setLastSelectedPosition] = useState(0)
 
   const columns = useMemo(
@@ -337,32 +350,39 @@ export const YearWalkthrough = ({
     onSelectedYearIndexChange(index)
   }
 
-  const moveTo = (position: number) => {
+  const moveTo = (position: number, group: YearGroup) => {
     const clamped = Math.max(0, Math.min(lastPosition, position))
     selectYear(columns[clamped].index)
-    cellRefs.current[clamped]?.focus()
+    const refs = group === 'chips' ? chipRefs : cellRefs
+    refs.current[clamped]?.focus()
   }
 
-  const handleGroupKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleYearKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    group: YearGroup,
+  ) => {
     if (columns.length === 0) return
     switch (event.key) {
       case 'ArrowRight':
       case 'ArrowDown':
         event.preventDefault()
-        moveTo(selectedPosition < 0 ? 0 : selectedPosition + 1)
+        moveTo(selectedPosition < 0 ? 0 : selectedPosition + 1, group)
         break
       case 'ArrowLeft':
       case 'ArrowUp':
         event.preventDefault()
-        moveTo(selectedPosition < 0 ? lastPosition : selectedPosition - 1)
+        moveTo(
+          selectedPosition < 0 ? lastPosition : selectedPosition - 1,
+          group,
+        )
         break
       case 'Home':
         event.preventDefault()
-        moveTo(0)
+        moveTo(0, group)
         break
       case 'End':
         event.preventDefault()
-        moveTo(lastPosition)
+        moveTo(lastPosition, group)
         break
       case 'Escape':
         event.preventDefault()
@@ -398,41 +418,136 @@ export const YearWalkthrough = ({
   const highlightLeftPct = lastSelectedPosition * columnWidthPct
   const hasSelectedColumn = selectedPosition >= 0
   const allYearsSelected = !hasSelectedColumn
+  const collapsed = collapsible && !open
+  const barBoxHeight = compact ? 'h-24' : 'h-28'
+  const barAreaHeight = compact ? 'h-20' : 'h-24'
+  const selectedEntry = loading ? null : (selectedColumn?.entry ?? null)
+  const selectedRelation = selectedEntry
+    ? describeQuotaRelation(selectedEntry.totalNLoadKg, quotaKgn)
+    : null
 
   return (
     <section
       aria-label="Gennemgang af årrække"
       aria-busy={loading}
-      className="shrink-0 rounded-lg border bg-card"
+      className="shrink-0 rounded-lg border bg-card @container"
     >
       <div
         className={cn(
-          'flex flex-wrap items-center justify-between gap-3 px-4 pt-3',
-          collapsible && !open ? 'pb-3' : 'pb-2',
+          'flex items-center gap-3 px-4 pt-3',
+          collapsed ? 'pb-3' : 'pb-2',
         )}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {collapsible ? (
             <DisclosureButton
               open={open}
-              onToggle={() => setOpen((current) => !current)}
+              onToggle={() => onOpenOverrideChange?.(!open)}
               aria-controls={bodyId}
               label="Årsgennemgang"
-              hint={
-                selectedColumn
-                  ? `${selectedColumn.calendarYear} valgt`
-                  : 'Alle år'
-              }
             />
           ) : (
             <h2 className="text-sm font-medium">Årsgennemgang</h2>
           )}
         </div>
+        {collapsed ? (
+          <>
+            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-full bg-muted p-0.5">
+              <button
+                type="button"
+                aria-pressed={allYearsSelected}
+                onClick={() => selectYear(null)}
+                className={cn(
+                  'flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2 text-xs tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  allYearsSelected
+                    ? 'bg-card font-semibold text-foreground shadow-sm'
+                    : 'font-medium text-muted-foreground hover:bg-background/80 hover:text-foreground',
+                )}
+              >
+                Alle år
+              </button>
+              <div
+                role="radiogroup"
+                aria-label="Vælg år"
+                onKeyDown={(event) => handleYearKeyDown(event, 'chips')}
+                className="flex items-center gap-0.5"
+              >
+                {columns.map((column, position) => {
+                  const isSelected = selectedYearIndex === column.index
+                  const relation = column.entry
+                    ? describeQuotaRelation(column.entry.totalNLoadKg, quotaKgn)
+                    : null
+                  const title = columnTitle(column, relation, loading)
+                  const tabIndex =
+                    isSelected || (selectedPosition < 0 && position === 0)
+                      ? 0
+                      : -1
+                  return (
+                    <button
+                      key={column.index}
+                      ref={(element) => {
+                        chipRefs.current[position] = element
+                      }}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      aria-label={title}
+                      title={title}
+                      tabIndex={tabIndex}
+                      onClick={() =>
+                        selectYear(isSelected ? null : column.index)
+                      }
+                      className={cn(
+                        'flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2 text-xs tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        isSelected
+                          ? 'bg-card font-semibold text-foreground shadow-sm'
+                          : 'font-medium text-muted-foreground hover:bg-background/80 hover:text-foreground',
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'size-1.5 shrink-0 rounded-full',
+                          loading
+                            ? 'bg-muted-foreground/20 motion-safe:animate-pulse'
+                            : QUOTA_STATUS_STYLES[
+                                relation?.level ?? 'uncalculated'
+                              ].dot,
+                        )}
+                      />
+                      {column.calendarYear}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {selectedEntry && selectedRelation ? (
+              <div className="ml-auto hidden shrink-0 items-center gap-3 text-xs tabular-nums @2xl:flex">
+                <span className="text-muted-foreground">
+                  DB2{' '}
+                  <span className="font-medium text-foreground">
+                    {formatCompactKr(selectedEntry.totalDb2)}
+                  </span>
+                </span>
+                <QuotaStatusIndicator
+                  level={selectedRelation.level}
+                  className={cn(
+                    'flex-nowrap items-baseline',
+                    QUOTA_STATUS_STYLES[selectedRelation.level].text,
+                  )}
+                >
+                  {formatNLoadAmount(selectedEntry.totalNLoadKg, quotaKgn)} -{' '}
+                  {selectedRelation.text}
+                </QuotaStatusIndicator>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       <div
         id={bodyId}
-        hidden={collapsible && !open}
+        hidden={collapsed}
         className="flex flex-wrap gap-6 px-4 pb-4 @container"
       >
         <div className="flex shrink-0 items-center self-center">
@@ -450,7 +565,7 @@ export const YearWalkthrough = ({
             role="radiogroup"
             aria-label="Vælg år"
             className="p-0.5"
-            onKeyDown={handleGroupKeyDown}
+            onKeyDown={(event) => handleYearKeyDown(event, 'bars')}
           >
             {quotaKgn > 0 ? (
               <span className="sr-only">
@@ -471,7 +586,10 @@ export const YearWalkthrough = ({
               />
               {quotaPct !== null ? (
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-4 z-20 h-24 motion-safe:animate-rise-in"
+                  className={cn(
+                    'pointer-events-none absolute inset-x-0 top-4 z-20 motion-safe:animate-rise-in',
+                    barAreaHeight,
+                  )}
                   aria-hidden="true"
                 >
                   <div
@@ -500,7 +618,7 @@ export const YearWalkthrough = ({
                       ]
                     : nLoadPct
                   const barColor =
-                    QUOTA_STATUS_STYLES[relation?.level ?? 'ok'].dot
+                    QUOTA_STATUS_STYLES[relation?.level ?? 'uncalculated'].dot
                   const title = columnTitle(column, relation, loading)
                   const tabIndex =
                     isSelected || (selectedPosition < 0 && position === 0)
@@ -525,10 +643,18 @@ export const YearWalkthrough = ({
                       className="group relative z-10 flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-lg pb-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                     >
                       <span
-                        className="flex h-28 w-full items-end justify-center"
+                        className={cn(
+                          'flex w-full items-end justify-center',
+                          barBoxHeight,
+                        )}
                         aria-hidden="true"
                       >
-                        <span className="relative flex h-24 items-end justify-center">
+                        <span
+                          className={cn(
+                            'relative flex items-end justify-center',
+                            barAreaHeight,
+                          )}
+                        >
                           {entry ? (
                             <span
                               className={cn(
