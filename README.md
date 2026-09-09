@@ -82,22 +82,22 @@ server proxies `/api` requests to the backend on port 8000.
 ## Registry data
 
 Registry source data is not distributed with this repository. If you are
-authorized to use the source datasets, place these files in
-`backend/database/data/raw/`:
+authorized to use it, place the merged registry file at
+`backend/database/data/raw/V1_1_IMK2026_n604144_gpkg_merged.gpkg` and the
+provided `ANGJ-data/` directory beside it.
 
-- `DataIMK2023_DataPlantPerform_n609506_gpkg.zip`
-- `CVR2023_AnomymKey.xlsx`
-- `Mark2023_AfgroedeAggEfterNless_n13Afgroeder_n609512marker.xlsx`
-
-Load the registry after applying migrations:
+Apply migrations and load all registry, Kystvandopland, MARS, and historical
+fertilizer data with one command:
 
 ```bash
 cd backend
-pixi run load-registry
+pixi run load-registry-data
 ```
 
-The loader truncates and repopulates `registry_field`; do not run it against a
-database whose registry contents must be preserved.
+The command truncates and repopulates `registry_field` and related source-data
+tables. Do not run it against a database whose registry contents must be
+preserved. See `backend/database/scripts/README.md` for source details and
+individual troubleshooting commands.
 
 ## Development checks
 

@@ -52,3 +52,4 @@ load-mars-projekter = "PYTHONPATH=src python database/scripts/load_mars_projekte
 load-historisk-goedningsfordeling = "PYTHONPATH=src python database/scripts/load_historisk_goedningsfordeling.py"
 load-kvotegivende-areal = "PYTHONPATH=src python database/scripts/load_kvotegivende_areal.py"
 load-registry-from-merged-gpkg = "PYTHONPATH=src python database/scripts/load_registry_from_merged_gpkg.py"
+load-registry-data = "alembic -c database/alembic.ini upgrade head && PYTHONPATH=src python database/scripts/load_registry_from_merged_gpkg.py && PYTHONPATH=src python database/scripts/load_kystvandoplande.py && PYTHONPATH=src python database/scripts/load_mars_projekter.py && PYTHONPATH=src python database/scripts/load_historisk_goedningsfordeling.py"

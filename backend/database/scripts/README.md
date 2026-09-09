@@ -30,16 +30,18 @@ data, del enten:
 - **En database-dump** (`pg_dump`) af de to tabeller, hvis modtageren bare
   skal bruge appen uden selv at genberegne noget.
 
-## Kørselsrækkefølge
+## Indlæs alle registerdata
 
 ```
-pixi run db-migrate
-pixi run load-registry-from-merged-gpkg
-pixi run load-kystvandoplande   # genberegner sammenhørende id + navn
-pixi run load-mars-projekter    # genberegner MARS-felter og mars_projekt
+pixi run load-registry-data
 ```
 
-Den samlede loader er den foretrukne vej med datasættet
+Kommandoen migrerer databasen, indlæser det samlede register, genberegner
+Kystvandopland og MARS og indlæser den historiske gødningsfordeling i den
+nødvendige rækkefølge. De enkelte Pixi-opgaver kan stadig køres separat ved
+fejlsøgning.
+
+Det samlede register er den foretrukne vej med datasættet
 `V1_1_IMK2026_n604144_gpkg_merged.gpkg` placeret direkte i
 `backend/database/data/raw/`. Den erstatter basis-, jordbunds-, retention-,
 udledningsgrænse-, økologi/HNV- og kvotegivende-loaderne nedenfor. Den
