@@ -31,7 +31,7 @@ export const CropGroupLegend = ({
         className,
       )}
     >
-      <span>Afgrøder</span>
+      <span className="font-medium text-foreground">Afgrøder</span>
       {groups.map((group) => (
         <span key={group.id} className="inline-flex items-center gap-1.5">
           <CropYearSwatch color={group.color} hasUdlaeg={false} size="8x12" />

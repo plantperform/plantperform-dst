@@ -211,6 +211,11 @@ const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   eeaPrecisionDagsbasis: simulation.eeaPrecisionDagsbasis,
 })
 
+const GROUP_LABEL_CLASS =
+  'h-7 text-[11px] font-semibold tracking-[0.06em] uppercase'
+const VIEW_BUTTON_CLASS =
+  'h-auto min-h-12 rounded-md px-3 py-2 data-[active=true]:[&>svg]:text-primary'
+
 type FarmSidebarProps = {
   farm: Farm
   fields: FieldRecord[]
@@ -339,7 +344,7 @@ export const FarmSidebar = ({
 
   return (
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
-      <SidebarHeader className="h-13 justify-center border-b border-sidebar-border px-2 py-0">
+      <SidebarHeader className="h-13 justify-center px-3 py-0">
         <SidebarBrand />
       </SidebarHeader>
 
@@ -351,8 +356,10 @@ export const FarmSidebar = ({
         />
 
         {showAllFarms ? (
-          <SidebarGroup className="py-1">
-            <SidebarGroupLabel>Bedrift</SidebarGroupLabel>
+          <SidebarGroup className="px-3 py-1">
+            <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+              Bedrift
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -368,8 +375,10 @@ export const FarmSidebar = ({
           </SidebarGroup>
         ) : null}
 
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel>Visninger</SidebarGroupLabel>
+        <SidebarGroup className="px-3 py-1">
+          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+            Visninger
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -379,7 +388,10 @@ export const FarmSidebar = ({
                   aria-current={
                     selection.kind === 'current' ? 'page' : undefined
                   }
-                  className="group-data-[collapsible=icon]:justify-center"
+                  className={cn(
+                    VIEW_BUTTON_CLASS,
+                    'group-data-[collapsible=icon]:justify-center',
+                  )}
                   tooltip={{
                     children: (
                       <div className="grid gap-0.5">
@@ -400,8 +412,10 @@ export const FarmSidebar = ({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel>Simuleringer</SidebarGroupLabel>
+        <SidebarGroup className="px-3 py-1">
+          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+            Simuleringer
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {simulations.map((simulation) => {
@@ -437,7 +451,7 @@ export const FarmSidebar = ({
               })}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  className="text-sidebar-foreground/70"
+                  className="rounded-md px-3 font-medium text-primary hover:text-primary"
                   tooltip="Ny simulering"
                   onClick={() => setNewSimulationOpen(true)}
                 >
@@ -450,7 +464,7 @@ export const FarmSidebar = ({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-1 pb-3">
+      <SidebarFooter className="gap-2 border-t border-sidebar-border p-3">
         <CollapseMenuButton />
         <SidebarUserMenu />
       </SidebarFooter>
@@ -480,16 +494,12 @@ export const FarmSidebar = ({
 
 const SidebarBrand = () => (
   <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
-    <img
-      src="/plantperform-mark.svg"
-      alt=""
-      className="size-9 shrink-0 group-data-[collapsible=icon]:size-8"
-    />
+    <img src="/plantperform-mark.svg" alt="" className="size-8 shrink-0" />
     <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-      <span className="truncate text-base font-semibold tracking-tight">
+      <span className="truncate text-sm font-bold tracking-tight">
         PlantPerform
       </span>
-      <span className="truncate text-xs text-muted-foreground">
+      <span className="truncate text-[11px] text-muted-foreground">
         Sædskifteplanlægning
       </span>
     </div>
@@ -578,7 +588,7 @@ const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
 
   if (iconRail) {
     return (
-      <SidebarGroup className="py-1">
+      <SidebarGroup className="px-3 py-1">
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -602,7 +612,7 @@ const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
   }
 
   return (
-    <SidebarGroup className="py-1">
+    <SidebarGroup className="px-3 py-1">
       <SidebarGroupContent className="space-y-1">
         <div className="relative">
           <Search
@@ -683,7 +693,7 @@ const CollapseMenuButton = () => {
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton
-          className="text-sidebar-foreground/70"
+          className="h-7 px-2 text-xs text-sidebar-foreground/70"
           tooltip="Vis sidepanel"
           onClick={toggleSidebar}
         >
@@ -711,15 +721,15 @@ const SidebarUserMenu = () => {
               size="lg"
               aria-label={email ? `Brugermenu, ${email}` : 'Brugermenu'}
               tooltip={email}
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:py-0!"
+              className="h-auto rounded-md border border-sidebar-border bg-card px-2 py-1.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:py-0!"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                 {initial}
               </span>
               <div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-sm">{email}</span>
+                <span className="truncate text-xs font-semibold">{email}</span>
                 {role ? (
-                  <span className="truncate text-xs text-sidebar-foreground/70">
+                  <span className="truncate text-[11px] text-sidebar-foreground/70">
                     {ROLE_LABELS[role]}
                   </span>
                 ) : null}
@@ -752,7 +762,7 @@ type ViewMenuLabelProps = {
 const ViewMenuLabel = ({ name, badge, children }: ViewMenuLabelProps) => (
   <div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate">{name}</span>
+      <span className="truncate font-medium">{name}</span>
       {badge}
     </span>
     {children}
@@ -835,7 +845,7 @@ const SimulationDetailLine = ({
 
   return (
     <span
-      className="truncate text-xs font-normal text-sidebar-foreground/70 tabular-nums"
+      className="truncate pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums"
       title={`${changedCount} af ${fieldCount} marker har et andet sædskifte end afgrødehistorikken${
         lockedCount > 0 ? `, ${lockedCount} er låst` : ''
       }`}
@@ -921,7 +931,10 @@ const SimulationMenuItem = ({
             size="lg"
             isActive={selected}
             aria-current={selected ? 'page' : undefined}
-            className="h-auto min-h-12 py-1.5 group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center"
+            className={cn(
+              VIEW_BUTTON_CLASS,
+              'group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
+            )}
             title={iconRail ? undefined : createdLabel}
             onClick={onSelect}
           >

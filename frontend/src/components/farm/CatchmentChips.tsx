@@ -58,7 +58,7 @@ const CatchmentChip = ({
       onClick={onToggle}
       title={`${label}: ${amount}${uncalculatedNote ? `, ${uncalculatedNote}` : ''}`}
       className={cn(
-        'inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs motion-safe:transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs motion-safe:transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         style.surface,
         style.text,
         highlighted && 'ring-2 ring-ring',
@@ -69,7 +69,7 @@ const CatchmentChip = ({
         className={cn('size-1.5 shrink-0 rounded-full', style.dot)}
       />
       <span className="max-w-40 truncate font-medium">{label}</span>
-      <span className="shrink-0 tabular-nums">{amount}</span>
+      <span className="shrink-0 font-semibold tabular-nums">{amount}</span>
       <span className="sr-only">
         {CATCHMENT_STATUS_LABELS[level]}
         {highlighted ? ', fremhævet på kortet' : ''}
@@ -115,9 +115,11 @@ export const CatchmentChips = ({
 
   return (
     <div
-      className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto text-xs"
+      className="flex min-h-8 min-w-0 shrink-0 items-center gap-2 overflow-x-auto text-xs"
     >
-      <span className="shrink-0 text-muted-foreground">Pr. kystvandopland</span>
+      <span className="shrink-0 font-medium text-muted-foreground">
+        Pr. kystvandopland
+      </span>
       {catchments.map((catchment) => (
         <CatchmentChip
           key={catchment.key}

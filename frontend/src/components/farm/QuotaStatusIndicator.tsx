@@ -21,15 +21,17 @@ export const QuotaStatusIndicator = ({
   const style = QUOTA_STATUS_STYLES[level]
   return (
     <span className={cn('flex flex-wrap items-center gap-2', className)}>
-      <span
-        className={cn('size-2 shrink-0 rounded-full', style.dot)}
-        aria-hidden="true"
-      />
-      <span>{children}</span>
+      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+        <span
+          className={cn('size-2 shrink-0 rounded-full', style.dot)}
+          aria-hidden="true"
+        />
+        <span>{children}</span>
+      </span>
       {badge && style.badgeLabel ? (
         <span
           className={cn(
-            'rounded-full border px-2 py-0.5 text-xs font-normal',
+            'rounded-full border px-1.5 py-px text-xs font-medium',
             style.surface,
             style.text,
             badgeClassName,
