@@ -55,6 +55,7 @@ Kortet bliver kontrolleret: `selectedFieldId`/`onSelectedFieldChange` som props,
 - Sticky header og footer; tabelcontaineren er den lodrette scroller.
 - Rækker er en memoiseret `FieldRow` med `isHovered`/`isSelected`, så hover på 200 rækker ikke re-renderer tabellen.
 - Kolonner-menuen og legenden bliver i listeruden; kystvandopland-chips flytter op i striben over den delte flade.
+- Kystvandopland i tabellen (Birks punkt 4.1c, 10-09): en valgbar kolonne "Kystvandopland" med oplandets navn, sorterbar alfabetisk med marker uden opland sidst, skjult som standard. Under kolonnerne i Kolonner-menuen ligger "Grupper efter kystvandopland", som også tænder kolonnen, når grupperingen slås til, og slukker den, når den slås fra (kolonnen kan stadig styres for sig bagefter): listen sorteres først efter opland (alfabetisk, uden opland sidst) og derefter efter den valgte kolonne, og hver gruppe får en overskriftsrække på `bg-muted/50` med statusprik, navn, antal marker og areal, og udledning mod kvoten for oplandet med samme tal som chipsene. Rækkefølgen ligger i FarmInspector, så markpanelets forrige/næste følger grupperingen. Valget gemmes pr. browser (`plantperform.farmGroupByCatchment`) og gælder begge visningstyper, ikke Regler. Fremhæver man et opland med en chip, dæmpes de andre gruppers overskrifter sammen med deres rækker.
 
 ## Kortets kontroller
 

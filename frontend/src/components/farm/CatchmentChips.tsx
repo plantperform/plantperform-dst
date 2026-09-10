@@ -7,7 +7,7 @@ import {
 } from '@/components/farm/catchment-options'
 import {
   describeUncalculatedCount,
-  formatNumber,
+  formatCatchmentAmount,
   groupFieldsByCatchment,
   QUOTA_STATUS_STYLES,
   totalsQuotaStatusLevel,
@@ -23,14 +23,6 @@ const CATCHMENT_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
   uncalculated: 'ikke beregnet',
   noData: 'ingen kvote',
   partial: 'delvist beregnet',
-}
-
-const formatCatchmentAmount = (totals: FieldTotals): string => {
-  if (totals.calculatedCount === 0) return 'ikke beregnet'
-  if (totals.udledningskvoteMarkKgn === 0) {
-    return `${formatNumber(totals.nLoad)} kg N, ingen kvote`
-  }
-  return `${formatNumber(totals.nLoad)} / ${formatNumber(totals.udledningskvoteMarkKgn)} kg N`
 }
 
 type CatchmentChipProps = {

@@ -476,6 +476,7 @@ export type FarmFieldsColumnsArgs = {
   totals: FieldTotals
   quotaFooterLevel: QuotaStatusLevel
   quotaFooterNote: string | null
+  catchmentLabel: (kystvandId: number | null) => string
   canEditRules: boolean
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
@@ -491,6 +492,7 @@ export const buildFarmFieldsColumns = ({
   totals,
   quotaFooterLevel,
   quotaFooterNote,
+  catchmentLabel,
   canEditRules,
   lockingFieldId,
   onToggleLock,
@@ -650,6 +652,31 @@ export const buildFarmFieldsColumns = ({
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Udledning mod kvote',
+      },
+    },
+    {
+      id: 'kystvandopland',
+      accessorFn: (field) => field.kystvandId,
+      header: ({ column }) => (
+        <SortableColumnHeaderContent label="Kystvandopland" column={column} />
+      ),
+      cell: ({ row }) => {
+        const { kystvandId } = row.original
+        const label = catchmentLabel(kystvandId)
+        if (kystvandId === null) {
+          return <span className="text-muted-foreground">{label}</span>
+        }
+        return (
+          <span className="block max-w-40 truncate" title={label}>
+            {label}
+          </span>
+        )
+      },
+      footer: () => null,
+      meta: {
+        headerClassName: HEADER_CELL_CLASS,
+        cellClassName: BODY_CELL_CLASS,
+        toggleLabel: 'Kystvandopland',
       },
     },
     numericMetricColumn(

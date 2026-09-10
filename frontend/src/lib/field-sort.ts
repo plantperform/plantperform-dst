@@ -36,16 +36,39 @@ const compareName = (
   return direction === 'asc' ? result : -result
 }
 
+export type CatchmentLabel = (kystvandId: number | null) => string
+
+const compareCatchment = (
+  left: number | null,
+  right: number | null,
+  direction: FieldsSortDirection,
+  catchmentLabel?: CatchmentLabel,
+) => {
+  if (left === null && right === null) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  if (!catchmentLabel) return compareNumber(left, right, direction)
+  return compareName(catchmentLabel(left), catchmentLabel(right), direction)
+}
+
 const comparePrimary = (
   left: FieldRecord,
   right: FieldRecord,
   sort: FieldsSortState,
+  catchmentLabel?: CatchmentLabel,
 ) => {
   switch (sort.key) {
     case 'name':
       return compareName(left.name, right.name, sort.direction)
     case 'areaHa':
       return compareNumber(left.areaHa, right.areaHa, sort.direction)
+    case 'kystvandopland':
+      return compareCatchment(
+        left.kystvandId,
+        right.kystvandId,
+        sort.direction,
+        catchmentLabel,
+      )
     case 'db2':
       return compareNumber(left.db2, right.db2, sort.direction)
     case 'nLoad':
@@ -81,8 +104,9 @@ export const compareFields = (
   left: FieldRecord,
   right: FieldRecord,
   sort: FieldsSortState,
+  catchmentLabel?: CatchmentLabel,
 ) => {
-  const primary = comparePrimary(left, right, sort)
+  const primary = comparePrimary(left, right, sort, catchmentLabel)
   if (primary !== 0) return primary
   const imkTie = compareNullableNumber(left.imkId, right.imkId, 'asc')
   if (imkTie !== 0) return imkTie

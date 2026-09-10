@@ -33,12 +33,15 @@ import type {
 import { CatchmentChips } from '@/components/farm/CatchmentChips'
 import {
   catchmentKey,
+  useCatchmentLabel,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
+  readStoredGroupByCatchment,
   resolveEffectiveFieldsSort,
+  storeGroupByCatchment,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
@@ -72,6 +75,7 @@ import {
 import {
   formatNumber,
   countCatchmentsOverQuota,
+  orderFieldsByCatchment,
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
@@ -167,6 +171,13 @@ export const FarmInspector = ({
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
+  const [groupByCatchment, setGroupByCatchment] = useState(
+    readStoredGroupByCatchment,
+  )
+  const changeGroupByCatchment = (value: boolean) => {
+    setGroupByCatchment(value)
+    storeGroupByCatchment(value)
+  }
   const [splitAvailable, setSplitAvailable] = useState(true)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
     null,
@@ -242,14 +253,16 @@ export const FarmInspector = ({
     [fields, isSimulationView],
   )
 
+  const catchmentLabel = useCatchmentLabel(farm.id, fields)
   const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
-  const sortedFields = useMemo(
-    () =>
-      [...fields].sort((left, right) =>
-        compareFields(left, right, effectiveSort),
-      ),
-    [fields, effectiveSort],
-  )
+  const sortedFields = useMemo(() => {
+    const sorted = [...fields].sort((left, right) =>
+      compareFields(left, right, effectiveSort, catchmentLabel),
+    )
+    return groupByCatchment && !isRules
+      ? orderFieldsByCatchment(sorted, catchmentLabel)
+      : sorted
+  }, [fields, effectiveSort, catchmentLabel, groupByCatchment, isRules])
   const panelField = isRules
     ? null
     : (fields.find((field) => field.id === selectedFieldId) ?? null)
@@ -463,6 +476,9 @@ export const FarmInspector = ({
                     hoveredFieldId={hoveredFieldId}
                     onHoveredFieldChange={setHoveredFieldId}
                     highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
+                    catchmentLabel={catchmentLabel}
+                    groupByCatchment={groupByCatchment}
+                    onGroupByCatchmentChange={changeGroupByCatchment}
                     onZoomToField={
                       effectiveView === 'list' ? undefined : requestZoomToField
                     }

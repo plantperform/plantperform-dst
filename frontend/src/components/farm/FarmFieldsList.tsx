@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-table'
 import { Columns3 } from 'lucide-react'
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -47,6 +48,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -59,19 +61,65 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  catchmentRuns,
   changedFieldIds,
   computeFieldTotals,
   describeCatchmentsOverQuota,
   farmQuotaStatusLevel,
+  formatCatchmentAmount,
+  formatFieldCount,
+  formatNumber,
   getFieldQuotaStatus,
   isFieldLocked,
   QUOTA_STATUS_STYLES,
+  totalsQuotaStatusLevel,
   type CatchmentOverview,
+  type FieldTotals,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 const ROW_ACCENT_CLASS =
   'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
+
+type CatchmentGroupRowProps = {
+  label: string
+  totals: FieldTotals
+  colSpan: number
+  isDimmed: boolean
+}
+
+const CatchmentGroupRow = memo(
+  ({ label, totals, colSpan, isDimmed }: CatchmentGroupRowProps) => {
+    const style = QUOTA_STATUS_STYLES[totalsQuotaStatusLevel(totals)]
+    return (
+      <TableRow
+        aria-label={`Kystvandopland ${label}`}
+        className={cn('bg-muted/50 hover:bg-muted/50', isDimmed && 'opacity-50')}
+      >
+        <TableCell
+          colSpan={colSpan}
+          className="px-2 py-1 text-xs whitespace-nowrap full:px-2.5"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className={cn('size-1.5 shrink-0 rounded-full', style.dot)}
+            />
+            <span className="font-medium">{label}</span>
+            <span className="text-muted-foreground">
+              {formatFieldCount(totals.fieldCount)} ·{' '}
+              {formatNumber(totals.areaHa)} ha ·
+            </span>
+            <span className={cn('font-semibold tabular-nums', style.text)}>
+              {formatCatchmentAmount(totals)}
+            </span>
+          </div>
+        </TableCell>
+      </TableRow>
+    )
+  },
+)
+CatchmentGroupRow.displayName = 'CatchmentGroupRow'
 
 type FieldRowProps = {
   field: FieldRecord
@@ -177,6 +225,9 @@ type FarmFieldsListProps = {
   hoveredFieldId: string | null
   onHoveredFieldChange: (fieldId: string | null) => void
   highlightedCatchmentKey?: string | null
+  catchmentLabel: (kystvandId: number | null) => string
+  groupByCatchment: boolean
+  onGroupByCatchmentChange: (value: boolean) => void
   onZoomToField?: (fieldId: string) => void
   focusRequest?: { fieldId: string; nonce: number }
   selectedYearIndex?: number | null
@@ -200,6 +251,9 @@ export const FarmFieldsList = ({
   hoveredFieldId,
   onHoveredFieldChange,
   highlightedCatchmentKey = null,
+  catchmentLabel,
+  groupByCatchment,
+  onGroupByCatchmentChange,
   onZoomToField,
   focusRequest,
   selectedYearIndex = null,
@@ -243,6 +297,16 @@ export const FarmFieldsList = ({
 
   const quotaFooterLevel = farmQuotaStatusLevel(totals, catchmentOverview)
   const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
+
+  const runStarts = useMemo(() => {
+    if (!groupByCatchment || isRules) return null
+    return new Map(
+      catchmentRuns(sortedFields, isSimulationView).map((run) => [
+        run.firstFieldId,
+        run,
+      ]),
+    )
+  }, [groupByCatchment, isRules, sortedFields, isSimulationView])
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => readStoredColumnVisibility(isSimulationView),
@@ -358,6 +422,7 @@ export const FarmFieldsList = ({
         totals,
         quotaFooterLevel,
         quotaFooterNote,
+        catchmentLabel,
         canEditRules,
         lockingFieldId,
         onToggleLock,
@@ -372,6 +437,7 @@ export const FarmFieldsList = ({
       totals,
       quotaFooterLevel,
       quotaFooterNote,
+      catchmentLabel,
       canEditRules,
       lockingFieldId,
       onToggleLock,
@@ -450,7 +516,7 @@ export const FarmFieldsList = ({
     return () => {
       cancelled = true
     }
-  }, [columns, columnVisibility, onRequiredWidthChange])
+  }, [columns, columnVisibility, runStarts, onRequiredWidthChange])
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -532,6 +598,23 @@ export const FarmFieldsList = ({
                         {column.columnDef.meta?.toggleLabel ?? column.id}
                       </DropdownMenuCheckboxItem>
                     ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem
+                      checked={groupByCatchment}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={(checked) => {
+                        const next = Boolean(checked)
+                        onGroupByCatchmentChange(next)
+                        const column = table.getColumn('kystvandopland')
+                        if (!column || column.getIsVisible() === next) return
+                        column.toggleVisibility(next)
+                        if (!next && sort.key === 'kystvandopland') {
+                          onSortChange(DEFAULT_FIELDS_SORT)
+                        }
+                      }}
+                    >
+                      Grupper efter kystvandopland
+                    </DropdownMenuCheckboxItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
@@ -585,7 +668,11 @@ export const FarmFieldsList = ({
             <TableBody className="[&_td]:border-b [&_tr:last-child_td]:border-b-0">
               {table.getRowModel().rows.map((row) => {
                 const field = row.original
+                const cells = row.getVisibleCells()
                 const isSelected = selectedFieldId === field.id
+                const isDimmed =
+                  highlightedCatchmentKey !== null &&
+                  catchmentKey(field.kystvandId) !== highlightedCatchmentKey
                 const rowAccent = isRules
                   ? null
                   : isSelected
@@ -593,27 +680,34 @@ export const FarmFieldsList = ({
                     : QUOTA_STATUS_STYLES[
                         getFieldQuotaStatus(field, isSimulationView).level
                       ].rowAccent
+                const run = runStarts?.get(field.id)
                 return (
-                  <FieldRow
-                    key={field.id}
-                    field={field}
-                    cells={row.getVisibleCells()}
-                    isRules={isRules}
-                    isSelected={isSelected}
-                    accentClassName={
-                      rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined
-                    }
-                    isHovered={hoveredFieldId === field.id}
-                    isChanged={changedFields.has(field.id)}
-                    isDimmed={
-                      highlightedCatchmentKey !== null &&
-                      catchmentKey(field.kystvandId) !== highlightedCatchmentKey
-                    }
-                    onSelect={selectRow}
-                    onZoom={zoomToRow}
-                    onHover={hoverRow}
-                    registerRow={registerRow}
-                  />
+                  <Fragment key={field.id}>
+                    {run ? (
+                      <CatchmentGroupRow
+                        label={catchmentLabel(run.kystvandId)}
+                        totals={run.totals}
+                        colSpan={cells.length}
+                        isDimmed={isDimmed}
+                      />
+                    ) : null}
+                    <FieldRow
+                      field={field}
+                      cells={cells}
+                      isRules={isRules}
+                      isSelected={isSelected}
+                      accentClassName={
+                        rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined
+                      }
+                      isHovered={hoveredFieldId === field.id}
+                      isChanged={changedFields.has(field.id)}
+                      isDimmed={isDimmed}
+                      onSelect={selectRow}
+                      onZoom={zoomToRow}
+                      onHover={hoverRow}
+                      registerRow={registerRow}
+                    />
+                  </Fragment>
                 )
               })}
             </TableBody>
