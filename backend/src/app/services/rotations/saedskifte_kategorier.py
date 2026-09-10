@@ -1,7 +1,7 @@
 """Sædskifte categories mapping every saedskiftevariant to one of four
-categories (driftsform + gødning level), read directly from the "Sammenlagt
-kategori" column in saedskifte_library (Ny_sædskifte_lookup_sammenlagt.csv,
-2026-09-02). This replaces the former separate
+categories (driftsform + gødning level), loaded from the "Sammenlagt kategori"
+column in Ny_sædskifte_lookup_sammenlagt.csv (2026-09-02) into PostgreSQL.
+This replaces the former separate
 saedskifte_kategorier_uden_E_F.csv with six categories, which is retired. The
 source file consolidated its six old categories into four by removing N-norm%
 variants (for example, "Økologiske sædskifter med kvæggylle (107 N)" and

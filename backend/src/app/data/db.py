@@ -94,6 +94,43 @@ mars_projekt_table = Table(
     Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False),
 )
 
+saedskifte_rotation_table = Table(
+    "saedskifte_rotation",
+    metadata,
+    Column("saedskiftevariant", SmallInteger, primary_key=True),
+    Column("variant", SmallInteger, primary_key=True),
+    Column("rotation", JSON, nullable=False),
+    Column("driftsform", Text, nullable=True),
+)
+
+saedskifte_category_table = Table(
+    "saedskifte_category",
+    metadata,
+    Column("saedskiftevariant", SmallInteger, primary_key=True),
+    Column("kategori", Text, primary_key=True),
+)
+
+historisk_goedningsfordeling_table = Table(
+    "historisk_goedningsfordeling",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("region", Text, nullable=False),
+    Column("driftsform", Text, nullable=False),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("jb_nr", SmallInteger, nullable=False),
+    Column("n_type", Text, nullable=False),
+    Column("vaerdi", Float, nullable=False),
+    Index(
+        "ix_historisk_goedningsfordeling_lookup",
+        "region",
+        "driftsform",
+        "afgroedekode",
+        "jb_nr",
+        "n_type",
+        unique=True,
+    ),
+)
+
 farm_table = Table(
     "farm",
     metadata,

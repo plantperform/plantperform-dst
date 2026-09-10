@@ -1,7 +1,8 @@
 # Kortdata: kilder, metode og kørselsrækkefølge
 
 Dette dokumenterer 2026-registreringen af `registry_field` (og det separate
-`mars_projekt`-lag), bygget 2026-08-27. Erstatter den gamle
+`mars_projekt`-lag) samt runtime-opslagstabellerne for sædskifte og historisk
+gødning, bygget 2026-08-27. Erstatter den gamle
 `load_registry.py`-pipeline (2023 IMK-geopackage), som er efterladt urørt
 som reference men ikke længere køres.
 
@@ -37,9 +38,9 @@ pixi run load-registry-data
 ```
 
 Kommandoen migrerer databasen, indlæser det samlede register, genberegner
-Kystvandopland og MARS og indlæser den historiske gødningsfordeling i den
-nødvendige rækkefølge. De enkelte Pixi-opgaver kan stadig køres separat ved
-fejlsøgning.
+Kystvandopland og MARS og indlæser den historiske gødningsfordeling samt
+sædskifte-opslaget i den nødvendige rækkefølge. De enkelte Pixi-opgaver kan
+stadig køres separat ved fejlsøgning.
 
 Det samlede register er den foretrukne vej med datasættet
 `V1_1_IMK2026_n604144_gpkg_merged.gpkg` placeret direkte i

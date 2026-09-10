@@ -86,8 +86,8 @@ authorized to use it, place the merged registry file at
 `backend/database/data/raw/V1_1_IMK2026_n604144_gpkg_merged.gpkg` and the
 provided `ANGJ-data/` directory beside it.
 
-Apply migrations and load all registry, Kystvandopland, MARS, and historical
-fertilizer data with one command:
+Apply migrations and load all registry, Kystvandopland, MARS, historical
+fertilizer, and runtime crop-rotation lookup data with one command:
 
 ```bash
 cd backend
