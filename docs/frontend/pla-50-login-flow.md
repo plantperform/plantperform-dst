@@ -1,6 +1,6 @@
 # PLA-50: Login-flow uden forvirring
 
-Status: bygget 10-09-2026 på `feat/pla-50-login-flow` direkte oven på dev. Kun frontend. Linear: https://linear.app/plantperform/issue/PLA-50/ui-login-og-oprettelse-roller-oversigt-og-profil
+Status: bygget 10-09-2026 på `feat/pla-50-login-flow` oven på PLA-55-branchen, som nummer fem i stakken efter #26, #27, #28 og #29. Kun frontend. Linear: https://linear.app/plantperform/issue/PLA-50/ui-login-og-oprettelse-roller-oversigt-og-profil
 
 ## Problem
 
@@ -9,8 +9,9 @@ Birk (mail 10-09, punkt 4.2): efter Opret konto stod formularen stadig med en ak
 ## Løsning
 
 - **Opret konto** sender videre til `/verify-email` med adressen i router-state. Siden hedder "Tjek din e-mail", viser adressen, hvad man skal gøre, at linket virker i 24 timer, en knap "Send mailen igen" og "Tilbage til login". Ingen formular, ingen aktiv Opret-knap.
-- **Linket i mailen** bekræfter af sig selv, når siden åbner: først "Bekræfter din e-mail" med spinner, så "Din e-mail er bekræftet" med en Log ind-knap, der sender til login med `verified` i router-state. Svarer backenden 400 (brugt eller udløbet), hedder siden "Linket virker ikke længere" med et e-mail-felt og "Send ny bekræftelsesmail". Kaldet sker kun en gang pr. token, også under React StrictMode, via en ref.
-- **Login** viser en grøn linje "Din e-mail er bekræftet. Log ind for at komme i gang", når man kommer fra bekræftelsen. Svarer backenden 403 (ikke bekræftet), står der, at mailen ikke er bekræftet, og en knap sender bekræftelsesmailen igen til den indtastede adresse uden at forlade siden. 401 giver som før "E-mail eller adgangskode er forkert".
+- **Linket i mailen** bekræfter af sig selv, når siden åbner: først "Bekræfter din e-mail" med spinner, så "Du er klar" med login-formularen indbygget. E-mailen er udfyldt fra `pp-sidst-oprettet` i localStorage (sat ved Opret konto i samme browser, ryddet efter første login), og fokus står i adgangskodefeltet, så et enkelt tryk på Log ind logger ind og sender til forsiden. Backenden giver ingen tokens ved bekræftelsen, så adgangskoden skal skrives; det er det tætteste på "tryk Log ind, og du er inde" uden backend-ændring. Svarer backenden 400 (brugt eller udløbet), hedder siden "Linket virker ikke længere" med et e-mail-felt og "Send ny bekræftelsesmail". Kaldet sker kun en gang pr. token, også under React StrictMode, via en ref.
+- **Login** bruger den samme `LoginForm` (`components/onboarding/LoginForm.tsx`) som bekræftelsen. Svarer backenden 403 (ikke bekræftet), står der, at mailen ikke er bekræftet, og en knap sender bekræftelsesmailen igen til den indtastede adresse uden at forlade siden. 401 giver som før "E-mail eller adgangskode er forkert".
+- **Udseende**: hver side har et ikon i en rund flade over titlen (`AuthIcon` i `AuthLayout.tsx`: konvolut, flueben, spinner, advarsel i rød), og indholdet glider ind med `rise-in`, så siderne ikke står tomme.
 - **Uden token og uden state** viser `/verify-email` kun formularen "Send bekræftelsesmail igen", som login-sidens "Send igen"-link peger på.
 - Grøn og rød besked er samlet i `AuthNotice` (`components/onboarding/AuthNotice.tsx`), så de tre sider ser ens ud.
 
@@ -22,6 +23,6 @@ Ingen ændringer. Endpoints: `POST /auth/register` (202, 409 findes), `POST /aut
 
 1. Opret en konto med en ny adresse. Siden skifter til "Tjek din e-mail" med adressen.
 2. Find linket i API-loggen (`docker logs plantperform-dev-api-1 --tail 30`), åbn det: siden bekræfter selv og viser Log ind.
-3. Klik Log ind: login-siden har den grønne linje. Log ind.
+3. Siden hedder "Du er klar" med e-mailen udfyldt: skriv adgangskoden, og du lander på forsiden.
 4. Åbn det samme link igen: "Linket virker ikke længere" med formularen.
 5. Opret endnu en konto, og prøv at logge ind uden at bekræfte: fejlen og knappen "Send bekræftelsesmailen igen".

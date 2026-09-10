@@ -1,17 +1,38 @@
+import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { BrandMark } from '@/components/BrandMark'
 import { FieldMosaic } from '@/components/onboarding/FieldMosaic'
+import { cn } from '@/lib/utils'
+
+type AuthIconProps = {
+  icon: LucideIcon
+  tone?: 'primary' | 'danger'
+  spin?: boolean
+}
+
+export const AuthIcon = ({ icon: Icon, tone = 'primary', spin = false }: AuthIconProps) => (
+  <div
+    className={cn(
+      'flex size-12 items-center justify-center rounded-full',
+      tone === 'danger' ? 'bg-red-50 text-red-700' : 'bg-primary/10 text-primary',
+    )}
+  >
+    <Icon className={cn('h-6 w-6', spin && 'animate-spin')} aria-hidden="true" />
+  </div>
+)
 
 type AuthLayoutProps = {
   title: string
   description: string
+  icon?: ReactNode
   children: ReactNode
 }
 
 export const AuthLayout = ({
   title,
   description,
+  icon,
   children,
 }: AuthLayoutProps) => (
   <main className="flex min-h-screen flex-col bg-background lg:flex-row">
@@ -28,7 +49,8 @@ export const AuthLayout = ({
       <FieldMosaic className="mt-auto hidden lg:block" />
     </aside>
     <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10 lg:py-16">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md motion-safe:animate-rise-in">
+        {icon ? <div className="mb-5">{icon}</div> : null}
         <h1 className="font-display text-3xl tracking-tight">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         <div className="mt-8">{children}</div>

@@ -1,85 +1,206 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { CircleAlert, MailCheck } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { CircleAlert, CircleCheck, LoaderCircle, Mail, MailOpen } from 'lucide-react'
 
 import { postJson } from '@/api/client'
-import { AuthLayout } from '@/components/onboarding/AuthLayout'
+import { AuthIcon, AuthLayout } from '@/components/onboarding/AuthLayout'
+import { AuthNotice } from '@/components/onboarding/AuthNotice'
+import { LoginForm } from '@/components/onboarding/LoginForm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  clearLastRegisteredEmail,
+  getLastRegisteredEmail,
+} from '@/lib/onboarding'
+
+type VerifyState = 'idle' | 'verifying' | 'verified' | 'invalid'
+type ResendState = 'idle' | 'sending' | 'sent' | 'failed'
+
+const resendVerification = (email: string) =>
+  postJson<{ message: string }, { email: string }>(
+    '/auth/verification/resend',
+    { email: email.trim().toLowerCase() },
+  )
+
+const BackToLogin = () => (
+  <Link
+    className="inline-block text-sm underline underline-offset-4"
+    to="/login"
+  >
+    Tilbage til login
+  </Link>
+)
+
+type ResendNoticeProps = {
+  state: ResendState
+  sentText: string
+}
+
+const ResendNotice = ({ state, sentText }: ResendNoticeProps) => {
+  if (state === 'sent') return <AuthNotice tone="success">{sentText}</AuthNotice>
+  if (state === 'failed') {
+    return (
+      <AuthNotice tone="error">
+        Kunne ikke sende en ny bekræftelsesmail. Prøv igen om lidt.
+      </AuthNotice>
+    )
+  }
+  return null
+}
 
 export const VerifyEmailPage = () => {
   const [searchParams] = useSearchParams()
-  const [token, setToken] = useState(searchParams.get('token') ?? '')
-  const [email, setEmail] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const token = searchParams.get('token')
+  const sentTo =
+    (location.state as { sentTo?: string } | null)?.sentTo ?? null
+  const [verifyState, setVerifyState] = useState<VerifyState>(
+    token ? 'verifying' : 'idle',
+  )
+  const attemptedToken = useRef<string | null>(null)
+  const [rememberedEmail] = useState(() => getLastRegisteredEmail() ?? '')
+  const [email, setEmail] = useState(sentTo ?? rememberedEmail)
+  const [resendState, setResendState] = useState<ResendState>('idle')
 
-  const verify = async (value: string) => {
-    if (!value) return
-    setIsSubmitting(true)
-    setError(null)
-    try {
-      await postJson<{ message: string }, { token: string }>('/auth/verify', { token: value })
-      setIsVerified(true)
-      setStatus('Din e-mailadresse er bekræftet. Du kan nu logge ind.')
-    } catch {
-      setError('Linket er ugyldigt eller udløbet.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+  useEffect(() => {
+    if (!token || attemptedToken.current === token) return
+    attemptedToken.current = token
+    postJson<{ message: string }, { token: string }>('/auth/verify', { token })
+      .then(() => setVerifyState('verified'))
+      .catch(() => setVerifyState('invalid'))
+  }, [token])
 
   const resend = async (event: FormEvent) => {
     event.preventDefault()
-    setError(null)
+    if (!email.trim()) return
+    setResendState('sending')
     try {
-      await postJson('/auth/verification/resend', { email: email.trim().toLowerCase() })
-      setStatus('Hvis adressen mangler bekræftelse, er en ny e-mail sendt.')
+      await resendVerification(email)
+      setResendState('sent')
     } catch {
-      setError('Kunne ikke sende en ny bekræftelsesmail.')
+      setResendState('failed')
     }
+  }
+
+  const resendForm = (
+    <form className="space-y-3" onSubmit={resend}>
+      <Label htmlFor="verification-email">E-mail</Label>
+      <Input
+        id="verification-email"
+        type="email"
+        autoComplete="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      <Button
+        variant="outline"
+        className="w-full"
+        disabled={resendState === 'sending'}
+      >
+        {resendState === 'sending' ? 'Sender...' : 'Send ny bekræftelsesmail'}
+      </Button>
+      <ResendNotice
+        state={resendState}
+        sentText="Hvis adressen mangler bekræftelse, har vi sendt en ny mail."
+      />
+    </form>
+  )
+
+  if (verifyState === 'verifying') {
+    return (
+      <AuthLayout
+        icon={<AuthIcon icon={LoaderCircle} spin />}
+        title="Bekræfter din e-mail"
+        description="Et øjeblik, vi tjekker linket fra mailen."
+      >
+        <p className="text-sm text-muted-foreground">
+          Det tager normalt under et sekund.
+        </p>
+      </AuthLayout>
+    )
+  }
+
+  if (verifyState === 'verified') {
+    return (
+      <AuthLayout
+        icon={<AuthIcon icon={CircleCheck} />}
+        title="Du er klar"
+        description={
+          rememberedEmail
+            ? `${rememberedEmail} er bekræftet. Skriv din adgangskode, så er du inde.`
+            : 'Din e-mail er bekræftet. Log ind, så er du inde.'
+        }
+      >
+        <LoginForm
+          initialEmail={rememberedEmail}
+          autoFocusPassword={Boolean(rememberedEmail)}
+          onSignedIn={() => {
+            clearLastRegisteredEmail()
+            navigate('/')
+          }}
+        />
+      </AuthLayout>
+    )
+  }
+
+  if (verifyState === 'invalid') {
+    return (
+      <AuthLayout
+        icon={<AuthIcon icon={CircleAlert} tone="danger" />}
+        title="Linket virker ikke længere"
+        description="Det er enten brugt allerede eller ældre end 24 timer. Skriv din e-mail, så sender vi et nyt."
+      >
+        <div className="space-y-6">
+          {resendForm}
+          <BackToLogin />
+        </div>
+      </AuthLayout>
+    )
+  }
+
+  if (sentTo) {
+    return (
+      <AuthLayout
+        icon={<AuthIcon icon={MailOpen} />}
+        title="Tjek din e-mail"
+        description={`Vi har sendt et link til ${sentTo}.`}
+      >
+        <div className="space-y-6">
+          <p className="text-sm text-muted-foreground">
+            Klik på linket i mailen, så er din konto klar. Linket virker i 24
+            timer. Kig i spam, hvis mailen ikke dukker op inden for et par
+            minutter.
+          </p>
+          <form className="space-y-3" onSubmit={resend}>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={resendState === 'sending'}
+            >
+              {resendState === 'sending' ? 'Sender...' : 'Send mailen igen'}
+            </Button>
+            <ResendNotice
+              state={resendState}
+              sentText={`Vi har sendt mailen igen til ${sentTo}.`}
+            />
+          </form>
+          <BackToLogin />
+        </div>
+      </AuthLayout>
+    )
   }
 
   return (
     <AuthLayout
-      title="Bekræft e-mail"
-      description={
-        isVerified
-          ? 'Din e-mailadresse er nu bekræftet.'
-          : 'Bekræft linket fra e-mailen, eller bed om at få det sendt igen.'
-      }
+      icon={<AuthIcon icon={Mail} />}
+      title="Send bekræftelsesmail igen"
+      description="Skriv den e-mail, du oprettede kontoen med, så sender vi et nyt link."
     >
       <div className="space-y-6">
-        {status ? (
-          <div className="flex items-start gap-2.5 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
-            <MailCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {status}
-          </div>
-        ) : null}
-        {error ? (
-          <p className="flex items-start gap-2 text-sm text-red-700">
-            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {error}
-          </p>
-        ) : null}
-        {token && !status ? (
-          <div className="space-y-3">
-            <Label htmlFor="token">Bekræftelsestoken</Label>
-            <Input id="token" value={token} onChange={(event) => setToken(event.target.value)} />
-            <Button disabled={isSubmitting} onClick={() => void verify(token)}>Bekræft</Button>
-          </div>
-        ) : null}
-        {!isVerified ? (
-          <form className="space-y-3" onSubmit={resend}>
-            <Label htmlFor="verification-email">E-mail</Label>
-            <Input id="verification-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-            <Button variant="outline">Send bekræftelsesmail igen</Button>
-          </form>
-        ) : null}
-        <Link className="inline-block text-sm underline underline-offset-4" to="/login">Tilbage til login</Link>
+        {resendForm}
+        <BackToLogin />
       </div>
     </AuthLayout>
   )

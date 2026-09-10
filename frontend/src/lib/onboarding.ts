@@ -41,6 +41,19 @@ const writeItem = (key: string, value: string | null) => {
   }
 }
 
+const LAST_REGISTERED_EMAIL_KEY = 'pp-sidst-oprettet'
+
+export const getLastRegisteredEmail = (): string | null =>
+  readItem(LAST_REGISTERED_EMAIL_KEY)
+
+export const setLastRegisteredEmail = (email: string) => {
+  writeItem(LAST_REGISTERED_EMAIL_KEY, email)
+}
+
+export const clearLastRegisteredEmail = () => {
+  writeItem(LAST_REGISTERED_EMAIL_KEY, null)
+}
+
 export const getStoredRole = (email: string): OnboardingRole | null => {
   const value = readItem(roleKey(email))
   return value === 'landmand' || value === 'konsulent' ? value : null
