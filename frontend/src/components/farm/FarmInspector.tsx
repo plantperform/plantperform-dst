@@ -13,6 +13,7 @@ import { mutate } from 'swr'
 import {
   simulationFieldsKey,
   simulationYearlySummaryKey,
+  useFarmHistoricalYearlySummary,
   useScenarioAfgrodeKoder,
   useSimulationFieldYearValues,
   useSimulationYearlySummary,
@@ -279,7 +280,7 @@ export const FarmInspector = ({
   }, [panelField, effectiveHighlightedCatchmentKey, onSelectedFieldChange])
   useEscapeKey(handleEscape)
 
-  const showYearWalkthrough = isSimulationView && !isRules && !fieldsError
+  const showYearWalkthrough = !isRules && !fieldsError
   const effectiveSelectedYearIndex = showYearWalkthrough
     ? selectedYearIndex
     : null
@@ -293,8 +294,18 @@ export const FarmInspector = ({
       fields,
       yearValuesEnabled,
     )
-  const { data: yearlySummary, isLoading: yearlySummaryLoading } =
-    useSimulationYearlySummary(farm.id, selectedSimulation?.id)
+  const simulationSummary = useSimulationYearlySummary(
+    farm.id,
+    selectedSimulation?.id,
+  )
+  const historicalSummary = useFarmHistoricalYearlySummary(
+    isSimulationView ? undefined : farm.id,
+  )
+  const {
+    data: yearlySummary,
+    isLoading: yearlySummaryLoading,
+    error: yearlySummaryError,
+  } = isSimulationView ? simulationSummary : historicalSummary
 
   const openRules = () => {
     onOptimizeDialogOpenChange(false)
@@ -378,9 +389,9 @@ export const FarmInspector = ({
             isRules && 'bg-rules/5',
           )}
         >
-          {showYearWalkthrough && selection.kind === 'simulation' ? (
+          {showYearWalkthrough ? (
             <YearWalkthrough
-              key={selection.id}
+              key={selectionKey}
               entries={yearlySummary}
               loading={fieldsLoading || yearlySummaryLoading}
               fields={fields}
@@ -391,6 +402,12 @@ export const FarmInspector = ({
               collapsible
               openOverride={walkthroughOpenOverride}
               onOpenOverrideChange={setWalkthroughOpenOverride}
+              history={!isSimulationView}
+              unavailableMessage={
+                yearlySummaryError
+                  ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
+                  : null
+              }
             />
           ) : null}
           {!isRules && !fieldsLoading && !fieldsError && fields.length > 0 ? (
@@ -464,7 +481,9 @@ export const FarmInspector = ({
                   fields={fields}
                   readOnly={isSimulationView}
                   mode={effectiveMode}
-                  selectedYearIndex={effectiveSelectedYearIndex}
+                  selectedYearIndex={
+                    isSimulationView ? effectiveSelectedYearIndex : null
+                  }
                   yearValues={yearValues}
                   yearValuesLoading={yearValuesEnabled && yearValuesLoading}
                   selectedFieldId={selectedFieldId}

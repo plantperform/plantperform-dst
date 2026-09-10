@@ -285,9 +285,7 @@ export const MarkPanel = ({
   const selectedYearValue =
     highlightIndex !== null ? (yearValues?.[highlightIndex] ?? null) : null
   const selectedCalendarYear =
-    isSimulationView && selectedYearIndex !== null
-      ? rotationStartYear + selectedYearIndex
-      : null
+    selectedYearIndex !== null ? rotationStartYear + selectedYearIndex : null
   const yearOutsideRotation =
     selectedCalendarYear !== null && highlightIndex === null
   const selectedValuesText =

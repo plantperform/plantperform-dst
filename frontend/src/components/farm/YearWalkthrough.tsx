@@ -25,6 +25,7 @@ import {
   formatWholeNumber,
   QUOTA_STATUS_STYLES,
   quotaStatusLevel,
+  REAL_HISTORY_START_CALENDAR_YEAR,
   resolveFarmQuota,
   ROTATION_CALENDAR_YEARS,
   ROTATION_START_CALENDAR_YEAR,
@@ -105,28 +106,43 @@ const columnTitle = (
   column: YearColumn,
   relation: QuotaRelation | null,
   loading: boolean,
+  history: boolean,
 ): string => {
   if (loading) return `${column.calendarYear}: indlæser årstal`
-  if (!column.entry) return `${column.calendarYear}: ingen årstal endnu`
+  if (!column.entry) {
+    return history
+      ? `${column.calendarYear}: ingen historik`
+      : `${column.calendarYear}: ingen årstal endnu`
+  }
   return `${column.calendarYear}: DB2 ${formatCompactKr(column.entry.totalDb2)}, udledning ${formatWholeNumber(column.entry.totalNLoadKg)} kg N (${relation?.text})`
 }
 
 const buildColumns = (
   entries: YearlySummaryEntry[] | undefined,
+  history: boolean,
 ): YearColumn[] => {
-  if (entries && entries.length > 0) {
-    return [...entries]
-      .sort((left, right) => left.year - right.year)
-      .map((entry) => ({
-        index: entry.year - 1,
-        calendarYear: ROTATION_START_CALENDAR_YEAR + entry.year - 1,
+  const startCalendarYear = history
+    ? REAL_HISTORY_START_CALENDAR_YEAR
+    : ROTATION_START_CALENDAR_YEAR
+  const yearCount = ROTATION_CALENDAR_YEARS.length
+  const entriesByIndex = new Map<number, YearlySummaryEntry>()
+  for (const entry of entries ?? []) {
+    const index = history ? entry.year - startCalendarYear : entry.year - 1
+    if (index >= 0 && index < yearCount) entriesByIndex.set(index, entry)
+  }
+  if (!history && entriesByIndex.size > 0) {
+    return [...entriesByIndex.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([index, entry]) => ({
+        index,
+        calendarYear: startCalendarYear + index,
         entry,
       }))
   }
-  return ROTATION_CALENDAR_YEARS.map((calendarYear, index) => ({
+  return Array.from({ length: yearCount }, (_, index) => ({
     index,
-    calendarYear,
-    entry: null,
+    calendarYear: startCalendarYear + index,
+    entry: entriesByIndex.get(index) ?? null,
   }))
 }
 
@@ -140,6 +156,8 @@ type YearSummaryBoxProps = {
   lastRun: OptimizeSimulationResponse | null
   overYears: number[]
   yearCount: number
+  history: boolean
+  unavailableMessage: string | null
 }
 
 const SummaryValue = ({
@@ -165,6 +183,8 @@ const renderYearSummary = ({
   lastRun,
   overYears,
   yearCount,
+  history,
+  unavailableMessage,
 }: YearSummaryBoxProps): ReactNode => {
   if (loading) {
     return (
@@ -235,7 +255,10 @@ const renderYearSummary = ({
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground">
-          Klik et år for at følge planen år for år.
+          {unavailableMessage ??
+            (history
+              ? 'Klik et år for at se markernes afgrøder det år.'
+              : 'Klik et år for at følge planen år for år.')}
         </p>
       </>
     )
@@ -248,8 +271,10 @@ const renderYearSummary = ({
           {column.calendarYear}
         </div>
         <p className="text-xs text-muted-foreground">
-          Ingen årstal for {column.calendarYear} endnu - kør Optimér for at
-          beregne markerne.
+          {unavailableMessage ??
+            (history
+              ? `Ingen historik for ${column.calendarYear}.`
+              : `Ingen årstal for ${column.calendarYear} endnu - kør Optimér for at beregne markerne.`)}
         </p>
       </>
     )
@@ -309,6 +334,8 @@ type YearWalkthroughProps = {
   collapsible?: boolean
   openOverride?: boolean | null
   onOpenOverrideChange?: (open: boolean) => void
+  history?: boolean
+  unavailableMessage?: string | null
 }
 
 export const YearWalkthrough = ({
@@ -322,6 +349,8 @@ export const YearWalkthrough = ({
   collapsible = false,
   openOverride = null,
   onOpenOverrideChange,
+  history = false,
+  unavailableMessage = null,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const shortViewport = useViewportShorterThan(COLLAPSED_VIEWPORT_HEIGHT)
@@ -332,10 +361,13 @@ export const YearWalkthrough = ({
   const [lastSelectedPosition, setLastSelectedPosition] = useState(0)
 
   const columns = useMemo(
-    () => buildColumns(loading ? undefined : entries),
-    [entries, loading],
+    () => buildColumns(loading ? undefined : entries, history),
+    [entries, loading, history],
   )
-  const totals = useMemo(() => computeFieldTotals(fields, true), [fields])
+  const totals = useMemo(
+    () => computeFieldTotals(fields, !history),
+    [fields, history],
+  )
   const quotaKgn = resolveFarmQuota(totals.udledningskvoteMarkKgn).quotaKgn
 
   const selectedPosition = columns.findIndex(
@@ -477,7 +509,7 @@ export const YearWalkthrough = ({
                   const relation = column.entry
                     ? describeQuotaRelation(column.entry.totalNLoadKg, quotaKgn)
                     : null
-                  const title = columnTitle(column, relation, loading)
+                  const title = columnTitle(column, relation, loading, history)
                   const tabIndex =
                     isSelected || (selectedPosition < 0 && position === 0)
                       ? 0
@@ -619,7 +651,7 @@ export const YearWalkthrough = ({
                     : nLoadPct
                   const barColor =
                     QUOTA_STATUS_STYLES[relation?.level ?? 'uncalculated'].dot
-                  const title = columnTitle(column, relation, loading)
+                  const title = columnTitle(column, relation, loading, history)
                   const tabIndex =
                     isSelected || (selectedPosition < 0 && position === 0)
                       ? 0
@@ -737,6 +769,8 @@ export const YearWalkthrough = ({
           lastRun={lastRun}
           overYears={overYears}
           yearCount={entryValues.length}
+          history={history}
+          unavailableMessage={unavailableMessage}
         />
       </div>
     </section>

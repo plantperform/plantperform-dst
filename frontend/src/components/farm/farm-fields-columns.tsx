@@ -527,7 +527,7 @@ export const buildFarmFieldsColumns = ({
   const rotationStartYear = isSimulationView
     ? ROTATION_START_CALENDAR_YEAR
     : REAL_HISTORY_START_CALENDAR_YEAR
-  const highlightIndex = isSimulationView ? selectedYearIndex : null
+  const highlightIndex = selectedYearIndex
   const selectedCalendarYear =
     highlightIndex !== null ? rotationStartYear + highlightIndex : null
 
@@ -577,8 +577,7 @@ export const buildFarmFieldsColumns = ({
     },
   })
 
-  if (isSimulationView) {
-    list.push({
+  list.push({
       id: 'cropYear',
       header: () => (
         <div className="flex flex-col">
@@ -616,7 +615,6 @@ export const buildFarmFieldsColumns = ({
         ),
       },
     })
-  }
 
   list.push(
     numericMetricColumn(

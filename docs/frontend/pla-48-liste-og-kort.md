@@ -64,6 +64,7 @@ Kortet bliver kontrolleret: `selectedFieldId`/`onSelectedFieldChange` som props,
 
 ## Årsgennemgang
 
+- Afgrødehistorik har også årsgennemgangen, med kalenderår 2019-2026 fra endpointet `fields/historical-yearly-summary` (Birks historiske årsoversigt fra dev, lagt ind i vores komponent under rebasen 10-09). Året fremhæver tabellens tern, Afgrøde-kolonnen og markpanelets sædskifte; kortet følger kun året i simuleringer, fordi årets tal pr. mark kun findes der.
 - Altid sammenfoldelig. Sammenfoldet header (44 px) viser de otte årstal som chips i en radiogroup med samme tastatur som søjlerne, og en tal-linje for det valgte år, så man kan skifte år uden at folde søjlerne ud.
 - Kompakt tæthed (søjler h-20) når viewport-højden er under 960 px. Standard sammenfoldet når viewport-højden er under 800 px.
 
