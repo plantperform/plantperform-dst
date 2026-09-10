@@ -3,6 +3,7 @@ import type { VisibilityState } from '@tanstack/react-table'
 export type FieldsSortKey =
   | 'name'
   | 'areaHa'
+  | 'kystvandopland'
   | 'db2'
   | 'nLoad'
   | 'leaching'
@@ -36,6 +37,7 @@ export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
   'db2',
   'quotaStatus',
+  'kystvandopland',
   'nLoad',
   'leaching',
   'fen',
@@ -106,6 +108,24 @@ export const storeColumnVisibility = (
       columnsStorageKey(isSimulationView),
       JSON.stringify(visibility),
     )
+  } catch {
+    return
+  }
+}
+
+const GROUP_BY_CATCHMENT_STORAGE_KEY = 'plantperform.farmGroupByCatchment'
+
+export const readStoredGroupByCatchment = (): boolean => {
+  try {
+    return window.localStorage.getItem(GROUP_BY_CATCHMENT_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export const storeGroupByCatchment = (value: boolean) => {
+  try {
+    window.localStorage.setItem(GROUP_BY_CATCHMENT_STORAGE_KEY, value ? '1' : '0')
   } catch {
     return
   }

@@ -547,6 +547,64 @@ export const groupFieldsByCatchment = (
   }))
 }
 
+export const formatCatchmentAmount = (totals: FieldTotals): string => {
+  if (totals.calculatedCount === 0) return 'ikke beregnet'
+  if (totals.udledningskvoteMarkKgn === 0) {
+    return `${formatNumber(totals.nLoad)} kg N, ingen kvote`
+  }
+  return `${formatNumber(totals.nLoad)} / ${formatNumber(totals.udledningskvoteMarkKgn)} kg N`
+}
+
+export const orderFieldsByCatchment = (
+  fields: FieldRecord[],
+  catchmentLabel: (kystvandId: number | null) => string,
+): FieldRecord[] => {
+  const groups = new Map<number | null, FieldRecord[]>()
+  for (const field of fields) {
+    const group = groups.get(field.kystvandId)
+    if (group) group.push(field)
+    else groups.set(field.kystvandId, [field])
+  }
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => {
+      if (left === null) return 1
+      if (right === null) return -1
+      return catchmentLabel(left).localeCompare(catchmentLabel(right), 'da')
+    })
+    .flatMap(([, group]) => group)
+}
+
+export type CatchmentRun = {
+  firstFieldId: string
+  kystvandId: number | null
+  totals: FieldTotals
+}
+
+export const catchmentRuns = (
+  orderedFields: FieldRecord[],
+  isSimulationView: boolean,
+): CatchmentRun[] => {
+  const runs: CatchmentRun[] = []
+  let current: FieldRecord[] = []
+  const closeRun = () => {
+    if (current.length === 0) return
+    runs.push({
+      firstFieldId: current[0].id,
+      kystvandId: current[0].kystvandId,
+      totals: computeFieldTotals(current, isSimulationView),
+    })
+    current = []
+  }
+  for (const field of orderedFields) {
+    if (current.length > 0 && current[0].kystvandId !== field.kystvandId) {
+      closeRun()
+    }
+    current.push(field)
+  }
+  closeRun()
+  return runs
+}
+
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
 export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
 
