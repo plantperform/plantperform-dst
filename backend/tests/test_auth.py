@@ -42,6 +42,10 @@ class VerificationEmailTests(unittest.TestCase):
         self.assertIn("code=MessageRejected", log_output)
         self.assertNotIn("recipient@example.com", log_output)
         self.assertNotIn("verification-token", log_output)
+        self.assertEqual(
+            client.return_value.send_email.call_args.kwargs["FromEmailAddress"],
+            "PlantPerform <noreply@cordulus.dev>",
+        )
 
     @patch("app.api.v0.auth.register_user", side_effect=RuntimeError("SES unavailable"))
     def test_register_keeps_ses_failures_generic(self, _register_user) -> None:

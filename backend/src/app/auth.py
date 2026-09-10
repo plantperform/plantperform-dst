@@ -5,6 +5,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from email.utils import formataddr
 from typing import Annotated
 from uuid import uuid4
 
@@ -205,7 +206,7 @@ def _send_verification_email(email: str, token: str) -> None:
 
     try:
         boto3.client("sesv2", region_name=_aws_region()).send_email(
-            FromEmailAddress=config.ses_from_email,
+            FromEmailAddress=formataddr(("PlantPerform", config.ses_from_email)),
             Destination={"ToAddresses": [email]},
             Content={
                 "Simple": {
