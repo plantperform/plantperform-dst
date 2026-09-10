@@ -361,6 +361,11 @@ export const FarmFieldsList = ({
   }, [selectedFieldId])
 
   useEffect(() => {
+    if (highlightedCatchmentKey === null) return
+    tableRef.current?.parentElement?.scrollTo({ top: 0 })
+  }, [highlightedCatchmentKey])
+
+  useEffect(() => {
     if (!focusRequest || focusRequest.nonce === focusedNonce.current) return
     focusedNonce.current = focusRequest.nonce
     const row = rowElements.current.get(focusRequest.fieldId)
