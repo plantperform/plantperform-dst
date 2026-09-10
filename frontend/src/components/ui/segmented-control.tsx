@@ -34,7 +34,7 @@ export const SegmentedControl = <T extends string>({
     role="group"
     aria-label={props['aria-label']}
     className={cn(
-      'flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-muted p-0.5',
+      'flex h-8 shrink-0 items-center gap-0.5 rounded-md border bg-muted p-0.5',
       className,
     )}
   >
@@ -51,9 +51,12 @@ export const SegmentedControl = <T extends string>({
           title={option.title}
           disabled={optionDisabled}
           className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+            'inline-flex h-6.5 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             active
-              ? cn('bg-card text-foreground shadow-sm', option.activeClassName)
+              ? cn(
+                  'bg-card font-semibold text-primary shadow-xs',
+                  option.activeClassName,
+                )
               : cn(
                   'text-muted-foreground',
                   !optionDisabled &&
@@ -62,7 +65,7 @@ export const SegmentedControl = <T extends string>({
           )}
           onClick={() => onValueChange(option.value)}
         >
-          <Icon className="size-4" aria-hidden="true" />
+          <Icon className="size-3.5" aria-hidden="true" />
           <span className={labelClassName}>{option.label}</span>
         </button>
       )

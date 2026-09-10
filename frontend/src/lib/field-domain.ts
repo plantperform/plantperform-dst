@@ -394,6 +394,7 @@ export const formatQuotaAmount = (
 export type QuotaStatusStyle = {
   dot: string
   accent: string
+  rowAccent: string | null
   surface: string
   text: string
   badgeLabel: string | null
@@ -402,6 +403,7 @@ export type QuotaStatusStyle = {
 const QUOTA_STATUS_STYLE_UNKNOWN: QuotaStatusStyle = {
   dot: 'bg-muted-foreground/60',
   accent: 'border-l-muted-foreground/60',
+  rowAccent: null,
   surface: 'border-border bg-muted/50',
   text: 'text-muted-foreground',
   badgeLabel: null,
@@ -411,6 +413,7 @@ export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   ok: {
     dot: 'bg-green-600',
     accent: 'border-l-green-600',
+    rowAccent: null,
     surface: 'border-green-200 bg-green-50',
     text: 'text-green-800',
     badgeLabel: null,
@@ -418,6 +421,7 @@ export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   near: {
     dot: 'bg-amber-600',
     accent: 'border-l-amber-600',
+    rowAccent: 'before:bg-amber-600',
     surface: 'border-amber-200 bg-amber-50',
     text: 'text-amber-800',
     badgeLabel: 'tæt på',
@@ -425,6 +429,7 @@ export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   over: {
     dot: 'bg-red-600',
     accent: 'border-l-red-600',
+    rowAccent: 'before:bg-red-600',
     surface: 'border-red-200 bg-red-50',
     text: 'text-red-800',
     badgeLabel: 'over',

@@ -63,10 +63,15 @@ import {
   computeFieldTotals,
   describeCatchmentsOverQuota,
   farmQuotaStatusLevel,
+  getFieldQuotaStatus,
   isFieldLocked,
+  QUOTA_STATUS_STYLES,
   type CatchmentOverview,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
+
+const ROW_ACCENT_CLASS =
+  'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
 
 type FieldRowProps = {
   field: FieldRecord
@@ -76,6 +81,7 @@ type FieldRowProps = {
   isHovered: boolean
   isChanged: boolean
   isDimmed: boolean
+  accentClassName?: string
   onSelect: (fieldId: string, isSelected: boolean) => void
   onZoom: (fieldId: string) => void
   onHover: (fieldId: string | null) => void
@@ -91,6 +97,7 @@ const FieldRow = memo(
     isHovered,
     isChanged,
     isDimmed,
+    accentClassName,
     onSelect,
     onZoom,
     onHover,
@@ -124,23 +131,27 @@ const FieldRow = memo(
         aria-label={isRules ? undefined : `Vis detaljer for mark ${field.name}`}
         data-selected={isSelected}
         className={cn(
+          'group h-10 hover:bg-muted full:h-13',
           isRules
             ? 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset'
             : 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           isDimmed && 'opacity-50',
           isSelected
-            ? 'bg-secondary/50'
+            ? 'bg-secondary hover:bg-secondary'
             : isHovered
-              ? 'bg-muted/60'
+              ? 'bg-muted'
               : isChanged
                 ? 'bg-blue-50'
                 : undefined,
         )}
       >
-        {cells.map((cell) => (
+        {cells.map((cell, index) => (
           <TableCell
             key={cell.id}
-            className={cell.column.columnDef.meta?.cellClassName}
+            className={cn(
+              cell.column.columnDef.meta?.cellClassName,
+              index === 0 && accentClassName,
+            )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </TableCell>
@@ -478,52 +489,54 @@ export const FarmFieldsList = ({
       <div
         ref={rootRef}
         data-density={density}
-        className="flex min-h-0 flex-1 flex-col gap-2"
+        className="flex min-h-0 flex-1 flex-col"
       >
-        {isRules ? (
-          <p className="text-xs text-muted-foreground">
-            Hvad optimeringen må gøre ved hver mark. Ændringer her styrer næste
-            kørsel - de er ikke tal, marken har.
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="xs" className="ml-auto gap-1.5">
-                  <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Kolonner
-                  <span className="text-muted-foreground">
-                    {visibleOptionalCount} af {optionalColumns.length}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {optionalColumns.map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={column.getIsVisible()}
-                    onSelect={(event) => event.preventDefault()}
-                    onCheckedChange={(checked) => {
-                      column.toggleVisibility(Boolean(checked))
-                      if (!checked && column.id === sort.key) {
-                        onSortChange(DEFAULT_FIELDS_SORT)
-                      }
-                    }}
-                  >
-                    {column.columnDef.meta?.toggleLabel ?? column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
-        {isRules ? null : <CropGroupLegend fields={sortedFields} />}
         <div
           className={cn(
-            'flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card',
+            'flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-xs',
             isRules && 'border-rules/30',
           )}
         >
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2">
+            {isRules ? (
+              <p className="text-xs text-muted-foreground">
+                Hvad optimeringen må gøre ved hver mark. Ændringer her styrer
+                næste kørsel - de er ikke tal, marken har.
+              </p>
+            ) : (
+              <>
+                <CropGroupLegend fields={sortedFields} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="xs" className="ml-auto gap-1.5">
+                      <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Kolonner
+                      <span className="text-muted-foreground">
+                        {visibleOptionalCount} af {optionalColumns.length}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {optionalColumns.map((column) => (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        checked={column.getIsVisible()}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={(checked) => {
+                          column.toggleVisibility(Boolean(checked))
+                          if (!checked && column.id === sort.key) {
+                            onSortChange(DEFAULT_FIELDS_SORT)
+                          }
+                        }}
+                      >
+                        {column.columnDef.meta?.toggleLabel ?? column.id}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
           <Table
             ref={tableRef}
             containerClassName="min-h-0 flex-1 scroll-pt-10 scroll-pb-24"
@@ -531,10 +544,10 @@ export const FarmFieldsList = ({
           >
             <TableHeader
               className={cn(
-                '[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:border-b [&_th]:bg-card [&_th]:bg-linear-to-b',
+                '[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:border-b',
                 isRules
-                  ? '[&_th]:from-rules/10 [&_th]:to-rules/10'
-                  : '[&_th]:from-muted/60 [&_th]:to-muted/60',
+                  ? '[&_th]:bg-card [&_th]:bg-linear-to-b [&_th]:from-rules/10 [&_th]:to-rules/10'
+                  : '[&_th]:bg-muted',
               )}
             >
               {table.getHeaderGroups().map((headerGroup) => (
@@ -572,13 +585,24 @@ export const FarmFieldsList = ({
             <TableBody className="[&_td]:border-b [&_tr:last-child_td]:border-b-0">
               {table.getRowModel().rows.map((row) => {
                 const field = row.original
+                const isSelected = selectedFieldId === field.id
+                const rowAccent = isRules
+                  ? null
+                  : isSelected
+                    ? 'before:bg-primary'
+                    : QUOTA_STATUS_STYLES[
+                        getFieldQuotaStatus(field, isSimulationView).level
+                      ].rowAccent
                 return (
                   <FieldRow
                     key={field.id}
                     field={field}
                     cells={row.getVisibleCells()}
                     isRules={isRules}
-                    isSelected={selectedFieldId === field.id}
+                    isSelected={isSelected}
+                    accentClassName={
+                      rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined
+                    }
                     isHovered={hoveredFieldId === field.id}
                     isChanged={changedFields.has(field.id)}
                     isDimmed={
@@ -593,7 +617,7 @@ export const FarmFieldsList = ({
                 )
               })}
             </TableBody>
-            <TableFooter className="bg-transparent [&_td]:sticky [&_td]:bottom-0 [&_td]:z-20 [&_td]:border-t [&_td]:bg-card [&_td]:bg-linear-to-b [&_td]:from-muted/50 [&_td]:to-muted/50">
+            <TableFooter className="bg-transparent font-semibold [&_td]:sticky [&_td]:bottom-0 [&_td]:z-20 [&_td]:border-t [&_td]:bg-muted [&_td]:py-2">
               {table.getFooterGroups().map((footerGroup) => (
                 <TableRow key={footerGroup.id}>
                   {footerGroup.headers.map((footer) => {

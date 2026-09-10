@@ -98,7 +98,7 @@ export const SplitDivider = ({
       tabIndex={0}
       className={cn(
         'group relative z-20 flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center self-stretch transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        isDragging ? 'bg-primary' : 'bg-transparent hover:bg-primary/40',
+        isDragging ? 'bg-primary/10' : 'bg-transparent hover:bg-primary/5',
       )}
       onPointerDown={startDrag}
       onPointerMove={drag}
@@ -109,13 +109,16 @@ export const SplitDivider = ({
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border"
+        className={cn(
+          'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-border group-focus-visible:bg-border',
+          isDragging && 'bg-primary',
+        )}
       />
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none relative h-8 w-1 rounded-full bg-border transition-colors group-hover:bg-primary',
-          isDragging && 'bg-primary-foreground',
+          'pointer-events-none relative h-8 w-1 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground/60 group-focus-visible:bg-muted-foreground/60',
+          isDragging && 'bg-primary',
         )}
       />
     </div>

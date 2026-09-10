@@ -23,7 +23,8 @@ type FarmTopBarProps = {
   actions?: ReactNode
 }
 
-const FARM_NAME_CLASS = 'truncate font-display text-lg tracking-tight'
+const FARM_NAME_CLASS =
+  'truncate font-display text-lg font-semibold tracking-tight'
 
 export const FarmTopBar = ({
   farm,
@@ -31,7 +32,7 @@ export const FarmTopBar = ({
   viewIcon: ViewIcon,
   actions,
 }: FarmTopBarProps) => (
-  <header className="flex min-h-13 shrink-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-1 @container">
+  <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-3 border-b bg-background px-4 py-1 @container">
     <SidebarTrigger
       className="size-8 shrink-0 md:hidden"
       aria-label="Vis eller skjul sidepanelet"
@@ -41,11 +42,14 @@ export const FarmTopBar = ({
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <FarmSwitcher farm={farm} />
       <ChevronRight
-        className="size-4 shrink-0 text-muted-foreground/60"
+        className="size-3.5 shrink-0 text-muted-foreground"
         aria-hidden="true"
       />
-      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-        <ViewIcon className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+        <ViewIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="truncate">{viewLabel}</span>
       </span>
     </div>

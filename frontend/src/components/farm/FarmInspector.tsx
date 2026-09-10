@@ -373,7 +373,7 @@ export const FarmInspector = ({
         </p>
         <div
           className={cn(
-            'flex h-full flex-col gap-3 overflow-y-auto p-3',
+            'flex h-full flex-col gap-2 overflow-y-auto px-4 pb-4 pt-2',
             isRules && 'bg-rules/5',
           )}
         >

@@ -38,9 +38,13 @@ declare module '@tanstack/react-table' {
   }
 }
 
-const CELL_PADDING = 'px-2 py-3 full:px-4'
-const HEADER_CELL_CLASS = `${CELL_PADDING} font-medium whitespace-normal`
-const BODY_CELL_CLASS = `${CELL_PADDING} whitespace-nowrap`
+const CELL_X_PADDING = 'px-2 full:px-2.5'
+const HEADER_CELL_CLASS = `${CELL_X_PADDING} py-2 align-top text-xs font-medium whitespace-normal text-muted-foreground`
+const HEADER_SUBLINE_CLASS = 'block text-[11px] leading-4 font-normal'
+const BODY_CELL_CLASS = `${CELL_X_PADDING} py-1 whitespace-nowrap full:py-1.5`
+const NUMERIC_HEADER_CLASS = `${HEADER_CELL_CLASS} text-right`
+const NUMERIC_CELL_CLASS = `${BODY_CELL_CLASS} text-right`
+const PER_HECTARE_CLASS = 'hidden text-xs text-muted-foreground full:block'
 
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
@@ -72,7 +76,7 @@ const renderQuotaPlaceholder = (level: QuotaStatusLevel) => {
   const label = QUOTA_PLACEHOLDER_LABELS[level]
   if (!label) return null
   return (
-    <QuotaStatusIndicator level={level}>
+    <QuotaStatusIndicator level={level} className="justify-end">
       <span className="font-normal text-muted-foreground">{label}</span>
     </QuotaStatusIndicator>
   )
@@ -86,7 +90,7 @@ const renderQuotaStatus = (status: QuotaStatus) => {
 
   if (status.level === 'partial') {
     return (
-      <QuotaStatusIndicator level={status.level}>
+      <QuotaStatusIndicator level={status.level} className="justify-end">
         <span className="text-muted-foreground">{amountText}</span>
       </QuotaStatusIndicator>
     )
@@ -96,7 +100,7 @@ const renderQuotaStatus = (status: QuotaStatus) => {
     <QuotaStatusIndicator
       level={status.level}
       badge
-      className="flex-nowrap full:flex-wrap"
+      className="flex-nowrap justify-end"
       badgeClassName="sr-only full:not-sr-only"
     >
       {amountText}
@@ -119,20 +123,24 @@ const renderQuotaStatusFooter = (
   if (catchmentNote) notes.push(catchmentNote)
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5 text-right">
       <QuotaStatusIndicator
         level={level}
         badge={level !== 'partial'}
         className={cn(
-          'flex-nowrap full:flex-wrap',
+          'flex-nowrap justify-end',
           level === 'partial' && 'text-muted-foreground',
         )}
         badgeClassName="sr-only full:not-sr-only"
       >
         {formatQuotaAmount(totals.nLoad, quota.quotaKgn)}
       </QuotaStatusIndicator>
-      <div className="text-xs font-normal whitespace-normal text-muted-foreground">
-        {notes.join(', ')}
+      <div className="flex flex-wrap justify-end gap-x-1 text-xs font-normal text-muted-foreground">
+        {notes.map((note, index) => (
+          <span key={note} className="whitespace-nowrap">
+            {index < notes.length - 1 ? note + ',' : note}
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -153,9 +161,9 @@ const renderMetricValue = (
   compactValue?: (value: number) => string,
 ): ReactNode => {
   const full = `${formatNumber(value)} ${unit}`
-  if (!compactValue) return <div>{full}</div>
+  if (!compactValue) return <div className="font-medium">{full}</div>
   return (
-    <div>
+    <div className="font-medium">
       <span className="full:hidden">{compactValue(value)}</span>
       <span className="hidden full:inline">{full}</span>
     </div>
@@ -171,7 +179,12 @@ const numericMetricColumn = (
   return {
     accessorKey: key,
     header: ({ column }) => (
-      <SortableColumnHeaderContent label={heading} unit={unit} column={column} />
+      <SortableColumnHeaderContent
+        label={heading}
+        unit={unit}
+        align="right"
+        column={column}
+      />
     ),
     cell: ({ row }) => {
       const field = row.original
@@ -183,7 +196,7 @@ const numericMetricColumn = (
         <>
           {renderMetricValue(value, unit, compactValue)}
           {field.areaHa > 0 ? (
-            <div className="hidden text-xs text-muted-foreground/80 full:block">
+            <div className={PER_HECTARE_CLASS}>
               {`${formatNumber(value / field.areaHa)} ${unit}/ha`}
             </div>
           ) : null}
@@ -195,8 +208,8 @@ const numericMetricColumn = (
         ? emptyCell('footer')
         : renderMetricValue(totals[key], unit, compactValue),
     meta: {
-      headerClassName: HEADER_CELL_CLASS,
-      cellClassName: BODY_CELL_CLASS,
+      headerClassName: NUMERIC_HEADER_CLASS,
+      cellClassName: NUMERIC_CELL_CLASS,
       toggleLabel: label,
     },
   }
@@ -273,7 +286,7 @@ const nameColumn = (
   footer,
   meta: {
     headerClassName: HEADER_CELL_CLASS,
-    cellClassName: cn(BODY_CELL_CLASS, 'font-medium'),
+    cellClassName: cn(BODY_CELL_CLASS, 'font-semibold'),
   },
 })
 
@@ -297,14 +310,14 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
   header: () => null,
   cell: () => (
     <ChevronRight
-      className="h-4 w-4 text-muted-foreground/60"
+      className="h-4 w-4 text-muted-foreground/60 transition-colors group-hover:text-primary"
       aria-hidden="true"
     />
   ),
   enableSorting: false,
   meta: {
-    headerClassName: 'hidden w-8 px-2 py-3 full:table-cell',
-    cellClassName: 'hidden w-8 px-2 py-3 text-right full:table-cell',
+    headerClassName: 'hidden w-8 px-2 py-2 full:table-cell',
+    cellClassName: 'hidden w-8 px-2 py-1 text-right full:table-cell',
   },
 }
 
@@ -445,11 +458,8 @@ const buildRulesColumns = ({
       },
       enableSorting: false,
       meta: {
-        headerClassName: cn(
-          CELL_PADDING,
-          'text-right font-medium whitespace-nowrap',
-        ),
-        cellClassName: cn(CELL_PADDING, 'text-right whitespace-nowrap'),
+        headerClassName: cn(HEADER_CELL_CLASS, 'text-right whitespace-nowrap'),
+        cellClassName: NUMERIC_CELL_CLASS,
       },
     })
   }
@@ -526,7 +536,7 @@ export const buildFarmFieldsColumns = ({
     header: () => (
       <div className="flex flex-col">
         <span>{isSimulationView ? 'Sædskifte' : 'Afgrødehistorik'}</span>
-        <span className="block text-xs font-normal text-muted-foreground">
+        <span className={HEADER_SUBLINE_CLASS}>
           {selectedCalendarYear !== null
             ? `${selectedCalendarYear} valgt`
             : maxYears > 1
@@ -573,7 +583,7 @@ export const buildFarmFieldsColumns = ({
       header: () => (
         <div className="flex flex-col">
           <span>Afgrøde</span>
-          <span className="block text-xs font-normal text-muted-foreground">
+          <span className={HEADER_SUBLINE_CLASS}>
             {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
           </span>
         </div>
@@ -595,13 +605,13 @@ export const buildFarmFieldsColumns = ({
       enableSorting: false,
       meta: {
         headerClassName: cn(
-          CELL_PADDING,
-          'font-medium whitespace-nowrap full:w-44',
+          HEADER_CELL_CLASS,
+          'whitespace-nowrap full:w-44',
           highlightIndex === null && 'hidden full:table-cell',
         ),
         cellClassName: cn(
-          CELL_PADDING,
-          'whitespace-nowrap full:w-44',
+          BODY_CELL_CLASS,
+          'full:w-44',
           highlightIndex === null && 'hidden full:table-cell',
         ),
       },
@@ -639,8 +649,8 @@ export const buildFarmFieldsColumns = ({
         renderQuotaStatusFooter(totals, quotaFooterLevel, quotaFooterNote),
       enableSorting: false,
       meta: {
-        headerClassName: HEADER_CELL_CLASS,
-        cellClassName: BODY_CELL_CLASS,
+        headerClassName: NUMERIC_HEADER_CLASS,
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Udledning mod kvote',
       },
     },
@@ -680,7 +690,12 @@ export const buildFarmFieldsColumns = ({
     {
       accessorKey: 'udledningskvoteMarkKgn',
       header: ({ column }) => (
-        <SortableColumnHeaderContent label="Kvote" unit="kg N" column={column} />
+        <SortableColumnHeaderContent
+          label="Kvote"
+          unit="kg N"
+          align="right"
+          column={column}
+        />
       ),
       cell: ({ row }) => {
         const field = row.original
@@ -689,9 +704,11 @@ export const buildFarmFieldsColumns = ({
         }
         return (
           <>
-            <div>{formatNumber(field.udledningskvoteMarkKgn)} kg N</div>
+            <div className="font-medium">
+              {formatNumber(field.udledningskvoteMarkKgn)} kg N
+            </div>
             {field.areaHa > 0 ? (
-              <div className="hidden text-xs text-muted-foreground/80 full:block">
+              <div className={PER_HECTARE_CLASS}>
                 {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg
                 N/ha
               </div>
@@ -703,8 +720,8 @@ export const buildFarmFieldsColumns = ({
         <div>{formatNumber(totals.udledningskvoteMarkKgn)} kg N</div>
       ),
       meta: {
-        headerClassName: HEADER_CELL_CLASS,
-        cellClassName: BODY_CELL_CLASS,
+        headerClassName: NUMERIC_HEADER_CLASS,
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Kvote (kg N)',
       },
     },
@@ -747,28 +764,36 @@ export const buildFarmFieldsColumns = ({
     {
       accessorKey: 'retention',
       header: ({ column }) => (
-        <SortableColumnHeaderContent label="Retention" column={column} />
+        <SortableColumnHeaderContent
+          label="Retention"
+          align="right"
+          column={column}
+        />
       ),
       cell: ({ row }) =>
         row.original.retention === null
           ? 'Ukendt'
           : formatNumber(row.original.retention),
       meta: {
-        headerClassName: HEADER_CELL_CLASS,
-        cellClassName: BODY_CELL_CLASS,
+        headerClassName: NUMERIC_HEADER_CLASS,
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Retention',
       },
     },
     {
       accessorKey: 'jbnr',
       header: ({ column }) => (
-        <SortableColumnHeaderContent label="JB nr." column={column} />
+        <SortableColumnHeaderContent
+          label="JB nr."
+          align="right"
+          column={column}
+        />
       ),
       cell: ({ row }) =>
         row.original.jbnr === null ? 'Ukendt' : row.original.jbnr,
       meta: {
-        headerClassName: HEADER_CELL_CLASS,
-        cellClassName: BODY_CELL_CLASS,
+        headerClassName: NUMERIC_HEADER_CLASS,
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'JB nr.',
       },
     },

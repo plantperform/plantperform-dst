@@ -905,15 +905,15 @@ export const FarmFieldsMap = ({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-background px-2 @container">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted shadow-xs">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3 @container">
         <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
           Farvelæg
         </span>
         <select
           aria-label="Farvelæg marker"
           title="Farvelæg marker"
-          className="h-8 w-full min-w-0 max-w-40 rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          className="h-7 w-full min-w-0 max-w-40 rounded-md border bg-card px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
           value={colorBy}
           onChange={(event) =>
             setColorBy(event.target.value as ColorAttribute)
@@ -1042,7 +1042,10 @@ export const FarmFieldsMap = ({
 
         {!readOnly ? (
           <Button
-            className="ml-auto shrink-0"
+            className={cn(
+              'ml-auto shrink-0',
+              !addMode && 'font-semibold text-primary hover:text-primary',
+            )}
             onClick={() => void (addMode ? finishAddMode() : toggleAddMode())}
             size="xs"
             variant={addMode ? 'default' : 'outline'}
