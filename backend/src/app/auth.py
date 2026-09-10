@@ -12,6 +12,7 @@ import boto3
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, select, update
@@ -225,7 +226,19 @@ def _send_verification_email(email: str, token: str) -> None:
                 }
             },
         )
+    except ClientError as error:
+        error_code = error.response.get("Error", {}).get("Code", "unknown")
+        LOGGER.error("SES verification email delivery failed (code=%s)", error_code)
+        raise RuntimeError("Verification email delivery failed") from error
+    except BotoCoreError as error:
+        LOGGER.error(
+            "SES verification email delivery failed (error_type=%s)", type(error).__name__
+        )
+        raise RuntimeError("Verification email delivery failed") from error
     except Exception as error:
+        LOGGER.error(
+            "SES verification email delivery failed (error_type=%s)", type(error).__name__
+        )
         raise RuntimeError("Verification email delivery failed") from error
 
 
