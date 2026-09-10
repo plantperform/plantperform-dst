@@ -574,8 +574,12 @@ export const FarmFieldsMap = ({
   useEffect(() => {
     if (!isMapLoaded) return
     if (fittedCatchmentKey.current === highlightedCatchmentKey) return
+    const hadCatchment = fittedCatchmentKey.current !== null
     fittedCatchmentKey.current = highlightedCatchmentKey
-    if (highlightedCatchmentKey === null) return
+    if (highlightedCatchmentKey === null) {
+      if (hadCatchment) fitAllFields()
+      return
+    }
 
     const bounds = getFieldsBounds(
       fields.filter(
@@ -591,7 +595,7 @@ export const FarmFieldsMap = ({
       ],
       { padding: 56, maxZoom: 14, duration: 700 },
     )
-  }, [fields, isMapLoaded, highlightedCatchmentKey])
+  }, [fields, isMapLoaded, highlightedCatchmentKey, fitAllFields])
 
   useEffect(() => {
     if (!isMapLoaded || !zoomRequest) return
