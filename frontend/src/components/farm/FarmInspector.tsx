@@ -320,6 +320,7 @@ export const FarmInspector = ({
     <section className="flex min-h-0 flex-1 flex-col">
       <FarmTopBar
         farm={farm}
+        onError={onError}
         viewLabel={
           selectedSimulation
             ? `Simulering: ${selectedSimulation.name}`
