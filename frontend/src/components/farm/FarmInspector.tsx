@@ -253,20 +253,6 @@ export const FarmInspector = ({
     [fields, isSimulationView],
   )
 
-  const catchmentLabel = useCatchmentLabel(farm.id, fields)
-  const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
-  const sortedFields = useMemo(() => {
-    const sorted = [...fields].sort((left, right) =>
-      compareFields(left, right, effectiveSort, catchmentLabel),
-    )
-    return groupByCatchment && !isRules
-      ? orderFieldsByCatchment(sorted, catchmentLabel)
-      : sorted
-  }, [fields, effectiveSort, catchmentLabel, groupByCatchment, isRules])
-  const panelField = isRules
-    ? null
-    : (fields.find((field) => field.id === selectedFieldId) ?? null)
-
   const effectiveHighlightedCatchmentKey = useMemo(() => {
     if (isRules || highlightedCatchmentKey === null) return null
     const stillPresent = fields.some(
@@ -274,6 +260,35 @@ export const FarmInspector = ({
     )
     return stillPresent ? highlightedCatchmentKey : null
   }, [fields, isRules, highlightedCatchmentKey])
+
+  const catchmentLabel = useCatchmentLabel(farm.id, fields)
+  const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
+  const sortedFields = useMemo(() => {
+    const sorted = [...fields].sort((left, right) =>
+      compareFields(left, right, effectiveSort, catchmentLabel),
+    )
+    const ordered =
+      groupByCatchment && !isRules
+        ? orderFieldsByCatchment(sorted, catchmentLabel)
+        : sorted
+    if (effectiveHighlightedCatchmentKey === null) return ordered
+    const inCatchment = (field: FieldRecord) =>
+      catchmentKey(field.kystvandId) === effectiveHighlightedCatchmentKey
+    return [
+      ...ordered.filter(inCatchment),
+      ...ordered.filter((field) => !inCatchment(field)),
+    ]
+  }, [
+    fields,
+    effectiveSort,
+    catchmentLabel,
+    groupByCatchment,
+    isRules,
+    effectiveHighlightedCatchmentKey,
+  ])
+  const panelField = isRules
+    ? null
+    : (fields.find((field) => field.id === selectedFieldId) ?? null)
 
   const selectFieldFromMap = (fieldId: string | null) => {
     onSelectedFieldChange(fieldId)
