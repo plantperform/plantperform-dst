@@ -102,7 +102,6 @@ const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
 const CROP_LABEL_MIN_ZOOM = 12
 const CROP_LABEL_CLUSTER_PX = 48
-const VIEWPORT_INSET_FRACTION = 0.1
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
 const paintTransitionMs = window.matchMedia('(prefers-reduced-motion: reduce)')
   .matches
@@ -539,37 +538,27 @@ export const FarmFieldsMap = ({
     if (!isMapLoaded) return
     if (pannedFieldId.current === selectedFieldId) return
     if (selectedFieldId === null) {
+      const hadSelection = pannedFieldId.current !== null
       pannedFieldId.current = null
+      if (hadSelection) fitAllFields()
       return
     }
 
     const field = fields.find((item) => item.id === selectedFieldId)
-    const map = mapRef.current
-    if (!field || !map) return
+    if (!field) return
     pannedFieldId.current = selectedFieldId
 
     const bounds = getFieldsBounds([field])
     if (!bounds) return
 
-    const viewport = map.getBounds()
-    const west = viewport.getWest()
-    const east = viewport.getEast()
-    const south = viewport.getSouth()
-    const north = viewport.getNorth()
-    const insetX = (east - west) * VIEWPORT_INSET_FRACTION
-    const insetY = (north - south) * VIEWPORT_INSET_FRACTION
-    const isVisible =
-      bounds[0] <= east - insetX &&
-      bounds[2] >= west + insetX &&
-      bounds[1] <= north - insetY &&
-      bounds[3] >= south + insetY
-    if (isVisible) return
-
-    map.easeTo({
-      center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
-      duration: 500,
-    })
-  }, [fields, isMapLoaded, selectedFieldId])
+    mapRef.current?.fitBounds(
+      [
+        [bounds[0], bounds[1]],
+        [bounds[2], bounds[3]],
+      ],
+      { padding: 64, maxZoom: 16, duration: 500 },
+    )
+  }, [fields, isMapLoaded, selectedFieldId, fitAllFields])
 
   useEffect(() => {
     if (!isMapLoaded) return
