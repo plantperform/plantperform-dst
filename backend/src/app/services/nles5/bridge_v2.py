@@ -17,9 +17,15 @@ back to the previous position's static WP field (see _resolve_wp).
 P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
 services.rotations.afstromning looks up the afgrødekode in Bilag 7, table 1
-(Bilag_1_tabel_1_med_P_noegle.csv, all 323 codes), and returns its
-afstrømningskategori (1-8), with an alternative category when the position has
-a winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
+(Bilag_1_tabel_1_med_P_noegle.csv), and returns its afstrømningskategori
+(1-8), with an alternative category when the position has a
+winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
+
+Historical crop_history can reference afgrødekoder that predate or fall
+outside Bilag 1 (e.g. administrative codes like "slettet mark"). For those,
+afstromningskategori() returns None; rather than blocking the mark from being
+added, the position's leaching is reported as 0/ukendt (see
+afstromningskategori_ukendt below).
 """
 from __future__ import annotations
 
@@ -180,16 +186,17 @@ def evaluate_leaching_position(
 
     # The afgrøde determines which of the eight P values is used, including
     # whether the position has a winter-cover-changing virkemiddel that year;
-    # see afstromning.py, which covers all 323 afgrødekoder without gaps.
-    # kategori_ukendt is therefore effectively always False and remains only as
-    # a safety flag for a future afgrødekode absent from the file, allowing the
-    # calculation to continue.
+    # see afstromning.py. Not every historical afgrødekode is in Bilag 1
+    # (e.g. administrative codes such as "slettet mark"); for those,
+    # afstromningskategori() returns None and the position falls back to
+    # leaching 0/ukendt below instead of blocking the whole mark on a missing
+    # crop code. A genuinely missing P/S/Nt soil measurement still raises.
     kategori = afstromning.afstromningskategori(afgrode_kode, eea_on=vk["eea"])
     kategori_ukendt = kategori is None
     p_value = (
         percolation_by_kategori[kategori - 1]
         if percolation_by_kategori is not None and kategori is not None
-        else None
+        else (0.0 if kategori_ukendt else None)
     )
     if p_value is None or org_n_topsoil is None or s_soil is None:
         raise MissingSoilDataError(
@@ -208,7 +215,7 @@ def evaluate_leaching_position(
         "F0": f0, "F1": f1, "F2": f2,
         "G0": g0, "G1": g1, "G2": g2,
         "P_override": p_value, "S_override": s_soil,
-        "afstromningskategori": kategori if kategori is not None else 1,
+        "afstromningskategori": kategori,
         "afstromningskategori_ukendt": kategori_ukendt,
         # EEA/EMA/ETS are derived from the rotation's udlægskode (see
         # _UDL_VIRKEMIDDEL above), not freely selected. Fdato/precision_dagsbasis
@@ -234,4 +241,10 @@ def evaluate_leaching_position(
     # inputs (M, W, MP, WP, MNCS, ...) and derived values (L, Ntheta, C, ...).
     # This is required for a full annual calculation walkthrough in the UI (see
     # streamlit_app.py's "Beregningsdetaljer pr. år").
-    return {**sample, **calculate_leaching(sample)}
+    result = {**sample, **calculate_leaching(sample)}
+    if kategori_ukendt:
+        # No afstrømningskategori to base a real percolation figure on:
+        # report the position as 0/ukendt rather than a number computed from
+        # a guessed category.
+        result.update({"L": 0.0, "L_nuar": 0.0, "leaching_kgN_ha": 0.0, "L_nuar_kgN_ha": 0.0})
+    return result
