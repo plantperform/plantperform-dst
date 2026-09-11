@@ -323,6 +323,7 @@ export type QuotaStatusLevel =
   | 'uncalculated'
   | 'noData'
   | 'partial'
+  | 'excluded'
 
 export const quotaStatusLevel = (
   nLoad: number,
@@ -373,11 +374,13 @@ export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
 ): QuotaStatus => ({
-  level: quotaStatusLevel(
-    field.nLoad,
-    field.udledningskvoteMarkKgn,
-    isFieldCalculated(field, isSimulationView),
-  ),
+  level: field.kvotegivende
+    ? quotaStatusLevel(
+        field.nLoad,
+        field.udledningskvoteMarkKgn,
+        isFieldCalculated(field, isSimulationView),
+      )
+    : 'excluded',
   nLoad: field.nLoad,
   quotaKgn: field.udledningskvoteMarkKgn,
 })
@@ -437,12 +440,14 @@ export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   uncalculated: QUOTA_STATUS_STYLE_UNKNOWN,
   noData: QUOTA_STATUS_STYLE_UNKNOWN,
   partial: QUOTA_STATUS_STYLE_UNKNOWN,
+  excluded: QUOTA_STATUS_STYLE_UNKNOWN,
 }
 
 export type FieldTotals = {
   fieldCount: number
   calculatedCount: number
   uncalculatedCount: number
+  excludedCount: number
   areaHa: number
   db2: number
   nLoad: number
@@ -459,6 +464,7 @@ export const computeFieldTotals = (
     fieldCount: fields.length,
     calculatedCount: 0,
     uncalculatedCount: 0,
+    excludedCount: 0,
     areaHa: 0,
     db2: 0,
     nLoad: 0,
@@ -469,13 +475,18 @@ export const computeFieldTotals = (
 
   for (const field of fields) {
     totals.areaHa += field.areaHa
-    totals.udledningskvoteMarkKgn += field.udledningskvoteMarkKgn
+    if (!field.kvotegivende) totals.excludedCount += 1
     if (!isFieldCalculated(field, isSimulationView)) continue
     totals.calculatedCount += 1
     totals.db2 += field.db2
-    totals.nLoad += field.nLoad
-    totals.leaching += field.leaching
     totals.fen += field.fen
+    // A non-kvotegivende mark draws down no quota and must not contribute to
+    // the udledning it is compared against either - see getFieldQuotaStatus.
+    if (field.kvotegivende) {
+      totals.udledningskvoteMarkKgn += field.udledningskvoteMarkKgn
+      totals.nLoad += field.nLoad
+      totals.leaching += field.leaching
+    }
   }
 
   totals.uncalculatedCount = fields.length - totals.calculatedCount
