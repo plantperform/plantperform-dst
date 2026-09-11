@@ -6,27 +6,21 @@ Dynamic fertilizer costs replace the static fertilizer rows from source data.
 """
 from __future__ import annotations
 
-import csv
 from functools import lru_cache
-from pathlib import Path
 
-import openpyxl
+from sqlalchemy import select
 
-from app.services.virkemidler import KORN_OG_RAPS_KODER
-
-_ROOT = Path(__file__).resolve().parents[4]  # .../backend
-_DATA_DIR = _ROOT / "database" / "data" / "raw" / "ANGJ-data"
-
-_SALGSPRISER_PATH = _DATA_DIR / "Salgspriser_afgroedekoder.csv"
-_DYRKNINGSOMKOSTNINGER_PATH = _DATA_DIR / "Dyrkningsomkostninger_afgroedekoder.csv"
-_HALMUDBYTTE_PATH = _DATA_DIR / "Halmudbytte_afgroedekoder.csv"
-_ARBEJDSSATSER_PATH = _DATA_DIR / "Arbejdssatser.csv"
-_ARBEJDSMAENGDER_PATH = _DATA_DIR / "Arbejdsmaengder_afgroedekoder.csv"
-_PRISLISTE_PATH = _DATA_DIR / "Prisliste_2026.csv"
-_NORMER_XLSX_PATH = (
-    _DATA_DIR
-    / "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx"
+from app.data.db import (
+    SessionLocal,
+    afgroede_norm_lookup_table,
+    arbejdsmaengde_table,
+    arbejdssats_table,
+    dyrkningsomkostning_table,
+    halmudbytte_table,
+    prisliste_table,
+    salgspris_table,
 )
+from app.services.virkemidler import KORN_OG_RAPS_KODER
 
 KONVENTIONEL = "Konventionel"
 OEKOLOGISK = "Økologisk"
@@ -73,66 +67,26 @@ _UDL_KOSTKATEGORI: dict[int, str] = {
 }
 
 
-def _to_float(v) -> float | None:
-    if v is None:
-        return None
-    s = str(v).strip().replace(",", ".")
-    if not s:
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _parse_jb_set(match_type, jb_values_str) -> set[int]:
-    s = str(jb_values_str).strip() if jb_values_str is not None else ""
-    if not s or s.lower() == "none":
-        return set()
-    mt = str(match_type).strip().lower() if match_type else ""
-    try:
-        if mt == "plus":
-            return {int(x) for x in s.split(";")}
-        elif mt == "til":
-            a, b = s.split("-")
-            return set(range(int(a), int(b) + 1))
-        elif mt == "enkelt":
-            return {int(s)}
-    except (ValueError, IndexError):
-        pass
-    return set()
+def _fetch_rows(table, task_name: str):
+    with SessionLocal() as session:
+        rows = session.execute(select(table).order_by(table.c.source_order)).all()
+    if not rows:
+        raise RuntimeError(f"{table.name} is empty; run pixi run {task_name}")
+    return rows
 
 
 @lru_cache(maxsize=1)
 def _load_udbyttenormer() -> dict[tuple[int, int, str, str], dict]:
-    """Index crop norms by crop, JB, irrigation category, and driftsform."""
-    wb = openpyxl.load_workbook(_NORMER_XLSX_PATH, read_only=True, data_only=True)
-    ws = wb["Lang_lookup"]
-    rows = list(ws.iter_rows(values_only=True))
-    wb.close()
-
+    """Index database-loaded crop norms by crop, JB, irrigation, and system."""
+    rows = _fetch_rows(afgroede_norm_lookup_table, "load-afgroede-normer")
     lookup: dict[tuple[int, int, str, str], dict] = {}
-    for row in rows[1:]:
-        if not row[0]:
-            continue
-        try:
-            code = int(row[0])
-        except (ValueError, TypeError):
-            continue
-
-        jb_set = _parse_jb_set(row[5], row[6])
-        if not jb_set:
-            continue
-
-        vanding = str(row[7]).strip() if row[7] else ""
-        driftsform = str(row[25]).strip() if len(row) > 25 and row[25] else KONVENTIONEL
+    for row in rows:
         data = {
-            "udbytteenhed": str(row[9]).strip() if row[9] else "",
-            "udbyttenorm": _to_float(row[10]),
-            "n_norm": _to_float(row[13]),
+            "udbytteenhed": row.udbytteenhed,
+            "udbyttenorm": row.udbyttenorm,
+            "n_norm": row.n_norm,
         }
-        for jb_nr in jb_set:
-            lookup[(code, jb_nr, vanding, driftsform)] = data
+        lookup[(row.afgroedekode, row.jb_nr, row.vanding, row.driftsform)] = data
     return lookup
 
 
@@ -157,17 +111,14 @@ def _lookup_udbyttenorm(
 
 @lru_cache(maxsize=1)
 def _load_salgspriser() -> dict[tuple[int, str, str], dict]:
+    rows = _fetch_rows(salgspris_table, "load-salgspriser")
     lookup: dict[tuple[int, str, str], dict] = {}
-    with open(_SALGSPRISER_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f, delimiter=","):
-            code = int(row["afgroedekode"])
-            driftsform = row["driftsform"].strip()
-            kvalitet = row.get("kvalitet", "").strip()
-            lookup[(code, driftsform, kvalitet)] = {
-                "salgspris": _to_float(row["salgspris"]) or 0.0,
-                "enhed": row["enhed"].strip(),
-                "halm_pris_kr_kg": _to_float(row.get("halm_pris_kr_kg")) or 0.0,
-            }
+    for row in rows:
+        lookup[(row.afgroedekode, row.driftsform, row.kvalitet)] = {
+            "salgspris": row.salgspris,
+            "enhed": row.enhed,
+            "halm_pris_kr_kg": row.halm_pris_kr_kg,
+        }
     return lookup
 
 
@@ -184,12 +135,10 @@ def _lookup_salgspris(afgrodekode: int, driftsform: str, kvalitet: str = "") -> 
 
 @lru_cache(maxsize=1)
 def _load_halmudbytte() -> dict[tuple[int, str], float]:
+    rows = _fetch_rows(halmudbytte_table, "load-halmudbytte")
     lookup: dict[tuple[int, str], float] = {}
-    with open(_HALMUDBYTTE_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f):
-            lookup[(int(row["afgroedekode"]), row["jordbonitet"].strip())] = (
-                _to_float(row["halm_udbytte_kg_ha"]) or 0.0
-            )
+    for row in rows:
+        lookup[(row.afgroedekode, row.jordbonitet)] = row.halm_udbytte_kg_ha
     return lookup
 
 
@@ -204,16 +153,15 @@ def _lookup_halm_udbytte(afgrodekode: int, jbnr: int, irrigated: bool) -> float:
 
 @lru_cache(maxsize=1)
 def _load_arbejdssatser() -> dict[tuple[str, str], list[dict]]:
+    rows = _fetch_rows(arbejdssats_table, "load-arbejdssatser")
     lookup: dict[tuple[str, str], list[dict]] = {}
-    with open(_ARBEJDSSATSER_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f):
-            code = row["afgroedekode"].strip()
-            key = (row["behandling"].strip(), row["jordbonitet"].strip())
-            lookup.setdefault(key, []).append({
-                "afgrodekode": int(code) if code else None,
-                "driftsform": row["driftsform"].strip(),
-                "pris": _to_float(row["pris_kr_per_enhed"]) or 0.0,
-            })
+    for row in rows:
+        key = (row.behandling, row.jordbonitet)
+        lookup.setdefault(key, []).append({
+            "afgrodekode": row.afgroedekode,
+            "driftsform": row.driftsform,
+            "pris": row.pris_kr_per_enhed,
+        })
     return lookup
 
 
@@ -238,18 +186,15 @@ def _lookup_arbejdssats(
 
 @lru_cache(maxsize=1)
 def _load_arbejdsmaengder() -> dict[tuple[int, str, str, str], list[dict]]:
+    rows = _fetch_rows(arbejdsmaengde_table, "load-arbejdsmaengder")
     lookup: dict[tuple[int, str, str, str], list[dict]] = {}
-    with open(_ARBEJDSMAENGDER_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f):
-            key = (
-                int(row["afgroedekode"]), row["driftsform"].strip(),
-                row["jordbonitet"].strip(), row["kvalitet"].strip(),
-            )
-            lookup.setdefault(key, []).append({
-                "kategori": row["kategori"].strip(),
-                "behandling": row["behandling"].strip(),
-                "antal": _to_float(row["antal"]) or 0.0,
-            })
+    for row in rows:
+        key = (row.afgroedekode, row.driftsform, row.jordbonitet, row.kvalitet)
+        lookup.setdefault(key, []).append({
+            "kategori": row.kategori,
+            "behandling": row.behandling,
+            "antal": row.antal,
+        })
     return lookup
 
 
@@ -261,19 +206,17 @@ def _migrerede_afgrodekoder() -> frozenset[int]:
 @lru_cache(maxsize=1)
 def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
     """Map (afgrodekode, driftsform) to rows excluding dynamically recalculated Gødning."""
+    rows = _fetch_rows(dyrkningsomkostning_table, "load-dyrkningsomkostninger")
     lookup: dict[tuple[int, str], list[dict]] = {}
-    with open(_DYRKNINGSOMKOSTNINGER_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f, delimiter=","):
-            if row["kategori"].strip() == "Gødning":
-                continue
-            code = int(row["afgroedekode"])
-            driftsform = row["driftsform"].strip()
-            key = (code, driftsform)
-            lookup.setdefault(key, []).append({
-                "kategori": row["kategori"].strip(),
-                "behandling": row["behandling"].strip(),
-                "udgift_kr_ha": _to_float(row["udgift_kr_ha"]) or 0.0,
-            })
+    for row in rows:
+        if row.kategori == "Gødning":
+            continue
+        key = (row.afgroedekode, row.driftsform)
+        lookup.setdefault(key, []).append({
+            "kategori": row.kategori,
+            "behandling": row.behandling,
+            "udgift_kr_ha": row.udgift_kr_ha,
+        })
     return lookup
 
 
@@ -308,16 +251,15 @@ def _lookup_omkostningslinjer(
 @lru_cache(maxsize=1)
 def _load_prisliste() -> dict[str, dict]:
     """Map post to price-list data for both Omkostning and Tilskud."""
+    rows = _fetch_rows(prisliste_table, "load-prisliste")
     lookup: dict[str, dict] = {}
-    with open(_PRISLISTE_PATH, encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f, delimiter=";"):
-            post = row["post"].strip()
-            lookup[post] = {
-                "kategori": row["kategori"].strip(),
-                "type": row["type"].strip(),
-                "pris": _to_float(row["pris"]) or 0.0,
-                "enhed": row["enhed"].strip(),
-            }
+    for row in rows:
+        lookup[row.post] = {
+            "kategori": row.kategori,
+            "type": row.type,
+            "pris": row.pris,
+            "enhed": row.enhed,
+        }
     return lookup
 
 

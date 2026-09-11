@@ -110,6 +110,157 @@ saedskifte_category_table = Table(
     Column("kategori", Text, primary_key=True),
 )
 
+# Runtime reference data is imported from the authoritative ANGJ source files
+# by the focused loaders under database/scripts/.  These tables deliberately
+# contain the lookup-ready, expanded form of the sources so the API never has
+# to open a source workbook or CSV at request time.
+afgroede_norm_lookup_table = Table(
+    "afgroede_norm_lookup",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("jb_nr", SmallInteger, primary_key=True),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("afgroede", Text, nullable=False),
+    Column("jb_gruppe", Text, nullable=False),
+    Column("vanding", Text, nullable=False),
+    Column("udbytteenhed", Text, nullable=False),
+    Column("udbyttenorm", Float, nullable=True),
+    Column("udbyttenorm_alt", Float, nullable=True),
+    Column("n_norm", Float, nullable=True),
+    Column("p_norm", Float, nullable=True),
+    Column("forfrugtsvaerdi", Float, nullable=False),
+    Column("indregn_ffv", Boolean, nullable=False),
+    Column("driftsform", Text, nullable=False),
+    Index(
+        "ix_afgroede_norm_lookup_runtime",
+        "afgroedekode",
+        "jb_nr",
+        "vanding",
+        "source_order",
+    ),
+)
+
+afgroede_nfix_lookup_table = Table(
+    "afgroede_nfix_lookup",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("jb_nr", SmallInteger, primary_key=True),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("vanding", Text, nullable=False),
+    Column("nfix_kgn_ha", Float, nullable=False),
+    Index(
+        "ix_afgroede_nfix_lookup_runtime",
+        "afgroedekode",
+        "jb_nr",
+        "vanding",
+        "source_order",
+    ),
+)
+
+nuar_kode_table = Table(
+    "nuar_kode",
+    metadata,
+    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
+    Column("navn", Text, nullable=False),
+    Column("m", SmallInteger, nullable=True),
+    Column("w", SmallInteger, nullable=True),
+    Column("wc", SmallInteger, nullable=True),
+    Column("mp", SmallInteger, nullable=True),
+    Column("wp", SmallInteger, nullable=True),
+    Column("m_ambig", Boolean, nullable=False),
+    Column("w_ambig", Boolean, nullable=False),
+    Column("wc_ambig", Boolean, nullable=False),
+    Column("mp_ambig", Boolean, nullable=False),
+    Column("wp_ambig", Boolean, nullable=False),
+)
+
+afstromningskategori_table = Table(
+    "afstromningskategori",
+    metadata,
+    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
+    Column("standard_kategori", SmallInteger, nullable=False),
+    Column("vinterdaekke_kategori", SmallInteger, nullable=True),
+)
+
+salgspris_table = Table(
+    "salgspris",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("driftsform", Text, nullable=False),
+    Column("kvalitet", Text, nullable=False),
+    Column("salgspris", Float, nullable=False),
+    Column("enhed", Text, nullable=False),
+    Column("halm_pris_kr_kg", Float, nullable=False),
+    Index("ix_salgspris_lookup", "afgroedekode", "driftsform", "kvalitet"),
+)
+
+halmudbytte_table = Table(
+    "halmudbytte",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("jordbonitet", Text, nullable=False),
+    Column("halm_udbytte_kg_ha", Float, nullable=False),
+    Index("ix_halmudbytte_lookup", "afgroedekode", "jordbonitet"),
+)
+
+arbejdssats_table = Table(
+    "arbejdssats",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("behandling", Text, nullable=False),
+    Column("jordbonitet", Text, nullable=False),
+    Column("afgroedekode", Integer, nullable=True),
+    Column("driftsform", Text, nullable=False),
+    Column("pris_kr_per_enhed", Float, nullable=False),
+    Index("ix_arbejdssats_lookup", "behandling", "jordbonitet"),
+)
+
+arbejdsmaengde_table = Table(
+    "arbejdsmaengde",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("driftsform", Text, nullable=False),
+    Column("jordbonitet", Text, nullable=False),
+    Column("kvalitet", Text, nullable=False),
+    Column("kategori", Text, nullable=False),
+    Column("behandling", Text, nullable=False),
+    Column("antal", Float, nullable=False),
+    Index(
+        "ix_arbejdsmaengde_lookup",
+        "afgroedekode",
+        "driftsform",
+        "jordbonitet",
+        "kvalitet",
+    ),
+)
+
+dyrkningsomkostning_table = Table(
+    "dyrkningsomkostning",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("afgroedekode", Integer, nullable=False),
+    Column("driftsform", Text, nullable=False),
+    Column("kategori", Text, nullable=False),
+    Column("behandling", Text, nullable=False),
+    Column("udgift_kr_ha", Float, nullable=False),
+    Index("ix_dyrkningsomkostning_lookup", "afgroedekode", "driftsform"),
+)
+
+prisliste_table = Table(
+    "prisliste",
+    metadata,
+    Column("source_order", Integer, primary_key=True, autoincrement=False),
+    Column("post", Text, nullable=False),
+    Column("kategori", Text, nullable=False),
+    Column("type", Text, nullable=False),
+    Column("pris", Float, nullable=False),
+    Column("enhed", Text, nullable=False),
+    Index("ix_prisliste_lookup", "post"),
+)
+
 historisk_goedningsfordeling_table = Table(
     "historisk_goedningsfordeling",
     metadata,

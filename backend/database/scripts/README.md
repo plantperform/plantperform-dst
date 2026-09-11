@@ -20,27 +20,54 @@ tildelingen skal genskabes fra bunden.
 
 ## Hvor ligger data?
 
-Der findes ingen "endelig fil" — resultatet er selve `registry_field`- og
-`mars_projekt`-tabellerne i Postgres-databasen. Kildefilerne ligger i
-`backend/database/data/raw/ANGJ-data/` og er **git-ignorerede** (for store,
-og databasen genereres fra dem). For at give andre adgang til det samme
-data, del enten:
+Der findes ingen "endelig fil" — resultatet er `registry_field`,
+`mars_projekt` og runtime-opslagstabellerne i Postgres-databasen.
+Kildefilerne ligger i `backend/database/data/raw/ANGJ-data/` og er
+**git-ignorerede** (for store, og databasen genereres fra dem). For at give
+andre adgang til det samme data, del enten:
 
 - **Kildefilerne** (`ANGJ-data`-mappen, uden om git) + kør scripts'ene
   forfra, eller
-- **En database-dump** (`pg_dump`) af de to tabeller, hvis modtageren bare
-  skal bruge appen uden selv at genberegne noget.
+- **En database-dump** (`pg_dump`) af register-, MARS- og
+  runtime-opslagstabellerne, hvis modtageren bare skal bruge appen uden selv
+  at genberegne noget.
 
-## Indlæs alle registerdata
+## `load-registry-data`: komplet, destruktiv genindlæsning
 
 ```
 pixi run load-registry-data
 ```
 
-Kommandoen migrerer databasen, indlæser det samlede register, genberegner
-Kystvandopland og MARS og indlæser den historiske gødningsfordeling samt
-sædskifte-opslaget i den nødvendige rækkefølge. De enkelte Pixi-opgaver kan
-stadig køres separat ved fejlsøgning.
+Dette er den reproducerbare kommando til at opbygge databasen fra de
+autoritative 2026-kilder. Den bruger `&&`: hvis et trin fejler, kører de
+efterfølgende trin ikke. Hvert loader-script har sin egen database-transaction,
+men hele kæden er ikke én fælles transaction.
+
+| Rækkefølge | Kommando | Hvad den indlæser eller genberegner |
+| --- | --- | --- |
+| 1 | `db-migrate` | Anvender alle Alembic-migrationer, inkl. tabellerne som de efterfølgende loaders skriver til. |
+| 2 | `load-registry-from-merged-gpkg` | Erstatter hele `registry_field` med den sammenlagte 2026 GeoPackage, inkl. geometri, mark-id'er, crop history og jord-/vanddata. |
+| 3 | `load-kystvandoplande` | Genberegner `kystvand_id` og `kystvand_navn` for de netop indlæste marker. |
+| 4 | `load-mars-projekter` | Erstatter MARS-laget og genberegner markerens MARS-/omlægningsfelter. |
+| 5 | `load-historisk-goedningsfordeling` | Erstatter referencen for faktisk gødningstildeling i 2025/2026. |
+| 6 | `load-saedskifte-lookup` | Erstatter sædskifte-rotationer og kategorier. |
+| 7 | `load-afgroede-normer` | Erstatter afgrødenormer, N-fiksering og NUAR-koder fra master-workbooken. |
+| 8 | `load-afstromningskategorier` | Erstatter P-afstrømningskategorier. |
+| 9 | `load-salgspriser` | Erstatter afgrøde-salgspriser. |
+| 10 | `load-halmudbytte` | Erstatter halmudbytter. |
+| 11 | `load-arbejdssatser` | Erstatter priser pr. arbejdsenhed. |
+| 12 | `load-arbejdsmaengder` | Erstatter afgrødespecifikke arbejdsmængder. |
+| 13 | `load-dyrkningsomkostninger` | Erstatter faste dyrkningsomkostninger. |
+| 14 | `load-prisliste` | Erstatter den fælles pris- og tilskudsliste. |
+
+Trin 2 er destruktivt: det erstatter `registry_field`, så gemte bedrifter og
+scenarier med gamle `imk_id` kan blive forældreløse. Brug derfor ikke denne
+kommando blot for at opdatere én lookup-fil; kør i stedet det konkrete script
+nedenfor og genstart backend’en, så process-caches læser de nye værdier.
+
+Backend’en læser ikke `ANGJ-data`-workbooks eller CSV-filer under API-kald.
+Filerne er kun administrative importkilder; produktions-API'en bruger de
+indlæste PostgreSQL-tabeller.
 
 Det samlede register er den foretrukne vej med datasættet
 `V1_1_IMK2026_n604144_gpkg_merged.gpkg` placeret direkte i
@@ -69,6 +96,47 @@ bunden); resten er uafhængige af hinanden og kan køres i vilkårlig
 rækkefølge efter den.
 
 ## Scripts
+
+### Aktuelle scripts i `load-registry-data`
+
+Tabellen ovenfor beskriver rækkefølgen; her er kilde og destinationsdata for
+hvert enkelt script i den aktuelle kæde.
+
+| Script | Kilde | Skriver eller genberegner |
+| --- | --- | --- |
+| `load_registry_from_merged_gpkg.py` | `V1_1_IMK2026_n604144_gpkg_merged.gpkg` | Erstatter `registry_field` med 2026-geometri, markidentitet, crop history og data, der allerede findes i den sammenlagte kilde. |
+| `load_kystvandoplande.py` | Kystvandoplands-polygongrænser | Sætter `registry_field.kystvand_id` og `kystvand_navn` efter dominant overlap. |
+| `load_mars_projekter.py` | `Mars_data.gpkg` | Erstatter `mars_projekt` og genberegner markernes MARS-/omlægningsfelter. |
+| `load_historisk_goedningsfordeling.py` | `Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv` | Erstatter historiske mineral- og organiske N-input pr. region, driftsform, afgrøde og JB-nr. |
+| `load_saedskifte_lookup.py` | `Ny_sædskifte_lookup_sammenlagt.csv` | Validerer og erstatter `saedskifte_rotation` og `saedskifte_category`; det er rotation-candidates' datakilde. |
+| `load_afgroede_normer.py` | Master-workbooken for afgrødenormer | Indlæser `Lang_lookup`, `N_fixering_lookup` og `NUAR_koder` samlet i norm-, N-fikserings- og NUAR-tabeller. |
+| `load_afstromningskategorier.py` | `Bilag_1_tabel_1_med_P_noegle.csv` | Erstatter P-afstrømningskategori med standard- og vinterdækkeværdi pr. afgrødekode. |
+| `load_salgspriser.py` | `Salgspriser_afgroedekoder.csv` | Erstatter salgspris, enhed og halmpris pr. afgrøde, driftsform og kvalitet. |
+| `load_halmudbytte.py` | `Halmudbytte_afgroedekoder.csv` | Erstatter halmudbytte pr. afgrøde og jordbonitetsgruppe. |
+| `load_arbejdssatser.py` | `Arbejdssatser.csv` | Erstatter enhedspriser pr. behandling og jordbonitet, med eventuelle afgrøde-/driftsformsoverrides. |
+| `load_arbejdsmaengder.py` | `Arbejdsmaengder_afgroedekoder.csv` | Erstatter arbejdsmængder pr. afgrøde, driftsform, jordbonitet, kvalitet og behandling. |
+| `load_dyrkningsomkostninger.py` | `Dyrkningsomkostninger_afgroedekoder.csv` | Erstatter faste dyrkningsomkostninger. Gødning beholdes i kilden, men beregnes dynamisk ved runtime. |
+| `load_prisliste.py` | `Prisliste_2026.csv` | Erstatter delte priser og tilskud, fx N-pris, udbringning, udsæd, etablering og arealstøtte. |
+
+Norm-, N-fikserings- og NUAR-data hører sammen i master-workbooken og læses
+derfor af ét script. Alle øvrige runtime-CSV'er har præcis ét loader-script.
+Hvert script validerer hele sin kilde, før det erstatter sine egne tabeller i
+én database-transaction.
+
+### Ældre og selvstændige load-scripts
+
+| Script | Anvendelse |
+| --- | --- |
+| `load_registry.py` | Den udgåede 2023-registerloader. Beholdes kun som reference og indgår ikke i den aktuelle pipeline. |
+| `load_dataimk2026.py` | Tidligere grundloader baseret på separate års-shapefiler; erstattes normalt af den sammenlagte 2026 GeoPackage. |
+| `load_jordbundskort.py` | Opdaterer `jbnr` fra Jordbundskortet efter dominant overlap. |
+| `load_retentionskort.py` | Beregner `retention` som pixelvægtet gennemsnit af retentionsrasteret. |
+| `load_udledningsgraenser.py` | Beregner arealvægtet udledningsgrænse og markkvote; har ingen selvstændig Pixi-task i øjeblikket. |
+| `load_oekologi_hnv.py` | Opdaterer `oeko`, `oestoette` og højeste HNV-score fra de tre særskilte polygonlag. |
+| `load_kvotegivende_areal.py` | Opdaterer `kvotegivende` og nulstiller kvoten for ikke-kvotegivende arealer ud fra Bilag 1-listen. |
+
+De følgende afsnit beskriver metode og datadækning for de ældre/særskilte
+geodata-loaders mere detaljeret.
 
 ### `load_dataimk2026.py` — basisdata
 **Kilde:** `Marker 24-25-25/Marker_2024/2025/2026.shp` (PlantPerform-native

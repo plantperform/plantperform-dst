@@ -87,7 +87,8 @@ authorized to use it, place the merged registry file at
 provided `ANGJ-data/` directory beside it.
 
 Apply migrations and load all registry, Kystvandopland, MARS, historical
-fertilizer, and runtime crop-rotation lookup data with one command:
+fertilizer, crop-rotation, crop-norm, runoff, and economics lookup data with
+one command:
 
 ```bash
 cd backend
