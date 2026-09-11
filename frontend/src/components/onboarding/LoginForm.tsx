@@ -2,11 +2,10 @@ import { useState, type FormEvent } from 'react'
 
 import { ApiError, postJson } from '@/api/client'
 import { useAuth } from '@/auth/context'
+import { useAuthFields } from '@/components/onboarding/auth-fields'
+import { AuthFields } from '@/components/onboarding/AuthFields'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
-import { PasswordInput } from '@/components/onboarding/PasswordInput'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { clearHomeVisitedThisSession } from '@/lib/onboarding'
 
 type ResendState = 'idle' | 'sending' | 'sent' | 'failed'
@@ -23,8 +22,7 @@ export const LoginForm = ({
   onSignedIn,
 }: LoginFormProps) => {
   const { signIn } = useAuth()
-  const [email, setEmail] = useState(initialEmail)
-  const [password, setPassword] = useState('')
+  const fields = useAuthFields('login', initialEmail)
   const [error, setError] = useState<string | null>(null)
   const [unverified, setUnverified] = useState(false)
   const [resendState, setResendState] = useState<ResendState>('idle')
@@ -35,7 +33,7 @@ export const LoginForm = ({
     try {
       await postJson<{ message: string }, { email: string }>(
         '/auth/verification/resend',
-        { email: email.trim().toLowerCase() },
+        { email: fields.normalizedEmail },
       )
       setResendState('sent')
     } catch {
@@ -48,20 +46,13 @@ export const LoginForm = ({
     setError(null)
     setUnverified(false)
     setResendState('idle')
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail.includes('@')) {
-      setError('Indtast en gyldig e-mailadresse.')
-      return
-    }
-    if (password.length < 6) {
-      setError('Adgangskoden skal være mindst 6 tegn.')
-      return
-    }
+    if (!fields.validate()) return
+    const email = fields.normalizedEmail
     setIsSubmitting(true)
     try {
-      await signIn({ email: normalizedEmail, password })
-      clearHomeVisitedThisSession(normalizedEmail)
-      onSignedIn(normalizedEmail)
+      await signIn({ email, password: fields.password })
+      clearHomeVisitedThisSession(email)
+      onSignedIn(email)
     } catch (requestError) {
       const status =
         requestError instanceof ApiError ? requestError.status : null
@@ -81,31 +72,15 @@ export const LoginForm = ({
   const credentialsRejected = error !== null && !unverified
 
   return (
-    <form className="space-y-6" onSubmit={onSubmit}>
-      <div className="space-y-2">
-        <Label htmlFor="email">E-mail</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          autoFocus={!autoFocusPassword && !initialEmail}
-          aria-invalid={credentialsRejected || undefined}
-          className="h-11 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Adgangskode</Label>
-        <PasswordInput
-          id="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-          autoFocus={autoFocusPassword}
-          invalid={credentialsRejected}
-        />
-      </div>
+    <form className="space-y-6" noValidate onSubmit={onSubmit}>
+      <AuthFields
+        fields={fields}
+        passwordAutoComplete="current-password"
+        autoFocus={
+          autoFocusPassword ? 'password' : initialEmail ? 'none' : 'email'
+        }
+        rejected={credentialsRejected}
+      />
       {error ? <AuthNotice tone="error">{error}</AuthNotice> : null}
       <div className="space-y-3">
         {unverified ? (
