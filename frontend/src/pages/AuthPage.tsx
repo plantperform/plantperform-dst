@@ -118,6 +118,7 @@ const RegisterForm = () => {
           id="email"
           type="email"
           autoComplete="email"
+          className="h-11"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
@@ -129,6 +130,7 @@ const RegisterForm = () => {
           type="password"
           minLength={6}
           autoComplete="new-password"
+          className="h-11"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
@@ -152,12 +154,14 @@ const RegisterForm = () => {
         </div>
       ) : null}
       {error ? <AuthNotice tone="error">{error}</AuthNotice> : null}
-      <Button className="w-full" disabled={isSubmitting}>
+      <Button size="lg" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? 'Opretter...' : 'Opret konto'}
       </Button>
     </form>
   )
 }
+
+const LINK_CLASS = 'font-medium text-foreground underline underline-offset-4'
 
 export const AuthPage = ({ mode }: { mode: Mode }) => {
   const navigate = useNavigate()
@@ -172,31 +176,35 @@ export const AuthPage = ({ mode }: { mode: Mode }) => {
           ? 'Log ind for at se dine bedrifter.'
           : 'Du får en mail med et link, der gør kontoen klar.'
       }
+      footer={
+        <>
+          <p>
+            {mode === 'login'
+              ? 'Har du ikke en konto? '
+              : 'Har du allerede en konto? '}
+            <Link
+              className={LINK_CLASS}
+              to={mode === 'login' ? '/register' : '/login'}
+            >
+              {mode === 'login' ? 'Opret konto' : 'Log ind'}
+            </Link>
+          </p>
+          {mode === 'login' ? (
+            <p>
+              Mangler du bekræftelsesmailen?{' '}
+              <Link className={LINK_CLASS} to="/verify-email">
+                Send igen
+              </Link>
+            </p>
+          ) : null}
+        </>
+      }
     >
       {mode === 'login' ? (
         <LoginForm onSignedIn={() => navigate(from)} />
       ) : (
         <RegisterForm />
       )}
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        {mode === 'login'
-          ? 'Har du ikke en konto? '
-          : 'Har du allerede en konto? '}
-        <Link
-          className="font-medium text-foreground underline underline-offset-4"
-          to={mode === 'login' ? '/register' : '/login'}
-        >
-          {mode === 'login' ? 'Opret konto' : 'Log ind'}
-        </Link>
-      </p>
-      {mode === 'login' ? (
-        <p className="mt-3 text-center text-sm text-muted-foreground">
-          Mangler du bekræftelsesmailen?{' '}
-          <Link className="underline underline-offset-4" to="/verify-email">
-            Send igen
-          </Link>
-        </p>
-      ) : null}
     </AuthLayout>
   )
 }
