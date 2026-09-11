@@ -563,6 +563,7 @@ export const FarmInspector = ({
                   farm={farm}
                   fields={fields}
                   readOnly={isSimulationView}
+                  isSimulationView={isSimulationView}
                   mode={effectiveMode}
                   selectedYearIndex={
                     isSimulationView ? effectiveSelectedYearIndex : null

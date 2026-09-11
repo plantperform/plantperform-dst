@@ -152,6 +152,20 @@ body {
   top: 2.75rem;
 }
 
+.field-tooltip .maplibregl-popup-content {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  box-shadow: 0 8px 24px -8px rgb(15 23 42 / 0.25);
+}
+
+.field-tooltip.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: hsl(var(--border));
+}
+
 @keyframes rise-in {
   from {
     transform: translateY(0.5rem);

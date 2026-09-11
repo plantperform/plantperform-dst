@@ -154,6 +154,9 @@ const JB_LABELS: Record<number, string> = {
   12: 'Specielle jordtyper',
 }
 
+export const jbSoilLabel = (jbnr: number): string | null =>
+  JB_LABELS[jbnr] ?? null
+
 const JB_COLORS: Record<number, string> = {
   1: '#FFEEA6',
   2: '#FFCCB3',
@@ -552,4 +555,47 @@ export const legendEntries = (
 
 export const formatLegendUnit = (spec: ColorSpec) => spec.unit
 
+export const toFiniteNumber = (raw: unknown): number | null => {
+  const value =
+    typeof raw === 'number'
+      ? raw
+      : typeof raw === 'string' && raw.trim() !== ''
+        ? Number(raw)
+        : null
+  return value !== null && Number.isFinite(value) ? value : null
+}
+
+export const describeSpecValue = (
+  spec: ColorSpec,
+  raw: unknown,
+): string | null => {
+  if (spec.kind === 'hashed') {
+    return raw === null || raw === undefined || raw === '' ? null : String(raw)
+  }
+  const value = toFiniteNumber(raw)
+  if (value === null) return null
+  if (spec.kind === 'category') {
+    return spec.bins.find((bin) => bin.value === value)?.label ?? null
+  }
+  const formatted = formatNumber.format(value)
+  return spec.unit ? `${formatted} ${spec.unit}` : formatted
+}
+
 export { formatNumber as formatLegendNumber }
+
+export const specColorFor = (spec: ColorSpec, raw: unknown): string | null => {
+  const value = toFiniteNumber(raw)
+  if (spec.kind === 'hashed') {
+    return value === null
+      ? null
+      : (HASHED_COLORS_BY_PROPERTY[spec.property]?.get(value) ??
+          spec.fallbackColor)
+  }
+  if (value === null) return spec.fallbackColor
+  if (spec.kind === 'category') {
+    return spec.bins.find((bin) => bin.value === value)?.color ?? spec.fallbackColor
+  }
+  if (value < 0) return spec.fallbackColor
+  const sortedBins = [...spec.bins].sort((a, b) => a.max - b.max)
+  return sortedBins.find((bin) => value < bin.max)?.color ?? spec.aboveColor
+}
