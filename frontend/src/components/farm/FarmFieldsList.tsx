@@ -17,13 +17,17 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react'
 import { mutate } from 'swr'
 
 import { simulationFieldsKey, useFarmFields } from '@/api/hooks'
 import { updateSimulationField } from '@/api/mutations'
 import type { FieldRecord, Simulation } from '@/api/types'
-import { catchmentKey } from '@/components/farm/catchment-options'
+import {
+  catchmentKey,
+  fieldInCatchment,
+} from '@/components/farm/catchment-options'
 import { CropGroupLegend } from '@/components/farm/CropGroupLegend'
 import {
   DEFAULT_FIELDS_SORT,
@@ -48,7 +52,6 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -82,30 +85,55 @@ const ROW_ACCENT_CLASS =
   'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
 
 type CatchmentGroupRowProps = {
+  kystvandId: number | null
   label: string
   totals: FieldTotals
+  colorClass: string
   colSpan: number
+  selected: boolean
   isDimmed: boolean
+  onToggle: (key: string, selected: boolean) => void
 }
 
 const CatchmentGroupRow = memo(
-  ({ label, totals, colSpan, isDimmed }: CatchmentGroupRowProps) => {
+  ({
+    kystvandId,
+    label,
+    totals,
+    colorClass,
+    colSpan,
+    selected,
+    isDimmed,
+    onToggle,
+  }: CatchmentGroupRowProps) => {
     const style = QUOTA_STATUS_STYLES[totalsQuotaStatusLevel(totals)]
     return (
-      <TableRow
-        aria-label={`Kystvandopland ${label}`}
-        className={cn('bg-muted/50 hover:bg-muted/50', isDimmed && 'opacity-50')}
-      >
+      <TableRow aria-label={`Kystvandopland ${label}`}>
         <TableCell
           colSpan={colSpan}
-          className="px-2 py-1 text-xs whitespace-nowrap full:px-2.5"
+          className="sticky top-(--list-header-height) z-10 bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))] p-0 text-xs whitespace-nowrap"
         >
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onToggle(catchmentKey(kystvandId), selected)}
+            className={cn(
+              'flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
+              selected
+                ? cn(
+                    ROW_ACCENT_CLASS,
+                    'bg-primary/5 text-primary before:bg-primary hover:bg-primary/10',
+                  )
+                : isDimmed && 'opacity-50',
+            )}
+          >
             <span
               aria-hidden="true"
-              className={cn('size-1.5 shrink-0 rounded-full', style.dot)}
+              className={cn('size-2 shrink-0 rounded-full', colorClass)}
             />
-            <span className="font-medium">{label}</span>
+            <span className={selected ? 'font-semibold' : 'font-medium'}>
+              {label}
+            </span>
             <span className="text-muted-foreground">
               {formatFieldCount(totals.fieldCount)} ·{' '}
               {formatNumber(totals.areaHa)} ha ·
@@ -113,7 +141,7 @@ const CatchmentGroupRow = memo(
             <span className={cn('font-semibold tabular-nums', style.text)}>
               {formatCatchmentAmount(totals)}
             </span>
-          </div>
+          </button>
         </TableCell>
       </TableRow>
     )
@@ -226,8 +254,8 @@ type FarmFieldsListProps = {
   onHoveredFieldChange: (fieldId: string | null) => void
   highlightedCatchmentKey?: string | null
   catchmentLabel: (kystvandId: number | null) => string
-  groupByCatchment: boolean
-  onGroupByCatchmentChange: (value: boolean) => void
+  catchmentColor: (kystvandId: number | null) => string
+  onHighlightedCatchmentKeyChange: (key: string | null) => void
   onZoomToField?: (fieldId: string) => void
   focusRequest?: { fieldId: string; nonce: number }
   selectedYearIndex?: number | null
@@ -252,8 +280,8 @@ export const FarmFieldsList = ({
   onHoveredFieldChange,
   highlightedCatchmentKey = null,
   catchmentLabel,
-  groupByCatchment,
-  onGroupByCatchmentChange,
+  catchmentColor,
+  onHighlightedCatchmentKeyChange,
   onZoomToField,
   focusRequest,
   selectedYearIndex = null,
@@ -268,6 +296,8 @@ export const FarmFieldsList = ({
   const focusedNonce = useRef(focusRequest?.nonce ?? null)
   const rootRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
+  const headerRef = useRef<HTMLTableSectionElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(40)
   const [requiredWidth, setRequiredWidth] = useState<number | null>(null)
   const [rootWidth, setRootWidth] = useState<number | null>(null)
 
@@ -299,14 +329,14 @@ export const FarmFieldsList = ({
   const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
 
   const runStarts = useMemo(() => {
-    if (!groupByCatchment || isRules) return null
+    if (isRules) return null
     return new Map(
       catchmentRuns(sortedFields, isSimulationView).map((run) => [
         run.firstFieldId,
         run,
       ]),
     )
-  }, [groupByCatchment, isRules, sortedFields, isSimulationView])
+  }, [isRules, sortedFields, isSimulationView])
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => readStoredColumnVisibility(isSimulationView),
@@ -324,12 +354,14 @@ export const FarmFieldsList = ({
     onSelectedFieldChange,
     onHoveredFieldChange,
     onZoomToField,
+    onHighlightedCatchmentKeyChange,
   })
   useEffect(() => {
     rowCallbacks.current = {
       onSelectedFieldChange,
       onHoveredFieldChange,
       onZoomToField,
+      onHighlightedCatchmentKeyChange,
     }
   })
 
@@ -346,6 +378,9 @@ export const FarmFieldsList = ({
   const zoomToRow = useCallback((fieldId: string) => {
     rowCallbacks.current.onSelectedFieldChange(fieldId)
     rowCallbacks.current.onZoomToField?.(fieldId)
+  }, [])
+  const toggleCatchment = useCallback((key: string, selected: boolean) => {
+    rowCallbacks.current.onHighlightedCatchmentKeyChange(selected ? null : key)
   }, [])
   const hoverRow = useCallback((fieldId: string | null) => {
     rowCallbacks.current.onHoveredFieldChange(fieldId)
@@ -531,6 +566,16 @@ export const FarmFieldsList = ({
     return () => observer.disconnect()
   }, [hasFields])
 
+  useLayoutEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+    const observer = new ResizeObserver(() =>
+      setHeaderHeight(Math.round(header.getBoundingClientRect().height)),
+    )
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [hasFields])
+
   const availableWidth = Math.min(
     paneWidth ?? Number.POSITIVE_INFINITY,
     rootWidth ?? Number.POSITIVE_INFINITY,
@@ -560,6 +605,7 @@ export const FarmFieldsList = ({
       <div
         ref={rootRef}
         data-density={density}
+        style={{ '--list-header-height': `${headerHeight}px` } as CSSProperties}
         className="flex min-h-0 flex-1 flex-col"
       >
         <div
@@ -603,23 +649,6 @@ export const FarmFieldsList = ({
                         {column.columnDef.meta?.toggleLabel ?? column.id}
                       </DropdownMenuCheckboxItem>
                     ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem
-                      checked={groupByCatchment}
-                      onSelect={(event) => event.preventDefault()}
-                      onCheckedChange={(checked) => {
-                        const next = Boolean(checked)
-                        onGroupByCatchmentChange(next)
-                        const column = table.getColumn('kystvandopland')
-                        if (!column || column.getIsVisible() === next) return
-                        column.toggleVisibility(next)
-                        if (!next && sort.key === 'kystvandopland') {
-                          onSortChange(DEFAULT_FIELDS_SORT)
-                        }
-                      }}
-                    >
-                      Grupper efter kystvandopland
-                    </DropdownMenuCheckboxItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
@@ -627,10 +656,11 @@ export const FarmFieldsList = ({
           </div>
           <Table
             ref={tableRef}
-            containerClassName="min-h-0 flex-1 scroll-pt-10 scroll-pb-24"
+            containerClassName="min-h-0 flex-1 scroll-pt-[calc(var(--list-header-height)_+_29px)] scroll-pb-24"
             className="border-separate border-spacing-0 text-left"
           >
             <TableHeader
+              ref={headerRef}
               className={cn(
                 '[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:border-b',
                 isRules
@@ -677,7 +707,7 @@ export const FarmFieldsList = ({
                 const isSelected = selectedFieldId === field.id
                 const isDimmed =
                   highlightedCatchmentKey !== null &&
-                  catchmentKey(field.kystvandId) !== highlightedCatchmentKey
+                  !fieldInCatchment(field, highlightedCatchmentKey)
                 const rowAccent = isRules
                   ? null
                   : isSelected
@@ -690,10 +720,14 @@ export const FarmFieldsList = ({
                   <Fragment key={field.id}>
                     {run ? (
                       <CatchmentGroupRow
+                        kystvandId={run.kystvandId}
                         label={catchmentLabel(run.kystvandId)}
                         totals={run.totals}
+                        colorClass={catchmentColor(run.kystvandId)}
                         colSpan={cells.length}
+                        selected={fieldInCatchment(run, highlightedCatchmentKey)}
                         isDimmed={isDimmed}
+                        onToggle={toggleCatchment}
                       />
                     ) : null}
                     <FieldRow
