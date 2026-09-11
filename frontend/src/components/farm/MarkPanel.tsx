@@ -40,6 +40,7 @@ const buildStatusMessage = (
       : 'Ingen beregnet udledning for markens historik'
   }
   if (status.level === 'noData') return 'Ingen kvote sat for denne mark'
+  if (status.level === 'excluded') return 'Indgår ikke i beregningen'
 
   const amount = formatQuotaAmount(status.nLoad, status.quotaKgn)
   const pct =

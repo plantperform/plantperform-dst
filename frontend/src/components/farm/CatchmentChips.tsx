@@ -23,6 +23,7 @@ const CATCHMENT_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
   uncalculated: 'ikke beregnet',
   noData: 'ingen kvote',
   partial: 'delvist beregnet',
+  excluded: 'indgår ikke i beregningen',
 }
 
 type CatchmentChipProps = {
