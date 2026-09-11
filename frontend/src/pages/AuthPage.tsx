@@ -7,6 +7,7 @@ import { AuthLayout } from '@/components/onboarding/AuthLayout'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
 import { FarmBasicsFields } from '@/components/onboarding/FarmBasicsFields'
 import { LoginForm } from '@/components/onboarding/LoginForm'
+import { PasswordInput } from '@/components/onboarding/PasswordInput'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -125,20 +126,17 @@ const RegisterForm = () => {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Adgangskode</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
-          minLength={6}
-          autoComplete="new-password"
-          className="h-11"
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={setPassword}
+          autoComplete="new-password"
         />
       </div>
       {role === 'landmand' ? (
-        <div className="space-y-5 rounded-lg border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
+        <div className="space-y-5 rounded-md border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
           <div>
-            <p className="text-sm font-medium leading-none">Om din bedrift</p>
+            <p className="text-sm font-semibold leading-none">Om din bedrift</p>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Vi opretter bedriften for dig, når du logger ind første gang.
             </p>
