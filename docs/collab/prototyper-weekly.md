@@ -1,4 +1,4 @@
-# Weekly routine — prototyper (`new-engine`)
+# Weekly routine — prototyper (`ANGJ-branch`)
 
 You need three commands. Nothing else. If anything asks you to do more than
 this, that is a signal to ask a developer, not to learn more git.
@@ -21,7 +21,7 @@ while. There is no cost to saving often — every save is a point you can be
 returned to. Nothing is truly safe until it is saved.
 
 You do not need to save before switching tasks, and you do not need to think
-about branches. You are always on `new-engine` and you always stay there.
+about branches. You are always on `ANGJ-branch` and you always stay there.
 
 ### When something is worth remembering
 
@@ -78,7 +78,7 @@ like your work was deleted. **It wasn't.**
 
 - Your work is *in the product*, under the developers' commits.
 - Your original commits are kept on an archive branch
-  (`archive/new-engine-<date>`), permanently, in case anyone needs them.
+  (`archive/ANGJ-branch-<date>`), permanently, in case anyone needs them.
 - The code you see on Monday is your work, plus the developers' work, plus the
   rough edges smoothed off.
 

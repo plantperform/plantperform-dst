@@ -19,7 +19,7 @@ git log --oneline origin/master..HEAD
 git diff --stat origin/master...HEAD
 ```
 
-If the branch is not `new-engine`, stop and tell the user to ask a developer.
+If the branch is not `ANGJ-branch`, stop and tell the user to ask a developer.
 
 Read the existing `HANDOFF.md` if there is one. Entries for work already ported
 (anything no longer in `git log origin/master..HEAD`) should be removed — the
@@ -92,7 +92,7 @@ edits in this whole process. Wait for their response and apply it.
 
 ## 4. Save
 
-Commit as `docs: handoff for week of <date>` and push to `new-engine`.
+Commit as `docs: handoff for week of <date>` and push to `ANGJ-branch`.
 
 Then tell them:
 

@@ -1,5 +1,5 @@
 ---
-description: Save and push the current work on the new-engine prototype branch
+description: Save and push the current work on the ANGJ-branch prototype branch
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*)
 ---
 
@@ -12,10 +12,10 @@ never show them raw git output, and never ask them a git question.
 git branch --show-current
 ```
 
-If it is not `new-engine`, **stop**. Change nothing. Tell them:
+If it is not `ANGJ-branch`, **stop**. Change nothing. Tell them:
 
 > You're not on the prototype branch right now, so I haven't saved anything.
-> Ask a developer to put you back on `new-engine` — it's a one-minute fix.
+> Ask a developer to put you back on `ANGJ-branch` — it's a one-minute fix.
 
 ## 2. Look at what changed
 
@@ -43,7 +43,7 @@ see any, mention it and leave it unstaged.
 ## 4. Push
 
 ```
-git push origin new-engine
+git push origin ANGJ-branch
 ```
 
 If the push is rejected, **stop**. Do not pull, merge, rebase, or force. Tell

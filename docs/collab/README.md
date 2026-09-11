@@ -1,15 +1,15 @@
-# Collaboration model: master and new-engine
+# Collaboration model: master and ANGJ-branch
 
 Two people work in this repository in two different ways.
 
 - **Developers** branch off `master`, open a pull request, merge back. Ordinary.
-- **The prototyper** works on `new-engine`, exploring with an agent on
+- **The prototyper** works on `ANGJ-branch`, exploring with an agent on
   localhost. That branch is a **prototype**, not a queue of work to merge.
 
 ## The rule that makes this work
 
-> `new-engine` is never merged. Its commits are never rewritten. Once a week an
-> integrator ports the valuable parts into `master` and resets `new-engine` onto
+> `ANGJ-branch` is never merged. Its commits are never rewritten. Once a week an
+> integrator ports the valuable parts into `master` and resets `ANGJ-branch` onto
 > the new `master`.
 
 Everything else follows from that sentence.
@@ -17,7 +17,7 @@ Everything else follows from that sentence.
 ### Why not merge it?
 
 We tried, in PR #1. The merge itself was fine. The expensive part was
-manufacturing `new-engine-clean` — rewriting thirty exploratory commits into
+manufacturing `ANGJ-branch-clean` — rewriting thirty exploratory commits into
 presentable ones so the history would be acceptable on `master`. That step is
 manual, judgement-heavy, and cannot be repeated weekly. It also stranded the
 original branch: the same content now existed on `master` under different SHAs.
@@ -42,7 +42,7 @@ the prototyper. Five people at most, so the process has to stay cheap.
 
 | | Prototyper | Developers (4) |
 |---|---|---|
-| Branch | `new-engine` only | `master` + feature branches |
+| Branch | `ANGJ-branch` only | `master` + feature branches |
 | Git knowledge needed | three slash commands | all of it |
 | Resolves conflicts | never | always |
 | Owns | *what* should exist | *how* it exists in `master` |
@@ -98,7 +98,7 @@ Mon–Thu   Prototyper explores on localhost. /save whenever.
 Fri       Prototyper runs /handoff → HANDOFF.md describing the week's work.
 Fri/Mon   Integrator reads HANDOFF.md, ports feature by feature into master,
           each as its own PR, agent-driven, following master's conventions.
-Mon       Integrator archives and resets new-engine onto master.
+Mon       Integrator archives and resets ANGJ-branch onto master.
           Prototyper runs /refresh and continues on fresh ground.
 ```
 
@@ -136,7 +136,7 @@ not have. No amount of git training fixes that; keeping it off their desk does.
 ## Guardrails to put in place
 
 - Protect `master` on GitHub: no direct pushes, PR required.
-- Protect `new-engine` against deletion, but allow force-push (the reset needs
+- Protect `ANGJ-branch` against deletion, but allow force-push (the reset needs
   it) — the archive branch created before each reset is the safety net.
 - CI on every push: `npm run build`, `npm run lint`, `ruff check`. The
   prototyper needs a green/red signal they can read without asking a developer.
