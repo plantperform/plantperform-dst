@@ -65,6 +65,37 @@ class RegistrySoilDataTests(unittest.TestCase):
         self.assertEqual(result["S_override"], 0.992)
         calculate_leaching.assert_called_once()
 
+    @patch(
+        "app.services.nles5.bridge_v2.calculate_leaching",
+        return_value={"L": 5.0, "L_nuar": 5.0},
+    )
+    @patch("app.services.nles5.bridge_v2.afstromning.afstromningskategori", return_value=None)
+    @patch("app.services.nles5.bridge_v2.afgroede_normer.lookup_crop_params", return_value={})
+    def test_unknown_category_reports_zero_instead_of_blocking(
+        self, _crop_params, _kategori, _calculate_leaching
+    ) -> None:
+        """A historical afgrødekode absent from Bilag 1 (e.g. "slettet mark")
+        must not block the mark from being added; it reports 0/ukendt for
+        that position instead of raising."""
+        result = evaluate_leaching_position(
+            afgrode_kode=995,
+            next_afgrode_kode=None,
+            prev_afgrode_kode=None,
+            udlaeg_kode=None,
+            jbnr=1,
+            mncs=100,
+            percolation_by_kategori=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8),
+            org_n_topsoil=3.123,
+            s_soil=0.992,
+        )
+
+        self.assertTrue(result["afstromningskategori_ukendt"])
+        self.assertIsNone(result["afstromningskategori"])
+        self.assertEqual(result["L"], 0.0)
+        self.assertEqual(result["L_nuar"], 0.0)
+        self.assertEqual(result["leaching_kgN_ha"], 0.0)
+        self.assertEqual(result["L_nuar_kgN_ha"], 0.0)
+
     def test_low_n_error_remains_a_value_error(self) -> None:
         with self.assertRaises(LowNitrogenModelError):
             nles5(Y=2027, Ntheta=-100, C=0, P=0.3, S=1.0)
