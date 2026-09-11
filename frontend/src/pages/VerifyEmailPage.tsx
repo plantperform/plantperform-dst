@@ -16,10 +16,12 @@ import {
 import { postJson } from '@/api/client'
 import { AuthIcon, AuthLayout } from '@/components/onboarding/AuthLayout'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
+import { FieldError } from '@/components/onboarding/FieldError'
 import { LoginForm } from '@/components/onboarding/LoginForm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { validateEmail } from '@/lib/auth-form'
 import {
   clearLastRegisteredEmail,
   getLastRegisteredEmail,
@@ -75,6 +77,7 @@ export const VerifyEmailPage = () => {
   const attemptedToken = useRef<string | null>(null)
   const [rememberedEmail] = useState(() => getLastRegisteredEmail() ?? '')
   const [email, setEmail] = useState(sentTo ?? rememberedEmail)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [resendState, setResendState] = useState<ResendState>('idle')
 
   useEffect(() => {
@@ -85,9 +88,20 @@ export const VerifyEmailPage = () => {
       .catch(() => setVerifyState('invalid'))
   }, [token])
 
+  const changeEmail = (value: string) => {
+    setEmail(value)
+    if (emailError) setEmailError(validateEmail(value))
+  }
+
+  const blurEmail = () => {
+    if (email.trim()) setEmailError(validateEmail(email))
+  }
+
   const resend = async (event: FormEvent) => {
     event.preventDefault()
-    if (!email.trim()) return
+    const nextError = validateEmail(email)
+    setEmailError(nextError)
+    if (nextError) return
     setResendState('sending')
     try {
       await resendVerification(email)
@@ -98,16 +112,22 @@ export const VerifyEmailPage = () => {
   }
 
   const resendForm = (
-    <form className="space-y-3" onSubmit={resend}>
-      <Label htmlFor="verification-email">E-mail</Label>
-      <Input
-        id="verification-email"
-        type="email"
-        autoComplete="email"
-        className="h-11"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-      />
+    <form className="space-y-3" noValidate onSubmit={resend}>
+      <div className="space-y-2">
+        <Label htmlFor="verification-email">E-mail</Label>
+        <Input
+          id="verification-email"
+          type="email"
+          autoComplete="email"
+          aria-invalid={emailError ? true : undefined}
+          aria-describedby={emailError ? 'verification-email-error' : undefined}
+          className="h-11 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
+          value={email}
+          onChange={(event) => changeEmail(event.target.value)}
+          onBlur={blurEmail}
+        />
+        <FieldError id="verification-email-error" message={emailError} />
+      </div>
       <Button
         size="lg"
         variant="outline"

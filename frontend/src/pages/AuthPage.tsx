@@ -3,15 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Tractor, Users } from 'lucide-react'
 
 import { ApiError, postJson } from '@/api/client'
+import { useAuthFields } from '@/components/onboarding/auth-fields'
+import { AuthFields } from '@/components/onboarding/AuthFields'
 import { AuthLayout } from '@/components/onboarding/AuthLayout'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
 import { FarmBasicsFields } from '@/components/onboarding/FarmBasicsFields'
 import { LoginForm } from '@/components/onboarding/LoginForm'
-import { PasswordInput } from '@/components/onboarding/PasswordInput'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { validateFarmBasics } from '@/lib/farm-form'
 import {
   setLastRegisteredEmail,
@@ -24,8 +23,7 @@ type Mode = 'login' | 'register'
 
 const RegisterForm = () => {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const fields = useAuthFields('register')
   const [role, setRole] = useState<OnboardingRole | null>(null)
   const [farmName, setFarmName] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -40,15 +38,7 @@ const RegisterForm = () => {
       setError('Vælg, om du er landmand eller konsulent.')
       return
     }
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail.includes('@')) {
-      setError('Indtast en gyldig e-mailadresse.')
-      return
-    }
-    if (password.length < 6) {
-      setError('Adgangskoden skal være mindst 6 tegn.')
-      return
-    }
+    if (!fields.validate()) return
     if (role === 'landmand') {
       const farmError = validateFarmBasics(farmName, ownerName, cvr)
       if (farmError) {
@@ -57,37 +47,40 @@ const RegisterForm = () => {
       }
     }
 
+    const email = fields.normalizedEmail
     setIsSubmitting(true)
     try {
       await postJson<{ message: string }, { email: string; password: string }>(
         '/auth/register',
-        { email: normalizedEmail, password },
+        { email, password: fields.password },
       )
-      setStoredRole(normalizedEmail, role)
+      setStoredRole(email, role)
       if (role === 'landmand') {
-        setPendingFarm(normalizedEmail, {
+        setPendingFarm(email, {
           name: farmName.trim(),
           ownerName: ownerName.trim(),
           cvr: cvr.trim() || null,
         })
       }
-      setLastRegisteredEmail(normalizedEmail)
-      navigate('/verify-email', { state: { sentTo: normalizedEmail } })
+      setLastRegisteredEmail(email)
+      navigate('/verify-email', { state: { sentTo: email } })
     } catch (requestError) {
       const status =
         requestError instanceof ApiError ? requestError.status : null
-      setError(
-        status === 409
-          ? 'Der findes allerede en konto med denne e-mailadresse.'
-          : 'Kunne ikke oprette kontoen.',
-      )
+      if (status === 409) {
+        fields.rejectEmail(
+          'Der findes allerede en konto med denne e-mailadresse.',
+        )
+      } else {
+        setError('Kunne ikke oprette kontoen.')
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form className="space-y-6" onSubmit={onSubmit}>
+    <form className="space-y-6" noValidate onSubmit={onSubmit}>
       <div className="space-y-3">
         <p id="rolle-valg-label" className="text-sm font-medium leading-none">
           Hvem er du?
@@ -113,26 +106,7 @@ const RegisterForm = () => {
           />
         </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="email">E-mail</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          className="h-11"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Adgangskode</Label>
-        <PasswordInput
-          id="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="new-password"
-        />
-      </div>
+      <AuthFields fields={fields} passwordAutoComplete="new-password" />
       {role === 'landmand' ? (
         <div className="space-y-5 rounded-md border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
           <div>
