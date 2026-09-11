@@ -65,7 +65,10 @@ class RegistrySoilDataTests(unittest.TestCase):
         self.assertEqual(result["S_override"], 0.992)
         calculate_leaching.assert_called_once()
 
-    @patch("app.services.nles5.bridge_v2.calculate_leaching", return_value={"L": 5.0, "L_nuar": 5.0})
+    @patch(
+        "app.services.nles5.bridge_v2.calculate_leaching",
+        return_value={"L": 5.0, "L_nuar": 5.0},
+    )
     @patch("app.services.nles5.bridge_v2.afstromning.afstromningskategori", return_value=None)
     @patch("app.services.nles5.bridge_v2.afgroede_normer.lookup_crop_params", return_value={})
     def test_unknown_category_reports_zero_instead_of_blocking(
