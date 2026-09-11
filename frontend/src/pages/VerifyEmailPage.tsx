@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { CircleAlert, CircleCheck, LoaderCircle, Mail, MailOpen } from 'lucide-react'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
+import {
+  CircleAlert,
+  CircleCheck,
+  LoaderCircle,
+  Mail,
+  MailOpen,
+} from 'lucide-react'
 
 import { postJson } from '@/api/client'
 import { AuthIcon, AuthLayout } from '@/components/onboarding/AuthLayout'
@@ -40,7 +51,8 @@ type ResendNoticeProps = {
 }
 
 const ResendNotice = ({ state, sentText }: ResendNoticeProps) => {
-  if (state === 'sent') return <AuthNotice tone="success">{sentText}</AuthNotice>
+  if (state === 'sent')
+    return <AuthNotice tone="success">{sentText}</AuthNotice>
   if (state === 'failed') {
     return (
       <AuthNotice tone="error">
@@ -56,8 +68,7 @@ export const VerifyEmailPage = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const token = searchParams.get('token')
-  const sentTo =
-    (location.state as { sentTo?: string } | null)?.sentTo ?? null
+  const sentTo = (location.state as { sentTo?: string } | null)?.sentTo ?? null
   const [verifyState, setVerifyState] = useState<VerifyState>(
     token ? 'verifying' : 'idle',
   )
@@ -132,9 +143,16 @@ export const VerifyEmailPage = () => {
         icon={<AuthIcon icon={CircleCheck} />}
         title="Du er klar"
         description={
-          rememberedEmail
-            ? `${rememberedEmail} er bekræftet. Skriv din adgangskode, så er du inde.`
-            : 'Din e-mail er bekræftet. Log ind, så er du inde.'
+          rememberedEmail ? (
+            <>
+              <strong className="font-medium text-foreground">
+                {rememberedEmail}
+              </strong>{' '}
+              er bekræftet. Skriv din adgangskode, så er du inde.
+            </>
+          ) : (
+            'Din e-mail er bekræftet. Log ind, så er du inde.'
+          )
         }
       >
         <LoginForm
@@ -167,7 +185,12 @@ export const VerifyEmailPage = () => {
       <AuthLayout
         icon={<AuthIcon icon={MailOpen} />}
         title="Tjek din e-mail"
-        description={`Vi har sendt et link til ${sentTo}.`}
+        description={
+          <>
+            Vi har sendt et link til{' '}
+            <strong className="font-medium text-foreground">{sentTo}</strong>.
+          </>
+        }
         footer={<BackToLogin />}
       >
         <div className="space-y-6">

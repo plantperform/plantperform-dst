@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { ApiError, postJson } from '@/api/client'
 import { useAuth } from '@/auth/context'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
+import { PasswordInput } from '@/components/onboarding/PasswordInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +25,6 @@ export const LoginForm = ({
   const { signIn } = useAuth()
   const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unverified, setUnverified] = useState(false)
   const [resendState, setResendState] = useState<ResendState>('idle')
@@ -97,34 +97,21 @@ export const LoginForm = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Adgangskode</Label>
-        <div className="relative">
-          <Input
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            minLength={6}
-            autoComplete="current-password"
-            autoFocus={autoFocusPassword}
-            aria-invalid={credentialsRejected || undefined}
-            className="h-11 pr-16 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <button
-            type="button"
-            aria-label={showPassword ? 'Skjul adgangskode' : 'Vis adgangskode'}
-            aria-pressed={showPassword}
-            onClick={() => setShowPassword((current) => !current)}
-            className="absolute inset-y-0 right-3 my-auto h-7 rounded px-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {showPassword ? 'Skjul' : 'Vis'}
-          </button>
-        </div>
+        <PasswordInput
+          id="password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+          autoFocus={autoFocusPassword}
+          invalid={credentialsRejected}
+        />
       </div>
       {error ? <AuthNotice tone="error">{error}</AuthNotice> : null}
-      {unverified ? (
-        <div className="space-y-3">
+      <div className="space-y-3">
+        {unverified ? (
           <Button
             type="button"
+            size="lg"
             variant="outline"
             className="w-full"
             disabled={resendState === 'sending' || resendState === 'sent'}
@@ -136,21 +123,21 @@ export const LoginForm = ({
                 ? 'Mailen er sendt igen'
                 : 'Send bekræftelsesmailen igen'}
           </Button>
-          {resendState === 'sent' ? (
-            <AuthNotice tone="success">
-              Tjek din indbakke, og klik på linket. Så kan du logge ind.
-            </AuthNotice>
-          ) : null}
-          {resendState === 'failed' ? (
-            <AuthNotice tone="error">
-              Kunne ikke sende mailen igen. Prøv om lidt.
-            </AuthNotice>
-          ) : null}
-        </div>
-      ) : null}
-      <Button size="lg" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? 'Logger ind...' : 'Log ind'}
-      </Button>
+        ) : null}
+        {resendState === 'sent' ? (
+          <AuthNotice tone="success">
+            Tjek din indbakke, og klik på linket. Så kan du logge ind.
+          </AuthNotice>
+        ) : null}
+        {resendState === 'failed' ? (
+          <AuthNotice tone="error">
+            Kunne ikke sende mailen igen. Prøv om lidt.
+          </AuthNotice>
+        ) : null}
+        <Button size="lg" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Logger ind...' : 'Log ind'}
+        </Button>
+      </div>
     </form>
   )
 }

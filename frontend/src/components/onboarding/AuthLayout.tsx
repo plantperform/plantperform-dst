@@ -11,20 +11,29 @@ type AuthIconProps = {
   spin?: boolean
 }
 
-export const AuthIcon = ({ icon: Icon, tone = 'primary', spin = false }: AuthIconProps) => (
+export const AuthIcon = ({
+  icon: Icon,
+  tone = 'primary',
+  spin = false,
+}: AuthIconProps) => (
   <div
     className={cn(
       'flex size-12 items-center justify-center rounded-full',
-      tone === 'danger' ? 'bg-red-50 text-red-700' : 'bg-primary/10 text-primary',
+      tone === 'danger'
+        ? 'bg-red-50 text-red-700'
+        : 'bg-primary/10 text-primary',
     )}
   >
-    <Icon className={cn('h-6 w-6', spin && 'animate-spin')} aria-hidden="true" />
+    <Icon
+      className={cn('h-6 w-6', spin && 'animate-spin')}
+      aria-hidden="true"
+    />
   </div>
 )
 
 type AuthLayoutProps = {
   title: string
-  description: string
+  description: ReactNode
   icon?: ReactNode
   footer?: ReactNode
   children: ReactNode
