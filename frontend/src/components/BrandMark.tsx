@@ -17,10 +17,10 @@ export const BrandMark = ({
     aria-label={compact ? 'PlantPerform' : undefined}
   >
     <img
-      src="/plantperform-mark.svg"
+      src="/plant-perform-tab-icon.svg"
       alt=""
       className={cn(
-        'shrink-0 rounded-sm',
+        'shrink-0 rounded-md',
         compact ? 'size-8' : 'size-9',
         variant === 'onDark' && 'ring-1 ring-primary-foreground/25',
       )}
