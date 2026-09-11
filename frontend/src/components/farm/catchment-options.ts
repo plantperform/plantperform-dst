@@ -11,10 +11,32 @@ export const inputToOptionalNumber = (value: string) => {
   return trimmed === '' ? null : Number(trimmed)
 }
 
-export type CatchmentOption = { kystvandId: number | null; label: string }
+export type CatchmentOption = {
+  kystvandId: number | null
+  label: string
+  colorClass: string
+}
+
+const CATCHMENT_COLOR_CLASSES = [
+  'bg-sky-500',
+  'bg-red-500',
+  'bg-yellow-400',
+  'bg-lime-500',
+  'bg-purple-500',
+  'bg-pink-500',
+  'bg-orange-500',
+  'bg-teal-500',
+]
+
+const NO_CATCHMENT_COLOR_CLASS = 'bg-stone-400'
 
 export const catchmentKey = (kystvandId: number | null) =>
   String(kystvandId ?? 'none')
+
+export const fieldInCatchment = (
+  field: Pick<FieldRecord, 'kystvandId'>,
+  key: string | null,
+) => catchmentKey(field.kystvandId) === key
 
 export const describeCatchment = (
   kystvandId: number | null,
@@ -33,7 +55,7 @@ export const useCatchmentOptions = (
     const nameById = new Map(
       emissions.map((u) => [u.kystvandId, u.kystvandNavn]),
     )
-    const seen = new Map<string, CatchmentOption>()
+    const seen = new Map<string, Omit<CatchmentOption, 'colorClass'>>()
     for (const field of fields) {
       const key = catchmentKey(field.kystvandId)
       if (seen.has(key)) continue
@@ -43,10 +65,34 @@ export const useCatchmentOptions = (
       )
       seen.set(key, { kystvandId: field.kystvandId, label })
     }
-    return Array.from(seen.values()).sort((a, b) =>
+    const sorted = Array.from(seen.values()).sort((a, b) =>
       a.label.localeCompare(b.label, 'da'),
     )
+    const withCatchment = sorted.filter((option) => option.kystvandId !== null)
+    return sorted.map((option) => ({
+      ...option,
+      colorClass:
+        option.kystvandId === null
+          ? NO_CATCHMENT_COLOR_CLASS
+          : CATCHMENT_COLOR_CLASSES[
+              withCatchment.indexOf(option) % CATCHMENT_COLOR_CLASSES.length
+            ],
+    }))
   }, [fields, emissions])
+}
+
+export const useCatchmentColor = (farmId: string, fields: FieldRecord[]) => {
+  const options = useCatchmentOptions(farmId, fields)
+  return useMemo(() => {
+    const colorByKey = new Map(
+      options.map((option) => [
+        catchmentKey(option.kystvandId),
+        option.colorClass,
+      ]),
+    )
+    return (kystvandId: number | null) =>
+      colorByKey.get(catchmentKey(kystvandId)) ?? NO_CATCHMENT_COLOR_CLASS
+  }, [options])
 }
 
 export const useCatchmentLabel = (farmId: string, fields: FieldRecord[]) => {
