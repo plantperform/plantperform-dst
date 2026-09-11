@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   clearPendingFarm,
   getAutoOpenSingleFarm,
@@ -274,9 +275,9 @@ export const HomePage = () => {
                   key={index}
                   className="space-y-3 rounded-lg border bg-card p-5 shadow-sm"
                 >
-                  <div className="h-5 w-2/3 motion-safe:animate-pulse rounded bg-muted" />
-                  <div className="h-4 w-1/2 motion-safe:animate-pulse rounded bg-muted" />
-                  <div className="h-4 w-1/3 motion-safe:animate-pulse rounded bg-muted" />
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-1/3" />
                 </div>
               ))}
             </div>

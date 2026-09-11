@@ -1,3 +1,5 @@
+import { Skeleton } from '@/components/ui/skeleton'
+
 const ROW_WIDTHS = [
   ['w-24', 'w-16', 'w-32', 'w-14', 'w-20'],
   ['w-20', 'w-14', 'w-40', 'w-12', 'w-16'],
@@ -19,10 +21,7 @@ export const FarmFieldsSkeleton = ({ message }: FarmFieldsSkeletonProps) => (
   <div className="min-h-0 flex-1 space-y-2 overflow-hidden">
     <div className="flex h-7 items-center justify-between gap-3">
       <p className="text-sm text-muted-foreground">{message}</p>
-      <div
-        aria-hidden="true"
-        className="h-7 w-28 rounded-md bg-muted motion-safe:animate-pulse"
-      />
+      <Skeleton className="h-7 w-28 rounded-md" />
     </div>
     <div
       aria-hidden="true"
@@ -42,10 +41,7 @@ export const FarmFieldsSkeleton = ({ message }: FarmFieldsSkeletonProps) => (
           className="flex items-center gap-6 border-t px-2 py-2"
         >
           {widths.map((width, index) => (
-            <div
-              key={index}
-              className={`h-5 rounded bg-muted motion-safe:animate-pulse ${width}`}
-            />
+            <Skeleton key={index} className={`h-5 ${width}`} />
           ))}
         </div>
       ))}
