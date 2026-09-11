@@ -6,6 +6,78 @@ forward (some commits may still be pulled from `new-engine`, but it will not
 be developed further). This handoff is against `dev`, not `master` — `dev`
 is the current integration branch; `master`'s history looks stale/unrelated.
 
+## Ikke-kvotegivende marker no longer inflate "udledning mod kvote"
+
+**What it does.** A mark that is not kvotegivende (per Bilag 1's
+"Kvotegivende areal" list) no longer contributes to a bedrift's or
+kystvandopland's udledning total, matching how it already contributed
+nothing to the kvote total — the two sides of the same comparison are
+consistent again. Its own row in Afgrødehistorik now says "Indgår ikke i
+beregningen" (status) and "Ikke kvotegivende areal" (in the renamed
+"Kvotebidrag" column) instead of a plain, ambiguous "Ingen data".
+
+**Why.** The user spotted mark 22-0 (afgrødekode 318, "Miljøtilsagn, ej
+udtagning, ej landbrugsareal" every year 2017-2026) still contributing kg N
+to the bedrift's "udledning mod kvote" total, despite being flagged
+`kvotegivende: false`. Two separate problems were layered on top of each
+other:
+1. `load_kvotegivende_areal.py` — the script that zeroes a mark's
+   `udledningskvote_mark_kgn` for non-kvotegivende marker — is a standalone
+   pixi task, not part of the main `load-registry-data` chain, so a full
+   database reload (done earlier this week to load the updated P-nøgle CSV)
+   silently left stale, un-zeroed kvote figures in place until the script
+   was run explicitly by hand.
+2. Even after that ran, a mark's real NLES5 leaching (`n_load`) was still
+   summed into the farm's and kystvandopland's total udledning, because that
+   figure is computed purely from crop-rotation biology and was never
+   cross-checked against `kvotegivende` at all. A mark excluded from the
+   kvote side of a comparison was still counted on the udledning side of the
+   *same* comparison.
+
+**Where.**
+- `backend/src/app/data/repository.py` —
+  `get_farm_udledning_per_kystvandopland` (the "Pr. kystvandopland" summary
+  bar) and `get_farm_historical_yearly_summary` (the year-by-year
+  "Årsgennemgang") both now skip a mark's `n_load` when
+  `registry_field.kvotegivende` is false.
+- `frontend/src/lib/field-domain.ts` — new `QuotaStatusLevel` value
+  `'excluded'`; `getFieldQuotaStatus` returns it whenever `field.kvotegivende`
+  is false, checked before the (now correctly zero) quota number is even
+  looked at. `computeFieldTotals` skips such marks' `nLoad`/`leaching`/
+  `udledningskvoteMarkKgn` when summing a bedrift's or catchment's totals.
+- `frontend/src/components/farm/farm-fields-columns.tsx`, `CatchmentChips.tsx`,
+  `MarkPanel.tsx` — the new status renders as "Indgår ikke i beregningen"
+  wherever the old "Ingen data"/"ingen kvote" labels covered this case, and
+  the mark-level column (renamed "Kvote" → "Kvotebidrag") says "Ikke
+  kvotegivende areal" specifically there, distinguishing it from a mark that
+  *is* kvotegivende but is genuinely missing a udledningsgrænse.
+
+**Status.** Solid. Ran the missing `load-kvotegivende-areal` script (33,504
+non-kvotegivende marker corrected database-wide), then verified live against
+mark 22-0: its contribution disappeared from the bedrift's total, its row
+shows the new status and label, and the mark's own detail panel shows the
+same status while still showing its real per-mark udledning figure for
+reference (a physical fact about the mark, not a quota question, so it stays
+visible there).
+
+**Shortcuts.** None — this is a direct exclusion of already-known
+`kvotegivende: false` marks, not a guess.
+
+**Contract changes.** None to any API shape — `kvotegivende` was already on
+`FieldRecord`. No migration.
+
+**Open questions.**
+- `load_kvotegivende_areal.py` is still outside `load-registry-data`. Should
+  it be folded into that chain so a full reload can't silently reintroduce
+  this exact bug? Left alone since it touches the documented reload pipeline
+  in `database/scripts/README.md`, which felt like a call for whoever owns
+  that pipeline rather than something to change unsupervised.
+- A mark's own detail panel intentionally still shows its real NLES5
+  udledning number even when excluded from every aggregate (confirmed with
+  the user) — worth a developer's sign-off, since the same number (e.g.
+  "2,6 kg N" for mark 22-0) now appears both as "real" on the mark and "not
+  counted" one level up.
+
 ## Historical afgrødekoder no longer block "Tilføj marker"
 
 **What it does.** A mark whose `crop_history` (2016-2026) includes certain
