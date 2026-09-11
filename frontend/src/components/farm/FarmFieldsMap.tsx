@@ -36,7 +36,12 @@ import type {
 import {
   catchmentKey,
   fieldInCatchment,
+  useCatchmentLabel,
 } from '@/components/farm/catchment-options'
+import {
+  FieldTooltip,
+  type HoveredField,
+} from '@/components/farm/FieldTooltip'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -88,7 +93,6 @@ import {
   isYearColorAttribute,
   legendEntries,
   registryPropertyFor,
-  yearQuotaStatusLabel,
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
@@ -153,6 +157,7 @@ type FarmFieldsMapProps = {
   farm: Farm
   fields: FieldRecord[]
   readOnly?: boolean
+  isSimulationView?: boolean
   mode?: FarmInspectorMode
   selectedYearIndex?: number | null
   yearValues?: FieldYearValues
@@ -167,29 +172,12 @@ type FarmFieldsMapProps = {
   onError: (message: string | null) => void
 }
 
-const describeYearQuotaStatus = (status: number | null): string => {
-  const label = yearQuotaStatusLabel(status)
-  if (label === null) return ''
-  return ` - ${label.charAt(0).toLowerCase()}${label.slice(1)}`
-}
-
 const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
   mode === 'rules' ? 'fieldLocked' : 'none'
 
 type ColorBySelection = {
   forMode: FarmInspectorMode
   value: ColorAttribute
-}
-
-type HoveredField = {
-  longitude: number
-  latitude: number
-  primary: string
-  vandopland: string | null
-  hasRotation: boolean
-  yearCrop: string | null
-  yearNLoadKgHa: number | null
-  yearQuotaStatus: number | null
 }
 
 type HoveredMars = {
@@ -215,6 +203,7 @@ export const FarmFieldsMap = ({
   farm,
   fields,
   readOnly = false,
+  isSimulationView = false,
   mode = 'values',
   selectedYearIndex = null,
   yearValues,
@@ -320,6 +309,15 @@ export const FarmFieldsMap = ({
       ? buildFillColor(activeColorSpec, registryThemedProperty)
       : null
   const isFarmOnlyAttribute = activeColorSpec?.source === 'farm'
+  const catchmentLabel = useCatchmentLabel(farm.id, fields)
+  const hoveredRecord = hoveredField?.fieldId
+    ? (fields.find((field) => field.id === hoveredField.fieldId) ?? null)
+    : null
+  const hoveredRotationName = hoveredRecord?.rotationId
+    ? (farm.rotationLibrary.find(
+        (rotation) => rotation.id === hoveredRecord.rotationId,
+      )?.name ?? null)
+    : null
 
   // Zoomed-out dots grow slightly with zoom before handing over to polygons.
   const registryPointRadius: ExpressionSpecification = [
@@ -855,16 +853,6 @@ export const FarmFieldsMap = ({
       ? feature.properties?.marknr
       : null
     const farmName = !addMode ? feature.properties?.name : null
-    const kystvandRaw = addMode
-      ? feature.properties?.kystvand_id
-      : feature.properties?.kystvandId
-    const kystvand =
-      typeof kystvandRaw === 'number' && Number.isFinite(kystvandRaw)
-        ? String(kystvandRaw)
-        : typeof kystvandRaw === 'string' && kystvandRaw.length > 0
-          ? kystvandRaw
-          : null
-
     const primary =
       typeof farmName === 'string' && farmName.length > 0
         ? farmName
@@ -892,7 +880,9 @@ export const FarmFieldsMap = ({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
       primary,
-      vandopland: kystvand,
+      fieldId: typeof hoveredFarmFieldId === 'string' ? hoveredFarmFieldId : null,
+      properties: feature.properties ?? {},
+      registry: addMode,
       hasRotation,
       yearCrop:
         typeof yearCropRaw === 'string' && yearCropRaw.length > 0
@@ -1414,32 +1404,19 @@ export const FarmFieldsMap = ({
               closeOnClick={false}
               anchor="top"
               offset={8}
+              maxWidth="none"
+              className="field-tooltip"
             >
-              <div className="flex flex-col gap-0.5 text-xs">
-                <span className="font-medium">{hoveredField.primary}</span>
-                <span className="text-muted-foreground">
-                  {hoveredField.vandopland !== null
-                    ? `Vandopland ${hoveredField.vandopland}`
-                    : 'Vandopland ukendt'}
-                </span>
-                {selectedCalendarYear !== null ? (
-                  <>
-                    <span>
-                      {selectedCalendarYear}:{' '}
-                      {hoveredField.yearCrop ?? 'ingen afgrøde for året'}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {hoveredField.yearNLoadKgHa !== null
-                        ? `Udledning ${formatNumber(hoveredField.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hoveredField.yearQuotaStatus)}`
-                        : yearValuesLoading
-                          ? 'Henter udledning for året...'
-                          : hoveredField.hasRotation
-                            ? 'Uden for markens rotationscyklus'
-                            : 'Ingen udledning beregnet for året'}
-                    </span>
-                  </>
-                ) : null}
-              </div>
+              <FieldTooltip
+                hovered={hoveredField}
+                field={hoveredRecord}
+                rotationName={hoveredRotationName}
+                catchmentLabel={catchmentLabel}
+                colorBy={colorBy}
+                isSimulationView={isSimulationView}
+                selectedCalendarYear={selectedCalendarYear}
+                yearValuesLoading={yearValuesLoading}
+              />
             </Popup>
           ) : null}
 
