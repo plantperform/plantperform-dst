@@ -41,9 +41,7 @@ import {
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
-  readStoredGroupByCatchment,
   resolveEffectiveFieldsSort,
-  storeGroupByCatchment,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
@@ -178,13 +176,6 @@ export const FarmInspector = ({
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
-  const [groupByCatchment, setGroupByCatchment] = useState(
-    readStoredGroupByCatchment,
-  )
-  const changeGroupByCatchment = (value: boolean) => {
-    setGroupByCatchment(value)
-    storeGroupByCatchment(value)
-  }
   const [splitAvailable, setSplitAvailable] = useState(true)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
     null,
@@ -280,10 +271,9 @@ export const FarmInspector = ({
     const sorted = [...fields].sort((left, right) =>
       compareFields(left, right, effectiveSort, catchmentLabel),
     )
-    const ordered =
-      groupByCatchment && !isRules
-        ? orderFieldsByCatchment(sorted, catchmentLabel)
-        : sorted
+    const ordered = isRules
+      ? sorted
+      : orderFieldsByCatchment(sorted, catchmentLabel)
     if (effectiveHighlightedCatchmentKey === null) return ordered
     const inCatchment = (field: FieldRecord) =>
       fieldInCatchment(field, effectiveHighlightedCatchmentKey)
@@ -295,7 +285,6 @@ export const FarmInspector = ({
     fields,
     effectiveSort,
     catchmentLabel,
-    groupByCatchment,
     isRules,
     effectiveHighlightedCatchmentKey,
   ])
@@ -555,8 +544,8 @@ export const FarmInspector = ({
                     onHoveredFieldChange={setHoveredFieldId}
                     highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                     catchmentLabel={catchmentLabel}
-                    groupByCatchment={groupByCatchment}
-                    onGroupByCatchmentChange={changeGroupByCatchment}
+                    catchmentColor={catchmentColor}
+                    onHighlightedCatchmentKeyChange={setHighlightedCatchmentKey}
                     onZoomToField={
                       effectiveView === 'list' ? undefined : requestZoomToField
                     }
