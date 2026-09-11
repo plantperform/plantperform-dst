@@ -2,15 +2,24 @@ import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { History } from 'lucide-react'
+
 import {
   useFarm,
   useFarmFields,
+  useFarms,
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
 import { useAuth } from '@/auth/context'
 import { FarmInspector } from '@/components/farm/FarmInspector'
+import {
+  FarmContentSkeleton,
+  FarmSidebarSkeleton,
+  FarmTopBarSkeleton,
+} from '@/components/farm/FarmLoadingShell'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
+import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSplitLayout } from '@/components/farm/split-layout'
 import type {
@@ -19,6 +28,7 @@ import type {
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { useDelayedFlag } from '@/hooks/use-delayed-flag'
 import {
   Card,
   CardContent,
@@ -42,6 +52,7 @@ export const FarmDetailPage = () => {
     error: farmError,
     isLoading: farmLoading,
   } = useFarm(farmId)
+  const { data: farms } = useFarms()
   const { data: fields = [], isLoading: fieldsLoading } = useFarmFields(farmId)
   const { data: simulationsData, isLoading: simulationsLoading } =
     useSimulations(farmId)
@@ -77,6 +88,11 @@ export const FarmDetailPage = () => {
   const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
+  const isReady =
+    farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
+  const showSkeleton = useDelayedFlag(!isReady, 200)
+  const farmSummary =
+    farm ?? farms?.find((candidate) => candidate.id === farmId)
 
   const activeFields =
     activeSelection.kind === 'current' ? fields : simulationFields
@@ -171,80 +187,88 @@ export const FarmDetailPage = () => {
     )
   }
 
-  if (farmLoading || !farm || fieldsLoading || simulationsLoading) {
-    return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle>Indlæser bedrift</CardTitle>
-              <CardDescription>
-                Indlæser bedriftens oplysninger, marker og simuleringer.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </main>
-    )
-  }
+  const loadedFarm = isReady ? farm : undefined
 
   return (
     <SidebarProvider
       className="h-svh overflow-hidden"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
-      <FarmSidebar
-        farm={farm}
-        fields={fields}
-        activeFields={activeFields}
-        simulations={simulations}
-        selection={activeSelection}
-        loadingSelection={simulationFieldsLoading}
-        onSelectionChange={changeSelection}
-        mode={mode}
-        onModeChange={changeMode}
-        onSelectField={selectFieldFromSearch}
-        onOptimize={() => setOptimizeDialogOpen(true)}
-        onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
-        onError={showErrorToast}
-        width={sidebarWidth}
-        onWidthChange={setSidebarWidth}
-      />
+      {loadedFarm ? (
+        <FarmSidebar
+          farm={loadedFarm}
+          fields={fields}
+          activeFields={activeFields}
+          simulations={simulations}
+          selection={activeSelection}
+          loadingSelection={simulationFieldsLoading}
+          onSelectionChange={changeSelection}
+          mode={mode}
+          onModeChange={changeMode}
+          onSelectField={selectFieldFromSearch}
+          onOptimize={() => setOptimizeDialogOpen(true)}
+          onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
+          onError={showErrorToast}
+          width={sidebarWidth}
+          onWidthChange={setSidebarWidth}
+        />
+      ) : (
+        <FarmSidebarSkeleton />
+      )}
       <SidebarInset className="min-w-0 overflow-x-hidden">
         {toast ? (
           <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
             <p role="alert">{toast.message}</p>
           </div>
         ) : null}
-        <FarmInspector
-          farm={farm}
-          fields={activeFields}
-          selection={activeSelection}
-          selectedSimulation={
-            activeSelection.kind === 'simulation'
-              ? simulations.find(
-                  (simulation) => simulation.id === activeSelection.id,
-                )
-              : undefined
-          }
-          fieldsLoading={simulationFieldsLoading}
-          fieldsError={Boolean(simulationFieldsError)}
-          mode={mode}
-          onModeChange={changeMode}
-          view={view}
-          onViewChange={changeView}
-          listSlack={listSlack}
-          onListSlackChange={changeListSlack}
-          selectedFieldId={selectedFieldId}
-          onSelectedFieldChange={setSelectedFieldId}
-          selectedYearIndex={selectedYearIndex}
-          onSelectedYearIndexChange={setSelectedYearIndex}
-          optimizeDialogOpen={optimizeDialogOpen}
-          onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-          yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
-          onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
-          onError={showErrorToast}
-        />
+        {loadedFarm ? (
+          <FarmInspector
+            farm={loadedFarm}
+            fields={activeFields}
+            selection={activeSelection}
+            selectedSimulation={
+              activeSelection.kind === 'simulation'
+                ? simulations.find(
+                    (simulation) => simulation.id === activeSelection.id,
+                  )
+                : undefined
+            }
+            fieldsLoading={simulationFieldsLoading}
+            fieldsError={Boolean(simulationFieldsError)}
+            mode={mode}
+            onModeChange={changeMode}
+            view={view}
+            onViewChange={changeView}
+            listSlack={listSlack}
+            onListSlackChange={changeListSlack}
+            selectedFieldId={selectedFieldId}
+            onSelectedFieldChange={setSelectedFieldId}
+            selectedYearIndex={selectedYearIndex}
+            onSelectedYearIndexChange={setSelectedYearIndex}
+            optimizeDialogOpen={optimizeDialogOpen}
+            onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+            yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
+            onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
+            onError={showErrorToast}
+          />
+        ) : (
+          <>
+            {farmSummary ? (
+              <FarmTopBar
+                farm={farmSummary}
+                viewLabel="Afgrødehistorik"
+                viewIcon={History}
+                onError={showErrorToast}
+              />
+            ) : (
+              <FarmTopBarSkeleton />
+            )}
+            <p role="status" className="sr-only">
+              Indlæser bedriften.
+            </p>
+            {showSkeleton ? <FarmContentSkeleton /> : null}
+          </>
+        )}
       </SidebarInset>
     </SidebarProvider>
   )
