@@ -24,6 +24,7 @@ export const LoginForm = ({
   const { signIn } = useAuth()
   const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unverified, setUnverified] = useState(false)
   const [resendState, setResendState] = useState<ResendState>('idle')
@@ -77,6 +78,8 @@ export const LoginForm = ({
     }
   }
 
+  const credentialsRejected = error !== null && !unverified
+
   return (
     <form className="space-y-6" onSubmit={onSubmit}>
       <div className="space-y-2">
@@ -86,21 +89,36 @@ export const LoginForm = ({
           type="email"
           autoComplete="email"
           autoFocus={!autoFocusPassword && !initialEmail}
+          aria-invalid={credentialsRejected || undefined}
+          className="h-11 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Adgangskode</Label>
-        <Input
-          id="password"
-          type="password"
-          minLength={6}
-          autoComplete="current-password"
-          autoFocus={autoFocusPassword}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            minLength={6}
+            autoComplete="current-password"
+            autoFocus={autoFocusPassword}
+            aria-invalid={credentialsRejected || undefined}
+            className="h-11 pr-16 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? 'Skjul adgangskode' : 'Vis adgangskode'}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((current) => !current)}
+            className="absolute inset-y-0 right-3 my-auto h-7 rounded px-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {showPassword ? 'Skjul' : 'Vis'}
+          </button>
+        </div>
       </div>
       {error ? <AuthNotice tone="error">{error}</AuthNotice> : null}
       {unverified ? (
@@ -130,7 +148,7 @@ export const LoginForm = ({
           ) : null}
         </div>
       ) : null}
-      <Button className="w-full" disabled={isSubmitting}>
+      <Button size="lg" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? 'Logger ind...' : 'Log ind'}
       </Button>
     </form>

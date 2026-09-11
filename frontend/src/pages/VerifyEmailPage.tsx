@@ -24,12 +24,14 @@ const resendVerification = (email: string) =>
   )
 
 const BackToLogin = () => (
-  <Link
-    className="inline-block text-sm underline underline-offset-4"
-    to="/login"
-  >
-    Tilbage til login
-  </Link>
+  <p>
+    <Link
+      className="font-medium text-foreground underline underline-offset-4"
+      to="/login"
+    >
+      Tilbage til login
+    </Link>
+  </p>
 )
 
 type ResendNoticeProps = {
@@ -91,10 +93,12 @@ export const VerifyEmailPage = () => {
         id="verification-email"
         type="email"
         autoComplete="email"
+        className="h-11"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
       />
       <Button
+        size="lg"
         variant="outline"
         className="w-full"
         disabled={resendState === 'sending'}
@@ -151,11 +155,9 @@ export const VerifyEmailPage = () => {
         icon={<AuthIcon icon={CircleAlert} tone="danger" />}
         title="Linket virker ikke længere"
         description="Det er enten brugt allerede eller ældre end 24 timer. Skriv din e-mail, så sender vi et nyt."
+        footer={<BackToLogin />}
       >
-        <div className="space-y-6">
-          {resendForm}
-          <BackToLogin />
-        </div>
+        {resendForm}
       </AuthLayout>
     )
   }
@@ -166,6 +168,7 @@ export const VerifyEmailPage = () => {
         icon={<AuthIcon icon={MailOpen} />}
         title="Tjek din e-mail"
         description={`Vi har sendt et link til ${sentTo}.`}
+        footer={<BackToLogin />}
       >
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground">
@@ -175,6 +178,7 @@ export const VerifyEmailPage = () => {
           </p>
           <form className="space-y-3" onSubmit={resend}>
             <Button
+              size="lg"
               variant="outline"
               className="w-full"
               disabled={resendState === 'sending'}
@@ -186,7 +190,6 @@ export const VerifyEmailPage = () => {
               sentText={`Vi har sendt mailen igen til ${sentTo}.`}
             />
           </form>
-          <BackToLogin />
         </div>
       </AuthLayout>
     )
@@ -197,11 +200,9 @@ export const VerifyEmailPage = () => {
       icon={<AuthIcon icon={Mail} />}
       title="Send bekræftelsesmail igen"
       description="Skriv den e-mail, du oprettede kontoen med, så sender vi et nyt link."
+      footer={<BackToLogin />}
     >
-      <div className="space-y-6">
-        {resendForm}
-        <BackToLogin />
-      </div>
+      {resendForm}
     </AuthLayout>
   )
 }

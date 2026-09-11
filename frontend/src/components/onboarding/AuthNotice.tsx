@@ -13,7 +13,10 @@ export const AuthNotice = ({ tone, children, className }: AuthNoticeProps) =>
   tone === 'error' ? (
     <p
       role="alert"
-      className={cn('flex items-start gap-2 text-sm text-red-700', className)}
+      className={cn(
+        'flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700',
+        className,
+      )}
     >
       <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{children}</span>
