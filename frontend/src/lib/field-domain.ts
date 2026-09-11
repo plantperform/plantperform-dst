@@ -1,10 +1,12 @@
 import type {
+  FieldYearValues,
   Crop,
   FieldMeasures,
   FieldRecord,
   Measure,
   NamedRotation,
   RotationYear,
+  YearlySummaryEntry,
 } from '@/api/types'
 
 export const CROP_VALUES: Crop[] = [
@@ -612,3 +614,60 @@ export const coverCropShadow = (hasUdlaeg: boolean): string | undefined =>
   hasUdlaeg
     ? `inset 0 -3px 0 ${CROP_YEAR_COVER_CROP_BORDER}, inset 0 -4px 0 ${CROP_YEAR_COVER_CROP_SEPARATOR}`
     : undefined
+
+export const summarizeFieldYears = (
+  fields: FieldRecord[],
+  yearsByFieldId: FieldYearValues | undefined,
+  history: boolean,
+): YearlySummaryEntry[] => {
+  const buckets = new Map<number, YearlySummaryEntry>()
+  for (const field of fields) {
+    const years = yearsByFieldId?.[field.id]
+    if (!years) continue
+    const retentionFactor = 1 - (field.retention ?? 0) / 100
+    years.forEach((yearResult, index) => {
+      const year = history
+        ? REAL_HISTORY_START_CALENDAR_YEAR + index
+        : index + 1
+      const bucket = buckets.get(year) ?? {
+        year,
+        totalNLoadKg: 0,
+        totalDb2: 0,
+        totalFen: 0,
+        fieldCount: 0,
+      }
+      bucket.totalNLoadKg +=
+        yearResult.leachingKgNHa * field.areaHa * retentionFactor
+      bucket.totalDb2 += yearResult.dbKrHa * field.areaHa
+      if (yearResult.dbDetail.udbytteenhed === 'FE/ha') {
+        bucket.totalFen +=
+          (Number(yearResult.dbDetail.udbytte) || 0) * field.areaHa
+      }
+      bucket.fieldCount += 1
+      buckets.set(year, bucket)
+    })
+  }
+  return [...buckets.values()].sort((left, right) => left.year - right.year)
+}
+
+export type CatchmentYearlySummary = {
+  kystvandId: number | null
+  entries: YearlySummaryEntry[]
+}
+
+export const summarizeFieldYearsByCatchment = (
+  fields: FieldRecord[],
+  yearsByFieldId: FieldYearValues | undefined,
+  history: boolean,
+): CatchmentYearlySummary[] => {
+  const fieldsByCatchment = new Map<number | null, FieldRecord[]>()
+  for (const field of fields) {
+    const group = fieldsByCatchment.get(field.kystvandId)
+    if (group) group.push(field)
+    else fieldsByCatchment.set(field.kystvandId, [field])
+  }
+  return Array.from(fieldsByCatchment, ([kystvandId, group]) => ({
+    kystvandId,
+    entries: summarizeFieldYears(group, yearsByFieldId, history),
+  }))
+}
