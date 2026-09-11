@@ -493,13 +493,15 @@ export const FarmSidebar = ({
 }
 
 const SidebarBrand = () => (
-  <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center">
-    <img src="/plantperform-mark.svg" alt="" className="size-8 shrink-0" />
+  <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+    <img
+      src="/plant-perform-tab-icon.svg"
+      alt=""
+      className="size-8 shrink-0 rounded-md"
+    />
     <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-      <span className="truncate text-sm font-bold tracking-tight">
-        PlantPerform
-      </span>
-      <span className="truncate text-[11px] text-muted-foreground">
+      <span className="truncate text-sm font-semibold">PlantPerform</span>
+      <span className="truncate text-xs text-muted-foreground">
         Sædskifteplanlægning
       </span>
     </div>
