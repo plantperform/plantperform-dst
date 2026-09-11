@@ -1,5 +1,4 @@
 import {
-  useId,
   useMemo,
   useRef,
   useState,
@@ -12,9 +11,13 @@ import type {
   OptimizeSimulationResponse,
   YearlySummaryEntry,
 } from '@/api/types'
+import { CalendarRange } from 'lucide-react'
+
+import {
+  CHOICE_IDLE_CLASS,
+  CHOICE_SELECTED_CLASS,
+} from '@/components/farm/choice-styles'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
-import { Button } from '@/components/ui/button'
-import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
   computeFieldTotals,
   describeCatchmentsOverQuota,
@@ -38,10 +41,7 @@ import { cn } from '@/lib/utils'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 
-type YearGroup = 'bars' | 'chips'
-
 const COMPACT_VIEWPORT_HEIGHT = 960
-const COLLAPSED_VIEWPORT_HEIGHT = 800
 
 const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
   {
@@ -51,7 +51,8 @@ const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
 
 const describeQuotaDiff = (nLoadKg: number, quotaKgn: number): string => {
   const diff = Math.abs(Math.round(nLoadKg) - Math.round(quotaKgn))
-  return `${formatWholeNumber(diff)} ${nLoadKg > quotaKgn ? 'over' : 'under'} grænsen`
+  const over = nLoadKg > quotaKgn
+  return `(${over ? '+' : '-'}${formatWholeNumber(diff)} ${over ? 'over' : 'under'})`
 }
 
 const buildHeadline = (
@@ -68,7 +69,7 @@ const buildHeadline = (
   const quotaKgn = totals.udledningskvoteMarkKgn
   const headline =
     formatQuotaAmount(totals.nLoad, quotaKgn, formatWholeNumber) +
-    ` - ${describeQuotaDiff(totals.nLoad, quotaKgn)}`
+    ` ${describeQuotaDiff(totals.nLoad, quotaKgn)}`
   return overCatchmentNote && totals.nLoad <= quotaKgn
     ? `${headline} samlet, men ${overCatchmentNote}`
     : headline
@@ -114,7 +115,7 @@ const columnTitle = (
       ? `${column.calendarYear}: ingen historik`
       : `${column.calendarYear}: ingen årstal endnu`
   }
-  return `${column.calendarYear}: DB2 ${formatCompactKr(column.entry.totalDb2)}, udledning ${formatWholeNumber(column.entry.totalNLoadKg)} kg N (${relation?.text})`
+  return `${column.calendarYear}: DB2 ${formatCompactKr(column.entry.totalDb2)}, udledning ${formatWholeNumber(column.entry.totalNLoadKg)} kg N ${relation?.text}`
 }
 
 const buildColumns = (
@@ -209,8 +210,10 @@ const renderYearSummary = ({
     const averageLevel = farmQuotaStatusLevel(totals, catchmentOverview)
     return (
       <>
-        <div className="font-display text-2xl leading-none">Alle år</div>
-        <SummaryValue label="Udledning, gennemsnit pr. år">
+        <div className="font-display text-xl leading-none">
+          {yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'}
+        </div>
+        <SummaryValue label="Udledning gns. pr. år">
           <QuotaStatusIndicator
             level={averageLevel}
             badge
@@ -231,14 +234,18 @@ const renderYearSummary = ({
             {quotaKgn > 0 ? (
               <QuotaStatusIndicator
                 level={overLevel}
-                className={cn(
-                  'flex-nowrap items-baseline',
-                  QUOTA_STATUS_STYLES[overLevel].text,
-                )}
+                className="flex-nowrap items-baseline text-foreground"
               >
-                {overYears.length > 0
-                  ? `${overYears.length} af ${yearCount} år: ${overYears.join(', ')}`
-                  : `Ingen af ${yearCount} år`}
+                {overYears.length > 0 ? (
+                  <>
+                    {overYears.length} af {yearCount} år:{' '}
+                    <span className={QUOTA_STATUS_STYLES.over.text}>
+                      {overYears.join(', ')}
+                    </span>
+                  </>
+                ) : (
+                  `Ingen af ${yearCount} år`
+                )}
               </QuotaStatusIndicator>
             ) : (
               'Ingen grænse'
@@ -297,7 +304,7 @@ const renderYearSummary = ({
             QUOTA_STATUS_STYLES[relation.level].text,
           )}
         >
-          {formatNLoadAmount(column.entry.totalNLoadKg, quotaKgn)} -{' '}
+          {formatNLoadAmount(column.entry.totalNLoadKg, quotaKgn)}{' '}
           {relation.text}
         </QuotaStatusIndicator>
       </SummaryValue>
@@ -312,7 +319,7 @@ const YearSummaryBox = (props: YearSummaryBoxProps) => (
   <div
     role="status"
     aria-live="polite"
-    className="basis-full @3xl:basis-64 @3xl:grow-0 @3xl:shrink-0 @3xl:border-l @3xl:pl-5"
+    className="basis-full self-center @3xl:basis-72 @3xl:grow-0 @3xl:shrink-0 @3xl:border-l @3xl:pl-5"
   >
     <div
       key={props.loading ? 'loading' : (props.column?.index ?? 'all')}
@@ -323,6 +330,13 @@ const YearSummaryBox = (props: YearSummaryBoxProps) => (
   </div>
 )
 
+export type YearSegment = {
+  key: string
+  label: string
+  colorClass: string
+  nLoadKg: number
+}
+
 type YearWalkthroughProps = {
   entries: YearlySummaryEntry[] | undefined
   loading: boolean
@@ -331,11 +345,10 @@ type YearWalkthroughProps = {
   onSelectedYearIndexChange: (index: number | null) => void
   catchmentOverview: CatchmentOverview
   lastRun: OptimizeSimulationResponse | null
-  collapsible?: boolean
-  openOverride?: boolean | null
-  onOpenOverrideChange?: (open: boolean) => void
   history?: boolean
   unavailableMessage?: string | null
+  scopeLabel?: string | null
+  segmentsByYear?: Record<number, YearSegment[]>
 }
 
 export const YearWalkthrough = ({
@@ -346,18 +359,14 @@ export const YearWalkthrough = ({
   onSelectedYearIndexChange,
   catchmentOverview,
   lastRun,
-  collapsible = false,
-  openOverride = null,
-  onOpenOverrideChange,
   history = false,
   unavailableMessage = null,
+  scopeLabel = null,
+  segmentsByYear,
 }: YearWalkthroughProps) => {
+  const heading = scopeLabel ? `Årsgennemgang, ${scopeLabel}` : 'Årsgennemgang'
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
-  const shortViewport = useViewportShorterThan(COLLAPSED_VIEWPORT_HEIGHT)
-  const open = openOverride ?? !shortViewport
-  const bodyId = useId()
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const chipRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [lastSelectedPosition, setLastSelectedPosition] = useState(0)
 
   const columns = useMemo(
@@ -382,39 +391,32 @@ export const YearWalkthrough = ({
     onSelectedYearIndexChange(index)
   }
 
-  const moveTo = (position: number, group: YearGroup) => {
+  const moveTo = (position: number) => {
     const clamped = Math.max(0, Math.min(lastPosition, position))
     selectYear(columns[clamped].index)
-    const refs = group === 'chips' ? chipRefs : cellRefs
-    refs.current[clamped]?.focus()
+    cellRefs.current[clamped]?.focus()
   }
 
-  const handleYearKeyDown = (
-    event: KeyboardEvent<HTMLDivElement>,
-    group: YearGroup,
-  ) => {
+  const handleYearKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (columns.length === 0) return
     switch (event.key) {
       case 'ArrowRight':
       case 'ArrowDown':
         event.preventDefault()
-        moveTo(selectedPosition < 0 ? 0 : selectedPosition + 1, group)
+        moveTo(selectedPosition < 0 ? 0 : selectedPosition + 1)
         break
       case 'ArrowLeft':
       case 'ArrowUp':
         event.preventDefault()
-        moveTo(
-          selectedPosition < 0 ? lastPosition : selectedPosition - 1,
-          group,
-        )
+        moveTo(selectedPosition < 0 ? lastPosition : selectedPosition - 1)
         break
       case 'Home':
         event.preventDefault()
-        moveTo(0, group)
+        moveTo(0)
         break
       case 'End':
         event.preventDefault()
-        moveTo(lastPosition, group)
+        moveTo(lastPosition)
         break
       case 'Escape':
         event.preventDefault()
@@ -450,310 +452,247 @@ export const YearWalkthrough = ({
   const highlightLeftPct = lastSelectedPosition * columnWidthPct
   const hasSelectedColumn = selectedPosition >= 0
   const allYearsSelected = !hasSelectedColumn
-  const collapsed = collapsible && !open
-  const barBoxHeight = compact ? 'h-24' : 'h-28'
-  const barAreaHeight = compact ? 'h-20' : 'h-24'
-  const selectedEntry = loading ? null : (selectedColumn?.entry ?? null)
-  const selectedRelation = selectedEntry
-    ? describeQuotaRelation(selectedEntry.totalNLoadKg, quotaKgn)
-    : null
+  const barBoxHeight = compact ? 'h-24' : 'h-32'
+  const barAreaHeight = compact ? 'h-20' : 'h-28'
+  const periodLabel =
+    columns.length > 0
+      ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
+      : ''
 
   return (
     <section
       aria-label="Gennemgang af årrække"
       aria-busy={loading}
-      className="shrink-0 rounded-lg border bg-card @container"
+      className="min-w-0 flex-1 basis-[36rem] rounded-lg border bg-card @container"
     >
-      <div
-        className={cn(
-          'flex items-center gap-3 px-4 pt-3',
-          collapsed ? 'pb-3' : 'pb-2',
-        )}
-      >
+      <div className="flex items-center gap-3 px-4 pt-3 pb-2">
         <div className="flex shrink-0 items-center gap-3">
-          {collapsible ? (
-            <DisclosureButton
-              open={open}
-              onToggle={() => onOpenOverrideChange?.(!open)}
-              aria-controls={bodyId}
-              label="Årsgennemgang"
-            />
-          ) : (
-            <h2 className="text-sm font-medium">Årsgennemgang</h2>
-          )}
+          <h2 className="text-sm font-medium">{heading}</h2>
         </div>
-        {collapsed ? (
-          <>
-            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-full bg-muted p-0.5">
-              <button
-                type="button"
-                aria-pressed={allYearsSelected}
-                onClick={() => selectYear(null)}
-                className={cn(
-                  'flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2 text-xs tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  allYearsSelected
-                    ? 'bg-card font-semibold text-foreground shadow-sm'
-                    : 'font-medium text-muted-foreground hover:bg-background/80 hover:text-foreground',
-                )}
-              >
-                Alle år
-              </button>
-              <div
-                role="radiogroup"
-                aria-label="Vælg år"
-                onKeyDown={(event) => handleYearKeyDown(event, 'chips')}
-                className="flex items-center gap-0.5"
-              >
-                {columns.map((column, position) => {
-                  const isSelected = selectedYearIndex === column.index
-                  const relation = column.entry
-                    ? describeQuotaRelation(column.entry.totalNLoadKg, quotaKgn)
-                    : null
-                  const title = columnTitle(column, relation, loading, history)
-                  const tabIndex =
-                    isSelected || (selectedPosition < 0 && position === 0)
-                      ? 0
-                      : -1
-                  return (
-                    <button
-                      key={column.index}
-                      ref={(element) => {
-                        chipRefs.current[position] = element
-                      }}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      aria-label={title}
-                      title={title}
-                      tabIndex={tabIndex}
-                      onClick={() =>
-                        selectYear(isSelected ? null : column.index)
-                      }
-                      className={cn(
-                        'flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2 text-xs tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        isSelected
-                          ? 'bg-card font-semibold text-foreground shadow-sm'
-                          : 'font-medium text-muted-foreground hover:bg-background/80 hover:text-foreground',
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'size-1.5 shrink-0 rounded-full',
-                          loading
-                            ? 'bg-muted-foreground/20 motion-safe:animate-pulse'
-                            : QUOTA_STATUS_STYLES[
-                                relation?.level ?? 'uncalculated'
-                              ].dot,
-                        )}
-                      />
-                      {column.calendarYear}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            {selectedEntry && selectedRelation ? (
-              <div className="ml-auto hidden shrink-0 items-center gap-3 text-xs tabular-nums @2xl:flex">
-                <span className="text-muted-foreground">
-                  DB2{' '}
-                  <span className="font-medium text-foreground">
-                    {formatCompactKr(selectedEntry.totalDb2)}
-                  </span>
-                </span>
-                <QuotaStatusIndicator
-                  level={selectedRelation.level}
-                  className={cn(
-                    'flex-nowrap items-baseline',
-                    QUOTA_STATUS_STYLES[selectedRelation.level].text,
-                  )}
-                >
-                  {formatNLoadAmount(selectedEntry.totalNLoadKg, quotaKgn)} -{' '}
-                  {selectedRelation.text}
-                </QuotaStatusIndicator>
-              </div>
-            ) : null}
-          </>
-        ) : null}
       </div>
 
-      <div
-        id={bodyId}
-        hidden={collapsed}
-        className="flex flex-wrap gap-6 px-4 pb-4 @container"
-      >
-        <div className="flex shrink-0 items-center self-center">
-          <Button
-            variant={allYearsSelected ? 'secondary' : 'outline'}
-            size="xs"
-            aria-pressed={allYearsSelected}
-            onClick={() => selectYear(null)}
-          >
-            Alle år
-          </Button>
-        </div>
+      <div className="flex flex-wrap gap-6 px-4 pb-4 @container">
         <div className="min-w-0 flex-1 basis-96">
           <div
             role="radiogroup"
             aria-label="Vælg år"
             className="p-0.5"
-            onKeyDown={(event) => handleYearKeyDown(event, 'bars')}
+            onKeyDown={handleYearKeyDown}
           >
             {quotaKgn > 0 ? (
               <span className="sr-only">
                 Grænse {formatWholeNumber(quotaKgn)} kg N pr. år
               </span>
             ) : null}
-            <div className="relative">
-              <div
+            <div className="flex">
+              <button
+                type="button"
+                aria-pressed={allYearsSelected}
+                title="Vis alle år samlet"
+                onClick={() => selectYear(null)}
                 className={cn(
-                  'absolute inset-y-0 z-0 rounded-lg bg-muted motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-out',
-                  allYearsSelected && 'opacity-0',
+                  'mr-2 flex w-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border py-2 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  allYearsSelected ? CHOICE_SELECTED_CLASS : CHOICE_IDLE_CLASS,
                 )}
-                style={{
-                  left: `${highlightLeftPct}%`,
-                  width: `${columnWidthPct}%`,
-                }}
-                aria-hidden="true"
-              />
-              {quotaPct !== null ? (
+              >
+                <CalendarRange className="size-6" aria-hidden="true" />
+                <span className="text-xs font-semibold @sm:text-sm">
+                  Alle år
+                </span>
+                <span className="text-xs tabular-nums">{periodLabel}</span>
+              </button>
+              <div className="relative min-w-0 flex-1">
                 <div
                   className={cn(
-                    'pointer-events-none absolute inset-x-0 top-4 z-20 motion-safe:animate-rise-in',
-                    barAreaHeight,
+                    'absolute inset-y-0 z-0 rounded-lg bg-muted motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-out',
+                    allYearsSelected && 'opacity-0',
                   )}
+                  style={{
+                    left: `${highlightLeftPct}%`,
+                    width: `${columnWidthPct}%`,
+                  }}
                   aria-hidden="true"
-                >
+                />
+                {quotaPct !== null ? (
                   <div
-                    className="absolute inset-x-0 border-t border-dashed border-foreground/40 motion-safe:transition-[bottom] motion-safe:duration-300"
-                    style={{ bottom: `${quotaPct}%` }}
+                    className={cn(
+                      'pointer-events-none absolute inset-x-0 top-4 z-20 motion-safe:animate-rise-in',
+                      barAreaHeight,
+                    )}
+                    aria-hidden="true"
                   >
-                    <span className="absolute right-0 bottom-full mb-0.5 rounded bg-card/80 px-1 text-xs leading-tight text-muted-foreground">
-                      grænse {formatWholeNumber(quotaKgn)} kg N pr. år
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex">
-                {columns.map((column, position) => {
-                  const isSelected = selectedYearIndex === column.index
-                  const entry = column.entry
-                  const relation = entry
-                    ? describeQuotaRelation(entry.totalNLoadKg, quotaKgn)
-                    : null
-                  const nLoadPct = entry
-                    ? barHeightPct(entry.totalNLoadKg, nLoadScale)
-                    : 0
-                  const barPct = loading
-                    ? PLACEHOLDER_BAR_HEIGHTS[
-                        position % PLACEHOLDER_BAR_HEIGHTS.length
-                      ]
-                    : nLoadPct
-                  const barColor =
-                    QUOTA_STATUS_STYLES[relation?.level ?? 'uncalculated'].dot
-                  const title = columnTitle(column, relation, loading, history)
-                  const tabIndex =
-                    isSelected || (selectedPosition < 0 && position === 0)
-                      ? 0
-                      : -1
-                  const dimmed = hasSelectedColumn && !isSelected
-                  return (
-                    <button
-                      key={column.index}
-                      ref={(element) => {
-                        cellRefs.current[position] = element
-                      }}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      aria-label={title}
-                      title={title}
-                      tabIndex={tabIndex}
-                      onClick={() =>
-                        selectYear(isSelected ? null : column.index)
-                      }
-                      className="group relative z-10 flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-lg pb-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    <div
+                      className="absolute inset-x-0 border-t border-dashed border-foreground/40 motion-safe:transition-[bottom] motion-safe:duration-300"
+                      style={{ bottom: `${quotaPct}%` }}
                     >
-                      <span
-                        className={cn(
-                          'flex w-full items-end justify-center',
-                          barBoxHeight,
-                        )}
-                        aria-hidden="true"
+                      <span className="absolute right-0 bottom-full mb-0.5 rounded border bg-card px-1.5 text-xs leading-tight font-medium text-foreground/80">
+                        Kvotegrænse {formatWholeNumber(quotaKgn)} kg N
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex gap-1">
+                  {columns.map((column, position) => {
+                    const isSelected = selectedYearIndex === column.index
+                    const entry = column.entry
+                    const relation = entry
+                      ? describeQuotaRelation(entry.totalNLoadKg, quotaKgn)
+                      : null
+                    const nLoadPct = entry
+                      ? barHeightPct(entry.totalNLoadKg, nLoadScale)
+                      : 0
+                    const barPct = loading
+                      ? PLACEHOLDER_BAR_HEIGHTS[
+                          position % PLACEHOLDER_BAR_HEIGHTS.length
+                        ]
+                      : nLoadPct
+                    const barColor =
+                      QUOTA_STATUS_STYLES[relation?.level ?? 'uncalculated'].dot
+                    const segments = entry
+                      ? (segmentsByYear?.[entry.year] ?? []).filter(
+                          (segment) => segment.nLoadKg > 0,
+                        )
+                      : []
+                    const segmentTotal = segments.reduce(
+                      (sum, segment) => sum + segment.nLoadKg,
+                      0,
+                    )
+                    const stacked =
+                      !loading && segments.length > 1 && segmentTotal > 0
+                    const title =
+                      columnTitle(column, relation, loading, history) +
+                      (stacked
+                        ? `. Pr. opland: ${segments
+                            .map(
+                              (segment) =>
+                                `${segment.label} ${formatWholeNumber(segment.nLoadKg)}`,
+                            )
+                            .join(', ')}`
+                        : '')
+                    const tabIndex =
+                      isSelected || (selectedPosition < 0 && position === 0)
+                        ? 0
+                        : -1
+                    const dimmed = hasSelectedColumn && !isSelected
+                    return (
+                      <button
+                        key={column.index}
+                        ref={(element) => {
+                          cellRefs.current[position] = element
+                        }}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={title}
+                        title={title}
+                        tabIndex={tabIndex}
+                        onClick={() =>
+                          selectYear(isSelected ? null : column.index)
+                        }
+                        className="group relative z-10 flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-lg pb-1.5 transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
                       >
                         <span
                           className={cn(
-                            'relative flex items-end justify-center',
-                            barAreaHeight,
+                            'flex w-full items-end justify-center',
+                            barBoxHeight,
                           )}
+                          aria-hidden="true"
                         >
-                          {entry ? (
-                            <span
-                              className={cn(
-                                'absolute left-1/2 mb-0.5 -translate-x-1/2 rounded bg-card/80 px-0.5 text-xs leading-tight whitespace-nowrap tabular-nums motion-safe:animate-rise-in motion-safe:transition-[color,bottom] motion-safe:duration-300',
-                                isSelected
-                                  ? 'font-medium text-foreground'
-                                  : 'text-muted-foreground',
-                              )}
-                              style={{
-                                bottom: `${nLoadPct}%`,
-                                animationDelay: '200ms',
-                              }}
-                            >
-                              {formatWholeNumber(entry.totalNLoadKg)}
-                            </span>
-                          ) : null}
                           <span
                             className={cn(
-                              'w-5 rounded-t-xs motion-safe:transition-[height,opacity,background-color] motion-safe:duration-300',
-                              loading
-                                ? 'bg-muted-foreground/20 motion-safe:animate-pulse'
-                                : barColor,
-                              !loading && nLoadPct > 0 && 'min-h-0.5',
-                              dimmed && 'opacity-60',
+                              'relative flex w-full items-end justify-center',
+                              barAreaHeight,
                             )}
-                            style={{ height: `${barPct}%` }}
-                          />
+                          >
+                            {entry ? (
+                              <span
+                                className={cn(
+                                  'absolute left-1/2 mb-0.5 -translate-x-1/2 rounded bg-card/80 px-0.5 text-xs leading-tight whitespace-nowrap tabular-nums motion-safe:animate-rise-in motion-safe:transition-[color,bottom] motion-safe:duration-300',
+                                  isSelected
+                                    ? 'font-medium text-foreground'
+                                    : relation?.level === 'over'
+                                      ? 'font-medium text-red-700'
+                                      : 'text-muted-foreground',
+                                )}
+                                style={{
+                                  bottom: `${nLoadPct}%`,
+                                  animationDelay: '200ms',
+                                }}
+                              >
+                                {formatWholeNumber(entry.totalNLoadKg)}
+                              </span>
+                            ) : null}
+                            <span
+                              className={cn(
+                                'flex w-2/5 max-w-24 min-w-8 flex-col-reverse overflow-hidden rounded-t-xs motion-safe:transition-[height,opacity,background-color] motion-safe:duration-300',
+                                loading
+                                  ? 'bg-muted-foreground/20 motion-safe:animate-pulse'
+                                  : stacked
+                                    ? 'bg-muted'
+                                    : barColor,
+                                !loading && nLoadPct > 0 && 'min-h-0.5',
+                                dimmed && 'opacity-60',
+                              )}
+                              style={{ height: `${barPct}%` }}
+                            >
+                              {stacked
+                                ? segments.map((segment) => (
+                                    <span
+                                      key={segment.key}
+                                      className={cn(
+                                        'w-full',
+                                        segment.colorClass,
+                                      )}
+                                      style={{
+                                        height: `${(segment.nLoadKg / segmentTotal) * 100}%`,
+                                      }}
+                                    />
+                                  ))
+                                : null}
+                            </span>
+                          </span>
                         </span>
-                      </span>
-                      <span
-                        className={cn(
-                          'pt-1 text-xs tabular-nums motion-safe:transition-colors motion-safe:duration-300 @sm:text-sm',
-                          isSelected
-                            ? 'font-semibold text-foreground'
-                            : 'text-muted-foreground',
-                        )}
-                        aria-hidden="true"
-                      >
-                        {column.calendarYear}
-                      </span>
-                      <span
-                        className={cn(
-                          'text-xs tabular-nums motion-safe:transition-colors motion-safe:duration-300',
-                          isSelected
-                            ? 'text-foreground'
-                            : 'text-muted-foreground',
-                        )}
-                        aria-hidden="true"
-                      >
-                        {loading ? (
-                          <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
-                        ) : entry ? (
-                          formatCompactKr(entry.totalDb2)
-                        ) : (
-                          '-'
-                        )}
-                      </span>
-                      <span
-                        className={cn(
-                          'mt-1 size-1.5 rounded-full bg-primary motion-safe:transition-opacity motion-safe:duration-300',
-                          isSelected ? 'opacity-100' : 'opacity-0',
-                        )}
-                        aria-hidden="true"
-                      />
-                    </button>
-                  )
-                })}
+                        <span
+                          className={cn(
+                            'pt-1 text-xs tabular-nums motion-safe:transition-colors motion-safe:duration-300 @sm:text-sm',
+                            isSelected
+                              ? 'font-semibold text-foreground'
+                              : relation?.level === 'over'
+                                ? 'font-medium text-red-700'
+                                : 'text-muted-foreground',
+                          )}
+                          aria-hidden="true"
+                        >
+                          {column.calendarYear}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xs tabular-nums motion-safe:transition-colors motion-safe:duration-300',
+                            isSelected
+                              ? 'text-foreground'
+                              : 'text-muted-foreground',
+                          )}
+                          aria-hidden="true"
+                        >
+                          {loading ? (
+                            <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
+                          ) : entry ? (
+                            `DB2 ${formatCompactKr(entry.totalDb2)}`
+                          ) : (
+                            '-'
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            'mt-1 size-1.5 rounded-full bg-primary motion-safe:transition-opacity motion-safe:duration-300',
+                            isSelected ? 'opacity-100' : 'opacity-0',
+                          )}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>

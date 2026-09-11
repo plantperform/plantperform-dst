@@ -112,21 +112,3 @@ export const storeColumnVisibility = (
     return
   }
 }
-
-const GROUP_BY_CATCHMENT_STORAGE_KEY = 'plantperform.farmGroupByCatchment'
-
-export const readStoredGroupByCatchment = (): boolean => {
-  try {
-    return window.localStorage.getItem(GROUP_BY_CATCHMENT_STORAGE_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export const storeGroupByCatchment = (value: boolean) => {
-  try {
-    window.localStorage.setItem(GROUP_BY_CATCHMENT_STORAGE_KEY, value ? '1' : '0')
-  } catch {
-    return
-  }
-}

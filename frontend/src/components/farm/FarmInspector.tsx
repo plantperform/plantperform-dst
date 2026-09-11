@@ -15,7 +15,7 @@ import {
   simulationYearlySummaryKey,
   useFarmHistoricalYearlySummary,
   useScenarioAfgrodeKoder,
-  useSimulationFieldYearValues,
+  useFieldYearValues,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
@@ -30,18 +30,18 @@ import type {
   OptimizeSimulationResponse,
   Simulation,
 } from '@/api/types'
-import { CatchmentChips } from '@/components/farm/CatchmentChips'
+import { CatchmentPicker } from '@/components/farm/CatchmentPicker'
 import {
   catchmentKey,
+  fieldInCatchment,
+  useCatchmentColor,
   useCatchmentLabel,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
-  readStoredGroupByCatchment,
   resolveEffectiveFieldsSort,
-  storeGroupByCatchment,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
@@ -56,7 +56,10 @@ import type {
   FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
-import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
+import {
+  YearWalkthrough,
+  type YearSegment,
+} from '@/components/farm/YearWalkthrough'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -77,6 +80,8 @@ import {
   countCatchmentsOverQuota,
   orderFieldsByCatchment,
   ROTATION_CALENDAR_YEARS,
+  summarizeFieldYears,
+  summarizeFieldYearsByCatchment,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
 import { useEscapeKey } from '@/hooks/use-escape-key'
@@ -171,13 +176,6 @@ export const FarmInspector = ({
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
-  const [groupByCatchment, setGroupByCatchment] = useState(
-    readStoredGroupByCatchment,
-  )
-  const changeGroupByCatchment = (value: boolean) => {
-    setGroupByCatchment(value)
-    storeGroupByCatchment(value)
-  }
   const [splitAvailable, setSplitAvailable] = useState(true)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
     null,
@@ -187,9 +185,6 @@ export const FarmInspector = ({
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
   const [highlightedCatchmentKey, setHighlightedCatchmentKey] = useState<
     string | null
-  >(null)
-  const [walkthroughOpenOverride, setWalkthroughOpenOverride] = useState<
-    boolean | null
   >(null)
   const [zoomRequest, setZoomRequest] = useState<{
     fieldId: string
@@ -255,25 +250,33 @@ export const FarmInspector = ({
 
   const effectiveHighlightedCatchmentKey = useMemo(() => {
     if (isRules || highlightedCatchmentKey === null) return null
-    const stillPresent = fields.some(
-      (field) => catchmentKey(field.kystvandId) === highlightedCatchmentKey,
+    const stillPresent = fields.some((field) =>
+      fieldInCatchment(field, highlightedCatchmentKey),
     )
     return stillPresent ? highlightedCatchmentKey : null
   }, [fields, isRules, highlightedCatchmentKey])
 
   const catchmentLabel = useCatchmentLabel(farm.id, fields)
+  const highlightedFields = useMemo(
+    () =>
+      effectiveHighlightedCatchmentKey === null
+        ? fields
+        : fields.filter((field) =>
+            fieldInCatchment(field, effectiveHighlightedCatchmentKey),
+          ),
+    [fields, effectiveHighlightedCatchmentKey],
+  )
   const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
   const sortedFields = useMemo(() => {
     const sorted = [...fields].sort((left, right) =>
       compareFields(left, right, effectiveSort, catchmentLabel),
     )
-    const ordered =
-      groupByCatchment && !isRules
-        ? orderFieldsByCatchment(sorted, catchmentLabel)
-        : sorted
+    const ordered = isRules
+      ? sorted
+      : orderFieldsByCatchment(sorted, catchmentLabel)
     if (effectiveHighlightedCatchmentKey === null) return ordered
     const inCatchment = (field: FieldRecord) =>
-      catchmentKey(field.kystvandId) === effectiveHighlightedCatchmentKey
+      fieldInCatchment(field, effectiveHighlightedCatchmentKey)
     return [
       ...ordered.filter(inCatchment),
       ...ordered.filter((field) => !inCatchment(field)),
@@ -282,7 +285,6 @@ export const FarmInspector = ({
     fields,
     effectiveSort,
     catchmentLabel,
-    groupByCatchment,
     isRules,
     effectiveHighlightedCatchmentKey,
   ])
@@ -312,15 +314,12 @@ export const FarmInspector = ({
   const effectiveSelectedYearIndex = showYearWalkthrough
     ? selectedYearIndex
     : null
-  const yearValuesEnabled =
-    effectiveSelectedYearIndex !== null &&
-    (effectiveView !== 'list' || selectedFieldId !== null)
   const { data: yearValues, isLoading: yearValuesLoading } =
-    useSimulationFieldYearValues(
+    useFieldYearValues(
       farm.id,
       selectedSimulation?.id,
       fields,
-      yearValuesEnabled,
+      showYearWalkthrough,
     )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,
@@ -334,6 +333,53 @@ export const FarmInspector = ({
     isLoading: yearlySummaryLoading,
     error: yearlySummaryError,
   } = isSimulationView ? simulationSummary : historicalSummary
+  const isCatchmentScoped =
+    showYearWalkthrough && effectiveHighlightedCatchmentKey !== null
+  const catchmentSummary = useMemo(
+    () =>
+      isCatchmentScoped
+        ? summarizeFieldYears(highlightedFields, yearValues, !isSimulationView)
+        : undefined,
+    [isCatchmentScoped, highlightedFields, yearValues, isSimulationView],
+  )
+  const catchmentColor = useCatchmentColor(farm.id, fields)
+  const segmentsByYear = useMemo(() => {
+    if (isCatchmentScoped) return undefined
+    const byYear: Record<number, YearSegment[]> = {}
+    for (const group of summarizeFieldYearsByCatchment(
+      fields,
+      yearValues,
+      !isSimulationView,
+    )) {
+      for (const entry of group.entries) {
+        const segments = byYear[entry.year] ?? (byYear[entry.year] = [])
+        segments.push({
+          key: catchmentKey(group.kystvandId),
+          label: catchmentLabel(group.kystvandId),
+          colorClass: catchmentColor(group.kystvandId),
+          nLoadKg: entry.totalNLoadKg,
+        })
+      }
+    }
+    for (const segments of Object.values(byYear)) {
+      segments.sort((left, right) => left.label.localeCompare(right.label, 'da'))
+    }
+    return byYear
+  }, [
+    isCatchmentScoped,
+    fields,
+    yearValues,
+    isSimulationView,
+    catchmentLabel,
+    catchmentColor,
+  ])
+  const scopedCatchmentOverview = useMemo(
+    () => countCatchmentsOverQuota(highlightedFields, isSimulationView),
+    [highlightedFields, isSimulationView],
+  )
+  const scopeLabel = isCatchmentScoped
+    ? catchmentLabel(highlightedFields[0]?.kystvandId ?? null)
+    : null
 
   const openRules = () => {
     onOptimizeDialogOpenChange(false)
@@ -418,34 +464,40 @@ export const FarmInspector = ({
           )}
         >
           {showYearWalkthrough ? (
+            <div className="flex flex-wrap gap-2">
+              {!fieldsLoading && fields.length > 0 ? (
+                <CatchmentPicker
+                  farmId={farm.id}
+                  fields={fields}
+                  isSimulationView={isSimulationView}
+                  highlightedKey={effectiveHighlightedCatchmentKey}
+                  onHighlightedKeyChange={setHighlightedCatchmentKey}
+                />
+              ) : null}
             <YearWalkthrough
               key={selectionKey}
-              entries={yearlySummary}
-              loading={fieldsLoading || yearlySummaryLoading}
-              fields={fields}
+              entries={catchmentSummary ?? yearlySummary}
+              loading={
+                fieldsLoading ||
+                (isCatchmentScoped ? yearValuesLoading : yearlySummaryLoading)
+              }
+              fields={highlightedFields}
+              scopeLabel={scopeLabel}
+              segmentsByYear={segmentsByYear}
               selectedYearIndex={selectedYearIndex}
               onSelectedYearIndexChange={onSelectedYearIndexChange}
-              catchmentOverview={catchmentOverview}
+              catchmentOverview={
+                isCatchmentScoped ? scopedCatchmentOverview : catchmentOverview
+              }
               lastRun={lastRun?.response ?? null}
-              collapsible
-              openOverride={walkthroughOpenOverride}
-              onOpenOverrideChange={setWalkthroughOpenOverride}
               history={!isSimulationView}
               unavailableMessage={
-                yearlySummaryError
+                yearlySummaryError && !isCatchmentScoped
                   ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
                   : null
               }
             />
-          ) : null}
-          {!isRules && !fieldsLoading && !fieldsError && fields.length > 0 ? (
-            <CatchmentChips
-              farmId={farm.id}
-              fields={fields}
-              isSimulationView={isSimulationView}
-              highlightedKey={effectiveHighlightedCatchmentKey}
-              onHighlightedKeyChange={setHighlightedCatchmentKey}
-            />
+            </div>
           ) : null}
           {fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
@@ -492,8 +544,8 @@ export const FarmInspector = ({
                     onHoveredFieldChange={setHoveredFieldId}
                     highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                     catchmentLabel={catchmentLabel}
-                    groupByCatchment={groupByCatchment}
-                    onGroupByCatchmentChange={changeGroupByCatchment}
+                    catchmentColor={catchmentColor}
+                    onHighlightedCatchmentKeyChange={setHighlightedCatchmentKey}
                     onZoomToField={
                       effectiveView === 'list' ? undefined : requestZoomToField
                     }
@@ -516,7 +568,7 @@ export const FarmInspector = ({
                     isSimulationView ? effectiveSelectedYearIndex : null
                   }
                   yearValues={yearValues}
-                  yearValuesLoading={yearValuesEnabled && yearValuesLoading}
+                  yearValuesLoading={yearValuesLoading}
                   selectedFieldId={selectedFieldId}
                   onSelectedFieldChange={selectFieldFromMap}
                   hoveredFieldId={hoveredFieldId}

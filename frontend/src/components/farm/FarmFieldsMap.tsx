@@ -22,10 +22,10 @@ import {
   farmKey,
   registryFieldsBulkKey,
   useFarmFields,
-  type SimulationFieldYearValues,
 } from '@/api/hooks'
 import { createFields } from '@/api/mutations'
 import type {
+  FieldYearValues,
   CreateFieldInput,
   Farm,
   FieldRecord,
@@ -33,7 +33,10 @@ import type {
   RegistryField,
   RegistryFieldSummary,
 } from '@/api/types'
-import { catchmentKey } from '@/components/farm/catchment-options'
+import {
+  catchmentKey,
+  fieldInCatchment,
+} from '@/components/farm/catchment-options'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -152,7 +155,7 @@ type FarmFieldsMapProps = {
   readOnly?: boolean
   mode?: FarmInspectorMode
   selectedYearIndex?: number | null
-  yearValues?: SimulationFieldYearValues
+  yearValues?: FieldYearValues
   yearValuesLoading?: boolean
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
@@ -580,9 +583,7 @@ export const FarmFieldsMap = ({
     }
 
     const bounds = getFieldsBounds(
-      fields.filter(
-        (field) => catchmentKey(field.kystvandId) === highlightedCatchmentKey,
-      ),
+      fields.filter((field) => fieldInCatchment(field, highlightedCatchmentKey)),
     )
     if (!bounds) return
 
