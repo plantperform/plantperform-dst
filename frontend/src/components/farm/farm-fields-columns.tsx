@@ -70,6 +70,7 @@ const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => 
 const QUOTA_PLACEHOLDER_LABELS: Partial<Record<QuotaStatusLevel, string>> = {
   uncalculated: 'Ikke beregnet',
   noData: 'Ingen data',
+  excluded: 'Indgår ikke i beregningen',
 }
 
 const renderQuotaPlaceholder = (level: QuotaStatusLevel) => {
@@ -718,7 +719,7 @@ export const buildFarmFieldsColumns = ({
       accessorKey: 'udledningskvoteMarkKgn',
       header: ({ column }) => (
         <SortableColumnHeaderContent
-          label="Kvote"
+          label="Kvotebidrag"
           unit="kg N"
           align="right"
           column={column}
@@ -726,6 +727,9 @@ export const buildFarmFieldsColumns = ({
       ),
       cell: ({ row }) => {
         const field = row.original
+        if (!field.kvotegivende) {
+          return <span className="text-muted-foreground">Ikke kvotegivende areal</span>
+        }
         if (field.udledningskvoteMarkKgn === 0) {
           return <span className="text-muted-foreground">Ingen data</span>
         }

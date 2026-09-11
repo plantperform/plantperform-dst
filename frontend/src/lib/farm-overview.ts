@@ -14,6 +14,7 @@ export const FARM_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
   uncalculated: 'Ikke beregnet',
   noData: 'Ingen kvote',
   partial: 'Delvist beregnet',
+  excluded: 'Ikke kvotegivende',
 }
 
 export type FarmOverview = {

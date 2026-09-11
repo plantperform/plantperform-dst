@@ -179,6 +179,11 @@ def get_farm_udledning_per_kystvandopland(
     kystvandopland, never across oplande (see KystvandoplandUdledning). Marker
     without imk_id, such as manually drawn marks, match no registry_field row
     and are therefore excluded from all groups, as in the previous flat total.
+
+    A mark that is not kvotegivende (registry_field.kvotegivende = false)
+    contributes neither kvote nor udledning here — such an area does not
+    count toward the bedrift's regulatory quota comparison at all, even
+    though NLES5 still computes a real leaching figure for it elsewhere.
     """
     with SessionLocal() as session:
         if not _farm_exists(session, farm_id, email):
@@ -191,7 +196,10 @@ def get_farm_udledning_per_kystvandopland(
                     rf.kystvand_id,
                     rf.kystvand_navn,
                     COALESCE(SUM(rf.udledningskvote_mark_kgn), 0) AS kvote,
-                    COALESCE(SUM((f.data->>'n_load')::float), 0) AS udledning
+                    COALESCE(
+                        SUM((f.data->>'n_load')::float) FILTER (WHERE rf.kvotegivende),
+                        0
+                    ) AS udledning
                 FROM field f
                 JOIN registry_field rf ON rf.imk_id = (f.data->>'imk_id')::bigint
                 WHERE f.farm_id = :farm_id AND NOT rf.banned
@@ -395,9 +403,13 @@ def get_farm_historical_yearly_summary(farm_id: str, email: str) -> list[dict] |
                 start_year + index,
                 {"n_load": 0.0, "db2": 0.0, "fen": 0.0, "count": 0},
             )
-            bucket["n_load"] += (
-                year_result.leaching_kg_n_ha * field.area_ha * retention_factor
-            )
+            # A non-kvotegivende mark does not count toward the udledning
+            # comparison at all - it does not draw down a quota, so its real
+            # leaching figure must not be summed into it either.
+            if context is not None and context.kvotegivende:
+                bucket["n_load"] += (
+                    year_result.leaching_kg_n_ha * field.area_ha * retention_factor
+                )
             bucket["db2"] += year_result.db_kr_ha * field.area_ha
             if year_result.db_detail.get("udbytteenhed") == "FE/ha":
                 bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha
