@@ -6,6 +6,35 @@ forward (some commits may still be pulled from `new-engine`, but it will not
 be developed further). This handoff is against `dev`, not `master` — `dev`
 is the current integration branch; `master`'s history looks stale/unrelated.
 
+## Map colours DB2/udvaskning/udledning per hectare, not per mark
+
+**What it does.** The map's DB2, Udvaskning and Udledning colour scales now
+reflect a mark's actual per-hectare performance instead of its raw total, so
+a small high-performing mark and a large one look the way their legend
+("kr./ha", "kg N/ha") already claimed.
+
+**Why.** The user spotted DB2 colouring by total, not kr/ha. Checking
+`map-coloring.ts` showed the same bug in all three numeric scales: bins are
+calibrated for per-hectare ranges (e.g. "2.000-5.000 kr./ha") but
+`geo.ts` fed them `field.db2`/`leaching`/`nLoad` directly - the mark's
+totals. A large mark always landed in the best DB2 bin and the worst
+udledning bin regardless of actual intensity; a small mark the opposite.
+
+**Where.** `frontend/src/lib/geo.ts` (`fieldsToFeatureCollection`) now
+divides by `field.areaHa` when building the three GeoJSON properties the map
+colours by. `field.db2`/`leaching`/`nLoad` themselves are untouched and stay
+totals everywhere else (table, mark panel, sidebar) - only the map-specific
+copies changed.
+
+**Status.** Solid. Verified live: the map now shows a genuine mix of
+colours across marks of different sizes rather than colour correlating with
+polygon size.
+
+**Shortcuts.** None.
+
+**Contract changes.** None - GeoJSON properties are internal to the map
+layer, not part of any API response.
+
 ## Årsgennemgang year selection actually works now
 
 **What it does.** Clicking a year in Afgrødehistorik's Årsgennemgang (the
