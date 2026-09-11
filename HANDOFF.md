@@ -6,6 +6,32 @@ forward (some commits may still be pulled from `new-engine`, but it will not
 be developed further). This handoff is against `dev`, not `master` — `dev`
 is the current integration branch; `master`'s history looks stale/unrelated.
 
+## Årsgennemgang year selection actually works now
+
+**What it does.** Clicking a year in Afgrødehistorik's Årsgennemgang (the
+bar chart at the top of the page) now actually selects that year and shows
+each mark's afgrøde and udledning for it, instead of silently doing nothing.
+
+**Why.** The user reported the year walkthrough "didn't work" - clicking a
+year visibly did nothing. A guard in `FarmDetailPage.tsx`, added when the
+walkthrough was built for simulations only, cleared the selected year on
+every render whenever the view was Afgrødehistorik (`kind: 'current'`) -
+which is also the ordinary state while browsing Afgrødehistorik itself. So
+selecting a year there set the index, and the very next render's guard
+immediately reset it to null before anything could show.
+
+**Where.** `frontend/src/pages/FarmDetailPage.tsx` (~line 94). The guard now
+only fires for the case it was actually meant for: `selection` still says
+'simulation' but `activeSelection` fell back to 'current' because that
+simulation was deleted.
+
+**Status.** Solid. Verified live: selecting 2020, then 2023, correctly
+updates the table to that year's afgrøde per mark.
+
+**Shortcuts.** None.
+
+**Contract changes.** None.
+
 ## Ikke-kvotegivende marker no longer inflate "udledning mod kvote"
 
 **What it does.** A mark that is not kvotegivende (per Bilag 1's
