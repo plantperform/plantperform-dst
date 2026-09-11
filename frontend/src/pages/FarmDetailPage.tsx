@@ -91,7 +91,17 @@ export const FarmDetailPage = () => {
     setSelectedFieldId(null)
   }
 
-  if (selectedYearIndex !== null && activeSelection.kind === 'current') {
+  // The selected simulation was deleted - activeSelection fell back to
+  // 'current' while `selection` itself still says 'simulation'. Drop the
+  // stale year index from that vanished simulation. Do NOT clear it just
+  // because activeSelection.kind is 'current' on its own - that is also
+  // the ordinary state while browsing Afgrødehistorik's own Årsgennemgang,
+  // and clearing it there undid every year click before it could render.
+  if (
+    selectedYearIndex !== null &&
+    selection.kind === 'simulation' &&
+    activeSelection.kind === 'current'
+  ) {
     setSelectedYearIndex(null)
   }
 
