@@ -147,6 +147,10 @@ body {
   bottom: 1.5rem;
 }
 
+.map-controls-inset .maplibregl-ctrl-top-right {
+  top: 2.75rem;
+}
+
 @keyframes rise-in {
   from {
     transform: translateY(0.5rem);

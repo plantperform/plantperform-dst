@@ -199,6 +199,15 @@ type HoveredMars = {
   arealHa: number | null
 }
 
+const MAP_CONTROLS_INSET = 44
+
+const withTopInset = (padding: number) => ({
+  top: padding + MAP_CONTROLS_INSET,
+  right: padding,
+  bottom: padding,
+  left: padding,
+})
+
 export const FarmFieldsMap = ({
   farm,
   fields,
@@ -506,7 +515,7 @@ export const FarmFieldsMap = ({
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 56, maxZoom: 14, duration: 700 },
+      { padding: withTopInset(56), maxZoom: 14, duration: 700 },
     )
     return true
   }, [fields])
@@ -556,7 +565,7 @@ export const FarmFieldsMap = ({
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 64, maxZoom: 16, duration: 500 },
+      { padding: withTopInset(64), maxZoom: 16, duration: 500 },
     )
   }, [fields, isMapLoaded, selectedFieldId, fitAllFields])
 
@@ -582,7 +591,7 @@ export const FarmFieldsMap = ({
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 56, maxZoom: 14, duration: 700 },
+      { padding: withTopInset(56), maxZoom: 14, duration: 700 },
     )
   }, [fields, isMapLoaded, highlightedCatchmentKey, fitAllFields])
 
@@ -603,7 +612,7 @@ export const FarmFieldsMap = ({
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 64, maxZoom: 16, duration: 500 },
+      { padding: withTopInset(64), maxZoom: 16, duration: 500 },
     )
   }, [fields, isMapLoaded, zoomRequest])
 
@@ -693,7 +702,7 @@ export const FarmFieldsMap = ({
             [bounds.west, bounds.south],
             [bounds.east, bounds.north],
           ],
-          { padding: 56, maxZoom: 14, duration: 700 },
+          { padding: withTopInset(56), maxZoom: 14, duration: 700 },
         )
       }
 
@@ -898,33 +907,35 @@ export const FarmFieldsMap = ({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted shadow-xs">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3 @container">
-        <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
-          Farvelæg
-        </span>
-        <select
-          aria-label="Farvelæg marker"
-          title="Farvelæg marker"
-          className="h-7 w-full min-w-0 max-w-40 rounded-md border bg-card px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-          value={colorBy}
-          onChange={(event) =>
-            setColorBy(event.target.value as ColorAttribute)
-          }
-        >
-          {colorOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted shadow-xs @container">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 p-2">
+        <div className="pointer-events-auto flex h-7 min-w-0 items-center gap-2 rounded-md border bg-card pl-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
+          <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
+            Farvelæg
+          </span>
+          <select
+            aria-label="Farvelæg marker"
+            title="Farvelæg marker"
+            className="h-full w-full min-w-0 max-w-40 rounded-r-md bg-transparent pr-2 text-xs outline-none"
+            value={colorBy}
+            onChange={(event) =>
+              setColorBy(event.target.value as ColorAttribute)
+            }
+          >
+            {colorOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               size="xs"
-              className="shrink-0 gap-1.5"
+              className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
               aria-label="Lag på kortet"
               title="Lag på kortet"
             >
@@ -1011,7 +1022,7 @@ export const FarmFieldsMap = ({
         <Button
           variant="outline"
           size="xs"
-          className="shrink-0 gap-1.5"
+          className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
           aria-label="Vis alle marker"
           title={
             hasFieldGeometry ? 'Vis alle marker' : 'Ingen marker at vise endnu'
@@ -1026,7 +1037,7 @@ export const FarmFieldsMap = ({
         </Button>
 
         {readOnly ? (
-          <span className="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground @2xl:block">
+          <span className="ml-auto hidden min-w-0 truncate rounded-md bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm @2xl:block">
             {mode === 'rules'
               ? 'Klik på en mark for at gå til dens række i listen.'
               : 'Klik på en simuleringsmark for at gennemgå den.'}
@@ -1036,8 +1047,8 @@ export const FarmFieldsMap = ({
         {!readOnly ? (
           <Button
             className={cn(
-              'ml-auto shrink-0',
-              !addMode && 'font-semibold text-primary hover:text-primary',
+              'pointer-events-auto ml-auto shrink-0 shadow-sm',
+              !addMode && 'bg-card font-semibold text-primary hover:text-primary',
             )}
             onClick={() => void (addMode ? finishAddMode() : toggleAddMode())}
             size="xs"
@@ -1057,7 +1068,7 @@ export const FarmFieldsMap = ({
 
       <div
         className={cn(
-          'relative min-h-0 flex-1',
+          'map-controls-inset relative min-h-0 flex-1',
           legendStripVisible && 'map-legend-inset',
         )}
       >
