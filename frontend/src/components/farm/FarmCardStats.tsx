@@ -1,6 +1,7 @@
 import { useFarmFields } from '@/api/hooks'
 import type { Farm } from '@/api/types'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   computeFieldTotals,
   formatFieldCount,
@@ -14,9 +15,9 @@ export const FarmCardStats = ({ farm }: { farm: Farm }) => {
 
   if (isLoading) {
     return (
-      <div className="space-y-2" aria-hidden="true">
-        <div className="h-4 w-1/2 motion-safe:animate-pulse rounded bg-muted" />
-        <div className="h-4 w-2/3 motion-safe:animate-pulse rounded bg-muted" />
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-2/3" />
       </div>
     )
   }

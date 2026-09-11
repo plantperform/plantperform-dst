@@ -211,7 +211,7 @@ const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   eeaPrecisionDagsbasis: simulation.eeaPrecisionDagsbasis,
 })
 
-const GROUP_LABEL_CLASS =
+export const GROUP_LABEL_CLASS =
   'h-7 text-[11px] font-semibold tracking-[0.06em] uppercase'
 const VIEW_BUTTON_CLASS =
   'h-auto min-h-12 rounded-md px-3 py-2 data-[active=true]:[&>svg]:text-primary'
@@ -492,7 +492,7 @@ export const FarmSidebar = ({
   )
 }
 
-const SidebarBrand = () => (
+export const SidebarBrand = () => (
   <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
     <img
       src="/plant-perform-tab-icon.svg"

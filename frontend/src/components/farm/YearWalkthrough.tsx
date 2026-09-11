@@ -35,6 +35,7 @@ import {
 } from '@/lib/field-domain'
 import { useViewportShorterThan } from '@/hooks/use-viewport-height'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 
@@ -193,10 +194,10 @@ const renderYearSummary = ({
           {column ? column.calendarYear : 'Alle år'}
         </div>
         <span className="sr-only">Indlæser årstal</span>
-        <div aria-hidden="true" className="space-y-2 pt-1">
-          <div className="h-3 w-24 rounded bg-muted motion-safe:animate-pulse" />
-          <div className="h-4 w-48 rounded bg-muted motion-safe:animate-pulse" />
-          <div className="h-3 w-36 rounded bg-muted motion-safe:animate-pulse" />
+        <div className="space-y-2 pt-1">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-3 w-36" />
         </div>
       </>
     )
