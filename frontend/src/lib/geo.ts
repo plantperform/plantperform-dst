@@ -229,6 +229,11 @@ export const fieldsToFeatureCollection = (
         yearQuotaLevel === 'ok' || yearQuotaLevel === 'near' || yearQuotaLevel === 'over'
           ? YEAR_QUOTA_STATUS_VALUES[yearQuotaLevel]
           : null
+      // Map colouring bins (leaching/nLoad/db2 in map-coloring.ts) are all
+      // labelled per hectare, so the GeoJSON properties they read must be
+      // per hectare too - field.leaching/nLoad/db2 themselves are the
+      // mark's totals (see FieldRecord), used as-is everywhere else.
+      const perHa = field.areaHa > 0 ? (value: number) => value / field.areaHa : () => null
       return {
         type: 'Feature',
         properties: {
@@ -240,9 +245,9 @@ export const fieldsToFeatureCollection = (
           jbnr: field.jbnr,
           udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
           udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
-          leaching: field.leaching,
-          nLoad: field.nLoad,
-          db2: field.db2,
+          leaching: perHa(field.leaching),
+          nLoad: perHa(field.nLoad),
+          db2: perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
           kvotegivende: field.kvotegivende ? 1 : 0,
