@@ -9,7 +9,7 @@ import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHea
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cropGroupColor } from '@/lib/crop-groups'
+import { cropGroupColor, cropGroupPattern } from '@/lib/crop-groups'
 import {
   describeUncalculatedCount,
   formatCompactKr,
@@ -229,6 +229,7 @@ const renderRotationSwatches = (
           ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
           : `${calendarYear}: ${year.afgrodeNavn}`
         const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
+        const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
         const isHighlighted = highlightIndex === index
         return (
           <span
@@ -242,6 +243,7 @@ const renderRotationSwatches = (
             <CropYearSwatch
               title={title}
               color={color}
+              pattern={pattern}
               hasUdlaeg={hasUdlaeg}
               size="12x16"
               className="w-3 full:w-4"
