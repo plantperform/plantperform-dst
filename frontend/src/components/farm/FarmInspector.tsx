@@ -22,6 +22,7 @@ import {
 import {
   runSimulationOptimization,
   runYearlySimulationOptimization,
+  updateSimulationField,
 } from '@/api/mutations'
 import type {
   Farm,
@@ -49,6 +50,7 @@ import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
 import { FarmSplitView } from '@/components/farm/FarmSplitView'
 import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
+import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import { resolveEffectiveView } from '@/components/farm/split-layout'
 import type {
@@ -74,6 +76,7 @@ import {
 } from '@/components/ui/segmented-control'
 import {
   formatNumber,
+  isFieldLocked,
   countCatchmentsOverQuota,
   orderFieldsByCatchment,
   ROTATION_CALENDAR_YEARS,
@@ -96,7 +99,10 @@ import { cn } from '@/lib/utils'
 // concurrent failed requests (422 "ikke optimeret endnu") for every previously
 // opened mark. SWR automatically reloads candidate detail the next time the
 // panel opens (revalidation on mount), which is sufficient in practice.
-const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
+const invalidateOptimizationDisplays = async (
+  farmId: string,
+  simulationId: string,
+) => {
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
 
@@ -183,6 +189,8 @@ export const FarmInspector = ({
     null,
   )
   const [panelCalcOpen, setPanelCalcOpen] = useState(false)
+  const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
+  const [bindFieldId, setBindFieldId] = useState<string | null>(null)
   const [addModeSnap, setAddModeSnap] = useState(false)
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
   const [highlightedCatchmentKey, setHighlightedCatchmentKey] = useState<
@@ -210,6 +218,7 @@ export const FarmInspector = ({
     onViewChange(next)
   }
   const isSimulationView = selection.kind === 'simulation'
+  const selectedSimulationId = selectedSimulation?.id
   const selectionKey =
     selection.kind === 'simulation'
       ? `${farm.id}:simulation-${selection.id}`
@@ -289,6 +298,46 @@ export const FarmInspector = ({
   const panelField = isRules
     ? null
     : (fields.find((field) => field.id === selectedFieldId) ?? null)
+  const bindField = fields.find((field) => field.id === bindFieldId) ?? null
+
+  const toggleFieldLock = useCallback(
+    async (field: FieldRecord) => {
+      if (!selectedSimulationId || field.rotationId === null) return
+
+      const target = isFieldLocked(field) ? [] : [field.rotationId]
+      setLockingFieldId(field.id)
+      try {
+        const updatedField = await updateSimulationField(
+          farm.id,
+          selectedSimulationId,
+          field.id,
+          { allowedRotationIds: target },
+        )
+        await mutate(
+          simulationFieldsKey(farm.id, selectedSimulationId),
+          (current: FieldRecord[] = []) =>
+            current.map((currentField) =>
+              currentField.id === updatedField.id ? updatedField : currentField,
+            ),
+          { revalidate: false },
+        )
+        onError(null)
+      } catch {
+        onError('Kunne ikke ændre låsningen af marken.')
+      } finally {
+        setLockingFieldId(null)
+      }
+    },
+    [farm.id, selectedSimulationId, onError],
+  )
+  const onToggleLock = useCallback(
+    (field: FieldRecord) => void toggleFieldLock(field),
+    [toggleFieldLock],
+  )
+  const onBindRotation = useCallback(
+    (field: FieldRecord) => setBindFieldId(field.id),
+    [],
+  )
 
   const selectFieldFromMap = (fieldId: string | null) => {
     onSelectedFieldChange(fieldId)
@@ -478,12 +527,10 @@ export const FarmInspector = ({
                     simulationId={
                       selection.kind === 'simulation' ? selection.id : undefined
                     }
-                    simulation={
-                      selection.kind === 'simulation'
-                        ? selectedSimulation
-                        : undefined
-                    }
                     mode={effectiveMode}
+                    lockingFieldId={lockingFieldId}
+                    onToggleLock={onToggleLock}
+                    onBindRotation={onBindRotation}
                     sort={fieldsSort}
                     onSortChange={setFieldsSort}
                     selectedFieldId={selectedFieldId}
@@ -501,7 +548,6 @@ export const FarmInspector = ({
                     selectedYearIndex={effectiveSelectedYearIndex}
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
-                    onError={onError}
                   />
                 </div>
               )}
@@ -512,6 +558,9 @@ export const FarmInspector = ({
                   fields={fields}
                   readOnly={isSimulationView}
                   mode={effectiveMode}
+                  lockingFieldId={lockingFieldId}
+                  onToggleLock={onToggleLock}
+                  onBindRotation={onBindRotation}
                   selectedYearIndex={
                     isSimulationView ? effectiveSelectedYearIndex : null
                   }
@@ -564,6 +613,21 @@ export const FarmInspector = ({
           )}
         </div>
       </div>
+      {bindField && selectedSimulationId && selectedSimulation ? (
+        <ManualRotationEditor
+          key={`${selectedSimulationId}:${bindField.id}`}
+          farmId={farm.id}
+          simulationId={selectedSimulationId}
+          simulation={selectedSimulation}
+          field={bindField}
+          intent="lock"
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setBindFieldId(null)
+          }}
+          onError={onError}
+        />
+      ) : null}
     </section>
   )
 }
@@ -645,7 +709,9 @@ const OptimizeDialog = ({
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
-  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
+  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(
+    new Set(),
+  )
 
   const catchments = useCatchmentOptions(farmId, fields)
   const catchmentLabelByKey = new Map(
@@ -772,7 +838,9 @@ const OptimizeDialog = ({
               min="1"
               max="600"
               value={timeLimitSeconds}
-              onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
+              onChange={(event) =>
+                setTimeLimitSeconds(Number(event.target.value))
+              }
             />
             <p className="text-xs text-muted-foreground">
               sekunder - sæt højere hvis optimeringen ikke når at finde en
@@ -798,10 +866,7 @@ const OptimizeDialog = ({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Annuller
           </Button>
-          <Button
-            onClick={() => void runOptimization()}
-            disabled={isRunning}
-          >
+          <Button onClick={() => void runOptimization()} disabled={isRunning}>
             {isRunning ? 'Arbejder...' : 'Kør optimering'}
           </Button>
         </DialogFooter>
@@ -834,7 +899,9 @@ const YearlyOptimizeDialog = ({
   const [db2SwingPct, setDb2SwingPct] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
+  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(
+    new Set(),
+  )
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -853,7 +920,10 @@ const YearlyOptimizeDialog = ({
     })
   }
 
-  const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
+  const { data: kategorier = [] } = useYearlyOptimizationCandidates(
+    farmId,
+    simulation.id,
+  )
   const catchments = useCatchmentOptions(farmId, fields)
 
   const catchmentInput = (key: string): CatchmentYearlyInput =>
@@ -881,8 +951,8 @@ const YearlyOptimizeDialog = ({
   }, [fields.length, kategorier])
 
   const runYearlyOptimization = async () => {
-    const maxNLoadByKystvandopland: KystvandoplandYearlyNLoadCaps[] = catchments.map(
-      (catchment) => {
+    const maxNLoadByKystvandopland: KystvandoplandYearlyNLoadCaps[] =
+      catchments.map((catchment) => {
         const key = catchmentKey(catchment.kystvandId)
         const input = catchmentInput(key)
         const maxNLoadByYear: Record<number, number> = {}
@@ -902,17 +972,20 @@ const YearlyOptimizeDialog = ({
           }
         }
         return { kystvandId: catchment.kystvandId, maxNLoadByYear }
-      },
-    )
+      })
     const trimmedSwing = db2SwingPct.trim()
     setIsRunning(true)
     try {
-      const response = await runYearlySimulationOptimization(farmId, simulation.id, {
-        timeLimitSeconds,
-        maxNLoadByKystvandopland,
-        db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
-        excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
-      })
+      const response = await runYearlySimulationOptimization(
+        farmId,
+        simulation.id,
+        {
+          timeLimitSeconds,
+          maxNLoadByKystvandopland,
+          db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
+          excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
+        },
+      )
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
         response.fields,
@@ -966,7 +1039,9 @@ const YearlyOptimizeDialog = ({
               min="1"
               max="600"
               value={timeLimitSeconds}
-              onChange={(event) => setTimeLimitSeconds(Number(event.target.value))}
+              onChange={(event) =>
+                setTimeLimitSeconds(Number(event.target.value))
+              }
             />
             <p className="text-xs text-muted-foreground">sekunder</p>
           </div>
@@ -984,7 +1059,9 @@ const YearlyOptimizeDialog = ({
                 return (
                   <div key={key} className="space-y-2 rounded border p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{catchment.label}</span>
+                      <span className="text-sm font-medium">
+                        {catchment.label}
+                      </span>
                       <label className="flex items-center gap-2 text-xs text-muted-foreground">
                         <input
                           type="checkbox"
@@ -1006,16 +1083,22 @@ const YearlyOptimizeDialog = ({
                           value={input.uniform}
                           placeholder="Ingen grænse"
                           onChange={(event) =>
-                            updateCatchmentInput(key, { uniform: event.target.value })
+                            updateCatchmentInput(key, {
+                              uniform: event.target.value,
+                            })
                           }
                         />
-                        <p className="text-xs text-muted-foreground">kg N, gælder hvert år</p>
+                        <p className="text-xs text-muted-foreground">
+                          kg N, gælder hvert år
+                        </p>
                       </div>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-4">
                         {ROTATION_CALENDAR_YEARS.map((year) => (
                           <label key={year} className="space-y-1 text-sm">
-                            <span className="text-xs text-muted-foreground">{year}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {year}
+                            </span>
                             <Input
                               type="number"
                               min="0"
@@ -1023,7 +1106,10 @@ const YearlyOptimizeDialog = ({
                               placeholder="Ingen grænse"
                               onChange={(event) =>
                                 updateCatchmentInput(key, {
-                                  perYear: { ...input.perYear, [year]: event.target.value },
+                                  perYear: {
+                                    ...input.perYear,
+                                    [year]: event.target.value,
+                                  },
                                 })
                               }
                             />
@@ -1038,7 +1124,9 @@ const YearlyOptimizeDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="yearly-db-swing">Maks. udsving i DB2 mellem år</Label>
+            <Label htmlFor="yearly-db-swing">
+              Maks. udsving i DB2 mellem år
+            </Label>
             <Input
               id="yearly-db-swing"
               type="number"
@@ -1054,8 +1142,8 @@ const YearlyOptimizeDialog = ({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Alle sædskifter kan forskydes · {fields.length} marker ·
-            ~{estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
+            Alle sædskifter kan forskydes · {fields.length} marker · ~
+            {estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
             (estimat, ikke en garanti)
           </p>
 

@@ -34,6 +34,7 @@ import type {
   RegistryFieldSummary,
 } from '@/api/types'
 import { catchmentKey } from '@/components/farm/catchment-options'
+import { MapRuleCard } from '@/components/farm/MapRuleCard'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -151,6 +152,9 @@ type FarmFieldsMapProps = {
   fields: FieldRecord[]
   readOnly?: boolean
   mode?: FarmInspectorMode
+  lockingFieldId: string | null
+  onToggleLock: (field: FieldRecord) => void
+  onBindRotation: (field: FieldRecord) => void
   selectedYearIndex?: number | null
   yearValues?: SimulationFieldYearValues
   yearValuesLoading?: boolean
@@ -201,6 +205,10 @@ type HoveredMars = {
 
 const MAP_CONTROLS_INSET = 44
 
+const isFromMapOverlay = (event: MapLayerMouseEvent) =>
+  event.originalEvent.target instanceof Element &&
+  event.originalEvent.target.closest('[data-map-overlay]') !== null
+
 const withTopInset = (padding: number) => ({
   top: padding + MAP_CONTROLS_INSET,
   right: padding,
@@ -213,6 +221,9 @@ export const FarmFieldsMap = ({
   fields,
   readOnly = false,
   mode = 'values',
+  lockingFieldId,
+  onToggleLock,
+  onBindRotation,
   selectedYearIndex = null,
   yearValues,
   yearValuesLoading = false,
@@ -282,7 +293,10 @@ export const FarmFieldsMap = ({
   const [showCropLabels, setShowCropLabels] = useState(true)
   const [mapZoom, setMapZoom] = useState(initialViewState.zoom)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
-  const [overflowingLegend, setOverflowingLegend] = useState<string | null>(null)
+  const [ruleRotationOpen, setRuleRotationOpen] = useState(true)
+  const [overflowingLegend, setOverflowingLegend] = useState<string | null>(
+    null,
+  )
 
   const yearCropSpec = useMemo(
     () =>
@@ -437,15 +451,15 @@ export const FarmFieldsMap = ({
     : undefined
   const selectedFarmGeoJson: FeatureCollection = selectedFarmField?.geometry
     ? {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {},
-          geometry: selectedFarmField.geometry,
-        },
-      ],
-    }
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: selectedFarmField.geometry,
+          },
+        ],
+      }
     : emptyFeatureCollection
   const hoveredFarmField =
     hoveredFieldId !== null && hoveredFieldId !== selectedFieldId
@@ -453,33 +467,39 @@ export const FarmFieldsMap = ({
       : undefined
   const hoverFarmGeoJson: FeatureCollection = hoveredFarmField?.geometry
     ? {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {},
-          geometry: hoveredFarmField.geometry,
-        },
-      ],
-    }
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: hoveredFarmField.geometry,
+          },
+        ],
+      }
     : emptyFeatureCollection
+  const activeRuleField = mode === 'rules' ? selectedFarmField : undefined
+  const activeRulePoint = activeRuleField
+    ? fieldLabelPoint(activeRuleField)
+    : null
+  const hoveringActiveRuleField =
+    activeRuleField !== undefined && hoveredFieldId === activeRuleField.id
   const attachedImkIds = fields
     .map((field) => field.imkId)
     .filter((imkId): imkId is number => imkId !== null)
   const selectedRegistryFilter: FilterSpecification =
     selectedImkIds.length > 0
       ? ([
-        'in',
-        ['get', 'imk_id'],
-        ['literal', selectedImkIds],
-      ] as FilterSpecification)
+          'in',
+          ['get', 'imk_id'],
+          ['literal', selectedImkIds],
+        ] as FilterSpecification)
       : (['==', ['get', 'imk_id'], -1] as FilterSpecification)
   const highlightedCvrFilter: FilterSpecification = highlightedCvr
     ? ([
-      'all',
-      ['==', ['get', 'owned'], false],
-      ['==', ['get', 'cvr'], highlightedCvr],
-    ] as FilterSpecification)
+        'all',
+        ['==', ['get', 'owned'], false],
+        ['==', ['get', 'cvr'], highlightedCvr],
+      ] as FilterSpecification)
     : (['==', ['get', 'imk_id'], -1] as FilterSpecification)
   const tileParams = new URLSearchParams({
     ownedByFarmId: farm.id,
@@ -658,7 +678,6 @@ export const FarmFieldsMap = ({
       onHoveredFieldChange(pendingHoveredFieldId.current)
     })
   }
-
   const toggleAddMode = () => {
     if (readOnly) return
 
@@ -763,6 +782,8 @@ export const FarmFieldsMap = ({
   }
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
+    if (isFromMapOverlay(event)) return
+
     if (addMode) {
       const candidate = event.features?.find((feature) =>
         [
@@ -798,10 +819,18 @@ export const FarmFieldsMap = ({
   }
 
   const handleMapHover = (event: MapLayerMouseEvent) => {
+    if (isFromMapOverlay(event)) {
+      setHoveredField(null)
+      setHoveredMars(null)
+      reportHoveredField(null)
+      mapRef.current?.getCanvas().style.setProperty('cursor', '')
+      return
+    }
+
     const marsFeature = showMars
       ? event.features?.find((item) =>
-        ['mars-fill', 'mars-points'].includes(item.layer.id),
-      )
+          ['mars-fill', 'mars-points'].includes(item.layer.id),
+        )
       : undefined
 
     if (marsFeature) {
@@ -816,7 +845,8 @@ export const FarmFieldsMap = ({
           (marsFeature.properties?.virkemiddel as string | undefined) ?? null,
         status: (marsFeature.properties?.status as string | undefined) ?? null,
         tilskudsordning:
-          (marsFeature.properties?.tilskudsordning as string | undefined) ?? null,
+          (marsFeature.properties?.tilskudsordning as string | undefined) ??
+          null,
         arealHa:
           typeof marsFeature.properties?.areal_ha === 'number'
             ? marsFeature.properties.areal_ha
@@ -850,9 +880,7 @@ export const FarmFieldsMap = ({
     const imkId = addMode
       ? feature.properties?.imk_id
       : feature.properties?.imkId
-    const marknr = addMode
-      ? feature.properties?.marknr
-      : null
+    const marknr = addMode ? feature.properties?.marknr : null
     const farmName = !addMode ? feature.properties?.name : null
     const kystvandRaw = addMode
       ? feature.properties?.kystvand_id
@@ -1048,7 +1076,8 @@ export const FarmFieldsMap = ({
           <Button
             className={cn(
               'pointer-events-auto ml-auto shrink-0 shadow-sm',
-              !addMode && 'bg-card font-semibold text-primary hover:text-primary',
+              !addMode &&
+                'bg-card font-semibold text-primary hover:text-primary',
             )}
             onClick={() => void (addMode ? finishAddMode() : toggleAddMode())}
             size="xs"
@@ -1084,11 +1113,11 @@ export const FarmFieldsMap = ({
           interactiveLayerIds={[
             ...(addMode
               ? [
-                'registry-selected-fill',
-                'registry-cvr-highlight-fill',
-                'registry-candidate-fill',
-                'registry-owned-fill',
-              ]
+                  'registry-selected-fill',
+                  'registry-cvr-highlight-fill',
+                  'registry-candidate-fill',
+                  'registry-owned-fill',
+                ]
               : ['farm-fields-fill']),
             ...(showMars ? ['mars-fill', 'mars-points'] : []),
           ]}
@@ -1353,59 +1382,83 @@ export const FarmFieldsMap = ({
           </Source>
 
           {showLockMarkers
-            ? lockedFieldMarkers.map(({ field, point }) => (
-              <Marker
-                key={`lock-${field.id}`}
-                longitude={point[0]}
-                latitude={point[1]}
-                anchor="center"
-                style={{ pointerEvents: 'none' }}
-              >
-                <span
-                  role="img"
-                  aria-label={`Låst mark ${field.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
-                >
-                  <Lock
-                    className="h-4 w-4 text-amber-600"
-                    strokeWidth={2.5}
-                    aria-hidden="true"
-                  />
-                </span>
-              </Marker>
-            ))
+            ? lockedFieldMarkers
+                .filter(({ field }) => field.id !== activeRuleField?.id)
+                .map(({ field, point }) => (
+                  <Marker
+                    key={`lock-${field.id}`}
+                    longitude={point[0]}
+                    latitude={point[1]}
+                    anchor="center"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    <span
+                      role="img"
+                      aria-label={`Låst mark ${field.name}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
+                    >
+                      <Lock
+                        className="h-4 w-4 text-amber-600"
+                        strokeWidth={2.5}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </Marker>
+                ))
             : null}
+          {activeRuleField && activeRulePoint ? (
+            <Marker
+              longitude={activeRulePoint[0]}
+              latitude={activeRulePoint[1]}
+              anchor="bottom"
+              offset={[0, -6]}
+              style={{ zIndex: 1 }}
+            >
+              <MapRuleCard
+                field={activeRuleField}
+                locking={lockingFieldId === activeRuleField.id}
+                onToggleLock={onToggleLock}
+                onBindRotation={onBindRotation}
+                rotationOpen={ruleRotationOpen}
+                onRotationOpenChange={setRuleRotationOpen}
+                onClose={() => onSelectedFieldChange(null)}
+              />
+            </Marker>
+          ) : null}
           {cropLabelsVisible
             ? cropLabelMarkers.map((marker) => (
-              <Marker
-                key={`crop-${marker.key}`}
-                longitude={marker.point[0]}
-                latitude={marker.point[1]}
-                anchor="top"
-                offset={[0, 4]}
-                style={{ pointerEvents: 'none' }}
-              >
-                <span
-                  role="img"
-                  aria-label={marker.title}
-                  title={marker.title}
-                  className={cn(
-                    'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
-                    marker.color === null && 'bg-background text-foreground',
-                  )}
-                  style={
-                    marker.color !== null
-                      ? { backgroundColor: marker.color, color: marker.textColor ?? undefined }
-                      : undefined
-                  }
+                <Marker
+                  key={`crop-${marker.key}`}
+                  longitude={marker.point[0]}
+                  latitude={marker.point[1]}
+                  anchor="top"
+                  offset={[0, 4]}
+                  style={{ pointerEvents: 'none' }}
                 >
-                  {marker.label}
-                </span>
-              </Marker>
-            ))
+                  <span
+                    role="img"
+                    aria-label={marker.title}
+                    title={marker.title}
+                    className={cn(
+                      'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
+                      marker.color === null && 'bg-background text-foreground',
+                    )}
+                    style={
+                      marker.color !== null
+                        ? {
+                            backgroundColor: marker.color,
+                            color: marker.textColor ?? undefined,
+                          }
+                        : undefined
+                    }
+                  >
+                    {marker.label}
+                  </span>
+                </Marker>
+              ))
             : null}
 
-          {hoveredField ? (
+          {hoveredField && !hoveringActiveRuleField ? (
             <Popup
               longitude={hoveredField.longitude}
               latitude={hoveredField.latitude}
