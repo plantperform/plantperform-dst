@@ -50,7 +50,7 @@ export const FarmTopBarSkeleton = () => (
 )
 
 export const FarmContentSkeleton = () => (
-  <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-4 pt-2">
+  <div className="flex min-h-0 flex-1 animate-skeleton-in flex-col gap-2 overflow-hidden px-4 pt-2 pb-4">
     <Skeleton className="h-10 rounded-lg" />
     <FarmFieldsSkeleton message="Henter bedriftens marker" />
   </div>
