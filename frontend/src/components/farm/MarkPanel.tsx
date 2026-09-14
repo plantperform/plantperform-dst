@@ -14,7 +14,7 @@ import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
-import { cropGroupColor } from '@/lib/crop-groups'
+import { cropGroupColor, cropGroupPattern } from '@/lib/crop-groups'
 import {
   CURRENT_CALENDAR_YEAR,
   formatNumber,
@@ -162,6 +162,7 @@ const RotationYearRow = ({
   const calendarYear = startYear + index
   const hasUdlaeg = year.udlaegNavn !== null
   const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
+  const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   const style = QUOTA_STATUS_STYLES[selectedStatus.level]
   const showRightGroup = hasUdlaeg || (isSelected && selectedValues !== null)
@@ -182,7 +183,12 @@ const RotationYearRow = ({
         <span className="w-9 shrink-0 tabular-nums text-muted-foreground">
           {calendarYear}
         </span>
-        <CropYearSwatch color={color} hasUdlaeg={hasUdlaeg} size="14x10" />
+        <CropYearSwatch
+          color={color}
+          pattern={pattern}
+          hasUdlaeg={hasUdlaeg}
+          size="14x10"
+        />
         <span className={isCurrentYear || isSelected ? 'font-medium' : undefined}>
           {year.afgrodeNavn}
         </span>
