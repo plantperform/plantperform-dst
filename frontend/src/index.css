@@ -37,6 +37,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
   --animate-rise-in: rise-in 250ms ease-out both;
+  --animate-skeleton-in: skeleton-in 150ms ease-out 200ms both;
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
     serif;
@@ -154,6 +155,12 @@ body {
 @keyframes rise-in {
   from {
     transform: translateY(0.5rem);
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton-in {
+  from {
     opacity: 0;
   }
 }

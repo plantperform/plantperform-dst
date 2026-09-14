@@ -28,7 +28,6 @@ import type {
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { useDelayedFlag } from '@/hooks/use-delayed-flag'
 import {
   Card,
   CardContent,
@@ -90,7 +89,6 @@ export const FarmDetailPage = () => {
     useSidebarWidth()
   const isReady =
     farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
-  const showSkeleton = useDelayedFlag(!isReady, 200)
   const farmSummary =
     farm ?? farms?.find((candidate) => candidate.id === farmId)
 
@@ -266,7 +264,7 @@ export const FarmDetailPage = () => {
             <p role="status" className="sr-only">
               Indlæser bedriften.
             </p>
-            {showSkeleton ? <FarmContentSkeleton /> : null}
+            <FarmContentSkeleton />
           </>
         )}
       </SidebarInset>
