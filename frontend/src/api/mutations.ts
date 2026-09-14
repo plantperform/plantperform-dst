@@ -1,4 +1,5 @@
-import { deleteJson, patchJson, postJson } from '@/api/client'
+import { deleteJson, fetcher, patchJson, postJson } from '@/api/client'
+import { registryFieldsBulkKey } from '@/api/hooks'
 import type {
   CreateFarmInput,
   CreateFieldInput,
@@ -10,6 +11,7 @@ import type {
   FieldRotationCandidates,
   OptimizeSimulationInput,
   OptimizeSimulationResponse,
+  RegistryField,
   OptimizationConstraints,
   RecomputeFieldRotationInput,
   RotationCandidateEvaluation,
@@ -35,6 +37,28 @@ export const createField = (farmId: string, input: CreateFieldInput) =>
 
 export const createFields = (farmId: string, input: CreateFieldInput[]) =>
   postJson<FieldRecord[], CreateFieldInput[]>(`/farms/${farmId}/fields`, input)
+
+const registryFieldToInput = (field: RegistryField): CreateFieldInput => ({
+  imkId: field.imkId,
+  kystvandId: field.kystvandId,
+  retention: field.retention,
+  name: field.marknr ?? `Mark ${field.imkId}`,
+  areaHa: field.areaHa,
+  inTakeoutPlan: field.inTakeoutPlan,
+  udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
+  udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+  geometry: field.geometry,
+})
+
+export const importRegistryFields = async (
+  farmId: string,
+  imkIds: number[],
+): Promise<FieldRecord[]> => {
+  const key = registryFieldsBulkKey(imkIds)
+  if (!key) return []
+  const registryFields = await fetcher<RegistryField[]>(key)
+  return createFields(farmId, registryFields.map(registryFieldToInput))
+}
 
 export const detachField = (farmId: string, fieldId: string) =>
   deleteJson(`/farms/${farmId}/fields/${fieldId}`)

@@ -18,3 +18,19 @@ export const validateFarmBasics = (
   }
   return null
 }
+
+export type FarmBasicsErrors = {
+  name?: string
+  ownerName?: string
+  cvr?: string
+}
+
+export const farmBasicsErrors = (
+  name: string,
+  ownerName: string,
+  cvr: string,
+): FarmBasicsErrors => ({
+  ...(name.trim() ? {} : { name: 'Bedriften skal have et navn.' }),
+  ...(ownerName.trim() ? {} : { ownerName: 'Ejerens navn skal udfyldes.' }),
+  ...(isCvrValid(cvr) ? {} : { cvr: invalidCvrMessage }),
+})
