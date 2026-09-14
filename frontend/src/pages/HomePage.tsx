@@ -6,7 +6,6 @@ import {
   ArrowRight,
   CircleAlert,
   LoaderCircle,
-  Plus,
   Search,
   Tractor,
   Users,
@@ -218,17 +217,6 @@ export const HomePage = () => {
           farmList.length > 0
             ? `${formatFarmCount(farmList.length)} - vælg en for at arbejde videre med marker og sædskifte.`
             : 'Vælg en bedrift for at arbejde videre med marker og sædskifte.'
-        }
-        actions={
-          <Button
-            asChild
-            className="shrink-0 bg-primary-foreground text-primary hover:bg-primary-foreground/90 focus-visible:ring-primary-foreground/60"
-          >
-            <Link to="/farms/new">
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Opret ny bedrift
-            </Link>
-          </Button>
         }
       />
 
