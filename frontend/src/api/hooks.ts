@@ -50,6 +50,32 @@ export const useFarm = (farmId?: string) =>
 export const useFarmFields = (farmId?: string) =>
   useSWR<FieldRecord[]>(farmFieldsKey(farmId), fetcher)
 
+export type FieldsByFarmId = Record<string, FieldRecord[]>
+
+const fetchFarmsFields = async (farmIds: string[]): Promise<FieldsByFarmId> => {
+  const entries = await Promise.all(
+    farmIds.map(async (farmId) => {
+      const key = farmFieldsKey(farmId)
+      const fields = key
+        ? await mutate<FieldRecord[]>(key, fetcher<FieldRecord[]>(key), {
+            revalidate: false,
+          })
+        : undefined
+      return [farmId, fields ?? []] as const
+    }),
+  )
+  return Object.fromEntries(entries)
+}
+
+export const useFarmsFields = (farms: Farm[] | undefined) => {
+  const farmIds = (farms ?? []).map((farm) => farm.id).sort()
+  return useSWR<FieldsByFarmId>(
+    farmIds.length > 0 ? ['farms-fields', farmIds.join(',')] : null,
+    ([, joinedIds]: string[]) => fetchFarmsFields(joinedIds.split(',')),
+    { revalidateOnFocus: false },
+  )
+}
+
 export const farmEmissionsKey = (farmId?: string) => {
   if (!farmId) return null
 

@@ -3,20 +3,25 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
-  ArrowRight,
   CircleAlert,
   LoaderCircle,
+  Plus,
   Search,
   Tractor,
   Users,
 } from 'lucide-react'
 
 import { useAuth } from '@/auth/context'
-import { farmsKey, useFarms } from '@/api/hooks'
+import { farmsKey, useFarms, useFarmsFields } from '@/api/hooks'
 import { createFarm } from '@/api/mutations'
-import { FarmCardStats } from '@/components/farm/FarmCardStats'
+import { AppTopBar } from '@/components/AppTopBar'
+import {
+  FARM_LIST_CLASS,
+  FarmRow,
+  FarmRowSkeleton,
+} from '@/components/farm/FarmList'
+import { FarmOverviewHeader } from '@/components/farm/FarmOverviewHeader'
 import { RoleCard } from '@/components/onboarding/RoleCard'
-import { WorkspaceHeader } from '@/components/WorkspaceHeader'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -25,8 +30,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
+import {
+  latestOpenedFarm,
+  sortFarms,
+  summarizeFarmFields,
+  type FarmOverview,
+} from '@/lib/farm-overview'
 import {
   clearPendingFarm,
   getAutoOpenSingleFarm,
@@ -41,14 +51,12 @@ import {
   type PendingFarm,
 } from '@/lib/onboarding'
 
-const formatFarmCount = (count: number) =>
-  `${count} ${count === 1 ? 'bedrift' : 'bedrifter'}`
-
 export const HomePage = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
   const { data: farms, error, isLoading } = useFarms()
+  const { data: fieldsByFarm, isLoading: fieldsLoading } = useFarmsFields(farms)
   const email = user?.email ?? ''
   const showOverview = Boolean(
     (location.state as { showOverview?: boolean } | null)?.showOverview,
@@ -62,38 +70,47 @@ export const HomePage = () => {
     email ? getStoredRole(email) : null,
   )
   const [searchText, setSearchText] = useState('')
-  const [wasSearchShown, setWasSearchShown] = useState(false)
   const hasStartedCreate = useRef(false)
 
-  const farmList = farms ?? []
-  const { lastOpenedMap, sortedFarms } = useMemo(() => {
-    const map = email ? getLastOpenedMap(email) : {}
-    const sorted = [...(farms ?? [])].sort((left, right) => {
-      const leftOpened = map[left.id] ?? 0
-      const rightOpened = map[right.id] ?? 0
-      if (leftOpened !== rightOpened) return rightOpened - leftOpened
-      return left.name.localeCompare(right.name, 'da-DK')
-    })
-    return { lastOpenedMap: map, sortedFarms: sorted }
-  }, [email, farms])
-  const latestOpenedFarmId =
-    sortedFarms.length > 1 && (lastOpenedMap[sortedFarms[0].id] ?? 0) > 0
-      ? sortedFarms[0].id
-      : null
-  const showSearch = farmList.length > 5
-  if (wasSearchShown !== showSearch) {
-    setWasSearchShown(showSearch)
-    if (!showSearch) setSearchText('')
-  }
+  const farmList = useMemo(() => farms ?? [], [farms])
+  const lastOpenedMap = useMemo(
+    () => (email ? getLastOpenedMap(email) : {}),
+    [email],
+  )
+  const overviews = useMemo(
+    () =>
+      Object.fromEntries(
+        farmList.map((farm) => [
+          farm.id,
+          summarizeFarmFields(fieldsByFarm?.[farm.id]),
+        ]),
+      ) as Record<string, FarmOverview>,
+    [farmList, fieldsByFarm],
+  )
+  const sortedFarms = useMemo(
+    () => sortFarms(farmList, lastOpenedMap),
+    [farmList, lastOpenedMap],
+  )
+  const latestFarm = latestOpenedFarm(farmList, lastOpenedMap)
   const normalizedSearch = searchText.trim().toLowerCase()
-  const visibleFarms =
-    showSearch && normalizedSearch
-      ? sortedFarms.filter((farm) =>
-          [farm.name, farm.ownerName, farm.cvr ?? ''].some((value) =>
-            value.toLowerCase().includes(normalizedSearch),
-          ),
-        )
-      : sortedFarms
+  const visibleFarms = normalizedSearch
+    ? sortedFarms.filter((farm) =>
+        [farm.name, farm.ownerName, farm.cvr ?? ''].some((value) =>
+          value.toLowerCase().includes(normalizedSearch),
+        ),
+      )
+    : sortedFarms
+  const totals = farmList.reduce(
+    (sum, farm) => {
+      const overview = overviews[farm.id]
+      return {
+        fieldCount: sum.fieldCount + (overview.totals?.fieldCount ?? 0),
+        areaHa: sum.areaHa + (overview.totals?.areaHa ?? 0),
+        overQuota: sum.overQuota + (overview.level === 'over' ? 1 : 0),
+      }
+    },
+    { fieldCount: 0, areaHa: 0, overQuota: 0 },
+  )
   const isReady = Boolean(email) && !isLoading && !error && farms !== undefined
   const pending = email ? getPendingFarm(email) : null
   const shouldCreatePendingFarm =
@@ -211,16 +228,17 @@ export const HomePage = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <WorkspaceHeader
-        title="Dine bedrifter"
-        description={
-          farmList.length > 0
-            ? `${formatFarmCount(farmList.length)} - vælg en for at arbejde videre med marker og sædskifte.`
-            : 'Vælg en bedrift for at arbejde videre med marker og sædskifte.'
-        }
-      />
+      <AppTopBar />
 
-      <div className="mx-auto max-w-6xl space-y-6 px-6 pb-12 pt-10 sm:px-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 pt-12 pb-16 sm:px-10">
+        <FarmOverviewHeader
+          farmCount={farmList.length}
+          fieldCount={totals.fieldCount}
+          areaHa={totals.areaHa}
+          overQuota={totals.overQuota}
+          loading={isLoading || fieldsLoading}
+        />
+
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
           <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm">
@@ -254,19 +272,9 @@ export const HomePage = () => {
         {isLoading ? (
           <div role="status">
             <p className="sr-only">Indlæser bedrifter...</p>
-            <div
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              aria-hidden="true"
-            >
+            <div className={FARM_LIST_CLASS} aria-hidden="true">
               {[0, 1, 2].map((index) => (
-                <div
-                  key={index}
-                  className="space-y-3 rounded-lg border bg-card p-5 shadow-sm"
-                >
-                  <Skeleton className="h-5 w-2/3" />
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-4 w-1/3" />
-                </div>
+                <FarmRowSkeleton key={index} />
               ))}
             </div>
           </div>
@@ -283,7 +291,7 @@ export const HomePage = () => {
         ) : null}
 
         {!isLoading && !error && farmList.length === 0 ? (
-          <div className="rounded-lg border bg-card p-6 shadow-sm sm:p-8">
+          <div className="rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
             <p id="kom-i-gang-heading" className="text-lg font-semibold">
               Kom i gang
             </p>
@@ -331,7 +339,7 @@ export const HomePage = () => {
                     ? 'Opret din bedrift for at komme i gang - fremover lander du direkte i den, når du logger ind.'
                     : 'Opret en bedrift pr. landmand, du hjælper. Du kan altid vende tilbage til denne oversigt.'}
                 </p>
-                <Button asChild className="mt-4">
+                <Button asChild className="mt-4 rounded-full">
                   <Link to="/farms/new">
                     {selectedRole === 'landmand'
                       ? 'Opret din bedrift'
@@ -344,67 +352,52 @@ export const HomePage = () => {
         ) : null}
 
         {farmList.length > 0 ? (
-          <>
-            {showSearch ? (
-              <div className="relative">
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Button
+                asChild
+                variant="outline"
+                className="h-[38px] rounded-full"
+              >
+                <Link to="/farms/new">
+                  <Plus className="size-4" aria-hidden="true" />
+                  Opret bedrift
+                </Link>
+              </Button>
+              <div className="relative w-72 max-w-full">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <Input
+                <input
                   type="search"
                   value={searchText}
                   onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Søg efter navn, ejer eller CVR"
+                  placeholder="Søg navn, ejer eller CVR"
                   aria-label="Søg i bedrifter"
-                  className="pl-9"
+                  className="h-[38px] w-full rounded-full border bg-card pr-3.5 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
                 />
               </div>
-            ) : null}
-            {visibleFarms.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Ingen bedrifter matcher søgningen.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            </div>
+            {visibleFarms.length > 0 ? (
+              <ul
+                className={cn(FARM_LIST_CLASS, 'motion-safe:animate-rise-in')}
+              >
                 {visibleFarms.map((farm) => (
-                  <Link
+                  <FarmRow
                     key={farm.id}
-                    to={`/farms/${farm.id}`}
-                    className="group flex flex-col gap-4 rounded-lg border bg-card p-6 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-display text-xl">
-                          {farm.name}
-                        </p>
-                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                          {farm.ownerName}
-                        </p>
-                      </div>
-                      <ArrowRight
-                        className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
-                        aria-hidden="true"
-                      />
-                    </div>
-                    {farm.id === latestOpenedFarmId ? (
-                      <span className="w-fit rounded-full border bg-muted/60 px-2.5 py-0.5 text-xs text-muted-foreground">
-                        Senest åbnet
-                      </span>
-                    ) : null}
-                    <FarmCardStats farm={farm} />
-                    {farm.cvr ? (
-                      <div className="mt-auto flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border bg-muted/60 px-2.5 py-0.5 text-xs text-muted-foreground">
-                          CVR {farm.cvr}
-                        </span>
-                      </div>
-                    ) : null}
-                  </Link>
+                    farm={farm}
+                    overview={overviews[farm.id]}
+                    latest={farm.id === latestFarm?.id}
+                  />
                 ))}
-              </div>
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Ingen bedrifter matcher "{searchText.trim()}".
+              </p>
             )}
-          </>
+          </section>
         ) : null}
       </div>
     </main>
