@@ -20,9 +20,8 @@ import {
   type CSSProperties,
 } from 'react'
 
-import { simulationFieldsKey, useFarmFields } from '@/api/hooks'
-import { updateSimulationField } from '@/api/mutations'
-import type { FieldRecord, Simulation } from '@/api/types'
+import { useFarmFields } from '@/api/hooks'
+import type { FieldRecord } from '@/api/types'
 import {
   catchmentKey,
   fieldInCatchment,
