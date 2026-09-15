@@ -1,8 +1,8 @@
-export type OnboardingRole = 'landmand' | 'konsulent'
+export type OnboardingRole = 'farmer' | 'advisor'
 
 export const ROLE_LABELS: Record<OnboardingRole, string> = {
-  landmand: 'Landmand',
-  konsulent: 'Konsulent',
+  farmer: 'Landmand',
+  advisor: 'Konsulent',
 }
 
 export type PendingFarm = {
@@ -54,9 +54,15 @@ export const clearLastRegisteredEmail = () => {
   writeItem(LAST_REGISTERED_EMAIL_KEY, null)
 }
 
+const LEGACY_ROLES: Record<string, OnboardingRole> = {
+  landmand: 'farmer',
+  konsulent: 'advisor',
+}
+
 export const getStoredRole = (email: string): OnboardingRole | null => {
   const value = readItem(roleKey(email))
-  return value === 'landmand' || value === 'konsulent' ? value : null
+  if (value === 'farmer' || value === 'advisor') return value
+  return value ? (LEGACY_ROLES[value] ?? null) : null
 }
 
 export const setStoredRole = (email: string, role: OnboardingRole) => {

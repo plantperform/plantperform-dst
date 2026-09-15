@@ -40,13 +40,13 @@ export const createFields = (farmId: string, input: CreateFieldInput[]) =>
 
 const registryFieldToInput = (field: RegistryField): CreateFieldInput => ({
   imkId: field.imkId,
-  kystvandId: field.kystvandId,
+  catchmentId: field.catchmentId,
   retention: field.retention,
-  name: field.marknr ?? `Mark ${field.imkId}`,
+  name: field.fieldNumber ?? `Mark ${field.imkId}`,
   areaHa: field.areaHa,
   inTakeoutPlan: field.inTakeoutPlan,
-  udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
-  udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+  nLoadLimitKgNHa: field.nLoadLimitKgNHa,
+  nLoadQuotaKgN: field.nLoadQuotaKgN,
   geometry: field.geometry,
 })
 

@@ -3,20 +3,20 @@ import useSWR, { mutate, preload } from 'swr'
 import { fetcher } from '@/api/client'
 import type {
   FieldYearValues,
-  AfgrodeKodeOption,
+  CropCodeOption,
   Farm,
   FarmMember,
   FieldRecord,
-  GodningPresetOption,
-  KystvandoplandEmissions,
+  FertiliserPresetOption,
+  CatchmentEmissions,
   RegistryField,
   RegistryFieldSummary,
   RotationCandidateEvaluation,
   RotationCandidateOption,
   RotationCandidateYearResult,
-  RotationKategoriOption,
+  RotationCategoryOption,
   Simulation,
-  YearlyOptimizationKategoriOption,
+  YearlyOptimizationCategoryOption,
   YearlySummaryEntry,
 } from '@/api/types'
 
@@ -83,7 +83,7 @@ export const farmEmissionsKey = (farmId?: string) => {
 }
 
 export const useFarmEmissions = (farmId?: string) =>
-  useSWR<KystvandoplandEmissions[]>(farmEmissionsKey(farmId), fetcher)
+  useSWR<CatchmentEmissions[]>(farmEmissionsKey(farmId), fetcher)
 
 export const simulationsKey = (farmId?: string) => {
   if (!farmId) return null
@@ -103,7 +103,7 @@ export const useSimulations = (farmId?: string) =>
 export const useSimulationFields = (farmId?: string, simulationId?: string) =>
   useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
 
-export const scenarioAfgrodeKoderKey = (
+export const scenarioCropCodesKey = (
   farmId?: string,
   simulationId?: string,
 ) => {
@@ -112,14 +112,8 @@ export const scenarioAfgrodeKoderKey = (
   return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/afgroder-i-brug`
 }
 
-export const useScenarioAfgrodeKoder = (
-  farmId?: string,
-  simulationId?: string,
-) =>
-  useSWR<AfgrodeKodeOption[]>(
-    scenarioAfgrodeKoderKey(farmId, simulationId),
-    fetcher,
-  )
+export const useScenarioCropCodes = (farmId?: string, simulationId?: string) =>
+  useSWR<CropCodeOption[]>(scenarioCropCodesKey(farmId, simulationId), fetcher)
 
 export const simulationFieldCandidateDetailKey = (
   farmId?: string,
@@ -327,47 +321,47 @@ export const rotationCandidatesKey = (farmId?: string) => {
 export const useRotationCandidateOptions = (farmId?: string) =>
   useSWR<RotationCandidateOption[]>(rotationCandidatesKey(farmId), fetcher)
 
-export const rotationKategorierKey = (farmId?: string) => {
+export const rotationCategoriesKey = (farmId?: string) => {
   if (!farmId) return null
 
   return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/kategorier`
 }
 
-export const useRotationKategorier = (farmId?: string) =>
-  useSWR<RotationKategoriOption[]>(rotationKategorierKey(farmId), fetcher)
+export const useRotationCategories = (farmId?: string) =>
+  useSWR<RotationCategoryOption[]>(rotationCategoriesKey(farmId), fetcher)
 
-export const rotationNNormProcenterKey = (farmId?: string) => {
+export const rotationNNormPercentagesKey = (farmId?: string) => {
   if (!farmId) return null
 
   return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/n-norm-procenter`
 }
 
-export const useRotationNNormProcenter = (farmId?: string) =>
-  useSWR<string[]>(rotationNNormProcenterKey(farmId), fetcher)
+export const useRotationNNormPercentages = (farmId?: string) =>
+  useSWR<string[]>(rotationNNormPercentagesKey(farmId), fetcher)
 
-export const afgrodeKoderKey = (farmId?: string) => {
+export const cropCodesKey = (farmId?: string) => {
   if (!farmId) return null
 
   return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/afgrode-koder`
 }
 
-export const useAfgrodeKoder = (farmId?: string) =>
-  useSWR<AfgrodeKodeOption[]>(afgrodeKoderKey(farmId), fetcher)
+export const useCropCodes = (farmId?: string) =>
+  useSWR<CropCodeOption[]>(cropCodesKey(farmId), fetcher)
 
 export const preloadRotationCandidateCatalog = (farmId: string) => {
-  void preload(rotationKategorierKey(farmId), fetcher)
+  void preload(rotationCategoriesKey(farmId), fetcher)
   void preload(rotationCandidatesKey(farmId), fetcher)
-  void preload(afgrodeKoderKey(farmId), fetcher)
+  void preload(cropCodesKey(farmId), fetcher)
 }
 
-export const godningsPresetsKey = (farmId?: string) => {
+export const fertiliserPresetsKey = (farmId?: string) => {
   if (!farmId) return null
 
   return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/godnings-presets`
 }
 
-export const useGodningsPresets = (farmId?: string) =>
-  useSWR<GodningPresetOption[]>(godningsPresetsKey(farmId), fetcher)
+export const useFertiliserPresets = (farmId?: string) =>
+  useSWR<FertiliserPresetOption[]>(fertiliserPresetsKey(farmId), fetcher)
 
 export const yearlyOptimizationCandidatesKey = (
   farmId?: string,
@@ -382,7 +376,7 @@ export const useYearlyOptimizationCandidates = (
   farmId?: string,
   simulationId?: string,
 ) =>
-  useSWR<YearlyOptimizationKategoriOption[]>(
+  useSWR<YearlyOptimizationCategoryOption[]>(
     yearlyOptimizationCandidatesKey(farmId, simulationId),
     fetcher,
   )

@@ -23,7 +23,7 @@ import {
   describeCatchmentsOverQuota,
   type CatchmentOverview,
   farmQuotaStatusLevel,
-  formatCompactKr,
+  formatCompactDkk,
   formatQuotaAmount,
   formatWholeNumber,
   QUOTA_STATUS_STYLES,
@@ -67,7 +67,7 @@ const buildHeadline = (
   if (level === 'uncalculated') {
     return 'Kan ikke opgøres endnu - kør Optimér for at beregne markerne'
   }
-  const quotaKgn = totals.udledningskvoteMarkKgn
+  const quotaKgn = totals.nLoadQuotaKgN
   const headline =
     formatQuotaAmount(totals.nLoad, quotaKgn, formatWholeNumber) +
     ` ${describeQuotaDiff(totals.nLoad, quotaKgn)}`
@@ -116,7 +116,7 @@ const columnTitle = (
       ? `${column.calendarYear}: ingen historik`
       : `${column.calendarYear}: ingen årstal endnu`
   }
-  return `${column.calendarYear}: DB2 ${formatCompactKr(column.entry.totalDb2)}, udledning ${formatWholeNumber(column.entry.totalNLoadKg)} kg N ${relation?.text}`
+  return `${column.calendarYear}: DB2 ${formatCompactDkk(column.entry.totalDb2)}, udledning ${formatWholeNumber(column.entry.totalNLoadKg)} kg N ${relation?.text}`
 }
 
 const buildColumns = (
@@ -256,10 +256,10 @@ const renderYearSummary = ({
         {lastRun ? (
           <p className="text-xs text-muted-foreground">
             Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
-            {formatCompactKr(lastRun.objectiveDb2)}, udledning{' '}
+            {formatCompactDkk(lastRun.objectiveDb2)}, udledning{' '}
             {formatWholeNumber(lastRun.totalNLoadKg)} kg N, udvaskning{' '}
             {formatWholeNumber(lastRun.totalLeachingKg)} kg N,{' '}
-            {formatWholeNumber(lastRun.totalFen)} FE
+            {formatWholeNumber(lastRun.totalFeedUnits)} FE
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground">
@@ -295,7 +295,7 @@ const renderYearSummary = ({
         {column.calendarYear}
       </div>
       <SummaryValue label="DB2">
-        {formatCompactKr(column.entry.totalDb2)}
+        {formatCompactDkk(column.entry.totalDb2)}
       </SummaryValue>
       <SummaryValue label="Udledning">
         <QuotaStatusIndicator
@@ -378,7 +378,7 @@ export const YearWalkthrough = ({
     () => computeFieldTotals(fields, !history),
     [fields, history],
   )
-  const quotaKgn = resolveFarmQuota(totals.udledningskvoteMarkKgn).quotaKgn
+  const quotaKgn = resolveFarmQuota(totals.nLoadQuotaKgN).quotaKgn
 
   const selectedPosition = columns.findIndex(
     (column) => column.index === selectedYearIndex,
@@ -678,7 +678,7 @@ export const YearWalkthrough = ({
                           {loading ? (
                             <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
                           ) : entry ? (
-                            `DB2 ${formatCompactKr(entry.totalDb2)}`
+                            `DB2 ${formatCompactDkk(entry.totalDb2)}`
                           ) : (
                             '-'
                           )}

@@ -15,8 +15,8 @@ import {
 import { cn } from '@/lib/utils'
 
 const SECTIONS = [
-  { id: 'konto', label: 'Konto', soon: false },
-  { id: 'indstillinger', label: 'Indstillinger', soon: true },
+  { id: 'account', label: 'Konto', soon: false },
+  { id: 'settings', label: 'Indstillinger', soon: true },
 ]
 
 const ROLE_OPTIONS: {
@@ -25,12 +25,12 @@ const ROLE_OPTIONS: {
   description: string
 }[] = [
   {
-    role: 'landmand',
+    role: 'farmer',
     icon: Tractor,
     description: 'Jeg driver en bedrift og planlægger mit eget sædskifte.',
   },
   {
-    role: 'konsulent',
+    role: 'advisor',
     icon: Users,
     description: 'Jeg rådgiver flere landmænd og bruger oversigten.',
   },
@@ -203,7 +203,7 @@ export const ProfilePage = () => {
           </div>
 
           <div className="flex max-w-[680px] flex-col gap-6">
-            <SettingsSection id="konto" title="Konto">
+            <SettingsSection id="account" title="Konto">
               <div className="divide-y divide-muted">
                 <div className="flex items-center justify-between gap-4 px-6 py-4">
                   <div>
@@ -232,7 +232,7 @@ export const ProfilePage = () => {
             </SettingsSection>
 
             <SettingsSection
-              id="rolle"
+              id="role"
               title="Din rolle"
               aside={
                 role
@@ -243,7 +243,7 @@ export const ProfilePage = () => {
               <div
                 className="grid gap-3 p-6 sm:grid-cols-2"
                 role={role ? undefined : 'group'}
-                aria-labelledby={role ? undefined : 'rolle-heading'}
+                aria-labelledby={role ? undefined : 'role-heading'}
               >
                 {ROLE_OPTIONS.map((option) =>
                   role ? (
@@ -269,7 +269,7 @@ export const ProfilePage = () => {
             </SettingsSection>
 
             <SettingsSection
-              id="indstillinger"
+              id="settings"
               title="Indstillinger"
               aside="Kommer snart"
             >

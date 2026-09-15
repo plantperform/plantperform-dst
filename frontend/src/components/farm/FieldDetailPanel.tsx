@@ -9,7 +9,7 @@ import type {
   RotationCandidateYearResult,
   Simulation,
 } from '@/api/types'
-import { MarkPanel } from '@/components/farm/MarkPanel'
+import { FieldPanel } from '@/components/farm/FieldPanel'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -180,7 +180,7 @@ export const FieldDetailPanel = ({
         </div>
       </div>
 
-      <MarkPanel
+      <FieldPanel
         key={field.id}
         farmId={farmId}
         field={field}

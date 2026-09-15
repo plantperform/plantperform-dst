@@ -292,7 +292,7 @@ export const HomePage = () => {
 
         {!isLoading && !error && farmList.length === 0 ? (
           <div className="rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
-            <p id="kom-i-gang-heading" className="text-lg font-semibold">
+            <p id="get-started-heading" className="text-lg font-semibold">
               Kom i gang
             </p>
             {!selectedRole ? (
@@ -304,7 +304,7 @@ export const HomePage = () => {
                 <div
                   className="mt-5 grid gap-3 sm:grid-cols-2"
                   role="group"
-                  aria-labelledby="kom-i-gang-heading"
+                  aria-labelledby="get-started-heading"
                 >
                   <RoleCard
                     selected={false}
@@ -312,8 +312,8 @@ export const HomePage = () => {
                     description="Jeg driver en bedrift og vil i gang med min egen planlægning."
                     icon={Tractor}
                     onSelect={() => {
-                      setStoredRole(email, 'landmand')
-                      setSelectedRole('landmand')
+                      setStoredRole(email, 'farmer')
+                      setSelectedRole('farmer')
                     }}
                   />
                   <RoleCard
@@ -322,8 +322,8 @@ export const HomePage = () => {
                     description="Jeg rådgiver flere landmænd og skal bruge oversigten."
                     icon={Users}
                     onSelect={() => {
-                      setStoredRole(email, 'konsulent')
-                      setSelectedRole('konsulent')
+                      setStoredRole(email, 'advisor')
+                      setSelectedRole('advisor')
                     }}
                   />
                 </div>
@@ -335,13 +335,13 @@ export const HomePage = () => {
                 className="mt-5 motion-safe:animate-rise-in"
               >
                 <p className="text-sm text-muted-foreground">
-                  {selectedRole === 'landmand'
+                  {selectedRole === 'farmer'
                     ? 'Opret din bedrift for at komme i gang - fremover lander du direkte i den, når du logger ind.'
                     : 'Opret en bedrift pr. landmand, du hjælper. Du kan altid vende tilbage til denne oversigt.'}
                 </p>
                 <Button asChild className="mt-4 rounded-full">
                   <Link to="/farms/new">
-                    {selectedRole === 'landmand'
+                    {selectedRole === 'farmer'
                       ? 'Opret din bedrift'
                       : 'Opret bedrift'}
                   </Link>
