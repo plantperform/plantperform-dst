@@ -72,18 +72,42 @@ const buildRows = (
   if (field) {
     const status = getFieldQuotaStatus(field, isSimulationView)
     const calculated = status.level !== 'uncalculated'
+    const perHaNote = (key: 'nLoad' | 'db2') => {
+      const description =
+        colorBy === key
+          ? describeSpecValue(
+              COLOR_SPECS[key],
+              rawSpecValue(COLOR_SPECS[key], hovered),
+            )
+          : null
+      return description ? (
+        <span className="font-normal text-muted-foreground"> {description}</span>
+      ) : null
+    }
     rows.push({
       key: 'nLoad',
       label: 'Udledning',
       level: status.level,
-      value: calculated
-        ? formatQuotaAmount(status.nLoad, status.quotaKgn)
-        : 'ikke beregnet',
+      value: calculated ? (
+        <>
+          {formatQuotaAmount(status.nLoad, status.quotaKgn)}
+          {perHaNote('nLoad')}
+        </>
+      ) : (
+        'ikke beregnet'
+      ),
     })
     rows.push({
       key: 'db2',
       label: 'DB2',
-      value: calculated ? formatCompactKr(field.db2) : '-',
+      value: calculated ? (
+        <>
+          {formatCompactKr(field.db2)}
+          {perHaNote('db2')}
+        </>
+      ) : (
+        '-'
+      ),
     })
   } else {
     const limit = toFiniteNumber(hovered.properties.udledningsgraense_kgn_ha)
