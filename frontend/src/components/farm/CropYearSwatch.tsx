@@ -4,7 +4,7 @@ import type { CropGroupPattern } from '@/lib/crop-groups'
 import { coverCropShadow } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
-type CropYearSwatchSize = '12x16' | '8x12' | '14x10' | '10x8'
+export type CropYearSwatchSize = '12x16' | '8x12' | '14x10' | '10x8'
 
 const SIZE_CLASSES: Record<CropYearSwatchSize, string> = {
   '12x16':

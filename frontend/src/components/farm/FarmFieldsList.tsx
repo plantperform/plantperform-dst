@@ -19,11 +19,9 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import { mutate } from 'swr'
 
-import { simulationFieldsKey, useFarmFields } from '@/api/hooks'
-import { updateSimulationField } from '@/api/mutations'
-import type { FieldRecord, Simulation } from '@/api/types'
+import { useFarmFields } from '@/api/hooks'
+import type { FieldRecord } from '@/api/types'
 import {
   catchmentKey,
   fieldInCatchment,
@@ -39,7 +37,6 @@ import {
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { buildFarmFieldsColumns } from '@/components/farm/farm-fields-columns'
-import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -73,7 +70,6 @@ import {
   formatFieldCount,
   formatNumber,
   getFieldQuotaStatus,
-  isFieldLocked,
   QUOTA_STATUS_STYLES,
   totalsQuotaStatusLevel,
   type CatchmentOverview,
@@ -244,8 +240,10 @@ type FarmFieldsListProps = {
   isSimulationView?: boolean
   catchmentOverview: CatchmentOverview
   simulationId?: string
-  simulation?: Simulation
   mode?: FarmInspectorMode
+  lockingFieldId: string | null
+  onToggleLock: (field: FieldRecord) => void
+  onBindRotation: (field: FieldRecord) => void
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
   selectedFieldId: string | null
@@ -261,7 +259,6 @@ type FarmFieldsListProps = {
   selectedYearIndex?: number | null
   paneWidth?: number
   onRequiredWidthChange?: (width: number) => void
-  onError: (message: string | null) => void
 }
 
 export const FarmFieldsList = ({
@@ -270,8 +267,10 @@ export const FarmFieldsList = ({
   isSimulationView = false,
   catchmentOverview,
   simulationId,
-  simulation,
   mode = 'values',
+  lockingFieldId,
+  onToggleLock,
+  onBindRotation,
   sort,
   onSortChange,
   selectedFieldId,
@@ -287,10 +286,7 @@ export const FarmFieldsList = ({
   selectedYearIndex = null,
   paneWidth,
   onRequiredWidthChange,
-  onError,
 }: FarmFieldsListProps) => {
-  const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
-  const [bindFieldId, setBindFieldId] = useState<string | null>(null)
   const rowElements = useRef(new Map<string, HTMLTableRowElement>())
   const scrolledFieldId = useRef<string | null>(null)
   const focusedNonce = useRef(focusRequest?.nonce ?? null)
@@ -304,9 +300,6 @@ export const FarmFieldsList = ({
   const isRules = mode === 'rules'
   const canEditRules = isRules && isSimulationView && Boolean(simulationId)
   const effectiveSort = resolveEffectiveFieldsSort(sort, isRules)
-
-  const bindField =
-    sortedFields.find((field) => field.id === bindFieldId) ?? null
 
   const maxYears = Math.max(
     0,
@@ -409,48 +402,6 @@ export const FarmFieldsList = ({
     row.scrollIntoView({ block: 'nearest' })
   }, [focusRequest])
 
-  const toggleFieldLock = useCallback(
-    async (field: FieldRecord) => {
-      if (!simulationId || field.rotationId === null) return
-
-      const locked = isFieldLocked(field)
-      const target = locked ? [] : [field.rotationId]
-
-      setLockingFieldId(field.id)
-      try {
-        const updatedField = await updateSimulationField(
-          farmId,
-          simulationId,
-          field.id,
-          { allowedRotationIds: target },
-        )
-        await mutate(
-          simulationFieldsKey(farmId, simulationId),
-          (current: FieldRecord[] = []) =>
-            current.map((currentField) =>
-              currentField.id === updatedField.id ? updatedField : currentField,
-            ),
-          { revalidate: false },
-        )
-        onError(null)
-      } catch {
-        onError('Kunne ikke ændre låsningen af marken.')
-      } finally {
-        setLockingFieldId(null)
-      }
-    },
-    [farmId, simulationId, onError],
-  )
-
-  const onToggleLock = useCallback(
-    (field: FieldRecord) => void toggleFieldLock(field),
-    [toggleFieldLock],
-  )
-  const onBindRotation = useCallback(
-    (field: FieldRecord) => setBindFieldId(field.id),
-    [],
-  )
-
   const columns = useMemo(
     () =>
       buildFarmFieldsColumns({
@@ -486,9 +437,7 @@ export const FarmFieldsList = ({
   )
 
   const sorting: SortingState = useMemo(
-    () => [
-      { id: effectiveSort.key, desc: effectiveSort.direction === 'desc' },
-    ],
+    () => [{ id: effectiveSort.key, desc: effectiveSort.direction === 'desc' }],
     [effectiveSort],
   )
 
@@ -625,7 +574,11 @@ export const FarmFieldsList = ({
                 <CropGroupLegend fields={sortedFields} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="xs" className="ml-auto gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="ml-auto gap-1.5"
+                    >
                       <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
                       Kolonner
                       <span className="text-muted-foreground">
@@ -775,21 +728,6 @@ export const FarmFieldsList = ({
           </Table>
         </div>
       </div>
-      {bindField && simulationId && simulation ? (
-        <ManualRotationEditor
-          key={bindField.id}
-          farmId={farmId}
-          simulationId={simulationId}
-          simulation={simulation}
-          field={bindField}
-          intent="lock"
-          open
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) setBindFieldId(null)
-          }}
-          onError={onError}
-        />
-      ) : null}
     </>
   )
 }
