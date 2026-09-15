@@ -2,7 +2,11 @@ import type { Feature, FeatureCollection } from 'geojson'
 
 import type { FieldRecord, GeoJSONMultiPolygon, GeoJSONPolygon } from '@/api/types'
 import { classifyCrop, CROP_GROUP_INDEX } from '@/lib/crop-groups'
-import { isFieldLocked, quotaStatusLevel } from '@/lib/field-domain'
+import {
+  isFieldCalculated,
+  isFieldLocked,
+  quotaStatusLevel,
+} from '@/lib/field-domain'
 import { YEAR_QUOTA_STATUS_VALUES } from '@/lib/map-coloring'
 
 export type FieldYearProperties = {
@@ -205,6 +209,7 @@ export const fieldLabelPoint = (
 
 export const fieldsToFeatureCollection = (
   fields: FieldRecord[],
+  isSimulationView: boolean,
   changedFieldIds?: Set<string>,
   yearProperties?: FieldYearProperties,
 ): FeatureCollection => ({
@@ -229,11 +234,10 @@ export const fieldsToFeatureCollection = (
         yearQuotaLevel === 'ok' || yearQuotaLevel === 'near' || yearQuotaLevel === 'over'
           ? YEAR_QUOTA_STATUS_VALUES[yearQuotaLevel]
           : null
-      // Map colouring bins (leaching/nLoad/db2 in map-coloring.ts) are all
-      // labelled per hectare, so the GeoJSON properties they read must be
-      // per hectare too - field.leaching/nLoad/db2 themselves are the
-      // mark's totals (see FieldRecord), used as-is everywhere else.
-      const perHa = field.areaHa > 0 ? (value: number) => value / field.areaHa : () => null
+      const hasPerHaValues =
+        field.areaHa > 0 && isFieldCalculated(field, isSimulationView)
+      const perHa = (value: number) =>
+        hasPerHaValues ? value / field.areaHa : null
       return {
         type: 'Feature',
         properties: {

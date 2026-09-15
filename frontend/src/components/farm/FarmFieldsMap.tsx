@@ -373,8 +373,14 @@ export const FarmFieldsMap = ({
   const hasFieldGeometry = fields.some((field) => field.geometry !== null)
 
   const farmFieldsGeoJson = useMemo(
-    () => fieldsToFeatureCollection(fields, changedFields, yearProperties),
-    [fields, changedFields, yearProperties],
+    () =>
+      fieldsToFeatureCollection(
+        fields,
+        isSimulationView,
+        changedFields,
+        yearProperties,
+      ),
+    [fields, isSimulationView, changedFields, yearProperties],
   )
   const lockedFieldMarkers = useMemo(
     () =>

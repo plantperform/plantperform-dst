@@ -523,7 +523,7 @@ export const buildFillColor = (
   const sortedBins = [...spec.bins].sort((a, b) => a.max - b.max)
   const stepExpr: unknown[] = [
     'step',
-    ['coalesce', ['to-number', ['get', property], -1], -1],
+    ['to-number', ['coalesce', ['get', property], -1], -1],
     spec.fallbackColor,
     0,
     sortedBins[0].color,
