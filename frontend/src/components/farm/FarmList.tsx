@@ -5,10 +5,13 @@ import type { Farm } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   describeFarmQuota,
-  FARM_STATUS_LABELS,
   type FarmOverview,
 } from '@/lib/farm-overview'
-import { formatNumber, QUOTA_STATUS_STYLES } from '@/lib/field-domain'
+import {
+  formatNumber,
+  QUOTA_STATUS_LABELS,
+  QUOTA_STATUS_STYLES,
+} from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 export const FARM_LIST_CLASS =
@@ -37,9 +40,9 @@ type FarmRowProps = {
 }
 
 export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
-  const { totals, level, quotaPct } = overview
+  const { totals, level, quotaPct, quota } = overview
   const style = level ? QUOTA_STATUS_STYLES[level] : null
-  const quotaLine = totals ? describeFarmQuota(totals, quotaPct) : ''
+  const quotaLine = describeFarmQuota(overview)
 
   return (
     <li>
@@ -101,21 +104,35 @@ export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
                     aria-hidden="true"
                     className={cn('size-[7px] rounded-full', style.dot)}
                   />
-                  {FARM_STATUS_LABELS[level]}
+                  {QUOTA_STATUS_LABELS[level]}
                 </span>
               ) : null}
-              <div
-                className="h-1.5 overflow-hidden rounded-full bg-muted"
-                title={quotaLine}
-              >
+              {quota && quota.quotaKgN === null ? (
+                <div className="flex h-1.5 gap-0.5" title={quotaLine}>
+                  {quota.catchments.map((catchment) => (
+                    <div
+                      key={catchment.catchmentId}
+                      className={cn(
+                        'h-full flex-1 rounded-full',
+                        QUOTA_STATUS_STYLES[catchment.level].dot,
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : (
                 <div
-                  className={cn(
-                    'h-full rounded-full',
-                    style?.dot ?? 'bg-muted-foreground/60',
-                  )}
-                  style={{ width: `${quotaPct ?? 100}%` }}
-                />
-              </div>
+                  className="h-1.5 overflow-hidden rounded-full bg-muted"
+                  title={quotaLine}
+                >
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      style?.dot ?? 'bg-muted-foreground/60',
+                    )}
+                    style={{ width: `${quotaPct ?? 100}%` }}
+                  />
+                </div>
+              )}
               <p className="text-xs whitespace-nowrap text-muted-foreground">
                 {quotaLine}
               </p>

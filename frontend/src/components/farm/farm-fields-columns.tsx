@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cropGroupColor, cropGroupPattern } from '@/lib/crop-groups'
 import {
+  describeSeparateQuotas,
   describeUncalculatedCount,
   formatCompactDkk,
   formatLockTooltip,
@@ -21,8 +22,8 @@ import {
   isFieldCalculated,
   isFieldLocked,
   REAL_HISTORY_START_CALENDAR_YEAR,
-  resolveFarmQuota,
   ROTATION_START_CALENDAR_YEAR,
+  type FarmQuota,
   type FieldTotals,
   type QuotaStatus,
   type QuotaStatusLevel,
@@ -111,19 +112,18 @@ const renderQuotaStatus = (status: QuotaStatus) => {
   )
 }
 
-const renderQuotaStatusFooter = (
-  totals: FieldTotals,
-  level: QuotaStatusLevel,
-  catchmentNote: string | null,
-) => {
+const renderQuotaStatusFooter = (quota: FarmQuota) => {
+  const { totals, level, quotaKgN } = quota
   const placeholder = renderQuotaPlaceholder(level)
   if (placeholder) return placeholder
 
-  const quota = resolveFarmQuota(totals.nLoadQuotaKgN)
-  const notes: string[] = [quota.basis]
+  const notes: string[] = [
+    quotaKgN === null
+      ? describeSeparateQuotas(quota)
+      : 'summen af markernes kvoter',
+  ]
   const uncalculatedNote = describeUncalculatedCount(totals)
   if (uncalculatedNote) notes.push(uncalculatedNote)
-  if (catchmentNote) notes.push(catchmentNote)
 
   return (
     <div className="space-y-0.5 text-right">
@@ -136,7 +136,9 @@ const renderQuotaStatusFooter = (
         )}
         badgeClassName="sr-only full:not-sr-only"
       >
-        {formatQuotaAmount(totals.nLoad, quota.quotaKgn)}
+        {quotaKgN === null
+          ? `${formatNumber(totals.nLoad)} kg N`
+          : formatQuotaAmount(totals.nLoad, quotaKgN)}
       </QuotaStatusIndicator>
       <div className="flex flex-wrap justify-end gap-x-1 text-xs font-normal text-muted-foreground">
         {notes.map((note, index) => (
@@ -478,9 +480,7 @@ export type FarmFieldsColumnsArgs = {
   maxYears: number
   selectedYearIndex: number | null
   fields: FieldRecord[]
-  totals: FieldTotals
-  quotaFooterLevel: QuotaStatusLevel
-  quotaFooterNote: string | null
+  quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
   canEditRules: boolean
   lockingFieldId: string | null
@@ -494,15 +494,14 @@ export const buildFarmFieldsColumns = ({
   maxYears,
   selectedYearIndex,
   fields,
-  totals,
-  quotaFooterLevel,
-  quotaFooterNote,
+  quota,
   catchmentLabel,
   canEditRules,
   lockingFieldId,
   onToggleLock,
   onBindRotation,
 }: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
+  const { totals } = quota
   if (mode === 'rules') {
     return buildRulesColumns({
       fields,
@@ -651,7 +650,7 @@ export const buildFarmFieldsColumns = ({
           getFieldQuotaStatus(row.original, isSimulationView),
         ),
       footer: () =>
-        renderQuotaStatusFooter(totals, quotaFooterLevel, quotaFooterNote),
+        renderQuotaStatusFooter(quota),
       enableSorting: false,
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
@@ -748,7 +747,10 @@ export const buildFarmFieldsColumns = ({
           </>
         )
       },
-      footer: () => <div>{formatNumber(totals.nLoadQuotaKgN)} kg N</div>,
+      footer: () =>
+        quota.quotaKgN === null ? null : (
+          <div>{formatNumber(totals.nLoadQuotaKgN)} kg N</div>
+        ),
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,

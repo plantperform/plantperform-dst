@@ -93,7 +93,7 @@ import {
 import { UserMenuContent } from '@/components/UserMenu'
 import {
   changedFieldIds,
-  computeFieldTotals,
+  describeSeparateQuotas,
   formatCompactDkk,
   formatFieldCount,
   formatNumber,
@@ -101,7 +101,8 @@ import {
   formatWholeNumber,
   isFieldLocked,
   QUOTA_STATUS_STYLES,
-  totalsQuotaStatusLevel,
+  resolveFarmQuota,
+  type FarmQuota,
   type FieldTotals,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
@@ -139,12 +140,10 @@ type ViewKeyFigures = {
 }
 
 const describeKeyFigures = (
-  fields: FieldRecord[],
+  quota: FarmQuota,
   isSimulationView: boolean,
 ): ViewKeyFigures => {
-  const totals = computeFieldTotals(fields, isSimulationView)
-  const level = totalsQuotaStatusLevel(totals)
-  const quota = totals.nLoadQuotaKgN
+  const { totals, level, quotaKgN } = quota
 
   if (totals.calculatedCount === 0) {
     return {
@@ -157,15 +156,17 @@ const describeKeyFigures = (
   }
 
   const emission =
-    quota > 0
-      ? `${formatWholeNumber(totals.nLoad)} / ${formatWholeNumber(quota)} kg N`
+    quotaKgN !== null && quotaKgN > 0
+      ? `${formatWholeNumber(totals.nLoad)} / ${formatWholeNumber(quotaKgN)} kg N`
       : `${formatWholeNumber(totals.nLoad)} kg N`
-  const fullEmission = formatQuotaAmount(totals.nLoad, quota)
+  const fullEmission = formatQuotaAmount(totals.nLoad, quotaKgN ?? 0)
+  const quotaNote =
+    quotaKgN === null ? `, ${describeSeparateQuotas(quota)}` : ''
 
   return {
     level,
     label: `${emission} · ${formatCompactDkk(totals.db2)}`,
-    title: `Udledning ${fullEmission} pr. gennemsnitsår, DB2 ${formatWholeNumber(totals.db2)} kr`,
+    title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr`,
   }
 }
 
@@ -180,25 +181,26 @@ const totalsEqual = (left: FieldTotals, right: FieldTotals) =>
   left.feedUnits === right.feedUnits &&
   left.nLoadQuotaKgN === right.nLoadQuotaKgN
 
+const quotaEqual = (left: FarmQuota, right: FarmQuota) =>
+  left.level === right.level && totalsEqual(left.totals, right.totals)
+
 const isFullyCalculated = (totals: FieldTotals) =>
   totals.fieldCount > 0 && totals.calculatedCount === totals.fieldCount
 
-const meetsQuota = (totals: FieldTotals) => {
-  const level = totalsQuotaStatusLevel(totals)
-  return level === 'ok' || level === 'near'
-}
+const meetsQuota = (quota: FarmQuota) =>
+  quota.level === 'ok' || quota.level === 'near'
 
 const pickBestSimulationId = (
-  totalsBySimulation: Record<string, FieldTotals>,
+  quotaBySimulation: Record<string, FarmQuota>,
 ): string | null => {
-  const complete = Object.entries(totalsBySimulation).filter(([, totals]) =>
-    isFullyCalculated(totals),
+  const complete = Object.entries(quotaBySimulation).filter(([, quota]) =>
+    isFullyCalculated(quota.totals),
   )
   if (complete.length < 2) return null
-  const compliant = complete.filter(([, totals]) => meetsQuota(totals))
+  const compliant = complete.filter(([, quota]) => meetsQuota(quota))
   if (compliant.length === 0) return null
   return compliant.reduce((best, entry) =>
-    entry[1].db2 > best[1].db2 ? entry : best,
+    entry[1].totals.db2 > best[1].totals.db2 ? entry : best,
   )[0]
 }
 
@@ -270,27 +272,30 @@ export const FarmSidebar = ({
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
-  const [totalsBySimulation, setTotalsBySimulation] = useState<
-    Record<string, FieldTotals>
+  const [quotaBySimulation, setQuotaBySimulation] = useState<
+    Record<string, FarmQuota>
   >({})
-  const historyFigures = describeKeyFigures(fields, false)
+  const historyFigures = describeKeyFigures(
+    resolveFarmQuota(fields, false),
+    false,
+  )
   const bestSimulationId = useMemo(
-    () => pickBestSimulationId(totalsBySimulation),
-    [totalsBySimulation],
+    () => pickBestSimulationId(quotaBySimulation),
+    [quotaBySimulation],
   )
 
-  const reportTotals = useCallback(
-    (simulationId: string, totals: FieldTotals | null) => {
-      setTotalsBySimulation((current) => {
+  const reportQuota = useCallback(
+    (simulationId: string, quota: FarmQuota | null) => {
+      setQuotaBySimulation((current) => {
         const existing = current[simulationId]
-        if (totals === null) {
+        if (quota === null) {
           if (!existing) return current
           const next = { ...current }
           delete next[simulationId]
           return next
         }
-        if (existing && totalsEqual(existing, totals)) return current
-        return { ...current, [simulationId]: totals }
+        if (existing && quotaEqual(existing, quota)) return current
+        return { ...current, [simulationId]: quota }
       })
     },
     [],
@@ -437,7 +442,7 @@ export const FarmSidebar = ({
                     onModeChange={onModeChange}
                     onOptimize={onOptimize}
                     onYearlyOptimize={onYearlyOptimize}
-                    onTotals={reportTotals}
+                    onQuota={reportQuota}
                     onSelect={() =>
                       onSelectionChange({
                         kind: 'simulation',
@@ -870,7 +875,7 @@ type SimulationMenuItemProps = {
   onModeChange: (mode: FarmInspectorMode) => void
   onOptimize: () => void
   onYearlyOptimize: () => void
-  onTotals: (simulationId: string, totals: FieldTotals | null) => void
+  onQuota: (simulationId: string, quota: FarmQuota | null) => void
   onSelect: () => void
   onCopy: () => void
   onDelete: () => void
@@ -889,7 +894,7 @@ const SimulationMenuItem = ({
   onModeChange,
   onOptimize,
   onYearlyOptimize,
-  onTotals,
+  onQuota,
   onSelect,
   onCopy,
   onDelete,
@@ -901,14 +906,11 @@ const SimulationMenuItem = ({
     error: fieldsError,
     isLoading: fieldsLoading,
   } = useSimulationFields(farmId, simulation.id)
-  const figures = simulationFields
-    ? describeKeyFigures(simulationFields, true)
-    : undefined
-  const totals = useMemo(
-    () =>
-      simulationFields ? computeFieldTotals(simulationFields, true) : null,
+  const quota = useMemo(
+    () => (simulationFields ? resolveFarmQuota(simulationFields, true) : null),
     [simulationFields],
   )
+  const figures = quota ? describeKeyFigures(quota, true) : undefined
   const changedCount = useMemo(
     () =>
       simulationFields ? changedFieldIds(simulationFields, liveFields).size : 0,
@@ -921,9 +923,9 @@ const SimulationMenuItem = ({
   )
 
   useEffect(() => {
-    onTotals(simulation.id, totals)
-    return () => onTotals(simulation.id, null)
-  }, [simulation.id, totals, onTotals])
+    onQuota(simulation.id, quota)
+    return () => onQuota(simulation.id, null)
+  }, [simulation.id, quota, onQuota])
 
   return (
     <SidebarMenuItem>

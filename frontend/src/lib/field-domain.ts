@@ -365,18 +365,6 @@ export type QuotaStatus = {
   quotaKgn: number
 }
 
-export type FarmQuotaBasis = 'summen af markernes kvoter'
-
-export type ResolvedFarmQuota = {
-  quotaKgn: number
-  basis: FarmQuotaBasis
-}
-
-export const resolveFarmQuota = (fieldQuotaSum: number): ResolvedFarmQuota => ({
-  quotaKgn: fieldQuotaSum,
-  basis: 'summen af markernes kvoter',
-})
-
 export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
@@ -400,6 +388,14 @@ export const formatQuotaAmount = (
   quotaKgn > 0
     ? `${format(nLoad)} af ${format(quotaKgn)} kg N`
     : `${format(nLoad)} kg N`
+
+export const quotaPercent = (nLoad: number, quotaKgN: number): number | null =>
+  quotaKgN > 0 ? (nLoad / quotaKgN) * 100 : null
+
+export const formatQuotaPercent = (nLoad: number, quotaKgN: number): string => {
+  const percent = quotaPercent(nLoad, quotaKgN)
+  return percent === null ? '-' : `${formatWholeNumber(percent)} %`
+}
 
 export type QuotaStatusStyle = {
   dot: string
@@ -448,6 +444,16 @@ export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   noData: QUOTA_STATUS_STYLE_UNKNOWN,
   partial: QUOTA_STATUS_STYLE_UNKNOWN,
   excluded: QUOTA_STATUS_STYLE_UNKNOWN,
+}
+
+export const QUOTA_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
+  ok: 'Under kvote',
+  near: 'Tæt på kvote',
+  over: 'Over kvote',
+  uncalculated: 'Ikke beregnet',
+  noData: 'Ingen kvote',
+  partial: 'Delvist beregnet',
+  excluded: 'Ikke kvotegivende',
 }
 
 export type FieldTotals = {
@@ -521,33 +527,79 @@ export type CatchmentTotals = {
   totals: FieldTotals
 }
 
-export type CatchmentOverview = { over: number; total: number }
+const combineQuotaStatusLevels = (
+  levels: QuotaStatusLevel[],
+): QuotaStatusLevel => {
+  if (levels.includes('over')) return 'over'
+  if (levels.length > 0 && levels.every((level) => level === 'uncalculated')) {
+    return 'uncalculated'
+  }
+  if (levels.some((level) => level === 'uncalculated' || level === 'partial')) {
+    return 'partial'
+  }
+  if (levels.includes('near')) return 'near'
+  if (levels.includes('ok')) return 'ok'
+  return 'noData'
+}
 
-export const countCatchmentsOverQuota = (
+export type CatchmentQuota = {
+  catchmentId: number
+  totals: FieldTotals
+  level: QuotaStatusLevel
+}
+
+export type FarmQuota = {
+  totals: FieldTotals
+  level: QuotaStatusLevel
+  quotaKgN: number | null
+  catchments: CatchmentQuota[]
+  overCount: number
+}
+
+export const resolveFarmQuota = (
   fields: FieldRecord[],
   isSimulationView: boolean,
-): CatchmentOverview => {
-  const groups = groupFieldsByCatchment(fields, isSimulationView)
+): FarmQuota => {
+  const totals = computeFieldTotals(fields, isSimulationView)
+  const catchments = groupFieldsByCatchment(fields, isSimulationView).flatMap(
+    ({ catchmentId, totals: catchmentTotals }) =>
+      catchmentId !== null &&
+      catchmentTotals.fieldCount > catchmentTotals.excludedCount
+        ? [
+            {
+              catchmentId,
+              totals: catchmentTotals,
+              level: totalsQuotaStatusLevel(catchmentTotals),
+            },
+          ]
+        : [],
+  )
+  const separate = catchments.length > 1
+  const levels = catchments.map((catchment) => catchment.level)
+  const overCount = catchments.filter(
+    (catchment) => catchment.level === 'over',
+  ).length
   return {
-    over: groups.filter(
-      (entry) => totalsQuotaStatusLevel(entry.totals) === 'over',
-    ).length,
-    total: groups.length,
+    totals,
+    level: separate
+      ? combineQuotaStatusLevels(levels)
+      : totalsQuotaStatusLevel(totals),
+    quotaKgN: separate ? null : totals.nLoadQuotaKgN,
+    catchments,
+    overCount,
   }
 }
 
-export const describeCatchmentsOverQuota = (
-  overview: CatchmentOverview,
-): string | null =>
-  overview.over > 0 && overview.total > 1
-    ? `${overview.over} af ${overview.total} oplande over grænsen`
-    : null
-
-export const farmQuotaStatusLevel = (
-  totals: FieldTotals,
-  overview: CatchmentOverview,
-): QuotaStatusLevel =>
-  overview.over > 0 ? 'over' : totalsQuotaStatusLevel(totals)
+export const describeSeparateQuotas = (quota: FarmQuota): string => {
+  const count = quota.catchments.length
+  if (quota.overCount > 0) {
+    return `${quota.overCount} af ${count} oplande over grænsen`
+  }
+  if (quota.level === 'ok' || quota.level === 'near') {
+    return `alle ${count} oplande under grænsen`
+  }
+  return `${count} oplande med hver sin kvote`
+}
 
 export const groupFieldsByCatchment = (
   fields: FieldRecord[],
@@ -655,8 +707,10 @@ export const summarizeFieldYears = (
         totalFeedUnits: 0,
         fieldCount: 0,
       }
-      bucket.totalNLoadKg +=
-        yearResult.leachingKgNHa * field.areaHa * retentionFactor
+      if (field.quotaEligible) {
+        bucket.totalNLoadKg +=
+          yearResult.leachingKgNHa * field.areaHa * retentionFactor
+      }
       bucket.totalDb2 += yearResult.dbDkkHa * field.areaHa
       if (yearResult.dbDetail.yieldUnit === 'FE/ha') {
         bucket.totalFeedUnits +=
@@ -668,6 +722,30 @@ export const summarizeFieldYears = (
   }
   return [...buckets.values()].sort((left, right) => left.year - right.year)
 }
+
+export const applyFieldYearValues = (
+  fields: FieldRecord[],
+  yearsByFieldId: FieldYearValues,
+  yearIndex: number,
+): FieldRecord[] =>
+  fields.map((field) => {
+    const yearResult = yearsByFieldId[field.id]?.[yearIndex]
+    if (!yearResult) {
+      return { ...field, db2: 0, nLoad: 0, leaching: 0, feedUnits: 0 }
+    }
+    return {
+      ...field,
+      db2: yearResult.dbDkkHa * field.areaHa,
+      nLoad:
+        yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
+        field.areaHa,
+      leaching: yearResult.leachingKgNHa * field.areaHa,
+      feedUnits:
+        yearResult.dbDetail.yieldUnit === 'FE/ha'
+          ? (Number(yearResult.dbDetail.yieldAmount) || 0) * field.areaHa
+          : 0,
+    }
+  })
 
 export type CatchmentYearlySummary = {
   catchmentId: number | null
