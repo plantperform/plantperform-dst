@@ -18,14 +18,12 @@ export type CatchmentOption = {
 }
 
 const CATCHMENT_COLOR_CLASSES = [
-  'bg-sky-500',
-  'bg-red-500',
-  'bg-yellow-400',
-  'bg-lime-500',
-  'bg-purple-500',
-  'bg-pink-500',
-  'bg-orange-500',
-  'bg-teal-500',
+  'bg-blue-700',
+  'bg-fuchsia-700',
+  'bg-teal-700',
+  'bg-stone-600',
+  'bg-violet-400',
+  'bg-cyan-900',
 ]
 
 const NO_CATCHMENT_COLOR_CLASS = 'bg-stone-400'
