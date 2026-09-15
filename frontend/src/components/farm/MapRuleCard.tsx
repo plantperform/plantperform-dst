@@ -2,7 +2,8 @@ import { Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
-import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { RotationSwatches } from '@/components/farm/RotationSwatches'
+import { RotationYearRow } from '@/components/farm/RotationYearRow'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
@@ -11,7 +12,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { cropGroupColor } from '@/lib/crop-groups'
 import {
   formatNumber,
   isFieldLocked,
@@ -65,11 +65,6 @@ export const MapRuleCard = ({
     return () => card.removeEventListener('dblclick', stop)
   }, [])
 
-  const years = field.cropRotation.map((year, index) => ({
-    year,
-    calendarYear: ROTATION_START_CALENDAR_YEAR + index,
-    color: cropGroupColor(year.afgrodeKode, year.afgrodeNavn),
-  }))
   const noRotation = field.rotationId === null
   const locked = isFieldLocked(field)
   const editTooltip = noRotation
@@ -85,7 +80,7 @@ export const MapRuleCard = ({
     <div
       ref={cardRef}
       data-map-overlay
-      className="w-64 max-w-[calc(100vw-2rem)] rounded-lg border bg-card text-xs text-card-foreground shadow-lg motion-safe:animate-[rise-in_180ms_ease-out_both]"
+      className="w-72 max-w-[calc(100vw-2rem)] rounded-lg border bg-card text-xs text-card-foreground shadow-lg motion-safe:animate-[rise-in_180ms_ease-out_both]"
     >
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
         <span className="min-w-0 truncate text-sm font-semibold">
@@ -118,7 +113,7 @@ export const MapRuleCard = ({
       </div>
 
       <div className="border-t">
-        {noRotation || years.length === 0 ? (
+        {noRotation || field.cropRotation.length === 0 ? (
           <p className="px-3 py-2 text-muted-foreground">
             Intet sædskifte endnu - kør Optimér for denne mark
           </p>
@@ -130,45 +125,28 @@ export const MapRuleCard = ({
               label={locked ? 'Låst til sædskifte' : 'Nuværende sædskifte'}
               aria-controls="map-rule-card-rotation"
               hint={
-                <span className="flex gap-0.5">
-                  {years.map(({ year, calendarYear, color }) => (
-                    <CropYearSwatch
-                      key={calendarYear}
-                      color={color}
-                      hasUdlaeg={year.udlaegNavn !== null}
-                      size="10x8"
-                    />
-                  ))}
-                </span>
+                <RotationSwatches
+                  rotation={field.cropRotation}
+                  startYear={ROTATION_START_CALENDAR_YEAR}
+                  size="10x8"
+                />
               }
               hintAlign="end"
               className="w-full px-3 py-2"
             />
             {rotationOpen ? (
-              <div id="map-rule-card-rotation" className="px-3 pb-2">
-                <ul className="space-y-1">
-                  {years.map(({ year, calendarYear, color }) => (
-                    <li key={calendarYear} className="flex items-center gap-2">
-                      <span className="w-8 shrink-0 text-muted-foreground tabular-nums">
-                        {calendarYear}
-                      </span>
-                      <CropYearSwatch
-                        color={color}
-                        hasUdlaeg={year.udlaegNavn !== null}
-                        size="14x10"
-                      />
-                      <span className="min-w-0 truncate">
-                        {year.afgrodeNavn}
-                        {year.udlaegNavn ? (
-                          <span className="text-muted-foreground">
-                            {` (udlæg: ${year.udlaegNavn})`}
-                          </span>
-                        ) : null}
-                      </span>
-                    </li>
+              <div id="map-rule-card-rotation" className="px-1.5 pb-2">
+                <ul className="divide-y">
+                  {field.cropRotation.map((year, index) => (
+                    <RotationYearRow
+                      key={index}
+                      year={year}
+                      index={index}
+                      startYear={ROTATION_START_CALENDAR_YEAR}
+                    />
                   ))}
                 </ul>
-                <p className="mt-1.5 text-muted-foreground">
+                <p className="mt-1.5 px-1.5 text-muted-foreground">
                   {locked ? 'Optimér ændrer det ikke' : 'Optimér kan ændre det'}
                 </p>
               </div>

@@ -3,13 +3,12 @@ import { ChevronRight, Lock, LockOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
-import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
+import { RotationSwatches } from '@/components/farm/RotationSwatches'
 import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHeaderContent'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cropGroupColor } from '@/lib/crop-groups'
 import {
   describeUncalculatedCount,
   formatCompactKr,
@@ -221,35 +220,13 @@ const renderRotationSwatches = (
   highlightIndex: number | null = null,
 ) => (
   <div className="flex items-center gap-2.5">
-    <div className="flex shrink-0 gap-0.5">
-      {rotation.map((year, index) => {
-        const calendarYear = rotationStartYear + index
-        const hasUdlaeg = year.udlaegNavn !== null
-        const title = hasUdlaeg
-          ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
-          : `${calendarYear}: ${year.afgrodeNavn}`
-        const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
-        const isHighlighted = highlightIndex === index
-        return (
-          <span
-            key={index}
-            className={cn(
-              'inline-flex rounded-xs motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
-              isHighlighted && 'ring-2 ring-primary ring-offset-1',
-              highlightIndex !== null && !isHighlighted && 'opacity-60',
-            )}
-          >
-            <CropYearSwatch
-              title={title}
-              color={color}
-              hasUdlaeg={hasUdlaeg}
-              size="12x16"
-              className="w-3 full:w-4"
-            />
-          </span>
-        )
-      })}
-    </div>
+    <RotationSwatches
+      rotation={rotation}
+      startYear={rotationStartYear}
+      size="12x16"
+      highlightIndex={highlightIndex}
+      swatchClassName="w-3 full:w-4"
+    />
     <span
       className="hidden min-w-0 max-w-40 truncate text-sm full:block"
       title={uniqueCropNames(rotation).join(' · ')}

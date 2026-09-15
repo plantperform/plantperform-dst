@@ -204,6 +204,7 @@ type HoveredMars = {
 }
 
 const MAP_CONTROLS_INSET = 44
+const RULE_CARD_MARGIN = 12
 
 const isFromMapOverlay = (event: MapLayerMouseEvent) =>
   event.originalEvent.target instanceof Element &&
@@ -294,6 +295,7 @@ export const FarmFieldsMap = ({
   const [mapZoom, setMapZoom] = useState(initialViewState.zoom)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
   const [ruleRotationOpen, setRuleRotationOpen] = useState(true)
+  const ruleCardRef = useRef<HTMLDivElement>(null)
   const [overflowingLegend, setOverflowingLegend] = useState<string | null>(
     null,
   )
@@ -481,6 +483,7 @@ export const FarmFieldsMap = ({
   const activeRulePoint = activeRuleField
     ? fieldLabelPoint(activeRuleField)
     : null
+  const activeRuleFieldId = activeRuleField?.id
   const hoveringActiveRuleField =
     activeRuleField !== undefined && hoveredFieldId === activeRuleField.id
   const attachedImkIds = fields
@@ -510,6 +513,21 @@ export const FarmFieldsMap = ({
   }
   const tileUrl = `${window.location.origin}${API_BASE}/registry/tiles/{z}/{x}/{y}.pbf?${tileParams}`
   const marsTileUrl = `${window.location.origin}${API_BASE}/mars/tiles/{z}/{x}/{y}.pbf`
+
+  useEffect(() => {
+    const map = mapRef.current
+    const card = ruleCardRef.current
+    if (!map || !card || activeRuleFieldId === undefined) return
+    const cardRect = card.getBoundingClientRect()
+    const mapRect = map.getContainer().getBoundingClientRect()
+    const top = cardRect.top - (mapRect.top + MAP_CONTROLS_INSET)
+    const bottom = cardRect.bottom - (mapRect.bottom - RULE_CARD_MARGIN)
+    const left = cardRect.left - (mapRect.left + RULE_CARD_MARGIN)
+    const right = cardRect.right - (mapRect.right - RULE_CARD_MARGIN)
+    const dx = left < 0 ? left : Math.max(right, 0)
+    const dy = top < 0 ? top : Math.max(bottom, 0)
+    if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { duration: 300 })
+  }, [activeRuleFieldId, ruleRotationOpen])
 
   const saveMapViewState = () => {
     const map = mapRef.current
@@ -1414,15 +1432,17 @@ export const FarmFieldsMap = ({
               offset={[0, -6]}
               style={{ zIndex: 1 }}
             >
-              <MapRuleCard
-                field={activeRuleField}
-                locking={lockingFieldId === activeRuleField.id}
-                onToggleLock={onToggleLock}
-                onBindRotation={onBindRotation}
-                rotationOpen={ruleRotationOpen}
-                onRotationOpenChange={setRuleRotationOpen}
-                onClose={() => onSelectedFieldChange(null)}
-              />
+              <div ref={ruleCardRef}>
+                <MapRuleCard
+                  field={activeRuleField}
+                  locking={lockingFieldId === activeRuleField.id}
+                  onToggleLock={onToggleLock}
+                  onBindRotation={onBindRotation}
+                  rotationOpen={ruleRotationOpen}
+                  onRotationOpenChange={setRuleRotationOpen}
+                  onClose={() => onSelectedFieldChange(null)}
+                />
+              </div>
             </Marker>
           ) : null}
           {cropLabelsVisible
