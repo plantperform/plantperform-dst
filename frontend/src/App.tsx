@@ -15,7 +15,7 @@ const App = () => (
     <Route path="/verify-email" element={<VerifyEmailPage />} />
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<HomePage />} />
-      <Route path="/profil" element={<ProfilePage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/farms/new" element={<CreateFarmPage />} />
       <Route path="/farms/:farmId" element={<FarmDetailPage />} />
     </Route>

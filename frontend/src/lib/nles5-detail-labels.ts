@@ -88,13 +88,13 @@ export const L_FORMULA_CONSTANTS = {
   rho: 1.085,
 }
 
-// Sowing date/establishment interval for efterafgrøde (EEA), ported from
+// Sowing date/establishment interval for catch crop (EEA), ported from
 // streamlit_app.py (lines 75-92) and engine.py's FDATO_EFFECT_BY_DATE/
 // FDATO_STEP_RATES, which the backend (bridge_v2.py) actually uses.
-// Applies as a scenarie-wide setting to every year with efterafgrøde.
+// Applies as a scenario-wide setting to every year with catch crop.
 
 // Section 37: standard (non-precision) establishment intervals, label -> representative date.
-export const FDATO_STANDARD_INTERVALS: { label: string; date: string }[] = [
+export const SOWING_DATE_INTERVALS: { label: string; date: string }[] = [
   { label: 'Til og med 20. august (45%)', date: '20/8' },
   { label: '21.-24. august (42%)', date: '24/8' },
   { label: '25.-28. august (40%)', date: '28/8' },
@@ -102,13 +102,13 @@ export const FDATO_STANDARD_INTERVALS: { label: string; date: string }[] = [
 ]
 
 // Section 38: Bilag 8's daily curve, tabulated only for 9/8-7/9 (the deadline in section 33(1)(2)).
-export const FDATO_OPTIONS: string[] = [
+export const SOWING_DATE_OPTIONS: string[] = [
   '9/8', '10/8', '11/8', '12/8', '13/8', '14/8', '15/8', '16/8', '17/8', '18/8',
   '19/8', '20/8', '21/8', '22/8', '23/8', '24/8', '25/8', '26/8', '27/8', '28/8',
   '29/8', '30/8', '31/8', '1/9', '2/9', '3/9', '4/9', '5/9', '6/9', '7/9',
 ]
 
-const FDATO_EFFECT_BY_DATE: Record<string, number> = {
+const SOWING_DATE_EFFECT_BY_DATE: Record<string, number> = {
   '9/8': 1.16, '10/8': 1.15, '11/8': 1.13, '12/8': 1.12, '13/8': 1.1,
   '14/8': 1.09, '15/8': 1.07, '16/8': 1.06, '17/8': 1.04, '18/8': 1.03,
   '19/8': 1.01, '20/8': 1.0, '21/8': 0.99, '22/8': 0.97, '23/8': 0.96,
@@ -117,24 +117,24 @@ const FDATO_EFFECT_BY_DATE: Record<string, number> = {
   '3/9': 0.8, '4/9': 0.78, '5/9': 0.77, '6/9': 0.75, '7/9': 0.74,
 }
 
-const FDATO_STEP_RATES: { maxMonth: number; maxDay: number; pct: number }[] = [
+const SOWING_DATE_STEP_RATES: { maxMonth: number; maxDay: number; pct: number }[] = [
   { maxMonth: 8, maxDay: 20, pct: 45 },
   { maxMonth: 8, maxDay: 24, pct: 42 },
   { maxMonth: 8, maxDay: 28, pct: 40 },
   { maxMonth: 9, maxDay: 7, pct: 33 },
 ]
 
-const parseFdato = (value: string): [number, number] | null => {
+const parseSowingDate = (value: string): [number, number] | null => {
   const [day, month] = value.split('/').map(Number)
   if (!day || !month) return null
   return [month, day]
 }
 
-const fdatoStepFactor = (value: string): number => {
-  const parsed = parseFdato(value)
+const sowingDateStepFactor = (value: string): number => {
+  const parsed = parseSowingDate(value)
   if (!parsed) return 1
   const [month, day] = parsed
-  for (const { maxMonth, maxDay, pct } of FDATO_STEP_RATES) {
+  for (const { maxMonth, maxDay, pct } of SOWING_DATE_STEP_RATES) {
     if (month < maxMonth || (month === maxMonth && day <= maxDay)) return pct / 45
   }
   return 0
@@ -146,7 +146,7 @@ const EEA_STRENGTH = 0.45
 // Calculated NUAR EEA effect as a percentage for the selected sowing date or
 // interval. Uses the same formula as streamlit_app.py's _fdato_effect_pct for
 // the preview in the "Nyt scenarie" wizard.
-export const fdatoEffectPercent = (fdato: string, precision: boolean): number => {
-  const factor = precision ? (FDATO_EFFECT_BY_DATE[fdato] ?? 1) : fdatoStepFactor(fdato)
+export const sowingDateEffectPercent = (sowingDate: string, precision: boolean): number => {
+  const factor = precision ? (SOWING_DATE_EFFECT_BY_DATE[sowingDate] ?? 1) : sowingDateStepFactor(sowingDate)
   return EEA_STRENGTH * factor * 100
 }

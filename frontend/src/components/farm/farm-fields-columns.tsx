@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   describeUncalculatedCount,
-  formatCompactKr,
+  formatCompactDkk,
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
@@ -48,7 +48,7 @@ const PER_HECTARE_CLASS = 'hidden text-xs text-muted-foreground full:block'
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
   for (const year of rotation) {
-    if (!seenNames.includes(year.afgrodeNavn)) seenNames.push(year.afgrodeNavn)
+    if (!seenNames.includes(year.cropName)) seenNames.push(year.cropName)
   }
   return seenNames
 }
@@ -56,7 +56,9 @@ const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
 const cropFirstWord = (name: string): string =>
   name.trim().split(/\s+/)[0].replace(/[,.-]+$/, '')
 
-const uniqueCropNamesLabel = (rotation: FieldRecord['cropRotation']): string => {
+const uniqueCropNamesLabel = (
+  rotation: FieldRecord['cropRotation'],
+): string => {
   const firstWords: string[] = []
   for (const name of uniqueCropNames(rotation)) {
     const word = cropFirstWord(name)
@@ -116,7 +118,7 @@ const renderQuotaStatusFooter = (
   const placeholder = renderQuotaPlaceholder(level)
   if (placeholder) return placeholder
 
-  const quota = resolveFarmQuota(totals.udledningskvoteMarkKgn)
+  const quota = resolveFarmQuota(totals.nLoadQuotaKgN)
   const notes: string[] = [quota.basis]
   const uncalculatedNote = describeUncalculatedCount(totals)
   if (uncalculatedNote) notes.push(uncalculatedNote)
@@ -147,7 +149,7 @@ const renderQuotaStatusFooter = (
 }
 
 type NumericMetricColumnConfig = {
-  key: 'db2' | 'nLoad' | 'leaching' | 'fen'
+  key: 'db2' | 'nLoad' | 'leaching' | 'feedUnits'
   label: string
   heading: string
   unit: string
@@ -454,7 +456,7 @@ export type FarmFieldsColumnsArgs = {
   totals: FieldTotals
   quotaFooterLevel: QuotaStatusLevel
   quotaFooterNote: string | null
-  catchmentLabel: (kystvandId: number | null) => string
+  catchmentLabel: (catchmentId: number | null) => string
   canEditRules: boolean
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
@@ -558,43 +560,43 @@ export const buildFarmFieldsColumns = ({
   })
 
   list.push({
-      id: 'cropYear',
-      header: () => (
-        <div className="flex flex-col">
-          <span>Afgrøde</span>
-          <span className={HEADER_SUBLINE_CLASS}>
-            {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
-          </span>
-        </div>
+    id: 'cropYear',
+    header: () => (
+      <div className="flex flex-col">
+        <span>Afgrøde</span>
+        <span className={HEADER_SUBLINE_CLASS}>
+          {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
+        </span>
+      </div>
+    ),
+    cell: ({ row }) => {
+      const year =
+        highlightIndex !== null
+          ? row.original.cropRotation[highlightIndex]
+          : undefined
+      if (!year) return <span className="text-muted-foreground">-</span>
+      const label = formatRotationYear(year)
+      return (
+        <span className="block max-w-24 truncate full:max-w-40" title={label}>
+          {label}
+        </span>
+      )
+    },
+    footer: () => null,
+    enableSorting: false,
+    meta: {
+      headerClassName: cn(
+        HEADER_CELL_CLASS,
+        'whitespace-nowrap full:w-44',
+        highlightIndex === null && 'hidden full:table-cell',
       ),
-      cell: ({ row }) => {
-        const year =
-          highlightIndex !== null
-            ? row.original.cropRotation[highlightIndex]
-            : undefined
-        if (!year) return <span className="text-muted-foreground">-</span>
-        const label = formatRotationYear(year)
-        return (
-          <span className="block max-w-24 truncate full:max-w-40" title={label}>
-            {label}
-          </span>
-        )
-      },
-      footer: () => null,
-      enableSorting: false,
-      meta: {
-        headerClassName: cn(
-          HEADER_CELL_CLASS,
-          'whitespace-nowrap full:w-44',
-          highlightIndex === null && 'hidden full:table-cell',
-        ),
-        cellClassName: cn(
-          BODY_CELL_CLASS,
-          'full:w-44',
-          highlightIndex === null && 'hidden full:table-cell',
-        ),
-      },
-    })
+      cellClassName: cn(
+        BODY_CELL_CLASS,
+        'full:w-44',
+        highlightIndex === null && 'hidden full:table-cell',
+      ),
+    },
+  })
 
   list.push(
     numericMetricColumn(
@@ -611,7 +613,7 @@ export const buildFarmFieldsColumns = ({
           ) : (
             <span className="font-normal text-muted-foreground">Ikke beregnet</span>
           ),
-        compactValue: formatCompactKr,
+        compactValue: formatCompactDkk,
       },
       isSimulationView,
       totals,
@@ -633,15 +635,15 @@ export const buildFarmFieldsColumns = ({
       },
     },
     {
-      id: 'kystvandopland',
-      accessorFn: (field) => field.kystvandId,
+      id: 'catchment',
+      accessorFn: (field) => field.catchmentId,
       header: ({ column }) => (
         <SortableColumnHeaderContent label="Kystvandopland" column={column} />
       ),
       cell: ({ row }) => {
-        const { kystvandId } = row.original
-        const label = catchmentLabel(kystvandId)
-        if (kystvandId === null) {
+        const { catchmentId } = row.original
+        const label = catchmentLabel(catchmentId)
+        if (catchmentId === null) {
           return <span className="text-muted-foreground">{label}</span>
         }
         return (
@@ -681,7 +683,7 @@ export const buildFarmFieldsColumns = ({
     ),
     numericMetricColumn(
       {
-        key: 'fen',
+        key: 'feedUnits',
         label: 'Foderenheder (FE)',
         heading: 'Foderenheder',
         unit: 'FE',
@@ -691,7 +693,7 @@ export const buildFarmFieldsColumns = ({
       totals,
     ),
     {
-      accessorKey: 'udledningskvoteMarkKgn',
+      accessorKey: 'nLoadQuotaKgN',
       header: ({ column }) => (
         <SortableColumnHeaderContent
           label="Kvotebidrag"
@@ -702,29 +704,26 @@ export const buildFarmFieldsColumns = ({
       ),
       cell: ({ row }) => {
         const field = row.original
-        if (!field.kvotegivende) {
+        if (!field.quotaEligible) {
           return <span className="text-muted-foreground">Ikke kvotegivende areal</span>
         }
-        if (field.udledningskvoteMarkKgn === 0) {
+        if (field.nLoadQuotaKgN === 0) {
           return <span className="text-muted-foreground">Ingen data</span>
         }
         return (
           <>
             <div className="font-medium">
-              {formatNumber(field.udledningskvoteMarkKgn)} kg N
+              {formatNumber(field.nLoadQuotaKgN)} kg N
             </div>
             {field.areaHa > 0 ? (
               <div className={PER_HECTARE_CLASS}>
-                {formatNumber(field.udledningskvoteMarkKgn / field.areaHa)} kg
-                N/ha
+                {formatNumber(field.nLoadQuotaKgN / field.areaHa)} kg N/ha
               </div>
             ) : null}
           </>
         )
       },
-      footer: () => (
-        <div>{formatNumber(totals.udledningskvoteMarkKgn)} kg N</div>
-      ),
+      footer: () => <div>{formatNumber(totals.nLoadQuotaKgN)} kg N</div>,
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
@@ -735,13 +734,13 @@ export const buildFarmFieldsColumns = ({
       id: 'soilSummary',
       header: () => 'Jord',
       cell: ({ row }) => {
-        const { jbnr, retention } = row.original
-        if (jbnr === null || retention === null) {
+        const { soilTypeNumber, retention } = row.original
+        if (soilTypeNumber === null || retention === null) {
           return <span className="text-muted-foreground">Ukendt</span>
         }
         return (
           <span>
-            JB {jbnr} - retention {formatNumber(retention)}
+            JB {soilTypeNumber} - retention {formatNumber(retention)}
           </span>
         )
       },
@@ -787,7 +786,7 @@ export const buildFarmFieldsColumns = ({
       },
     },
     {
-      accessorKey: 'jbnr',
+      accessorKey: 'soilTypeNumber',
       header: ({ column }) => (
         <SortableColumnHeaderContent
           label="JB nr."
@@ -796,7 +795,9 @@ export const buildFarmFieldsColumns = ({
         />
       ),
       cell: ({ row }) =>
-        row.original.jbnr === null ? 'Ukendt' : row.original.jbnr,
+        row.original.soilTypeNumber === null
+          ? 'Ukendt'
+          : row.original.soilTypeNumber,
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,

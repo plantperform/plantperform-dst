@@ -143,7 +143,7 @@ const SupportMetricCard = ({
   </div>
 )
 
-type MarkPanelProps = {
+type FieldPanelProps = {
   farmId: string
   field: FieldRecord
   isSimulationView: boolean
@@ -158,7 +158,7 @@ type MarkPanelProps = {
   onError: (message: string | null) => void
 }
 
-export const MarkPanel = ({
+export const FieldPanel = ({
   farmId,
   field,
   isSimulationView,
@@ -171,7 +171,7 @@ export const MarkPanel = ({
   onRequestDetach,
   onCalcOpenChange,
   onError,
-}: MarkPanelProps) => {
+}: FieldPanelProps) => {
   const [calcOpen, setCalcOpen] = useState(false)
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
 
@@ -209,7 +209,7 @@ export const MarkPanel = ({
   const selectedValuesText =
     selectedYearValue && selectedCalendarYear !== null
       ? `${selectedCalendarYear}: DB2 ${formatWholeNumber(
-          selectedYearValue.dbKrHa * field.areaHa,
+          selectedYearValue.dbDkkHa * field.areaHa,
         )} kr, udledning ${formatNumber(
           yearNLoadKgHa(selectedYearValue.leachingKgNHa, field.retention) *
             field.areaHa,
@@ -219,12 +219,12 @@ export const MarkPanel = ({
 
   const metaParts = [
     `${formatNumber(field.areaHa)} ha`,
-    field.jbnr !== null ? `JB ${field.jbnr}` : 'JB ukendt',
+    field.soilTypeNumber !== null ? `JB ${field.soilTypeNumber}` : 'JB ukendt',
     field.retention !== null
       ? `Retention ${formatNumber(field.retention)}`
       : 'Retention ukendt',
-    field.kystvandId !== null
-      ? `Kystvand-id ${field.kystvandId}`
+    field.catchmentId !== null
+      ? `Kystvand-id ${field.catchmentId}`
       : 'Kystvand-id ukendt',
   ]
 
@@ -296,21 +296,21 @@ export const MarkPanel = ({
             value={
               !calculated
                 ? 'Ikke beregnet'
-                : field.fen === 0
+                : field.feedUnits === 0
                   ? '-'
-                  : `${formatNumber(field.fen)} FE`
+                  : `${formatNumber(field.feedUnits)} FE`
             }
             detail={
               !calculated
                 ? undefined
-                : field.fen === 0
+                : field.feedUnits === 0
                   ? 'ingen grovfoder i sædskiftet'
                   : field.areaHa > 0
-                    ? `${formatNumber(field.fen / field.areaHa)} FE/ha`
+                    ? `${formatNumber(field.feedUnits / field.areaHa)} FE/ha`
                     : undefined
             }
-            detailItalic={calculated && field.fen === 0}
-            muted={!calculated || field.fen === 0}
+            detailItalic={calculated && field.feedUnits === 0}
+            muted={!calculated || field.feedUnits === 0}
           />
         </div>
 
@@ -355,8 +355,7 @@ export const MarkPanel = ({
                 <div className="mt-1 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
                   <Repeat className="size-4" aria-hidden="true" />
                   <span>
-                    {restartYear}: forfra med{' '}
-                    {field.cropRotation[0].afgrodeNavn}
+                    {restartYear}: forfra med {field.cropRotation[0].cropName}
                   </span>
                 </div>
               ) : null}

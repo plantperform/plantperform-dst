@@ -31,7 +31,7 @@ const PATTERN_STYLES: Record<CropGroupPattern, CSSProperties> = {
 type CropYearSwatchProps = {
   color: string
   pattern?: CropGroupPattern
-  hasUdlaeg: boolean
+  hasUndersownCrop: boolean
   size: CropYearSwatchSize
   title?: string
   className?: string
@@ -40,7 +40,7 @@ type CropYearSwatchProps = {
 export const CropYearSwatch = ({
   color,
   pattern = 'solid',
-  hasUdlaeg,
+  hasUndersownCrop,
   size,
   title,
   className,
@@ -50,7 +50,7 @@ export const CropYearSwatch = ({
     className={cn(SIZE_CLASSES[size], className)}
     style={{
       backgroundColor: color,
-      boxShadow: coverCropShadow(hasUdlaeg),
+      boxShadow: coverCropShadow(hasUndersownCrop),
       ...PATTERN_STYLES[pattern],
     }}
     aria-hidden={title ? undefined : 'true'}

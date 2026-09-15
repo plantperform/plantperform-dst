@@ -24,14 +24,14 @@ export const RotationYearRow = ({
   selectedValues?: string | null
 }) => {
   const calendarYear = startYear + index
-  const hasUdlaeg = year.udlaegNavn !== null
-  const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
-  const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
+  const hasUndersownCrop = year.undersownCropName !== null
+  const color = cropGroupColor(year.cropCode, year.cropName)
+  const pattern = cropGroupPattern(year.cropCode, year.cropName)
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   const style = selectedStatus
     ? QUOTA_STATUS_STYLES[selectedStatus.level]
     : undefined
-  const showRightGroup = hasUdlaeg || (isSelected && selectedValues !== null)
+  const showRightGroup = hasUndersownCrop || (isSelected && selectedValues !== null)
   return (
     <li
       className={cn(
@@ -53,7 +53,7 @@ export const RotationYearRow = ({
         <CropYearSwatch
           color={color}
           pattern={pattern}
-          hasUdlaeg={hasUdlaeg}
+          hasUndersownCrop={hasUndersownCrop}
           size="14x10"
         />
         <span
@@ -61,9 +61,9 @@ export const RotationYearRow = ({
             'min-w-0 truncate',
             (isCurrentYear || isSelected) && 'font-medium',
           )}
-          title={year.afgrodeNavn}
+          title={year.cropName}
         >
-          {year.afgrodeNavn}
+          {year.cropName}
         </span>
         {isSelected ? (
           <span className="shrink-0 rounded-full bg-primary px-1.5 py-px text-xs font-semibold text-primary-foreground">
@@ -77,7 +77,7 @@ export const RotationYearRow = ({
         ) : null}
         {showRightGroup ? (
           <span className="ml-auto flex shrink-0 items-center gap-2">
-            {hasUdlaeg ? (
+            {hasUndersownCrop ? (
               <span className="rounded-full border bg-muted px-2 py-0.5 text-xs text-primary">
                 efterafgrøde
               </span>

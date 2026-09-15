@@ -125,21 +125,21 @@ const savedMapViewStates = new globalThis.Map<string, SavedMapViewState>()
 
 // Colour groups for the MARS "virkemiddel" layer. Everything not listed
 // (Ekstensivering, Øvrige, ...) falls back to MARS_OTHER_COLOR.
-const MARS_LEGEND: { label: string; color: string; virkemidler: string[] }[] = [
+const MARS_LEGEND: { label: string; color: string; measures: string[] }[] = [
   {
     label: 'Vådområder',
     color: '#7c3aed',
-    virkemidler: [
+    measures: [
       'Kvælstofvådområder',
       'Minivådområder',
       'Fosforvådområder og ådale',
     ],
   },
-  { label: 'Skovrejsning', color: '#166534', virkemidler: ['Skovrejsning'] },
+  { label: 'Skovrejsning', color: '#166534', measures: ['Skovrejsning'] },
   {
     label: 'Lavbundsprojekter',
     color: '#b08968',
-    virkemidler: ['Lavbundsprojekter'],
+    measures: ['Lavbundsprojekter'],
   },
 ]
 const MARS_OTHER_COLOR = '#94a3b8'
@@ -150,7 +150,7 @@ const MARS_LEGEND_ENTRIES: { label: string; color: string }[] = [
 const marsFillColor = [
   'match',
   ['get', 'virkemiddel'],
-  ...MARS_LEGEND.flatMap(({ virkemidler, color }) => [virkemidler, color]),
+  ...MARS_LEGEND.flatMap(({ measures, color }) => [measures, color]),
   MARS_OTHER_COLOR,
 ] as unknown as ExpressionSpecification
 
@@ -187,11 +187,11 @@ type ColorBySelection = {
 type HoveredMars = {
   longitude: number
   latitude: number
-  titel: string | null
-  virkemiddel: string | null
+  title: string | null
+  measure: string | null
   status: string | null
-  tilskudsordning: string | null
-  arealHa: number | null
+  subsidyScheme: string | null
+  areaHa: number | null
 }
 
 const MAP_CONTROLS_INSET = 44
@@ -419,9 +419,9 @@ export const FarmFieldsMap = ({
         {
           field,
           point,
-          name: shortCropName(year.afgrodeNavn),
-          fullName: year.afgrodeNavn,
-          color: cropGroupColor(year.afgrodeKode, year.afgrodeNavn),
+          name: shortCropName(year.cropName),
+          fullName: year.cropName,
+          color: cropGroupColor(year.cropCode, year.cropName),
         },
       ]
     })
@@ -781,13 +781,13 @@ export const FarmFieldsMap = ({
       const registryFields = await fetcher<RegistryField[]>(registryFieldsKey)
       const payload: CreateFieldInput[] = registryFields.map((field) => ({
         imkId: field.imkId,
-        kystvandId: field.kystvandId,
+        catchmentId: field.catchmentId,
         retention: field.retention,
-        name: field.marknr ?? `Mark ${field.imkId}`,
+        name: field.fieldNumber ?? `Mark ${field.imkId}`,
         areaHa: field.areaHa,
         inTakeoutPlan: field.inTakeoutPlan,
-        udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
-        udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+        nLoadLimitKgNHa: field.nLoadLimitKgNHa,
+        nLoadQuotaKgN: field.nLoadQuotaKgN,
         geometry: field.geometry,
       }))
 
@@ -863,14 +863,13 @@ export const FarmFieldsMap = ({
       setHoveredMars({
         longitude: event.lngLat.lng,
         latitude: event.lngLat.lat,
-        titel: (marsFeature.properties?.titel as string | undefined) ?? null,
-        virkemiddel:
+        title: (marsFeature.properties?.titel as string | undefined) ?? null,
+        measure:
           (marsFeature.properties?.virkemiddel as string | undefined) ?? null,
         status: (marsFeature.properties?.status as string | undefined) ?? null,
-        tilskudsordning:
-          (marsFeature.properties?.tilskudsordning as string | undefined) ??
-          null,
-        arealHa:
+        subsidyScheme:
+          (marsFeature.properties?.tilskudsordning as string | undefined) ?? null,
+        areaHa:
           typeof marsFeature.properties?.areal_ha === 'number'
             ? marsFeature.properties.areal_ha
             : null,
@@ -903,17 +902,17 @@ export const FarmFieldsMap = ({
     const imkId = addMode
       ? feature.properties?.imk_id
       : feature.properties?.imkId
-    const marknr = addMode ? feature.properties?.marknr : null
+    const fieldNumber = addMode ? feature.properties?.marknr : null
     const farmName = !addMode ? feature.properties?.name : null
     const primary =
       typeof farmName === 'string' && farmName.length > 0
         ? farmName
-        : typeof marknr === 'string' && marknr.length > 0
-          ? `Mark ${marknr}`
+        : typeof fieldNumber === 'string' && fieldNumber.length > 0
+          ? `Mark ${fieldNumber}`
           : imkId
             ? `IMK ${imkId}`
             : 'Manuel mark'
-    const yearCropRaw = addMode ? null : feature.properties?.yearAfgrodeNavn
+    const yearCropRaw = addMode ? null : feature.properties?.yearCropName
     const yearNLoadRaw = addMode ? null : feature.properties?.yearNLoadKgHa
     const yearQuotaStatusRaw = addMode
       ? null
@@ -1322,7 +1321,7 @@ export const FarmFieldsMap = ({
           {showMars ? (
             <Source
               key={marsTileUrl}
-              id="mars-projekter"
+              id="mars-projects"
               type="vector"
               tiles={[marsTileUrl]}
               maxzoom={16}
@@ -1510,20 +1509,20 @@ export const FarmFieldsMap = ({
             >
               <div className="flex flex-col gap-0.5 text-xs">
                 <span className="font-medium">
-                  {hoveredMars.titel ?? 'MARS-projekt'}
+                  {hoveredMars.title ?? 'MARS-projekt'}
                 </span>
-                {hoveredMars.virkemiddel ? (
-                  <span>{hoveredMars.virkemiddel}</span>
+                {hoveredMars.measure ? (
+                  <span>{hoveredMars.measure}</span>
                 ) : null}
-                {hoveredMars.tilskudsordning ? (
+                {hoveredMars.subsidyScheme ? (
                   <span className="text-muted-foreground">
-                    {hoveredMars.tilskudsordning}
+                    {hoveredMars.subsidyScheme}
                   </span>
                 ) : null}
                 <span className="text-muted-foreground">
                   {hoveredMars.status ?? 'Status ukendt'}
-                  {hoveredMars.arealHa !== null
-                    ? ` · ${formatNumber(hoveredMars.arealHa)} ha`
+                  {hoveredMars.areaHa !== null
+                    ? ` · ${formatNumber(hoveredMars.areaHa)} ha`
                     : ''}
                 </span>
               </div>

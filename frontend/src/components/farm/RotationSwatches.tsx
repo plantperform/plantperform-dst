@@ -24,12 +24,12 @@ export const RotationSwatches = ({
   <span className="flex shrink-0 gap-0.5">
     {rotation.map((year, index) => {
       const calendarYear = startYear + index
-      const hasUdlaeg = year.udlaegNavn !== null
-      const title = hasUdlaeg
-        ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
-        : `${calendarYear}: ${year.afgrodeNavn}`
-      const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
-      const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
+      const hasUndersownCrop = year.undersownCropName !== null
+      const title = hasUndersownCrop
+        ? `${calendarYear}: ${year.cropName} (udlæg: ${year.undersownCropName})`
+        : `${calendarYear}: ${year.cropName}`
+      const color = cropGroupColor(year.cropCode, year.cropName)
+      const pattern = cropGroupPattern(year.cropCode, year.cropName)
       const isHighlighted = highlightIndex === index
       return (
         <span
@@ -44,7 +44,7 @@ export const RotationSwatches = ({
             title={title}
             color={color}
             pattern={pattern}
-            hasUdlaeg={hasUdlaeg}
+            hasUndersownCrop={hasUndersownCrop}
             size={size}
             className={swatchClassName}
           />

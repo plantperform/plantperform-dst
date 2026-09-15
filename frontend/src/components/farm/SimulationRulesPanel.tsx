@@ -6,7 +6,7 @@ import { simulationsKey } from '@/api/hooks'
 import { updateSimulationConstraints } from '@/api/mutations'
 import type {
   FieldRecord,
-  KystvandoplandNLoadCap,
+  CatchmentNLoadCap,
   OptimizationConstraints,
   Simulation,
 } from '@/api/types'
@@ -43,8 +43,8 @@ const buildMaxNLoadInputs = (
   constraints: OptimizationConstraints,
 ): Record<string, string> =>
   Object.fromEntries(
-    constraints.maxNLoadByKystvandopland.map((cap) => [
-      catchmentKey(cap.kystvandId),
+    constraints.maxNLoadByCatchment.map((cap) => [
+      catchmentKey(cap.catchmentId),
       numberToInput(cap.maxNLoadKg),
     ]),
   )
@@ -60,8 +60,8 @@ export const SimulationRulesPanel = ({
   simulation,
   fields,
 }: SimulationRulesPanelProps) => {
-  const [minFen, setMinFen] = useState(simulation.constraints.minFen)
-  const [maxFen, setMaxFen] = useState(simulation.constraints.maxFen)
+  const [minFeedUnits, setMinFeedUnits] = useState(simulation.constraints.minFeedUnits)
+  const [maxFeedUnits, setMaxFeedUnits] = useState(simulation.constraints.maxFeedUnits)
   const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(
     () => buildMaxNLoadInputs(simulation.constraints),
   )
@@ -71,38 +71,38 @@ export const SimulationRulesPanel = ({
 
   const catchments = useCatchmentOptions(farmId, fields)
 
-  const maxNLoadByKystvandopland: KystvandoplandNLoadCap[] = catchments.map(
+  const maxNLoadByCatchment: CatchmentNLoadCap[] = catchments.map(
     (catchment) => ({
-      kystvandId: catchment.kystvandId,
+      catchmentId: catchment.catchmentId,
       maxNLoadKg: inputToOptionalNumber(
-        maxNLoadInputs[catchmentKey(catchment.kystvandId)] ?? '',
+        maxNLoadInputs[catchmentKey(catchment.catchmentId)] ?? '',
       ),
     }),
   )
 
   const savedMaxNLoadByKey = new Map(
-    simulation.constraints.maxNLoadByKystvandopland.map((cap) => [
-      catchmentKey(cap.kystvandId),
+    simulation.constraints.maxNLoadByCatchment.map((cap) => [
+      catchmentKey(cap.catchmentId),
       cap.maxNLoadKg,
     ]),
   )
   const isDirty =
-    minFen !== simulation.constraints.minFen ||
-    maxFen !== simulation.constraints.maxFen ||
-    maxNLoadByKystvandopland.some(
+    minFeedUnits !== simulation.constraints.minFeedUnits ||
+    maxFeedUnits !== simulation.constraints.maxFeedUnits ||
+    maxNLoadByCatchment.some(
       (cap) =>
         cap.maxNLoadKg !==
-        (savedMaxNLoadByKey.get(catchmentKey(cap.kystvandId)) ?? null),
+        (savedMaxNLoadByKey.get(catchmentKey(cap.catchmentId)) ?? null),
     )
 
-  const editMinFen = (value: string) => {
+  const editMinFeedUnits = (value: string) => {
     setIsSaved(false)
-    setMinFen(inputToOptionalNumber(value))
+    setMinFeedUnits(inputToOptionalNumber(value))
   }
 
-  const editMaxFen = (value: string) => {
+  const editMaxFeedUnits = (value: string) => {
     setIsSaved(false)
-    setMaxFen(inputToOptionalNumber(value))
+    setMaxFeedUnits(inputToOptionalNumber(value))
   }
 
   const editMaxNLoadInput = (key: string, value: string) => {
@@ -115,9 +115,9 @@ export const SimulationRulesPanel = ({
     try {
       const updated = await updateSimulationConstraints(farmId, simulation.id, {
         ...simulation.constraints,
-        minFen,
-        maxFen,
-        maxNLoadByKystvandopland,
+        minFeedUnits,
+        maxFeedUnits,
+        maxNLoadByCatchment,
       })
       await mutate(
         simulationsKey(farmId),
@@ -125,8 +125,8 @@ export const SimulationRulesPanel = ({
           current.map((entry) => (entry.id === updated.id ? updated : entry)),
         { revalidate: false },
       )
-      setMinFen(updated.constraints.minFen)
-      setMaxFen(updated.constraints.maxFen)
+      setMinFeedUnits(updated.constraints.minFeedUnits)
+      setMaxFeedUnits(updated.constraints.maxFeedUnits)
       setMaxNLoadInputs(buildMaxNLoadInputs(updated.constraints))
       setSaveError(null)
       setIsSaved(true)
@@ -137,7 +137,7 @@ export const SimulationRulesPanel = ({
     }
   }
 
-  const { godning } = simulation
+  const { fertiliser } = simulation
 
   return (
     <Card className="border-rules/40 bg-rules/5">
@@ -169,7 +169,7 @@ export const SimulationRulesPanel = ({
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {catchments.map((catchment) => {
-                  const key = catchmentKey(catchment.kystvandId)
+                  const key = catchmentKey(catchment.catchmentId)
                   return (
                     <div key={key} className="space-y-1">
                       <Label
@@ -197,26 +197,26 @@ export const SimulationRulesPanel = ({
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="rules-min-fen">Min. foderenheder</Label>
+              <Label htmlFor="rules-min-feed-units">Min. foderenheder</Label>
               <Input
-                id="rules-min-fen"
+                id="rules-min-feed-units"
                 type="number"
                 min="0"
-                value={numberToInput(minFen)}
+                value={numberToInput(minFeedUnits)}
                 placeholder="Ingen grænse"
-                onChange={(event) => editMinFen(event.target.value)}
+                onChange={(event) => editMinFeedUnits(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">FE</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rules-max-fen">Maks. foderenheder</Label>
+              <Label htmlFor="rules-max-feed-units">Maks. foderenheder</Label>
               <Input
-                id="rules-max-fen"
+                id="rules-max-feed-units"
                 type="number"
                 min="0"
-                value={numberToInput(maxFen)}
+                value={numberToInput(maxFeedUnits)}
                 placeholder="Ingen grænse"
-                onChange={(event) => editMaxFen(event.target.value)}
+                onChange={(event) => editMaxFeedUnits(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">FE</p>
             </div>
@@ -264,43 +264,43 @@ export const SimulationRulesPanel = ({
             <ReadOnlyRule
               label="Sædskiftevarianter"
               value={
-                simulation.rotationSaedskiftevarianter.length > 0
-                  ? `${simulation.rotationSaedskiftevarianter.length} valgt`
+                simulation.rotationVariants.length > 0
+                  ? `${simulation.rotationVariants.length} valgt`
                   : 'Ingen valgt'
               }
             />
             <ReadOnlyRule
               label="N-norm%"
               value={
-                simulation.rotationNNormProcenter.length > 0
-                  ? simulation.rotationNNormProcenter.join(', ')
+                simulation.nNormPercentages.length > 0
+                  ? simulation.nNormPercentages.join(', ')
                   : 'Ingen valgt'
               }
             />
-            <ReadOnlyRule label="Driftsform" value={godning.driftsform} />
+            <ReadOnlyRule label="Driftsform" value={fertiliser.farmingSystem} />
             <ReadOnlyRule
               label="Organisk bundet N"
-              value={`${godning.orgMineralN}`}
+              value={`${fertiliser.orgMineralN}`}
             />
             <ReadOnlyRule
               label="Mineralsk andel"
-              value={`${godning.mineralskAndelPct} %`}
+              value={`${fertiliser.mineralSharePct} %`}
             />
             <ReadOnlyRule
               label="N-indhold i husdyrgødning"
-              value={`${godning.nIndholdKgPerTon} kg N/ton`}
+              value={`${fertiliser.nContentKgPerTon} kg N/ton`}
             />
             <ReadOnlyRule
               label="Kun organisk gødning"
-              value={godning.onlyOrganic ? 'Ja' : 'Nej'}
+              value={fertiliser.onlyOrganic ? 'Ja' : 'Nej'}
             />
             <ReadOnlyRule
               label="Efterafgrøde-etablering"
-              value={simulation.eeaFdato}
+              value={simulation.catchCropSowingDate}
             />
             <ReadOnlyRule
               label="Præcision på dagsbasis"
-              value={simulation.eeaPrecisionDagsbasis ? 'Ja' : 'Nej'}
+              value={simulation.catchCropDailyBasis ? 'Ja' : 'Nej'}
             />
           </div>
         </div>
