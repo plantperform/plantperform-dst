@@ -1,51 +1,54 @@
 import type { Farm, FieldRecord } from '@/api/types'
 import {
-  computeFieldTotals,
+  describeSeparateQuotas,
   formatNumber,
-  totalsQuotaStatusLevel,
+  formatQuotaAmount,
+  quotaPercent,
+  resolveFarmQuota,
+  type FarmQuota,
   type FieldTotals,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-
-export const FARM_STATUS_LABELS: Record<QuotaStatusLevel, string> = {
-  ok: 'Under kvote',
-  near: 'Tæt på kvote',
-  over: 'Over kvote',
-  uncalculated: 'Ikke beregnet',
-  noData: 'Ingen kvote',
-  partial: 'Delvist beregnet',
-  excluded: 'Ikke kvotegivende',
-}
 
 export type FarmOverview = {
   totals: FieldTotals | null
   level: QuotaStatusLevel | null
   quotaPct: number | null
+  quota: FarmQuota | null
 }
 
 export const summarizeFarmFields = (
   fields: FieldRecord[] | undefined,
 ): FarmOverview => {
-  if (!fields) return { totals: null, level: null, quotaPct: null }
-  const totals = computeFieldTotals(fields, false)
-  if (fields.length === 0) return { totals, level: null, quotaPct: null }
+  if (!fields) {
+    return { totals: null, level: null, quotaPct: null, quota: null }
+  }
+  const quota = resolveFarmQuota(fields, false)
+  const { totals, quotaKgN } = quota
+  if (fields.length === 0) {
+    return { totals, level: null, quotaPct: null, quota: null }
+  }
+  const percent =
+    quotaKgN === null ? null : quotaPercent(totals.nLoad, quotaKgN)
   return {
     totals,
-    level: totalsQuotaStatusLevel(totals),
-    quotaPct:
-      totals.nLoadQuotaKgN > 0
-        ? Math.min(100, Math.round((totals.nLoad / totals.nLoadQuotaKgN) * 100))
-        : null,
+    level: quota.level,
+    quotaPct: percent === null ? null : Math.min(100, Math.round(percent)),
+    quota,
   }
 }
 
-export const describeFarmQuota = (
-  totals: FieldTotals,
-  quotaPct: number | null,
-): string =>
-  quotaPct !== null
-    ? `${formatNumber(totals.nLoad)} af ${formatNumber(totals.nLoadQuotaKgN)} kg N · ${quotaPct} %`
+export const describeFarmQuota = ({
+  totals,
+  quotaPct,
+  quota,
+}: FarmOverview): string => {
+  if (!totals) return ''
+  if (quota && quota.quotaKgN === null) return describeSeparateQuotas(quota)
+  return quotaPct !== null
+    ? `${formatQuotaAmount(totals.nLoad, totals.nLoadQuotaKgN)} · ${quotaPct} %`
     : `${formatNumber(totals.nLoad)} kg N udledt`
+}
 
 export const sortFarms = (
   farms: Farm[],

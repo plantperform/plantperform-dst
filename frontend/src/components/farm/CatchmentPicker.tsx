@@ -19,6 +19,12 @@ import {
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
+const ROW_CLASS =
+  'flex w-full min-w-0 cursor-pointer gap-2 rounded-md border px-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+
+const describeTotals = (totals: FieldTotals) =>
+  `${formatFieldCount(totals.fieldCount)} · ${formatNumber(totals.areaHa)} ha`
+
 type CatchmentRowProps = {
   label: string
   totals: FieldTotals
@@ -38,18 +44,27 @@ const CatchmentRow = ({
     type="button"
     aria-pressed={selected}
     onClick={onSelect}
-    title={`${formatFieldCount(totals.fieldCount)} · ${formatNumber(totals.areaHa)} ha`}
+    title={describeTotals(totals)}
     className={cn(
-      'flex w-full min-w-0 items-center gap-2.5 rounded-md border px-2.5 py-1.5 text-left text-sm leading-snug transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-      selected ? cn(CHOICE_SELECTED_CLASS, 'font-semibold') : CHOICE_IDLE_CLASS,
+      ROW_CLASS,
+      'items-start py-[7px]',
+      selected ? CHOICE_SELECTED_CLASS : CHOICE_IDLE_CLASS,
     )}
   >
     <span
       aria-hidden="true"
-      className={cn('size-2.5 shrink-0 rounded-full', colorClass)}
+      className={cn('mt-[5px] size-[7px] shrink-0 rounded-[2px]', colorClass)}
     />
-    <span className="min-w-0 flex-1">{label}</span>
-    {selected ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}
+    <span className="min-w-0 flex-1 text-[13px] leading-4 font-medium text-pretty">
+      {label}
+    </span>
+    {selected ? (
+      <Check
+        className="mt-px size-3.5 shrink-0 text-primary"
+        strokeWidth={2.5}
+        aria-hidden="true"
+      />
+    ) : null}
   </button>
 )
 
@@ -99,37 +114,62 @@ export const CatchmentPicker = ({
 
   if (catchments.length === 0) return null
 
+  const wholeFarmSelected = highlightedKey === null
+
   return (
     <section
       aria-label="Kystvandopland"
-      className="w-72 shrink-0 rounded-lg border bg-card p-3"
+      className="flex w-58 shrink-0 flex-col rounded-2xl border bg-card px-3.5 pt-3.5 pb-3"
     >
-      <h2 className="mb-2 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+      <h2 className="mb-2.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
         Kystvandopland
       </h2>
       <div
         role="group"
         aria-label="Vis hele bedriften eller et kystvandopland"
-        className="space-y-0.5"
+        className="flex min-h-0 flex-1 flex-col"
       >
-        <CatchmentRow
-          label="Hele bedriften"
-          totals={farmTotals}
-          colorClass="bg-foreground/40"
-          selected={highlightedKey === null}
-          onSelect={() => onHighlightedKeyChange(null)}
-        />
-        <div className="my-1.5 border-t" aria-hidden="true" />
-        {catchments.map((catchment) => (
-          <CatchmentRow
-            key={catchment.key}
-            label={catchment.label}
-            totals={catchment.totals}
-            colorClass={catchment.colorClass}
-            selected={highlightedKey === catchment.key}
-            onSelect={() => onHighlightedKeyChange(catchment.key)}
+        <button
+          type="button"
+          aria-pressed={wholeFarmSelected}
+          onClick={() => onHighlightedKeyChange(null)}
+          title={describeTotals(farmTotals)}
+          className={cn(
+            ROW_CLASS,
+            'items-center py-2',
+            wholeFarmSelected ? CHOICE_SELECTED_CLASS : 'hover:bg-muted',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="size-[7px] shrink-0 rounded-full bg-muted-foreground"
           />
-        ))}
+          <span className="flex-1 text-[13px] font-semibold">
+            Hele bedriften
+          </span>
+          {wholeFarmSelected ? (
+            <Check
+              className="size-3.5 shrink-0 text-primary"
+              strokeWidth={2.5}
+              aria-hidden="true"
+            />
+          ) : null}
+        </button>
+        <div className="my-1.5 h-px bg-muted" aria-hidden="true" />
+        <div className="relative min-h-24 flex-1">
+          <div className="absolute inset-0 -mr-1.5 flex flex-col gap-0.5 overflow-y-auto pr-1.5">
+            {catchments.map((catchment) => (
+              <CatchmentRow
+                key={catchment.key}
+                label={catchment.label}
+                totals={catchment.totals}
+                colorClass={catchment.colorClass}
+                selected={highlightedKey === catchment.key}
+                onSelect={() => onHighlightedKeyChange(catchment.key)}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )

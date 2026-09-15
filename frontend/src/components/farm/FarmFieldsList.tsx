@@ -66,17 +66,14 @@ import {
 import {
   catchmentRuns,
   changedFieldIds,
-  computeFieldTotals,
-  describeCatchmentsOverQuota,
-  farmQuotaStatusLevel,
   formatCatchmentAmount,
   formatFieldCount,
   formatNumber,
   getFieldQuotaStatus,
   isFieldLocked,
   QUOTA_STATUS_STYLES,
+  resolveFarmQuota,
   totalsQuotaStatusLevel,
-  type CatchmentOverview,
   type FieldTotals,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -242,7 +239,6 @@ type FarmFieldsListProps = {
   farmId: string
   sortedFields: FieldRecord[]
   isSimulationView?: boolean
-  catchmentOverview: CatchmentOverview
   simulationId?: string
   simulation?: Simulation
   mode?: FarmInspectorMode
@@ -268,7 +264,6 @@ export const FarmFieldsList = ({
   farmId,
   sortedFields,
   isSimulationView = false,
-  catchmentOverview,
   simulationId,
   simulation,
   mode = 'values',
@@ -320,13 +315,10 @@ export const FarmFieldsList = ({
     [isRules, sortedFields, liveFields],
   )
 
-  const totals = useMemo(
-    () => computeFieldTotals(sortedFields, isSimulationView),
+  const quota = useMemo(
+    () => resolveFarmQuota(sortedFields, isSimulationView),
     [sortedFields, isSimulationView],
   )
-
-  const quotaFooterLevel = farmQuotaStatusLevel(totals, catchmentOverview)
-  const quotaFooterNote = describeCatchmentsOverQuota(catchmentOverview)
 
   const runStarts = useMemo(() => {
     if (isRules) return null
@@ -459,9 +451,7 @@ export const FarmFieldsList = ({
         maxYears,
         selectedYearIndex,
         fields: sortedFields,
-        totals,
-        quotaFooterLevel,
-        quotaFooterNote,
+        quota,
         catchmentLabel,
         canEditRules,
         lockingFieldId,
@@ -474,9 +464,7 @@ export const FarmFieldsList = ({
       maxYears,
       selectedYearIndex,
       sortedFields,
-      totals,
-      quotaFooterLevel,
-      quotaFooterNote,
+      quota,
       catchmentLabel,
       canEditRules,
       lockingFieldId,
