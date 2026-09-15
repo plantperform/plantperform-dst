@@ -317,6 +317,8 @@ export type RotationCandidateYearResult = {
   nNormPct: number
 }
 
+export type FieldYearValues = Record<string, RotationCandidateYearResult[]>
+
 export type RotationPositionOverride = {
   position: number
   afgrodeKode: number

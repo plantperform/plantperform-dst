@@ -1,3 +1,6 @@
+import type { CSSProperties } from 'react'
+
+import type { CropGroupPattern } from '@/lib/crop-groups'
 import { coverCropShadow } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
@@ -12,8 +15,22 @@ const SIZE_CLASSES: Record<CropYearSwatchSize, string> = {
   '10x8': 'h-[10px] w-[8px] shrink-0 rounded-[2px]',
 }
 
+const PATTERN_STYLES: Record<CropGroupPattern, CSSProperties> = {
+  solid: {},
+  stripes: {
+    backgroundImage:
+      'repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px 3px)',
+  },
+  dots: {
+    backgroundImage:
+      'radial-gradient(rgba(255, 255, 255, 0.65) 0.7px, transparent 0.8px)',
+    backgroundSize: '3px 3px',
+  },
+}
+
 type CropYearSwatchProps = {
   color: string
+  pattern?: CropGroupPattern
   hasUdlaeg: boolean
   size: CropYearSwatchSize
   title?: string
@@ -22,6 +39,7 @@ type CropYearSwatchProps = {
 
 export const CropYearSwatch = ({
   color,
+  pattern = 'solid',
   hasUdlaeg,
   size,
   title,
@@ -33,6 +51,7 @@ export const CropYearSwatch = ({
     style={{
       backgroundColor: color,
       boxShadow: coverCropShadow(hasUdlaeg),
+      ...PATTERN_STYLES[pattern],
     }}
     aria-hidden={title ? undefined : 'true'}
   />

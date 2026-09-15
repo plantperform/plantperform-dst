@@ -1,6 +1,6 @@
 import type { FieldRecord } from '@/api/types'
 import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
-import { cropGroupColor } from '@/lib/crop-groups'
+import { cropGroupColor, cropGroupPattern } from '@/lib/crop-groups'
 import {
   CURRENT_CALENDAR_YEAR,
   QUOTA_STATUS_STYLES,
@@ -26,6 +26,7 @@ export const RotationYearRow = ({
   const calendarYear = startYear + index
   const hasUdlaeg = year.udlaegNavn !== null
   const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
+  const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
   const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
   const style = selectedStatus
     ? QUOTA_STATUS_STYLES[selectedStatus.level]
@@ -49,7 +50,12 @@ export const RotationYearRow = ({
         <span className="w-9 shrink-0 tabular-nums text-muted-foreground">
           {calendarYear}
         </span>
-        <CropYearSwatch color={color} hasUdlaeg={hasUdlaeg} size="14x10" />
+        <CropYearSwatch
+          color={color}
+          pattern={pattern}
+          hasUdlaeg={hasUdlaeg}
+          size="14x10"
+        />
         <span
           className={cn(
             'min-w-0 truncate',

@@ -3,7 +3,7 @@ import {
   CropYearSwatch,
   type CropYearSwatchSize,
 } from '@/components/farm/CropYearSwatch'
-import { cropGroupColor } from '@/lib/crop-groups'
+import { cropGroupColor, cropGroupPattern } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
 
 type RotationSwatchesProps = {
@@ -29,6 +29,7 @@ export const RotationSwatches = ({
         ? `${calendarYear}: ${year.afgrodeNavn} (udlæg: ${year.udlaegNavn})`
         : `${calendarYear}: ${year.afgrodeNavn}`
       const color = cropGroupColor(year.afgrodeKode, year.afgrodeNavn)
+      const pattern = cropGroupPattern(year.afgrodeKode, year.afgrodeNavn)
       const isHighlighted = highlightIndex === index
       return (
         <span
@@ -42,6 +43,7 @@ export const RotationSwatches = ({
           <CropYearSwatch
             title={title}
             color={color}
+            pattern={pattern}
             hasUdlaeg={hasUdlaeg}
             size={size}
             className={swatchClassName}
