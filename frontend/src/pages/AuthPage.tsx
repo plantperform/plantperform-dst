@@ -39,7 +39,7 @@ const RegisterForm = () => {
       return
     }
     if (!fields.validate()) return
-    if (role === 'landmand') {
+    if (role === 'farmer') {
       const farmError = validateFarmBasics(farmName, ownerName, cvr)
       if (farmError) {
         setError(farmError)
@@ -55,7 +55,7 @@ const RegisterForm = () => {
         { email, password: fields.password },
       )
       setStoredRole(email, role)
-      if (role === 'landmand') {
+      if (role === 'farmer') {
         setPendingFarm(email, {
           name: farmName.trim(),
           ownerName: ownerName.trim(),
@@ -82,32 +82,32 @@ const RegisterForm = () => {
   return (
     <form className="space-y-6" noValidate onSubmit={onSubmit}>
       <div className="space-y-3">
-        <p id="rolle-valg-label" className="text-sm font-medium leading-none">
+        <p id="role-choice-label" className="text-sm font-medium leading-none">
           Hvem er du?
         </p>
         <div
           className="grid gap-3 sm:grid-cols-2"
           role="group"
-          aria-labelledby="rolle-valg-label"
+          aria-labelledby="role-choice-label"
         >
           <RoleCard
-            selected={role === 'landmand'}
+            selected={role === 'farmer'}
             title="Landmand"
             description="Jeg driver en bedrift"
             icon={Tractor}
-            onSelect={() => setRole('landmand')}
+            onSelect={() => setRole('farmer')}
           />
           <RoleCard
-            selected={role === 'konsulent'}
+            selected={role === 'advisor'}
             title="Konsulent"
             description="Jeg rådgiver flere bedrifter"
             icon={Users}
-            onSelect={() => setRole('konsulent')}
+            onSelect={() => setRole('advisor')}
           />
         </div>
       </div>
       <AuthFields fields={fields} passwordAutoComplete="new-password" />
-      {role === 'landmand' ? (
+      {role === 'farmer' ? (
         <div className="space-y-5 rounded-md border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
           <div>
             <p className="text-sm font-semibold leading-none">Om din bedrift</p>

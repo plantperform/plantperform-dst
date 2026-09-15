@@ -39,10 +39,13 @@ Alembic migrations under `backend/database/migrations/`. Domain services live in
 
 ## Language
 
-Code, comments, and commit messages are in English. Danish domain terms and UI
-labels are preserved verbatim — `mark`, `markblok`, `jbnr`, `udvaskning`,
-`udledning`, `driftsform`, `nøgletal` — because translating them loses
-precision. Do not anglicise them.
+Code, comments, and commit messages are in English. In the frontend that
+includes identifiers for domain concepts: `docs/glossary.md` maps each Danish
+term to the English name used in code, and new terms are added there in the
+same commit. UI text stays Danish, and so do the Danish values the backend
+expects. Commit messages and PR descriptions may use the Danish term where the
+English one would be less precise. The backend keeps its Danish field names
+for now; the frontend API layer maps them to the glossary names.
 
 ## Checks
 

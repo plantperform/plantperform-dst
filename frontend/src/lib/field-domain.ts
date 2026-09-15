@@ -92,20 +92,22 @@ export const yearNLoadKgHa = (
   retention: number | null,
 ): number => leachingKgNHa * (1 - (retention ?? 0) / 100)
 
-// Starting calendar year for the actual history in the "Aktuel" mark overview
+// Starting calendar year for the actual history in the "Aktuel" field overview
 // (must match field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7 in the
-// backend). The eight positions are the mark's actual 2019-2026 afgrøder, not a
-// forward-looking scenarie rotation.
+// backend). The eight positions are the field's actual 2019-2026 crops, not a
+// forward-looking scenario rotation.
 export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
 
-// One year's afgrøde: the afgrødenavn followed by the udlæg/efterafgrøde name in
+// One year's crop: the crop name followed by the undersown/catch crop name in
 // parentheses when that year has one.
 export const formatRotationYear = (year: RotationYear): string =>
-  year.udlaegNavn ? `${year.afgrodeNavn} (${year.udlaegNavn})` : year.afgrodeNavn
+  year.undersownCropName
+    ? `${year.cropName} (${year.undersownCropName})`
+    : year.cropName
 
-// Actual sædskifte (based on afgrødekoder), formatted as one continuous string.
+// Actual rotation (based on crop codes), formatted as one continuous string.
 // Replaces both the old formatCropRotation usage and the separate
-// "Virkemidler: ..." line for marker with a calculated sædskifte (from
+// "Virkemidler: ..." line for fields with a calculated rotation (from
 // "Optimér").
 export const formatRealRotation = (rotation: RotationYear[]): string => {
   if (rotation.length === 0) return 'Intet sædskifte endnu - opret en simulering og kør Optimér'
@@ -132,7 +134,7 @@ const compactMillionFormat = new Intl.NumberFormat('da-DK', {
   maximumFractionDigits: 1,
 })
 
-export const formatCompactKr = (value: number): string => {
+export const formatCompactDkk = (value: number): string => {
   const magnitude = Math.abs(value)
   if (magnitude >= 999_500) {
     return `${compactMillionFormat.format(value / 1_000_000)} mio. kr`
@@ -167,7 +169,10 @@ export const compactCropSequenceLabel = (cropSequence: string[]): string => {
   while (index < cropSequence.length) {
     const name = cropSequence[index]
     let count = 1
-    while (index + count < cropSequence.length && cropSequence[index + count] === name) {
+    while (
+      index + count < cropSequence.length &&
+      cropSequence[index + count] === name
+    ) {
       count += 1
     }
     parts.push(count > 1 ? `${name} ×${count}` : name)
@@ -272,8 +277,8 @@ export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>
   left.length === right.length &&
   left.every(
     (year, index) =>
-      year.afgrodeKode === right[index].afgrodeKode &&
-      year.udlaegKode === right[index].udlaegKode,
+      year.cropCode === right[index].cropCode &&
+      year.undersownCropCode === right[index].undersownCropCode,
   )
 
 export const changedFieldIds = (
@@ -312,7 +317,7 @@ export const isFieldCalculated = (
     field.db2 !== 0 ||
     field.nLoad !== 0 ||
     field.leaching !== 0 ||
-    field.fen !== 0
+    field.feedUnits !== 0
   )
 }
 
@@ -376,15 +381,15 @@ export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
 ): QuotaStatus => ({
-  level: field.kvotegivende
+  level: field.quotaEligible
     ? quotaStatusLevel(
         field.nLoad,
-        field.udledningskvoteMarkKgn,
+        field.nLoadQuotaKgN,
         isFieldCalculated(field, isSimulationView),
       )
     : 'excluded',
   nLoad: field.nLoad,
-  quotaKgn: field.udledningskvoteMarkKgn,
+  quotaKgn: field.nLoadQuotaKgN,
 })
 
 export const formatQuotaAmount = (
@@ -454,8 +459,8 @@ export type FieldTotals = {
   db2: number
   nLoad: number
   leaching: number
-  fen: number
-  udledningskvoteMarkKgn: number
+  feedUnits: number
+  nLoadQuotaKgN: number
 }
 
 export const computeFieldTotals = (
@@ -471,21 +476,22 @@ export const computeFieldTotals = (
     db2: 0,
     nLoad: 0,
     leaching: 0,
-    fen: 0,
-    udledningskvoteMarkKgn: 0,
+    feedUnits: 0,
+    nLoadQuotaKgN: 0,
   }
 
   for (const field of fields) {
     totals.areaHa += field.areaHa
-    if (!field.kvotegivende) totals.excludedCount += 1
+    if (!field.quotaEligible) totals.excludedCount += 1
     if (!isFieldCalculated(field, isSimulationView)) continue
     totals.calculatedCount += 1
     totals.db2 += field.db2
-    totals.fen += field.fen
-    // A non-kvotegivende mark draws down no quota and must not contribute to
-    // the udledning it is compared against either - see getFieldQuotaStatus.
-    if (field.kvotegivende) {
-      totals.udledningskvoteMarkKgn += field.udledningskvoteMarkKgn
+    totals.feedUnits += field.feedUnits
+    // A mark that is not quota eligible draws down no quota and must not
+    // contribute to the N load it is compared against either - see
+    // getFieldQuotaStatus.
+    if (field.quotaEligible) {
+      totals.nLoadQuotaKgN += field.nLoadQuotaKgN
       totals.nLoad += field.nLoad
       totals.leaching += field.leaching
     }
@@ -498,7 +504,7 @@ export const computeFieldTotals = (
 export const totalsQuotaStatusLevel = (totals: FieldTotals): QuotaStatusLevel =>
   aggregateQuotaStatusLevel(
     totals.nLoad,
-    totals.udledningskvoteMarkKgn,
+    totals.nLoadQuotaKgN,
     totals.calculatedCount,
     totals.fieldCount,
   )
@@ -511,7 +517,7 @@ export const describeUncalculatedCount = (
     : null
 
 export type CatchmentTotals = {
-  kystvandId: number | null
+  catchmentId: number | null
   totals: FieldTotals
 }
 
@@ -549,34 +555,34 @@ export const groupFieldsByCatchment = (
 ): CatchmentTotals[] => {
   const fieldsByCatchment = new Map<number | null, FieldRecord[]>()
   for (const field of fields) {
-    const group = fieldsByCatchment.get(field.kystvandId)
+    const group = fieldsByCatchment.get(field.catchmentId)
     if (group) group.push(field)
-    else fieldsByCatchment.set(field.kystvandId, [field])
+    else fieldsByCatchment.set(field.catchmentId, [field])
   }
 
-  return Array.from(fieldsByCatchment, ([kystvandId, group]) => ({
-    kystvandId,
+  return Array.from(fieldsByCatchment, ([catchmentId, group]) => ({
+    catchmentId,
     totals: computeFieldTotals(group, isSimulationView),
   }))
 }
 
 export const formatCatchmentAmount = (totals: FieldTotals): string => {
   if (totals.calculatedCount === 0) return 'ikke beregnet'
-  if (totals.udledningskvoteMarkKgn === 0) {
+  if (totals.nLoadQuotaKgN === 0) {
     return `${formatNumber(totals.nLoad)} kg N, ingen kvote`
   }
-  return `${formatNumber(totals.nLoad)} / ${formatNumber(totals.udledningskvoteMarkKgn)} kg N`
+  return `${formatNumber(totals.nLoad)} / ${formatNumber(totals.nLoadQuotaKgN)} kg N`
 }
 
 export const orderFieldsByCatchment = (
   fields: FieldRecord[],
-  catchmentLabel: (kystvandId: number | null) => string,
+  catchmentLabel: (catchmentId: number | null) => string,
 ): FieldRecord[] => {
   const groups = new Map<number | null, FieldRecord[]>()
   for (const field of fields) {
-    const group = groups.get(field.kystvandId)
+    const group = groups.get(field.catchmentId)
     if (group) group.push(field)
-    else groups.set(field.kystvandId, [field])
+    else groups.set(field.catchmentId, [field])
   }
   return Array.from(groups.entries())
     .sort(([left], [right]) => {
@@ -589,7 +595,7 @@ export const orderFieldsByCatchment = (
 
 export type CatchmentRun = {
   firstFieldId: string
-  kystvandId: number | null
+  catchmentId: number | null
   totals: FieldTotals
 }
 
@@ -603,13 +609,13 @@ export const catchmentRuns = (
     if (current.length === 0) return
     runs.push({
       firstFieldId: current[0].id,
-      kystvandId: current[0].kystvandId,
+      catchmentId: current[0].catchmentId,
       totals: computeFieldTotals(current, isSimulationView),
     })
     current = []
   }
   for (const field of orderedFields) {
-    if (current.length > 0 && current[0].kystvandId !== field.kystvandId) {
+    if (current.length > 0 && current[0].catchmentId !== field.catchmentId) {
       closeRun()
     }
     current.push(field)
@@ -621,8 +627,10 @@ export const catchmentRuns = (
 export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
 export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
 
-export const coverCropShadow = (hasUdlaeg: boolean): string | undefined =>
-  hasUdlaeg
+export const coverCropShadow = (
+  hasUndersownCrop: boolean,
+): string | undefined =>
+  hasUndersownCrop
     ? `inset 0 -3px 0 ${CROP_YEAR_COVER_CROP_BORDER}, inset 0 -4px 0 ${CROP_YEAR_COVER_CROP_SEPARATOR}`
     : undefined
 
@@ -644,15 +652,15 @@ export const summarizeFieldYears = (
         year,
         totalNLoadKg: 0,
         totalDb2: 0,
-        totalFen: 0,
+        totalFeedUnits: 0,
         fieldCount: 0,
       }
       bucket.totalNLoadKg +=
         yearResult.leachingKgNHa * field.areaHa * retentionFactor
-      bucket.totalDb2 += yearResult.dbKrHa * field.areaHa
-      if (yearResult.dbDetail.udbytteenhed === 'FE/ha') {
-        bucket.totalFen +=
-          (Number(yearResult.dbDetail.udbytte) || 0) * field.areaHa
+      bucket.totalDb2 += yearResult.dbDkkHa * field.areaHa
+      if (yearResult.dbDetail.yieldUnit === 'FE/ha') {
+        bucket.totalFeedUnits +=
+          (Number(yearResult.dbDetail.yieldAmount) || 0) * field.areaHa
       }
       bucket.fieldCount += 1
       buckets.set(year, bucket)
@@ -662,7 +670,7 @@ export const summarizeFieldYears = (
 }
 
 export type CatchmentYearlySummary = {
-  kystvandId: number | null
+  catchmentId: number | null
   entries: YearlySummaryEntry[]
 }
 
@@ -673,12 +681,12 @@ export const summarizeFieldYearsByCatchment = (
 ): CatchmentYearlySummary[] => {
   const fieldsByCatchment = new Map<number | null, FieldRecord[]>()
   for (const field of fields) {
-    const group = fieldsByCatchment.get(field.kystvandId)
+    const group = fieldsByCatchment.get(field.catchmentId)
     if (group) group.push(field)
-    else fieldsByCatchment.set(field.kystvandId, [field])
+    else fieldsByCatchment.set(field.catchmentId, [field])
   }
-  return Array.from(fieldsByCatchment, ([kystvandId, group]) => ({
-    kystvandId,
+  return Array.from(fieldsByCatchment, ([catchmentId, group]) => ({
+    catchmentId,
     entries: summarizeFieldYears(group, yearsByFieldId, history),
   }))
 }

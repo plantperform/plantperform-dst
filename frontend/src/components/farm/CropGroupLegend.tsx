@@ -14,11 +14,11 @@ export const CropGroupLegend = ({
   fields,
   className,
 }: CropGroupLegendProps) => {
-  const { groups, hasUdlaeg } = useMemo(() => {
+  const { groups, hasUndersownCrop } = useMemo(() => {
     const years = fields.flatMap((field) => field.cropRotation)
     return {
       groups: presentCropGroups(years),
-      hasUdlaeg: years.some((year) => year.udlaegNavn !== null),
+      hasUndersownCrop: years.some((year) => year.undersownCropName !== null),
     }
   }, [fields])
 
@@ -37,15 +37,19 @@ export const CropGroupLegend = ({
           <CropYearSwatch
             color={group.color}
             pattern={group.pattern}
-            hasUdlaeg={false}
+            hasUndersownCrop={false}
             size="8x12"
           />
           <span>{group.label}</span>
         </span>
       ))}
-      {hasUdlaeg ? (
+      {hasUndersownCrop ? (
         <span className="inline-flex items-center gap-1.5">
-          <CropYearSwatch color="var(--color-muted)" hasUdlaeg size="8x12" />
+          <CropYearSwatch
+            color="var(--color-muted)"
+            hasUndersownCrop
+            size="8x12"
+          />
           <span>med udlæg</span>
         </span>
       ) : null}

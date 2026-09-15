@@ -117,51 +117,45 @@ const KEYWORD_RULES: readonly KeywordRule[] = [
   ],
 ]
 
-const groupFromCode = (afgrodeKode: number): CropGroup | null => {
-  if (!Number.isFinite(afgrodeKode) || afgrodeKode <= 0) return null
+const groupFromCode = (cropCode: number): CropGroup | null => {
+  if (!Number.isFinite(cropCode) || cropCode <= 0) return null
   for (const [from, to, group] of CODE_RANGES) {
-    if (afgrodeKode >= from && afgrodeKode <= to) return group
+    if (cropCode >= from && cropCode <= to) return group
   }
   return null
 }
 
-const groupFromName = (afgrodeNavn: string): CropGroup => {
-  const name = afgrodeNavn.toLocaleLowerCase('da-DK')
+const groupFromName = (cropName: string): CropGroup => {
+  const name = cropName.toLocaleLowerCase('da-DK')
   for (const [keywords, group] of KEYWORD_RULES) {
     if (keywords.some((keyword) => name.includes(keyword))) return group
   }
   return 'other'
 }
 
-export const classifyCrop = (
-  afgrodeKode: number,
-  afgrodeNavn: string,
-): CropGroup => groupFromCode(afgrodeKode) ?? groupFromName(afgrodeNavn)
+export const classifyCrop = (cropCode: number, cropName: string): CropGroup =>
+  groupFromCode(cropCode) ?? groupFromName(cropName)
 
 export const cropGroupDefinition = (group: CropGroup): CropGroupDefinition =>
   groupById.get(group) ?? CROP_GROUPS[CROP_GROUPS.length - 1]
 
-export const cropGroupColor = (
-  afgrodeKode: number,
-  afgrodeNavn: string,
-): string => cropGroupDefinition(classifyCrop(afgrodeKode, afgrodeNavn)).color
+export const cropGroupColor = (cropCode: number, cropName: string): string =>
+  cropGroupDefinition(classifyCrop(cropCode, cropName)).color
 
 export const cropGroupPattern = (
-  afgrodeKode: number,
-  afgrodeNavn: string,
+  cropCode: number,
+  cropName: string,
 ): CropGroupPattern =>
-  cropGroupDefinition(classifyCrop(afgrodeKode, afgrodeNavn)).pattern
+  cropGroupDefinition(classifyCrop(cropCode, cropName)).pattern
 
-export const cropGroupLabel = (
-  afgrodeKode: number,
-  afgrodeNavn: string,
-): string => cropGroupDefinition(classifyCrop(afgrodeKode, afgrodeNavn)).label
+export const cropGroupLabel = (cropCode: number, cropName: string): string =>
+  cropGroupDefinition(classifyCrop(cropCode, cropName)).label
 
 export const presentCropGroups = (
-  crops: { afgrodeKode: number; afgrodeNavn: string }[],
+  crops: { cropCode: number; cropName: string }[],
 ): CropGroupDefinition[] => {
   const present = new Set<CropGroup>(
-    crops.map((crop) => classifyCrop(crop.afgrodeKode, crop.afgrodeNavn)),
+    crops.map((crop) => classifyCrop(crop.cropCode, crop.cropName)),
   )
   return CROP_GROUPS.filter((group) => present.has(group.id))
 }

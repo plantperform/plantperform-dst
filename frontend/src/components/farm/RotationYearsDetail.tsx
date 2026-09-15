@@ -33,18 +33,20 @@ const fmtSigned = (value: unknown, digits = 3) => {
 }
 
 const SHORT_TAB_LABEL_MAX_LENGTH = 24
-const UDLAEG_ABBREVIATION_LENGTH = 10
+const UNDERSOWN_ABBREVIATION_LENGTH = 10
 
 const abbreviate = (name: string) =>
-  name.length > UDLAEG_ABBREVIATION_LENGTH
-    ? `${name.slice(0, UDLAEG_ABBREVIATION_LENGTH - 1)}.`
+  name.length > UNDERSOWN_ABBREVIATION_LENGTH
+    ? `${name.slice(0, UNDERSOWN_ABBREVIATION_LENGTH - 1)}.`
     : name
 
 const shortTabLabel = (year: RotationYear): string => {
-  const crop = shortCropName(year.afgrodeNavn)
-  if (!year.udlaegNavn) return crop
-  const withUdlaeg = `${crop} (${abbreviate(shortCropName(year.udlaegNavn))})`
-  return withUdlaeg.length <= SHORT_TAB_LABEL_MAX_LENGTH ? withUdlaeg : crop
+  const crop = shortCropName(year.cropName)
+  if (!year.undersownCropName) return crop
+  const withUndersownCrop = `${crop} (${abbreviate(shortCropName(year.undersownCropName))})`
+  return withUndersownCrop.length <= SHORT_TAB_LABEL_MAX_LENGTH
+    ? withUndersownCrop
+    : crop
 }
 
 const fullTabLabel = (
@@ -52,17 +54,17 @@ const fullTabLabel = (
   index: number,
   calendarYear: number,
 ): string =>
-  `År ${index + 1} (${calendarYear}) - ${year.afgrodeNavn}${
-    year.udlaegNavn ? ` (${year.udlaegNavn})` : ''
+  `År ${index + 1} (${calendarYear}) - ${year.cropName}${
+    year.undersownCropName ? ` (${year.undersownCropName})` : ''
   }`
 
-const beregnUdledning = (
+const calculateNLoad = (
   lNuar: number,
   retention: number | null,
   areaHa: number,
-): { udledningPrHa: number; udledningMark: number } => {
-  const udledningPrHa = yearNLoadKgHa(lNuar, retention)
-  return { udledningPrHa, udledningMark: udledningPrHa * areaHa }
+): { nLoadPerHa: number; nLoadField: number } => {
+  const nLoadPerHa = yearNLoadKgHa(lNuar, retention)
+  return { nLoadPerHa, nLoadField: nLoadPerHa * areaHa }
 }
 
 type Row = { label: string; detail?: string; value: string; strong?: boolean }
@@ -153,8 +155,8 @@ const DefinitionRow = ({
   </div>
 )
 
-// The nøgletal layer shows the same annual metrics as the old app
-// (Normudbytte, Forfrugt FV, Tildelt N), plus DB and foderenheder, which DST2
+// The key figures layer shows the same annual metrics as the old app
+// (Normudbytte, Forfrugt FV, Tildelt N), plus DB and feed units, which DST2
 // already calculates but did not previously collect in one place. The full
 // formula walkthrough (M/W/MP/WP, N-theta, L_nuar, DB2 items) is layer 2,
 // expanded from here rather than shown by default.
@@ -171,46 +173,47 @@ const KeyMetricsSection = ({
   retention: number | null
   footer?: React.ReactNode
 }) => {
-  const udbytte = num(year.dbDetail.udbytte)
-  const udbytteenhed = String(year.dbDetail.udbytteenhed ?? '')
-  const isFoderafgroede = udbytteenhed === 'FE/ha'
-  const forfrugt = year.forfrugtsvaerdiKgnHa
-  // Husdyrgødning has two parts: a utilised/mineral part that counts toward
-  // satisfying the norm like handelsgødning, and an organically bound part that
-  // does not (but still enters the udvaskning calculation as G0).
-  const husdyrUdnyttet = year.tildeltHusdyrgodningUdnyttetKgnHa
-  const handelsgodning = year.tildeltHandelsgodningKgnHa
-  const organiskBundet = year.husdyrgodningOrganiskBundetKgnHa
-  const tildeltGoedning = husdyrUdnyttet + handelsgodning
-  const tilgaengeligtN = forfrugt + tildeltGoedning
+  const yieldAmount = num(year.dbDetail.yieldAmount)
+  const yieldUnit = String(year.dbDetail.yieldUnit ?? '')
+  const isFodderCrop = yieldUnit === 'FE/ha'
+  const precedingCropValue = year.precedingCropValueKgNHa
+  // Manure has two parts: a utilised/mineral part that counts toward
+  // satisfying the norm like mineral fertiliser, and an organically bound part
+  // that does not (but still enters the leaching calculation as G0).
+  const manureUtilised = year.appliedManureUtilisedKgNHa
+  const mineralFertiliser = year.appliedMineralFertiliserKgNHa
+  const organicBound = year.manureOrganicBoundKgNHa
+  const appliedFertiliser = manureUtilised + mineralFertiliser
+  const availableN = precedingCropValue + appliedFertiliser
 
-  const afgrodeNorm = year.afgrodeNormKgnHa
-  const reduceretNorm = afgrodeNorm !== null ? afgrodeNorm * (year.nNormPct / 100) : null
+  const cropNorm = year.cropNormKgNHa
+  const reducedNorm =
+    cropNorm !== null ? cropNorm * (year.nNormPct / 100) : null
 
-  const udvaskning = year.leachingKgNHa
-  const { udledningPrHa: udledning } = beregnUdledning(udvaskning, retention, areaHa)
+  const leaching = year.leachingKgNHa
+  const { nLoadPerHa: nLoad } = calculateNLoad(leaching, retention, areaHa)
 
-  const retentionTekst =
+  const retentionText =
     retention === null
       ? 'retention ikke sat, regner med 0%'
       : `${fmt(retention, 1)}% tilbageholdes (retention)`
 
-  const tonTotal = year.husdyrgodningTonPrHa * areaHa
-  const tonPrHa = year.husdyrgodningTonPrHa
-  const visFoderenheder = isFoderafgroede && udbytte > 0
+  const tonsTotal = year.manureTonsPerHa * areaHa
+  const tonsPerHa = year.manureTonsPerHa
+  const showFeedUnits = isFodderCrop && yieldAmount > 0
 
   return (
     <div className="grid gap-4 @2xl:grid-cols-12">
       <div className="space-y-3 @2xl:col-span-5">
         <BigMetricTile
           label={`Udledning (${calendarYear})`}
-          value={`${fmt(udledning, 1)} kg N/ha`}
-          caption={`Udvaskning ${fmt(udvaskning, 1)} kg N/ha - ${retentionTekst}`}
+          value={`${fmt(nLoad, 1)} kg N/ha`}
+          caption={`Udvaskning ${fmt(leaching, 1)} kg N/ha - ${retentionText}`}
         />
         <BigMetricTile
           label={`DB2 (${calendarYear})`}
-          value={`${fmt(year.dbKrHa, 0)} kr/ha`}
-          caption={udbytte ? `Normudbytte ${fmt(udbytte, 0)} ${udbytteenhed}` : 'Normudbytte -'}
+          value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
+          caption={yieldAmount ? `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}` : 'Normudbytte -'}
         />
       </div>
 
@@ -218,42 +221,42 @@ const KeyMetricsSection = ({
         <div className="flex items-center justify-between gap-3 border-b pb-2">
           <SectionHeading>Gødning</SectionHeading>
           <span className="text-xs text-muted-foreground">
-            {shortCropName(year.year.afgrodeNavn)} {calendarYear}
+            {shortCropName(year.year.cropName)} {calendarYear}
           </span>
         </div>
         <div>
           <DefinitionRow
             label="Afgrøde-norm"
-            value={afgrodeNorm !== null ? `${fmt(afgrodeNorm, 0)} kg N/ha` : '-'}
+            value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
             title={
-              reduceretNorm !== null
-                ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reduceretNorm, 0)} kg N/ha`
+              reducedNorm !== null
+                ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reducedNorm, 0)} kg N/ha`
                 : undefined
             }
           />
           <DefinitionRow
             label="Tilgængeligt N"
-            value={`${fmt(tilgaengeligtN, 0)} kg N/ha`}
-            title={`Forfrugt ${fmt(forfrugt, 0)} + husdyrgødning ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}`}
+            value={`${fmt(availableN, 0)} kg N/ha`}
+            title={`Forfrugt ${fmt(precedingCropValue, 0)} + husdyrgødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
-          <DefinitionRow label="Forfrugtsværdi" value={`${fmt(forfrugt, 0)} kg N/ha`} />
+          <DefinitionRow label="Forfrugtsværdi" value={`${fmt(precedingCropValue, 0)} kg N/ha`} />
           <DefinitionRow
             label="Tildelt gødning"
-            value={`${fmt(tildeltGoedning, 0)} kg N/ha`}
+            value={`${fmt(appliedFertiliser, 0)} kg N/ha`}
             strong
             title={
-              `Husdyrgødning (udnyttet) ${fmt(husdyrUdnyttet, 0)} + handelsgødning ${fmt(handelsgodning, 0)}` +
-              (organiskBundet > 0
-                ? ` - plus ${fmt(organiskBundet, 0)} kg N/ha organisk bundet N`
+              `Husdyrgødning (udnyttet) ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}` +
+              (organicBound > 0
+                ? ` - plus ${fmt(organicBound, 0)} kg N/ha organisk bundet N`
                 : '')
             }
           />
-          {visFoderenheder ? (
-            <DefinitionRow label="Foderenheder" value={`${fmt(udbytte, 0)} FE/ha`} />
+          {showFeedUnits ? (
+            <DefinitionRow label="Foderenheder" value={`${fmt(yieldAmount, 0)} FE/ha`} />
           ) : null}
           <DefinitionRow
             label="Ton gødning"
-            value={`${fmt(tonTotal, 1)} ton - ${fmt(tonPrHa, 2)} ton/ha`}
+            value={`${fmt(tonsTotal, 1)} ton - ${fmt(tonsPerHa, 2)} ton/ha`}
             muted
           />
         </div>
@@ -291,13 +294,16 @@ const CalculationStepsSection = ({
 }) => {
   const l = num(detail.L)
   const lNuar = num(detail.L_nuar)
-  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
+  const { nLoadPerHa, nLoadField } = calculateNLoad(lNuar, retention, areaHa)
 
-  const virkemidler = [
-    { navn: 'Efterafgrøde', pct: num(detail.EEA) * num(detail.Fdato_factor) * 100 },
-    { navn: 'Mellemafgrøde', pct: num(detail.EMA) * 100 },
-    { navn: 'Tidlig såning', pct: num(detail.ETS) * 100 },
-    { navn: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
+  const measures = [
+    {
+      name: 'Efterafgrøde',
+      pct: num(detail.EEA) * num(detail.Fdato_factor) * 100,
+    },
+    { name: 'Mellemafgrøde', pct: num(detail.EMA) * 100 },
+    { name: 'Tidlig såning', pct: num(detail.ETS) * 100 },
+    { name: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
   ].filter((v) => v.pct > 0.001)
 
   return (
@@ -312,12 +318,12 @@ const CalculationStepsSection = ({
 
       <div className="space-y-1.5 border-t pt-3">
         <SectionHeading>2. Virkemidler</SectionHeading>
-        {virkemidler.length > 0 ? (
+        {measures.length > 0 ? (
           <div className="space-y-1">
-            {virkemidler.map((v) => (
+            {measures.map((v) => (
               <StepRow
-                key={v.navn}
-                text={`${v.navn} reducerer med`}
+                key={v.name}
+                text={`${v.name} reducerer med`}
                 value={`${fmt(v.pct, 1)}%`}
               />
             ))}
@@ -344,8 +350,8 @@ const CalculationStepsSection = ({
       <div className="space-y-1.5 border-t pt-3">
         <SectionHeading>4. Markens udledning</SectionHeading>
         <Callout>
-          {fmt(udledningPrHa, 1)} kg N pr. ha gange arealet på {fmt(areaHa, 1)} ha ={' '}
-          <strong>{fmt(udledningMark, 1)} kg N</strong>
+          {fmt(nLoadPerHa, 1)} kg N pr. ha gange arealet på {fmt(areaHa, 1)} ha
+          = <strong>{fmt(nLoadField, 1)} kg N</strong>
         </Callout>
       </div>
     </div>
@@ -412,13 +418,13 @@ const LeachingDetailSection = ({
   const lRaw = Math.max(0, trend + cropSoil)
   const l = num(detail.L)
   const lNuar = num(detail.L_nuar)
-  const { udledningPrHa, udledningMark } = beregnUdledning(lNuar, retention, areaHa)
+  const { nLoadPerHa, nLoadField } = calculateNLoad(lNuar, retention, areaHa)
 
-  const m11Applied = Boolean(detail.M11_korrektion_anvendt)
+  const m11Applied = Boolean(detail.m11CorrectionApplied)
   const eeaRed = num(detail.EEA) * num(detail.Fdato_factor)
-  const virksum = eeaRed + num(detail.EMA) + num(detail.ETS)
-  const faktor1 = 1 - virksum
-  const faktor2 = 1 - num(detail.EPJ)
+  const measureSum = eeaRed + num(detail.EMA) + num(detail.ETS)
+  const factor1 = 1 - measureSum
+  const factor2 = 1 - num(detail.EPJ)
 
   return (
     <div className="space-y-4">
@@ -502,11 +508,11 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Afstrømningskategori <strong>{String(detail.afstromningskategori ?? '—')}</strong>
+            Afstrømningskategori <strong>{String(detail.runoffCategory ?? '—')}</strong>
             {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
             afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
             egen perkolationsværdi for denne kategori.
-            {detail.afstromningskategori_ukendt ? (
+            {detail.runoffCategoryUnknown ? (
               <span className="text-amber-700">
                 {' '}
                 ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1
@@ -587,13 +593,13 @@ const LeachingDetailSection = ({
           <DetailTable
             rows={[
               { label: 'MNCS (forår)', value: `${fmt(num(detail.M11_MNCS), 1)} kg N/ha` },
-              { label: 'Korrektionsfaktor', value: fmt(num(detail.M11_korrektionsfaktor), 3), strong: true },
+              { label: 'Korrektionsfaktor', value: fmt(num(detail.m11CorrectionFactor), 3), strong: true },
               { label: 'L (før korrektion)', value: `${fmt(lRaw, 3)} kg N/ha` },
               { label: 'L (efter korrektion)', value: `${fmt(l, 3)} kg N/ha`, strong: true },
             ]}
           />
           <Callout>
-            L = {fmt(lRaw, 3)} × {fmt(num(detail.M11_korrektionsfaktor), 3)} ={' '}
+            L = {fmt(lRaw, 3)} × {fmt(num(detail.m11CorrectionFactor), 3)} ={' '}
             <strong>{fmt(l, 3)} kg N/ha</strong> (M11-korrektion anvendt)
           </Callout>
         </div>
@@ -613,20 +619,20 @@ const LeachingDetailSection = ({
             },
             { label: 'Mellemafgrøde', detail: 'EMA', value: fmt(num(detail.EMA), 4) },
             { label: 'Tidlig såning', detail: 'ETS', value: fmt(num(detail.ETS), 4) },
-            { label: 'Sum virkemidler', detail: '', value: fmt(virksum, 4) },
-            { label: 'Faktor 1 (virkemidler)', detail: `1 − ${fmt(virksum, 4)}`, value: fmt(faktor1, 4) },
-            { label: 'Faktor 2 (EPJ)', detail: `1 − ${fmt(num(detail.EPJ), 2)}`, value: fmt(faktor2, 4) },
+            { label: 'Sum virkemidler', detail: '', value: fmt(measureSum, 4) },
+            { label: 'Faktor 1 (virkemidler)', detail: `1 − ${fmt(measureSum, 4)}`, value: fmt(factor1, 4) },
+            { label: 'Faktor 2 (EPJ)', detail: `1 − ${fmt(num(detail.EPJ), 2)}`, value: fmt(factor2, 4) },
           ]}
         />
         <Callout>
-          L_nuar = {fmt(l, 3)} × {fmt(faktor1, 4)} × {fmt(faktor2, 4)} ={' '}
+          L_nuar = {fmt(l, 3)} × {fmt(factor1, 4)} × {fmt(factor2, 4)} ={' '}
           <strong>{fmt(lNuar, 3)} kg N/ha</strong>
         </Callout>
-        {detail.efterafgroede_nfiks ? (
+        {detail.catchCropNFixation ? (
           <p className="text-xs text-muted-foreground">
             §24 stk. 9: Efterafgrødeblanding med kvælstoffikserende arter — F0
             ovenfor inkluderer allerede +
-            {fmt(num(detail.efterafgroede_nfiks_bonus), 0)} kg N herfra.
+            {fmt(num(detail.catchCropNFixationBonus), 0)} kg N herfra.
           </p>
         ) : null}
       </div>
@@ -644,34 +650,39 @@ const LeachingDetailSection = ({
               detail: retention === null ? 'ikke sat — bruger 0%' : `${fmt(retention, 1)}%`,
               value: `× ${fmt((100 - (retention ?? 0)) / 100, 4)}`,
             },
-            { label: 'Udledning', detail: '', value: `${fmt(udledningPrHa, 3)} kg N/ha`, strong: true },
+            {
+              label: 'Udledning',
+              detail: '',
+              value: `${fmt(nLoadPerHa, 3)} kg N/ha`,
+              strong: true,
+            },
             { label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` },
           ]}
         />
         <Callout>
-          Udledning (mark) = {fmt(udledningPrHa, 3)} × {fmt(areaHa, 2)} ={' '}
-          <strong>{fmt(udledningMark, 1)} kg N</strong>
+          Udledning (mark) = {fmt(nLoadPerHa, 3)} × {fmt(areaHa, 2)} ={' '}
+          <strong>{fmt(nLoadField, 1)} kg N</strong>
         </Callout>
       </div>
     </div>
   )
 }
 
-type Linje = { kategori: string; behandling: string; udgift_kr_ha: number }
+type CostLine = { category: string; treatment: string; costDkkHa: number }
 
 // One category total (for example, "Gødning") with the line items that add up
 // to it, expanded on click instead of showing only the aggregated sum.
 const CategoryBreakdownRow = ({
   label,
   total,
-  linjer,
+  lines,
 }: {
   label: string
   total: number
-  linjer: Linje[]
+  lines: CostLine[]
 }) => {
   const [open, setOpen] = useState(false)
-  const hasBreakdown = linjer.length > 0
+  const hasBreakdown = lines.length > 0
 
   return (
     <div className="border-t py-1.5">
@@ -690,10 +701,10 @@ const CategoryBreakdownRow = ({
       </button>
       {open && hasBreakdown ? (
         <div className="mt-1 space-y-0.5 border-l pl-3">
-          {linjer.map((l, index) => (
+          {lines.map((l, index) => (
             <div key={index} className="flex justify-between gap-2 text-xs text-muted-foreground">
-              <span>{l.behandling}</span>
-              <span className="tabular-nums">−{fmt(l.udgift_kr_ha, 0)} kr/ha</span>
+              <span>{l.treatment}</span>
+              <span className="tabular-nums">−{fmt(l.costDkkHa, 0)} kr/ha</span>
             </div>
           ))}
         </div>
@@ -709,21 +720,21 @@ const EconomicDetailSection = ({
   detail: Record<string, unknown>
   areaHa: number
 }) => {
-  const udbytte = num(detail.udbytte)
-  const enhed = String(detail.udbytteenhed ?? '')
-  const salgspris = num(detail.salgspris)
-  const indtaegt = num(detail.indtaegt)
-  const tilskud = num(detail.tilskud)
-  const goedning = num(detail.goedning)
-  const udsaed = num(detail.udsaed)
-  const plantevaern = num(detail.plantevaern)
-  const markarbejde = num(detail.markarbejde)
-  const toerring = num(detail.toerring)
-  const omkostninger = num(detail.omkostninger_total)
+  const yieldAmount = num(detail.yieldAmount)
+  const unit = String(detail.yieldUnit ?? '')
+  const salePrice = num(detail.salePrice)
+  const revenue = num(detail.revenue)
+  const subsidy = num(detail.subsidy)
+  const fertiliserCost = num(detail.fertiliserCost)
+  const seed = num(detail.seed)
+  const cropProtection = num(detail.cropProtection)
+  const fieldWork = num(detail.fieldWork)
+  const drying = num(detail.drying)
+  const totalCosts = num(detail.totalCosts)
   const db = num(detail.db)
 
-  const linjer = Array.isArray(detail.linjer) ? (detail.linjer as Linje[]) : []
-  const linjerFor = (kategori: string) => linjer.filter((l) => l.kategori === kategori)
+  const lines = Array.isArray(detail.lines) ? (detail.lines as CostLine[]) : []
+  const linesFor = (category: string) => lines.filter((l) => l.category === category)
 
   return (
     <div className="space-y-1.5 border-t pt-3">
@@ -733,7 +744,7 @@ const EconomicDetailSection = ({
         planteværn, markarbejde og tørring, giver dækningsbidraget (DB2) pr.
         hektar - ganget med markens areal til sidst.
       </p>
-      {detail.udbyttenorm_mangler ? (
+      {detail.yieldNormMissing ? (
         <p className="text-xs text-amber-700">
           Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og
           indtægt er sat til 0.
@@ -741,24 +752,24 @@ const EconomicDetailSection = ({
       ) : null}
       <DetailTable
         rows={[
-          { label: 'Udbytte', value: `${fmt(udbytte, 1)} ${enhed}` },
-          { label: 'Salgspris', value: `${fmt(salgspris, 2)} kr/${enhed || 'enhed'}` },
-          { label: 'Indtægt', detail: 'udbytte × salgspris', value: `${fmt(indtaegt, 0)} kr/ha`, strong: true },
-          { label: 'Tilskud', value: `+${fmt(tilskud, 0)} kr/ha` },
+          { label: 'Udbytte', value: `${fmt(yieldAmount, 1)} ${unit}` },
+          { label: 'Salgspris', value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}` },
+          { label: 'Indtægt', detail: 'udbytte × salgspris', value: `${fmt(revenue, 0)} kr/ha`, strong: true },
+          { label: 'Tilskud', value: `+${fmt(subsidy, 0)} kr/ha` },
         ]}
       />
       <div>
-        <CategoryBreakdownRow label="Gødning" total={goedning} linjer={linjerFor('Gødning')} />
-        <CategoryBreakdownRow label="Udsæd" total={udsaed} linjer={linjerFor('Udsæd')} />
-        <CategoryBreakdownRow label="Planteværn" total={plantevaern} linjer={linjerFor('Planteværn')} />
-        <CategoryBreakdownRow label="Markarbejde" total={markarbejde} linjer={linjerFor('Markarbejde')} />
-        <CategoryBreakdownRow label="Tørring/lagring" total={toerring} linjer={linjerFor('Tørring/lagring')} />
+        <CategoryBreakdownRow label="Gødning" total={fertiliserCost} lines={linesFor('Gødning')} />
+        <CategoryBreakdownRow label="Udsæd" total={seed} lines={linesFor('Udsæd')} />
+        <CategoryBreakdownRow label="Planteværn" total={cropProtection} lines={linesFor('Planteværn')} />
+        <CategoryBreakdownRow label="Markarbejde" total={fieldWork} lines={linesFor('Markarbejde')} />
+        <CategoryBreakdownRow label="Tørring/lagring" total={drying} lines={linesFor('Tørring/lagring')} />
       </div>
       <DetailTable
-        rows={[{ label: 'Omkostninger i alt', value: `−${fmt(omkostninger, 0)} kr/ha`, strong: true }]}
+        rows={[{ label: 'Omkostninger i alt', value: `−${fmt(totalCosts, 0)} kr/ha`, strong: true }]}
       />
       <Callout>
-        DB2 = {fmt(indtaegt, 0)} + {fmt(tilskud, 0)} − {fmt(omkostninger, 0)} ={' '}
+        DB2 = {fmt(revenue, 0)} + {fmt(subsidy, 0)} − {fmt(totalCosts, 0)} ={' '}
         <strong>{fmt(db, 0)} kr/ha</strong>
       </Callout>
       <DetailTable rows={[{ label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` }]} />

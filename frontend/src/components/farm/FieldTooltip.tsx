@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import {
-  formatCompactKr,
+  formatCompactDkk,
   formatNumber,
   formatQuotaAmount,
   formatWholeNumber,
@@ -13,7 +13,7 @@ import {
 import {
   COLOR_SPECS,
   describeSpecValue,
-  jbSoilLabel,
+  soilTypeLabel,
   registryPropertyFor,
   specColorFor,
   toFiniteNumber,
@@ -51,7 +51,7 @@ const describeYearQuotaStatus = (status: number | null): string => {
 
 const tooltipSpecFor = (attribute: ColorAttribute): ColorSpec | null =>
   attribute === 'none' ||
-  attribute === 'vandopland' ||
+  attribute === 'catchment' ||
   attribute === 'yearCrop' ||
   attribute === 'yearNLoad'
     ? null
@@ -102,7 +102,7 @@ const buildRows = (
       label: 'DB2',
       value: calculated ? (
         <>
-          {formatCompactKr(field.db2)}
+          {formatCompactDkk(field.db2)}
           {perHaNote('db2')}
         </>
       ) : (
@@ -112,7 +112,7 @@ const buildRows = (
   } else {
     const limit = toFiniteNumber(hovered.properties.udledningsgraense_kgn_ha)
     rows.push({
-      key: 'udledningsgraenseKgnHa',
+      key: 'nLoadLimitKgNHa',
       label: 'Udledningsgrænse',
       value: limit === null ? 'ukendt' : `${formatNumber(limit)} kg N/ha`,
     })
@@ -125,17 +125,19 @@ const buildRows = (
     label: 'Retention',
     value: retention === null ? 'ukendt' : `${formatWholeNumber(retention)} %`,
   })
-  const jbnr = field ? field.jbnr : toFiniteNumber(hovered.properties.jbnr)
-  const soil = jbnr === null ? null : jbSoilLabel(jbnr)
+  const soilTypeNumber = field
+    ? field.soilTypeNumber
+    : toFiniteNumber(hovered.properties.jbnr)
+  const soil = soilTypeNumber === null ? null : soilTypeLabel(soilTypeNumber)
   rows.push({
-    key: 'jbnr',
+    key: 'soilTypeNumber',
     label: 'JB nr.',
     value:
-      jbnr === null ? (
+      soilTypeNumber === null ? (
         'ukendt'
       ) : (
         <>
-          JB {jbnr}
+          JB {soilTypeNumber}
           {soil ? (
             <span className="font-normal text-muted-foreground"> {soil}</span>
           ) : null}
@@ -159,7 +161,7 @@ type FieldTooltipProps = {
   hovered: HoveredField
   field: FieldRecord | null
   rotationName: string | null
-  catchmentLabel: (kystvandId: number | null) => string
+  catchmentLabel: (catchmentId: number | null) => string
   colorBy: ColorAttribute
   isSimulationView: boolean
   selectedCalendarYear: number | null
@@ -179,8 +181,8 @@ export const FieldTooltip = ({
   const areaHa = field
     ? field.areaHa
     : toFiniteNumber(hovered.properties.area_ha)
-  const kystvandId = field
-    ? field.kystvandId
+  const catchmentId = field
+    ? field.catchmentId
     : toFiniteNumber(hovered.properties.kystvand_id)
   const rows = buildRows(hovered, field, colorBy, isSimulationView)
 
@@ -198,7 +200,7 @@ export const FieldTooltip = ({
           ) : null}
         </div>
         <div className="truncate text-muted-foreground">
-          {catchmentLabel(kystvandId)}
+          {catchmentLabel(catchmentId)}
         </div>
         {rotationName ? (
           <div className="truncate text-muted-foreground">

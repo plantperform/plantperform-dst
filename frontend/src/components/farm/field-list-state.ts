@@ -3,15 +3,15 @@ import type { VisibilityState } from '@tanstack/react-table'
 export type FieldsSortKey =
   | 'name'
   | 'areaHa'
-  | 'kystvandopland'
+  | 'catchment'
   | 'db2'
   | 'nLoad'
   | 'leaching'
-  | 'fen'
-  | 'udledningskvoteMarkKgn'
+  | 'feedUnits'
+  | 'nLoadQuotaKgN'
   | 'inTakeoutPlan'
   | 'retention'
-  | 'jbnr'
+  | 'soilTypeNumber'
 
 export type FieldsSortDirection = 'asc' | 'desc'
 
@@ -37,15 +37,15 @@ export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
   'db2',
   'quotaStatus',
-  'kystvandopland',
+  'catchment',
   'nLoad',
   'leaching',
-  'fen',
-  'udledningskvoteMarkKgn',
+  'feedUnits',
+  'nLoadQuotaKgN',
   'soilSummary',
   'inTakeoutPlan',
   'retention',
-  'jbnr',
+  'soilTypeNumber',
 ]
 
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
@@ -56,7 +56,7 @@ const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
 const CURRENT_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
   'quotaStatus',
-  'udledningskvoteMarkKgn',
+  'nLoadQuotaKgN',
   'soilSummary',
 ])
 

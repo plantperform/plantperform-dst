@@ -6,9 +6,9 @@ import {
   simulationFieldCandidateDetailKey,
   simulationFieldsKey,
   simulationYearlySummaryKey,
-  useAfgrodeKoder,
+  useCropCodes,
   useRotationCandidateOptions,
-  useRotationKategorier,
+  useRotationCategories,
   useSimulationFieldCandidateDetail,
 } from '@/api/hooks'
 import { applyFieldRotation, previewFieldRotation } from '@/api/mutations'
@@ -57,7 +57,7 @@ const fmt =(value: number, digits = 1) =>
   }).format(value)
 
 const refsEqual = (a: RotationCandidateRef, b: RotationCandidateRef) =>
-  a.saedskiftevariant === b.saedskiftevariant &&
+  a.rotationVariant === b.rotationVariant &&
   a.variant === b.variant &&
   a.nNormPct === b.nNormPct
 
@@ -86,31 +86,33 @@ export const ManualRotationEditor = ({
     error: currentError,
   } = useSimulationFieldCandidateDetail(farmId, simulationId, field.id)
   const {
-    data: kategorier = [],
-    isLoading: isLoadingKategorier,
-    error: kategorierError,
-  } = useRotationKategorier(farmId)
+    data: categories = [],
+    isLoading: isLoadingCategories,
+    error: categoriesError,
+  } = useRotationCategories(farmId)
   const {
     data: allRefs = [],
     isLoading: isLoadingAllRefs,
     error: allRefsError,
   } = useRotationCandidateOptions(farmId)
   const {
-    data: afgrodeKoder = [],
-    isLoading: isLoadingAfgrodeKoder,
-    error: afgrodeKoderError,
-  } = useAfgrodeKoder(farmId)
+    data: cropCodes = [],
+    isLoading: isLoadingCropCodes,
+    error: cropCodesError,
+  } = useCropCodes(farmId)
 
   const isLoadingCandidates =
     isLoadingCurrent ||
-    isLoadingKategorier ||
+    isLoadingCategories ||
     isLoadingAllRefs ||
-    isLoadingAfgrodeKoder
+    isLoadingCropCodes
   const candidatesError =
-    currentError ?? kategorierError ?? allRefsError ?? afgrodeKoderError
+    currentError ?? categoriesError ?? allRefsError ?? cropCodesError
 
   const [baseRef, setBaseRef] = useState<RotationCandidateRef | null>(null)
-  const [selectedKategoriName, setSelectedKategoriName] = useState<string | null>(null)
+  const [selectedCategoryName, setSelectedCategoryName] = useState<
+    string | null
+  >(null)
   const [overrides, setOverrides] = useState<RotationPositionOverride[]>([])
   const [startYear, setStartYear] = useState(1)
   const [baselineStartYear, setBaselineStartYear] = useState(1)
@@ -123,15 +125,15 @@ export const ManualRotationEditor = ({
   const requestId = useRef(0)
   const pendingShiftDirectionRef = useRef<'left' | 'right' | null>(null)
 
-  const availableKategorier = useMemo(() => {
-    const allowed = new Set(simulation.rotationSaedskiftevarianter)
-    return kategorier
+  const availableCategories = useMemo(() => {
+    const allowed = new Set(simulation.rotationVariants)
+    return categories
       .map((k) => ({
         ...k,
-        saedskifter: k.saedskifter.filter((s) => allowed.has(s.saedskiftevariant)),
+        rotations: k.rotations.filter((s) => allowed.has(s.rotationVariant)),
       }))
-      .filter((k) => k.saedskifter.some((s) => s.saedskiftevariant !== '1'))
-  }, [kategorier, simulation.rotationSaedskiftevarianter])
+      .filter((k) => k.rotations.some((s) => s.rotationVariant !== '1'))
+  }, [categories, simulation.rotationVariants])
 
   useEffect(() => {
     if (!open || !current) return
@@ -142,26 +144,28 @@ export const ManualRotationEditor = ({
     setOverrides(current.overrides ?? [])
     setStartYear(seededStartYear)
     setBaselineStartYear(seededStartYear)
-    const kategori = availableKategorier.find((k) =>
-      k.saedskifter.some((s) => s.saedskiftevariant === ref.saedskiftevariant),
+    const category = availableCategories.find((k) =>
+      k.rotations.some((s) => s.rotationVariant === ref.rotationVariant),
     )
-    setSelectedKategoriName(kategori?.kategori ?? availableKategorier[0]?.kategori ?? null)
+    setSelectedCategoryName(
+      category?.category ?? availableCategories[0]?.category ?? null,
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, current])
 
-  const selectedKategori = useMemo(
+  const selectedCategory = useMemo(
     () =>
-      availableKategorier.find((k) => k.kategori === selectedKategoriName) ??
-      availableKategorier[0],
-    [availableKategorier, selectedKategoriName],
+      availableCategories.find((k) => k.category === selectedCategoryName) ??
+      availableCategories[0],
+    [availableCategories, selectedCategoryName],
   )
 
-  const variantsForSaedskifte = useMemo(() => {
+  const variantsForRotation = useMemo(() => {
     if (!baseRef) return []
     return Array.from(
       new Set(
         allRefs
-          .filter((r) => r.ref.saedskiftevariant === baseRef.saedskiftevariant)
+          .filter((r) => r.ref.rotationVariant === baseRef.rotationVariant)
           .map((r) => r.ref.variant),
       ),
     )
@@ -174,44 +178,44 @@ export const ManualRotationEditor = ({
         allRefs
           .filter(
             (r) =>
-              r.ref.saedskiftevariant === baseRef.saedskiftevariant &&
+              r.ref.rotationVariant === baseRef.rotationVariant &&
               r.ref.variant === baseRef.variant,
           )
           .map((r) => r.ref.nNormPct),
       ),
-    ).filter((n) => simulation.rotationNNormProcenter.includes(n))
-  }, [allRefs, baseRef, simulation.rotationNNormProcenter])
+    ).filter((n) => simulation.nNormPercentages.includes(n))
+  }, [allRefs, baseRef, simulation.nNormPercentages])
 
   const codeByCropName = useMemo(
-    () => new Map(afgrodeKoder.map((a) => [a.navn, a.code])),
-    [afgrodeKoder],
+    () => new Map(cropCodes.map((a) => [a.name, a.code])),
+    [cropCodes],
   )
 
   const colorForCropName = (name: string) =>
     cropGroupColor(codeByCropName.get(name) ?? 0, name)
 
-  const kategoriPickerItems = useMemo(
+  const categoryPickerItems = useMemo(
     () =>
-      (selectedKategori?.saedskifter ?? []).map((s) => ({
-        key: s.saedskiftevariant,
+      (selectedCategory?.rotations ?? []).map((s) => ({
+        key: s.rotationVariant,
         label: compactCropSequenceLabel(s.cropSequence),
         title: s.cropSequence.join(' - '),
         colors: s.cropSequence.map(colorForCropName),
         meta: `${s.cropSequence.length} år`,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedKategori, codeByCropName],
+    [selectedCategory, codeByCropName],
   )
 
-  const afgrodePickerItems = useMemo(
+  const cropPickerItems = useMemo(
     () =>
-      afgrodeKoder.map((a) => ({
+      cropCodes.map((a) => ({
         key: String(a.code),
-        label: a.navn,
-        title: a.navn,
-        colors: [cropGroupColor(a.code, a.navn)],
+        label: a.name,
+        title: a.name,
+        colors: [cropGroupColor(a.code, a.name)],
       })),
-    [afgrodeKoder],
+    [cropCodes],
   )
 
   const runPreview = (
@@ -238,7 +242,9 @@ export const ManualRotationEditor = ({
         pendingShiftDirectionRef.current = null
         setPreview(null)
         setPreviewError(
-          error instanceof Error ? error.message : 'Kunne ikke genberegne rotationen.',
+          error instanceof Error
+            ? error.message
+            : 'Kunne ikke genberegne rotationen.',
         )
       })
       .finally(() => {
@@ -270,25 +276,27 @@ export const ManualRotationEditor = ({
     setActiveYearIndex(null)
   }
 
-  const selectKategori = (kategoriName: string) => {
-    setSelectedKategoriName(kategoriName)
-    const kategori = availableKategorier.find((k) => k.kategori === kategoriName)
+  const selectCategory = (categoryName: string) => {
+    setSelectedCategoryName(categoryName)
+    const category = availableCategories.find(
+      (k) => k.category === categoryName,
+    )
     const first =
-      kategori?.saedskifter.find((s) => s.saedskiftevariant !== '1') ??
-      kategori?.saedskifter[0]
+      category?.rotations.find((s) => s.rotationVariant !== '1') ??
+      category?.rotations[0]
     if (first) {
       changeBase({
-        saedskiftevariant: first.saedskiftevariant,
+        rotationVariant: first.rotationVariant,
         variant: '1',
-        nNormPct: simulation.rotationNNormProcenter[0] ?? '100',
+        nNormPct: simulation.nNormPercentages[0] ?? '100',
       })
     }
   }
 
-  const setPositionOverride = (position: number, afgrodeKode: number) => {
+  const setPositionOverride = (position: number, cropCode: number) => {
     setOverrides((prev) => [
       ...prev.filter((o) => o.position !== position),
-      { position, afgrodeKode },
+      { position, cropCode },
     ])
   }
 
@@ -345,7 +353,8 @@ export const ManualRotationEditor = ({
   const rotationLength = years.length
   const startYearOffset =
     rotationLength > 0
-      ? (((startYear - baselineStartYear) % rotationLength) + rotationLength) % rotationLength
+      ? (((startYear - baselineStartYear) % rotationLength) + rotationLength) %
+        rotationLength
       : 0
   const slideAnimationClassName = shiftAnimation
     ? 'motion-safe:animate-[slide-in_280ms_ease-out]'
@@ -355,7 +364,10 @@ export const ManualRotationEditor = ({
     shiftAnimation && rotationLength > 0
       ? shiftAnimation === 'right'
         ? { index: rotationLength - 1, fromYear: ROTATION_START_CALENDAR_YEAR }
-        : { index: 0, fromYear: ROTATION_START_CALENDAR_YEAR + rotationLength - 1 }
+        : {
+            index: 0,
+            fromYear: ROTATION_START_CALENDAR_YEAR + rotationLength - 1,
+          }
       : null
 
   return (
@@ -363,7 +375,8 @@ export const ManualRotationEditor = ({
       <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {intent === 'lock' ? 'Lås sædskifte' : 'Rediger sædskifte'} - {field.name}
+            {intent === 'lock' ? 'Lås sædskifte' : 'Rediger sædskifte'} -{' '}
+            {field.name}
           </DialogTitle>
           <DialogDescription>
             {intent === 'lock'
@@ -385,15 +398,17 @@ export const ManualRotationEditor = ({
                 <div className="space-y-1.5">
                   <Label>Kategori</Label>
                   <div className="flex flex-wrap gap-2">
-                    {availableKategorier.map((k) => (
+                    {availableCategories.map((k) => (
                       <button
-                        key={k.kategori}
+                        key={k.category}
                         type="button"
-                        aria-pressed={selectedKategori?.kategori === k.kategori}
-                        onClick={() => selectKategori(k.kategori)}
-                        className={chipClassName(selectedKategori?.kategori === k.kategori)}
+                        aria-pressed={selectedCategory?.category === k.category}
+                        onClick={() => selectCategory(k.category)}
+                        className={chipClassName(
+                          selectedCategory?.category === k.category,
+                        )}
                       >
-                        {k.kategori}
+                        {k.category}
                       </button>
                     ))}
                   </div>
@@ -402,14 +417,14 @@ export const ManualRotationEditor = ({
                 <div className="space-y-1.5">
                   <Label>Sædskifte</Label>
                   <SearchableCropPickerList
-                    key={selectedKategori?.kategori ?? 'none'}
-                    items={kategoriPickerItems}
-                    selectedKey={baseRef?.saedskiftevariant ?? null}
+                    key={selectedCategory?.category ?? 'none'}
+                    items={categoryPickerItems}
+                    selectedKey={baseRef?.rotationVariant ?? null}
                     onSelect={(key) =>
                       changeBase({
-                        saedskiftevariant: key,
+                        rotationVariant: key,
                         variant: '1',
-                        nNormPct: simulation.rotationNNormProcenter[0] ?? '100',
+                        nNormPct: simulation.nNormPercentages[0] ?? '100',
                       })
                     }
                     searchLabel="Søg i sædskifter"
@@ -419,10 +434,10 @@ export const ManualRotationEditor = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {variantsForSaedskifte.length > 1 ? (
+                  {variantsForRotation.length > 1 ? (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">Variant</span>
-                      {variantsForSaedskifte.map((v) => (
+                      {variantsForRotation.map((v) => (
                         <button
                           key={v}
                           type="button"
@@ -482,10 +497,10 @@ export const ManualRotationEditor = ({
                       />
                       <BigMetricTile
                         label="DB2"
-                        value={`${preview ? fmt(preview.avgDbKrHa, 0) : '-'} kr/ha`}
+                        value={`${preview ? fmt(preview.avgDbDkkHa, 0) : '-'} kr/ha`}
                         caption={
-                          preview && preview.avgFen > 0
-                            ? `${fmt(preview.avgFen, 0)} FE/ha`
+                          preview && preview.avgFeedUnits > 0
+                            ? `${fmt(preview.avgFeedUnits, 0)} FE/ha`
                             : undefined
                         }
                       />
@@ -531,8 +546,8 @@ export const ManualRotationEditor = ({
                             const isActive = activeYearIndex === index
                             const cellWrap = wrapCell && wrapCell.index === index ? wrapCell : null
                             const color = cropGroupColor(
-                              y.year.afgrodeKode,
-                              y.year.afgrodeNavn,
+                              y.year.cropCode,
+                              y.year.cropName,
                             )
                             const cellTitle = cellWrap
                               ? `Afgrøden rullede rundt fra ${cellWrap.fromYear}`
@@ -572,10 +587,14 @@ export const ManualRotationEditor = ({
                                 >
                                   <CropYearSwatch
                                     color={color}
-                                    hasUdlaeg={y.year.udlaegNavn !== null}
+                                    hasUndersownCrop={
+                                      y.year.undersownCropName !== null
+                                    }
                                     size="10x8"
                                   />
-                                  <span className="min-w-0 truncate">{y.year.afgrodeNavn}</span>
+                                  <span className="min-w-0 truncate">
+                                    {y.year.cropName}
+                                  </span>
                                 </span>
                                 {cellWrap ? (
                                   <span
@@ -622,8 +641,8 @@ export const ManualRotationEditor = ({
                         {activeYearIndex !== null && activeYear ? (
                           <SearchableCropPickerList
                             key={activeYearIndex}
-                            items={afgrodePickerItems}
-                            selectedKey={String(activeYear.year.afgrodeKode)}
+                            items={cropPickerItems}
+                            selectedKey={String(activeYear.year.cropCode)}
                             onSelect={(key) => setPositionOverride(activeYearIndex, Number(key))}
                             searchLabel="Søg afgrøde"
                             searchPlaceholder="Søg afgrøde..."
