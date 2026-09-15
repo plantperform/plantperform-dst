@@ -1,5 +1,5 @@
 ---
-description: Bring the new-engine prototype branch up to date with the latest product
+description: Bring the ANGJ-branch prototype branch up to date with the latest product
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git fetch:*), Bash(git reset:*), Bash(git stash:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*)
 ---
 
@@ -17,7 +17,7 @@ git branch --show-current
 git status
 ```
 
-If the branch is not `new-engine`, stop and tell them to ask a developer.
+If the branch is not `ANGJ-branch`, stop and tell them to ask a developer.
 
 If there are uncommitted changes, **do not discard them**. Say:
 
@@ -30,8 +30,8 @@ fails, stop here and tell them to ask a developer.
 
 ```
 git fetch origin
-git log --oneline HEAD..origin/new-engine
-git log --oneline origin/new-engine..HEAD
+git log --oneline HEAD..origin/ANGJ-branch
+git log --oneline origin/ANGJ-branch..HEAD
 ```
 
 If nothing has changed at all, say "You're already up to date" and stop.
@@ -45,7 +45,7 @@ Change nothing. Tell them:
 ## 3. Reset onto the refreshed branch
 
 ```
-git reset --hard origin/new-engine
+git reset --hard origin/ANGJ-branch
 ```
 
 ## 4. Report, and pre-empt the alarming part

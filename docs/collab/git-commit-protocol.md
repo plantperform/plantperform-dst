@@ -1,6 +1,6 @@
 # Git commit protocol
 
-Applies on every branch, including the `new-engine` prototype branch.
+Applies on every branch, including the `ANGJ-branch` prototype branch.
 
 Use English for every commit message. Preserve Danish domain terms and UI
 labels when translating them would make the message less precise.
@@ -79,7 +79,7 @@ Message rules:
 Generate the message from the staged diff, not from the conversation or task
 description.
 
-## Why this matters on `new-engine`
+## Why this matters on `ANGJ-branch`
 
 The prototype branch is exploratory, but its commits are not throwaway. Each
 week an integrator sorts them into two buckets:

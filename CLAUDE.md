@@ -9,10 +9,10 @@ This repository has two kinds of branches, and they are worked on differently.
 
 - `master` and feature branches off it — production code. Reviewed, merged via
   pull request.
-- `new-engine` — a **prototype branch**. It is explored freely, it is never
+- `ANGJ-branch` — a **prototype branch**. It is explored freely, it is never
   merged, and it is reset onto `master` after each integration round.
 
-**If the current branch is `new-engine` (check with `git branch --show-current`),
+**If the current branch is `ANGJ-branch` (check with `git branch --show-current`),
 also read and follow `docs/collab/prototyper-CLAUDE.md` before doing anything
 else.** The rules there replace the production expectations below.
 
@@ -60,14 +60,14 @@ Never claim a check passed unless it was actually run.
 
 @docs/collab/git-commit-protocol.md
 
-This applies on every branch, including `new-engine`. On the prototype branch it
+This applies on every branch, including `ANGJ-branch`. On the prototype branch it
 is what decides whether a commit is cherry-picked into `master` as-is or has to
 be reimplemented.
 
 ## Never
 
 - Commit or push directly to `master`. Work goes through a pull request.
-- Force-push a shared branch, except the documented `new-engine` reset in
+- Force-push a shared branch, except the documented `ANGJ-branch` reset in
   `docs/collab/integrator-weekly.md`.
 - Commit secrets. `backend/.env` is local only; `.env.default` holds
   placeholders.

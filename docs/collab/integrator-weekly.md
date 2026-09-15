@@ -23,19 +23,19 @@ Your colleagues **review**; they do not co-own. Two gates are mandatory:
 ```bash
 git fetch --all --prune
 
-git rev-list --left-right --count origin/master...origin/new-engine
-git log --oneline origin/master..origin/new-engine
-git diff --stat origin/master...origin/new-engine | tail -1
+git rev-list --left-right --count origin/master...origin/ANGJ-branch
+git log --oneline origin/master..origin/ANGJ-branch
+git diff --stat origin/master...origin/ANGJ-branch | tail -1
 
 # conflicts, without touching the working tree
-git merge-tree --write-tree --name-only origin/master origin/new-engine \
+git merge-tree --write-tree --name-only origin/master origin/ANGJ-branch \
   | grep -i conflict
 ```
 
-Read `HANDOFF.md` on `origin/new-engine` — that is the actual input:
+Read `HANDOFF.md` on `origin/ANGJ-branch` — that is the actual input:
 
 ```bash
-git show origin/new-engine:HANDOFF.md
+git show origin/ANGJ-branch:HANDOFF.md
 ```
 
 **Health check.** Under ten commits and a handful of conflicting files is
@@ -100,7 +100,7 @@ prototype that never had one.
 Give the agent the intent, the reference implementation, and the conventions.
 The prompt below is the standard form — adapt the bracketed parts.
 
-> Port the feature "[name]" from `origin/new-engine` into `master`.
+> Port the feature "[name]" from `origin/ANGJ-branch` into `master`.
 >
 > **Intent** (from `HANDOFF.md`, the authoritative statement of what this is
 > for):
@@ -111,8 +111,8 @@ The prompt below is the standard form — adapt the bracketed parts.
 > specification of behaviour, not as code to copy:
 >
 > ```
-> git diff origin/master...origin/new-engine -- [paths]
-> git log -p origin/master..origin/new-engine -- [paths]
+> git diff origin/master...origin/ANGJ-branch -- [paths]
+> git log -p origin/master..origin/ANGJ-branch -- [paths]
 > ```
 >
 > **Rules**
@@ -153,7 +153,7 @@ Run it against a real farm before merging.
 
 ---
 
-## 4. Reset `new-engine` (5 minutes, Monday)
+## 4. Reset `ANGJ-branch` (5 minutes, Monday)
 
 Only after the ports are merged to `master`.
 
@@ -162,14 +162,14 @@ git fetch --all --prune
 
 # 1. Archive the prototype history, permanently. This is the safety net
 #    that makes the force-push in step 3 reversible.
-git branch archive/new-engine-$(date +%Y-%m-%d) origin/new-engine
-git push origin archive/new-engine-$(date +%Y-%m-%d)
+git branch archive/ANGJ-branch-$(date +%Y-%m-%d) origin/ANGJ-branch
+git push origin archive/ANGJ-branch-$(date +%Y-%m-%d)
 
 # 2. Confirm nothing unported is about to be discarded.
-git log --oneline origin/master..origin/new-engine
+git log --oneline origin/master..origin/ANGJ-branch
 
 # 3. Reset the prototype branch onto the new master.
-git push origin origin/master:new-engine --force-with-lease
+git push origin origin/master:ANGJ-branch --force-with-lease
 ```
 
 Step 2 is not optional. Read the list and confirm every commit on it is ported
@@ -204,10 +204,10 @@ write-ups produce good ports.
 
 ## Recovering a mistake
 
-Everything is on `archive/new-engine-<date>`:
+Everything is on `archive/ANGJ-branch-<date>`:
 
 ```bash
-git log --oneline archive/new-engine-<date>
+git log --oneline archive/ANGJ-branch-<date>
 git cherry-pick <sha>
 ```
 

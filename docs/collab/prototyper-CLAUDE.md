@@ -1,12 +1,12 @@
-# Agent context for the `new-engine` branch
+# Agent context for the `ANGJ-branch` branch
 
-Read this whenever `git branch --show-current` is `new-engine`. It replaces the
+Read this whenever `git branch --show-current` is `ANGJ-branch`. It replaces the
 production expectations in the root `CLAUDE.md`, except for the sections named
 below.
 
 ## What this branch is
 
-`new-engine` is a **prototype**. Its purpose is to find out what the product
+`ANGJ-branch` is a **prototype**. Its purpose is to find out what the product
 should do, quickly, by building it and looking at it on localhost.
 
 It is never merged. Once a week a developer ports the valuable parts into
@@ -49,7 +49,7 @@ It is on you.
 
 ## Does not apply here
 
-- Pull requests. Commit and push straight to `new-engine`.
+- Pull requests. Commit and push straight to `ANGJ-branch`.
 - Production polish, exhaustive error handling, test coverage.
 - Refactoring `master`'s existing code for its own sake.
 
