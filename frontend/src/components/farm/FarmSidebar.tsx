@@ -16,7 +16,6 @@ import {
   Warehouse,
 } from 'lucide-react'
 import {
-  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -93,7 +92,7 @@ import {
 import { UserMenuContent } from '@/components/UserMenu'
 import {
   changedFieldIds,
-  computeFieldTotals,
+  describeSeparateQuotas,
   formatCompactDkk,
   formatFieldCount,
   formatNumber,
@@ -101,8 +100,8 @@ import {
   formatWholeNumber,
   isFieldLocked,
   QUOTA_STATUS_STYLES,
-  totalsQuotaStatusLevel,
-  type FieldTotals,
+  resolveFarmQuota,
+  type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import {
@@ -139,12 +138,10 @@ type ViewKeyFigures = {
 }
 
 const describeKeyFigures = (
-  fields: FieldRecord[],
+  quota: FarmQuota,
   isSimulationView: boolean,
 ): ViewKeyFigures => {
-  const totals = computeFieldTotals(fields, isSimulationView)
-  const level = totalsQuotaStatusLevel(totals)
-  const quota = totals.nLoadQuotaKgN
+  const { totals, level, quotaKgN } = quota
 
   if (totals.calculatedCount === 0) {
     return {
@@ -157,50 +154,20 @@ const describeKeyFigures = (
   }
 
   const emission =
-    quota > 0
-      ? `${formatWholeNumber(totals.nLoad)} / ${formatWholeNumber(quota)} kg N`
+    quotaKgN !== null && quotaKgN > 0
+      ? `${formatWholeNumber(totals.nLoad)} / ${formatWholeNumber(quotaKgN)} kg N`
       : `${formatWholeNumber(totals.nLoad)} kg N`
-  const fullEmission = formatQuotaAmount(totals.nLoad, quota)
+  const fullEmission = formatQuotaAmount(totals.nLoad, quotaKgN ?? 0)
+  const quotaNote =
+    quotaKgN === null ? `, ${describeSeparateQuotas(quota)}` : ''
 
   return {
     level,
     label: `${emission} · ${formatCompactDkk(totals.db2)}`,
-    title: `Udledning ${fullEmission} pr. gennemsnitsår, DB2 ${formatWholeNumber(totals.db2)} kr`,
+    title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr`,
   }
 }
 
-const totalsEqual = (left: FieldTotals, right: FieldTotals) =>
-  left.fieldCount === right.fieldCount &&
-  left.calculatedCount === right.calculatedCount &&
-  left.uncalculatedCount === right.uncalculatedCount &&
-  left.areaHa === right.areaHa &&
-  left.db2 === right.db2 &&
-  left.nLoad === right.nLoad &&
-  left.leaching === right.leaching &&
-  left.feedUnits === right.feedUnits &&
-  left.nLoadQuotaKgN === right.nLoadQuotaKgN
-
-const isFullyCalculated = (totals: FieldTotals) =>
-  totals.fieldCount > 0 && totals.calculatedCount === totals.fieldCount
-
-const meetsQuota = (totals: FieldTotals) => {
-  const level = totalsQuotaStatusLevel(totals)
-  return level === 'ok' || level === 'near'
-}
-
-const pickBestSimulationId = (
-  totalsBySimulation: Record<string, FieldTotals>,
-): string | null => {
-  const complete = Object.entries(totalsBySimulation).filter(([, totals]) =>
-    isFullyCalculated(totals),
-  )
-  if (complete.length < 2) return null
-  const compliant = complete.filter(([, totals]) => meetsQuota(totals))
-  if (compliant.length === 0) return null
-  return compliant.reduce((best, entry) =>
-    entry[1].db2 > best[1].db2 ? entry : best,
-  )[0]
-}
 
 const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   name: `${simulation.name} (kopi)`,
@@ -270,30 +237,9 @@ export const FarmSidebar = ({
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
-  const [totalsBySimulation, setTotalsBySimulation] = useState<
-    Record<string, FieldTotals>
-  >({})
-  const historyFigures = describeKeyFigures(fields, false)
-  const bestSimulationId = useMemo(
-    () => pickBestSimulationId(totalsBySimulation),
-    [totalsBySimulation],
-  )
-
-  const reportTotals = useCallback(
-    (simulationId: string, totals: FieldTotals | null) => {
-      setTotalsBySimulation((current) => {
-        const existing = current[simulationId]
-        if (totals === null) {
-          if (!existing) return current
-          const next = { ...current }
-          delete next[simulationId]
-          return next
-        }
-        if (existing && totalsEqual(existing, totals)) return current
-        return { ...current, [simulationId]: totals }
-      })
-    },
-    [],
+  const historyFigures = describeKeyFigures(
+    resolveFarmQuota(fields, false),
+    false,
   )
 
   const removeSimulation = async (simulationId: string) => {
@@ -428,7 +374,6 @@ export const FarmSidebar = ({
                     farmId={farm.id}
                     simulation={simulation}
                     liveFields={fields}
-                    isBest={bestSimulationId === simulation.id}
                     selected={selected}
                     loading={loadingSelection && selected}
                     deleting={deletingSimulationId === simulation.id}
@@ -437,7 +382,6 @@ export const FarmSidebar = ({
                     onModeChange={onModeChange}
                     onOptimize={onOptimize}
                     onYearlyOptimize={onYearlyOptimize}
-                    onTotals={reportTotals}
                     onSelect={() =>
                       onSelectionChange({
                         kind: 'simulation',
@@ -757,27 +701,14 @@ const SidebarUserMenu = () => {
 
 type ViewMenuLabelProps = {
   name: string
-  badge?: ReactNode
   children: ReactNode
 }
 
-const ViewMenuLabel = ({ name, badge, children }: ViewMenuLabelProps) => (
+const ViewMenuLabel = ({ name, children }: ViewMenuLabelProps) => (
   <div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-    <span className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate font-medium">{name}</span>
-      {badge}
-    </span>
+    <span className="block truncate font-medium">{name}</span>
     {children}
   </div>
-)
-
-const BestBadge = () => (
-  <span
-    className="shrink-0 rounded-full border border-sidebar-border bg-sidebar-accent px-1.5 text-xs font-medium text-sidebar-accent-foreground"
-    title="Overholder kvoten med højest DB2"
-  >
-    Bedste<span className="sr-only">, bedste simulering</span>
-  </span>
 )
 
 type KeyFiguresLineProps = {
@@ -861,7 +792,6 @@ type SimulationMenuItemProps = {
   farmId: string
   simulation: Simulation
   liveFields: FieldRecord[]
-  isBest: boolean
   selected: boolean
   loading: boolean
   deleting: boolean
@@ -870,7 +800,6 @@ type SimulationMenuItemProps = {
   onModeChange: (mode: FarmInspectorMode) => void
   onOptimize: () => void
   onYearlyOptimize: () => void
-  onTotals: (simulationId: string, totals: FieldTotals | null) => void
   onSelect: () => void
   onCopy: () => void
   onDelete: () => void
@@ -880,7 +809,6 @@ const SimulationMenuItem = ({
   farmId,
   simulation,
   liveFields,
-  isBest,
   selected,
   loading,
   deleting,
@@ -889,7 +817,6 @@ const SimulationMenuItem = ({
   onModeChange,
   onOptimize,
   onYearlyOptimize,
-  onTotals,
   onSelect,
   onCopy,
   onDelete,
@@ -901,14 +828,11 @@ const SimulationMenuItem = ({
     error: fieldsError,
     isLoading: fieldsLoading,
   } = useSimulationFields(farmId, simulation.id)
-  const figures = simulationFields
-    ? describeKeyFigures(simulationFields, true)
-    : undefined
-  const totals = useMemo(
-    () =>
-      simulationFields ? computeFieldTotals(simulationFields, true) : null,
+  const quota = useMemo(
+    () => (simulationFields ? resolveFarmQuota(simulationFields, true) : null),
     [simulationFields],
   )
+  const figures = quota ? describeKeyFigures(quota, true) : undefined
   const changedCount = useMemo(
     () =>
       simulationFields ? changedFieldIds(simulationFields, liveFields).size : 0,
@@ -919,11 +843,6 @@ const SimulationMenuItem = ({
       simulationFields ? simulationFields.filter(isFieldLocked).length : 0,
     [simulationFields],
   )
-
-  useEffect(() => {
-    onTotals(simulation.id, totals)
-    return () => onTotals(simulation.id, null)
-  }, [simulation.id, totals, onTotals])
 
   return (
     <SidebarMenuItem>
@@ -945,10 +864,7 @@ const SimulationMenuItem = ({
             ) : (
               <FlaskConical />
             )}
-            <ViewMenuLabel
-              name={simulation.name}
-              badge={isBest ? <BestBadge /> : undefined}
-            >
+            <ViewMenuLabel name={simulation.name}>
               <KeyFiguresLine
                 figures={figures}
                 loading={fieldsLoading}
