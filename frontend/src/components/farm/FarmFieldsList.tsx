@@ -85,7 +85,7 @@ const ROW_ACCENT_CLASS =
   'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
 
 type CatchmentGroupRowProps = {
-  kystvandId: number | null
+  catchmentId: number | null
   label: string
   totals: FieldTotals
   colorClass: string
@@ -97,7 +97,7 @@ type CatchmentGroupRowProps = {
 
 const CatchmentGroupRow = memo(
   ({
-    kystvandId,
+    catchmentId,
     label,
     totals,
     colorClass,
@@ -116,7 +116,7 @@ const CatchmentGroupRow = memo(
           <button
             type="button"
             aria-pressed={selected}
-            onClick={() => onToggle(catchmentKey(kystvandId), selected)}
+            onClick={() => onToggle(catchmentKey(catchmentId), selected)}
             className={cn(
               'flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
               selected
@@ -253,8 +253,8 @@ type FarmFieldsListProps = {
   hoveredFieldId: string | null
   onHoveredFieldChange: (fieldId: string | null) => void
   highlightedCatchmentKey?: string | null
-  catchmentLabel: (kystvandId: number | null) => string
-  catchmentColor: (kystvandId: number | null) => string
+  catchmentLabel: (catchmentId: number | null) => string
+  catchmentColor: (catchmentId: number | null) => string
   onHighlightedCatchmentKeyChange: (key: string | null) => void
   onZoomToField?: (fieldId: string) => void
   focusRequest?: { fieldId: string; nonce: number }
@@ -720,7 +720,7 @@ export const FarmFieldsList = ({
                   <Fragment key={field.id}>
                     {run ? (
                       <CatchmentGroupRow
-                        kystvandId={run.kystvandId}
+                        catchmentId={run.kystvandId}
                         label={catchmentLabel(run.kystvandId)}
                         totals={run.totals}
                         colorClass={catchmentColor(run.kystvandId)}
