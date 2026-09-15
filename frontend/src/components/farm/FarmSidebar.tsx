@@ -94,7 +94,7 @@ import { UserMenuContent } from '@/components/UserMenu'
 import {
   changedFieldIds,
   computeFieldTotals,
-  formatCompactKr,
+  formatCompactDkk,
   formatFieldCount,
   formatNumber,
   formatQuotaAmount,
@@ -144,7 +144,7 @@ const describeKeyFigures = (
 ): ViewKeyFigures => {
   const totals = computeFieldTotals(fields, isSimulationView)
   const level = totalsQuotaStatusLevel(totals)
-  const quota = totals.udledningskvoteMarkKgn
+  const quota = totals.nLoadQuotaKgN
 
   if (totals.calculatedCount === 0) {
     return {
@@ -164,7 +164,7 @@ const describeKeyFigures = (
 
   return {
     level,
-    label: `${emission} · ${formatCompactKr(totals.db2)}`,
+    label: `${emission} · ${formatCompactDkk(totals.db2)}`,
     title: `Udledning ${fullEmission} pr. gennemsnitsår, DB2 ${formatWholeNumber(totals.db2)} kr`,
   }
 }
@@ -177,8 +177,8 @@ const totalsEqual = (left: FieldTotals, right: FieldTotals) =>
   left.db2 === right.db2 &&
   left.nLoad === right.nLoad &&
   left.leaching === right.leaching &&
-  left.fen === right.fen &&
-  left.udledningskvoteMarkKgn === right.udledningskvoteMarkKgn
+  left.feedUnits === right.feedUnits &&
+  left.nLoadQuotaKgN === right.nLoadQuotaKgN
 
 const isFullyCalculated = (totals: FieldTotals) =>
   totals.fieldCount > 0 && totals.calculatedCount === totals.fieldCount
@@ -204,11 +204,11 @@ const pickBestSimulationId = (
 
 const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   name: `${simulation.name} (kopi)`,
-  saedskiftevarianter: simulation.rotationSaedskiftevarianter,
-  nNormProcenter: simulation.rotationNNormProcenter,
-  godning: simulation.godning,
-  eeaFdato: simulation.eeaFdato,
-  eeaPrecisionDagsbasis: simulation.eeaPrecisionDagsbasis,
+  allowedRotationVariants: simulation.rotationVariants,
+  allowedNNormPercentages: simulation.nNormPercentages,
+  fertiliser: simulation.fertiliser,
+  catchCropSowingDate: simulation.catchCropSowingDate,
+  catchCropDailyBasis: simulation.catchCropDailyBasis,
 })
 
 export const GROUP_LABEL_CLASS =
@@ -235,10 +235,10 @@ type FarmSidebarProps = {
 }
 
 /**
- * Navigation for the bedrift: back to the bedrift list, then the visninger.
- * Rows are single-line so the list stays dense; only the selected visning
+ * Navigation for the farm: back to the farm list, then the views.
+ * Rows are single-line so the list stays dense; only the selected view
  * expands to describe itself, which keeps the detail where it is being read.
- * Collapses to an icon rail, so every visning keeps a row even when minimised.
+ * Collapses to an icon rail, so every view keeps a row even when minimised.
  */
 export const FarmSidebar = ({
   farm,
@@ -260,7 +260,7 @@ export const FarmSidebar = ({
   const { user } = useAuth()
   const email = user?.email ?? ''
   const role = email ? getStoredRole(email) : null
-  const showAllFarms = role !== 'landmand'
+  const showAllFarms = role !== 'farmer'
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)

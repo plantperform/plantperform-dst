@@ -720,10 +720,10 @@ export const FarmFieldsList = ({
                   <Fragment key={field.id}>
                     {run ? (
                       <CatchmentGroupRow
-                        catchmentId={run.kystvandId}
-                        label={catchmentLabel(run.kystvandId)}
+                        catchmentId={run.catchmentId}
+                        label={catchmentLabel(run.catchmentId)}
                         totals={run.totals}
-                        colorClass={catchmentColor(run.kystvandId)}
+                        colorClass={catchmentColor(run.catchmentId)}
                         colSpan={cells.length}
                         selected={fieldInCatchment(run, highlightedCatchmentKey)}
                         isDimmed={isDimmed}

@@ -14,7 +14,7 @@ import {
   simulationFieldsKey,
   simulationYearlySummaryKey,
   useFarmHistoricalYearlySummary,
-  useScenarioAfgrodeKoder,
+  useScenarioCropCodes,
   useFieldYearValues,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
@@ -26,7 +26,7 @@ import {
 import type {
   Farm,
   FieldRecord,
-  KystvandoplandYearlyNLoadCaps,
+  CatchmentYearlyNLoadCaps,
   OptimizeSimulationResponse,
   Simulation,
 } from '@/api/types'
@@ -96,10 +96,10 @@ import { cn } from '@/lib/utils'
 // The "Beregningsgennemgang pr. år" panel (candidate detail) is deliberately no
 // longer invalidated here. A broadly matching key revalidation previously
 // refreshed every candidate-detail key the user had ever opened in this
-// simulering, regardless of whether the mark actually received a new
-// assignment. In scenarier with unoptimised marker, this caused a burst of
+// simulation, regardless of whether the field actually received a new
+// assignment. In scenarios with unoptimised fields, this caused a burst of
 // concurrent failed requests (422 "ikke optimeret endnu") for every previously
-// opened mark. SWR automatically reloads candidate detail the next time the
+// opened field. SWR automatically reloads candidate detail the next time the
 // panel opens (revalidation on mount), which is sufficient in practice.
 const invalidateOptimizationDisplays = async (farmId: string, simulationId: string) => {
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
@@ -354,9 +354,9 @@ export const FarmInspector = ({
       for (const entry of group.entries) {
         const segments = byYear[entry.year] ?? (byYear[entry.year] = [])
         segments.push({
-          key: catchmentKey(group.kystvandId),
-          label: catchmentLabel(group.kystvandId),
-          colorClass: catchmentColor(group.kystvandId),
+          key: catchmentKey(group.catchmentId),
+          label: catchmentLabel(group.catchmentId),
+          colorClass: catchmentColor(group.catchmentId),
           nLoadKg: entry.totalNLoadKg,
         })
       }
@@ -378,7 +378,7 @@ export const FarmInspector = ({
     [highlightedFields, isSimulationView],
   )
   const scopeLabel = isCatchmentScoped
-    ? catchmentLabel(highlightedFields[0]?.kystvandId ?? null)
+    ? catchmentLabel(highlightedFields[0]?.catchmentId ?? null)
     : null
 
   const openRules = () => {
@@ -646,7 +646,7 @@ const DEFAULT_CATCHMENT_YEARLY_INPUT: CatchmentYearlyInput = {
   perYear: {},
 }
 
-const AfgrodeExclusionList = ({
+const CropExclusionList = ({
   farmId,
   simulationId,
   excludedCodes,
@@ -657,8 +657,8 @@ const AfgrodeExclusionList = ({
   excludedCodes: Set<number>
   onToggle: (code: number) => void
 }) => {
-  const { data: afgroder = [] } = useScenarioAfgrodeKoder(farmId, simulationId)
-  if (afgroder.length === 0) return null
+  const { data: crops = [] } = useScenarioCropCodes(farmId, simulationId)
+  if (crops.length === 0) return null
 
   return (
     <div className="space-y-2">
@@ -668,17 +668,17 @@ const AfgrodeExclusionList = ({
         et eller flere steder. Valget gælder kun denne kørsel.
       </p>
       <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
-        {afgroder.map((afgrode) => (
+        {crops.map((crop) => (
           <label
-            key={afgrode.code}
+            key={crop.code}
             className="flex items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"
           >
             <input
               type="checkbox"
-              checked={!excludedCodes.has(afgrode.code)}
-              onChange={() => onToggle(afgrode.code)}
+              checked={!excludedCodes.has(crop.code)}
+              onChange={() => onToggle(crop.code)}
             />
-            <span>{afgrode.navn}</span>
+            <span>{crop.name}</span>
           </label>
         ))}
       </div>
@@ -698,12 +698,14 @@ const OptimizeDialog = ({
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
-  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
+  const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
+    new Set(),
+  )
 
   const catchments = useCatchmentOptions(farmId, fields)
   const catchmentLabelByKey = new Map(
     catchments.map((catchment) => [
-      catchmentKey(catchment.kystvandId),
+      catchmentKey(catchment.catchmentId),
       catchment.label,
     ]),
   )
@@ -712,13 +714,13 @@ const OptimizeDialog = ({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setRunError(null)
-      setExcludedAfgrodekoder(new Set())
+      setExcludedCropCodes(new Set())
     }
     onOpenChange(nextOpen)
   }
 
-  const toggleAfgrode = (code: number) => {
-    setExcludedAfgrodekoder((current) => {
+  const toggleCrop = (code: number) => {
+    setExcludedCropCodes((current) => {
       const next = new Set(current)
       if (next.has(code)) next.delete(code)
       else next.add(code)
@@ -731,7 +733,7 @@ const OptimizeDialog = ({
     try {
       const response = await runSimulationOptimization(farmId, simulation.id, {
         timeLimitSeconds,
-        excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
+        excludedCropCodes: Array.from(excludedCropCodes),
       })
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
@@ -775,17 +777,17 @@ const OptimizeDialog = ({
               <div className="sm:col-span-3">
                 <dt className="text-muted-foreground">Maks. udledning</dt>
                 <dd>
-                  {constraints.maxNLoadByKystvandopland.length === 0 ? (
+                  {constraints.maxNLoadByCatchment.length === 0 ? (
                     'Ingen grænse'
                   ) : (
                     <ul className="space-y-0.5">
-                      {constraints.maxNLoadByKystvandopland.map((cap) => {
-                        const key = catchmentKey(cap.kystvandId)
+                      {constraints.maxNLoadByCatchment.map((cap) => {
+                        const key = catchmentKey(cap.catchmentId)
                         const label =
                           catchmentLabelByKey.get(key) ??
-                          (cap.kystvandId === null
+                          (cap.catchmentId === null
                             ? 'Uden kystvandopland'
-                            : `Kystvandopland ${cap.kystvandId}`)
+                            : `Kystvandopland ${cap.catchmentId}`)
                         return (
                           <li key={key}>
                             {label}: {formatLimit(cap.maxNLoadKg, 'kg N')}
@@ -798,11 +800,11 @@ const OptimizeDialog = ({
               </div>
               <div>
                 <dt className="text-muted-foreground">Min. foderenheder</dt>
-                <dd>{formatLimit(constraints.minFen, 'FE')}</dd>
+                <dd>{formatLimit(constraints.minFeedUnits, 'FE')}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Maks. foderenheder</dt>
-                <dd>{formatLimit(constraints.maxFen, 'FE')}</dd>
+                <dd>{formatLimit(constraints.maxFeedUnits, 'FE')}</dd>
               </div>
             </dl>
             <p className="text-xs text-muted-foreground">
@@ -833,11 +835,11 @@ const OptimizeDialog = ({
             </p>
           </div>
 
-          <AfgrodeExclusionList
+          <CropExclusionList
             farmId={farmId}
             simulationId={simulation.id}
-            excludedCodes={excludedAfgrodekoder}
-            onToggle={toggleAfgrode}
+            excludedCodes={excludedCropCodes}
+            onToggle={toggleCrop}
           />
         </div>
 
@@ -887,18 +889,20 @@ const YearlyOptimizeDialog = ({
   const [db2SwingPct, setDb2SwingPct] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const [excludedAfgrodekoder, setExcludedAfgrodekoder] = useState<Set<number>>(new Set())
+  const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
+    new Set(),
+  )
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setRunError(null)
-      setExcludedAfgrodekoder(new Set())
+      setExcludedCropCodes(new Set())
     }
     onOpenChange(nextOpen)
   }
 
-  const toggleAfgrode = (code: number) => {
-    setExcludedAfgrodekoder((current) => {
+  const toggleCrop = (code: number) => {
+    setExcludedCropCodes((current) => {
       const next = new Set(current)
       if (next.has(code)) next.delete(code)
       else next.add(code)
@@ -906,7 +910,10 @@ const YearlyOptimizeDialog = ({
     })
   }
 
-  const { data: kategorier = [] } = useYearlyOptimizationCandidates(farmId, simulation.id)
+  const { data: categories = [] } = useYearlyOptimizationCandidates(
+    farmId,
+    simulation.id,
+  )
   const catchments = useCatchmentOptions(farmId, fields)
 
   const catchmentInput = (key: string): CatchmentYearlyInput =>
@@ -925,18 +932,18 @@ const YearlyOptimizeDialog = ({
   // Estimate, not a guarantee. Every candidate may be shifted.
   const estimatedSeconds = useMemo(() => {
     let totalShiftUnits = 0
-    for (const kategori of kategorier) {
-      for (const option of kategori.saedskifter) {
+    for (const category of categories) {
+      for (const option of category.rotations) {
         totalShiftUnits += option.activeLen
       }
     }
     return fields.length * totalShiftUnits * 0.002
-  }, [fields.length, kategorier])
+  }, [fields.length, categories])
 
   const runYearlyOptimization = async () => {
-    const maxNLoadByKystvandopland: KystvandoplandYearlyNLoadCaps[] = catchments.map(
+    const maxNLoadByCatchment: CatchmentYearlyNLoadCaps[] = catchments.map(
       (catchment) => {
-        const key = catchmentKey(catchment.kystvandId)
+        const key = catchmentKey(catchment.catchmentId)
         const input = catchmentInput(key)
         const maxNLoadByYear: Record<number, number> = {}
         if (input.sameForAllYears) {
@@ -954,18 +961,22 @@ const YearlyOptimizeDialog = ({
             }
           }
         }
-        return { kystvandId: catchment.kystvandId, maxNLoadByYear }
+        return { catchmentId: catchment.catchmentId, maxNLoadByYear }
       },
     )
     const trimmedSwing = db2SwingPct.trim()
     setIsRunning(true)
     try {
-      const response = await runYearlySimulationOptimization(farmId, simulation.id, {
-        timeLimitSeconds,
-        maxNLoadByKystvandopland,
-        db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
-        excludedAfgrodekoder: Array.from(excludedAfgrodekoder),
-      })
+      const response = await runYearlySimulationOptimization(
+        farmId,
+        simulation.id,
+        {
+          timeLimitSeconds,
+          maxNLoadByCatchment,
+          db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
+          excludedCropCodes: Array.from(excludedCropCodes),
+        },
+      )
       await mutate(
         simulationFieldsKey(farmId, simulation.id),
         response.fields,
@@ -1032,7 +1043,7 @@ const YearlyOptimizeDialog = ({
               </p>
             ) : (
               catchments.map((catchment) => {
-                const key = catchmentKey(catchment.kystvandId)
+                const key = catchmentKey(catchment.catchmentId)
                 const input = catchmentInput(key)
                 return (
                   <div key={key} className="space-y-2 rounded border p-3">
@@ -1112,11 +1123,11 @@ const YearlyOptimizeDialog = ({
             (estimat, ikke en garanti)
           </p>
 
-          <AfgrodeExclusionList
+          <CropExclusionList
             farmId={farmId}
             simulationId={simulation.id}
-            excludedCodes={excludedAfgrodekoder}
-            onToggle={toggleAfgrode}
+            excludedCodes={excludedCropCodes}
+            onToggle={toggleCrop}
           />
         </div>
 

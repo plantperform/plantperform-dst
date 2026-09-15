@@ -39,7 +39,7 @@ export const UserMenuContent = () => {
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
-        <Link to="/profil">
+        <Link to="/profile">
           <User className="mr-2 h-4 w-4" aria-hidden="true" />
           Profil
         </Link>

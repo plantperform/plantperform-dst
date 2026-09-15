@@ -12,10 +12,10 @@ type RotationDetailPanelProps = {
   farmId: string
   simulationId: string
   fieldId: string
-  // The mark's CURRENT assigned candidate (from the already-fresh mark list).
+  // The field's CURRENT assigned candidate (from the already-fresh field list).
   // The panel can remain open during an "Optimér" or "Års-optimering" run, and
   // SWR reloads candidate detail only on mount/remount, not automatically when
-  // the mark receives a new assignment. A change in this value triggers the
+  // the field receives a new assignment. A change in this value triggers the
   // reload without revalidating all previously opened panels' keys at once
   // (which was the source of the fixed burst of 422 responses).
   rotationId: string | null

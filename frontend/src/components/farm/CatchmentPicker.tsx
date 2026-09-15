@@ -73,12 +73,12 @@ export const CatchmentPicker = ({
   const catchments = useMemo(() => {
     const totalsByKey = new Map(
       groupFieldsByCatchment(fields, isSimulationView).map((entry) => [
-        catchmentKey(entry.kystvandId),
+        catchmentKey(entry.catchmentId),
         entry.totals,
       ]),
     )
     return catchmentOptions.flatMap((option) => {
-      const key = catchmentKey(option.kystvandId)
+      const key = catchmentKey(option.catchmentId)
       const catchmentTotals = totalsByKey.get(key)
       return catchmentTotals
         ? [

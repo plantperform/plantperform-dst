@@ -5,15 +5,15 @@ import { CROP_GROUP_INDEX, presentCropGroups } from '@/lib/crop-groups'
 export type ColorAttribute =
   | 'none'
   | 'retention'
-  | 'jbnr'
+  | 'soilTypeNumber'
   | 'leaching'
   | 'nLoad'
-  | 'udledningsgraenseKgnHa'
+  | 'nLoadLimitKgNHa'
   | 'db2'
-  | 'vandopland'
+  | 'catchment'
   | 'rotationChanged'
   | 'inTakeoutPlan'
-  | 'kvotegivende'
+  | 'quotaEligible'
   | 'fieldLocked'
   | 'yearNLoad'
   | 'yearCrop'
@@ -102,7 +102,7 @@ export const HOVER_FIELD_LINE_COLOR = '#334155'
 
 export const DIMMED_FIELD_FILL_OPACITY = 0.12
 
-const CATCHMENT_PROPERTY = 'kystvandId'
+const CATCHMENT_PROPERTY = 'catchmentId'
 
 export const buildCatchmentFillOpacity = (
   baseOpacity: number,
@@ -154,8 +154,8 @@ const JB_LABELS: Record<number, string> = {
   12: 'Specielle jordtyper',
 }
 
-export const jbSoilLabel = (jbnr: number): string | null =>
-  JB_LABELS[jbnr] ?? null
+export const soilTypeLabel = (soilTypeNumber: number): string | null =>
+  JB_LABELS[soilTypeNumber] ?? null
 
 const JB_COLORS: Record<number, string> = {
   1: '#FFEEA6',
@@ -172,29 +172,29 @@ const JB_COLORS: Record<number, string> = {
   12: '#8C8C8C',
 }
 
-const JB_NR: CategorySpec = {
+const JB_NUMBER: CategorySpec = {
   kind: 'category',
   label: 'JB nr.',
   unit: '',
   source: 'both',
-  property: 'jbnr',
+  property: 'soilTypeNumber',
   bins: Array.from({ length: 12 }, (_, i) => {
-    const jbnr = i + 1
+    const soilTypeNumber = i + 1
     return {
-      value: jbnr,
-      color: JB_COLORS[jbnr],
-      label: `JB ${jbnr} — ${JB_LABELS[jbnr]}`,
+      value: soilTypeNumber,
+      color: JB_COLORS[soilTypeNumber],
+      label: `JB ${soilTypeNumber} — ${JB_LABELS[soilTypeNumber]}`,
     }
   }),
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-const UDLEDNINGSGRAENSE: NumericSpec = {
+const N_LOAD_LIMIT: NumericSpec = {
   kind: 'numeric',
   label: 'Udledningsgrænse',
   unit: 'kg N/ha',
   source: 'both',
-  property: 'udledningsgraenseKgnHa',
+  property: 'nLoadLimitKgNHa',
   bins: [
     { max: 5, color: '#440154', label: '< 5' },
     { max: 10, color: '#482878', label: '5–10' },
@@ -266,15 +266,15 @@ const DB2: NumericSpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-// Vandopland is a categorical id with ~107 unique values; we hash the id to
+// Catchment is a categorical id with ~107 unique values; we hash the id to
 // HSL with a tertiary lightness bucket so neighbouring catchments are easier
 // to distinguish even though the 4-colour problem is unsolved.
-const VANDOPLAND: HashedSpec = {
+const CATCHMENT: HashedSpec = {
   kind: 'hashed',
   label: 'Vandopland',
   unit: '',
   source: 'both',
-  property: 'kystvandId',
+  property: 'catchmentId',
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
@@ -311,16 +311,16 @@ const TAKEOUT: CategorySpec = {
   fallbackColor: NEUTRAL_FALLBACK,
 }
 
-// Whether the mark's 2026 afgrødekode is kvotegivende areal (Bilag 1,
+// Whether the field's 2026 crop code is quota-eligible area (Bilag 1,
 // table 1). Uses the same pattern as TAKEOUT: categorical 1/0 on both layers.
-// Farm GeoJSON emits kvotegivende as 1/0, while registry MVT exposes the column
+// Farm GeoJSON emits quotaEligible as 1/0, while registry MVT exposes the column
 // directly as kvotegivende::int.
-const KVOTEGIVENDE: CategorySpec = {
+const QUOTA_ELIGIBLE: CategorySpec = {
   kind: 'category',
   label: 'Kvotegivende areal',
   unit: '',
   source: 'both',
-  property: 'kvotegivende',
+  property: 'quotaEligible',
   bins: [
     { value: 1, color: '#0d9488', label: 'Kvotegivende' },
     { value: 0, color: NEUTRAL_FALLBACK, label: 'Ikke kvotegivende' },
@@ -373,7 +373,7 @@ export const yearQuotaStatusLabel = (status: number | null): string | null =>
   YEAR_N_LOAD.bins.find((bin) => bin.value === status)?.label ?? null
 
 export const buildYearCropSpec = (
-  crops: { afgrodeKode: number; afgrodeNavn: string }[],
+  crops: { cropCode: number; cropName: string }[],
 ): CategorySpec => {
   const bins: CategoryBin[] = presentCropGroups(crops).map((group) => ({
     value: CROP_GROUP_INDEX[group.id],
@@ -396,15 +396,15 @@ export const COLOR_SPECS: Record<
   ColorSpec
 > = {
   retention: RETENTION,
-  jbnr: JB_NR,
-  udledningsgraenseKgnHa: UDLEDNINGSGRAENSE,
+  soilTypeNumber: JB_NUMBER,
+  nLoadLimitKgNHa: N_LOAD_LIMIT,
   leaching: LEACHING,
   nLoad: N_LOAD,
   db2: DB2,
-  vandopland: VANDOPLAND,
+  catchment: CATCHMENT,
   rotationChanged: ROTATION_CHANGED,
   inTakeoutPlan: TAKEOUT,
-  kvotegivende: KVOTEGIVENDE,
+  quotaEligible: QUOTA_ELIGIBLE,
   fieldLocked: FIELD_LOCKED,
   yearNLoad: YEAR_N_LOAD,
 }
@@ -412,15 +412,15 @@ export const COLOR_SPECS: Record<
 export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'none', label: 'Ingen' },
   { value: 'retention', label: 'Retention' },
-  { value: 'jbnr', label: 'JB nr.' },
-  { value: 'udledningsgraenseKgnHa', label: 'Udledningsgrænse' },
+  { value: 'soilTypeNumber', label: 'JB nr.' },
+  { value: 'nLoadLimitKgNHa', label: 'Udledningsgrænse' },
   { value: 'leaching', label: 'Udvaskning' },
   { value: 'nLoad', label: 'Udledning' },
   { value: 'db2', label: 'DB2' },
-  { value: 'vandopland', label: 'Vandopland' },
+  { value: 'catchment', label: 'Vandopland' },
   { value: 'rotationChanged', label: 'Ændret sædskifte' },
   { value: 'inTakeoutPlan', label: 'Omlægning' },
-  { value: 'kvotegivende', label: 'Kvotegivende areal' },
+  { value: 'quotaEligible', label: 'Kvotegivende areal' },
   { value: 'fieldLocked', label: 'Låst sædskifte' },
   { value: 'yearNLoad', label: 'Udledning (valgt år)' },
   { value: 'yearCrop', label: 'Afgrøde (valgt år)' },
@@ -430,11 +430,11 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
 // Registry MVT properties use snake_case (matching SQL column names).
 const REGISTRY_PROPERTY_NAMES: Record<string, string> = {
   retention: 'retention',
-  jbnr: 'jbnr',
-  udledningsgraenseKgnHa: 'udledningsgraense_kgn_ha',
-  kystvandId: 'kystvand_id',
+  soilTypeNumber: 'jbnr',
+  nLoadLimitKgNHa: 'udledningsgraense_kgn_ha',
+  catchmentId: 'kystvand_id',
   inTakeoutPlan: 'in_takeout_plan',
-  kvotegivende: 'kvotegivende',
+  quotaEligible: 'kvotegivende',
 }
 
 export const registryPropertyFor = (spec: ColorSpec): string | null => {
@@ -442,11 +442,11 @@ export const registryPropertyFor = (spec: ColorSpec): string | null => {
   return mapped ?? null
 }
 
-// Known kystvand ids in the registry (107 unique values, dumped from the GPKG
+// Known catchment ids in the registry (107 unique values, dumped from the GPKG
 // source). If the upstream dataset ever introduces a new id, polygons with
 // that id will render in the neutral fallback colour until this list is
 // updated.
-const KYSTVAND_IDS: readonly number[] = [
+const CATCHMENT_IDS: readonly number[] = [
   1, 2, 6, 16, 17, 18, 24, 25, 28, 29, 34, 35, 36, 37, 38, 44, 45, 46, 47, 48,
   49, 56, 59, 62, 68, 72, 74, 80, 82, 83, 84, 85, 86, 87, 89, 90, 92, 93, 95,
   96, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 113, 114, 119, 120,
@@ -473,10 +473,10 @@ const hslToHex = (h: number, s: number, l: number): string => {
 // Deterministic per-id colour built once at module load. Golden-ratio hue
 // rotation distributes hues evenly; lightness varies by (id mod 3) so
 // neighbouring ids that happen to collide on hue still differ in luminance.
-const buildKystvandColors = (): Map<number, string> => {
+const buildCatchmentColors = (): Map<number, string> => {
   const colors = new Map<number, string>()
   const lightnessByMod3 = [45, 60, 75]
-  for (const id of KYSTVAND_IDS) {
+  for (const id of CATCHMENT_IDS) {
     const hue = (id * 137.508) % 360
     const lightness = lightnessByMod3[id % 3]
     colors.set(id, hslToHex(hue, 65, lightness))
@@ -488,8 +488,8 @@ const HASHED_COLORS_BY_PROPERTY: Record<
   string,
   Map<number, string> | undefined
 > = {
-  kystvandId: buildKystvandColors(),
-  kystvand_id: buildKystvandColors(),
+  catchmentId: buildCatchmentColors(),
+  kystvand_id: buildCatchmentColors(),
 }
 
 export const buildFillColor = (

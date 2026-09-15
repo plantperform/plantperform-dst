@@ -33,11 +33,8 @@ export const summarizeFarmFields = (
     totals,
     level: totalsQuotaStatusLevel(totals),
     quotaPct:
-      totals.udledningskvoteMarkKgn > 0
-        ? Math.min(
-            100,
-            Math.round((totals.nLoad / totals.udledningskvoteMarkKgn) * 100),
-          )
+      totals.nLoadQuotaKgN > 0
+        ? Math.min(100, Math.round((totals.nLoad / totals.nLoadQuotaKgN) * 100))
         : null,
   }
 }
@@ -47,7 +44,7 @@ export const describeFarmQuota = (
   quotaPct: number | null,
 ): string =>
   quotaPct !== null
-    ? `${formatNumber(totals.nLoad)} af ${formatNumber(totals.udledningskvoteMarkKgn)} kg N · ${quotaPct} %`
+    ? `${formatNumber(totals.nLoad)} af ${formatNumber(totals.nLoadQuotaKgN)} kg N · ${quotaPct} %`
     : `${formatNumber(totals.nLoad)} kg N udledt`
 
 export const sortFarms = (

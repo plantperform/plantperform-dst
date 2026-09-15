@@ -227,7 +227,7 @@ export const fieldsToFeatureCollection = (
           ? null
           : quotaStatusLevel(
               yearNLoadKgHa * field.areaHa,
-              field.udledningskvoteMarkKgn,
+              field.nLoadQuotaKgN,
               true,
             )
       const yearQuotaStatus =
@@ -243,23 +243,23 @@ export const fieldsToFeatureCollection = (
         properties: {
           fieldId: field.id,
           imkId: field.imkId,
-          kystvandId: field.kystvandId,
+          catchmentId: field.catchmentId,
           name: field.name,
           retention: field.retention,
-          jbnr: field.jbnr,
-          udledningsgraenseKgnHa: field.udledningsgraenseKgnHa,
-          udledningskvoteMarkKgn: field.udledningskvoteMarkKgn,
+          soilTypeNumber: field.soilTypeNumber,
+          nLoadLimitKgNHa: field.nLoadLimitKgNHa,
+          nLoadQuotaKgN: field.nLoadQuotaKgN,
           leaching: perHa(field.leaching),
           nLoad: perHa(field.nLoad),
           db2: perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
-          kvotegivende: field.kvotegivende ? 1 : 0,
+          quotaEligible: field.quotaEligible ? 1 : 0,
           fieldLocked: isFieldLocked(field) ? 1 : 0,
-          yearAfgrodeNavn: yearRotation?.afgrodeNavn ?? null,
+          yearCropName: yearRotation?.cropName ?? null,
           yearCropGroup: yearRotation
             ? CROP_GROUP_INDEX[
-                classifyCrop(yearRotation.afgrodeKode, yearRotation.afgrodeNavn)
+                classifyCrop(yearRotation.cropCode, yearRotation.cropName)
               ]
             : null,
           yearNLoadKgHa,

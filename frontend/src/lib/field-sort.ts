@@ -36,7 +36,7 @@ const compareName = (
   return direction === 'asc' ? result : -result
 }
 
-export type CatchmentLabel = (kystvandId: number | null) => string
+export type CatchmentLabel = (catchmentId: number | null) => string
 
 const compareCatchment = (
   left: number | null,
@@ -62,10 +62,10 @@ const comparePrimary = (
       return compareName(left.name, right.name, sort.direction)
     case 'areaHa':
       return compareNumber(left.areaHa, right.areaHa, sort.direction)
-    case 'kystvandopland':
+    case 'catchment':
       return compareCatchment(
-        left.kystvandId,
-        right.kystvandId,
+        left.catchmentId,
+        right.catchmentId,
         sort.direction,
         catchmentLabel,
       )
@@ -75,12 +75,12 @@ const comparePrimary = (
       return compareNumber(left.nLoad, right.nLoad, sort.direction)
     case 'leaching':
       return compareNumber(left.leaching, right.leaching, sort.direction)
-    case 'fen':
-      return compareNumber(left.fen, right.fen, sort.direction)
-    case 'udledningskvoteMarkKgn':
+    case 'feedUnits':
+      return compareNumber(left.feedUnits, right.feedUnits, sort.direction)
+    case 'nLoadQuotaKgN':
       return compareNullableNumber(
-        left.udledningskvoteMarkKgn,
-        right.udledningskvoteMarkKgn,
+        left.nLoadQuotaKgN,
+        right.nLoadQuotaKgN,
         sort.direction,
       )
     case 'inTakeoutPlan':
@@ -95,8 +95,12 @@ const comparePrimary = (
         right.retention,
         sort.direction,
       )
-    case 'jbnr':
-      return compareNullableNumber(left.jbnr, right.jbnr, sort.direction)
+    case 'soilTypeNumber':
+      return compareNullableNumber(
+        left.soilTypeNumber,
+        right.soilTypeNumber,
+        sort.direction,
+      )
   }
 }
 

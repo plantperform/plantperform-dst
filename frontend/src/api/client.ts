@@ -1,4 +1,5 @@
 import { getAccessToken, refreshAccessToken } from '@/api/auth'
+import { fromWire, toWire } from '@/api/wire'
 
 export const API_BASE = '/api/v0'
 
@@ -124,7 +125,7 @@ export const fetcher = async <T>(path: string): Promise<T> => {
     throw new ApiError(response.status, await getErrorMessage(response))
   }
 
-  return response.json() as Promise<T>
+  return fromWire<T>(await response.json())
 }
 
 export const postJson = async <TResponse, TBody>(
@@ -136,14 +137,14 @@ export const postJson = async <TResponse, TBody>(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(toWire(body)),
   })
 
   if (!response.ok) {
     throw new ApiError(response.status, await getErrorMessage(response))
   }
 
-  return response.json() as Promise<TResponse>
+  return fromWire<TResponse>(await response.json())
 }
 
 export const patchJson = async <TResponse, TBody>(
@@ -155,14 +156,14 @@ export const patchJson = async <TResponse, TBody>(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(toWire(body)),
   })
 
   if (!response.ok) {
     throw new ApiError(response.status, await getErrorMessage(response))
   }
 
-  return response.json() as Promise<TResponse>
+  return fromWire<TResponse>(await response.json())
 }
 
 export const deleteJson = async (path: string): Promise<void> => {

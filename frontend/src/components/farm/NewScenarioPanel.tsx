@@ -5,15 +5,15 @@ import { mutate } from 'swr'
 import {
   simulationFieldsKey,
   simulationsKey,
-  useGodningsPresets,
-  useRotationKategorier,
-  useRotationNNormProcenter,
+  useFertiliserPresets,
+  useRotationCategories,
+  useRotationNNormPercentages,
 } from '@/api/hooks'
 import { createSimulation } from '@/api/mutations'
 import type {
   FieldRecord,
-  GodningSettings,
-  RotationKategoriOption,
+  FertiliserSettings,
+  RotationCategoryOption,
   Simulation,
 } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -27,9 +27,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  FDATO_OPTIONS,
-  FDATO_STANDARD_INTERVALS,
-  fdatoEffectPercent,
+  SOWING_DATE_OPTIONS,
+  SOWING_DATE_INTERVALS,
+  sowingDateEffectPercent,
 } from '@/lib/nles5-detail-labels'
 
 type NewScenarioPanelProps = {
@@ -60,85 +60,88 @@ export const NewScenarioPanel = ({
   onSimulationCreated,
   onError,
 }: NewScenarioPanelProps) => {
-  const { data: kategorier = [] } = useRotationKategorier(farmId)
-  const { data: nNormProcenter = [] } = useRotationNNormProcenter(farmId)
-  const { data: godningsPresets = [] } = useGodningsPresets(farmId)
+  const { data: categories = [] } = useRotationCategories(farmId)
+  const { data: nNormOptions = [] } = useRotationNNormPercentages(farmId)
+  const { data: fertiliserPresets = [] } = useFertiliserPresets(farmId)
 
   const [scenarioName, setScenarioName] = useState('')
-  const [selectedByKategori, setSelectedByKategori] = useState<
+  const [selectedByCategory, setSelectedByCategory] = useState<
     Record<string, Set<string>>
   >({})
-  const [expandedKategorier, setExpandedKategorier] = useState<Set<string>>(
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(),
   )
   const [selectedNNorm, setSelectedNNorm] = useState<Set<string>>(new Set())
-  const [godningsTypeValg, setGodningsTypeValg] = useState('ingen')
-  const [driftsform, setDriftsform] = useState<GodningSettings['driftsform']>('Konventionel')
+  const [fertiliserTypeChoice, setFertiliserTypeChoice] = useState('none')
+  const [farmingSystem, setFarmingSystem] =
+    useState<FertiliserSettings['farmingSystem']>('Konventionel')
   const [orgMineralN, setOrgMineralN] = useState('0')
-  const [mineralskAndelPct, setMineralskAndelPct] = useState('100')
+  const [mineralSharePct, setMineralSharePct] = useState('100')
   const [onlyOrganic, setOnlyOrganic] = useState(false)
-  const [nIndholdKgPerTon, setNIndholdKgPerTon] = useState('6')
-  const [precisionDagsbasis, setPrecisionDagsbasis] = useState(false)
-  const [praecisionsjordbrug, setPraecisionsjordbrug] = useState(false)
-  const [tidligSaaning, setTidligSaaning] = useState(true)
-  const [mellemafgrode, setMellemafgrode] = useState(true)
-  const [fdatoInterval, setFdatoInterval] = useState(FDATO_STANDARD_INTERVALS[0].date)
-  const [fdatoDate, setFdatoDate] = useState('20/8')
+  const [nContentKgPerTon, setNContentKgPerTon] = useState('6')
+  const [precisionDailyBasis, setPrecisionDailyBasis] = useState(false)
+  const [precisionFarming, setPrecisionFarming] = useState(false)
+  const [earlySowing, setEarlySowing] = useState(true)
+  const [intermediateCrop, setIntermediateCrop] = useState(true)
+  const [sowingDateInterval, setSowingDateInterval] = useState(SOWING_DATE_INTERVALS[0].date)
+  const [sowingDate, setSowingDate] = useState('20/8')
   const [isCreating, setIsCreating] = useState(false)
 
-  const applyGodningsTypeValg = (value: string) => {
-    setGodningsTypeValg(value)
-    if (value === 'ingen') {
+  const applyFertiliserTypeChoice = (value: string) => {
+    setFertiliserTypeChoice(value)
+    if (value === 'none') {
       setOrgMineralN('0')
-      setMineralskAndelPct('100')
-      setOnlyOrganic(driftsform === 'Økologisk')
+      setMineralSharePct('100')
+      setOnlyOrganic(farmingSystem === 'Økologisk')
       return
     }
-    if (value === 'brugerdefineret') return
+    if (value === 'custom') return
 
-    const preset = godningsPresets.find((p) => p.navn === value)
+    const preset = fertiliserPresets.find((p) => p.name === value)
     if (!preset) return
-    // Do NOT set driftsform from the preset: the same gødningstype (for example,
-    // Kvæggylle) is used whether the mark is konventionel or økologisk.
-    // Driftsform is controlled solely by the separate selector above. However,
-    // "kun organisk gødning" must always follow driftsform rather than the
+    // Do NOT set farmingSystem from the preset: the same fertiliser type (for example,
+    // Kvæggylle) is used whether the field is conventional or organic.
+    // FarmingSystem is controlled solely by the separate selector above. However,
+    // "kun organisk gødning" must always follow farmingSystem rather than the
     // preset's own conventionally shaped value, regardless of the order in
-    // which the user selects driftsform and gødningstype.
-    setOrgMineralN(String(preset.godning.orgMineralN))
-    setMineralskAndelPct(String(preset.godning.mineralskAndelPct))
-    setOnlyOrganic(driftsform === 'Økologisk' ? true : preset.godning.onlyOrganic)
+    // which the user selects farmingSystem and fertiliser type.
+    setOrgMineralN(String(preset.fertiliser.orgMineralN))
+    setMineralSharePct(String(preset.fertiliser.mineralSharePct))
+    setOnlyOrganic(
+      farmingSystem === 'Økologisk' ? true : preset.fertiliser.onlyOrganic,
+    )
   }
 
-  const eeaFdato = precisionDagsbasis ? fdatoDate : fdatoInterval
+  const catchCropSowingDate = precisionDailyBasis ? sowingDate : sowingDateInterval
 
-  const selectedFor = (kategori: string): Set<string> =>
-    selectedByKategori[kategori] ?? new Set()
+  const selectedFor = (category: string): Set<string> =>
+    selectedByCategory[category] ?? new Set()
 
-  const toggleKategoriAll = (option: RotationKategoriOption) => {
-    const current = selectedFor(option.kategori)
+  const toggleCategoryAll = (option: RotationCategoryOption) => {
+    const current = selectedFor(option.category)
     const allSelected =
-      option.saedskifter.length > 0 && current.size === option.saedskifter.length
-    setSelectedByKategori((prev) => ({
+      option.rotations.length > 0 && current.size === option.rotations.length
+    setSelectedByCategory((prev) => ({
       ...prev,
-      [option.kategori]: allSelected
+      [option.category]: allSelected
         ? new Set()
-        : new Set(option.saedskifter.map((s) => s.saedskiftevariant)),
+        : new Set(option.rotations.map((s) => s.rotationVariant)),
     }))
   }
 
-  const toggleSaedskifte = (kategori: string, saedskiftevariant: string) => {
-    setSelectedByKategori((prev) => {
-      const next = new Set(prev[kategori] ?? [])
-      if (next.has(saedskiftevariant)) next.delete(saedskiftevariant)
-      else next.add(saedskiftevariant)
-      return { ...prev, [kategori]: next }
+  const toggleRotation = (category: string, rotationVariant: string) => {
+    setSelectedByCategory((prev) => {
+      const next = new Set(prev[category] ?? [])
+      if (next.has(rotationVariant)) next.delete(rotationVariant)
+      else next.add(rotationVariant)
+      return { ...prev, [category]: next }
     })
   }
 
-  const toggleExpanded = (kategori: string) =>
-    toggleSet(expandedKategorier, setExpandedKategorier, kategori)
+  const toggleExpanded = (category: string) =>
+    toggleSet(expandedCategories, setExpandedCategories, category)
 
-  const hasAnySelection = Object.values(selectedByKategori).some(
+  const hasAnySelection = Object.values(selectedByCategory).some(
     (set) => set.size > 0,
   )
 
@@ -165,27 +168,27 @@ export const NewScenarioPanel = ({
 
     setIsCreating(true)
     try {
-      const saedskiftevarianter = Array.from(
+      const allowedRotationVariants = Array.from(
         new Set(
-          Object.values(selectedByKategori).flatMap((set) => Array.from(set)),
+          Object.values(selectedByCategory).flatMap((set) => Array.from(set)),
         ),
       )
       const simulation = await createSimulation(farmId, {
         name,
-        saedskiftevarianter,
-        nNormProcenter: Array.from(selectedNNorm),
-        godning: {
-          driftsform,
+        allowedRotationVariants,
+        allowedNNormPercentages: Array.from(selectedNNorm),
+        fertiliser: {
+          farmingSystem,
           orgMineralN: Number(orgMineralN) || 0,
-          mineralskAndelPct: Number(mineralskAndelPct) || 100,
+          mineralSharePct: Number(mineralSharePct) || 100,
           onlyOrganic,
-          nIndholdKgPerTon: Number(nIndholdKgPerTon) || 6,
+          nContentKgPerTon: Number(nContentKgPerTon) || 6,
         },
-        eeaFdato,
-        eeaPrecisionDagsbasis: precisionDagsbasis,
-        praecisionsjordbrug,
-        tidligSaaning,
-        mellemafgrode,
+        catchCropSowingDate,
+        catchCropDailyBasis: precisionDailyBasis,
+        precisionFarming,
+        earlySowing,
+        intermediateCrop,
       })
       await mutate(
         simulationsKey(farmId),
@@ -198,20 +201,20 @@ export const NewScenarioPanel = ({
       onError(null)
       onOpenChange(false)
       setScenarioName('')
-      setSelectedByKategori({})
-      setExpandedKategorier(new Set())
+      setSelectedByCategory({})
+      setExpandedCategories(new Set())
       setSelectedNNorm(new Set())
-      setGodningsTypeValg('ingen')
-      setDriftsform('Konventionel')
+      setFertiliserTypeChoice('none')
+      setFarmingSystem('Konventionel')
       setOrgMineralN('0')
-      setMineralskAndelPct('100')
+      setMineralSharePct('100')
       setOnlyOrganic(false)
-      setPrecisionDagsbasis(false)
-      setPraecisionsjordbrug(false)
-      setTidligSaaning(true)
-      setMellemafgrode(true)
-      setFdatoInterval(FDATO_STANDARD_INTERVALS[0].date)
-      setFdatoDate('20/8')
+      setPrecisionDailyBasis(false)
+      setPrecisionFarming(false)
+      setEarlySowing(true)
+      setIntermediateCrop(true)
+      setSowingDateInterval(SOWING_DATE_INTERVALS[0].date)
+      setSowingDate('20/8')
     } catch {
       onError('Kunne ikke oprette simuleringen.')
     } finally {
@@ -244,14 +247,15 @@ export const NewScenarioPanel = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="scenario-driftsform">Driftsform</Label>
+            <Label htmlFor="scenario-farming-system">Driftsform</Label>
             <select
-              id="scenario-driftsform"
+              id="scenario-farming-system"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-              value={driftsform}
+              value={farmingSystem}
               onChange={(event) => {
-                const value = event.target.value as GodningSettings['driftsform']
-                setDriftsform(value)
+                const value = event.target
+                  .value as FertiliserSettings['farmingSystem']
+                setFarmingSystem(value)
                 setOnlyOrganic(value === 'Økologisk')
               }}
             >
@@ -268,15 +272,18 @@ export const NewScenarioPanel = ({
               gruppe ud for at vælge specifikke sædskifter til/fra - ellers indgår alle.
             </p>
             <div className="space-y-1">
-              {kategorier.map((option) => {
-                const selected = selectedFor(option.kategori)
+              {categories.map((option) => {
+                const selected = selectedFor(option.category)
                 const allSelected =
-                  option.saedskifter.length > 0 &&
-                  selected.size === option.saedskifter.length
+                  option.rotations.length > 0 &&
+                  selected.size === option.rotations.length
                 const partiallySelected = selected.size > 0 && !allSelected
-                const isExpanded = expandedKategorier.has(option.kategori)
+                const isExpanded = expandedCategories.has(option.category)
                 return (
-                  <div key={option.kategori} className="rounded-md border bg-background">
+                  <div
+                    key={option.category}
+                    className="rounded-md border bg-background"
+                  >
                     <div className="flex items-start gap-2 p-3 text-sm">
                       <input
                         type="checkbox"
@@ -285,17 +292,18 @@ export const NewScenarioPanel = ({
                         ref={(element) => {
                           if (element) element.indeterminate = partiallySelected
                         }}
-                        onChange={() => toggleKategoriAll(option)}
+                        onChange={() => toggleCategoryAll(option)}
                       />
                       <button
                         type="button"
                         className="flex flex-1 items-start justify-between gap-2 text-left"
-                        onClick={() => toggleExpanded(option.kategori)}
+                        onClick={() => toggleExpanded(option.category)}
                       >
                         <span>
-                          <span className="font-medium">{option.kategori}</span>
+                          <span className="font-medium">{option.category}</span>
                           <span className="block text-xs text-muted-foreground">
-                            {selected.size}/{option.antalSaedskifter} sædskifter valgt
+                            {selected.size}/{option.rotationCount} sædskifter
+                            valgt
                           </span>
                         </span>
                         {isExpanded ? (
@@ -313,23 +321,23 @@ export const NewScenarioPanel = ({
                     </div>
                     {isExpanded ? (
                       <div className="max-h-56 space-y-1 overflow-y-auto border-t p-2">
-                        {option.saedskifter.map((saedskifte) => (
+                        {option.rotations.map((rotation) => (
                           <label
-                            key={saedskifte.saedskiftevariant}
+                            key={rotation.rotationVariant}
                             className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50"
                           >
                             <input
                               type="checkbox"
                               className="mt-0.5"
-                              checked={selected.has(saedskifte.saedskiftevariant)}
+                              checked={selected.has(rotation.rotationVariant)}
                               onChange={() =>
-                                toggleSaedskifte(
-                                  option.kategori,
-                                  saedskifte.saedskiftevariant,
+                                toggleRotation(
+                                  option.category,
+                                  rotation.rotationVariant,
                                 )
                               }
                             />
-                            <span>{saedskifte.cropSequence.join(' - ')}</span>
+                            <span>{rotation.cropSequence.join(' - ')}</span>
                           </label>
                         ))}
                       </div>
@@ -350,20 +358,22 @@ export const NewScenarioPanel = ({
               <span className="text-xs text-muted-foreground">Gødningstype</span>
               <select
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                value={godningsTypeValg}
-                onChange={(event) => applyGodningsTypeValg(event.target.value)}
+                value={fertiliserTypeChoice}
+                onChange={(event) =>
+                  applyFertiliserTypeChoice(event.target.value)
+                }
               >
-                <option value="ingen">Ingen organisk gødning (ren handelsgødning)</option>
-                {godningsPresets.map((preset) => (
-                  <option key={preset.navn} value={preset.navn}>
-                    {preset.navn}
+                <option value="none">Ingen organisk gødning (ren handelsgødning)</option>
+                {fertiliserPresets.map((preset) => (
+                  <option key={preset.name} value={preset.name}>
+                    {preset.name}
                   </option>
                 ))}
-                <option value="brugerdefineret">Brugerdefineret</option>
+                <option value="custom">Brugerdefineret</option>
               </select>
             </label>
 
-            {godningsTypeValg !== 'ingen' ? (
+            {fertiliserTypeChoice !== 'none' ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
                   <span className="text-xs text-muted-foreground">
@@ -382,8 +392,8 @@ export const NewScenarioPanel = ({
                     type="number"
                     min="1"
                     max="100"
-                    value={mineralskAndelPct}
-                    onChange={(event) => setMineralskAndelPct(event.target.value)}
+                    value={mineralSharePct}
+                    onChange={(event) => setMineralSharePct(event.target.value)}
                   />
                 </label>
                 <label className="space-y-1 text-sm">
@@ -394,23 +404,25 @@ export const NewScenarioPanel = ({
                     type="number"
                     min="0.1"
                     step="0.1"
-                    value={nIndholdKgPerTon}
-                    onChange={(event) => setNIndholdKgPerTon(event.target.value)}
+                    value={nContentKgPerTon}
+                    onChange={(event) =>
+                      setNContentKgPerTon(event.target.value)
+                    }
                   />
                   <span className="block text-xs text-muted-foreground">
                     Typisk kvæggylle: 4–7 kg udnyttet N/ton. Bruges til at
                     omregne til ton gødning brugt pr. mark pr. år (reference,
                     ingen beregningseffekt).
                     {(() => {
-                      const udnyttetPerTon = Number(nIndholdKgPerTon)
-                      const mineralskPct = Number(mineralskAndelPct)
-                      if (!udnyttetPerTon || !mineralskPct) return null
-                      const totalPerTon = udnyttetPerTon / (mineralskPct / 100)
+                      const utilisedPerTon = Number(nContentKgPerTon)
+                      const mineralPct = Number(mineralSharePct)
+                      if (!utilisedPerTon || !mineralPct) return null
+                      const totalPerTon = utilisedPerTon / (mineralPct / 100)
                       return (
                         <>
                           {' '}
                           Svarer til ca. {totalPerTon.toFixed(1)} kg total N/ton
-                          (ved {mineralskPct}% mineralsk andel).
+                          (ved {mineralPct}% mineralsk andel).
                         </>
                       )
                     })()}
@@ -419,7 +431,7 @@ export const NewScenarioPanel = ({
               </div>
             ) : null}
 
-            {godningsTypeValg !== 'ingen' ? (
+            {fertiliserTypeChoice !== 'none' ? (
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
@@ -437,7 +449,7 @@ export const NewScenarioPanel = ({
               Hvor stor en andel af den fulde N-norm der skal indgå - vælg et eller flere niveauer.
             </p>
             <div className="flex flex-wrap gap-2">
-              {nNormProcenter.map((value) => (
+              {nNormOptions.map((value) => (
                 <label
                   key={value}
                   className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors ${
@@ -468,8 +480,10 @@ export const NewScenarioPanel = ({
               <input
                 type="checkbox"
                 className="mt-1"
-                checked={precisionDagsbasis}
-                onChange={(event) => setPrecisionDagsbasis(event.target.checked)}
+                checked={precisionDailyBasis}
+                onChange={(event) =>
+                  setPrecisionDailyBasis(event.target.checked)
+                }
               />
               <span>
                 <span className="font-medium">
@@ -482,13 +496,13 @@ export const NewScenarioPanel = ({
               </span>
             </label>
 
-            {precisionDagsbasis ? (
+            {precisionDailyBasis ? (
               <select
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                value={fdatoDate}
-                onChange={(event) => setFdatoDate(event.target.value)}
+                value={sowingDate}
+                onChange={(event) => setSowingDate(event.target.value)}
               >
-                {FDATO_OPTIONS.map((date) => (
+                {SOWING_DATE_OPTIONS.map((date) => (
                   <option key={date} value={date}>
                     {date}
                   </option>
@@ -497,10 +511,10 @@ export const NewScenarioPanel = ({
             ) : (
               <select
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                value={fdatoInterval}
-                onChange={(event) => setFdatoInterval(event.target.value)}
+                value={sowingDateInterval}
+                onChange={(event) => setSowingDateInterval(event.target.value)}
               >
-                {FDATO_STANDARD_INTERVALS.map((interval) => (
+                {SOWING_DATE_INTERVALS.map((interval) => (
                   <option key={interval.date} value={interval.date}>
                     {interval.label}
                   </option>
@@ -508,8 +522,9 @@ export const NewScenarioPanel = ({
               </select>
             )}
             <p className="text-xs text-muted-foreground">
-              NUAR EEA-effekt: {fdatoEffectPercent(eeaFdato, precisionDagsbasis).toFixed(1)}%
-              ({precisionDagsbasis ? 'dagsbasis, §38' : 'trappesats, §37'})
+              NUAR EEA-effekt:{' '}
+              {sowingDateEffectPercent(catchCropSowingDate, precisionDailyBasis).toFixed(1)}% (
+              {precisionDailyBasis ? 'dagsbasis, §38' : 'trappesats, §37'})
             </p>
           </div>
 
@@ -519,8 +534,8 @@ export const NewScenarioPanel = ({
               <input
                 type="checkbox"
                 className="mt-1"
-                checked={praecisionsjordbrug}
-                onChange={(event) => setPraecisionsjordbrug(event.target.checked)}
+                checked={precisionFarming}
+                onChange={(event) => setPrecisionFarming(event.target.checked)}
               />
               <span>
                 <span className="font-medium">Anvend præcisionsjordbrug</span>
@@ -541,16 +556,16 @@ export const NewScenarioPanel = ({
             <label className="flex items-center gap-3 rounded-md border bg-background p-3 text-sm">
               <input
                 type="checkbox"
-                checked={tidligSaaning}
-                onChange={(event) => setTidligSaaning(event.target.checked)}
+                checked={earlySowing}
+                onChange={(event) => setEarlySowing(event.target.checked)}
               />
               <span className="font-medium">Tillad tidlig såning</span>
             </label>
             <label className="flex items-center gap-3 rounded-md border bg-background p-3 text-sm">
               <input
                 type="checkbox"
-                checked={mellemafgrode}
-                onChange={(event) => setMellemafgrode(event.target.checked)}
+                checked={intermediateCrop}
+                onChange={(event) => setIntermediateCrop(event.target.checked)}
               />
               <span className="font-medium">Tillad mellemafgrøde</span>
             </label>
