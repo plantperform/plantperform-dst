@@ -21,6 +21,7 @@ import {
 } from '@/components/farm/catchment-options'
 import { CropExclusionList } from '@/components/farm/CropExclusionList'
 import { invalidateOptimizationDisplays } from '@/components/farm/optimization-run'
+import { YearlyOptimizationSummary } from '@/components/farm/YearlyOptimizationSummary'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
@@ -548,6 +549,17 @@ export const YearlyOptimizeDialog = ({
               </p>
             ) : null}
           </>
+        ) : null}
+
+        {stepIndex === 3 ? (
+          <YearlyOptimizationSummary
+            values={values}
+            catchments={catchments}
+            crops={crops}
+            fieldCount={fields.length}
+            estimatedSeconds={estimatedSeconds}
+            onEditStep={navigate}
+          />
         ) : null}
       </div>
     </StepDialog>
