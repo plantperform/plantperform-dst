@@ -21,17 +21,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
   SOWING_DATE_INTERVALS,
   sowingDateEffectPercent,
 } from '@/lib/nles5-detail-labels'
 import {
+  CUSTOM_FERTILISER,
   DEFAULT_SIMULATION_FORM_VALUES,
   NO_FERTILISER,
   SIMULATION_FORM_STEPS,
   catchCropSowingDateOf,
   fertiliserFieldsForChoice,
+  isPresetModified,
   isStepValid,
   simulationFormSchema,
   stepFields,
@@ -39,6 +42,7 @@ import {
   toggleValue,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
+import { cn } from '@/lib/utils'
 
 type NewScenarioPanelProps = {
   farmId: string
@@ -157,6 +161,7 @@ export const NewScenarioPanel = ({
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
+  const presetModified = isPresetModified(values, fertiliserPresets)
 
   const createScenario = async () => {
     if (!hasFields) return
@@ -338,24 +343,78 @@ export const NewScenarioPanel = ({
               Uafhængig af hvilke sædskifter du har valgt - samme gødningsvalg
               bruges for alle valgte sædskifter i simuleringen.
             </p>
-            <label className="space-y-1 text-sm">
-              <span className="text-xs text-muted-foreground">Gødningstype</span>
-              <select
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                value={values.fertiliserChoice}
-                onChange={(event) => applyFertiliserChoice(event.target.value)}
-              >
-                <option value="none">
-                  Ingen organisk gødning (ren handelsgødning)
-                </option>
-                {fertiliserPresets.map((preset) => (
-                  <option key={preset.name} value={preset.name}>
-                    {preset.name}
-                  </option>
-                ))}
-                <option value="custom">Brugerdefineret</option>
-              </select>
-            </label>
+            <div
+              role="radiogroup"
+              aria-label="Gødningstype"
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              {[
+                {
+                  value: NO_FERTILISER,
+                  label: 'Ingen organisk gødning',
+                  detail: 'Ren handelsgødning',
+                },
+                ...fertiliserPresets.map((preset) => ({
+                  value: preset.name,
+                  label: preset.name,
+                  detail: `${formatNumber(preset.fertiliser.orgMineralN)} kg N/ha · ${formatNumber(preset.fertiliser.mineralSharePct)} % mineralsk`,
+                })),
+                {
+                  value: CUSTOM_FERTILISER,
+                  label: 'Brugerdefineret',
+                  detail: 'Angiv selv værdierne',
+                },
+              ].map((option) => {
+                const checked = values.fertiliserChoice === option.value
+                const modified = checked && presetModified
+                return (
+                  <label
+                    key={option.value}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-2.5 rounded-md border p-3 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                      checked
+                        ? 'border-primary bg-primary/5'
+                        : 'bg-background hover:bg-muted/50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="scenario-fertiliser-choice"
+                      className="mt-1"
+                      checked={checked}
+                      onChange={() => applyFertiliserChoice(option.value)}
+                    />
+                    <span className="min-w-0">
+                      <span className="font-medium">
+                        {option.label}
+                        {modified ? (
+                          <span className="font-normal text-muted-foreground">
+                            {' '}
+                            (tilpasset)
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {option.detail}
+                      </span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+
+            {presetModified ? (
+              <p className="text-xs text-muted-foreground">
+                Værdierne afviger fra standarden for {values.fertiliserChoice}.{' '}
+                <button
+                  type="button"
+                  className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => applyFertiliserChoice(values.fertiliserChoice)}
+                >
+                  Gendan standard
+                </button>
+              </p>
+            ) : null}
 
             {values.fertiliserChoice !== NO_FERTILISER ? (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -444,11 +503,23 @@ export const NewScenarioPanel = ({
             ) : null}
 
             {values.fertiliserChoice !== NO_FERTILISER ? (
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" {...register('onlyOrganic')} />
-                Kun organisk gødning (ingen handelsgødnings-optopning) - typisk
-                økologisk
-              </label>
+              values.farmingSystem === 'Økologisk' ? (
+                // Not registered: a disabled registered input would drop its value.
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked disabled readOnly />
+                  <span>
+                    Kun organisk gødning (ingen handelsgødnings-optopning)
+                    <span className="block">
+                      Følger driftsform: økologisk tilføres aldrig handelsgødning.
+                    </span>
+                  </span>
+                </label>
+              ) : (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" {...register('onlyOrganic')} />
+                  Kun organisk gødning (ingen handelsgødnings-optopning)
+                </label>
+              )
             ) : null}
           </div>
 

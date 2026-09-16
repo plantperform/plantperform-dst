@@ -295,6 +295,25 @@ export const fertiliserFieldsForChoice = (
   }
 }
 
+// True when a preset is chosen and its numbers were edited afterwards. The
+// preset name is not sent, so this only labels the choice as tilpasset.
+export const isPresetModified = (
+  values: Pick<
+    SimulationFormValues,
+    'fertiliserChoice' | 'orgMineralN' | 'mineralSharePct'
+  >,
+  presets: FertiliserPresetOption[],
+): boolean => {
+  const preset = presets.find(
+    (option) => option.name === values.fertiliserChoice,
+  )
+  if (!preset) return false
+  return (
+    Number(values.orgMineralN) !== preset.fertiliser.orgMineralN ||
+    Number(values.mineralSharePct) !== preset.fertiliser.mineralSharePct
+  )
+}
+
 export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
   values.catchCropDailyBasis
     ? values.catchCropSowingDate
@@ -313,7 +332,8 @@ export const toCreateSimulationInput = (
       farmingSystem: values.farmingSystem,
       orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),
       mineralSharePct: withoutFertiliser ? 100 : Number(values.mineralSharePct),
-      onlyOrganic: values.onlyOrganic,
+      // Økologisk never tops up with handelsgødning, whatever the draft holds.
+      onlyOrganic: values.farmingSystem === 'Økologisk' || values.onlyOrganic,
       // Hidden without fertiliser, where whatever was typed earlier is ignored.
       nContentKgPerTon: withoutFertiliser
         ? Number(DEFAULT_SIMULATION_FORM_VALUES.nContentKgPerTon)
