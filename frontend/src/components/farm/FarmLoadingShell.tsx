@@ -1,5 +1,11 @@
+import type { Farm } from '@/api/types'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
-import { GROUP_LABEL_CLASS, SidebarBrand } from '@/components/farm/FarmSidebar'
+import {
+  GROUP_CLASS,
+  GROUP_LABEL_CLASS,
+  SidebarBrand,
+} from '@/components/farm/FarmSidebar'
+import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import {
   Sidebar,
   SidebarContent,
@@ -12,16 +18,29 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const SIDEBAR_ROW_CLASS = 'h-11 rounded-md bg-sidebar-accent'
 
-export const FarmSidebarSkeleton = () => (
+type FarmSidebarSkeletonProps = {
+  farm?: Farm
+  onError: (message: string | null) => void
+}
+
+export const FarmSidebarSkeleton = ({
+  farm,
+  onError,
+}: FarmSidebarSkeletonProps) => (
   <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
-    <SidebarHeader className="h-13 justify-center px-3 py-0">
+    <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
       <SidebarBrand />
+      {farm ? (
+        <FarmSwitcher farm={farm} onError={onError} />
+      ) : (
+        <Skeleton className="h-10 rounded-md bg-sidebar-accent group-data-[collapsible=icon]:size-8" />
+      )}
     </SidebarHeader>
     <SidebarContent>
       <div className="px-3 pt-2 group-data-[collapsible=icon]:hidden">
         <Skeleton className="h-9 rounded-md bg-sidebar-accent" />
       </div>
-      <SidebarGroup className="px-3 py-1">
+      <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
           Visninger
         </SidebarGroupLabel>
@@ -29,7 +48,7 @@ export const FarmSidebarSkeleton = () => (
           <Skeleton className={SIDEBAR_ROW_CLASS} />
         </SidebarGroupContent>
       </SidebarGroup>
-      <SidebarGroup className="px-3 py-1">
+      <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
           Simuleringer
         </SidebarGroupLabel>
@@ -40,13 +59,6 @@ export const FarmSidebarSkeleton = () => (
       </SidebarGroup>
     </SidebarContent>
   </Sidebar>
-)
-
-export const FarmTopBarSkeleton = () => (
-  <header className="flex min-h-12 shrink-0 items-center gap-3 border-b bg-background px-4 py-1">
-    <Skeleton className="h-6 w-40 rounded-md" />
-    <Skeleton className="h-6 w-28 rounded-full" />
-  </header>
 )
 
 export const FarmContentSkeleton = () => (
