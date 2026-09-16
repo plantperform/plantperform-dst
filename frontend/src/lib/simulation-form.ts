@@ -149,6 +149,12 @@ export const SIMULATION_FORM_STEPS = [
       intermediateCrop: z.boolean(),
     }),
   },
+  {
+    id: 'confirm',
+    label: 'Bekræft',
+    // Only reviews the earlier steps, which are validated again on create.
+    schema: z.object({}),
+  },
 ] as const
 
 // The fields each step owns, taken from its schema so the two cannot drift.
@@ -260,6 +266,53 @@ export const farmingSystemMismatchCount = (
   )
   return rotationVariants.filter((variant) => !matching.has(variant)).length
 }
+
+export const selectedCountsByCategory = (
+  categories: RotationCategoryOption[],
+  rotationVariants: string[],
+): { category: string; count: number }[] =>
+  categories
+    .map((category) => ({
+      category: category.category,
+      count: selectedInCategory(category, rotationVariants),
+    }))
+    .filter(({ count }) => count > 0)
+
+// The selected rotations in selection order, each once, with its crops.
+export const selectedRotations = (
+  categories: RotationCategoryOption[],
+  rotationVariants: string[],
+): RotationOption[] => {
+  const byVariant = new Map<string, RotationOption>()
+  for (const category of categories) {
+    for (const rotation of category.rotations) {
+      if (!byVariant.has(rotation.rotationVariant)) {
+        byVariant.set(rotation.rotationVariant, rotation)
+      }
+    }
+  }
+  return rotationVariants.flatMap((variant) => byVariant.get(variant) ?? [])
+}
+
+// Rotations x N-norm levels x fields. The backend also crosses each rotation
+// with all of its variants and drops duplicates, which the frontend cannot
+// see, so this is not the exact number of candidates.
+export const combinationCount = (
+  values: Pick<SimulationFormValues, 'rotationVariants' | 'nNormPercentages'>,
+  fieldCount: number,
+): number =>
+  values.rotationVariants.length * values.nNormPercentages.length * fieldCount
+
+const OTHER_SYSTEM_PLURAL: Record<FarmingSystem, string> = {
+  Konventionel: 'økologiske',
+  Økologisk: 'konventionelle',
+}
+
+export const farmingSystemMismatchMessage = (
+  count: number,
+  farmingSystem: FarmingSystem,
+): string =>
+  `Du har valgt ${count} ${OTHER_SYSTEM_PLURAL[farmingSystem]} sædskifter til en ${farmingSystem.toLowerCase()} simulering.`
 
 type FertiliserFields = Pick<
   SimulationFormValues,
