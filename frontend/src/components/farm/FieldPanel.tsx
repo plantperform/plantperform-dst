@@ -15,6 +15,7 @@ import { RotationYearRow } from '@/components/farm/RotationYearRow'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
+  fieldTitle,
   formatNumber,
   formatQuotaAmount,
   formatWholeNumber,
@@ -234,7 +235,7 @@ export const FieldPanel = ({
         <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between @2xl:gap-4 @2xl:border-b @2xl:pb-3">
           <div className="min-w-0">
             <h2 className="truncate font-display text-2xl tracking-tight @2xl:text-3xl">
-              Mark {field.name}
+              {fieldTitle(field)}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {metaParts.map((part, index) => (

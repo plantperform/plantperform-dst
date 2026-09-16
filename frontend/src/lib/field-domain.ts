@@ -130,6 +130,9 @@ export const formatWholeNumber = (value: number) =>
 export const formatFieldCount = (count: number) =>
   `${count} ${count === 1 ? 'mark' : 'marker'}`
 
+export const fieldTitle = (field: Pick<FieldRecord, 'name'>): string =>
+  field.name.startsWith('Mark ') ? field.name : `Mark ${field.name}`
+
 const compactMillionFormat = new Intl.NumberFormat('da-DK', {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,

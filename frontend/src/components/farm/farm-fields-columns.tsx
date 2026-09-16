@@ -1,5 +1,5 @@
 import type { ColumnDef, RowData } from '@tanstack/react-table'
-import { ChevronRight, Lock, LockOpen } from 'lucide-react'
+import { ChevronRight, Lock, LockOpen, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
@@ -292,6 +292,40 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
   },
 }
 
+const detachColumn = (
+  detachingFieldIds: string[],
+  onRequestDetach: (field: FieldRecord) => void,
+): ColumnDef<FieldRecord, unknown> => ({
+  id: 'detach',
+  header: () => <span className="sr-only">Fjern fra bedriften</span>,
+  cell: ({ row }) => {
+    const rowField = row.original
+    return (
+      <Button
+        variant="ghost"
+        size="xs"
+        className="size-7 p-0 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 pointer-coarse:opacity-100"
+        disabled={detachingFieldIds.includes(rowField.id)}
+        aria-label={`Fjern mark ${rowField.name} fra bedriften`}
+        title="Fjern fra bedriften"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRequestDetach(rowField)
+        }}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <X className="size-4" aria-hidden="true" />
+      </Button>
+    )
+  },
+  enableSorting: false,
+  meta: {
+    headerClassName: 'w-9 px-1 py-2',
+    cellClassName: 'w-9 px-1 py-0.5 text-right',
+  },
+})
+
 type RulesColumnsArgs = {
   fields: FieldRecord[]
   canEditRules: boolean
@@ -450,6 +484,8 @@ export type FarmFieldsColumnsArgs = {
   lockingFieldId: string | null
   onToggleLock: (field: FieldRecord) => void
   onBindRotation: (field: FieldRecord) => void
+  detachingFieldIds: string[]
+  onRequestDetach?: (field: FieldRecord) => void
 }
 
 export const buildFarmFieldsColumns = ({
@@ -464,6 +500,8 @@ export const buildFarmFieldsColumns = ({
   lockingFieldId,
   onToggleLock,
   onBindRotation,
+  detachingFieldIds,
+  onRequestDetach,
 }: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
   const { totals } = quota
   if (mode === 'rules') {
@@ -797,6 +835,9 @@ export const buildFarmFieldsColumns = ({
     },
   )
 
+  if (onRequestDetach) {
+    list.push(detachColumn(detachingFieldIds, onRequestDetach))
+  }
   list.push(rowAffordanceColumn)
 
   return list

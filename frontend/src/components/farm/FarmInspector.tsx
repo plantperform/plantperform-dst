@@ -39,6 +39,8 @@ import {
   useCatchmentLabel,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
+import { useDetachFields } from '@/components/farm/detach-fields'
+import { DetachFieldsDialog } from '@/components/farm/DetachFieldsDialog'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
@@ -199,6 +201,12 @@ export const FarmInspector = ({
     fieldId: string
     nonce: number
   } | null>(null)
+  const [detachRequest, setDetachRequest] = useState<FieldRecord[]>([])
+  const { detachingFieldIds, detachFields } = useDetachFields(farm.id, onError)
+  const requestDetach = useCallback(
+    (field: FieldRecord) => setDetachRequest([field]),
+    [],
+  )
   const viewOptions = useMemo(
     () => buildViewOptions(splitAvailable),
     [splitAvailable],
@@ -233,6 +241,12 @@ export const FarmInspector = ({
       fieldId,
       nonce: (current?.nonce ?? 0) + 1,
     }))
+
+  const confirmDetach = () => {
+    const fieldIds = detachRequest.map((field) => field.id)
+    setDetachRequest([])
+    void detachFields(fieldIds)
+  }
 
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
@@ -468,6 +482,12 @@ export const FarmInspector = ({
         />
       ) : null}
 
+      <DetachFieldsDialog
+        fields={detachRequest}
+        onCancel={() => setDetachRequest([])}
+        onConfirm={confirmDetach}
+      />
+
       <div
         className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
         aria-busy={fieldsLoading}
@@ -568,6 +588,10 @@ export const FarmInspector = ({
                     selectedYearIndex={effectiveSelectedYearIndex}
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
+                    detachingFieldIds={detachingFieldIds}
+                    onRequestDetach={
+                      isSimulationView ? undefined : requestDetach
+                    }
                   />
                 </div>
               )}
@@ -594,6 +618,7 @@ export const FarmInspector = ({
                   highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                   zoomRequest={zoomRequest ?? undefined}
                   onAddModeChange={setAddModeSnap}
+                  detachFields={detachFields}
                   onError={onError}
                 />
               }
@@ -619,6 +644,8 @@ export const FarmInspector = ({
                         selectedYearIndex={effectiveSelectedYearIndex}
                         onSelectedYearIndexChange={onSelectedYearIndexChange}
                         yearValues={yearValues?.[panelField.id]}
+                        isDetaching={detachingFieldIds.includes(panelField.id)}
+                        onRequestDetach={() => requestDetach(panelField)}
                         listBehind={listBehind}
                         mapVisible={mapVisible}
                         onSelectFieldId={onSelectedFieldChange}
