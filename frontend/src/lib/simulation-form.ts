@@ -5,6 +5,7 @@ import type {
   FarmingSystem,
   FertiliserPresetOption,
   RotationCategoryOption,
+  RotationOption,
 } from '@/api/types'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
@@ -189,22 +190,75 @@ export const selectedInCategory = (
   ).length
 }
 
-// Selects every rotation in the category, or clears them when all are selected.
-export const toggleCategoryRotations = (
-  category: RotationCategoryOption,
+// A crop filter keeps rotations containing every chosen crop ('all') or at
+// least one of them ('any'). No chosen crops keeps everything.
+export type CropMatchMode = 'all' | 'any'
+
+export const cropsInCategory = (category: RotationCategoryOption): string[] =>
+  Array.from(
+    new Set(category.rotations.flatMap((rotation) => rotation.cropSequence)),
+  ).sort((a, b) => a.localeCompare(b, 'da'))
+
+export const filterRotations = (
+  rotations: RotationOption[],
+  {
+    crops,
+    mode,
+    onlySelectedFrom,
+  }: {
+    crops: string[]
+    mode: CropMatchMode
+    // When given, only rotations in this selection are kept.
+    onlySelectedFrom?: string[]
+  },
+): RotationOption[] => {
+  const selected = onlySelectedFrom ? new Set(onlySelectedFrom) : null
+  return rotations.filter((rotation) => {
+    if (selected && !selected.has(rotation.rotationVariant)) return false
+    if (crops.length === 0) return true
+    const sequence = new Set(rotation.cropSequence)
+    return mode === 'all'
+      ? crops.every((crop) => sequence.has(crop))
+      : crops.some((crop) => sequence.has(crop))
+  })
+}
+
+export const setRotationsSelected = (
   rotationVariants: string[],
+  rotations: RotationOption[],
+  selected: boolean,
 ): string[] => {
-  const categoryVariants = category.rotations.map(
-    (rotation) => rotation.rotationVariant,
+  const variants = rotations.map((rotation) => rotation.rotationVariant)
+  if (selected) return Array.from(new Set([...rotationVariants, ...variants]))
+  const removed = new Set(variants)
+  return rotationVariants.filter((variant) => !removed.has(variant))
+}
+
+// Categories for the chosen driftsform first, keeping their order otherwise.
+export const orderCategoriesForFarmingSystem = (
+  categories: RotationCategoryOption[],
+  farmingSystem: FarmingSystem,
+): RotationCategoryOption[] => [
+  ...categories.filter((category) => category.croppingSystem === farmingSystem),
+  ...categories.filter((category) => category.croppingSystem !== farmingSystem),
+]
+
+// Counts selected rotations that exist only in categories of the other
+// driftsform. Brak is in every category, so it never counts. This is a
+// warning, not a rule: mixing is allowed.
+export const farmingSystemMismatchCount = (
+  categories: RotationCategoryOption[],
+  rotationVariants: string[],
+  farmingSystem: FarmingSystem,
+): number => {
+  const matching = new Set(
+    categories
+      .filter((category) => category.croppingSystem === farmingSystem)
+      .flatMap((category) =>
+        category.rotations.map((rotation) => rotation.rotationVariant),
+      ),
   )
-  const allSelected =
-    categoryVariants.length > 0 &&
-    selectedInCategory(category, rotationVariants) === categoryVariants.length
-  if (allSelected) {
-    const removed = new Set(categoryVariants)
-    return rotationVariants.filter((variant) => !removed.has(variant))
-  }
-  return Array.from(new Set([...rotationVariants, ...categoryVariants]))
+  return rotationVariants.filter((variant) => !matching.has(variant)).length
 }
 
 type FertiliserFields = Pick<

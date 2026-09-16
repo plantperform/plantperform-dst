@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
@@ -17,6 +16,7 @@ import type {
   FertiliserSettings,
   Simulation,
 } from '@/api/types'
+import { RotationPicker } from '@/components/farm/RotationPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,11 +33,9 @@ import {
   catchCropSowingDateOf,
   fertiliserFieldsForChoice,
   isStepValid,
-  selectedInCategory,
   simulationFormSchema,
   stepFields,
   toCreateSimulationInput,
-  toggleCategoryRotations,
   toggleValue,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
@@ -93,9 +91,6 @@ export const NewScenarioPanel = ({
 
   const [stepIndex, setStepIndex] = useState(0)
   const [furthestStepIndex, setFurthestStepIndex] = useState(0)
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(),
-  )
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -145,7 +140,6 @@ export const NewScenarioPanel = ({
     reset(DEFAULT_SIMULATION_FORM_VALUES)
     setStepIndex(0)
     setFurthestStepIndex(0)
-    setExpandedCategories(new Set())
     setCreateError(null)
   }
 
@@ -163,14 +157,6 @@ export const NewScenarioPanel = ({
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
-
-  const toggleExpanded = (category: string) =>
-    setExpandedCategories((current) => {
-      const next = new Set(current)
-      if (next.has(category)) next.delete(category)
-      else next.add(category)
-      return next
-    })
 
   const createScenario = async () => {
     if (!hasFields) return
@@ -333,110 +319,15 @@ export const NewScenarioPanel = ({
       ) : null}
 
       {stepIndex === 1 ? (
-        <div className="space-y-2">
-          <Label>Sædskifter</Label>
-          <p className="text-xs text-muted-foreground">
-            Grupperet efter sædskifte-type til overblik - gødning vælges i
-            næste trin og er uafhængig af hvilke sædskifter du vælger her. Fold
-            en gruppe ud for at vælge specifikke sædskifter til/fra.
-          </p>
-          <FieldError
-            id="scenario-rotations-error"
-            message={errors.rotationVariants?.message}
-          />
-          <div className="space-y-1">
-            {categories.map((option) => {
-              const selectedCount = selectedInCategory(
-                option,
-                values.rotationVariants,
-              )
-              const allSelected =
-                option.rotations.length > 0 &&
-                selectedCount === option.rotations.length
-              const partiallySelected = selectedCount > 0 && !allSelected
-              const isExpanded = expandedCategories.has(option.category)
-              return (
-                <div
-                  key={option.category}
-                  className="rounded-md border bg-background"
-                >
-                  <div className="flex items-start gap-2 p-3 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      aria-label={`Vælg alle i ${option.category}`}
-                      checked={allSelected}
-                      ref={(element) => {
-                        if (element) element.indeterminate = partiallySelected
-                      }}
-                      onChange={() =>
-                        updateValue(
-                          'rotationVariants',
-                          toggleCategoryRotations(
-                            option,
-                            getValues('rotationVariants'),
-                          ),
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="flex flex-1 items-start justify-between gap-2 text-left"
-                      onClick={() => toggleExpanded(option.category)}
-                    >
-                      <span>
-                        <span className="font-medium">{option.category}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {selectedCount}/{option.rotationCount} sædskifter
-                          valgt
-                        </span>
-                      </span>
-                      {isExpanded ? (
-                        <ChevronDown
-                          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <ChevronRight
-                          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  </div>
-                  {isExpanded ? (
-                    <div className="max-h-56 space-y-1 overflow-y-auto border-t p-2">
-                      {option.rotations.map((rotation) => (
-                        <label
-                          key={rotation.rotationVariant}
-                          className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50"
-                        >
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={values.rotationVariants.includes(
-                              rotation.rotationVariant,
-                            )}
-                            onChange={() =>
-                              updateValue(
-                                'rotationVariants',
-                                toggleValue(
-                                  getValues('rotationVariants'),
-                                  rotation.rotationVariant,
-                                ),
-                              )
-                            }
-                          />
-                          <span>{rotation.cropSequence.join(' - ')}</span>
-                        </label>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <RotationPicker
+          categories={categories}
+          farmingSystem={values.farmingSystem}
+          rotationVariants={values.rotationVariants}
+          onRotationVariantsChange={(next) =>
+            updateValue('rotationVariants', next)
+          }
+          error={errors.rotationVariants?.message}
+        />
       ) : null}
 
       {stepIndex === 2 ? (
