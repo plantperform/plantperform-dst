@@ -2,12 +2,9 @@ import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { History } from 'lucide-react'
-
 import {
   useFarm,
   useFarmFields,
-  useFarms,
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
@@ -16,14 +13,16 @@ import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
   FarmContentSkeleton,
   FarmSidebarSkeleton,
-  FarmTopBarSkeleton,
 } from '@/components/farm/FarmLoadingShell'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
-import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
-import { useSplitLayout } from '@/components/farm/split-layout'
+import {
+  resolveEffectiveView,
+  useSplitLayout,
+} from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
+  FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
@@ -51,7 +50,6 @@ export const FarmDetailPage = () => {
     error: farmError,
     isLoading: farmLoading,
   } = useFarm(farmId)
-  const { data: farms } = useFarms()
   const { data: fields = [], isLoading: fieldsLoading } = useFarmFields(farmId)
   const { data: simulationsData, isLoading: simulationsLoading } =
     useSimulations(farmId)
@@ -74,6 +72,14 @@ export const FarmDetailPage = () => {
   } = useSimulationFields(farmId, selectedSimulationId)
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
+  const [splitAvailable, setSplitAvailable] = useState(true)
+  const [addModeSnap, setAddModeSnap] = useState(false)
+  const snappedView: FarmView = addModeSnap ? 'map' : view
+  const effectiveView = resolveEffectiveView(snappedView, splitAvailable)
+  const selectView = (next: FarmView) => {
+    setAddModeSnap(false)
+    changeView(next)
+  }
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(
     null,
@@ -89,9 +95,6 @@ export const FarmDetailPage = () => {
     useSidebarWidth()
   const isReady =
     farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
-  const farmSummary =
-    farm ?? farms?.find((candidate) => candidate.id === farmId)
-
   const activeFields =
     activeSelection.kind === 'current' ? fields : simulationFields
   const activeFieldsLoading =
@@ -207,12 +210,15 @@ export const FarmDetailPage = () => {
           onSelectField={selectFieldFromSearch}
           onOptimize={() => setOptimizeDialogOpen(true)}
           onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
+          view={effectiveView}
+          splitAvailable={splitAvailable}
+          onViewChange={selectView}
           onError={showErrorToast}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />
       ) : (
-        <FarmSidebarSkeleton />
+        <FarmSidebarSkeleton farm={farm} onError={showErrorToast} />
       )}
       <SidebarInset className="min-w-0 overflow-x-hidden">
         {toast ? (
@@ -236,8 +242,11 @@ export const FarmDetailPage = () => {
             fieldsError={Boolean(simulationFieldsError)}
             mode={mode}
             onModeChange={changeMode}
-            view={view}
-            onViewChange={changeView}
+            view={snappedView}
+            effectiveView={effectiveView}
+            onViewChange={selectView}
+            onSplitAvailableChange={setSplitAvailable}
+            onAddModeChange={setAddModeSnap}
             listSlack={listSlack}
             onListSlackChange={changeListSlack}
             selectedFieldId={selectedFieldId}
@@ -252,16 +261,6 @@ export const FarmDetailPage = () => {
           />
         ) : (
           <>
-            {farmSummary ? (
-              <FarmTopBar
-                farm={farmSummary}
-                viewLabel="Afgrødehistorik"
-                viewIcon={History}
-                onError={showErrorToast}
-              />
-            ) : (
-              <FarmTopBarSkeleton />
-            )}
             <p role="status" className="sr-only">
               Indlæser bedriften.
             </p>

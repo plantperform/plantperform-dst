@@ -1,12 +1,4 @@
-import {
-  Columns2,
-  FlaskConical,
-  History,
-  Info,
-  List,
-  Map as MapIcon,
-  SlidersHorizontal,
-} from 'lucide-react'
+import { Info, SlidersHorizontal } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -50,11 +42,9 @@ import {
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
 import { FarmSplitView } from '@/components/farm/FarmSplitView'
-import { FarmTopBar } from '@/components/farm/FarmTopBar'
 import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
-import { resolveEffectiveView } from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
   FarmView,
@@ -72,10 +62,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  SegmentedControl,
-  type SegmentedControlOption,
-} from '@/components/ui/segmented-control'
 import {
   applyFieldYearValues,
   formatNumber,
@@ -110,22 +96,6 @@ const invalidateOptimizationDisplays = async (
   await mutate(simulationYearlySummaryKey(farmId, simulationId))
 }
 
-const SPLIT_UNAVAILABLE_TITLE = 'Skærmen er for smal til delt visning'
-
-const buildViewOptions = (
-  splitAvailable: boolean,
-): SegmentedControlOption<FarmView>[] => [
-  { value: 'list', label: 'Liste', icon: List },
-  {
-    value: 'split',
-    label: 'Delt',
-    icon: Columns2,
-    disabled: !splitAvailable,
-    title: splitAvailable ? undefined : SPLIT_UNAVAILABLE_TITLE,
-  },
-  { value: 'map', label: 'Kort', icon: MapIcon },
-]
-
 type LastRun = {
   simulationId: string
   response: OptimizeSimulationResponse
@@ -141,7 +111,10 @@ type FarmInspectorProps = {
   mode: FarmInspectorMode
   onModeChange: (mode: FarmInspectorMode) => void
   view: FarmView
+  effectiveView: FarmView
   onViewChange: (view: FarmView) => void
+  onSplitAvailableChange: (available: boolean) => void
+  onAddModeChange: (active: boolean) => void
   listSlack: number
   onListSlackChange: (slack: number) => void
   selectedFieldId: string | null
@@ -165,7 +138,10 @@ export const FarmInspector = ({
   mode,
   onModeChange,
   view,
+  effectiveView,
   onViewChange,
+  onSplitAvailableChange,
+  onAddModeChange,
   listSlack,
   onListSlackChange,
   selectedFieldId,
@@ -181,14 +157,12 @@ export const FarmInspector = ({
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
-  const [splitAvailable, setSplitAvailable] = useState(true)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
     null,
   )
   const [panelCalcOpen, setPanelCalcOpen] = useState(false)
   const [lockingFieldId, setLockingFieldId] = useState<string | null>(null)
   const [bindFieldId, setBindFieldId] = useState<string | null>(null)
-  const [addModeSnap, setAddModeSnap] = useState(false)
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null)
   const [highlightedCatchmentKey, setHighlightedCatchmentKey] = useState<
     string | null
@@ -207,16 +181,6 @@ export const FarmInspector = ({
     (field: FieldRecord) => setDetachRequest([field]),
     [],
   )
-  const viewOptions = useMemo(
-    () => buildViewOptions(splitAvailable),
-    [splitAvailable],
-  )
-  const snappedView: FarmView = addModeSnap ? 'map' : view
-  const effectiveView = resolveEffectiveView(snappedView, splitAvailable)
-  const changeView = (next: FarmView) => {
-    setAddModeSnap(false)
-    onViewChange(next)
-  }
   const isSimulationView = selection.kind === 'simulation'
   const selectedSimulationId = selectedSimulation?.id
   const selectionKey =
@@ -435,28 +399,6 @@ export const FarmInspector = ({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <FarmTopBar
-        farm={farm}
-        onError={onError}
-        viewLabel={
-          selectedSimulation
-            ? `Simulering: ${selectedSimulation.name}`
-            : 'Afgrødehistorik'
-        }
-        viewIcon={selectedSimulation ? FlaskConical : History}
-        actions={
-          <SegmentedControl
-            aria-label="Liste, delt eller kort"
-            value={effectiveView}
-            options={viewOptions}
-            onValueChange={(next) => {
-              if (next !== effectiveView) changeView(next)
-            }}
-            labelClassName="hidden @4xl:inline"
-          />
-        }
-      />
-
       {selectedSimulation ? (
         <OptimizeDialog
           key={selectedSimulation.id}
@@ -551,12 +493,12 @@ export const FarmInspector = ({
             </>
           ) : (
             <FarmSplitView
-              view={snappedView}
-              onViewChange={changeView}
+              view={view}
+              onViewChange={onViewChange}
               listSlack={listSlack}
               onListSlackChange={onListSlackChange}
               listRequiredWidth={listRequiredWidth}
-              onSplitAvailableChange={setSplitAvailable}
+              onSplitAvailableChange={onSplitAvailableChange}
               list={({ width }) => (
                 <div className="flex h-full min-h-0 flex-col gap-3">
                   {rulesPanel}
@@ -617,7 +559,7 @@ export const FarmInspector = ({
                   onHoveredFieldChange={setHoveredFieldId}
                   highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                   zoomRequest={zoomRequest ?? undefined}
-                  onAddModeChange={setAddModeSnap}
+                  onAddModeChange={onAddModeChange}
                   detachFields={detachFields}
                   onError={onError}
                 />

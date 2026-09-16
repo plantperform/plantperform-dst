@@ -13,7 +13,6 @@ import {
   SlidersHorizontal,
   Table2,
   Trash2,
-  Warehouse,
 } from 'lucide-react'
 import {
   useEffect,
@@ -24,7 +23,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { Link } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import {
@@ -44,12 +42,15 @@ import type {
   Simulation,
 } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import type {
   FarmInspectorMode,
+  FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
+import { ViewModeSwitch } from '@/components/farm/ViewModeSwitch'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -106,7 +107,6 @@ import {
 } from '@/lib/field-domain'
 import {
   getStoredRole,
-  HOME_OVERVIEW_STATE,
   ROLE_LABELS,
 } from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
@@ -124,11 +124,6 @@ const formatCreatedAt = (value: string) => {
 
   const diffDays = Math.round(diffHours / 24)
   return `Oprettet for ${diffDays} d. siden`
-}
-
-const useIsIconRail = () => {
-  const { state, isMobile } = useSidebar()
-  return !isMobile && state === 'collapsed'
 }
 
 type ViewKeyFigures = {
@@ -178,6 +173,8 @@ const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   catchCropDailyBasis: simulation.catchCropDailyBasis,
 })
 
+export const GROUP_CLASS = 'px-3 py-1 group-data-[collapsible=icon]:px-2'
+
 export const GROUP_LABEL_CLASS =
   'h-7 text-[11px] font-semibold tracking-[0.06em] uppercase'
 const VIEW_BUTTON_CLASS =
@@ -196,13 +193,16 @@ type FarmSidebarProps = {
   onSelectField: (fieldId: string) => void
   onOptimize: () => void
   onYearlyOptimize: () => void
+  view: FarmView
+  splitAvailable: boolean
+  onViewChange: (view: FarmView) => void
   onError: (message: string | null) => void
   width: number
   onWidthChange: (width: number) => void
 }
 
 /**
- * Navigation for the farm: back to the farm list, then the views.
+ * Navigation for the farm: the farm menu, then the views.
  * Rows are single-line so the list stays dense; only the selected view
  * expands to describe itself, which keeps the detail where it is being read.
  * Collapses to an icon rail, so every view keeps a row even when minimised.
@@ -220,14 +220,13 @@ export const FarmSidebar = ({
   onSelectField,
   onOptimize,
   onYearlyOptimize,
+  view,
+  splitAvailable,
+  onViewChange,
   onError,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
-  const { user } = useAuth()
-  const email = user?.email ?? ''
-  const role = email ? getStoredRole(email) : null
-  const showAllFarms = role !== 'farmer'
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
@@ -290,8 +289,9 @@ export const FarmSidebar = ({
 
   return (
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
-      <SidebarHeader className="h-13 justify-center px-3 py-0">
+      <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
         <SidebarBrand />
+        <FarmSwitcher farm={farm} onError={onError} />
       </SidebarHeader>
 
       <SidebarContent>
@@ -301,27 +301,7 @@ export const FarmSidebar = ({
           onSelectField={onSelectField}
         />
 
-        {showAllFarms ? (
-          <SidebarGroup className="px-3 py-1">
-            <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-              Bedrift
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Bedrifter">
-                    <Link to="/" state={HOME_OVERVIEW_STATE}>
-                      <Warehouse />
-                      <span>Bedrifter</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : null}
-
-        <SidebarGroup className="px-3 py-1">
+        <SidebarGroup className={GROUP_CLASS}>
           <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
             Visninger
           </SidebarGroupLabel>
@@ -358,7 +338,7 @@ export const FarmSidebar = ({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="px-3 py-1">
+        <SidebarGroup className={GROUP_CLASS}>
           <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
             Simuleringer
           </SidebarGroupLabel>
@@ -408,7 +388,12 @@ export const FarmSidebar = ({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 border-t border-sidebar-border p-3">
+      <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
+        <ViewModeSwitch
+          view={view}
+          splitAvailable={splitAvailable}
+          onViewChange={onViewChange}
+        />
         <CollapseMenuButton />
         <SidebarUserMenu />
       </SidebarFooter>
@@ -476,8 +461,8 @@ type FieldSearchProps = {
 }
 
 const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
-  const iconRail = useIsIconRail()
-  const { toggleSidebar } = useSidebar()
+  const { state, toggleSidebar } = useSidebar()
+  const iconRail = state === 'collapsed'
   const listId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const focusAfterExpandRef = useRef(false)
@@ -534,7 +519,7 @@ const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
 
   if (iconRail) {
     return (
-      <SidebarGroup className="px-3 py-1">
+      <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -558,7 +543,7 @@ const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
   }
 
   return (
-    <SidebarGroup className="px-3 py-1">
+    <SidebarGroup className={GROUP_CLASS}>
       <SidebarGroupContent className="space-y-1">
         <div className="relative">
           <Search
@@ -653,7 +638,7 @@ const CollapseMenuButton = () => {
 
 const SidebarUserMenu = () => {
   const { user } = useAuth()
-  const iconRail = useIsIconRail()
+  const iconRail = useSidebar().state === 'collapsed'
   const email = user?.email ?? ''
   const initial = email.charAt(0).toUpperCase()
   const role = email ? getStoredRole(email) : null
@@ -821,7 +806,7 @@ const SimulationMenuItem = ({
   onCopy,
   onDelete,
 }: SimulationMenuItemProps) => {
-  const iconRail = useIsIconRail()
+  const iconRail = useSidebar().state === 'collapsed'
   const createdLabel = formatCreatedAt(simulation.createdAt)
   const {
     data: simulationFields,
