@@ -1,9 +1,6 @@
 import { ChevronLeft, ChevronRight, Locate, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
-import { mutate } from 'swr'
+import { useEffect } from 'react'
 
-import { farmFieldsKey, farmKey } from '@/api/hooks'
-import { detachField } from '@/api/mutations'
 import type {
   FieldRecord,
   RotationCandidateYearResult,
@@ -11,14 +8,6 @@ import type {
 } from '@/api/types'
 import { FieldPanel } from '@/components/farm/FieldPanel'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 
 type FieldDetailPanelProps = {
   farmId: string
@@ -30,6 +19,8 @@ type FieldDetailPanelProps = {
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
   yearValues?: RotationCandidateYearResult[]
+  isDetaching: boolean
+  onRequestDetach: () => void
   listBehind: boolean
   mapVisible: boolean
   onSelectFieldId: (fieldId: string) => void
@@ -49,6 +40,8 @@ export const FieldDetailPanel = ({
   selectedYearIndex = null,
   onSelectedYearIndexChange,
   yearValues,
+  isDetaching,
+  onRequestDetach,
   listBehind,
   mapVisible,
   onSelectFieldId,
@@ -57,27 +50,6 @@ export const FieldDetailPanel = ({
   onCalcOpenChange,
   onError,
 }: FieldDetailPanelProps) => {
-  const [detachingFieldId, setDetachingFieldId] = useState<string | null>(null)
-  const [confirmDetachField, setConfirmDetachField] =
-    useState<FieldRecord | null>(null)
-
-  const detachFarmField = useCallback(
-    async (fieldId: string) => {
-      setDetachingFieldId(fieldId)
-      try {
-        await detachField(farmId, fieldId)
-        await mutate(farmFieldsKey(farmId))
-        await mutate(farmKey(farmId))
-        onError(null)
-      } catch {
-        onError('Kunne ikke fjerne marken fra bedriften.')
-      } finally {
-        setDetachingFieldId(null)
-      }
-    },
-    [farmId, onError],
-  )
-
   const position = sortedFields.findIndex(
     (candidate) => candidate.id === field.id,
   )
@@ -190,46 +162,11 @@ export const FieldDetailPanel = ({
         selectedYearIndex={selectedYearIndex}
         onSelectedYearIndexChange={onSelectedYearIndexChange}
         yearValues={yearValues}
-        isDetaching={detachingFieldId === field.id}
-        onRequestDetach={() => setConfirmDetachField(field)}
+        isDetaching={isDetaching}
+        onRequestDetach={onRequestDetach}
         onCalcOpenChange={onCalcOpenChange}
         onError={onError}
       />
-
-      <Dialog
-        open={confirmDetachField !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDetachField(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Fjern mark?</DialogTitle>
-            <DialogDescription>
-              Marken {confirmDetachField?.name} fjernes fra bedriften. Det
-              ændrer ikke registret.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDetachField(null)}
-            >
-              Annuller
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                const fieldToDetach = confirmDetachField
-                setConfirmDetachField(null)
-                if (fieldToDetach) void detachFarmField(fieldToDetach.id)
-              }}
-            >
-              Fjern
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

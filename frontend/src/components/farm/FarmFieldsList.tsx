@@ -255,6 +255,8 @@ type FarmFieldsListProps = {
   selectedYearIndex?: number | null
   paneWidth?: number
   onRequiredWidthChange?: (width: number) => void
+  detachingFieldIds: string[]
+  onRequestDetach?: (field: FieldRecord) => void
 }
 
 export const FarmFieldsList = ({
@@ -281,6 +283,8 @@ export const FarmFieldsList = ({
   selectedYearIndex = null,
   paneWidth,
   onRequiredWidthChange,
+  detachingFieldIds,
+  onRequestDetach,
 }: FarmFieldsListProps) => {
   const rowElements = useRef(new Map<string, HTMLTableRowElement>())
   const scrolledFieldId = useRef<string | null>(null)
@@ -408,6 +412,8 @@ export const FarmFieldsList = ({
         lockingFieldId,
         onToggleLock,
         onBindRotation,
+        detachingFieldIds,
+        onRequestDetach,
       }),
     [
       isSimulationView,
@@ -421,6 +427,8 @@ export const FarmFieldsList = ({
       lockingFieldId,
       onToggleLock,
       onBindRotation,
+      detachingFieldIds,
+      onRequestDetach,
     ],
   )
 
@@ -526,11 +534,11 @@ export const FarmFieldsList = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Tilføj marker fra kortet</CardTitle>
+          <CardTitle>Ingen marker endnu</CardTitle>
           <CardDescription>
             {isSimulationView
               ? 'Denne simulering blev oprettet, før der var tilknyttet aktuelle marker.'
-              : 'Slå Tilføj marker til på kortet for at gennemgå registermarker, før du tilføjer dem.'}
+              : 'Slå Rediger marker til på kortet for at gennemgå registermarker, før du tilføjer dem.'}
           </CardDescription>
         </CardHeader>
       </Card>

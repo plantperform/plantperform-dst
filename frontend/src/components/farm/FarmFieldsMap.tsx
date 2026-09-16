@@ -1,7 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import type { FeatureCollection } from 'geojson'
-import { Layers, Lock, Maximize } from 'lucide-react'
+import { Layers, Lock, Maximize, X } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Map, {
@@ -13,24 +13,16 @@ import Map, {
   type MapLayerMouseEvent,
   type MapRef,
 } from 'react-map-gl/maplibre'
-import { mutate } from 'swr'
 
 import { getAccessToken } from '@/api/auth'
 import { API_BASE, fetcher } from '@/api/client'
-import {
-  farmFieldsKey,
-  farmKey,
-  registryFieldsBulkKey,
-  useFarmFields,
-} from '@/api/hooks'
-import { createFields } from '@/api/mutations'
+import { useFarmFields } from '@/api/hooks'
+import { importRegistryFields } from '@/api/mutations'
 import type {
   FieldYearValues,
-  CreateFieldInput,
   Farm,
   FieldRecord,
   RegistryBounds,
-  RegistryField,
   RegistryFieldSummary,
 } from '@/api/types'
 import {
@@ -38,6 +30,8 @@ import {
   fieldInCatchment,
   useCatchmentLabel,
 } from '@/components/farm/catchment-options'
+import { refreshFarmFields } from '@/components/farm/detach-fields'
+import { FieldRowList, type FieldRow } from '@/components/farm/FieldRowList'
 import {
   FieldTooltip,
   type HoveredField,
@@ -48,7 +42,6 @@ import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -64,6 +57,7 @@ import {
 import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
+  fieldTitle,
   formatFieldCount,
   isFieldLocked,
   ROTATION_START_CALENDAR_YEAR,
@@ -76,6 +70,7 @@ import {
   getFieldsBounds,
   type FieldYearProperties,
 } from '@/lib/geo'
+import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
 import {
   cropGroupColor,
@@ -94,6 +89,7 @@ import {
   isYearColorAttribute,
   legendEntries,
   registryPropertyFor,
+  toFiniteNumber,
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
@@ -105,6 +101,57 @@ const emptyFeatureCollection: FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
 }
+type SelectedRegistryField = {
+  imkId: number
+  label: string
+  areaHa: number | null
+}
+
+const registryFieldLabel = (imkId: number, fieldNumber: unknown) =>
+  typeof fieldNumber === 'string' && fieldNumber.length > 0
+    ? `Mark ${fieldNumber}`
+    : `IMK ${imkId}`
+
+const describeFarmAfterChanges = (
+  fieldCount: number,
+  nextFieldCount: number,
+  areaChangeHa: number,
+) => {
+  const count =
+    nextFieldCount === fieldCount
+      ? `Bedriften bliver på ${formatFieldCount(fieldCount)}`
+      : `Bedriften går fra ${fieldCount} til ${formatFieldCount(nextFieldCount)}`
+  const area =
+    areaChangeHa === 0
+      ? ''
+      : `, ${areaChangeHa < 0 ? '-' : '+'}${formatNumber(Math.abs(areaChangeHa))} ha`
+  return `${count}${area}`
+}
+
+const REGISTRY_CANDIDATE_LAYER_IDS = [
+  'registry-selected-fill',
+  'registry-cvr-highlight-fill',
+  'registry-candidate-fill',
+]
+
+const EDIT_MODE_LAYER_IDS = [
+  ...REGISTRY_CANDIDATE_LAYER_IDS,
+  'registry-owned-fill',
+  'farm-fields-fill',
+]
+
+const EDIT_BASE_LEGEND = [
+  { label: 'Bedriftens marker', color: 'rgba(22, 163, 74, 0.28)' },
+  { label: 'Registermarker', color: 'rgba(100, 116, 139, 0.3)' },
+]
+
+const EDIT_CHANGE_LEGEND = [
+  { label: 'Tilføjes', color: 'rgba(37, 99, 235, 0.55)' },
+  { label: 'Fjernes', color: 'rgba(220, 38, 38, 0.5)' },
+]
+
+const CVR_LEGEND_ENTRY = { label: 'Fremhævet CVR', color: 'rgba(250, 204, 21, 0.48)' }
+
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
@@ -173,6 +220,7 @@ type FarmFieldsMapProps = {
   highlightedCatchmentKey?: string | null
   zoomRequest?: { fieldId: string; nonce: number }
   onAddModeChange?: (active: boolean) => void
+  detachFields: (fieldIds: string[]) => Promise<string[]>
   onError: (message: string | null) => void
 }
 
@@ -208,6 +256,21 @@ const withTopInset = (padding: number) => ({
   left: padding,
 })
 
+type FieldChangeListProps = {
+  title: string
+  changes: FieldRow[]
+}
+
+const FieldChangeList = ({ title, changes }: FieldChangeListProps) =>
+  changes.length === 0 ? null : (
+    <div>
+      <p className="mb-1 text-xs text-muted-foreground">
+        {title} ({changes.length})
+      </p>
+      <FieldRowList rows={changes} className="max-h-32 bg-background" />
+    </div>
+  )
+
 export const FarmFieldsMap = ({
   farm,
   fields,
@@ -227,6 +290,7 @@ export const FarmFieldsMap = ({
   highlightedCatchmentKey = null,
   zoomRequest,
   onAddModeChange,
+  detachFields,
   onError,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
@@ -241,12 +305,23 @@ export const FarmFieldsMap = ({
   const appliedZoomNonce = useRef<number | null>(zoomRequest?.nonce ?? null)
   const legendStripRef = useRef<HTMLDivElement>(null)
   const [addMode, setAddMode] = useState(false)
-  const [selectedImkIds, setSelectedImkIds] = useState<number[]>([])
+  const [selectedRegistryFields, setSelectedRegistryFields] = useState<
+    SelectedRegistryField[]
+  >([])
+  const [detachFieldIds, setDetachFieldIds] = useState<string[]>([])
+  const [fieldActionPopup, setFieldActionPopup] = useState<{
+    fieldId: string
+    longitude: number
+    latitude: number
+  } | null>(null)
   const [cvrInput, setCvrInput] = useState(farm.cvr ?? '')
   const [highlightedCvr, setHighlightedCvr] = useState<string | null>(null)
-  const [highlightedCvrImkIds, setHighlightedCvrImkIds] = useState<number[]>([])
+  const [highlightedCvrFields, setHighlightedCvrFields] = useState<
+    RegistryFieldSummary[]
+  >([])
   const [isCvrOpen, setIsCvrOpen] = useState(false)
-  const [isAttaching, setIsAttaching] = useState(false)
+  const [isSavingFieldChanges, setIsSavingFieldChanges] = useState(false)
+
   const [isLoadingCvrFields, setIsLoadingCvrFields] = useState(false)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [hoveredField, setHoveredField] = useState<HoveredField | null>(null)
@@ -381,10 +456,20 @@ export const FarmFieldsMap = ({
         : yearValuesFieldCount < rotationFieldCount
           ? `${yearValuesFieldCount} af ${rotationFieldCount} marker har årstal for ${selectedCalendarYear}`
           : null
-  const legendStripVisible = activeColorSpec !== null || yearStatusText !== null
+  const editLegendEntries = addMode
+    ? [
+        ...(activeColorSpec === null ? EDIT_BASE_LEGEND : []),
+        ...EDIT_CHANGE_LEGEND,
+        ...(highlightedCvr ? [CVR_LEGEND_ENTRY] : []),
+      ]
+    : []
+  const legendStripVisible =
+    activeColorSpec !== null ||
+    yearStatusText !== null ||
+    editLegendEntries.length > 0
   const legendBins =
     activeColorSpec === null ? [] : legendEntries(activeColorSpec)
-  const legendSignature = `${activeColorSpec?.label ?? ''}|${legendBins.length}|${yearStatusText ?? ''}`
+  const legendSignature = `${activeColorSpec?.label ?? ''}|${legendBins.length}|${yearStatusText ?? ''}|${editLegendEntries.map((entry) => entry.label).join(',')}`
   const legendOverflows = overflowingLegend === legendSignature
   const hasFieldGeometry = fields.some((field) => field.geometry !== null)
 
@@ -493,9 +578,62 @@ export const FarmFieldsMap = ({
   const activeRuleFieldId = activeRuleField?.id
   const hoveringActiveRuleField =
     activeRuleField !== undefined && hoveredFieldId === activeRuleField.id
-  const attachedImkIds = fields
-    .map((field) => field.imkId)
-    .filter((imkId): imkId is number => imkId !== null)
+  const attachedImkIds = useMemo(
+    () =>
+      fields
+        .map((field) => field.imkId)
+        .filter((imkId): imkId is number => imkId !== null),
+    [fields],
+  )
+  const pendingRegistryFields = useMemo(
+    () =>
+      selectedRegistryFields.filter(
+        (field) => !attachedImkIds.includes(field.imkId),
+      ),
+    [selectedRegistryFields, attachedImkIds],
+  )
+  const selectedImkIds = useMemo(
+    () => pendingRegistryFields.map((field) => field.imkId),
+    [pendingRegistryFields],
+  )
+  const fieldsMarkedForDetach = useMemo(
+    () => fields.filter((field) => detachFieldIds.includes(field.id)),
+    [fields, detachFieldIds],
+  )
+  const detachFieldsGeoJson = useMemo(
+    () => fieldsToFeatureCollection(fieldsMarkedForDetach, isSimulationView),
+    [fieldsMarkedForDetach, isSimulationView],
+  )
+  const fieldChangeCount =
+    pendingRegistryFields.length + fieldsMarkedForDetach.length
+  const detachChanges: FieldRow[] = fieldsMarkedForDetach.map((field) => ({
+    key: field.id,
+    label: fieldTitle(field),
+    areaHa: field.areaHa,
+    onUndo: () =>
+      setDetachFieldIds((current) =>
+        current.filter((fieldId) => fieldId !== field.id),
+      ),
+  }))
+  const addChanges: FieldRow[] = pendingRegistryFields.map((field) => ({
+    key: String(field.imkId),
+    label: field.label,
+    areaHa: field.areaHa,
+    onUndo: () =>
+      setSelectedRegistryFields((current) =>
+        current.filter((selected) => selected.imkId !== field.imkId),
+      ),
+  }))
+  const areaChangeHa =
+    pendingRegistryFields.reduce((sum, field) => sum + (field.areaHa ?? 0), 0) -
+    fieldsMarkedForDetach.reduce((sum, field) => sum + field.areaHa, 0)
+  const actionPopupField =
+    addMode && fieldActionPopup
+      ? (fields.find((field) => field.id === fieldActionPopup.fieldId) ?? null)
+      : null
+  const actionPopupMarked =
+    actionPopupField !== null && detachFieldIds.includes(actionPopupField.id)
+
   const selectedRegistryFilter: FilterSpecification =
     selectedImkIds.length > 0
       ? ([
@@ -705,9 +843,11 @@ export const FarmFieldsMap = ({
     if (readOnly) return
 
     onSelectedFieldChange(null)
-    setSelectedImkIds([])
+    setSelectedRegistryFields([])
+    setDetachFieldIds([])
+    setFieldActionPopup(null)
     setHighlightedCvr(null)
-    setHighlightedCvrImkIds([])
+    setHighlightedCvrFields([])
     if (
       !addMode &&
       isMapLoaded &&
@@ -733,7 +873,7 @@ export const FarmFieldsMap = ({
         `/registry/fields/search?cvr=${encodeURIComponent(cvr)}&limit=500`,
       )
       setHighlightedCvr(cvr)
-      setHighlightedCvrImkIds(fieldsForCvr.map((field) => field.imkId))
+      setHighlightedCvrFields(fieldsForCvr)
 
       if (fieldsForCvr.length > 0) {
         const bounds = await fetcher<RegistryBounds>(
@@ -757,74 +897,117 @@ export const FarmFieldsMap = ({
   }
 
   const selectHighlightedCvrFields = () => {
-    const newImkIds = highlightedCvrImkIds.filter(
-      (imkId) => !attachedImkIds.includes(imkId),
-    )
-    setSelectedImkIds((current) =>
-      Array.from(new Set([...current, ...newImkIds])),
-    )
+    setSelectedRegistryFields((current) => [
+      ...current,
+      ...highlightedCvrFields
+        .filter(
+          (field) =>
+            !attachedImkIds.includes(field.imkId) &&
+            !current.some((selected) => selected.imkId === field.imkId),
+        )
+        .map((field) => ({
+          imkId: field.imkId,
+          label: registryFieldLabel(field.imkId, field.fieldNumber),
+          areaHa: field.areaHa,
+        })),
+    ])
   }
 
-  const finishAddMode = async () => {
+  const saveFieldChanges = async () => {
     if (readOnly) return
 
-    if (selectedImkIds.length === 0) {
+    if (fieldChangeCount === 0) {
       toggleAddMode()
       return
     }
 
-    setIsAttaching(true)
+    setIsSavingFieldChanges(true)
     try {
-      const registryFieldsKey = registryFieldsBulkKey(selectedImkIds)
-      if (!registryFieldsKey) return
-
-      const registryFields = await fetcher<RegistryField[]>(registryFieldsKey)
-      const payload: CreateFieldInput[] = registryFields.map((field) => ({
-        imkId: field.imkId,
-        catchmentId: field.catchmentId,
-        retention: field.retention,
-        name: field.fieldNumber ?? `Mark ${field.imkId}`,
-        areaHa: field.areaHa,
-        inTakeoutPlan: field.inTakeoutPlan,
-        nLoadLimitKgNHa: field.nLoadLimitKgNHa,
-        nLoadQuotaKgN: field.nLoadQuotaKgN,
-        geometry: field.geometry,
-      }))
-
-      await createFields(farm.id, payload)
-      await mutate(farmFieldsKey(farm.id))
-      await mutate(farmKey(farm.id))
-      setSelectedImkIds([])
-      setAddMode(false)
-      onError(null)
+      if (selectedImkIds.length > 0) {
+        await importRegistryFields(farm.id, selectedImkIds)
+        setSelectedRegistryFields([])
+      }
+      if (fieldsMarkedForDetach.length === 0) {
+        await refreshFarmFields(farm.id)
+        onError(null)
+        setAddMode(false)
+        return
+      }
+      const failedFieldIds = await detachFields(
+        fieldsMarkedForDetach.map((field) => field.id),
+      )
+      setDetachFieldIds(failedFieldIds)
+      if (failedFieldIds.length === 0) setAddMode(false)
     } catch {
+      await refreshFarmFields(farm.id)
       onError('Kunne ikke tilføje de valgte marker til bedriften.')
     } finally {
-      setIsAttaching(false)
+      setIsSavingFieldChanges(false)
     }
   }
+
+  const toggleFieldDetach = (fieldId: string) => {
+    setDetachFieldIds((current) =>
+      current.includes(fieldId)
+        ? current.filter((currentFieldId) => currentFieldId !== fieldId)
+        : [...current, fieldId],
+    )
+    setFieldActionPopup(null)
+  }
+
+  const showFieldDetails = (fieldId: string) => {
+    setFieldActionPopup(null)
+    onSelectedFieldChange(fieldId)
+  }
+
+  useEscapeKey(
+    useCallback(() => {
+      if (fieldActionPopup === null) return false
+      setFieldActionPopup(null)
+      return true
+    }, [fieldActionPopup]),
+  )
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
     if (isFromMapOverlay(event)) return
 
     if (addMode) {
       const candidate = event.features?.find((feature) =>
-        [
-          'registry-selected-fill',
-          'registry-cvr-highlight-fill',
-          'registry-candidate-fill',
-        ].includes(feature.layer.id),
+        REGISTRY_CANDIDATE_LAYER_IDS.includes(feature.layer.id),
       )
-      const imkId = Number(candidate?.properties?.imk_id)
-
-      if (!Number.isFinite(imkId)) return
-
-      setSelectedImkIds((current) =>
-        current.includes(imkId)
-          ? current.filter((selectedImkId) => selectedImkId !== imkId)
-          : [...current, imkId],
+      const imkId = toFiniteNumber(candidate?.properties?.imk_id)
+      const ownedImkId = toFiniteNumber(
+        event.features?.find(
+          (feature) => feature.layer.id === 'registry-owned-fill',
+        )?.properties?.imk_id,
       )
+      const farmFieldId =
+        event.features?.find(
+          (feature) => feature.layer.id === 'farm-fields-fill',
+        )?.properties?.fieldId ??
+        fields.find((field) => field.imkId === ownedImkId)?.id
 
+      if (imkId !== null) {
+        const label = registryFieldLabel(imkId, candidate?.properties?.marknr)
+        const areaHa = toFiniteNumber(candidate?.properties?.area_ha)
+        setSelectedRegistryFields((current) =>
+          current.some((field) => field.imkId === imkId)
+            ? current.filter((field) => field.imkId !== imkId)
+            : [...current, { imkId, label, areaHa }],
+        )
+        setFieldActionPopup(null)
+      } else if (typeof farmFieldId === 'string') {
+        setFieldActionPopup({
+          fieldId: farmFieldId,
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+        })
+      } else {
+        setFieldActionPopup(null)
+        return
+      }
+
+      pannedFieldId.current = null
       onSelectedFieldChange(null)
       onError(null)
       return
@@ -879,18 +1062,11 @@ export const FarmFieldsMap = ({
 
     setHoveredMars(null)
 
-    const feature = event.features?.find((item) => {
-      if (addMode) {
-        return [
-          'registry-selected-fill',
-          'registry-cvr-highlight-fill',
-          'registry-candidate-fill',
-          'registry-owned-fill',
-        ].includes(item.layer.id)
-      }
-
-      return item.layer.id === 'farm-fields-fill'
-    })
+    const feature = event.features?.find((item) =>
+      addMode
+        ? EDIT_MODE_LAYER_IDS.includes(item.layer.id)
+        : item.layer.id === 'farm-fields-fill',
+    )
 
     if (!feature) {
       setHoveredField(null)
@@ -899,25 +1075,30 @@ export const FarmFieldsMap = ({
       return
     }
 
-    const imkId = addMode
+    const isRegistry = feature.layer.id !== 'farm-fields-fill'
+    const imkId = isRegistry
       ? feature.properties?.imk_id
       : feature.properties?.imkId
-    const fieldNumber = addMode ? feature.properties?.marknr : null
-    const farmName = !addMode ? feature.properties?.name : null
+    const fieldNumber = isRegistry ? feature.properties?.marknr : null
+    const farmName = !isRegistry ? feature.properties?.name : null
+    const registryImkId = toFiniteNumber(imkId)
     const primary =
       typeof farmName === 'string' && farmName.length > 0
         ? farmName
-        : typeof fieldNumber === 'string' && fieldNumber.length > 0
-          ? `Mark ${fieldNumber}`
-          : imkId
-            ? `IMK ${imkId}`
-            : 'Manuel mark'
-    const yearCropRaw = addMode ? null : feature.properties?.yearCropName
-    const yearNLoadRaw = addMode ? null : feature.properties?.yearNLoadKgHa
-    const yearQuotaStatusRaw = addMode
+        : registryImkId !== null
+          ? registryFieldLabel(registryImkId, fieldNumber)
+          : 'Manuel mark'
+    const yearCropRaw = isRegistry ? null : feature.properties?.yearCropName
+    const yearNLoadRaw = isRegistry ? null : feature.properties?.yearNLoadKgHa
+    const yearQuotaStatusRaw = isRegistry
       ? null
       : feature.properties?.yearQuotaStatus
-    const hoveredFarmFieldId = addMode ? null : feature.properties?.fieldId
+    const isOwnedRegistry = feature.layer.id === 'registry-owned-fill'
+    const hoveredFarmFieldId = isOwnedRegistry
+      ? fields.find((field) => field.imkId === registryImkId)?.id
+      : isRegistry
+        ? null
+        : feature.properties?.fieldId
     const hasRotation =
       typeof hoveredFarmFieldId === 'string' &&
       fields.some(
@@ -933,7 +1114,7 @@ export const FarmFieldsMap = ({
       primary,
       fieldId: typeof hoveredFarmFieldId === 'string' ? hoveredFarmFieldId : null,
       properties: feature.properties ?? {},
-      registry: addMode,
+      registry: isRegistry,
       hasRotation,
       yearCrop:
         typeof yearCropRaw === 'string' && yearCropRaw.length > 0
@@ -1093,18 +1274,18 @@ export const FarmFieldsMap = ({
               !addMode &&
                 'bg-card font-semibold text-primary hover:text-primary',
             )}
-            onClick={() => void (addMode ? finishAddMode() : toggleAddMode())}
+            onClick={() => void (addMode ? saveFieldChanges() : toggleAddMode())}
             size="xs"
             variant={addMode ? 'default' : 'outline'}
-            disabled={isAttaching}
+            disabled={isSavingFieldChanges}
           >
-            {addMode && selectedImkIds.length > 0
-              ? isAttaching
-                ? 'Tilføjer...'
-                : `Tilføj ${selectedImkIds.length} ${selectedImkIds.length === 1 ? 'mark' : 'marker'}`
-              : addMode
-                ? 'Færdig'
-                : 'Tilføj marker'}
+            {!addMode
+              ? 'Rediger marker'
+              : isSavingFieldChanges
+                ? 'Gemmer...'
+                : fieldChangeCount > 0
+                  ? `Gem ${fieldChangeCount} ${fieldChangeCount === 1 ? 'ændring' : 'ændringer'}`
+                  : 'Færdig'}
           </Button>
         ) : null}
       </div>
@@ -1125,14 +1306,7 @@ export const FarmFieldsMap = ({
             return { url, headers: { Authorization: `Bearer ${token}` } }
           }}
           interactiveLayerIds={[
-            ...(addMode
-              ? [
-                  'registry-selected-fill',
-                  'registry-cvr-highlight-fill',
-                  'registry-candidate-fill',
-                  'registry-owned-fill',
-                ]
-              : ['farm-fields-fill']),
+            ...(addMode ? EDIT_MODE_LAYER_IDS : ['farm-fields-fill']),
             ...(showMars ? ['mars-fill', 'mars-points'] : []),
           ]}
           onLoad={() => setIsMapLoaded(true)}
@@ -1318,6 +1492,29 @@ export const FarmFieldsMap = ({
             </Source>
           ) : null}
 
+          {addMode ? (
+            <Source
+              id="detach-farm-fields"
+              type="geojson"
+              data={detachFieldsGeoJson}
+            >
+              <Layer
+                id="detach-farm-fields-fill"
+                type="fill"
+                paint={{ 'fill-color': '#dc2626', 'fill-opacity': 0.5 }}
+              />
+              <Layer
+                id="detach-farm-fields-outline"
+                type="line"
+                paint={{
+                  'line-color': '#b91c1c',
+                  'line-width': 2.5,
+                  'line-opacity': 0.95,
+                }}
+              />
+            </Source>
+          ) : null}
+
           {showMars ? (
             <Source
               key={marsTileUrl}
@@ -1474,7 +1671,7 @@ export const FarmFieldsMap = ({
               ))
             : null}
 
-          {hoveredField && !hoveringActiveRuleField ? (
+          {hoveredField && !hoveringActiveRuleField && !actionPopupField ? (
             <Popup
               longitude={hoveredField.longitude}
               latitude={hoveredField.latitude}
@@ -1495,6 +1692,77 @@ export const FarmFieldsMap = ({
                 selectedCalendarYear={selectedCalendarYear}
                 yearValuesLoading={yearValuesLoading}
               />
+            </Popup>
+          ) : null}
+
+          {actionPopupField && fieldActionPopup ? (
+            <Popup
+              longitude={fieldActionPopup.longitude}
+              latitude={fieldActionPopup.latitude}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="top"
+              offset={8}
+              maxWidth="none"
+              className="field-tooltip"
+            >
+              <div
+                role="dialog"
+                aria-label={fieldTitle(actionPopupField)}
+                className="w-60 text-xs"
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape') return
+                  event.stopPropagation()
+                  setFieldActionPopup(null)
+                }}
+              >
+                <div className="flex items-center gap-2 py-1.5 pr-1.5 pl-3">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    {fieldTitle(actionPopupField)}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    {formatNumber(actionPopupField.areaHa)} ha
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="size-7 shrink-0 p-0 text-muted-foreground"
+                    aria-label="Luk"
+                    title="Luk"
+                    onClick={() => setFieldActionPopup(null)}
+                  >
+                    <X className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+                {actionPopupMarked ? (
+                  <p className="px-3 pb-2 text-muted-foreground">
+                    Fjernes, når du gemmer.
+                  </p>
+                ) : null}
+                <div className="grid gap-1.5 border-t p-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    autoFocus
+                    className={cn(
+                      !actionPopupMarked &&
+                        'text-destructive hover:text-destructive',
+                    )}
+                    onClick={() => toggleFieldDetach(actionPopupField.id)}
+                  >
+                    {actionPopupMarked
+                      ? 'Fortryd fjernelse'
+                      : 'Fjern fra bedriften'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => showFieldDetails(actionPopupField.id)}
+                  >
+                    Se detaljer
+                  </Button>
+                </div>
+              </div>
             </Popup>
           ) : null}
 
@@ -1542,27 +1810,25 @@ export const FarmFieldsMap = ({
             )}
           >
             {activeColorSpec !== null ? (
-              <>
-                <span className="shrink-0 font-medium text-muted-foreground">
-                  {activeColorSpec.label}
-                  {formatLegendUnit(activeColorSpec)
-                    ? ` (${formatLegendUnit(activeColorSpec)})`
-                    : ''}
-                </span>
-                {legendBins.map((entry) => (
-                  <span
-                    key={entry.label}
-                    className="flex shrink-0 items-center gap-1"
-                  >
-                    <span
-                      className="inline-block h-3 w-4 rounded-sm border border-black/10"
-                      style={{ backgroundColor: entry.color }}
-                    />
-                    <span>{entry.label}</span>
-                  </span>
-                ))}
-              </>
+              <span className="shrink-0 font-medium text-muted-foreground">
+                {activeColorSpec.label}
+                {formatLegendUnit(activeColorSpec)
+                  ? ` (${formatLegendUnit(activeColorSpec)})`
+                  : ''}
+              </span>
             ) : null}
+            {[...legendBins, ...editLegendEntries].map((entry) => (
+              <span
+                key={entry.label}
+                className="flex shrink-0 items-center gap-1"
+              >
+                <span
+                  className="inline-block h-3 w-4 rounded-sm border border-black/10"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span>{entry.label}</span>
+              </span>
+            ))}
             {yearStatusText !== null ? (
               <span
                 role="status"
@@ -1576,12 +1842,47 @@ export const FarmFieldsMap = ({
         ) : null}
 
         {addMode ? (
-          <Card className="absolute left-4 top-4 z-10 w-[min(18rem,calc(100%-2rem))] bg-background/95 shadow-lg">
+          <Card className="absolute left-4 top-4 z-10 max-h-[calc(100%-2rem)] w-[min(18rem,calc(100%-2rem))] overflow-y-auto bg-background/95 shadow-lg">
             <CardHeader className="p-4 pb-2">
-              <CardTitle>{selectedImkIds.length} valgt</CardTitle>
-              <CardDescription>Blå marker tilføjes samlet.</CardDescription>
+              <CardTitle>Rediger marker</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0 text-sm">
+              {fieldChangeCount > 0 ? (
+                <>
+                  <FieldChangeList title="Fjernes" changes={detachChanges} />
+                  <FieldChangeList title="Tilføjes" changes={addChanges} />
+                  <p className="text-xs text-muted-foreground">
+                    {describeFarmAfterChanges(
+                      fields.length,
+                      fields.length +
+                        pendingRegistryFields.length -
+                        fieldsMarkedForDetach.length,
+                      areaChangeHa,
+                    )}
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">
+                  Klik på en registermark for at tilføje den, eller på en af
+                  bedriftens marker for at fjerne den eller se detaljer.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={() => void saveFieldChanges()}
+                  disabled={isSavingFieldChanges || fieldChangeCount === 0}
+                >
+                  {isSavingFieldChanges ? 'Gemmer...' : 'Gem ændringer'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={toggleAddMode}
+                  disabled={isSavingFieldChanges}
+                >
+                  Annuller
+                </Button>
+              </div>
               <div className="rounded-md border bg-background/80">
                 <DisclosureButton
                   open={isCvrOpen}
@@ -1612,7 +1913,7 @@ export const FarmFieldsMap = ({
                         size="sm"
                         onClick={selectHighlightedCvrFields}
                         disabled={
-                          !highlightedCvr || highlightedCvrImkIds.length === 0
+                          !highlightedCvr || highlightedCvrFields.length === 0
                         }
                       >
                         Tilføj marker for CVR
@@ -1620,40 +1921,13 @@ export const FarmFieldsMap = ({
                     </div>
                     {highlightedCvr ? (
                       <p className="text-xs text-muted-foreground">
-                        Fremhæver {highlightedCvrImkIds.length}{' '}
-                        {highlightedCvrImkIds.length === 1 ? 'mark' : 'marker'}{' '}
-                        for CVR {highlightedCvr}.
+                        Fremhæver{' '}
+                        {formatFieldCount(highlightedCvrFields.length)} for CVR{' '}
+                        {highlightedCvr}.
                       </p>
                     ) : null}
                   </div>
                 ) : null}
-              </div>
-              {selectedImkIds.length > 0 ? (
-                <p className="text-muted-foreground">
-                  {selectedImkIds.length}{' '}
-                  {selectedImkIds.length === 1 ? 'mark' : 'marker'} valgt til
-                  tilføjelse.
-                </p>
-              ) : (
-                <p className="text-muted-foreground">
-                  Klik på grå eller gule registermarker for at vælge dem.
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={() => void finishAddMode()}
-                  disabled={isAttaching || selectedImkIds.length === 0}
-                >
-                  {isAttaching ? 'Tilføjer...' : 'Tilføj valgte'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={toggleAddMode}
-                  disabled={isAttaching}
-                >
-                  Annuller
-                </Button>
               </div>
             </CardContent>
           </Card>
