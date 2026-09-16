@@ -1,28 +1,48 @@
-import { useScenarioCropCodes } from '@/api/hooks'
+import type { CropCodeOption } from '@/api/types'
+import { FieldError } from '@/components/ui/field-error'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 export const CropExclusionList = ({
-  farmId,
-  simulationId,
+  id,
+  crops,
   excludedCodes,
   onToggle,
+  error,
 }: {
-  farmId: string
-  simulationId: string
-  excludedCodes: Set<number>
+  id: string
+  crops: CropCodeOption[]
+  excludedCodes: number[]
   onToggle: (code: number) => void
+  error?: string
 }) => {
-  const { data: crops = [] } = useScenarioCropCodes(farmId, simulationId)
   if (crops.length === 0) return null
+
+  const includedCount = crops.filter(
+    (crop) => !excludedCodes.includes(crop.code),
+  ).length
 
   return (
     <div className="space-y-2">
-      <Label>Afgrøder</Label>
+      <div className="flex items-baseline justify-between gap-2">
+        <Label id={`${id}-label`}>Afgrøder</Label>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {includedCount} af {crops.length} med
+        </span>
+      </div>
       <p className="text-xs text-muted-foreground">
         Fravælg en afgrøde for at udelukke alle sædskifter, der indeholder den
         et eller flere steder. Valget gælder kun denne kørsel.
       </p>
-      <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+      <div
+        role="group"
+        aria-labelledby={`${id}-label`}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={cn(
+          'max-h-48 space-y-1 overflow-y-auto rounded-md border p-2',
+          error && 'border-destructive',
+        )}
+      >
         {crops.map((crop) => (
           <label
             key={crop.code}
@@ -30,13 +50,14 @@ export const CropExclusionList = ({
           >
             <input
               type="checkbox"
-              checked={!excludedCodes.has(crop.code)}
+              checked={!excludedCodes.includes(crop.code)}
               onChange={() => onToggle(crop.code)}
             />
             <span>{crop.name}</span>
           </label>
         ))}
       </div>
+      <FieldError id={`${id}-error`} message={error} />
     </div>
   )
 }

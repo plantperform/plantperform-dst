@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { DialogActionBar } from '@/components/ui/dialog-action-bar'
 import { cn } from '@/lib/utils'
 
 // Status is decided by the form that owns the steps. The dialog only renders it.
@@ -250,15 +251,11 @@ export const StepDialog = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-6 py-4">
-          {secondaryAction}
-          {/* Next to the actions it explains. Always mounted, never display:none,
-              so screen readers announce messages as they appear. */}
-          <div aria-live="polite" className="ml-auto min-w-0 text-right text-xs">
-            {footerMessage}
-          </div>
-          <div className="flex items-center gap-2">{actions}</div>
-        </div>
+        <DialogActionBar
+          secondaryAction={secondaryAction}
+          message={footerMessage}
+          actions={actions}
+        />
       </DialogContent>
     </Dialog>
   )

@@ -7,6 +7,7 @@ import type {
   RotationCategoryOption,
   RotationOption,
 } from '@/api/types'
+import { checkNumberText } from '@/lib/form-validation'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
 // 'none' and 'custom' are fixed choices; any other value is a preset name.
@@ -53,28 +54,6 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   intermediateCrop: true,
 }
 
-// Checks a number field kept as text. The first failing message is the one
-// shown, so an empty field reads "Udfyld feltet", not a range message.
-const checkNumberText = (
-  ctx: z.RefinementCtx,
-  path: keyof SimulationFormValues,
-  text: string,
-  isValid: (value: number) => boolean,
-  message: string,
-) => {
-  const trimmed = text.trim()
-  if (trimmed === '') {
-    ctx.addIssue({ code: 'custom', path: [path], message: 'Udfyld feltet' })
-    return
-  }
-  const value = Number(trimmed)
-  if (!Number.isFinite(value)) {
-    ctx.addIssue({ code: 'custom', path: [path], message: 'Angiv et tal' })
-    return
-  }
-  if (!isValid(value)) ctx.addIssue({ code: 'custom', path: [path], message })
-}
-
 // The number rules mirror the backend's FertiliserSettings; nContentKgPerTon
 // has no backend rule but only makes sense above zero.
 const nitrogenSchema = z
@@ -93,21 +72,21 @@ const nitrogenSchema = z
     if (values.fertiliserChoice === NO_FERTILISER) return
     checkNumberText(
       ctx,
-      'orgMineralN',
+      ['orgMineralN'],
       values.orgMineralN,
       (value) => value >= 0,
       'Skal være 0 eller mere',
     )
     checkNumberText(
       ctx,
-      'mineralSharePct',
+      ['mineralSharePct'],
       values.mineralSharePct,
       (value) => value > 0 && value <= 100,
       'Mineralsk andel skal være større end 0 og højst 100 %',
     )
     checkNumberText(
       ctx,
-      'nContentKgPerTon',
+      ['nContentKgPerTon'],
       values.nContentKgPerTon,
       (value) => value > 0,
       'Angiv et N-indhold større end 0',
