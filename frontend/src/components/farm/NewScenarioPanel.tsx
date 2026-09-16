@@ -23,6 +23,7 @@ import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { useStepNavigation } from '@/hooks/use-step-navigation'
 import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
@@ -94,8 +95,6 @@ export const NewScenarioPanel = ({
   })
   const values = useWatch({ control }) as SimulationFormValues
 
-  const [stepIndex, setStepIndex] = useState(0)
-  const [furthestStepIndex, setFurthestStepIndex] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -125,26 +124,17 @@ export const NewScenarioPanel = ({
     return valid
   }
 
-  // Going back never validates. Going forward validates every step passed.
-  const goToStep = async (target: number) => {
-    if (target <= stepIndex) {
-      setStepIndex(target)
-      return
-    }
-    for (let index = stepIndex; index < target; index += 1) {
-      if (!(await validateStep(index))) {
-        setStepIndex(index)
-        return
-      }
-    }
-    setStepIndex(target)
-    setFurthestStepIndex((current) => Math.max(current, target))
-  }
+  const {
+    stepIndex,
+    furthestStepIndex,
+    goToStep,
+    validateAllSteps,
+    resetSteps,
+  } = useStepNavigation(validateStep)
 
   const startOver = () => {
     reset(DEFAULT_SIMULATION_FORM_VALUES)
-    setStepIndex(0)
-    setFurthestStepIndex(0)
+    resetSteps()
     setCreateError(null)
   }
 
@@ -170,12 +160,7 @@ export const NewScenarioPanel = ({
 
   const createScenario = async () => {
     if (!hasFields) return
-    for (let index = 0; index <= LAST_STEP_INDEX; index += 1) {
-      if (!(await validateStep(index))) {
-        setStepIndex(index)
-        return
-      }
-    }
+    if (!(await validateAllSteps(SIMULATION_FORM_STEPS.length))) return
 
     setIsCreating(true)
     setCreateError(null)
