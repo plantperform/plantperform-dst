@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import {
   cropsInCategory,
   farmingSystemMismatchCount,
+  farmingSystemMismatchMessage,
   filterRotations,
   orderCategoriesForFarmingSystem,
   selectedInCategory,
@@ -21,11 +22,6 @@ type RotationPickerProps = {
   rotationVariants: string[]
   onRotationVariantsChange: (rotationVariants: string[]) => void
   error?: string
-}
-
-const OTHER_SYSTEM_PLURAL: Record<FarmingSystem, string> = {
-  Konventionel: 'økologiske',
-  Økologisk: 'konventionelle',
 }
 
 export const RotationPicker = ({
@@ -102,8 +98,7 @@ export const RotationPicker = ({
               className="mt-0.5 size-3.5 shrink-0 text-amber-700"
               aria-hidden="true"
             />
-            Du har valgt {mismatchCount} {OTHER_SYSTEM_PLURAL[farmingSystem]}{' '}
-            sædskifter til en {farmingSystem.toLowerCase()} simulering.
+            {farmingSystemMismatchMessage(mismatchCount, farmingSystem)}
           </p>
         ) : null}
 

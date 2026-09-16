@@ -17,6 +17,7 @@ import type {
   Simulation,
 } from '@/api/types'
 import { RotationPicker } from '@/components/farm/RotationPicker'
+import { SimulationSummary } from '@/components/farm/SimulationSummary'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -656,6 +657,16 @@ export const NewScenarioPanel = ({
             </label>
           </div>
         </div>
+      ) : null}
+
+      {stepIndex === 4 ? (
+        <SimulationSummary
+          values={values}
+          categories={categories}
+          fertiliserPresets={fertiliserPresets}
+          fieldCount={fields.length}
+          onEditStep={(index) => void goToStep(index)}
+        />
       ) : null}
     </StepDialog>
   )
