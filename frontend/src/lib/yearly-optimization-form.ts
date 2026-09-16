@@ -74,6 +74,8 @@ export const YEARLY_OPTIMIZE_FORM_STEPS = [
   },
   { id: 'crops', label: 'Afgrøder', fields: ['excludedCropCodes'] },
   { id: 'run', label: 'Kørsel', fields: ['timeLimitSeconds'] },
+  // Only reviews the earlier steps, which are validated again before running.
+  { id: 'confirm', label: 'Bekræft', fields: [] },
 ] as const satisfies readonly {
   id: string
   label: string
