@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import type {
   CreateSimulationInput,
   FarmingSystem,
@@ -49,6 +51,128 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   earlySowing: true,
   intermediateCrop: true,
 }
+
+// Checks a number field kept as text. The first failing message is the one
+// shown, so an empty field reads "Udfyld feltet", not a range message.
+const checkNumberText = (
+  ctx: z.RefinementCtx,
+  path: keyof SimulationFormValues,
+  text: string,
+  isValid: (value: number) => boolean,
+  message: string,
+) => {
+  const trimmed = text.trim()
+  if (trimmed === '') {
+    ctx.addIssue({ code: 'custom', path: [path], message: 'Udfyld feltet' })
+    return
+  }
+  const value = Number(trimmed)
+  if (!Number.isFinite(value)) {
+    ctx.addIssue({ code: 'custom', path: [path], message: 'Angiv et tal' })
+    return
+  }
+  if (!isValid(value)) ctx.addIssue({ code: 'custom', path: [path], message })
+}
+
+// The number rules mirror the backend's FertiliserSettings; nContentKgPerTon
+// has no backend rule but only makes sense above zero.
+const nitrogenSchema = z
+  .object({
+    fertiliserChoice: z.string(),
+    orgMineralN: z.string(),
+    mineralSharePct: z.string(),
+    onlyOrganic: z.boolean(),
+    nContentKgPerTon: z.string(),
+    nNormPercentages: z
+      .array(z.string())
+      .min(1, 'Vælg mindst ét N-norm-niveau'),
+  })
+  .superRefine((values, ctx) => {
+    // Without organic fertiliser the numbers are fixed and hidden.
+    if (values.fertiliserChoice === NO_FERTILISER) return
+    checkNumberText(
+      ctx,
+      'orgMineralN',
+      values.orgMineralN,
+      (value) => value >= 0,
+      'Skal være 0 eller mere',
+    )
+    checkNumberText(
+      ctx,
+      'mineralSharePct',
+      values.mineralSharePct,
+      (value) => value > 0 && value <= 100,
+      'Mineralsk andel skal være større end 0 og højst 100 %',
+    )
+    checkNumberText(
+      ctx,
+      'nContentKgPerTon',
+      values.nContentKgPerTon,
+      (value) => value > 0,
+      'Angiv et N-indhold større end 0',
+    )
+  })
+
+export const SIMULATION_FORM_STEPS = [
+  {
+    id: 'basics',
+    label: 'Grundlag',
+    schema: z.object({
+      name: z.string().trim().min(1, 'Giv simuleringen et navn'),
+      farmingSystem: z.enum(['Konventionel', 'Økologisk']),
+    }),
+  },
+  {
+    id: 'rotations',
+    label: 'Sædskifter',
+    schema: z.object({
+      rotationVariants: z
+        .array(z.string())
+        .min(1, 'Vælg mindst ét sædskifte'),
+    }),
+  },
+  {
+    id: 'nitrogen',
+    label: 'Kvælstof',
+    schema: nitrogenSchema,
+  },
+  {
+    id: 'practice',
+    label: 'Dyrkningspraksis',
+    schema: z.object({
+      catchCropDailyBasis: z.boolean(),
+      catchCropSowingInterval: z.string().min(1),
+      catchCropSowingDate: z.string().min(1),
+      precisionFarming: z.boolean(),
+      earlySowing: z.boolean(),
+      intermediateCrop: z.boolean(),
+    }),
+  },
+] as const
+
+// The fields each step owns, taken from its schema so the two cannot drift.
+export const stepFields = (stepIndex: number) => {
+  const { shape } = SIMULATION_FORM_STEPS[stepIndex].schema
+  return Object.keys(shape) as (keyof SimulationFormValues)[]
+}
+
+export const isStepValid = (
+  stepIndex: number,
+  values: SimulationFormValues,
+): boolean => SIMULATION_FORM_STEPS[stepIndex].schema.safeParse(values).success
+
+// Runs every step's rules at once, for the resolver and the final create.
+export const simulationFormSchema = z
+  .custom<SimulationFormValues>()
+  .superRefine((values, ctx) => {
+    for (const step of SIMULATION_FORM_STEPS) {
+      const result = step.schema.safeParse(values)
+      if (result.success) continue
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+      }
+    }
+  })
 
 export const toggleValue = (values: string[], value: string): string[] =>
   values.includes(value)
@@ -122,22 +246,29 @@ export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
     ? values.catchCropSowingDate
     : values.catchCropSowingInterval
 
+// Expects values that passed simulationFormSchema.
 export const toCreateSimulationInput = (
   values: SimulationFormValues,
-): CreateSimulationInput => ({
-  name: values.name.trim(),
-  allowedRotationVariants: values.rotationVariants,
-  allowedNNormPercentages: values.nNormPercentages,
-  fertiliser: {
-    farmingSystem: values.farmingSystem,
-    orgMineralN: Number(values.orgMineralN) || 0,
-    mineralSharePct: Number(values.mineralSharePct) || 100,
-    onlyOrganic: values.onlyOrganic,
-    nContentKgPerTon: Number(values.nContentKgPerTon) || 6,
-  },
-  catchCropSowingDate: catchCropSowingDateOf(values),
-  catchCropDailyBasis: values.catchCropDailyBasis,
-  precisionFarming: values.precisionFarming,
-  earlySowing: values.earlySowing,
-  intermediateCrop: values.intermediateCrop,
-})
+): CreateSimulationInput => {
+  const withoutFertiliser = values.fertiliserChoice === NO_FERTILISER
+  return {
+    name: values.name.trim(),
+    allowedRotationVariants: values.rotationVariants,
+    allowedNNormPercentages: values.nNormPercentages,
+    fertiliser: {
+      farmingSystem: values.farmingSystem,
+      orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),
+      mineralSharePct: withoutFertiliser ? 100 : Number(values.mineralSharePct),
+      onlyOrganic: values.onlyOrganic,
+      // Hidden without fertiliser, where whatever was typed earlier is ignored.
+      nContentKgPerTon: withoutFertiliser
+        ? Number(DEFAULT_SIMULATION_FORM_VALUES.nContentKgPerTon)
+        : Number(values.nContentKgPerTon),
+    },
+    catchCropSowingDate: catchCropSowingDateOf(values),
+    catchCropDailyBasis: values.catchCropDailyBasis,
+    precisionFarming: values.precisionFarming,
+    earlySowing: values.earlySowing,
+    intermediateCrop: values.intermediateCrop,
+  }
+}
