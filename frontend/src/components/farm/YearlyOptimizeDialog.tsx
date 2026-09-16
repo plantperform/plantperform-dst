@@ -4,6 +4,7 @@ import { mutate } from 'swr'
 
 import {
   simulationFieldsKey,
+  useScenarioCropCodes,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
 import { runYearlySimulationOptimization } from '@/api/mutations'
@@ -31,6 +32,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+import { toggleCropCode } from '@/lib/optimization-form'
 
 type CatchmentYearlyInput = {
   sameForAllYears: boolean
@@ -68,27 +70,21 @@ export const YearlyOptimizeDialog = ({
   const [db2SwingPct, setDb2SwingPct] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
-    new Set(),
-  )
+  const [excludedCropCodes, setExcludedCropCodes] = useState<number[]>([])
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setRunError(null)
-      setExcludedCropCodes(new Set())
+      setExcludedCropCodes([])
     }
     onOpenChange(nextOpen)
   }
 
   const toggleCrop = (code: number) => {
-    setExcludedCropCodes((current) => {
-      const next = new Set(current)
-      if (next.has(code)) next.delete(code)
-      else next.add(code)
-      return next
-    })
+    setExcludedCropCodes((current) => toggleCropCode(current, code))
   }
 
+  const { data: crops = [] } = useScenarioCropCodes(farmId, simulation.id)
   const { data: categories = [] } = useYearlyOptimizationCandidates(
     farmId,
     simulation.id,
@@ -153,7 +149,7 @@ export const YearlyOptimizeDialog = ({
           timeLimitSeconds,
           maxNLoadByCatchment,
           db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
-          excludedCropCodes: Array.from(excludedCropCodes),
+          excludedCropCodes,
         },
       )
       await mutate(
@@ -318,8 +314,8 @@ export const YearlyOptimizeDialog = ({
           </p>
 
           <CropExclusionList
-            farmId={farmId}
-            simulationId={simulation.id}
+            id="yearly-crops"
+            crops={crops}
             excludedCodes={excludedCropCodes}
             onToggle={toggleCrop}
           />
