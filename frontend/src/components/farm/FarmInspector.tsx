@@ -63,6 +63,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LoadError } from '@/components/ui/load-error'
+import { Spinner } from '@/components/ui/spinner'
 import {
   applyFieldYearValues,
   formatNumber,
@@ -109,6 +111,8 @@ type FarmInspectorProps = {
   selectedSimulation?: Simulation
   fieldsLoading?: boolean
   fieldsError?: boolean
+  fieldsRetrying?: boolean
+  onRetryFields?: () => void
   mode: FarmInspectorMode
   onModeChange: (mode: FarmInspectorMode) => void
   view: FarmView
@@ -137,6 +141,8 @@ export const FarmInspector = ({
   selectedSimulation,
   fieldsLoading = false,
   fieldsError = false,
+  fieldsRetrying = false,
+  onRetryFields,
   mode,
   onModeChange,
   view,
@@ -512,12 +518,11 @@ export const FarmInspector = ({
           ) : fieldsError ? (
             <>
               {rulesPanel}
-              <div
-                role="alert"
-                className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-              >
-                Kunne ikke hente simuleringens marker. Prøv igen om lidt.
-              </div>
+              <LoadError
+                message="Kunne ikke hente simuleringens marker."
+                onRetry={onRetryFields}
+                retrying={fieldsRetrying}
+              />
             </>
           ) : (
             <FarmSplitView
@@ -689,7 +694,33 @@ const CropExclusionList = ({
   excludedCodes: Set<number>
   onToggle: (code: number) => void
 }) => {
-  const { data: crops = [] } = useScenarioCropCodes(farmId, simulationId)
+  const {
+    data: crops = [],
+    error,
+    isLoading,
+    isValidating,
+    mutate: retry,
+  } = useScenarioCropCodes(farmId, simulationId)
+
+  if (isLoading) {
+    return (
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Spinner className="size-3.5" />
+        Henter afgrøder...
+      </p>
+    )
+  }
+
+  if (error) {
+    return (
+      <LoadError
+        message="Kunne ikke hente simuleringens afgrøder, så ingen kan fravælges."
+        onRetry={() => void retry()}
+        retrying={isValidating}
+      />
+    )
+  }
+
   if (crops.length === 0) return null
 
   return (

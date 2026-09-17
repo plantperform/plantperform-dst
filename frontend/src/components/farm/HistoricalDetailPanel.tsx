@@ -1,6 +1,7 @@
 import { useFieldHistoricalDetail } from '@/api/hooks'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
+import { LoadError } from '@/components/ui/load-error'
 import { REAL_HISTORY_START_CALENDAR_YEAR } from '@/lib/field-domain'
 
 type HistoricalDetailPanelProps = {
@@ -16,7 +17,13 @@ export const HistoricalDetailPanel = ({
   areaHa,
   retention,
 }: HistoricalDetailPanelProps) => {
-  const { data: years, error, isLoading } = useFieldHistoricalDetail(farmId, fieldId)
+  const {
+    data: years,
+    error,
+    isLoading,
+    isValidating,
+    mutate: retry,
+  } = useFieldHistoricalDetail(farmId, fieldId)
 
   if (isLoading) {
     return <LoadingSkeleton message="Henter beregningsdetaljer..." />
@@ -24,9 +31,12 @@ export const HistoricalDetailPanel = ({
 
   if (error) {
     return (
-      <div className="p-4 text-sm text-red-700">
-        Kunne ikke hente beregningsdetaljer: {error.message}
-      </div>
+      <LoadError
+        className="m-4"
+        message={`Kunne ikke hente beregningsdetaljer: ${error.message}`}
+        onRetry={() => void retry()}
+        retrying={isValidating}
+      />
     )
   }
 

@@ -2,6 +2,7 @@ import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ApiError } from '@/api/client'
 import {
   useFarm,
   useFarmFields,
@@ -38,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { LoadError } from '@/components/ui/load-error'
 import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
 
 const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
@@ -53,10 +55,23 @@ export const FarmDetailPage = () => {
     data: farm,
     error: farmError,
     isLoading: farmLoading,
+    isValidating: farmValidating,
+    mutate: retryFarm,
   } = useFarm(farmId)
-  const { data: fields = [], isLoading: fieldsLoading } = useFarmFields(farmId)
-  const { data: simulationsData, isLoading: simulationsLoading } =
-    useSimulations(farmId)
+  const {
+    data: fields = [],
+    error: fieldsError,
+    isLoading: fieldsLoading,
+    isValidating: fieldsValidating,
+    mutate: retryFields,
+  } = useFarmFields(farmId)
+  const {
+    data: simulationsData,
+    error: simulationsError,
+    isLoading: simulationsLoading,
+    isValidating: simulationsValidating,
+    mutate: retrySimulations,
+  } = useSimulations(farmId)
   const simulations = simulationsData ?? []
   const [selection, setSelection] = useState<FarmViewSelection>({
     kind: 'current',
@@ -73,6 +88,8 @@ export const FarmDetailPage = () => {
     data: simulationFields = [],
     error: simulationFieldsError,
     isLoading: simulationFieldsLoading,
+    isValidating: simulationFieldsValidating,
+    mutate: retrySimulationFields,
   } = useSimulationFields(farmId, selectedSimulationId)
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
@@ -97,8 +114,19 @@ export const FarmDetailPage = () => {
   const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
+  // Without this check a failed fetch would render as a farm with no fields
+  // or no simulations.
+  const contentError = Boolean(fieldsError || simulationsError)
+  const retryContent = () => {
+    if (fieldsError) void retryFields()
+    if (simulationsError) void retrySimulations()
+  }
   const isReady =
-    farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
+    farm !== undefined &&
+    !farmLoading &&
+    !fieldsLoading &&
+    !simulationsLoading &&
+    !contentError
   const activeFields =
     activeSelection.kind === 'current' ? fields : simulationFields
   const activeFieldsLoading =
@@ -169,6 +197,35 @@ export const FarmDetailPage = () => {
     if (!activeFields.some((field) => field.id === fieldId)) return
     setSelectedFieldId(fieldId)
     if (mode === 'rules') setMode('values')
+  }
+
+  if (farmError && !(farmError instanceof ApiError && farmError.status === 404)) {
+    return (
+      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
+        <div className="mx-auto max-w-3xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bedriften kunne ikke hentes</CardTitle>
+              <CardDescription>
+                Der opstod en fejl, da bedriften skulle hentes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <LoadError
+                message={farmError.message}
+                onRetry={() => void retryFarm()}
+                retrying={farmValidating}
+              />
+              <Button asChild variant="outline">
+                <Link to="/" state={HOME_OVERVIEW_STATE}>
+                  Alle bedrifter
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    )
   }
 
   if (farmError) {
@@ -246,6 +303,8 @@ export const FarmDetailPage = () => {
             }
             fieldsLoading={simulationFieldsLoading}
             fieldsError={Boolean(simulationFieldsError)}
+            fieldsRetrying={simulationFieldsValidating}
+            onRetryFields={() => void retrySimulationFields()}
             mode={mode}
             onModeChange={changeMode}
             view={snappedView}
@@ -266,6 +325,18 @@ export const FarmDetailPage = () => {
             onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
             onError={showErrorToast}
           />
+        ) : contentError ? (
+          <div className="p-4">
+            <LoadError
+              message={
+                fieldsError
+                  ? 'Kunne ikke hente bedriftens marker.'
+                  : 'Kunne ikke hente bedriftens simuleringer.'
+              }
+              onRetry={retryContent}
+              retrying={fieldsValidating || simulationsValidating}
+            />
+          </div>
         ) : (
           <>
             <p role="status" className="sr-only">

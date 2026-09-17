@@ -47,7 +47,11 @@ export const RotationPicker = ({
     orderedCategories[0]
 
   if (!active) {
-    return <p className="text-sm text-muted-foreground">Henter sædskifter...</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Ingen sædskifter at vælge imellem.
+      </p>
+    )
   }
 
   const availableCrops = cropsInCategory(active).filter(

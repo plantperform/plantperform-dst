@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { LoadError } from '@/components/ui/load-error'
 import {
   compactCropSequenceLabel,
   formatRotationYear,
@@ -83,22 +84,30 @@ export const ManualRotationEditor = ({
   const {
     data: current,
     isLoading: isLoadingCurrent,
+    isValidating: isValidatingCurrent,
     error: currentError,
+    mutate: retryCurrent,
   } = useSimulationFieldCandidateDetail(farmId, simulationId, field.id)
   const {
     data: categories = [],
     isLoading: isLoadingCategories,
+    isValidating: isValidatingCategories,
     error: categoriesError,
+    mutate: retryCategories,
   } = useRotationCategories(farmId)
   const {
     data: allRefs = [],
     isLoading: isLoadingAllRefs,
+    isValidating: isValidatingAllRefs,
     error: allRefsError,
+    mutate: retryAllRefs,
   } = useRotationCandidateOptions(farmId)
   const {
     data: cropCodes = [],
     isLoading: isLoadingCropCodes,
+    isValidating: isValidatingCropCodes,
     error: cropCodesError,
+    mutate: retryCropCodes,
   } = useCropCodes(farmId)
 
   const isLoadingCandidates =
@@ -108,6 +117,17 @@ export const ManualRotationEditor = ({
     isLoadingCropCodes
   const candidatesError =
     currentError ?? categoriesError ?? allRefsError ?? cropCodesError
+  const isRetryingCandidates =
+    isValidatingCurrent ||
+    isValidatingCategories ||
+    isValidatingAllRefs ||
+    isValidatingCropCodes
+  const retryCandidates = () => {
+    if (currentError) void retryCurrent()
+    if (categoriesError) void retryCategories()
+    if (allRefsError) void retryAllRefs()
+    if (cropCodesError) void retryCropCodes()
+  }
 
   const [baseRef, setBaseRef] = useState<RotationCandidateRef | null>(null)
   const [selectedCategoryName, setSelectedCategoryName] = useState<
@@ -386,7 +406,11 @@ export const ManualRotationEditor = ({
         </DialogHeader>
 
         {candidatesError ? (
-          <p className="text-sm text-red-700">Kunne ikke hente sædskifter.</p>
+          <LoadError
+            message="Kunne ikke hente sædskifter."
+            onRetry={retryCandidates}
+            retrying={isRetryingCandidates}
+          />
         ) : isLoadingCandidates ? (
           <LoadingSkeleton message="Henter sædskifter..." />
         ) : (

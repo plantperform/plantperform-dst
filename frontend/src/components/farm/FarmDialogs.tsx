@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LoadError } from '@/components/ui/load-error'
+import { Spinner } from '@/components/ui/spinner'
 import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 
 type FarmDialogProps = {
@@ -36,7 +38,13 @@ export const ShareFarmDialog = ({
 }: FarmDialogProps) => {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { data: members = [], isLoading } = useFarmMembers(
+  const {
+    data: members = [],
+    error: membersError,
+    isLoading,
+    isValidating: membersValidating,
+    mutate: retryMembers,
+  } = useFarmMembers(
     open ? farm.id : undefined,
   )
   const [memberEmail, setMemberEmail] = useState('')
@@ -105,11 +113,21 @@ export const ShareFarmDialog = ({
               Har adgang
             </p>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
                 Henter medlemmer...
               </p>
+            ) : membersError ? (
+              <LoadError
+                message="Kunne ikke hente, hvem der har adgang."
+                onRetry={() => void retryMembers()}
+                retrying={membersValidating}
+              />
             ) : null}
-            <ul className="divide-y rounded-md border">
+            <ul
+              className="divide-y rounded-md border"
+              hidden={isLoading || Boolean(membersError)}
+            >
               {members.map((member) => {
                 const isSelf = member.email.toLowerCase() === ownEmail
                 return (
