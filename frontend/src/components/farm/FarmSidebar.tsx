@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Table2,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
@@ -32,8 +33,14 @@ import type {
   Simulation,
 } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import {
+  useOptimizationRun,
+  type OptimizationRun,
+} from '@/api/optimization-runs'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
+import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
+import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import type {
   FarmInspectorMode,
@@ -98,6 +105,7 @@ import {
   getStoredRole,
   ROLE_LABELS,
 } from '@/lib/onboarding'
+import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
 const formatCreatedAt = (value: string) => {
@@ -615,6 +623,10 @@ const SimulationMenuItem = ({
 }: SimulationMenuItemProps) => {
   const iconRail = useSidebar().state === 'collapsed'
   const createdLabel = formatCreatedAt(simulation.createdAt)
+  const run = useOptimizationRun(simulation.id)
+  const runningRun = run?.status === 'running' ? run : undefined
+  const running = Boolean(runningRun)
+  const failedRun = run?.status === 'failed' ? run : undefined
   const {
     data: simulationFields,
     error: fieldsError,
@@ -644,25 +656,32 @@ const SimulationMenuItem = ({
             size="lg"
             isActive={selected}
             aria-current={selected ? 'page' : undefined}
+            aria-busy={running || undefined}
             className={cn(
               VIEW_BUTTON_CLASS,
-              'group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
+              'relative group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
             )}
             title={iconRail ? undefined : createdLabel}
             onClick={onSelect}
           >
-            {loading ? (
-              <Spinner />
-            ) : (
-              <FlaskConical />
-            )}
+            {loading || running ? <Spinner /> : <FlaskConical />}
+            {failedRun ? (
+              <span
+                className="absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
+                aria-hidden="true"
+              />
+            ) : null}
             <ViewMenuLabel name={simulation.name}>
               <KeyFiguresLine
                 figures={figures}
                 loading={fieldsLoading}
                 error={Boolean(fieldsError)}
               />
-              {simulationFields ? (
+              {runningRun ? (
+                <span className="truncate pl-3 text-[11px] font-normal text-primary tabular-nums">
+                  <OptimizationRunElapsed run={runningRun} />
+                </span>
+              ) : simulationFields ? (
                 <SimulationDetailLine
                   changedCount={changedCount}
                   lockedCount={lockedCount}
@@ -678,6 +697,15 @@ const SimulationMenuItem = ({
               <span>{simulation.name}</span>
               <span>{createdLabel}</span>
               {figures ? <span>{figures.label}</span> : null}
+              {runningRun ? (
+                <span className="tabular-nums">
+                  <OptimizationRunElapsed run={runningRun} />
+                </span>
+              ) : failedRun ? (
+                <span>
+                  {OPTIMIZATION_KIND_LABELS[failedRun.kind]} fejlede
+                </span>
+              ) : null}
             </div>
           ) : (
             createdLabel
@@ -718,10 +746,14 @@ const SimulationMenuItem = ({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {failedRun ? (
+        <SimulationRunFailure run={failedRun} fields={simulationFields} />
+      ) : null}
       {selected ? (
         <SimulationSubMenu
           mode={mode}
           disabled={loading}
+          running={running}
           onModeChange={onModeChange}
           onOptimize={onOptimize}
           onYearlyOptimize={onYearlyOptimize}
@@ -731,9 +763,52 @@ const SimulationMenuItem = ({
   )
 }
 
+type SimulationRunFailureProps = {
+  run: OptimizationRun
+  fields: FieldRecord[] | undefined
+}
+
+// Kept until dismissed, so a failure is not missed while the user is elsewhere.
+const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
+  const { retry, dismiss } = useOptimizationRunRetry(run, fields)
+  return (
+    <div
+      role="alert"
+      className="flex items-center gap-1 pr-1 pl-9 text-[11px] text-destructive group-data-[collapsible=icon]:hidden"
+    >
+      <span
+        className="min-w-0 flex-1 truncate"
+        title={run.status === 'failed' ? run.error : undefined}
+      >
+        {OPTIMIZATION_KIND_LABELS[run.kind]} fejlede
+      </span>
+      <button
+        type="button"
+        className="shrink-0 rounded px-1 font-medium underline-offset-2 hover:underline disabled:opacity-50"
+        disabled={!retry}
+        onClick={retry}
+      >
+        Prøv igen
+      </button>
+      <button
+        type="button"
+        className="shrink-0 rounded p-0.5 hover:bg-sidebar-accent"
+        aria-label="Luk fejlbeskeden"
+        onClick={dismiss}
+      >
+        <X className="size-3" aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
+// On the list item, because a disabled button does not show its title.
+const RUN_IN_PROGRESS_TITLE = 'En optimering kører allerede'
+
 type SimulationSubMenuProps = {
   mode: FarmInspectorMode
   disabled: boolean
+  running: boolean
   onModeChange: (mode: FarmInspectorMode) => void
   onOptimize: () => void
   onYearlyOptimize: () => void
@@ -742,6 +817,7 @@ type SimulationSubMenuProps = {
 const SimulationSubMenu = ({
   mode,
   disabled,
+  running,
   onModeChange,
   onOptimize,
   onYearlyOptimize,
@@ -781,17 +857,25 @@ const SimulationSubMenu = ({
         </button>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
-    <SidebarMenuSubItem>
+    <SidebarMenuSubItem title={running ? RUN_IN_PROGRESS_TITLE : undefined}>
       <SidebarMenuSubButton asChild className="w-full">
-        <button type="button" disabled={disabled} onClick={onOptimize}>
+        <button
+          type="button"
+          disabled={disabled || running}
+          onClick={onOptimize}
+        >
           <Play />
           <span>Optimér</span>
         </button>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
-    <SidebarMenuSubItem>
+    <SidebarMenuSubItem title={running ? RUN_IN_PROGRESS_TITLE : undefined}>
       <SidebarMenuSubButton asChild className="w-full">
-        <button type="button" disabled={disabled} onClick={onYearlyOptimize}>
+        <button
+          type="button"
+          disabled={disabled || running}
+          onClick={onYearlyOptimize}
+        >
           <CalendarRange />
           <span>Års-optimering</span>
         </button>

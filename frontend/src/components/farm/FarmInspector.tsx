@@ -48,6 +48,7 @@ import type {
   FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
+import { OptimizationRunBanner } from '@/components/farm/OptimizationRunStatus'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { Button } from '@/components/ui/button'
 import {
@@ -436,6 +437,9 @@ export const FarmInspector = ({
         >
           {showYearWalkthrough ? (
             <div className="flex flex-wrap gap-3">
+              {isSimulationView && optimizationRun ? (
+                <OptimizationRunBanner run={optimizationRun} fields={fields} />
+              ) : null}
               {!fieldsLoading &&
               fields.length > 0 &&
               singleCatchmentKey === null ? (
