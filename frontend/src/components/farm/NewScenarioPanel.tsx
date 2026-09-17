@@ -56,6 +56,12 @@ type NewScenarioPanelProps = {
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 
+const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
+  'orgMineralN',
+  'mineralSharePct',
+  'nContentKgPerTon',
+]
+
 const FieldError = ({ id, message }: { id: string; message?: string }) =>
   message ? (
     <p id={id} className="text-xs font-medium text-destructive">
@@ -155,10 +161,14 @@ export const NewScenarioPanel = ({
       fertiliserPresets,
       getValues('farmingSystem'),
     )
-    if (!fertiliserFields) return
-    updateValue('orgMineralN', fertiliserFields.orgMineralN)
-    updateValue('mineralSharePct', fertiliserFields.mineralSharePct)
-    updateValue('onlyOrganic', fertiliserFields.onlyOrganic)
+    if (fertiliserFields) {
+      updateValue('orgMineralN', fertiliserFields.orgMineralN)
+      updateValue('mineralSharePct', fertiliserFields.mineralSharePct)
+      updateValue('onlyOrganic', fertiliserFields.onlyOrganic)
+    }
+    if (FERTILISER_NUMBER_FIELDS.some((name) => errors[name])) {
+      void trigger(FERTILISER_NUMBER_FIELDS)
+    }
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
