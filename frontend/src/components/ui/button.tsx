@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
@@ -34,12 +35,42 @@ const buttonVariants = cva(
 type ButtonProps = React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    // Shows a spinner before the label and disables the button. Keep a
+    // pending label such as "Gemmer..." so screen readers announce the state.
+    loading?: boolean
   }
 
-const Button = ({ className, variant, size, asChild = false, ...props }: ButtonProps) => {
-  const Comp = asChild ? Slot : 'button'
+const Button = ({
+  className,
+  variant,
+  size,
+  asChild = false,
+  loading = false,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) => {
+  const classes = cn(buttonVariants({ variant, size, className }))
 
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />
+  if (asChild) {
+    return (
+      <Slot className={classes} {...props} {...{ disabled }}>
+        {children}
+      </Slot>
+    )
+  }
+
+  return (
+    <button
+      className={classes}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {loading ? <Spinner /> : null}
+      {children}
+    </button>
+  )
 }
 
 export { Button }
