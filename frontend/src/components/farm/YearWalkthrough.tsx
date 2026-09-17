@@ -293,6 +293,8 @@ type YearPanelProps = {
   lastRun: OptimizeSimulationResponse | null
   history: boolean
   unavailableMessage: string | null
+  view: PanelView
+  onViewChange?: (view: PanelView) => void
 }
 
 const YearPanel = ({
@@ -311,9 +313,11 @@ const YearPanel = ({
   lastRun,
   history,
   unavailableMessage,
+  view,
+  onViewChange,
 }: YearPanelProps) => {
-  const [panelView, setPanelView] = useState<PanelView>('nLoad')
-  const showCrops = panelView === 'crops'
+  const showCrops = view === 'crops'
+  const fixedCrops = showCrops && !onViewChange
   const entry = column?.entry ?? null
   const scoped = scopeLabel !== null
   const pending =
@@ -357,7 +361,9 @@ const YearPanel = ({
       ? 'Ingen marker er beregnet endnu.'
       : 'Kør Optimér for at beregne markerne.'
   const message = pending
-    ? (unavailableMessage ?? pendingNote)
+    ? fixedCrops
+      ? null
+      : (unavailableMessage ?? pendingNote)
     : showCrops
       ? null
       : !hasQuota
@@ -368,13 +374,17 @@ const YearPanel = ({
 
   return (
     <aside
-      aria-label="Oversigt over årene"
+      aria-label={
+        onViewChange
+          ? 'Oversigt over årene'
+          : PANEL_VIEW_OPTIONS.find((option) => option.value === view)?.label
+      }
       className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
     >
       <div
         key={loading ? 'loading' : (column?.index ?? 'all')}
-        role="status"
-        aria-live="polite"
+        role={fixedCrops ? undefined : 'status'}
+        aria-live={fixedCrops ? undefined : 'polite'}
         className="flex min-h-0 flex-1 flex-col gap-2.5 motion-safe:animate-rise-in"
       >
         {loading ? (
@@ -400,13 +410,15 @@ const YearPanel = ({
                   {subtitle}
                 </p>
               </div>
-              <SegmentedControl
-                aria-label="Vis udledning eller afgrøder"
-                value={panelView}
-                options={PANEL_VIEW_OPTIONS}
-                onValueChange={setPanelView}
-                labelClassName="hidden @md:inline"
-              />
+              {onViewChange ? (
+                <SegmentedControl
+                  aria-label="Vis udledning eller afgrøder"
+                  value={view}
+                  options={PANEL_VIEW_OPTIONS}
+                  onValueChange={onViewChange}
+                  labelClassName="hidden @md:inline"
+                />
+              ) : null}
             </div>
 
             <div className="relative min-h-24 flex-1">
@@ -442,7 +454,10 @@ const YearPanel = ({
                     />
                   ))
                 ) : null}
-                {entry && yearFieldCount !== null && yearFieldCount < fieldCount ? (
+                {!showCrops &&
+                entry &&
+                yearFieldCount !== null &&
+                yearFieldCount < fieldCount ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
                     Kun {yearFieldCount} af {fieldCount} marker har data for
                     året.
@@ -480,6 +495,7 @@ type YearWalkthroughProps = {
   scopeLabel?: string | null
   catchmentTotalsByYear?: CatchmentTotalsByYear
   yearValues?: FieldYearValues
+  splitPanels?: boolean
 }
 
 export const YearWalkthrough = ({
@@ -496,9 +512,11 @@ export const YearWalkthrough = ({
   scopeLabel = null,
   catchmentTotalsByYear,
   yearValues,
+  splitPanels = false,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [panelView, setPanelView] = useState<PanelView>('nLoad')
 
   const columns = useMemo(
     () => buildColumns(loading ? undefined : entries, history),
@@ -619,6 +637,30 @@ export const YearWalkthrough = ({
       ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
       : ''
   const chartHint = scopeLabel ? null : 'Hvert opland mod sin egen kvote'
+  const panelProps: Omit<YearPanelProps, 'view' | 'onViewChange'> = {
+    loading,
+    column: selectedColumn,
+    rows:
+      selectedColumn === null
+        ? catchmentYears(null)
+        : selectedColumn.entry
+          ? catchmentYears(selectedColumn.entry)
+          : [],
+    quota,
+    scopeLabel,
+    catchmentLabel,
+    catchmentColor,
+    yearCount,
+    overYearCount,
+    fieldCount: fields.length,
+    yearFieldCount: selectedColumn?.entry
+      ? countFieldsWithYearValues(selectedColumn.entry.year)
+      : null,
+    cropShares,
+    lastRun,
+    history,
+    unavailableMessage,
+  }
 
   return (
     <div className="flex min-w-0 flex-1 basis-[36rem] flex-wrap gap-3">
@@ -817,33 +859,18 @@ export const YearWalkthrough = ({
         </div>
       </section>
 
-      <YearPanel
-        loading={loading}
-        column={selectedColumn}
-        rows={
-          selectedColumn === null
-            ? catchmentYears(null)
-            : selectedColumn.entry
-              ? catchmentYears(selectedColumn.entry)
-              : []
-        }
-        quota={quota}
-        scopeLabel={scopeLabel}
-        catchmentLabel={catchmentLabel}
-        catchmentColor={catchmentColor}
-        yearCount={yearCount}
-        overYearCount={overYearCount}
-        fieldCount={fields.length}
-        yearFieldCount={
-          selectedColumn?.entry
-            ? countFieldsWithYearValues(selectedColumn.entry.year)
-            : null
-        }
-        cropShares={cropShares}
-        lastRun={lastRun}
-        history={history}
-        unavailableMessage={unavailableMessage}
-      />
+      {splitPanels ? (
+        <div className="flex min-w-0 flex-[1_1_37.5rem] flex-wrap gap-3">
+          <YearPanel {...panelProps} view="nLoad" />
+          <YearPanel {...panelProps} view="crops" />
+        </div>
+      ) : (
+        <YearPanel
+          {...panelProps}
+          view={panelView}
+          onViewChange={setPanelView}
+        />
+      )}
     </div>
   )
 }

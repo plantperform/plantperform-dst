@@ -230,13 +230,24 @@ export const FarmInspector = ({
     setLastRun(null)
   }
 
+  const singleCatchmentKey = useMemo(() => {
+    const keys = new Set(fields.map((field) => catchmentKey(field.catchmentId)))
+    return keys.size === 1 && !keys.has(catchmentKey(null))
+      ? [...keys][0]
+      : null
+  }, [fields])
   const effectiveHighlightedCatchmentKey = useMemo(() => {
-    if (isRules || highlightedCatchmentKey === null) return null
+    if (
+      isRules ||
+      singleCatchmentKey !== null ||
+      highlightedCatchmentKey === null
+    )
+      return null
     const stillPresent = fields.some((field) =>
       fieldInCatchment(field, highlightedCatchmentKey),
     )
     return stillPresent ? highlightedCatchmentKey : null
-  }, [fields, isRules, highlightedCatchmentKey])
+  }, [fields, isRules, singleCatchmentKey, highlightedCatchmentKey])
 
   const catchmentLabel = useCatchmentLabel(farm.id, fields)
   const highlightedFields = useMemo(
@@ -378,7 +389,9 @@ export const FarmInspector = ({
   )
   const scopeLabel = isCatchmentScoped
     ? catchmentLabel(highlightedFields[0]?.catchmentId ?? null)
-    : null
+    : singleCatchmentKey !== null
+      ? catchmentLabel(fields[0]?.catchmentId ?? null)
+      : null
 
   const openRules = () => {
     onOptimizeDialogOpenChange(false)
@@ -456,7 +469,9 @@ export const FarmInspector = ({
         >
           {showYearWalkthrough ? (
             <div className="flex flex-wrap gap-3">
-              {!fieldsLoading && fields.length > 0 ? (
+              {!fieldsLoading &&
+              fields.length > 0 &&
+              singleCatchmentKey === null ? (
                 <CatchmentPicker
                   farmId={farm.id}
                   fields={fields}
@@ -475,6 +490,7 @@ export const FarmInspector = ({
               }
               fields={highlightedFields}
               scopeLabel={scopeLabel}
+              splitPanels={singleCatchmentKey !== null}
               catchmentTotalsByYear={catchmentTotalsByYear}
               yearValues={yearValues}
               selectedYearIndex={selectedYearIndex}
