@@ -22,6 +22,7 @@ import {
 import { FarmOverviewHeader } from '@/components/farm/FarmOverviewHeader'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
+import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Card,
@@ -55,7 +56,13 @@ export const HomePage = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
-  const { data: farms, error, isLoading } = useFarms()
+  const {
+    data: farms,
+    error,
+    isLoading,
+    isValidating: farmsValidating,
+    mutate: retryFarms,
+  } = useFarms()
   const { data: fieldsByFarm, isLoading: fieldsLoading } = useFarmsFields(farms)
   const email = user?.email ?? ''
   const showOverview = Boolean(
@@ -275,13 +282,11 @@ export const HomePage = () => {
         ) : null}
 
         {error ? (
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <CircleAlert
-              className="mt-0.5 h-4 w-4 shrink-0"
-              aria-hidden="true"
-            />
-            <p>Kunne ikke indlæse bedrifter. Prøv at genindlæse siden.</p>
-          </div>
+          <LoadError
+            message="Kunne ikke indlæse bedrifter."
+            onRetry={() => void retryFarms()}
+            retrying={farmsValidating}
+          />
         ) : null}
 
         {!isLoading && !error && farmList.length === 0 ? (

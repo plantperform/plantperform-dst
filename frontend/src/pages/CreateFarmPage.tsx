@@ -14,6 +14,8 @@ import { FieldError } from '@/components/ui/field-error'
 import { Button } from '@/components/ui/button'
 import { EYEBROW_CLASS } from '@/components/ui/eyebrow'
 import { Label } from '@/components/ui/label'
+import { LoadError } from '@/components/ui/load-error'
+import { Spinner } from '@/components/ui/spinner'
 import { farmBasicsErrors, type FarmBasicsErrors } from '@/lib/farm-form'
 import { formatNumber } from '@/lib/field-domain'
 import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
@@ -83,7 +85,9 @@ export const CreateFarmPage = () => {
   const {
     data: registryFields,
     isLoading: lookupLoading,
+    isValidating: lookupValidating,
     error: lookupError,
+    mutate: retryLookup,
   } = useRegistryFieldsByCvr(lookupActive ? cvr : undefined, 500)
   const lookup: RegistryLookup | null =
     lookupActive && registryFields
@@ -217,13 +221,16 @@ export const CreateFarmPage = () => {
                   </Button>
                 </div>
                 {lookupActive && lookupLoading ? (
-                  <p className="text-[13px] leading-5 text-muted-foreground">
+                  <p className="flex items-center gap-2 text-[13px] leading-5 text-muted-foreground">
+                    <Spinner className="size-3.5" />
                     Slår op i registret...
                   </p>
                 ) : lookupActive && lookupError ? (
-                  <p className="text-[13px] leading-5 text-red-700">
-                    Opslaget i registret fejlede. Prøv igen.
-                  </p>
+                  <LoadError
+                    message="Opslaget i registret fejlede."
+                    onRetry={() => void retryLookup()}
+                    retrying={lookupValidating}
+                  />
                 ) : willImport && lookup ? (
                   <div className="flex items-start gap-3 rounded-xl bg-primary/10 px-4 py-3.5 text-sm leading-5 text-primary-deep motion-safe:animate-rise-in">
                     <Check

@@ -16,12 +16,14 @@ import type {
   FertiliserSettings,
   Simulation,
 } from '@/api/types'
+import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
 import { SimulationSummary } from '@/components/farm/SimulationSummary'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
 import { formatNumber } from '@/lib/field-domain'
 import {
@@ -71,9 +73,25 @@ export const NewScenarioPanel = ({
   onSimulationCreated,
   onError,
 }: NewScenarioPanelProps) => {
-  const { data: categories = [] } = useRotationCategories(farmId)
-  const { data: nNormOptions = [] } = useRotationNNormPercentages(farmId)
-  const { data: fertiliserPresets = [] } = useFertiliserPresets(farmId)
+  const categoriesQuery = useRotationCategories(farmId)
+  const nNormQuery = useRotationNNormPercentages(farmId)
+  const presetsQuery = useFertiliserPresets(farmId)
+  const categories = categoriesQuery.data ?? []
+  const nNormOptions = nNormQuery.data ?? []
+  const fertiliserPresets = presetsQuery.data ?? []
+  const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
+  const referenceLoading = referenceQueries.some((query) => query.isLoading)
+  const referenceError = referenceQueries.some((query) => query.error)
+  const referenceRetrying = referenceQueries.some(
+    (query) => query.isValidating,
+  )
+  // Steps after the first need the reference data, so hide them until it is in.
+  const referenceBlocked = referenceLoading || referenceError
+  const retryReferenceData = () => {
+    for (const query of referenceQueries) {
+      if (query.error) void query.mutate()
+    }
+  }
 
   // The form lives outside the dialog content, so closing the dialog keeps the
   // draft until it is created or started over.
@@ -329,7 +347,17 @@ export const NewScenarioPanel = ({
         </div>
       ) : null}
 
-      {stepIndex === 1 ? (
+      {stepIndex > 0 && referenceError ? (
+        <LoadError
+          message="Kunne ikke hente sædskifter, N-norm-niveauer og gødningstyper."
+          onRetry={retryReferenceData}
+          retrying={referenceRetrying}
+        />
+      ) : stepIndex > 0 && referenceLoading ? (
+        <LoadingSkeleton message="Henter sædskifter og gødningstyper..." />
+      ) : null}
+
+      {!referenceBlocked && stepIndex === 1 ? (
         <RotationPicker
           categories={categories}
           farmingSystem={values.farmingSystem}
@@ -341,7 +369,7 @@ export const NewScenarioPanel = ({
         />
       ) : null}
 
-      {stepIndex === 2 ? (
+      {!referenceBlocked && stepIndex === 2 ? (
         <div className="space-y-6">
           <div className="space-y-3">
             <Label>Gødning</Label>
@@ -568,7 +596,7 @@ export const NewScenarioPanel = ({
         </div>
       ) : null}
 
-      {stepIndex === 3 ? (
+      {!referenceBlocked && stepIndex === 3 ? (
         <div className="space-y-6">
           <div className="space-y-2">
             <Label>Efterafgrøde-etablering</Label>
@@ -664,7 +692,7 @@ export const NewScenarioPanel = ({
         </div>
       ) : null}
 
-      {stepIndex === 4 ? (
+      {!referenceBlocked && stepIndex === 4 ? (
         <SimulationSummary
           values={values}
           categories={categories}
