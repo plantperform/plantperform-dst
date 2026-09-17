@@ -19,7 +19,7 @@ import type {
   RotationPositionOverride,
   Simulation,
 } from '@/api/types'
-import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { BigMetricTile, RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
 import { SearchableCropPickerList } from '@/components/farm/SearchableCropPickerList'
@@ -37,7 +37,7 @@ import {
   formatRotationYear,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
-import { cropGroupColor } from '@/lib/crop-groups'
+import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
 
 type ManualRotationEditorProps = {
   farmId: string
@@ -545,7 +545,7 @@ export const ManualRotationEditor = ({
                             const isOverridden = overrides.some((o) => o.position === index)
                             const isActive = activeYearIndex === index
                             const cellWrap = wrapCell && wrapCell.index === index ? wrapCell : null
-                            const color = cropGroupColor(
+                            const group = cropGroupFor(
                               y.year.cropCode,
                               y.year.cropName,
                             )
@@ -585,12 +585,11 @@ export const ManualRotationEditor = ({
                                       : undefined
                                   }
                                 >
-                                  <CropYearSwatch
-                                    color={color}
+                                  <CropGroupTile
+                                    group={group}
                                     hasUndersownCrop={
                                       y.year.undersownCropName !== null
                                     }
-                                    size="10x8"
                                   />
                                   <span className="min-w-0 truncate">
                                     {y.year.cropName}

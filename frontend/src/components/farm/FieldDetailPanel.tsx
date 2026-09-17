@@ -19,6 +19,7 @@ type FieldDetailPanelProps = {
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
   yearValues?: RotationCandidateYearResult[]
+  yearValuesLoading?: boolean
   isDetaching: boolean
   onRequestDetach: () => void
   listBehind: boolean
@@ -40,6 +41,7 @@ export const FieldDetailPanel = ({
   selectedYearIndex = null,
   onSelectedYearIndexChange,
   yearValues,
+  yearValuesLoading,
   isDetaching,
   onRequestDetach,
   listBehind,
@@ -162,6 +164,7 @@ export const FieldDetailPanel = ({
         selectedYearIndex={selectedYearIndex}
         onSelectedYearIndexChange={onSelectedYearIndexChange}
         yearValues={yearValues}
+        yearValuesLoading={yearValuesLoading}
         isDetaching={isDetaching}
         onRequestDetach={onRequestDetach}
         onCalcOpenChange={onCalcOpenChange}

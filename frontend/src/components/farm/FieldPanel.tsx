@@ -1,4 +1,3 @@
-import { Repeat } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
@@ -7,24 +6,24 @@ import type {
   RotationCandidateYearResult,
   Simulation,
 } from '@/api/types'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
-import { RotationYearRow } from '@/components/farm/RotationYearRow'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
+import { cropGroupFor } from '@/lib/crop-groups'
 import {
   fieldTitle,
   formatNumber,
   formatQuotaAmount,
-  formatWholeNumber,
   getFieldQuotaStatus,
   isFieldCalculated,
   QUOTA_STATUS_STYLES,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
-  yearNLoadKgHa,
   type QuotaStatus,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -153,6 +152,7 @@ type FieldPanelProps = {
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
   yearValues?: RotationCandidateYearResult[]
+  yearValuesLoading?: boolean
   isDetaching: boolean
   onRequestDetach: () => void
   onCalcOpenChange?: (open: boolean) => void
@@ -168,6 +168,7 @@ export const FieldPanel = ({
   selectedYearIndex = null,
   onSelectedYearIndexChange,
   yearValues,
+  yearValuesLoading = false,
   isDetaching,
   onRequestDetach,
   onCalcOpenChange,
@@ -196,27 +197,16 @@ export const FieldPanel = ({
   const canEditRotation = isSimulationView && Boolean(simulationId)
   const rotationYearCount = yearValues?.length ?? field.cropRotation.length
   const highlightIndex =
-    isSimulationView &&
-    selectedYearIndex !== null &&
-    selectedYearIndex < rotationYearCount
+    selectedYearIndex !== null && selectedYearIndex < rotationYearCount
       ? selectedYearIndex
       : null
-  const selectedYearValue =
-    highlightIndex !== null ? (yearValues?.[highlightIndex] ?? null) : null
+  const hasYearValues = yearValues !== undefined && yearValues.length > 0
   const selectedCalendarYear =
     selectedYearIndex !== null ? rotationStartYear + selectedYearIndex : null
   const yearOutsideRotation =
     selectedCalendarYear !== null && highlightIndex === null
-  const selectedValuesText =
-    selectedYearValue && selectedCalendarYear !== null
-      ? `${selectedCalendarYear}: DB2 ${formatWholeNumber(
-          selectedYearValue.dbDkkHa * field.areaHa,
-        )} kr, udledning ${formatNumber(
-          yearNLoadKgHa(selectedYearValue.leachingKgNHa, field.retention) *
-            field.areaHa,
-        )} kg N`
-      : null
   const restartYear = rotationStartYear + field.cropRotation.length
+  const firstYear = field.cropRotation[0]
 
   const metaParts = [
     `${formatNumber(field.areaHa)} ha`,
@@ -315,7 +305,7 @@ export const FieldPanel = ({
           />
         </div>
 
-        <div className="rounded-lg border bg-card p-3.5 @2xl:p-4">
+        <div className="@container rounded-lg border bg-card p-3.5 @2xl:p-4">
           <div className="border-b pb-2">
             <h3 className="text-sm font-semibold">
               {isSimulationView ? 'Sædskifte år for år' : 'Afgrødehistorik år for år'}
@@ -334,29 +324,33 @@ export const FieldPanel = ({
             </p>
           ) : (
             <>
-              <ul className="divide-y text-xs">
-                {field.cropRotation.map((year, index) => (
-                  <RotationYearRow
-                    key={index}
-                    year={year}
-                    index={index}
-                    startYear={rotationStartYear}
-                    isSelected={highlightIndex === index}
-                    selectedStatus={quotaStatus}
-                    selectedValues={selectedValuesText}
-                  />
-                ))}
-              </ul>
+              <FieldYearStrip
+                field={field}
+                yearValues={yearValues}
+                startYear={rotationStartYear}
+                selectedIndex={highlightIndex}
+                onSelect={onSelectedYearIndexChange}
+              />
               {yearOutsideRotation ? (
                 <p className="pt-2 text-xs text-muted-foreground">
                   {selectedCalendarYear} ligger uden for markens sædskifte ({rotationYearCount} år)
                 </p>
               ) : null}
+              {!hasYearValues && !yearValuesLoading ? (
+                <p className="pt-2 text-xs text-muted-foreground">
+                  {isSimulationView
+                    ? 'Ikke beregnet endnu - kør Optimér for tal pr. år'
+                    : 'Ingen beregnet udledning for markens historik'}
+                </p>
+              ) : null}
               {isSimulationView ? (
-                <div className="mt-1 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
-                  <Repeat className="size-4" aria-hidden="true" />
+                <div className="mt-2 flex items-center gap-1.5 border-t pt-2 text-xs leading-4 text-muted-foreground tabular-nums">
+                  <CropGroupTile
+                    group={cropGroupFor(firstYear.cropCode, firstYear.cropName)}
+                    hasUndersownCrop={firstYear.undersownCropName !== null}
+                  />
                   <span>
-                    {restartYear}: forfra med {field.cropRotation[0].cropName}
+                    {restartYear}: forfra med {firstYear.cropName}
                   </span>
                 </div>
               ) : null}
