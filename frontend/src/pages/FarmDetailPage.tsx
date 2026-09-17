@@ -26,7 +26,11 @@ import type {
   FarmViewSelection,
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 import {
   Card,
   CardContent,
@@ -200,14 +204,12 @@ export const FarmDetailPage = () => {
         <FarmSidebar
           farm={loadedFarm}
           fields={fields}
-          activeFields={activeFields}
           simulations={simulations}
           selection={activeSelection}
           loadingSelection={simulationFieldsLoading}
           onSelectionChange={changeSelection}
           mode={mode}
           onModeChange={changeMode}
-          onSelectField={selectFieldFromSearch}
           onOptimize={() => setOptimizeDialogOpen(true)}
           onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
           view={effectiveView}
@@ -221,6 +223,10 @@ export const FarmDetailPage = () => {
         <FarmSidebarSkeleton farm={farm} onError={showErrorToast} />
       )}
       <SidebarInset className="min-w-0 overflow-x-hidden">
+        <SidebarTrigger
+          className="fixed top-2 left-2 z-30 size-8 border bg-background shadow-sm md:hidden"
+          aria-label="Vis eller skjul sidepanelet"
+        />
         {toast ? (
           <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
             <p role="alert">{toast.message}</p>
@@ -251,6 +257,7 @@ export const FarmDetailPage = () => {
             onListSlackChange={changeListSlack}
             selectedFieldId={selectedFieldId}
             onSelectedFieldChange={setSelectedFieldId}
+            onSelectField={selectFieldFromSearch}
             selectedYearIndex={selectedYearIndex}
             onSelectedYearIndexChange={setSelectedYearIndex}
             optimizeDialogOpen={optimizeDialogOpen}

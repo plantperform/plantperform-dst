@@ -43,6 +43,7 @@ import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
 import { FarmSplitView } from '@/components/farm/FarmSplitView'
 import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
+import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
@@ -119,6 +120,7 @@ type FarmInspectorProps = {
   onListSlackChange: (slack: number) => void
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
+  onSelectField: (fieldId: string) => void
   selectedYearIndex: number | null
   onSelectedYearIndexChange: (index: number | null) => void
   optimizeDialogOpen: boolean
@@ -146,6 +148,7 @@ export const FarmInspector = ({
   onListSlackChange,
   selectedFieldId,
   onSelectedFieldChange,
+  onSelectField,
   selectedYearIndex,
   onSelectedYearIndexChange,
   optimizeDialogOpen,
@@ -397,6 +400,14 @@ export const FarmInspector = ({
       />
     ) : null
 
+  const fieldSearch = (
+    <FieldSearch
+      fields={fields}
+      loading={fieldsLoading}
+      onSelectField={onSelectField}
+    />
+  )
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       {selectedSimulation ? (
@@ -504,6 +515,7 @@ export const FarmInspector = ({
                   {rulesPanel}
                   <FarmFieldsList
                     farmId={farm.id}
+                    search={fieldSearch}
                     sortedFields={sortedFields}
                     isSimulationView={isSimulationView}
                     simulationId={
@@ -561,6 +573,7 @@ export const FarmInspector = ({
                   zoomRequest={zoomRequest ?? undefined}
                   onAddModeChange={onAddModeChange}
                   detachFields={detachFields}
+                  search={effectiveView === 'map' ? fieldSearch : undefined}
                   onError={onError}
                 />
               }

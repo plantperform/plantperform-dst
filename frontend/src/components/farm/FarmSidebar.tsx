@@ -9,20 +9,11 @@ import {
   PanelLeft,
   Play,
   Plus,
-  Search,
   SlidersHorizontal,
   Table2,
   Trash2,
 } from 'lucide-react'
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -75,7 +66,6 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
@@ -96,7 +86,6 @@ import {
   describeSeparateQuotas,
   formatCompactDkk,
   formatFieldCount,
-  formatNumber,
   formatQuotaAmount,
   formatWholeNumber,
   isFieldLocked,
@@ -183,14 +172,12 @@ const VIEW_BUTTON_CLASS =
 type FarmSidebarProps = {
   farm: Farm
   fields: FieldRecord[]
-  activeFields: FieldRecord[]
   simulations: Simulation[]
   selection: FarmViewSelection
   loadingSelection?: boolean
   onSelectionChange: (selection: FarmViewSelection) => void
   mode: FarmInspectorMode
   onModeChange: (mode: FarmInspectorMode) => void
-  onSelectField: (fieldId: string) => void
   onOptimize: () => void
   onYearlyOptimize: () => void
   view: FarmView
@@ -210,14 +197,12 @@ type FarmSidebarProps = {
 export const FarmSidebar = ({
   farm,
   fields,
-  activeFields,
   simulations,
   selection,
   loadingSelection = false,
   onSelectionChange,
   mode,
   onModeChange,
-  onSelectField,
   onOptimize,
   onYearlyOptimize,
   view,
@@ -295,12 +280,6 @@ export const FarmSidebar = ({
       </SidebarHeader>
 
       <SidebarContent>
-        <FieldSearch
-          fields={activeFields}
-          loading={loadingSelection}
-          onSelectField={onSelectField}
-        />
-
         <SidebarGroup className={GROUP_CLASS}>
           <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
             Visninger
@@ -386,14 +365,22 @@ export const FarmSidebar = ({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup className={cn(GROUP_CLASS, 'mt-auto')}>
+          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+            Vis som
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <ViewModeSwitch
+              view={view}
+              splitAvailable={splitAvailable}
+              onViewChange={onViewChange}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
-        <ViewModeSwitch
-          view={view}
-          splitAvailable={splitAvailable}
-          onViewChange={onViewChange}
-        />
         <CollapseMenuButton />
         <SidebarUserMenu />
       </SidebarFooter>
@@ -436,186 +423,6 @@ export const SidebarBrand = () => (
     </div>
   </div>
 )
-
-const MAX_SEARCH_RESULTS = 8
-
-const matchFields = (fields: FieldRecord[], query: string): FieldRecord[] => {
-  const needle = query.trim().toLowerCase()
-  if (needle === '') return []
-  const ranked = fields.flatMap((field) => {
-    const name = field.name.toLowerCase()
-    if (name.startsWith(needle)) return [{ field, rank: 0 }]
-    if (name.includes(needle)) return [{ field, rank: 1 }]
-    return []
-  })
-  return ranked
-    .sort((left, right) => left.rank - right.rank)
-    .slice(0, MAX_SEARCH_RESULTS)
-    .map((entry) => entry.field)
-}
-
-type FieldSearchProps = {
-  fields: FieldRecord[]
-  loading: boolean
-  onSelectField: (fieldId: string) => void
-}
-
-const FieldSearch = ({ fields, loading, onSelectField }: FieldSearchProps) => {
-  const { state, toggleSidebar } = useSidebar()
-  const iconRail = state === 'collapsed'
-  const listId = useId()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const focusAfterExpandRef = useRef(false)
-  const [query, setQuery] = useState('')
-  const [activeIndex, setActiveIndex] = useState(0)
-  const matches = useMemo(() => matchFields(fields, query), [fields, query])
-  const hasQuery = query.trim() !== ''
-  const hasMatches = matches.length > 0
-  const highlightedIndex = hasMatches
-    ? Math.min(activeIndex, matches.length - 1)
-    : -1
-  const optionId = (index: number) => `${listId}-option-${index}`
-
-  useEffect(() => {
-    if (iconRail || !focusAfterExpandRef.current) return
-    focusAfterExpandRef.current = false
-    inputRef.current?.focus()
-  }, [iconRail])
-
-  const clear = () => {
-    setQuery('')
-    setActiveIndex(0)
-  }
-
-  const choose = (field: FieldRecord | undefined) => {
-    if (!field) return
-    onSelectField(field.id)
-    clear()
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      if (!hasQuery) return
-      event.preventDefault()
-      clear()
-      return
-    }
-    if (matches.length === 0) return
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setActiveIndex((highlightedIndex + 1) % matches.length)
-      return
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setActiveIndex((highlightedIndex - 1 + matches.length) % matches.length)
-      return
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      choose(matches[Math.max(0, highlightedIndex)])
-    }
-  }
-
-  if (iconRail) {
-    return (
-      <SidebarGroup className={GROUP_CLASS}>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Find mark"
-                aria-label="Find mark"
-                className="group-data-[collapsible=icon]:justify-center"
-                onClick={() => {
-                  focusAfterExpandRef.current = true
-                  toggleSidebar()
-                }}
-              >
-                <Search />
-                <span>Find mark</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    )
-  }
-
-  return (
-    <SidebarGroup className={GROUP_CLASS}>
-      <SidebarGroupContent className="space-y-1">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <SidebarInput
-            ref={inputRef}
-            type="search"
-            role="combobox"
-            placeholder="Find mark..."
-            aria-label="Find mark"
-            aria-expanded={hasMatches}
-            aria-controls={hasMatches ? listId : undefined}
-            aria-autocomplete="list"
-            aria-activedescendant={
-              highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
-            }
-            autoComplete="off"
-            className="pl-8"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setActiveIndex(0)
-            }}
-            onKeyDown={onKeyDown}
-          />
-        </div>
-        {hasQuery ? (
-          !hasMatches ? (
-            <p
-              role="status"
-              className="px-2 py-1 text-xs text-muted-foreground"
-            >
-              {loading ? 'Henter marker' : 'Ingen marker matcher'}
-            </p>
-          ) : (
-            <SidebarMenu
-              id={listId}
-              role="listbox"
-              aria-label="Marker der matcher"
-            >
-              {matches.map((field, index) => {
-                const highlighted = index === highlightedIndex
-                return (
-                  <SidebarMenuItem key={field.id} role="none">
-                    <SidebarMenuButton
-                      id={optionId(index)}
-                      role="option"
-                      size="sm"
-                      aria-selected={highlighted}
-                      isActive={highlighted}
-                      tabIndex={-1}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onMouseEnter={() => setActiveIndex(index)}
-                      onClick={() => choose(field)}
-                    >
-                      <span className="truncate">{field.name}</span>
-                      <span className="ml-auto shrink-0 text-xs font-normal text-sidebar-foreground/70 tabular-nums">
-                        {formatNumber(field.areaHa)} ha
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          )
-        ) : null}
-      </SidebarGroupContent>
-    </SidebarGroup>
-  )
-}
 
 const CollapseMenuButton = () => {
   const { toggleSidebar } = useSidebar()
