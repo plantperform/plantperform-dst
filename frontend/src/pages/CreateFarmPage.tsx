@@ -10,7 +10,7 @@ import {
   CreateFarmPreview,
   type RegistryLookup,
 } from '@/components/farm/CreateFarmPreview'
-import { FieldError } from '@/components/onboarding/FieldError'
+import { FieldError } from '@/components/ui/field-error'
 import { Button } from '@/components/ui/button'
 import { EYEBROW_CLASS } from '@/components/ui/eyebrow'
 import { Label } from '@/components/ui/label'
@@ -58,7 +58,7 @@ const FormField = ({
       )}
       {...inputProps}
     />
-    <FieldError id={`${id}-error`} message={error ?? null} />
+    <FieldError id={`${id}-error`} message={error} />
   </div>
 )
 

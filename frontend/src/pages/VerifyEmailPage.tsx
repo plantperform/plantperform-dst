@@ -16,7 +16,7 @@ import {
 import { postJson } from '@/api/client'
 import { AuthIcon, AuthLayout } from '@/components/onboarding/AuthLayout'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
-import { FieldError } from '@/components/onboarding/FieldError'
+import { FieldError } from '@/components/ui/field-error'
 import { LoginForm } from '@/components/onboarding/LoginForm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

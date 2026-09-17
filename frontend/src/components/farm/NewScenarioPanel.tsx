@@ -19,6 +19,7 @@ import type {
 import { RotationPicker } from '@/components/farm/RotationPicker'
 import { SimulationSummary } from '@/components/farm/SimulationSummary'
 import { Button } from '@/components/ui/button'
+import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
@@ -61,13 +62,6 @@ const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'mineralSharePct',
   'nContentKgPerTon',
 ]
-
-const FieldError = ({ id, message }: { id: string; message?: string }) =>
-  message ? (
-    <p id={id} className="text-xs font-medium text-destructive">
-      {message}
-    </p>
-  ) : null
 
 export const NewScenarioPanel = ({
   farmId,

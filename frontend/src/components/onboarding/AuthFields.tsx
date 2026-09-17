@@ -3,7 +3,7 @@ import {
   PASSWORD_FIELD_ID,
   type AuthFieldsState,
 } from '@/components/onboarding/auth-fields'
-import { FieldError } from '@/components/onboarding/FieldError'
+import { FieldError } from '@/components/ui/field-error'
 import { PasswordInput } from '@/components/onboarding/PasswordInput'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
