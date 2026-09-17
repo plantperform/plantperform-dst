@@ -129,7 +129,8 @@ export const ShareFarmDialog = ({
                       size="xs"
                       variant="ghost"
                       className="shrink-0 gap-1 text-muted-foreground hover:text-destructive"
-                      disabled={isLastMember || removingEmail === member.email}
+                      disabled={isLastMember}
+                      loading={removingEmail === member.email}
                       title={
                         isLastMember
                           ? 'Den sidste med adgang kan ikke fjernes'
@@ -139,7 +140,9 @@ export const ShareFarmDialog = ({
                       }
                       onClick={() => void revokeMember(member.email)}
                     >
-                      <X className="size-3.5" aria-hidden="true" />
+                      {removingEmail === member.email ? null : (
+                        <X className="size-3.5" aria-hidden="true" />
+                      )}
                       {isSelf ? 'Forlad' : 'Fjern'}
                     </Button>
                   </li>
@@ -161,8 +164,10 @@ export const ShareFarmDialog = ({
                 value={memberEmail}
                 onChange={(event) => setMemberEmail(event.target.value)}
               />
-              <Button type="submit" className="gap-1.5" disabled={isSharing}>
-                <UserPlus className="size-4" aria-hidden="true" />
+              <Button type="submit" className="gap-1.5" loading={isSharing}>
+                {isSharing ? null : (
+                  <UserPlus className="size-4" aria-hidden="true" />
+                )}
                 {isSharing ? 'Deler...' : 'Del'}
               </Button>
             </div>
@@ -242,7 +247,8 @@ export const DeleteFarmDialog = ({
           </DialogClose>
           <Button
             variant="destructive"
-            disabled={!canDelete || isDeleting}
+            disabled={!canDelete}
+            loading={isDeleting}
             onClick={() => void confirmDelete()}
           >
             {isDeleting ? 'Sletter...' : 'Slet bedrift'}

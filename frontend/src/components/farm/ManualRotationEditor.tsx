@@ -690,7 +690,8 @@ export const ManualRotationEditor = ({
             <div className="flex items-center gap-3">
               <Button
                 onClick={() => void save()}
-                disabled={isSaving || !preview || isLoadingCandidates}
+                disabled={!preview || isLoadingCandidates}
+                loading={isSaving}
               >
                 {isSaving ? 'Gemmer...' : intent === 'lock' ? 'Gem og lås' : 'Gem'}
               </Button>

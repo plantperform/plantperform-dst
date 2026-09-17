@@ -439,7 +439,8 @@ const buildRulesColumns = ({
               size="xs"
               variant="ghost"
               onClick={() => onToggleLock(field)}
-              disabled={noRotation || lockingFieldId === field.id}
+              disabled={noRotation}
+              loading={lockingFieldId === field.id}
               className={
                 locked
                   ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
@@ -451,7 +452,7 @@ const buildRulesColumns = ({
                   : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse til det nuværende sædskifte.'
               }
             >
-              {locked ? (
+              {lockingFieldId === field.id ? null : locked ? (
                 <Lock className="h-4 w-4" aria-hidden="true" />
               ) : (
                 <LockOpen className="h-4 w-4" aria-hidden="true" />

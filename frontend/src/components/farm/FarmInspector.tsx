@@ -869,7 +869,7 @@ const OptimizeDialog = ({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Annuller
           </Button>
-          <Button onClick={() => void runOptimization()} disabled={isRunning}>
+          <Button onClick={() => void runOptimization()} loading={isRunning}>
             {isRunning ? 'Arbejder...' : 'Kør optimering'}
           </Button>
         </DialogFooter>
@@ -1171,7 +1171,7 @@ const YearlyOptimizeDialog = ({
           </Button>
           <Button
             onClick={() => void runYearlyOptimization()}
-            disabled={isRunning}
+            loading={isRunning}
           >
             {isRunning ? 'Arbejder...' : 'Kør års-optimering'}
           </Button>

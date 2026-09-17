@@ -178,10 +178,11 @@ export const MapRuleCard = ({
                 locked &&
                   'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900',
               )}
-              disabled={noRotation || locking}
+              disabled={noRotation}
+              loading={locking}
               onClick={() => onToggleLock(field)}
             >
-              {locked ? (
+              {locking ? null : locked ? (
                 <LockOpen className="size-3.5" aria-hidden="true" />
               ) : (
                 <Lock className="size-3.5" aria-hidden="true" />
