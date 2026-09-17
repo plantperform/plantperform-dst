@@ -22,6 +22,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
   const [hovered, setHovered] = useState<CropGroup | null>(null)
   const totalHa = shares.reduce((sum, entry) => sum + entry.areaHa, 0)
   const active = shares.find((entry) => entry.group.id === hovered) ?? null
+  const twoColumns = shares.length >= TWO_COLUMN_MIN_GROUPS
   const gap = shares.length > 1 ? DONUT_GAP : 0
   const arcs: { entry: CropShare; length: number; offset: number }[] = []
   let offset = 0
@@ -85,7 +86,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
         aria-label="Afgrødefordeling"
         className={cn(
           'w-full min-w-0 @md:w-auto @md:flex-1',
-          shares.length >= TWO_COLUMN_MIN_GROUPS &&
+          twoColumns &&
             '@xl:columns-2 @xl:gap-x-4 @xl:[column-rule:1px_solid_var(--color-border)]',
         )}
       >
@@ -93,7 +94,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
           <li
             key={entry.group.id}
             className={cn(
-              'grid break-inside-avoid grid-cols-[auto_minmax(0,1fr)_auto_2.5rem] items-center gap-x-2 rounded-sm px-1 py-1 text-[13px] leading-5',
+              'grid break-inside-avoid grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto] items-center gap-x-2 rounded-sm px-1 py-1 text-[13px] leading-5',
               hovered === entry.group.id && 'bg-muted',
             )}
             onMouseEnter={() => setHovered(entry.group.id)}
@@ -106,11 +107,23 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
               size="8x12"
             />
             <span className="truncate">{entry.group.label}</span>
-            <span className="text-right text-[11px] text-muted-foreground tabular-nums">
+            <span
+              className={cn(
+                'text-right text-[11px] text-muted-foreground tabular-nums',
+                twoColumns ? 'hidden @2xl:block' : 'hidden @lg:block',
+              )}
+            >
               {formatNumber(entry.areaHa)} ha
             </span>
             <span className="text-right font-semibold tabular-nums">
               {formatWholeNumber(entry.share * 100)} %
+            </span>
+            <span
+              className="text-right whitespace-nowrap tabular-nums"
+              title={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
+            >
+              {formatNumber(entry.nLoadKgHa)}{' '}
+              <span className="text-[11px] text-muted-foreground">kg N/ha</span>
             </span>
           </li>
         ))}

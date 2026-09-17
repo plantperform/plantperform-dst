@@ -814,6 +814,7 @@ export type CropShare = {
   group: CropGroupDefinition
   areaHa: number
   share: number
+  nLoadKgHa: number
 }
 
 export const summarizeCropDistribution = (
@@ -822,6 +823,7 @@ export const summarizeCropDistribution = (
   yearIndex: number | null,
 ): CropShare[] => {
   const areaByGroup = new Map<CropGroup, number>()
+  const nLoadByGroup = new Map<CropGroup, number>()
   let totalHa = 0
   for (const field of fields) {
     const years = yearsByFieldId?.[field.id]
@@ -838,6 +840,12 @@ export const summarizeCropDistribution = (
         yearResult.year.cropName,
       )
       areaByGroup.set(group, (areaByGroup.get(group) ?? 0) + areaPerYear)
+      nLoadByGroup.set(
+        group,
+        (nLoadByGroup.get(group) ?? 0) +
+          yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
+            areaPerYear,
+      )
     }
   }
   if (totalHa === 0) return []
@@ -846,6 +854,7 @@ export const summarizeCropDistribution = (
       group: cropGroupDefinition(group),
       areaHa,
       share: areaHa / totalHa,
+      nLoadKgHa: (nLoadByGroup.get(group) ?? 0) / areaHa,
     }))
     .sort((left, right) => right.areaHa - left.areaHa)
 }
