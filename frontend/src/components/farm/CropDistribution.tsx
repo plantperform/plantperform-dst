@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import type { CropGroup } from '@/lib/crop-groups'
 import {
   formatNumber,
@@ -114,12 +114,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
             onMouseEnter={() => setHovered(entry.group.id)}
             onMouseLeave={() => setHovered(null)}
           >
-            <CropYearSwatch
-              color={entry.group.color}
-              pattern={entry.group.pattern}
-              hasUndersownCrop={false}
-              size="8x12"
-            />
+            <CropGroupTile group={entry.group} hasUndersownCrop={false} />
             <span className="truncate">{entry.group.label}</span>
             <span
               className={cn(

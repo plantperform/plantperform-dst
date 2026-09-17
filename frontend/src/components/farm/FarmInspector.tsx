@@ -616,6 +616,7 @@ export const FarmInspector = ({
                         selectedYearIndex={effectiveSelectedYearIndex}
                         onSelectedYearIndexChange={onSelectedYearIndexChange}
                         yearValues={yearValues?.[panelField.id]}
+                        yearValuesLoading={yearValuesLoading}
                         isDetaching={detachingFieldIds.includes(panelField.id)}
                         onRequestDetach={() => requestDetach(panelField)}
                         listBehind={listBehind}

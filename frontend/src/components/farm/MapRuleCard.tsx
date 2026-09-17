@@ -128,11 +128,10 @@ export const MapRuleCard = ({
                 <RotationSwatches
                   rotation={field.cropRotation}
                   startYear={ROTATION_START_CALENDAR_YEAR}
-                  size="10x8"
                 />
               }
               hintAlign="end"
-              className="w-full px-3 py-2"
+              className="w-full flex-wrap px-3 py-2"
             />
             {rotationOpen ? (
               <div id="map-rule-card-rotation" className="px-1.5 pb-2">

@@ -11,42 +11,68 @@ export type CropGroup =
   | 'fallow'
   | 'other'
 
-export type CropGroupPattern = 'solid' | 'stripes' | 'dots'
-
 export type CropGroupDefinition = {
   id: CropGroup
   label: string
   color: string
-  pattern: CropGroupPattern
 }
 
 export const CROP_GROUPS: readonly CropGroupDefinition[] = [
-  { id: 'springCereal', label: 'Vårsæd', color: '#d9a23a', pattern: 'solid' },
+  {
+    id: 'springCereal',
+    label: 'Vårsæd',
+    color: '#64b04a',
+  },
   {
     id: 'winterCereal',
     label: 'Vintersæd',
-    color: '#7a4b14',
-    pattern: 'stripes',
+    color: '#3d7a2b',
   },
-  { id: 'maize', label: 'Majs', color: '#f07a2a', pattern: 'solid' },
-  { id: 'oilseed', label: 'Raps og olie', color: '#fae62e', pattern: 'solid' },
-  { id: 'legume', label: 'Bælgsæd', color: '#7a52c9', pattern: 'solid' },
-  { id: 'potato', label: 'Kartofler', color: '#d4487e', pattern: 'dots' },
+  {
+    id: 'maize',
+    label: 'Majs',
+    color: '#e8b022',
+  },
+  {
+    id: 'oilseed',
+    label: 'Raps og olie',
+    color: '#fbe64a',
+  },
+  {
+    id: 'legume',
+    label: 'Bælgsæd',
+    color: '#2b8c62',
+  },
+  {
+    id: 'potato',
+    label: 'Kartofler',
+    color: '#8a5a2b',
+  },
   {
     id: 'beet',
     label: 'Roer og industri',
-    color: '#3a86d6',
-    pattern: 'solid',
+    color: '#c0392b',
   },
-  { id: 'seedGrass', label: 'Frøgræs', color: '#9ccb4b', pattern: 'stripes' },
-  { id: 'grass', label: 'Græs', color: '#237a3e', pattern: 'solid' },
+  {
+    id: 'seedGrass',
+    label: 'Frøgræs',
+    color: '#a3cc45',
+  },
+  {
+    id: 'grass',
+    label: 'Græs',
+    color: '#1e5e34',
+  },
   {
     id: 'fallow',
     label: 'Brak og natur',
-    color: '#4cc2b5',
-    pattern: 'solid',
+    color: '#8b6fb5',
   },
-  { id: 'other', label: 'Andet', color: '#c0c4ca', pattern: 'solid' },
+  {
+    id: 'other',
+    label: 'Andet',
+    color: '#b5b9c0',
+  },
 ]
 
 const groupById = new Map<CropGroup, CropGroupDefinition>(
@@ -139,17 +165,13 @@ export const classifyCrop = (cropCode: number, cropName: string): CropGroup =>
 export const cropGroupDefinition = (group: CropGroup): CropGroupDefinition =>
   groupById.get(group) ?? CROP_GROUPS[CROP_GROUPS.length - 1]
 
-export const cropGroupColor = (cropCode: number, cropName: string): string =>
-  cropGroupDefinition(classifyCrop(cropCode, cropName)).color
-
-export const cropGroupPattern = (
+export const cropGroupFor = (
   cropCode: number,
   cropName: string,
-): CropGroupPattern =>
-  cropGroupDefinition(classifyCrop(cropCode, cropName)).pattern
+): CropGroupDefinition => cropGroupDefinition(classifyCrop(cropCode, cropName))
 
-export const cropGroupLabel = (cropCode: number, cropName: string): string =>
-  cropGroupDefinition(classifyCrop(cropCode, cropName)).label
+export const cropGroupColor = (cropCode: number, cropName: string): string =>
+  cropGroupDefinition(classifyCrop(cropCode, cropName)).color
 
 export const presentCropGroups = (
   crops: { cropCode: number; cropName: string }[],

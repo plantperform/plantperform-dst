@@ -217,9 +217,8 @@ const renderRotationSwatches = (
     <RotationSwatches
       rotation={rotation}
       startYear={rotationStartYear}
-      size="12x16"
       highlightIndex={highlightIndex}
-      swatchClassName="w-3 full:w-4"
+      tileClassName="size-4 full:size-[18px]"
     />
     <span
       className="hidden min-w-0 max-w-40 truncate text-sm full:block"

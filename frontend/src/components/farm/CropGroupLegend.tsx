@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
 import type { FieldRecord } from '@/api/types'
-import { CropYearSwatch } from '@/components/farm/CropYearSwatch'
+import { CoverCropSwatch, CropGroupTile } from '@/components/farm/CropGroupTile'
 import { presentCropGroups } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
 
@@ -34,22 +34,13 @@ export const CropGroupLegend = ({
       <span className="font-medium text-foreground">Afgrøder</span>
       {groups.map((group) => (
         <span key={group.id} className="inline-flex items-center gap-1.5">
-          <CropYearSwatch
-            color={group.color}
-            pattern={group.pattern}
-            hasUndersownCrop={false}
-            size="8x12"
-          />
+          <CropGroupTile group={group} hasUndersownCrop={false} />
           <span>{group.label}</span>
         </span>
       ))}
       {hasUndersownCrop ? (
         <span className="inline-flex items-center gap-1.5">
-          <CropYearSwatch
-            color="var(--color-muted)"
-            hasUndersownCrop
-            size="8x12"
-          />
+          <CoverCropSwatch />
           <span>med udlæg</span>
         </span>
       ) : null}
