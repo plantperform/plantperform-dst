@@ -1,12 +1,18 @@
-import { useMemo, useRef, type KeyboardEvent } from 'react'
-import { CalendarRange } from 'lucide-react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { CalendarRange, Droplets, Wheat } from 'lucide-react'
 
 import type {
   FieldRecord,
+  FieldYearValues,
   OptimizeSimulationResponse,
   YearlySummaryEntry,
 } from '@/api/types'
 import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
+import { CropDistribution } from '@/components/farm/CropDistribution'
+import {
+  SegmentedControl,
+  type SegmentedControlOption,
+} from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useViewportShorterThan } from '@/hooks/use-viewport-height'
 import {
@@ -23,8 +29,10 @@ import {
   resolveFarmQuota,
   ROTATION_CALENDAR_YEARS,
   ROTATION_START_CALENDAR_YEAR,
+  summarizeCropDistribution,
   type CatchmentQuota,
   type CatchmentTotalsByYear,
+  type CropShare,
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
@@ -41,6 +49,13 @@ const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
     OPTIMAL: 'optimal løsning',
     FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
   }
+
+type PanelView = 'nLoad' | 'crops'
+
+const PANEL_VIEW_OPTIONS: SegmentedControlOption<PanelView>[] = [
+  { value: 'nLoad', label: 'Udledning', icon: Droplets, title: 'Udledning' },
+  { value: 'crops', label: 'Afgrøder', icon: Wheat, title: 'Afgrøder' },
+]
 
 type YearColumn = {
   index: number
@@ -274,6 +289,7 @@ type YearPanelProps = {
   overYearCount: number
   fieldCount: number
   yearFieldCount: number | null
+  cropShares: CropShare[]
   lastRun: OptimizeSimulationResponse | null
   history: boolean
   unavailableMessage: string | null
@@ -291,10 +307,13 @@ const YearPanel = ({
   overYearCount,
   fieldCount,
   yearFieldCount,
+  cropShares,
   lastRun,
   history,
   unavailableMessage,
 }: YearPanelProps) => {
+  const [panelView, setPanelView] = useState<PanelView>('nLoad')
+  const showCrops = panelView === 'crops'
   const entry = column?.entry ?? null
   const scoped = scopeLabel !== null
   const pending =
@@ -316,13 +335,19 @@ const YearPanel = ({
     ? column
       ? 'Ingen årstal for året'
       : 'Ikke beregnet endnu'
-    : column
-      ? scoped
-        ? `${scopeLabel} mod sin kvote`
-        : 'Udledning mod hvert oplands kvote'
-      : scoped
-        ? 'Gennemsnit pr. år mod kvoten'
-        : 'Gennemsnit pr. år mod hvert oplands kvote'
+    : showCrops
+      ? column
+        ? scoped
+          ? `Areal pr. afgrødegruppe i ${scopeLabel}`
+          : 'Areal pr. afgrødegruppe'
+        : 'Gennemsnitligt areal pr. år'
+      : column
+        ? scoped
+          ? `${scopeLabel} mod sin kvote`
+          : 'Udledning mod hvert oplands kvote'
+        : scoped
+          ? 'Gennemsnit pr. år mod kvoten'
+          : 'Gennemsnit pr. år mod hvert oplands kvote'
 
   const pendingNote = column
     ? history
@@ -333,16 +358,18 @@ const YearPanel = ({
       : 'Kør Optimér for at beregne markerne.'
   const message = pending
     ? (unavailableMessage ?? pendingNote)
-    : !hasQuota
-      ? 'Markerne har ingen udledningsgrænse.'
-      : column
-        ? null
-        : unavailableMessage
+    : showCrops
+      ? null
+      : !hasQuota
+        ? 'Markerne har ingen udledningsgrænse.'
+        : column
+          ? null
+          : unavailableMessage
 
   return (
     <aside
       aria-label="Oversigt over årene"
-      className="flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
+      className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
     >
       <div
         key={loading ? 'loading' : (column?.index ?? 'all')}
@@ -364,13 +391,22 @@ const YearPanel = ({
           </>
         ) : (
           <>
-            <div className="flex flex-col gap-0.5">
-              <h3 className="font-display text-xl leading-tight font-normal">
-                {title}
-              </h3>
-              <p className="text-xs text-pretty text-muted-foreground">
-                {subtitle}
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <h3 className="font-display text-xl leading-tight font-normal">
+                  {title}
+                </h3>
+                <p className="text-xs text-pretty text-muted-foreground">
+                  {subtitle}
+                </p>
+              </div>
+              <SegmentedControl
+                aria-label="Vis udledning eller afgrøder"
+                value={panelView}
+                options={PANEL_VIEW_OPTIONS}
+                onValueChange={setPanelView}
+                labelClassName="hidden @md:inline"
+              />
             </div>
 
             <div className="relative min-h-24 flex-1">
@@ -380,7 +416,15 @@ const YearPanel = ({
                     {message}
                   </p>
                 ) : null}
-                {scopedRow ? (
+                {showCrops ? (
+                  cropShares.length > 0 ? (
+                    <CropDistribution shares={cropShares} />
+                  ) : !pending ? (
+                    <p className="text-[11px] leading-4 text-muted-foreground">
+                      Ingen afgrøder at vise.
+                    </p>
+                  ) : null
+                ) : scopedRow ? (
                   <ScopedSummary
                     row={scopedRow}
                     column={column}
@@ -404,7 +448,7 @@ const YearPanel = ({
                     året.
                   </p>
                 ) : null}
-                {lastRun && !column ? (
+                {lastRun && !column && !showCrops ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
                     Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
                     {formatCompactDkk(lastRun.objectiveDb2)}, udledning{' '}
@@ -435,6 +479,7 @@ type YearWalkthroughProps = {
   unavailableMessage?: string | null
   scopeLabel?: string | null
   catchmentTotalsByYear?: CatchmentTotalsByYear
+  yearValues?: FieldYearValues
 }
 
 export const YearWalkthrough = ({
@@ -450,6 +495,7 @@ export const YearWalkthrough = ({
   unavailableMessage = null,
   scopeLabel = null,
   catchmentTotalsByYear,
+  yearValues,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -510,6 +556,15 @@ export const YearWalkthrough = ({
   const selectedColumn =
     selectedPosition >= 0 ? columns[selectedPosition] : null
   const allYearsSelected = selectedColumn === null
+  const cropShares = useMemo(
+    () =>
+      summarizeCropDistribution(
+        fields,
+        yearValues,
+        selectedColumn?.index ?? null,
+      ),
+    [fields, yearValues, selectedColumn],
+  )
 
   const selectYear = (index: number | null) => {
     onSelectedYearIndexChange(index)
@@ -784,6 +839,7 @@ export const YearWalkthrough = ({
             ? countFieldsWithYearValues(selectedColumn.entry.year)
             : null
         }
+        cropShares={cropShares}
         lastRun={lastRun}
         history={history}
         unavailableMessage={unavailableMessage}

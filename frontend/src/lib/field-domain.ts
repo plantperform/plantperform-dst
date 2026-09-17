@@ -9,6 +9,12 @@ import type {
   RotationYear,
   YearlySummaryEntry,
 } from '@/api/types'
+import {
+  classifyCrop,
+  cropGroupDefinition,
+  type CropGroup,
+  type CropGroupDefinition,
+} from '@/lib/crop-groups'
 
 export const CROP_VALUES: Crop[] = [
   'CEREAL_WINTER',
@@ -802,4 +808,44 @@ export const summarizeCatchmentYearTotals = (
     })
   }
   return byCatchment
+}
+
+export type CropShare = {
+  group: CropGroupDefinition
+  areaHa: number
+  share: number
+}
+
+export const summarizeCropDistribution = (
+  fields: FieldRecord[],
+  yearsByFieldId: FieldYearValues | undefined,
+  yearIndex: number | null,
+): CropShare[] => {
+  const areaByGroup = new Map<CropGroup, number>()
+  let totalHa = 0
+  for (const field of fields) {
+    const years = yearsByFieldId?.[field.id]
+    if (!years) continue
+    const candidates =
+      yearIndex === null ? years : years.slice(yearIndex, yearIndex + 1)
+    const counted = candidates.filter(yearResultHasValues)
+    if (counted.length === 0) continue
+    const areaPerYear = field.areaHa / counted.length
+    totalHa += field.areaHa
+    for (const yearResult of counted) {
+      const group = classifyCrop(
+        yearResult.year.cropCode,
+        yearResult.year.cropName,
+      )
+      areaByGroup.set(group, (areaByGroup.get(group) ?? 0) + areaPerYear)
+    }
+  }
+  if (totalHa === 0) return []
+  return [...areaByGroup.entries()]
+    .map(([group, areaHa]) => ({
+      group: cropGroupDefinition(group),
+      areaHa,
+      share: areaHa / totalHa,
+    }))
+    .sort((left, right) => right.areaHa - left.areaHa)
 }
