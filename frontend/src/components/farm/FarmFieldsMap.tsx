@@ -1287,7 +1287,7 @@ export const FarmFieldsMap = ({
             onClick={() => void (addMode ? saveFieldChanges() : toggleAddMode())}
             size="xs"
             variant={addMode ? 'default' : 'outline'}
-            disabled={isSavingFieldChanges}
+            loading={isSavingFieldChanges}
           >
             {!addMode
               ? 'Rediger marker'
@@ -1881,7 +1881,8 @@ export const FarmFieldsMap = ({
                 <Button
                   className="flex-1"
                   onClick={() => void saveFieldChanges()}
-                  disabled={isSavingFieldChanges || fieldChangeCount === 0}
+                  disabled={fieldChangeCount === 0}
+                  loading={isSavingFieldChanges}
                 >
                   {isSavingFieldChanges ? 'Gemmer...' : 'Gem ændringer'}
                 </Button>
@@ -1915,7 +1916,7 @@ export const FarmFieldsMap = ({
                         variant="outline"
                         size="sm"
                         onClick={() => void highlightFieldsForCvr()}
-                        disabled={isLoadingCvrFields}
+                        loading={isLoadingCvrFields}
                       >
                         {isLoadingCvrFields ? 'Indlæser...' : 'Fremhæv marker'}
                       </Button>

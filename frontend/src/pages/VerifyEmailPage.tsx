@@ -132,7 +132,7 @@ export const VerifyEmailPage = () => {
         size="lg"
         variant="outline"
         className="w-full"
-        disabled={resendState === 'sending'}
+        loading={resendState === 'sending'}
       >
         {resendState === 'sending' ? 'Sender...' : 'Send ny bekræftelsesmail'}
       </Button>
@@ -224,7 +224,7 @@ export const VerifyEmailPage = () => {
               size="lg"
               variant="outline"
               className="w-full"
-              disabled={resendState === 'sending'}
+              loading={resendState === 'sending'}
             >
               {resendState === 'sending' ? 'Sender...' : 'Send mailen igen'}
             </Button>

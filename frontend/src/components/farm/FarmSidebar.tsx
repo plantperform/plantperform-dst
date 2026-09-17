@@ -692,7 +692,7 @@ const SimulationMenuItem = ({
             className="peer-data-[size=lg]/menu-button:top-3.5"
             aria-label={`Handlinger for ${simulation.name}`}
           >
-            {copying ? (
+            {copying || deleting ? (
               <Spinner />
             ) : (
               <MoreHorizontal />

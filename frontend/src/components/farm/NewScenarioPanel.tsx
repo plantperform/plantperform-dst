@@ -266,7 +266,8 @@ export const NewScenarioPanel = ({
           {isLastStep ? (
             <Button
               onClick={() => void createScenario()}
-              disabled={!hasFields || isCreating}
+              disabled={!hasFields}
+              loading={isCreating}
             >
               {isCreating ? 'Opretter simulering...' : 'Opret simulering'}
             </Button>

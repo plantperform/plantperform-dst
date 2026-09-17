@@ -126,7 +126,7 @@ const RegisterForm = () => {
         </div>
       ) : null}
       {error ? <AuthNotice tone="error">{error}</AuthNotice> : null}
-      <Button size="lg" className="w-full" disabled={isSubmitting}>
+      <Button size="lg" className="w-full" loading={isSubmitting}>
         {isSubmitting ? 'Opretter...' : 'Opret konto'}
       </Button>
     </form>

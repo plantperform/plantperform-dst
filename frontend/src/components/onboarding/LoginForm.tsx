@@ -89,7 +89,8 @@ export const LoginForm = ({
             size="lg"
             variant="outline"
             className="w-full"
-            disabled={resendState === 'sending' || resendState === 'sent'}
+            disabled={resendState === 'sent'}
+            loading={resendState === 'sending'}
             onClick={() => void resendVerification()}
           >
             {resendState === 'sending'
@@ -109,7 +110,7 @@ export const LoginForm = ({
             Kunne ikke sende mailen igen. Prøv om lidt.
           </AuthNotice>
         ) : null}
-        <Button size="lg" className="w-full" disabled={isSubmitting}>
+        <Button size="lg" className="w-full" loading={isSubmitting}>
           {isSubmitting ? 'Logger ind...' : 'Log ind'}
         </Button>
       </div>

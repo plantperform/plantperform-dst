@@ -428,7 +428,7 @@ export const FieldPanel = ({
             size="sm"
             className="w-full @2xl:w-auto @2xl:px-5"
             onClick={onRequestDetach}
-            disabled={isDetaching}
+            loading={isDetaching}
           >
             {isDetaching ? 'Fjerner...' : 'Fjern mark'}
           </Button>

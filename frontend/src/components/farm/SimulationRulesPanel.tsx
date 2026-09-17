@@ -225,7 +225,8 @@ export const SimulationRulesPanel = ({
             <Button
               size="sm"
               onClick={() => void saveConstraints()}
-              disabled={isSaving || !isDirty}
+              disabled={!isDirty}
+              loading={isSaving}
             >
               {isSaving ? 'Gemmer...' : 'Gem grænser'}
             </Button>

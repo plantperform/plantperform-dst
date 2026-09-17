@@ -259,7 +259,7 @@ export const CreateFarmPage = () => {
             <div className="flex flex-col gap-3.5 border-t pt-3.5">
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button
-                  disabled={isSubmitting}
+                  loading={isSubmitting}
                   className="h-[46px] rounded-full px-[22px] text-[15px] font-semibold"
                 >
                   {isSubmitting
@@ -267,7 +267,9 @@ export const CreateFarmPage = () => {
                     : willImport
                       ? 'Opret bedrift og importer marker'
                       : 'Opret bedrift'}
-                  <ArrowRight className="size-4" aria-hidden="true" />
+                  {isSubmitting ? null : (
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  )}
                 </Button>
                 <Button
                   asChild
