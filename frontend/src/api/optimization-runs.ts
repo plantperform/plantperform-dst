@@ -1,0 +1,81 @@
+import { createContext, useContext } from 'react'
+
+import type {
+  FieldRecord,
+  OptimizeSimulationInput,
+  OptimizeSimulationResponse,
+  YearlyOptimizeSimulationInput,
+} from '@/api/types'
+import type {
+  OptimizationChanges,
+  OptimizationKind,
+} from '@/lib/optimization-run'
+
+export type OptimizationRunRequest =
+  | { kind: 'optimize'; input: OptimizeSimulationInput }
+  | { kind: 'yearly'; input: YearlyOptimizeSimulationInput }
+
+type OptimizationRunBase = OptimizationRunRequest & {
+  id: number
+  farmId: string
+  simulationId: string
+  startedAt: number
+  timeLimitSeconds: number
+}
+
+export type OptimizationRun = OptimizationRunBase &
+  (
+    | { status: 'running' }
+    | { status: 'failed'; error: string }
+    | {
+        status: 'succeeded'
+        finishedAt: number
+        response: OptimizeSimulationResponse
+        changes: OptimizationChanges
+      }
+  )
+
+export type StartOptimizationRun = (
+  request: OptimizationRunRequest & {
+    farmId: string
+    simulationId: string
+    // The simulation's fields before the run, to describe what changed.
+    fieldsBefore: FieldRecord[]
+  },
+) => number | null
+
+export type OptimizationRunsContextValue = {
+  runs: ReadonlyMap<string, OptimizationRun>
+  // Returns the run id, or null when the simulation already has a run going.
+  startRun: StartOptimizationRun
+  dismissRun: (simulationId: string) => void
+}
+
+export const OptimizationRunsContext =
+  createContext<OptimizationRunsContextValue | null>(null)
+
+const useOptimizationRunsContext = () => {
+  const context = useContext(OptimizationRunsContext)
+  if (!context) {
+    throw new Error(
+      'Optimization runs must be used inside OptimizationRunsProvider',
+    )
+  }
+  return context
+}
+
+// The latest run of the simulation, whichever kind it was.
+export const useOptimizationRun = (simulationId?: string) => {
+  const { runs } = useOptimizationRunsContext()
+  return simulationId ? runs.get(simulationId) : undefined
+}
+
+export const useOptimizationRunActions = () => {
+  const { startRun, dismissRun } = useOptimizationRunsContext()
+  return { startRun, dismissRun }
+}
+
+export const DEFAULT_TIME_LIMIT_SECONDS: Record<OptimizationKind, number> = {
+  optimize: 15,
+  yearly: 20,
+}
