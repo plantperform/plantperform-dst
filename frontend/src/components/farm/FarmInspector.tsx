@@ -4,23 +4,18 @@ import { mutate } from 'swr'
 
 import {
   simulationFieldsKey,
-  simulationYearlySummaryKey,
   useFarmHistoricalYearlySummary,
   useScenarioCropCodes,
   useFieldYearValues,
   useSimulationYearlySummary,
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
-import {
-  runSimulationOptimization,
-  runYearlySimulationOptimization,
-  updateSimulationField,
-} from '@/api/mutations'
+import { updateSimulationField } from '@/api/mutations'
+import { useOptimizationRun } from '@/api/optimization-runs'
 import type {
   Farm,
   FieldRecord,
   CatchmentYearlyNLoadCaps,
-  OptimizeSimulationResponse,
   Simulation,
 } from '@/api/types'
 import { CatchmentPicker } from '@/components/farm/CatchmentPicker'
@@ -45,6 +40,8 @@ import { FarmSplitView } from '@/components/farm/FarmSplitView'
 import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
+import { OptimizationRunProgress } from '@/components/farm/OptimizationRunProgress'
+import { useOptimizationDialogRun } from '@/components/farm/optimization-dialog-run'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import type {
   FarmInspectorMode,
@@ -77,32 +74,6 @@ import {
 import { compareFields } from '@/lib/field-sort'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
-
-// After an "Optimér" or "Års-optimering" run, simulationFieldsKey has already
-// been updated directly from the response (no refetch needed). The yearly
-// overview strip uses a separate SWR key, however, and would otherwise retain
-// data from before the run. That is invisible to the user but makes new
-// constraints or caps appear to have been ignored, so force a refetch.
-//
-// The "Beregningsgennemgang pr. år" panel (candidate detail) is deliberately no
-// longer invalidated here. A broadly matching key revalidation previously
-// refreshed every candidate-detail key the user had ever opened in this
-// simulation, regardless of whether the field actually received a new
-// assignment. In scenarios with unoptimised fields, this caused a burst of
-// concurrent failed requests (422 "ikke optimeret endnu") for every previously
-// opened field. SWR automatically reloads candidate detail the next time the
-// panel opens (revalidation on mount), which is sufficient in practice.
-const invalidateOptimizationDisplays = async (
-  farmId: string,
-  simulationId: string,
-) => {
-  await mutate(simulationYearlySummaryKey(farmId, simulationId))
-}
-
-type LastRun = {
-  simulationId: string
-  response: OptimizeSimulationResponse
-}
 
 type FarmInspectorProps = {
   farm: Farm
@@ -163,7 +134,7 @@ export const FarmInspector = ({
   onYearlyOptimizeDialogOpenChange,
   onError,
 }: FarmInspectorProps) => {
-  const [lastRun, setLastRun] = useState<LastRun | null>(null)
+  const optimizationRun = useOptimizationRun(selectedSimulation?.id)
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
@@ -232,9 +203,6 @@ export const FarmInspector = ({
   const loadingMessage = selectedSimulation
     ? `Indlæser marker for simuleringen ${selectedSimulation.name}...`
     : 'Indlæser marker...'
-  if (lastRun && lastRun.simulationId !== selectedSimulation?.id) {
-    setLastRun(null)
-  }
 
   const singleCatchmentKey = useMemo(() => {
     const keys = new Set(fields.map((field) => catchmentKey(field.catchmentId)))
@@ -404,11 +372,6 @@ export const FarmInspector = ({
     onModeChange('rules')
   }
 
-  const recordRun = (response: OptimizeSimulationResponse) => {
-    if (!selectedSimulation) return
-    setLastRun({ simulationId: selectedSimulation.id, response })
-  }
-
   const rulesPanel =
     isRules && selectedSimulation && !fieldsLoading ? (
       <SimulationRulesPanel
@@ -437,7 +400,6 @@ export const FarmInspector = ({
           fields={fields}
           open={optimizeDialogOpen}
           onOpenChange={onOptimizeDialogOpenChange}
-          onOptimized={recordRun}
           onOpenRules={openRules}
         />
       ) : null}
@@ -450,7 +412,6 @@ export const FarmInspector = ({
           fields={fields}
           open={yearlyOptimizeDialogOpen}
           onOpenChange={onYearlyOptimizeDialogOpenChange}
-          onOptimized={recordRun}
         />
       ) : null}
 
@@ -503,7 +464,11 @@ export const FarmInspector = ({
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentLabel={catchmentLabel}
               catchmentColor={catchmentColor}
-              lastRun={lastRun?.response ?? null}
+              lastRun={
+                optimizationRun?.status === 'succeeded'
+                  ? optimizationRun.response
+                  : null
+              }
               history={!isSimulationView}
               unavailableMessage={
                 yearlySummaryError && !isCatchmentScoped
@@ -664,7 +629,6 @@ type OptimizeDialogProps = {
   fields: FieldRecord[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOptimized: (response: OptimizeSimulationResponse) => void
   onOpenRules: () => void
 }
 
@@ -755,11 +719,13 @@ const OptimizeDialog = ({
   fields,
   open,
   onOpenChange,
-  onOptimized,
   onOpenRules,
 }: OptimizeDialogProps) => {
-  const [isRunning, setIsRunning] = useState(false)
-  const [runError, setRunError] = useState<string | null>(null)
+  const { run, view, runError, startRun } = useOptimizationDialogRun(
+    simulation.id,
+    'optimize',
+    open,
+  )
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
   const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
     new Set(),
@@ -775,10 +741,7 @@ const OptimizeDialog = ({
   const { constraints } = simulation
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      setRunError(null)
-      setExcludedCropCodes(new Set())
-    }
+    if (!nextOpen) setExcludedCropCodes(new Set())
     onOpenChange(nextOpen)
   }
 
@@ -791,31 +754,17 @@ const OptimizeDialog = ({
     })
   }
 
-  const runOptimization = async () => {
-    setIsRunning(true)
-    try {
-      const response = await runSimulationOptimization(farmId, simulation.id, {
+  const runOptimization = () =>
+    startRun({
+      kind: 'optimize',
+      farmId,
+      simulationId: simulation.id,
+      input: {
         timeLimitSeconds,
         excludedCropCodes: Array.from(excludedCropCodes),
-      })
-      await mutate(
-        simulationFieldsKey(farmId, simulation.id),
-        response.fields,
-        { revalidate: false },
-      )
-      await invalidateOptimizationDisplays(farmId, simulation.id)
-      onOptimized(response)
-      handleOpenChange(false)
-    } catch (error) {
-      setRunError(
-        error instanceof Error
-          ? error.message
-          : 'Kunne ikke køre optimeringen.',
-      )
-    } finally {
-      setIsRunning(false)
-    }
-  }
+      },
+      fieldsBefore: fields,
+    })
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -827,100 +776,114 @@ const OptimizeDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
-          <div className="space-y-2 rounded-lg border border-rules/30 bg-rules/5 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <SlidersHorizontal
-                className="h-4 w-4 text-rules"
-                aria-hidden="true"
+        {run && view !== 'form' ? (
+          <OptimizationRunProgress run={run} />
+        ) : (
+          <>
+            <div className="space-y-5">
+              <div className="space-y-2 rounded-lg border border-rules/30 bg-rules/5 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SlidersHorizontal
+                    className="h-4 w-4 text-rules"
+                    aria-hidden="true"
+                  />
+                  Gældende grænser
+                </div>
+                <dl className="grid gap-2 text-xs sm:grid-cols-3">
+                  <div className="sm:col-span-3">
+                    <dt className="text-muted-foreground">Maks. udledning</dt>
+                    <dd>
+                      {constraints.maxNLoadByCatchment.length === 0 ? (
+                        'Ingen grænse'
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {constraints.maxNLoadByCatchment.map((cap) => {
+                            const key = catchmentKey(cap.catchmentId)
+                            const label =
+                              catchmentLabelByKey.get(key) ??
+                              (cap.catchmentId === null
+                                ? 'Uden kystvandopland'
+                                : `Kystvandopland ${cap.catchmentId}`)
+                            return (
+                              <li key={key}>
+                                {label}: {formatLimit(cap.maxNLoadKg, 'kg N')}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Min. foderenheder</dt>
+                    <dd>{formatLimit(constraints.minFeedUnits, 'FE')}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Maks. foderenheder</dt>
+                    <dd>{formatLimit(constraints.maxFeedUnits, 'FE')}</dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-muted-foreground">
+                  Ændres under <strong>Regler</strong> - ikke her.{' '}
+                  <button
+                    type="button"
+                    className="rounded-sm font-medium text-rules underline underline-offset-2 hover:text-rules/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                    onClick={onOpenRules}
+                  >
+                    Åbn Regler
+                  </button>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="optimize-time-limit">Tidsgrænse</Label>
+                <Input
+                  id="optimize-time-limit"
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={timeLimitSeconds}
+                  onChange={(event) =>
+                    setTimeLimitSeconds(Number(event.target.value))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  sekunder - sæt højere hvis optimeringen ikke når at finde en
+                  løsning i tide på en stor bedrift
+                </p>
+              </div>
+
+              <CropExclusionList
+                farmId={farmId}
+                simulationId={simulation.id}
+                excludedCodes={excludedCropCodes}
+                onToggle={toggleCrop}
               />
-              Gældende grænser
             </div>
-            <dl className="grid gap-2 text-xs sm:grid-cols-3">
-              <div className="sm:col-span-3">
-                <dt className="text-muted-foreground">Maks. udledning</dt>
-                <dd>
-                  {constraints.maxNLoadByCatchment.length === 0 ? (
-                    'Ingen grænse'
-                  ) : (
-                    <ul className="space-y-0.5">
-                      {constraints.maxNLoadByCatchment.map((cap) => {
-                        const key = catchmentKey(cap.catchmentId)
-                        const label =
-                          catchmentLabelByKey.get(key) ??
-                          (cap.catchmentId === null
-                            ? 'Uden kystvandopland'
-                            : `Kystvandopland ${cap.catchmentId}`)
-                        return (
-                          <li key={key}>
-                            {label}: {formatLimit(cap.maxNLoadKg, 'kg N')}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Min. foderenheder</dt>
-                <dd>{formatLimit(constraints.minFeedUnits, 'FE')}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Maks. foderenheder</dt>
-                <dd>{formatLimit(constraints.maxFeedUnits, 'FE')}</dd>
-              </div>
-            </dl>
-            <p className="text-xs text-muted-foreground">
-              Ændres under <strong>Regler</strong> - ikke her.{' '}
-              <button
-                type="button"
-                className="rounded-sm font-medium text-rules underline underline-offset-2 hover:text-rules/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                onClick={onOpenRules}
-              >
-                Åbn Regler
-              </button>
-            </p>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="optimize-time-limit">Tidsgrænse</Label>
-            <Input
-              id="optimize-time-limit"
-              type="number"
-              min="1"
-              max="600"
-              value={timeLimitSeconds}
-              onChange={(event) =>
-                setTimeLimitSeconds(Number(event.target.value))
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              sekunder - sæt højere hvis optimeringen ikke når at finde en
-              løsning i tide på en stor bedrift
-            </p>
-          </div>
-
-          <CropExclusionList
-            farmId={farmId}
-            simulationId={simulation.id}
-            excludedCodes={excludedCropCodes}
-            onToggle={toggleCrop}
-          />
-        </div>
-
-        {runError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
-            {runError}
-          </p>
-        ) : null}
+            {runError ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+                {runError}
+              </p>
+            ) : null}
+          </>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            Annuller
-          </Button>
-          <Button onClick={() => void runOptimization()} loading={isRunning}>
-            {isRunning ? 'Arbejder...' : 'Kør optimering'}
-          </Button>
+          {view === 'running' ? (
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              Luk
+            </Button>
+          ) : view === 'succeeded' ? (
+            <Button onClick={() => handleOpenChange(false)}>Luk</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                Annuller
+              </Button>
+              <Button onClick={runOptimization}>Kør optimering</Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -933,7 +896,6 @@ type YearlyOptimizeDialogProps = {
   fields: FieldRecord[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOptimized: (response: OptimizeSimulationResponse) => void
 }
 
 const YearlyOptimizeDialog = ({
@@ -942,24 +904,23 @@ const YearlyOptimizeDialog = ({
   fields,
   open,
   onOpenChange,
-  onOptimized,
 }: YearlyOptimizeDialogProps) => {
+  const { run, view, runError, startRun } = useOptimizationDialogRun(
+    simulation.id,
+    'yearly',
+    open,
+  )
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(20)
   const [catchmentInputs, setCatchmentInputs] = useState<
     Record<string, CatchmentYearlyInput>
   >({})
   const [db2SwingPct, setDb2SwingPct] = useState('')
-  const [isRunning, setIsRunning] = useState(false)
-  const [runError, setRunError] = useState<string | null>(null)
   const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
     new Set(),
   )
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      setRunError(null)
-      setExcludedCropCodes(new Set())
-    }
+    if (!nextOpen) setExcludedCropCodes(new Set())
     onOpenChange(nextOpen)
   }
 
@@ -1002,7 +963,7 @@ const YearlyOptimizeDialog = ({
     return fields.length * totalShiftUnits * 0.002
   }, [fields.length, categories])
 
-  const runYearlyOptimization = async () => {
+  const runYearlyOptimization = () => {
     const maxNLoadByCatchment: CatchmentYearlyNLoadCaps[] = catchments.map(
       (catchment) => {
         const key = catchmentKey(catchment.catchmentId)
@@ -1027,35 +988,18 @@ const YearlyOptimizeDialog = ({
       },
     )
     const trimmedSwing = db2SwingPct.trim()
-    setIsRunning(true)
-    try {
-      const response = await runYearlySimulationOptimization(
-        farmId,
-        simulation.id,
-        {
-          timeLimitSeconds,
-          maxNLoadByCatchment,
-          db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
-          excludedCropCodes: Array.from(excludedCropCodes),
-        },
-      )
-      await mutate(
-        simulationFieldsKey(farmId, simulation.id),
-        response.fields,
-        { revalidate: false },
-      )
-      await invalidateOptimizationDisplays(farmId, simulation.id)
-      onOptimized(response)
-      handleOpenChange(false)
-    } catch (error) {
-      setRunError(
-        error instanceof Error
-          ? error.message
-          : 'Kunne ikke køre års-optimeringen.',
-      )
-    } finally {
-      setIsRunning(false)
-    }
+    startRun({
+      kind: 'yearly',
+      farmId,
+      simulationId: simulation.id,
+      input: {
+        timeLimitSeconds,
+        maxNLoadByCatchment,
+        db2SwingPct: trimmedSwing === '' ? null : Number(trimmedSwing),
+        excludedCropCodes: Array.from(excludedCropCodes),
+      },
+      fieldsBefore: fields,
+    })
   }
 
   return (
@@ -1070,160 +1014,171 @@ const YearlyOptimizeDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <Info
-            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
-            aria-hidden="true"
-          />
-          <p className="text-xs text-amber-900">
-            Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
-            gemmes ikke på simuleringen - de nulstilles, når dialogen lukkes, og
-            vises derfor ikke under Regler. Noter dem, hvis du skal kunne
-            gentage kørslen.
-          </p>
-        </div>
-
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="yearly-time-limit">Tidsgrænse</Label>
-            <Input
-              id="yearly-time-limit"
-              type="number"
-              min="1"
-              max="600"
-              value={timeLimitSeconds}
-              onChange={(event) =>
-                setTimeLimitSeconds(Number(event.target.value))
-              }
-            />
-            <p className="text-xs text-muted-foreground">sekunder</p>
-          </div>
-
-          <div className="space-y-3">
-            <Label>Maks. tilladt udledning pr. år, pr. kystvandopland</Label>
-            {catchments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Ingen marker med et kystvandopland i denne simulering.
+        {run && view !== 'form' ? (
+          <OptimizationRunProgress run={run} />
+        ) : (
+          <>
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+                aria-hidden="true"
+              />
+              <p className="text-xs text-amber-900">
+                Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
+                gemmes ikke på simuleringen - de nulstilles, når dialogen lukkes, og
+                vises derfor ikke under Regler. Noter dem, hvis du skal kunne
+                gentage kørslen.
               </p>
-            ) : (
-              catchments.map((catchment) => {
-                const key = catchmentKey(catchment.catchmentId)
-                const input = catchmentInput(key)
-                return (
-                  <div key={key} className="space-y-2 rounded border p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        {catchment.label}
-                      </span>
-                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={input.sameForAllYears}
-                          onChange={(event) =>
-                            updateCatchmentInput(key, {
-                              sameForAllYears: event.target.checked,
-                            })
-                          }
-                        />
-                        Samme grænse for alle år
-                      </label>
-                    </div>
-                    {input.sameForAllYears ? (
-                      <div className="space-y-1">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={input.uniform}
-                          placeholder="Ingen grænse"
-                          onChange={(event) =>
-                            updateCatchmentInput(key, {
-                              uniform: event.target.value,
-                            })
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          kg N, gælder hvert år
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-2 sm:grid-cols-4">
-                        {ROTATION_CALENDAR_YEARS.map((year) => (
-                          <label key={year} className="space-y-1 text-sm">
-                            <span className="text-xs text-muted-foreground">
-                              {year}
-                            </span>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={input.perYear[year] ?? ''}
-                              placeholder="Ingen grænse"
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="yearly-time-limit">Tidsgrænse</Label>
+                <Input
+                  id="yearly-time-limit"
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={timeLimitSeconds}
+                  onChange={(event) =>
+                    setTimeLimitSeconds(Number(event.target.value))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">sekunder</p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Maks. tilladt udledning pr. år, pr. kystvandopland</Label>
+                {catchments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Ingen marker med et kystvandopland i denne simulering.
+                  </p>
+                ) : (
+                  catchments.map((catchment) => {
+                    const key = catchmentKey(catchment.catchmentId)
+                    const input = catchmentInput(key)
+                    return (
+                      <div key={key} className="space-y-2 rounded border p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            {catchment.label}
+                          </span>
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={input.sameForAllYears}
                               onChange={(event) =>
                                 updateCatchmentInput(key, {
-                                  perYear: {
-                                    ...input.perYear,
-                                    [year]: event.target.value,
-                                  },
+                                  sameForAllYears: event.target.checked,
                                 })
                               }
                             />
+                            Samme grænse for alle år
                           </label>
-                        ))}
+                        </div>
+                        {input.sameForAllYears ? (
+                          <div className="space-y-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={input.uniform}
+                              placeholder="Ingen grænse"
+                              onChange={(event) =>
+                                updateCatchmentInput(key, {
+                                  uniform: event.target.value,
+                                })
+                              }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              kg N, gælder hvert år
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-4">
+                            {ROTATION_CALENDAR_YEARS.map((year) => (
+                              <label key={year} className="space-y-1 text-sm">
+                                <span className="text-xs text-muted-foreground">
+                                  {year}
+                                </span>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={input.perYear[year] ?? ''}
+                                  placeholder="Ingen grænse"
+                                  onChange={(event) =>
+                                    updateCatchmentInput(key, {
+                                      perYear: {
+                                        ...input.perYear,
+                                        [year]: event.target.value,
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </div>
+                    )
+                  })
+                )}
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="yearly-db-swing">
-              Maks. udsving i DB2 mellem år
-            </Label>
-            <Input
-              id="yearly-db-swing"
-              type="number"
-              min="0"
-              value={db2SwingPct}
-              placeholder="Ingen grænse"
-              onChange={(event) => setDb2SwingPct(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              % - intet års samlede DB2 må afvige mere end dette fra
-              gennemsnittet af simuleringens år
-            </p>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="yearly-db-swing">
+                  Maks. udsving i DB2 mellem år
+                </Label>
+                <Input
+                  id="yearly-db-swing"
+                  type="number"
+                  min="0"
+                  value={db2SwingPct}
+                  placeholder="Ingen grænse"
+                  onChange={(event) => setDb2SwingPct(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  % - intet års samlede DB2 må afvige mere end dette fra
+                  gennemsnittet af simuleringens år
+                </p>
+              </div>
 
-          <p className="text-xs text-muted-foreground">
-            Alle sædskifter kan forskydes · {fields.length} marker · ~
-            {estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
-            (estimat, ikke en garanti)
-          </p>
+              <p className="text-xs text-muted-foreground">
+                Alle sædskifter kan forskydes · {fields.length} marker · ~
+                {estimatedSeconds < 1 ? '<1' : Math.round(estimatedSeconds)} sek.
+                (estimat, ikke en garanti)
+              </p>
 
-          <CropExclusionList
-            farmId={farmId}
-            simulationId={simulation.id}
-            excludedCodes={excludedCropCodes}
-            onToggle={toggleCrop}
-          />
-        </div>
+              <CropExclusionList
+                farmId={farmId}
+                simulationId={simulation.id}
+                excludedCodes={excludedCropCodes}
+                onToggle={toggleCrop}
+              />
+            </div>
 
-        {runError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
-            {runError}
-          </p>
-        ) : null}
+            {runError ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
+                {runError}
+              </p>
+            ) : null}
+          </>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            Annuller
-          </Button>
-          <Button
-            onClick={() => void runYearlyOptimization()}
-            loading={isRunning}
-          >
-            {isRunning ? 'Arbejder...' : 'Kør års-optimering'}
-          </Button>
+          {view === 'running' ? (
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              Luk
+            </Button>
+          ) : view === 'succeeded' ? (
+            <Button onClick={() => handleOpenChange(false)}>Luk</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                Annuller
+              </Button>
+              <Button onClick={runYearlyOptimization}>Kør års-optimering</Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
