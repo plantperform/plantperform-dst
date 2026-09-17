@@ -3,7 +3,14 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeatureCollection } from 'geojson'
 import { Layers, Lock, Maximize, X } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import Map, {
   Layer,
   Marker,
@@ -222,6 +229,7 @@ type FarmFieldsMapProps = {
   onAddModeChange?: (active: boolean) => void
   detachFields: (fieldIds: string[]) => Promise<string[]>
   onError: (message: string | null) => void
+  search?: ReactNode
 }
 
 const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
@@ -292,6 +300,7 @@ export const FarmFieldsMap = ({
   onAddModeChange,
   detachFields,
   onError,
+  search,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
   const initialViewState =
@@ -1131,7 +1140,8 @@ export const FarmFieldsMap = ({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-muted shadow-xs @container">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 p-2">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start gap-2 p-2">
+        {search ? <div className="pointer-events-auto">{search}</div> : null}
         <div className="pointer-events-auto flex h-7 min-w-0 items-center gap-2 rounded-md border bg-card pl-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
           <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
             Farvelæg

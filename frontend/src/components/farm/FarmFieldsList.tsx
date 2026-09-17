@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react'
 
 import { useFarmFields } from '@/api/hooks'
@@ -257,6 +258,7 @@ type FarmFieldsListProps = {
   onRequiredWidthChange?: (width: number) => void
   detachingFieldIds: string[]
   onRequestDetach?: (field: FieldRecord) => void
+  search?: ReactNode
 }
 
 export const FarmFieldsList = ({
@@ -285,6 +287,7 @@ export const FarmFieldsList = ({
   onRequiredWidthChange,
   detachingFieldIds,
   onRequestDetach,
+  search,
 }: FarmFieldsListProps) => {
   const rowElements = useRef(new Map<string, HTMLTableRowElement>())
   const scrolledFieldId = useRef<string | null>(null)
@@ -559,7 +562,8 @@ export const FarmFieldsList = ({
             isRules && 'border-rules/30',
           )}
         >
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2">
+            {search}
             {isRules ? (
               <p className="text-xs text-muted-foreground">
                 Hvad optimeringen må gøre ved hver mark. Ændringer her styrer
