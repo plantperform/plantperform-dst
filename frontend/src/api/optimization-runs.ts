@@ -79,3 +79,11 @@ export const DEFAULT_TIME_LIMIT_SECONDS: Record<OptimizationKind, number> = {
   optimize: 15,
   yearly: 20,
 }
+
+// The request that started a run, to start it again after a failure.
+export const optimizationRunRequest = (
+  run: OptimizationRun,
+): OptimizationRunRequest =>
+  run.kind === 'optimize'
+    ? { kind: 'optimize', input: run.input }
+    : { kind: 'yearly', input: run.input }
