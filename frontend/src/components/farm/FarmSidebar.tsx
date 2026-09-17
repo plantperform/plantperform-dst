@@ -4,7 +4,6 @@ import {
   Copy,
   FlaskConical,
   History,
-  Loader2,
   MoreHorizontal,
   PanelLeft,
   Play,
@@ -75,6 +74,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Tooltip,
   TooltipContent,
@@ -652,7 +652,7 @@ const SimulationMenuItem = ({
             onClick={onSelect}
           >
             {loading ? (
-              <Loader2 className="motion-safe:animate-spin" />
+              <Spinner />
             ) : (
               <FlaskConical />
             )}
@@ -693,7 +693,7 @@ const SimulationMenuItem = ({
             aria-label={`Handlinger for ${simulation.name}`}
           >
             {copying ? (
-              <Loader2 className="motion-safe:animate-spin" />
+              <Spinner />
             ) : (
               <MoreHorizontal />
             )}

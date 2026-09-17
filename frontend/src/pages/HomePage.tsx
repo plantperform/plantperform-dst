@@ -4,7 +4,6 @@ import { mutate } from 'swr'
 
 import {
   CircleAlert,
-  LoaderCircle,
   Plus,
   Search,
   Tractor,
@@ -23,6 +22,7 @@ import {
 import { FarmOverviewHeader } from '@/components/farm/FarmOverviewHeader'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Card,
   CardContent,
@@ -202,10 +202,7 @@ export const HomePage = () => {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background p-10">
         <p className="flex items-center gap-2.5 text-lg text-muted-foreground">
-          <LoaderCircle
-            className="h-5 w-5 motion-safe:animate-spin"
-            aria-hidden="true"
-          />
+          <Spinner className="size-5" />
           Opretter din bedrift...
         </p>
       </main>
@@ -216,10 +213,7 @@ export const HomePage = () => {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background p-10">
         <p className="flex items-center gap-2.5 text-lg text-muted-foreground">
-          <LoaderCircle
-            className="h-5 w-5 motion-safe:animate-spin"
-            aria-hidden="true"
-          />
+          <Spinner className="size-5" />
           Åbner din bedrift...
         </p>
       </main>
