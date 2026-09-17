@@ -476,6 +476,7 @@ export const FarmInspector = ({
               fields={highlightedFields}
               scopeLabel={scopeLabel}
               catchmentTotalsByYear={catchmentTotalsByYear}
+              yearValues={yearValues}
               selectedYearIndex={selectedYearIndex}
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentLabel={catchmentLabel}
