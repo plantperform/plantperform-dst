@@ -32,11 +32,21 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
     offset += length
   }
   return (
-    <div className="flex flex-col items-center gap-4 @md:flex-row @md:gap-5">
+    <div
+      className={cn(
+        'flex flex-col items-center gap-4',
+        twoColumns
+          ? '@sm:flex-row @sm:gap-3 @xl:gap-5'
+          : '@md:flex-row @md:gap-5',
+      )}
+    >
       <svg
         aria-hidden="true"
         viewBox="0 0 100 100"
-        className="size-28 shrink-0 @md:size-36"
+        className={cn(
+          'shrink-0',
+          twoColumns ? 'size-36' : 'size-28 @md:size-36',
+        )}
         onMouseLeave={() => setHovered(null)}
       >
         {arcs.map(({ entry, length, offset: start }) => (
@@ -85,16 +95,20 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
       <ul
         aria-label="Afgrødefordeling"
         className={cn(
-          'w-full min-w-0 @md:w-auto @md:flex-1',
-          twoColumns &&
-            '@xl:columns-2 @xl:gap-x-4 @xl:[column-rule:1px_solid_var(--color-border)]',
+          'w-full min-w-0',
+          twoColumns
+            ? '@sm:w-auto @sm:flex-1 @sm:columns-2 @sm:gap-x-3 @sm:[column-rule:1px_solid_var(--color-border)] @xl:gap-x-4'
+            : '@md:w-auto @md:flex-1',
         )}
       >
         {shares.map((entry) => (
           <li
             key={entry.group.id}
             className={cn(
-              'grid break-inside-avoid grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto] items-center gap-x-2 rounded-sm px-1 py-1 text-[13px] leading-5',
+              'grid break-inside-avoid items-center rounded-sm py-1 leading-5',
+              twoColumns
+                ? 'grid-cols-[auto_minmax(0,1fr)_2.25rem_auto] gap-x-1.5 px-0.5 text-xs @xl:gap-x-2 @xl:px-1 @xl:text-[13px] @2xl:grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto]'
+                : 'grid-cols-[auto_minmax(0,1fr)_2.5rem_auto] gap-x-2 px-1 text-[13px] @lg:grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto]',
               hovered === entry.group.id && 'bg-muted',
             )}
             onMouseEnter={() => setHovered(entry.group.id)}
