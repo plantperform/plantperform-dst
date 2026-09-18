@@ -87,6 +87,7 @@ export const NewScenarioPanel = ({
   )
   // Steps after the first need the reference data, so hide them until it is in.
   const referenceBlocked = referenceLoading || referenceError
+  const stepReachable = (index: number) => index <= 1 || !referenceBlocked
   const retryReferenceData = () => {
     for (const query of referenceQueries) {
       if (query.error) void query.mutate()
@@ -260,7 +261,9 @@ export const NewScenarioPanel = ({
       }, der er valgt under Afgrødehistorik.`}
       steps={steps}
       currentIndex={stepIndex}
-      onStepSelect={(index) => void goToStep(index)}
+      onStepSelect={(index) => {
+        if (stepReachable(index)) void goToStep(index)
+      }}
       locked={isCreating}
       footerMessage={footerMessage}
       secondaryAction={
@@ -284,7 +287,7 @@ export const NewScenarioPanel = ({
           {isLastStep ? (
             <Button
               onClick={() => void createScenario()}
-              disabled={!hasFields}
+              disabled={!hasFields || referenceBlocked}
               loading={isCreating}
             >
               {isCreating ? 'Opretter simulering...' : 'Opret simulering'}
@@ -292,7 +295,7 @@ export const NewScenarioPanel = ({
           ) : (
             <Button
               onClick={() => void goToStep(stepIndex + 1)}
-              disabled={!hasFields}
+              disabled={!hasFields || !stepReachable(stepIndex + 1)}
             >
               Næste
             </Button>
