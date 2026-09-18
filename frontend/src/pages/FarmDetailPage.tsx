@@ -59,7 +59,7 @@ export const FarmDetailPage = () => {
     mutate: retryFarm,
   } = useFarm(farmId)
   const {
-    data: fields = [],
+    data: fieldsData,
     error: fieldsError,
     isLoading: fieldsLoading,
     isValidating: fieldsValidating,
@@ -72,6 +72,7 @@ export const FarmDetailPage = () => {
     isValidating: simulationsValidating,
     mutate: retrySimulations,
   } = useSimulations(farmId)
+  const fields = fieldsData ?? []
   const simulations = simulationsData ?? []
   const [selection, setSelection] = useState<FarmViewSelection>({
     kind: 'current',
@@ -85,12 +86,13 @@ export const FarmDetailPage = () => {
   const selectedSimulationId =
     activeSelection.kind === 'simulation' ? activeSelection.id : undefined
   const {
-    data: simulationFields = [],
+    data: simulationFieldsData,
     error: simulationFieldsError,
     isLoading: simulationFieldsLoading,
     isValidating: simulationFieldsValidating,
     mutate: retrySimulationFields,
   } = useSimulationFields(farmId, selectedSimulationId)
+  const simulationFields = simulationFieldsData ?? []
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
   const [splitAvailable, setSplitAvailable] = useState(true)
@@ -114,19 +116,31 @@ export const FarmDetailPage = () => {
   const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
-  // Without this check a failed fetch would render as a farm with no fields
-  // or no simulations.
-  const contentError = Boolean(fieldsError || simulationsError)
-  const retryContent = () => {
-    if (fieldsError) void retryFields()
-    if (simulationsError) void retrySimulations()
+  const notFound = farmError instanceof ApiError && farmError.status === 404
+  const farmFailed = Boolean(farmError) && farm === undefined
+  const fieldsFailed = Boolean(fieldsError) && fieldsData === undefined
+  const simulationsFailed =
+    Boolean(simulationsError) && simulationsData === undefined
+  const loadFailed = farmFailed || fieldsFailed || simulationsFailed
+  const loadFailedMessage = farmFailed
+    ? 'Kunne ikke hente bedriften.'
+    : fieldsFailed
+      ? 'Kunne ikke hente bedriftens marker.'
+      : 'Kunne ikke hente bedriftens simuleringer.'
+  const retryingLoad =
+    (farmFailed && farmValidating) ||
+    (fieldsFailed && fieldsValidating) ||
+    (simulationsFailed && simulationsValidating)
+  const retryLoad = () => {
+    if (farmFailed) void retryFarm()
+    if (fieldsFailed) void retryFields()
+    if (simulationsFailed) void retrySimulations()
   }
   const isReady =
     farm !== undefined &&
     !farmLoading &&
     !fieldsLoading &&
-    !simulationsLoading &&
-    !contentError
+    !simulationsLoading
   const activeFields =
     activeSelection.kind === 'current' ? fields : simulationFields
   const activeFieldsLoading =
@@ -199,46 +213,32 @@ export const FarmDetailPage = () => {
     if (mode === 'rules') setMode('values')
   }
 
-  if (farmError && !(farmError instanceof ApiError && farmError.status === 404)) {
+  if (notFound || loadFailed) {
     return (
       <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
         <div className="mx-auto max-w-3xl">
           <Card>
             <CardHeader>
-              <CardTitle>Bedriften kunne ikke hentes</CardTitle>
+              <CardTitle>
+                {notFound
+                  ? 'Bedriften blev ikke fundet'
+                  : 'Bedriften kunne ikke hentes'}
+              </CardTitle>
               <CardDescription>
-                Der opstod en fejl, da bedriften skulle hentes.
+                {notFound
+                  ? 'Den valgte bedrift findes ikke.'
+                  : 'Der opstod en fejl, da bedriften skulle hentes.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <LoadError
-                message={farmError.message}
-                onRetry={() => void retryFarm()}
-                retrying={farmValidating}
-              />
-              <Button asChild variant="outline">
-                <Link to="/" state={HOME_OVERVIEW_STATE}>
-                  Alle bedrifter
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    )
-  }
-
-  if (farmError) {
-    return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle>Bedriften blev ikke fundet</CardTitle>
-              <CardDescription>Den valgte bedrift findes ikke.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
+              {notFound ? null : (
+                <LoadError
+                  message={loadFailedMessage}
+                  onRetry={retryLoad}
+                  retrying={retryingLoad}
+                />
+              )}
+              <Button asChild variant={notFound ? 'default' : 'outline'}>
                 <Link to="/" state={HOME_OVERVIEW_STATE}>
                   Alle bedrifter
                 </Link>
@@ -302,7 +302,10 @@ export const FarmDetailPage = () => {
                 : undefined
             }
             fieldsLoading={simulationFieldsLoading}
-            fieldsError={Boolean(simulationFieldsError)}
+            fieldsError={
+              Boolean(simulationFieldsError) &&
+              simulationFieldsData === undefined
+            }
             fieldsRetrying={simulationFieldsValidating}
             onRetryFields={() => void retrySimulationFields()}
             mode={mode}
@@ -325,18 +328,6 @@ export const FarmDetailPage = () => {
             onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
             onError={showErrorToast}
           />
-        ) : contentError ? (
-          <div className="p-4">
-            <LoadError
-              message={
-                fieldsError
-                  ? 'Kunne ikke hente bedriftens marker.'
-                  : 'Kunne ikke hente bedriftens simuleringer.'
-              }
-              onRetry={retryContent}
-              retrying={fieldsValidating || simulationsValidating}
-            />
-          </div>
         ) : (
           <>
             <p role="status" className="sr-only">
