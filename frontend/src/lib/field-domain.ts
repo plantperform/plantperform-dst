@@ -10,9 +10,8 @@ import type {
   YearlySummaryEntry,
 } from '@/api/types'
 import {
-  classifyCrop,
-  cropGroupDefinition,
-  type CropGroup,
+  cropGroupFor,
+  shortCropName,
   type CropGroupDefinition,
 } from '@/lib/crop-groups'
 
@@ -810,20 +809,31 @@ export const summarizeCatchmentYearTotals = (
   return byCatchment
 }
 
+export type CropShareLevel = 'group' | 'crop'
+
 export type CropShare = {
+  id: string
+  label: string
   group: CropGroupDefinition
   areaHa: number
   share: number
   nLoadKgHa: number
 }
 
+type CropShareTotals = {
+  label: string
+  group: CropGroupDefinition
+  areaHa: number
+  nLoadKg: number
+}
+
 export const summarizeCropDistribution = (
   fields: FieldRecord[],
   yearsByFieldId: FieldYearValues | undefined,
   yearIndex: number | null,
+  level: CropShareLevel,
 ): CropShare[] => {
-  const areaByGroup = new Map<CropGroup, number>()
-  const nLoadByGroup = new Map<CropGroup, number>()
+  const totalsById = new Map<string, CropShareTotals>()
   let totalHa = 0
   for (const field of fields) {
     const years = yearsByFieldId?.[field.id]
@@ -835,29 +845,31 @@ export const summarizeCropDistribution = (
     const areaPerYear = field.areaHa / counted.length
     totalHa += field.areaHa
     for (const yearResult of counted) {
-      const group = classifyCrop(
-        yearResult.year.cropCode,
-        yearResult.year.cropName,
-      )
-      areaByGroup.set(group, (areaByGroup.get(group) ?? 0) + areaPerYear)
-      nLoadByGroup.set(
+      const { cropCode, cropName } = yearResult.year
+      const group = cropGroupFor(cropCode, cropName)
+      const label = level === 'group' ? group.label : shortCropName(cropName)
+      const id = level === 'group' ? group.id : `${group.id}:${label}`
+      const totals = totalsById.get(id) ?? {
+        label,
         group,
-        (nLoadByGroup.get(group) ?? 0) +
-          yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
-            areaPerYear,
-      )
+        areaHa: 0,
+        nLoadKg: 0,
+      }
+      const yearNLoad = yearNLoadKgHa(yearResult.leachingKgNHa, field.retention)
+      totals.areaHa += areaPerYear
+      totals.nLoadKg += yearNLoad * areaPerYear
+      totalsById.set(id, totals)
     }
   }
   if (totalHa === 0) return []
-  return [...areaByGroup.entries()]
-    .map(([group, areaHa]) => ({
-      group: cropGroupDefinition(group),
-      areaHa,
-      share: areaHa / totalHa,
-      nLoadKgHa: (nLoadByGroup.get(group) ?? 0) / areaHa,
+  return [...totalsById.entries()]
+    .map(([id, totals]) => ({
+      id,
+      label: totals.label,
+      group: totals.group,
+      areaHa: totals.areaHa,
+      share: totals.areaHa / totalHa,
+      nLoadKgHa: totals.nLoadKg / totals.areaHa,
     }))
-    .sort(
-      (left, right) =>
-        right.nLoadKgHa - left.nLoadKgHa || right.areaHa - left.areaHa,
-    )
+    .sort((left, right) => right.areaHa - left.areaHa)
 }

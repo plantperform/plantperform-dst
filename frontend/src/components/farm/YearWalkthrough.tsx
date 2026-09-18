@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { CalendarRange, Droplets, Wheat } from 'lucide-react'
+import { CalendarRange, Droplets, Layers, Wheat } from 'lucide-react'
 
 import type {
   FieldRecord,
@@ -33,6 +33,7 @@ import {
   type CatchmentQuota,
   type CatchmentTotalsByYear,
   type CropShare,
+  type CropShareLevel,
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
@@ -45,11 +46,16 @@ const COMPACT_VIEWPORT_HEIGHT = 960
 
 const QUOTA_LINE_PCT = 34
 
-type PanelView = 'nLoad' | 'crops'
+type PanelView = 'nLoad' | CropShareLevel
+
+const CROP_LEVEL_OPTIONS: SegmentedControlOption<PanelView>[] = [
+  { value: 'group', label: 'Grupper', icon: Layers, title: 'Afgrødegrupper' },
+  { value: 'crop', label: 'Afgrøder', icon: Wheat, title: 'Afgrøder' },
+]
 
 const PANEL_VIEW_OPTIONS: SegmentedControlOption<PanelView>[] = [
   { value: 'nLoad', label: 'Udledning', icon: Droplets, title: 'Udledning' },
-  { value: 'crops', label: 'Afgrøder', icon: Wheat, title: 'Afgrøder' },
+  ...CROP_LEVEL_OPTIONS,
 ]
 
 type YearColumn = {
@@ -289,6 +295,7 @@ type YearPanelProps = {
   history: boolean
   unavailableMessage: string | null
   view: PanelView
+  viewOptions?: SegmentedControlOption<PanelView>[]
   onViewChange?: (view: PanelView) => void
 }
 
@@ -309,10 +316,13 @@ const YearPanel = ({
   history,
   unavailableMessage,
   view,
+  viewOptions,
   onViewChange,
 }: YearPanelProps) => {
-  const showCrops = view === 'crops'
-  const fixedCrops = showCrops && !onViewChange
+  const showCrops = view !== 'nLoad'
+  const canShowNLoad =
+    viewOptions?.some((option) => option.value === 'nLoad') ?? false
+  const fixedCrops = showCrops && !canShowNLoad
   const entry = column?.entry ?? null
   const scoped = scopeLabel !== null
   const pending =
@@ -330,6 +340,7 @@ const YearPanel = ({
   const title = column
     ? String(column.calendarYear)
     : (scopeLabel ?? (yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'))
+  const levelLabel = view === 'crop' ? 'afgrøde' : 'afgrødegruppe'
   const subtitle = pending
     ? column
       ? 'Ingen årstal for året'
@@ -337,9 +348,9 @@ const YearPanel = ({
     : showCrops
       ? column
         ? scoped
-          ? `Afgrødegrupper i ${scopeLabel} sorteret efter udledning pr. hektar`
-          : 'Afgrødegrupper sorteret efter udledning pr. hektar'
-        : 'Gennemsnit pr. år, sorteret efter udledning pr. hektar'
+          ? `Areal og udledning pr. ${levelLabel} i ${scopeLabel}`
+          : `Areal og udledning pr. ${levelLabel}`
+        : 'Gennemsnitligt areal og udledning pr. år'
       : column
         ? scoped
           ? `${scopeLabel} mod sin kvote`
@@ -370,9 +381,11 @@ const YearPanel = ({
   return (
     <aside
       aria-label={
-        onViewChange
+        canShowNLoad
           ? 'Oversigt over årene'
-          : PANEL_VIEW_OPTIONS.find((option) => option.value === view)?.label
+          : view === 'nLoad'
+            ? 'Udledning'
+            : 'Afgrøder'
       }
       className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
     >
@@ -405,11 +418,15 @@ const YearPanel = ({
                   {subtitle}
                 </p>
               </div>
-              {onViewChange ? (
+              {viewOptions && onViewChange ? (
                 <SegmentedControl
-                  aria-label="Vis udledning eller afgrøder"
+                  aria-label={
+                    canShowNLoad
+                      ? 'Vis udledning, afgrødegrupper eller afgrøder'
+                      : 'Vis afgrødegrupper eller afgrøder'
+                  }
                   value={view}
-                  options={PANEL_VIEW_OPTIONS}
+                  options={viewOptions}
                   onValueChange={onViewChange}
                   labelClassName="hidden @md:inline"
                 />
@@ -512,6 +529,7 @@ export const YearWalkthrough = ({
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [panelView, setPanelView] = useState<PanelView>('nLoad')
+  const cropLevel: CropShareLevel = panelView === 'nLoad' ? 'group' : panelView
 
   const columns = useMemo(
     () => buildColumns(loading ? undefined : entries, history),
@@ -575,8 +593,9 @@ export const YearWalkthrough = ({
         fields,
         yearValues,
         selectedColumn?.index ?? null,
+        cropLevel,
       ),
-    [fields, yearValues, selectedColumn],
+    [fields, yearValues, selectedColumn, cropLevel],
   )
 
   const selectYear = (index: number | null) => {
@@ -632,7 +651,10 @@ export const YearWalkthrough = ({
       ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
       : ''
   const chartHint = scopeLabel ? null : 'Hvert opland mod sin egen kvote'
-  const panelProps: Omit<YearPanelProps, 'view' | 'onViewChange'> = {
+  const panelProps: Omit<
+    YearPanelProps,
+    'view' | 'viewOptions' | 'onViewChange'
+  > = {
     loading,
     column: selectedColumn,
     rows:
@@ -857,12 +879,18 @@ export const YearWalkthrough = ({
       {splitPanels ? (
         <div className="flex min-w-0 flex-[1_1_37.5rem] flex-wrap gap-3">
           <YearPanel {...panelProps} view="nLoad" />
-          <YearPanel {...panelProps} view="crops" />
+          <YearPanel
+            {...panelProps}
+            view={cropLevel}
+            viewOptions={CROP_LEVEL_OPTIONS}
+            onViewChange={setPanelView}
+          />
         </div>
       ) : (
         <YearPanel
           {...panelProps}
           view={panelView}
+          viewOptions={PANEL_VIEW_OPTIONS}
           onViewChange={setPanelView}
         />
       )}
