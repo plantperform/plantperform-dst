@@ -342,9 +342,9 @@ const YearPanel = ({
     : showCrops
       ? column
         ? scoped
-          ? `Areal og udledning pr. afgrødegruppe i ${scopeLabel}`
-          : 'Areal og udledning pr. afgrødegruppe'
-        : 'Gennemsnitligt areal og udledning pr. år'
+          ? `Afgrødegrupper i ${scopeLabel} sorteret efter udledning pr. hektar`
+          : 'Afgrødegrupper sorteret efter udledning pr. hektar'
+        : 'Gennemsnit pr. år, sorteret efter udledning pr. hektar'
       : column
         ? scoped
           ? `${scopeLabel} mod sin kvote`

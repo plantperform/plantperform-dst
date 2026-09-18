@@ -856,5 +856,8 @@ export const summarizeCropDistribution = (
       share: areaHa / totalHa,
       nLoadKgHa: (nLoadByGroup.get(group) ?? 0) / areaHa,
     }))
-    .sort((left, right) => right.areaHa - left.areaHa)
+    .sort(
+      (left, right) =>
+        right.nLoadKgHa - left.nLoadKgHa || right.areaHa - left.areaHa,
+    )
 }

@@ -14,6 +14,28 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 const DONUT_GAP = 0.8
 const TWO_COLUMN_MIN_GROUPS = 6
 
+type ColumnHeadingsProps = {
+  className: string
+  areaClassName: string
+}
+
+const ColumnHeadings = ({ className, areaClassName }: ColumnHeadingsProps) => (
+  <li
+    aria-hidden="true"
+    className={cn(
+      'pb-1 text-[11px] leading-[14px] text-muted-foreground',
+      className,
+    )}
+  >
+    <span className="col-span-2">Afgrøde</span>
+    <span className={cn('text-right', areaClassName)}>Areal</span>
+    <span className="text-right">
+      Udledning
+      <span className="block">kg N/ha</span>
+    </span>
+  </li>
+)
+
 type CropDistributionProps = {
   shares: CropShare[]
 }
@@ -23,6 +45,13 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
   const totalHa = shares.reduce((sum, entry) => sum + entry.areaHa, 0)
   const active = shares.find((entry) => entry.group.id === hovered) ?? null
   const twoColumns = shares.length >= TWO_COLUMN_MIN_GROUPS
+  const rowClassName = cn(
+    'col-span-4 grid grid-cols-subgrid px-1',
+    twoColumns
+      ? '@sm:odd:pr-2 @sm:even:border-l @sm:even:pl-2 @3xl:col-span-5'
+      : '@lg:col-span-5',
+  )
+  const areaSpanClassName = twoColumns ? '@3xl:col-span-2' : '@lg:col-span-2'
   const gap = shares.length > 1 ? DONUT_GAP : 0
   const arcs: { entry: CropShare; length: number; offset: number }[] = []
   let offset = 0
@@ -36,7 +65,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
       className={cn(
         'flex flex-col items-center gap-4',
         twoColumns
-          ? '@sm:flex-row @sm:gap-3 @xl:gap-5'
+          ? '@lg:flex-row @lg:gap-3 @xl:gap-5'
           : '@md:flex-row @md:gap-5',
       )}
     >
@@ -44,8 +73,8 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
         aria-hidden="true"
         viewBox="0 0 100 100"
         className={cn(
-          'shrink-0',
-          twoColumns ? 'size-36' : 'size-28 @md:size-36',
+          'size-28 shrink-0',
+          twoColumns ? '@xl:size-36' : '@md:size-36',
         )}
         onMouseLeave={() => setHovered(null)}
       >
@@ -95,44 +124,56 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
       <ul
         aria-label="Afgrødefordeling"
         className={cn(
-          'w-full min-w-0',
+          'grid w-full min-w-0 content-start grid-cols-[auto_minmax(0,1fr)_auto_auto]',
           twoColumns
-            ? '@sm:w-auto @sm:flex-1 @sm:columns-2 @sm:gap-x-3 @sm:[column-rule:1px_solid_var(--color-border)] @xl:gap-x-4'
-            : '@md:w-auto @md:flex-1',
+            ? 'gap-x-1.5 text-xs @sm:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto)] @lg:w-auto @lg:flex-1 @xl:gap-x-2 @xl:text-[13px] @3xl:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto_auto)]'
+            : 'gap-x-2 text-[13px] @md:w-auto @md:flex-1 @lg:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]',
         )}
       >
+        <ColumnHeadings
+          className={rowClassName}
+          areaClassName={areaSpanClassName}
+        />
+        {twoColumns ? (
+          <ColumnHeadings
+            className={cn(rowClassName, 'hidden @sm:grid')}
+            areaClassName={areaSpanClassName}
+          />
+        ) : null}
         {shares.map((entry) => (
           <li
             key={entry.group.id}
             className={cn(
-              'grid break-inside-avoid items-center rounded-sm py-1 leading-5',
-              twoColumns
-                ? 'grid-cols-[auto_minmax(0,1fr)_2.25rem_auto] gap-x-1.5 px-0.5 text-xs @xl:gap-x-2 @xl:px-1 @xl:text-[13px] @2xl:grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto]'
-                : 'grid-cols-[auto_minmax(0,1fr)_2.5rem_auto] gap-x-2 px-1 text-[13px] @lg:grid-cols-[auto_minmax(0,1fr)_auto_2.5rem_auto]',
+              rowClassName,
+              'items-center rounded-sm py-1 leading-5',
+              twoColumns && '@sm:even:rounded-l-none',
               hovered === entry.group.id && 'bg-muted',
             )}
             onMouseEnter={() => setHovered(entry.group.id)}
             onMouseLeave={() => setHovered(null)}
           >
             <CropGroupTile group={entry.group} hasUndersownCrop={false} />
-            <span className="truncate">{entry.group.label}</span>
+            <span className="truncate" title={entry.group.label}>
+              {entry.group.label}
+            </span>
             <span
               className={cn(
                 'text-right text-[11px] text-muted-foreground tabular-nums',
-                twoColumns ? 'hidden @2xl:block' : 'hidden @lg:block',
+                twoColumns ? 'hidden @3xl:block' : 'hidden @lg:block',
               )}
             >
               {formatNumber(entry.areaHa)} ha
             </span>
-            <span className="text-right font-semibold tabular-nums">
+            <span className="text-right tabular-nums">
               {formatWholeNumber(entry.share * 100)} %
+              <span className="sr-only"> af arealet, udledning</span>
             </span>
             <span
-              className="text-right whitespace-nowrap tabular-nums"
+              className="text-right font-semibold tabular-nums"
               title={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
             >
-              {formatNumber(entry.nLoadKgHa)}{' '}
-              <span className="text-[11px] text-muted-foreground">kg N/ha</span>
+              {formatNumber(entry.nLoadKgHa)}
+              <span className="sr-only"> kg N pr. hektar</span>
             </span>
           </li>
         ))}
