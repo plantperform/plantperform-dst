@@ -1,7 +1,8 @@
 import type { FieldRecord } from '@/api/types'
-import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { cropGroupFor } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
+import { rotationCovers } from '@/lib/winter-cover'
 
 type RotationSwatchesProps = {
   rotation: FieldRecord['cropRotation']
@@ -15,32 +16,37 @@ export const RotationSwatches = ({
   startYear,
   highlightIndex = null,
   tileClassName,
-}: RotationSwatchesProps) => (
-  <span className="flex shrink-0 gap-0.5">
-    {rotation.map((year, index) => {
-      const calendarYear = startYear + index
-      const hasUndersownCrop = year.undersownCropName !== null
-      const title = hasUndersownCrop
-        ? `${calendarYear}: ${year.cropName} (udlæg: ${year.undersownCropName})`
-        : `${calendarYear}: ${year.cropName}`
-      const isHighlighted = highlightIndex === index
-      return (
-        <span
-          key={index}
-          className={cn(
-            'inline-flex rounded-[3px] motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
-            isHighlighted && 'ring-2 ring-primary ring-offset-1',
-            highlightIndex !== null && !isHighlighted && 'opacity-60',
-          )}
-        >
-          <CropGroupTile
-            group={cropGroupFor(year.cropCode, year.cropName)}
-            hasUndersownCrop={hasUndersownCrop}
-            title={title}
-            className={tileClassName}
-          />
-        </span>
-      )
-    })}
-  </span>
-)
+}: RotationSwatchesProps) => {
+  const yearCovers = rotationCovers(rotation)
+  return (
+    <span className="flex shrink-0 gap-0.5">
+      {rotation.map((year, index) => {
+        const calendarYear = startYear + index
+        const covers = yearCovers?.[index] ?? []
+        const title = `${calendarYear}: ${year.cropName}${
+          year.undersownCropName !== null
+            ? ` (udlæg: ${year.undersownCropName})`
+            : ''
+        }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}`
+        const isHighlighted = highlightIndex === index
+        return (
+          <span
+            key={index}
+            className={cn(
+              'inline-flex rounded-[3px] motion-safe:transition-[opacity,box-shadow] motion-safe:duration-300',
+              isHighlighted && 'ring-2 ring-primary ring-offset-1',
+              highlightIndex !== null && !isHighlighted && 'opacity-60',
+            )}
+          >
+            <CropYearBlock
+              group={cropGroupFor(year.cropCode, year.cropName)}
+              covers={yearCovers?.[index]}
+              title={title}
+              tileClassName={tileClassName}
+            />
+          </span>
+        )
+      })}
+    </span>
+  )
+}

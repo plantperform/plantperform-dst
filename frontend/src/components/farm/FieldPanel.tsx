@@ -347,7 +347,6 @@ export const FieldPanel = ({
                 <div className="mt-2 flex items-center gap-1.5 border-t pt-2 text-xs leading-4 text-muted-foreground tabular-nums">
                   <CropGroupTile
                     group={cropGroupFor(firstYear.cropCode, firstYear.cropName)}
-                    hasUndersownCrop={firstYear.undersownCropName !== null}
                   />
                   <span>
                     {restartYear}: forfra med {firstYear.cropName}

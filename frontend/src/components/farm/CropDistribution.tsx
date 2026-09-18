@@ -179,7 +179,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
               onMouseEnter={() => setHovered(entry.id)}
               onMouseLeave={() => setHovered(null)}
             >
-              <CropGroupTile group={entry.group} hasUndersownCrop={false} />
+              <CropGroupTile group={entry.group} />
               <span className="truncate" title={entry.label}>
                 {entry.label}
               </span>

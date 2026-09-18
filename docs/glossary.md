@@ -50,6 +50,9 @@ field" column is the name on the wire.
 | udlæg | `undersownCropCode`, `undersownCropName` | `udlaegKode`, `udlaegNavn` | |
 | efterafgrøde | catch crop | | EEA in formula names |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
+| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `cropCover` (plantedække), `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing` |
+| stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
+| bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
+import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { shortCropName } from '@/lib/crop-groups'
 import { ROTATION_START_CALENDAR_YEAR, yearNLoadKgHa } from '@/lib/field-domain'
 import {
@@ -10,11 +11,18 @@ import {
   MP_LABELS,
   MP_P,
   NTHETA_COEFFICIENTS,
-  W_LABELS,
   W_P,
   WP_LABELS,
   WP_P,
 } from '@/lib/nles5-detail-labels'
+import {
+  CATCH_CROP,
+  EARLY_SOWING,
+  INTERMEDIATE_CROP,
+  yearCoverForW,
+  yearCoversFromDetail,
+  type WinterCoverDefinition,
+} from '@/lib/winter-cover'
 
 const num = (value: unknown): number =>
   typeof value === 'number' ? value : Number(value ?? 0)
@@ -39,6 +47,9 @@ const abbreviate = (name: string) =>
   name.length > UNDERSOWN_ABBREVIATION_LENGTH
     ? `${name.slice(0, UNDERSOWN_ABBREVIATION_LENGTH - 1)}.`
     : name
+
+const lowerFirst = (text: string) =>
+  text.charAt(0).toLocaleLowerCase('da-DK') + text.slice(1)
 
 const shortTabLabel = (year: RotationYear): string => {
   const crop = shortCropName(year.cropName)
@@ -67,7 +78,12 @@ const calculateNLoad = (
   return { nLoadPerHa, nLoadField: nLoadPerHa * areaHa }
 }
 
-type Row = { label: string; detail?: string; value: string; strong?: boolean }
+type Row = {
+  label: string
+  detail?: React.ReactNode
+  value: string
+  strong?: boolean
+}
 
 const DetailTable = ({ rows }: { rows: Row[] }) => (
   <table className="w-full border-collapse text-xs">
@@ -283,6 +299,8 @@ const StepRow = ({
   </div>
 )
 
+type Measure = { name: string; cover?: WinterCoverDefinition; pct: number }
+
 const CalculationStepsSection = ({
   detail,
   areaHa,
@@ -296,20 +314,42 @@ const CalculationStepsSection = ({
   const lNuar = num(detail.L_nuar)
   const { nLoadPerHa, nLoadField } = calculateNLoad(lNuar, retention, areaHa)
 
-  const measures = [
+  const [winterCover] = yearCoversFromDetail(detail)
+  const allMeasures: Measure[] = [
     {
       name: 'Efterafgrøde',
+      cover: CATCH_CROP,
       pct: num(detail.EEA) * num(detail.Fdato_factor) * 100,
     },
-    { name: 'Mellemafgrøde', pct: num(detail.EMA) * 100 },
-    { name: 'Tidlig såning', pct: num(detail.ETS) * 100 },
+    {
+      name: 'Mellemafgrøde',
+      cover: INTERMEDIATE_CROP,
+      pct: num(detail.EMA) * 100,
+    },
+    {
+      name: 'Tidlig såning',
+      cover: EARLY_SOWING,
+      pct: num(detail.ETS) * 100,
+    },
     { name: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
-  ].filter((v) => v.pct > 0.001)
+  ]
+  const measures = allMeasures.filter((v) => v.pct > 0.001)
 
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
         <SectionHeading>1. Udvaskning fra rodzonen</SectionHeading>
+        {winterCover ? (
+          <StepRow
+            text={winterCover.description}
+            value={
+              <span className="inline-flex items-center gap-1.5">
+                <WinterCoverSwatch cover={winterCover.cover} />
+                {winterCover.cover.label}
+              </span>
+            }
+          />
+        ) : null}
         <StepRow
           text="Ud fra afgrøderne, jordtypen og gødningen er udvaskningen beregnet til"
           value={`${fmt(l, 1)} kg N pr. ha`}
@@ -323,7 +363,16 @@ const CalculationStepsSection = ({
             {measures.map((v) => (
               <StepRow
                 key={v.name}
-                text={`${v.name} reducerer med`}
+                text={
+                  v.cover ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <WinterCoverSwatch cover={v.cover} />
+                      {v.name} reducerer med
+                    </span>
+                  ) : (
+                    `${v.name} reducerer med`
+                  )
+                }
                 value={`${fmt(v.pct, 1)}%`}
               />
             ))}
@@ -369,10 +418,11 @@ const LeachingDetailSection = ({
 }) => {
   const m = num(detail.M)
   const wUsed = num(detail.W_used ?? detail.W)
-  const wRef = detail.W_ref
   const mp = num(detail.MP)
   const wp = num(detail.WP)
   const wc = num(detail.WC)
+  const wCover = yearCoverForW(wUsed)
+  const wState = yearCoversFromDetail(detail)[0] ?? wCover
 
   const mCoef = M_P[m] ?? 0
   const wCoef = W_P[wUsed] ?? 0
@@ -434,31 +484,47 @@ const LeachingDetailSection = ({
           rows={[
             {
               label: `M=${m}`,
-              detail: `Hovedafgrøde — ${M_LABELS[m] ?? '—'}`,
+              detail: `Hovedafgrøde: ${M_LABELS[m] ?? '-'}`,
               value: fmtSigned(mCoef),
             },
             {
               label: `W=${wUsed}`,
-              detail: `Vinterdækning${wRef !== null && wRef !== undefined ? ` (EEA-ref, oprindelig W${detail.W_original})` : ''} — ${W_LABELS[wUsed] ?? '—'}`,
+              detail:
+                wCover && wState ? (
+                  <span className="inline-flex items-start gap-1.5">
+                    <WinterCoverSwatch
+                      cover={wState.cover}
+                      className="size-4"
+                    />
+                    <span>
+                      {wState.cover.label}.{' '}
+                      {wState.cover === CATCH_CROP
+                        ? `Regnet som om der ikke var efterafgrøde: ${lowerFirst(wCover.description)}`
+                        : wCover.description}
+                    </span>
+                  </span>
+                ) : (
+                  '-'
+                ),
               value: fmtSigned(wCoef),
             },
             {
               label: `MP=${mp}`,
-              detail: `Forfrugt — ${MP_LABELS[mp] ?? '—'}`,
+              detail: `Forfrugt: ${MP_LABELS[mp] ?? '-'}`,
               value: fmtSigned(mpCoef),
             },
             {
               label: `WP=${wp}`,
-              detail: `Forfrugtens vinterdækning — ${WP_LABELS[wp] ?? '—'}`,
+              detail: `Forfrugtens vinterdække: ${WP_LABELS[wp] ?? '-'}`,
               value: fmtSigned(wpCoef),
             },
             {
               label: `WC=${wc}`,
               detail:
                 wc === 1
-                  ? 'Efterårsoptag — stort N-optag (ingen korrektion)'
-                  : `Efterårsoptag — lavt N-optag (× θ₂=${theta2})`,
-              value: '—',
+                  ? 'Efterårsoptag: stort N-optag (ingen korrektion)'
+                  : `Efterårsoptag: lavt N-optag (× θ₂=${theta2})`,
+              value: '-',
             },
           ]}
         />
