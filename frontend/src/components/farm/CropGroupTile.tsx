@@ -13,13 +13,14 @@ import {
   SheafOfRice,
   WheatOutline,
 } from '@/components/farm/crop-icons'
+import { WinterCoverBand } from '@/components/farm/WinterCoverBand'
 import {
   readableTextColor,
   type CropGroup,
   type CropGroupDefinition,
 } from '@/lib/crop-groups'
-import { coverCropShadow } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
+import type { YearCover } from '@/lib/winter-cover'
 
 const ICONS: Record<CropGroup, ComponentType<{ className?: string }>> = {
   springCereal: WheatOutline,
@@ -35,17 +36,17 @@ const ICONS: Record<CropGroup, ComponentType<{ className?: string }>> = {
   other: OakLeaf,
 }
 
+type TileSize = 'sm' | 'md'
+
 type CropGroupTileProps = {
   group: CropGroupDefinition
-  hasUndersownCrop: boolean
-  size?: 'sm' | 'md'
+  size?: TileSize
   title?: string
   className?: string
 }
 
 export const CropGroupTile = ({
   group,
-  hasUndersownCrop,
   size = 'sm',
   title,
   className,
@@ -58,13 +59,11 @@ export const CropGroupTile = ({
       className={cn(
         'flex shrink-0 items-center justify-center',
         size === 'sm' ? 'size-[18px] rounded-[3px]' : 'h-6 rounded-[4px]',
-        hasUndersownCrop && 'pb-1',
         className,
       )}
       style={{
         backgroundColor: group.color,
         color: readableTextColor(group.color),
-        boxShadow: coverCropShadow(hasUndersownCrop),
       }}
     >
       <Icon className={size === 'sm' ? 'size-3' : 'size-4'} />
@@ -72,10 +71,47 @@ export const CropGroupTile = ({
   )
 }
 
-export const CoverCropSwatch = () => (
-  <span
-    aria-hidden="true"
-    className="box-border h-3 w-4 shrink-0 rounded-xs bg-muted outline-1 -outline-offset-1 outline-foreground/10"
-    style={{ boxShadow: coverCropShadow(true) }}
-  />
-)
+type CropYearBlockProps = {
+  group: CropGroupDefinition
+  covers?: YearCover[]
+  size?: TileSize
+  title?: string
+  className?: string
+  tileClassName?: string
+}
+
+export const CropYearBlock = ({
+  group,
+  covers,
+  size = 'sm',
+  title,
+  className,
+  tileClassName,
+}: CropYearBlockProps) =>
+  covers ? (
+    <span
+      className={cn(
+        'flex flex-col gap-px overflow-hidden',
+        size === 'sm' ? 'rounded-[3px]' : 'rounded-[4px]',
+        className,
+      )}
+    >
+      <CropGroupTile
+        group={group}
+        size={size}
+        title={title}
+        className={cn('rounded-none', tileClassName)}
+      />
+      <WinterCoverBand
+        covers={covers}
+        className={size === 'sm' ? 'h-1' : 'h-2.5'}
+      />
+    </span>
+  ) : (
+    <CropGroupTile
+      group={group}
+      size={size}
+      title={title}
+      className={cn(className, tileClassName)}
+    />
+  )

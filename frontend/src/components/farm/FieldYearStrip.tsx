@@ -2,7 +2,11 @@ import { ArrowDownToLine, Coins, Droplets } from 'lucide-react'
 import { useState } from 'react'
 
 import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
-import { CoverCropSwatch, CropGroupTile } from '@/components/farm/CropGroupTile'
+import { CropGroupTile, CropYearBlock } from '@/components/farm/CropGroupTile'
+import {
+  WinterCoverLegend,
+  WinterCoverSwatch,
+} from '@/components/farm/WinterCoverBand'
 import {
   SegmentedControl,
   type SegmentedControlOption,
@@ -15,6 +19,7 @@ import {
   yearNLoadKgHa,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
+import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type YearMetric = 'nLoad' | 'leaching' | 'db2'
 
@@ -111,15 +116,16 @@ export const FieldYearStrip = ({
       ? counted.reduce((sum, value) => sum + value, 0) / counted.length
       : null
   const scale = columnScale(metric, values)
-  const hasUndersownCrop = field.cropRotation.some(
-    (year) => year.undersownCropName !== null,
+  const yearCovers = rotationCovers(
+    field.cropRotation,
+    yearValues?.map((yearValue) => yearValue.leachingDetail) ?? [],
   )
+  const presentCovers = presentWinterCovers(yearCovers ?? [])
   const distinctCrops = field.cropRotation.filter(
     (year, index, all) =>
       all.findIndex((candidate) => candidate.cropName === year.cropName) ===
       index,
   )
-  const legendAlways = hasUndersownCrop && !hasValues
   const selectedYear =
     selectedIndex !== null ? field.cropRotation[selectedIndex] : undefined
   const selectedValue =
@@ -139,22 +145,14 @@ export const FieldYearStrip = ({
             aria-label="Vis"
             labelClassName="inline"
           />
-          <div className="flex items-center gap-3 text-[11px] leading-[14px] text-muted-foreground">
-            <span className="tabular-nums">
-              {meanValue !== null ? (
-                <span className="@min-[560px]:hidden">
-                  Gns. {formatColumnValue(meanValue, scale)}{' '}
-                </span>
-              ) : null}
-              {scale.unit}
-            </span>
-            {hasUndersownCrop ? (
-              <span className="hidden items-center gap-1.5 @min-[560px]:inline-flex">
-                <CoverCropSwatch />
-                udlæg
+          <span className="text-[11px] leading-[14px] text-muted-foreground tabular-nums">
+            {meanValue !== null ? (
+              <span className="@min-[560px]:hidden">
+                Gns. {formatColumnValue(meanValue, scale)}{' '}
               </span>
             ) : null}
-          </div>
+            {scale.unit}
+          </span>
         </div>
       ) : null}
       <div className="relative @min-[560px]:pr-14">
@@ -186,6 +184,7 @@ export const FieldYearStrip = ({
         >
           {field.cropRotation.map((year, index) => {
             const value = values[index]
+            const covers = yearCovers?.[index] ?? []
             const isSelected = selectedIndex === index
             const calendarYear = startYear + index
             const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
@@ -196,7 +195,9 @@ export const FieldYearStrip = ({
               year.undersownCropName !== null
                 ? ` (udlæg: ${year.undersownCropName})`
                 : ''
-            }${value !== null ? ` · ${describeMetric(metric, value)}` : ''}`
+            }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}${
+              value !== null ? ` · ${describeMetric(metric, value)}` : ''
+            }`
             const ratio =
               value !== null && maxValue > 0 ? Math.max(0, value) / maxValue : 0
             const content = (
@@ -232,9 +233,9 @@ export const FieldYearStrip = ({
                     />
                   </span>
                 ) : null}
-                <CropGroupTile
+                <CropYearBlock
                   group={group}
-                  hasUndersownCrop={year.undersownCropName !== null}
+                  covers={yearCovers?.[index]}
                   size="md"
                   className="mt-[3px]"
                 />
@@ -285,47 +286,56 @@ export const FieldYearStrip = ({
           })}
         </div>
       </div>
-      <div
-        className={cn(
-          'flex flex-wrap gap-x-3 gap-y-1 pt-2 text-[11px] leading-[14px] text-muted-foreground',
-          !legendAlways && '@min-[560px]:hidden',
-        )}
-      >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-[11px] leading-[14px] text-muted-foreground @min-[560px]:hidden">
+        <span className="font-medium text-foreground">Afgrøder</span>
         {distinctCrops.map((year) => (
           <span
             key={year.cropName}
             className="inline-flex items-center gap-1.5"
           >
-            <CropGroupTile
-              group={cropGroupFor(year.cropCode, year.cropName)}
-              hasUndersownCrop={false}
-            />
+            <CropGroupTile group={cropGroupFor(year.cropCode, year.cropName)} />
             {shortCropName(year.cropName)}
           </span>
         ))}
-        {hasUndersownCrop ? (
-          <span className="inline-flex items-center gap-1.5">
-            <CoverCropSwatch />
-            udlæg
-          </span>
-        ) : null}
       </div>
+      {presentCovers.length > 0 ? (
+        <WinterCoverLegend
+          covers={presentCovers}
+          className="pt-2 text-[11px] leading-[14px]"
+        />
+      ) : null}
       {selectedYear && selectedIndex !== null ? (
-        <p className="pt-2 text-xs leading-4 tabular-nums text-pretty">
-          <span className="font-semibold">{startYear + selectedIndex}</span> ·{' '}
-          {selectedYear.cropName}
-          {selectedYear.undersownCropName !== null
-            ? ` · udlæg: ${shortCropName(selectedYear.undersownCropName)}`
-            : ''}
-          {selectedValue
-            ? otherMetrics
-                .map(
-                  (option) =>
-                    ` · ${describeMetric(option.value, metricValue(option.value, selectedValue, field))}`,
-                )
-                .join('')
-            : ''}
-        </p>
+        <div className="space-y-1.5 pt-2 text-xs leading-4">
+          <p className="tabular-nums text-pretty">
+            <span className="font-semibold">{startYear + selectedIndex}</span> ·{' '}
+            {selectedYear.cropName}
+            {selectedYear.undersownCropName !== null
+              ? ` · udlæg: ${shortCropName(selectedYear.undersownCropName)}`
+              : ''}
+            {selectedValue
+              ? otherMetrics
+                  .map(
+                    (option) =>
+                      ` · ${describeMetric(option.value, metricValue(option.value, selectedValue, field))}`,
+                  )
+                  .join('')
+              : ''}
+          </p>
+          {(yearCovers?.[selectedIndex] ?? []).map((yearCover) => (
+            <p
+              key={yearCover.cover.id}
+              className="flex items-start gap-1.5 text-muted-foreground"
+            >
+              <WinterCoverSwatch cover={yearCover.cover} className="size-4" />
+              <span>
+                <span className="font-medium text-foreground">
+                  {yearCover.cover.label}.
+                </span>{' '}
+                {yearCover.description}
+              </span>
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   )
