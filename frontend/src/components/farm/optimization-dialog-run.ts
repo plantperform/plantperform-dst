@@ -9,7 +9,7 @@ import type { OptimizationKind } from '@/lib/optimization-run'
 export type OptimizationDialogView = 'form' | 'running' | 'succeeded'
 
 // Run state for one optimization dialog. The confirmation is only shown for a
-// run the user started and watched to the end without closing the dialog.
+// run the user watched to the end without closing the dialog.
 export const useOptimizationDialogRun = (
   simulationId: string,
   kind: OptimizationKind,
@@ -19,6 +19,9 @@ export const useOptimizationDialogRun = (
   const { startRun } = useOptimizationRunActions()
   const [watchedRunId, setWatchedRunId] = useState<number | null>(null)
   if (!open && watchedRunId !== null) setWatchedRunId(null)
+  if (open && watchedRunId === null && run?.status === 'running') {
+    setWatchedRunId(run.id)
+  }
 
   const view: OptimizationDialogView =
     run?.status === 'running'
