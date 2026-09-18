@@ -20,10 +20,7 @@ export const RotationYearRow = ({
       <span className="w-9 shrink-0 tabular-nums text-muted-foreground">
         {calendarYear}
       </span>
-      <CropGroupTile
-        group={cropGroupFor(year.cropCode, year.cropName)}
-        hasUndersownCrop={year.undersownCropName !== null}
-      />
+      <CropGroupTile group={cropGroupFor(year.cropCode, year.cropName)} />
       <span
         className={cn('min-w-0 truncate', isCurrentYear && 'font-medium')}
         title={year.cropName}

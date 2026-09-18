@@ -19,10 +19,11 @@ import type {
   RotationPositionOverride,
   Simulation,
 } from '@/api/types'
-import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { BigMetricTile, RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
 import { SearchableCropPickerList } from '@/components/farm/SearchableCropPickerList'
+import { WinterCoverLegend } from '@/components/farm/WinterCoverBand'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -39,6 +40,7 @@ import {
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
+import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type ManualRotationEditorProps = {
   farmId: string
@@ -369,6 +371,10 @@ export const ManualRotationEditor = ({
   }
 
   const years = preview ? preview.years.slice(0, preview.activeLen) : []
+  const yearCovers = rotationCovers(
+    years.map((y) => y.year),
+    years.map((y) => y.leachingDetail),
+  )
   const activeYear = activeYearIndex !== null ? years[activeYearIndex] : undefined
   const rotationLength = years.length
   const startYearOffset =
@@ -609,11 +615,9 @@ export const ManualRotationEditor = ({
                                       : undefined
                                   }
                                 >
-                                  <CropGroupTile
+                                  <CropYearBlock
                                     group={group}
-                                    hasUndersownCrop={
-                                      y.year.undersownCropName !== null
-                                    }
+                                    covers={yearCovers?.[index]}
                                   />
                                   <span className="min-w-0 truncate">
                                     {y.year.cropName}
@@ -631,6 +635,12 @@ export const ManualRotationEditor = ({
                             )
                           })}
                         </div>
+                        {yearCovers ? (
+                          <WinterCoverLegend
+                            covers={presentWinterCovers(yearCovers)}
+                            className="text-xs"
+                          />
+                        ) : null}
 
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs text-muted-foreground">Ryk alle afgrøder</span>

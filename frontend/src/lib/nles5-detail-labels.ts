@@ -18,17 +18,6 @@ export const M_LABELS: Record<number, string> = {
   13: 'Bælgsæd og vårraps',
 }
 
-export const W_LABELS: Record<number, string> = {
-  1: 'Vintersæd',
-  2: 'Bar jord',
-  3: 'Bar jord efter majs/kartofler',
-  4: 'Efterafgrøder, undersået græs og brak',
-  5: 'Ukrudt og spildkorn',
-  6: 'Græs, kløvergræs, vinterraps, roer',
-  7: 'Vintersæd efter græs',
-  8: 'Græs og kløvergræs pløjet sent',
-}
-
 export const MP_LABELS: Record<number, string> = {
   1: 'Vintersæd',
   2: 'Andre afgrøder',

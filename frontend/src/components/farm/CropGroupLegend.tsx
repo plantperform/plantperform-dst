@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 
 import type { FieldRecord } from '@/api/types'
-import { CoverCropSwatch, CropGroupTile } from '@/components/farm/CropGroupTile'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { WinterCoverLegend } from '@/components/farm/WinterCoverBand'
 import { presentCropGroups } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
+import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type CropGroupLegendProps = {
   fields: FieldRecord[]
@@ -14,11 +16,11 @@ export const CropGroupLegend = ({
   fields,
   className,
 }: CropGroupLegendProps) => {
-  const { groups, hasUndersownCrop } = useMemo(() => {
+  const { groups, covers } = useMemo(() => {
     const years = fields.flatMap((field) => field.cropRotation)
     return {
       groups: presentCropGroups(years),
-      hasUndersownCrop: years.some((year) => year.undersownCropName !== null),
+      covers: presentWinterCovers(rotationCovers(years) ?? []),
     }
   }, [fields])
 
@@ -34,16 +36,11 @@ export const CropGroupLegend = ({
       <span className="font-medium text-foreground">Afgrøder</span>
       {groups.map((group) => (
         <span key={group.id} className="inline-flex items-center gap-1.5">
-          <CropGroupTile group={group} hasUndersownCrop={false} />
+          <CropGroupTile group={group} />
           <span>{group.label}</span>
         </span>
       ))}
-      {hasUndersownCrop ? (
-        <span className="inline-flex items-center gap-1.5">
-          <CoverCropSwatch />
-          <span>med udlæg</span>
-        </span>
-      ) : null}
+      {covers.length > 0 ? <WinterCoverLegend covers={covers} /> : null}
     </div>
   )
 }
