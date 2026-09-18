@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -8,11 +8,18 @@ type LoadErrorProps = {
   message: React.ReactNode
   onRetry?: () => void
   retrying?: boolean
+  onDismiss?: () => void
   className?: string
 }
 
 // Failed data fetch, kept visually distinct from loading and from empty data.
-const LoadError = ({ message, onRetry, retrying = false, className }: LoadErrorProps) => (
+const LoadError = ({
+  message,
+  onRetry,
+  retrying = false,
+  onDismiss,
+  className,
+}: LoadErrorProps) => (
   <div
     role="alert"
     className={cn(
@@ -32,6 +39,18 @@ const LoadError = ({ message, onRetry, retrying = false, className }: LoadErrorP
         onClick={onRetry}
       >
         Prøv igen
+      </Button>
+    ) : null}
+    {onDismiss ? (
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        className="px-2 text-red-700 hover:bg-red-100 hover:text-red-700"
+        aria-label="Luk fejlbeskeden"
+        onClick={onDismiss}
+      >
+        <X className="size-4" aria-hidden="true" />
       </Button>
     ) : null}
   </div>

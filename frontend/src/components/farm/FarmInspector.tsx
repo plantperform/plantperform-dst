@@ -869,9 +869,7 @@ const OptimizeDialog = ({
             </div>
 
             {runError ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
-                {runError}
-              </p>
+              <LoadError className="whitespace-pre-wrap" message={runError} />
             ) : null}
           </>
         )}
@@ -1164,9 +1162,7 @@ const YearlyOptimizeDialog = ({
             </div>
 
             {runError ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm whitespace-pre-wrap text-red-700">
-                {runError}
-              </p>
+              <LoadError className="whitespace-pre-wrap" message={runError} />
             ) : null}
           </>
         )}
