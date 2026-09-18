@@ -438,7 +438,10 @@ export const FarmInspector = ({
           {showYearWalkthrough ? (
             <div className="flex flex-wrap gap-3">
               {isSimulationView && optimizationRun ? (
-                <OptimizationRunBanner run={optimizationRun} fields={fields} />
+                <OptimizationRunBanner
+                  run={optimizationRun}
+                  fields={fieldsLoading ? undefined : fields}
+                />
               ) : null}
               {!fieldsLoading &&
               fields.length > 0 &&
