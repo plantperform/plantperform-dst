@@ -46,7 +46,7 @@ field" column is the name on the wire.
 | afgrøde | crop | | |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
 | afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
-| afgrødefordeling | `CropShare`, `summarizeCropDistribution` | | Area and N load per crop group for a year, or the average per year |
+| afgrødefordeling | `CropShare`, `CropShareLevel`, `summarizeCropDistribution` | | Area and N load per crop group or per crop for a year, or the average per year |
 | udlæg | `undersownCropCode`, `undersownCropName` | `udlaegKode`, `udlaegNavn` | |
 | efterafgrøde | catch crop | | EEA in formula names |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |

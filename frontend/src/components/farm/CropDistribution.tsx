@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { Fragment, useState, type CSSProperties } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import type { CropGroup } from '@/lib/crop-groups'
 import {
   formatNumber,
   formatWholeNumber,
@@ -12,7 +11,17 @@ import { cn } from '@/lib/utils'
 const DONUT_RADIUS = 40
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 const DONUT_GAP = 0.8
-const TWO_COLUMN_MIN_GROUPS = 6
+const TWO_COLUMN_MIN_ROWS = 6
+
+const formatShare = (share: number) => {
+  const percent = share * 100
+  if (percent > 0 && percent < 0.05) return '< 0,1 %'
+  const text =
+    percent > 0 && percent < 1
+      ? formatNumber(percent)
+      : formatWholeNumber(percent)
+  return `${text} %`
+}
 
 type ColumnHeadingsProps = {
   className: string
@@ -23,7 +32,7 @@ const ColumnHeadings = ({ className, areaClassName }: ColumnHeadingsProps) => (
   <li
     aria-hidden="true"
     className={cn(
-      'pb-1 text-[11px] leading-[14px] text-muted-foreground',
+      'border-b pb-1 text-[11px] leading-[14px] text-muted-foreground',
       className,
     )}
   >
@@ -41,16 +50,23 @@ type CropDistributionProps = {
 }
 
 export const CropDistribution = ({ shares }: CropDistributionProps) => {
-  const [hovered, setHovered] = useState<CropGroup | null>(null)
+  const [hovered, setHovered] = useState<string | null>(null)
   const totalHa = shares.reduce((sum, entry) => sum + entry.areaHa, 0)
-  const active = shares.find((entry) => entry.group.id === hovered) ?? null
-  const twoColumns = shares.length >= TWO_COLUMN_MIN_GROUPS
+  const active = shares.find((entry) => entry.id === hovered) ?? null
+  const twoColumns = shares.length >= TWO_COLUMN_MIN_ROWS
+  const firstColumnSize = twoColumns
+    ? Math.ceil(shares.length / 2)
+    : shares.length
   const rowClassName = cn(
     'col-span-4 grid grid-cols-subgrid px-1',
-    twoColumns
-      ? '@sm:odd:pr-2 @sm:even:border-l @sm:even:pl-2 @3xl:col-span-5'
-      : '@lg:col-span-5',
+    twoColumns ? '@3xl:col-span-5' : '@lg:col-span-5',
   )
+  const sideClassName = (index: number) =>
+    twoColumns
+      ? index < firstColumnSize
+        ? '@sm:pr-2'
+        : '@sm:border-l @sm:pl-2'
+      : ''
   const areaSpanClassName = twoColumns ? '@3xl:col-span-2' : '@lg:col-span-2'
   const gap = shares.length > 1 ? DONUT_GAP : 0
   const arcs: { entry: CropShare; length: number; offset: number }[] = []
@@ -74,13 +90,15 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
         viewBox="0 0 100 100"
         className={cn(
           'size-28 shrink-0',
-          twoColumns ? '@xl:size-36' : '@md:size-36',
+          twoColumns
+            ? '@lg:sticky @lg:top-0 @lg:self-start @xl:size-36'
+            : '@md:sticky @md:top-0 @md:self-start @md:size-36',
         )}
         onMouseLeave={() => setHovered(null)}
       >
         {arcs.map(({ entry, length, offset: start }) => (
           <circle
-            key={entry.group.id}
+            key={entry.id}
             cx="50"
             cy="50"
             r={DONUT_RADIUS}
@@ -92,9 +110,9 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
             transform="rotate(-90 50 50)"
             className={cn(
               'motion-safe:transition-opacity',
-              hovered !== null && hovered !== entry.group.id && 'opacity-45',
+              hovered !== null && hovered !== entry.id && 'opacity-45',
             )}
-            onMouseEnter={() => setHovered(entry.group.id)}
+            onMouseEnter={() => setHovered(entry.id)}
           />
         ))}
         <text
@@ -107,7 +125,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
           className="tabular-nums"
         >
           {active
-            ? `${formatWholeNumber(active.share * 100)} %`
+            ? formatShare(active.share)
             : `${formatWholeNumber(totalHa)} ha`}
         </text>
         <text
@@ -118,7 +136,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
           fill="currentColor"
           opacity="0.7"
         >
-          {active ? active.group.label : 'i alt'}
+          {active ? active.label : 'i alt'}
         </text>
       </svg>
       <ul
@@ -126,56 +144,66 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
         className={cn(
           'grid w-full min-w-0 content-start grid-cols-[auto_minmax(0,1fr)_auto_auto]',
           twoColumns
-            ? 'gap-x-1.5 text-xs @sm:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto)] @lg:w-auto @lg:flex-1 @xl:gap-x-2 @xl:text-[13px] @3xl:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto_auto)]'
+            ? 'gap-x-1.5 text-xs @sm:grid-flow-col @sm:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto)] @sm:grid-rows-[repeat(var(--rows),auto)] @lg:w-auto @lg:flex-1 @xl:gap-x-2 @xl:text-[13px] @3xl:grid-cols-[repeat(2,auto_minmax(0,1fr)_auto_auto_auto)]'
             : 'gap-x-2 text-[13px] @md:w-auto @md:flex-1 @lg:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]',
         )}
+        style={
+          twoColumns
+            ? ({ '--rows': firstColumnSize + 1 } as CSSProperties)
+            : undefined
+        }
       >
         <ColumnHeadings
-          className={rowClassName}
+          className={cn(rowClassName, sideClassName(0))}
           areaClassName={areaSpanClassName}
         />
-        {twoColumns ? (
-          <ColumnHeadings
-            className={cn(rowClassName, 'hidden @sm:grid')}
-            areaClassName={areaSpanClassName}
-          />
-        ) : null}
-        {shares.map((entry) => (
-          <li
-            key={entry.group.id}
-            className={cn(
-              rowClassName,
-              'items-center rounded-sm py-1 leading-5',
-              twoColumns && '@sm:even:rounded-l-none',
-              hovered === entry.group.id && 'bg-muted',
-            )}
-            onMouseEnter={() => setHovered(entry.group.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <CropGroupTile group={entry.group} hasUndersownCrop={false} />
-            <span className="truncate" title={entry.group.label}>
-              {entry.group.label}
-            </span>
-            <span
+        {shares.map((entry, index) => (
+          <Fragment key={entry.id}>
+            {twoColumns && index === firstColumnSize ? (
+              <ColumnHeadings
+                className={cn(
+                  rowClassName,
+                  sideClassName(index),
+                  'hidden @sm:grid',
+                )}
+                areaClassName={areaSpanClassName}
+              />
+            ) : null}
+            <li
               className={cn(
-                'text-right text-[11px] text-muted-foreground tabular-nums',
-                twoColumns ? 'hidden @3xl:block' : 'hidden @lg:block',
+                rowClassName,
+                sideClassName(index),
+                'items-center border-b border-border/60 py-1 leading-5',
+                hovered === entry.id && 'bg-muted',
               )}
+              onMouseEnter={() => setHovered(entry.id)}
+              onMouseLeave={() => setHovered(null)}
             >
-              {formatNumber(entry.areaHa)} ha
-            </span>
-            <span className="text-right tabular-nums">
-              {formatWholeNumber(entry.share * 100)} %
-              <span className="sr-only"> af arealet, udledning</span>
-            </span>
-            <span
-              className="text-right font-semibold tabular-nums"
-              title={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
-            >
-              {formatNumber(entry.nLoadKgHa)}
-              <span className="sr-only"> kg N pr. hektar</span>
-            </span>
-          </li>
+              <CropGroupTile group={entry.group} hasUndersownCrop={false} />
+              <span className="truncate" title={entry.label}>
+                {entry.label}
+              </span>
+              <span
+                className={cn(
+                  'text-right text-[11px] text-muted-foreground tabular-nums',
+                  twoColumns ? 'hidden @3xl:block' : 'hidden @lg:block',
+                )}
+              >
+                {formatNumber(entry.areaHa)} ha
+              </span>
+              <span className="text-right font-semibold tabular-nums">
+                {formatShare(entry.share)}
+                <span className="sr-only"> af arealet, udledning</span>
+              </span>
+              <span
+                className="text-right tabular-nums"
+                title={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
+              >
+                {formatNumber(entry.nLoadKgHa)}
+                <span className="sr-only"> kg N pr. hektar</span>
+              </span>
+            </li>
+          </Fragment>
         ))}
       </ul>
     </div>
