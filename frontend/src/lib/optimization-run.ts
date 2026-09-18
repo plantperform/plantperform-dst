@@ -1,4 +1,5 @@
 import type { FieldRecord, OptimizationStatus } from '@/api/types'
+import { computeFieldTotals, rotationsEqual } from '@/lib/field-domain'
 
 export type OptimizationKind = 'optimize' | 'yearly'
 
@@ -22,14 +23,6 @@ export type OptimizationChanges = {
   nLoadAfter: number
 }
 
-const rotationSignature = (field: FieldRecord) =>
-  `${field.rotationId ?? ''}|${field.cropRotation
-    .map((year) => `${year.cropCode}:${year.undersownCropCode ?? ''}`)
-    .join(',')}`
-
-const sum = (fields: FieldRecord[], pick: (field: FieldRecord) => number) =>
-  fields.reduce((total, field) => total + pick(field), 0)
-
 export const summarizeOptimizationChanges = (
   before: FieldRecord[],
   after: FieldRecord[],
@@ -37,15 +30,21 @@ export const summarizeOptimizationChanges = (
   const beforeById = new Map(before.map((field) => [field.id, field]))
   const changedFields = after.filter((field) => {
     const previous = beforeById.get(field.id)
-    return !previous || rotationSignature(previous) !== rotationSignature(field)
+    return (
+      !previous ||
+      previous.rotationId !== field.rotationId ||
+      !rotationsEqual(previous.cropRotation, field.cropRotation)
+    )
   })
+  const totalsBefore = computeFieldTotals(before, true)
+  const totalsAfter = computeFieldTotals(after, true)
 
   return {
     changedFields,
-    db2Before: sum(before, (field) => field.db2),
-    db2After: sum(after, (field) => field.db2),
-    nLoadBefore: sum(before, (field) => field.nLoad),
-    nLoadAfter: sum(after, (field) => field.nLoad),
+    db2Before: totalsBefore.db2,
+    db2After: totalsAfter.db2,
+    nLoadBefore: totalsBefore.nLoad,
+    nLoadAfter: totalsAfter.nLoad,
   }
 }
 
