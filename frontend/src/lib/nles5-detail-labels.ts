@@ -18,17 +18,6 @@ export const M_LABELS: Record<number, string> = {
   13: 'Bælgsæd og vårraps',
 }
 
-export const W_LABELS: Record<number, string> = {
-  1: 'Vintersæd',
-  2: 'Bar jord',
-  3: 'Bar jord efter majs/kartofler',
-  4: 'Efterafgrøder, undersået græs og brak',
-  5: 'Ukrudt og spildkorn',
-  6: 'Græs, kløvergræs, vinterraps, roer',
-  7: 'Vintersæd efter græs',
-  8: 'Græs og kløvergræs pløjet sent',
-}
-
 export const MP_LABELS: Record<number, string> = {
   1: 'Vintersæd',
   2: 'Andre afgrøder',
@@ -50,16 +39,16 @@ export const WP_LABELS: Record<number, string> = {
 }
 
 export const M_P: Record<number, number> = {
-  1: 0, 2: -6.744, 3: -7.279, 4: -13.493, 5: -17.478, 6: -11.192,
-  8: -0.64, 9: 3.534, 10: -7.319, 11: -1.248, 12: 19.524, 13: -6.229,
+  1: 0, 2: -6.744, 3: -7.279, 4: -13.493, 5: -17.478, 6: -11.192, 7: -0.64,
+  8: 3.534, 9: -7.319, 10: -1.248, 11: 19.524, 12: -6.229, 13: -2.866,
 }
 
 export const W_P: Record<number, number> = {
   1: 0, 2: -2.055, 3: -0.456, 4: -15.959, 5: -3.792,
-  6: -14.596, 7: 0, 8: -21.06, 9: -1.049,
+  6: -14.596, 7: -1.049, 8: -21.06,
 }
 
-export const MP_P: Record<number, number> = { 1: 0, 2: 2.847, 3: 0.664, 4: 1.16 }
+export const MP_P: Record<number, number> = { 1: 0, 2: 2.847, 3: 0.664, 4: 1.166 }
 
 export const WP_P: Record<number, number> = {
   1: 0, 2: 9.704, 3: 10.601, 4: 9.354, 5: 13.241,
@@ -71,10 +60,10 @@ export const NTHETA_COEFFICIENTS = {
   bt: 0.456793,
   bCS: 0.04957,
   bCA: 0.157044,
-  budb: 0.038245,
+  budb: 0.016314,
   bm1M: 0.026499,
-  bf0: 0.016314,
-  bf1: 0.026499,
+  bf0: 0.038245,
+  bf1: 0.025499,
   bg0: 0.014099,
   bm1G: 0.026499,
   theta2: 1.205144,

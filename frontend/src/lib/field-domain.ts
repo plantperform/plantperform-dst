@@ -680,16 +680,6 @@ export const catchmentRuns = (
   return runs
 }
 
-export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
-export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
-
-export const coverCropShadow = (
-  hasUndersownCrop: boolean,
-): string | undefined =>
-  hasUndersownCrop
-    ? `inset 0 -3px 0 ${CROP_YEAR_COVER_CROP_BORDER}, inset 0 -4px 0 ${CROP_YEAR_COVER_CROP_SEPARATOR}`
-    : undefined
-
 const yearResultHasValues = (
   yearResult: RotationCandidateYearResult,
 ): boolean =>
