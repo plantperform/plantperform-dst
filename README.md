@@ -114,3 +114,22 @@ running application code that depends on them:
 cd backend
 pixi run db-migrate
 ```
+
+## Crop icons
+
+The crop group icons in the frontend
+(`frontend/src/components/farm/crop-icons.tsx`) are inlined SVG paths from
+these sets. The paths are used as they are; the app only sets colour and size.
+
+- [Game Icons](https://game-icons.net) by Delapouite (flax, potato, beet,
+  high grass, grass, oak leaf) and Lorc (daisy), licensed
+  [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+- [Emoji One (Monotone)](https://github.com/EmojiTwo/emojitwo) (sheaf of rice,
+  ear of corn), licensed
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- [Material Symbols](https://github.com/google/material-design-icons) by Google
+  (wheat), licensed
+  [Apache 2.0](https://github.com/google/material-design-icons/blob/master/LICENSE).
+- [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft
+  (pea pod), licensed
+  [MIT](https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE).
