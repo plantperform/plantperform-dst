@@ -28,7 +28,7 @@ export const OptimizationRunElapsed = ({ run }: RunProps) => {
 }
 
 type OptimizationRunBannerProps = RunProps & {
-  fields: FieldRecord[]
+  fields: FieldRecord[] | undefined
   className?: string
 }
 
