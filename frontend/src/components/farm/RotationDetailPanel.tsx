@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { mutate } from 'swr'
 
+import { ApiError } from '@/api/client'
 import {
   simulationFieldCandidateDetailKey,
   useSimulationFieldCandidateDetail,
@@ -60,7 +61,11 @@ export const RotationDetailPanel = ({
     return (
       <LoadError
         className="m-4"
-        message={`Kunne ikke hente beregningsdetaljer: ${error.message}`}
+        message={
+          error instanceof ApiError
+            ? `Kunne ikke hente beregningsdetaljer: ${error.message}`
+            : 'Kunne ikke hente beregningsdetaljer.'
+        }
         onRetry={() => void retry()}
         retrying={isValidating}
       />

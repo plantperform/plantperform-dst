@@ -1,3 +1,4 @@
+import { ApiError } from '@/api/client'
 import { useFieldHistoricalDetail } from '@/api/hooks'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
@@ -33,7 +34,11 @@ export const HistoricalDetailPanel = ({
     return (
       <LoadError
         className="m-4"
-        message={`Kunne ikke hente beregningsdetaljer: ${error.message}`}
+        message={
+          error instanceof ApiError
+            ? `Kunne ikke hente beregningsdetaljer: ${error.message}`
+            : 'Kunne ikke hente beregningsdetaljer.'
+        }
         onRetry={() => void retry()}
         retrying={isValidating}
       />
