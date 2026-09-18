@@ -10,7 +10,7 @@ import {
   formatElapsed,
   formatFieldNameList,
   OPTIMIZATION_KIND_LABELS,
-  OPTIMIZATION_STATUS_LABELS,
+  RUN_STATUS_LABELS,
 } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
@@ -83,10 +83,10 @@ const SucceededDetails = ({
   return (
     <>
       <p className="text-base font-semibold">
-        {run.kind === 'optimize' ? 'Optimering' : 'Års-optimering'} færdig
+        {OPTIMIZATION_KIND_LABELS[run.kind]} færdig
       </p>
-      <p className="text-sm text-muted-foreground">
-        {OPTIMIZATION_STATUS_LABELS[run.response.status]} ·{' '}
+      <p className="text-sm text-muted-foreground first-letter:uppercase">
+        {RUN_STATUS_LABELS[run.response.status]} ·{' '}
         {formatElapsed(run.finishedAt - run.startedAt)}
       </p>
       {changedCount === 0 ? (

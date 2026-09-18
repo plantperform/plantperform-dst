@@ -36,6 +36,7 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
@@ -43,12 +44,6 @@ const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 const COMPACT_VIEWPORT_HEIGHT = 960
 
 const QUOTA_LINE_PCT = 34
-
-const RUN_STATUS_LABELS: Record<OptimizeSimulationResponse['status'], string> =
-  {
-    OPTIMAL: 'optimal løsning',
-    FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
-  }
 
 type PanelView = 'nLoad' | 'crops'
 

@@ -3,13 +3,13 @@ import type { FieldRecord, OptimizationStatus } from '@/api/types'
 export type OptimizationKind = 'optimize' | 'yearly'
 
 export const OPTIMIZATION_KIND_LABELS: Record<OptimizationKind, string> = {
-  optimize: 'Optimér',
+  optimize: 'Optimering',
   yearly: 'Års-optimering',
 }
 
-export const OPTIMIZATION_STATUS_LABELS: Record<OptimizationStatus, string> = {
-  OPTIMAL: 'Optimal løsning',
-  FEASIBLE: 'Bedste løsning inden for tidsgrænsen',
+export const RUN_STATUS_LABELS: Record<OptimizationStatus, string> = {
+  OPTIMAL: 'optimal løsning',
+  FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
 }
 
 export type OptimizationChanges = {
