@@ -83,6 +83,7 @@ export const OptimizationRunsProvider = ({
           await mutate(simulationFieldsKey(farmId, simulationId), response.fields, {
             revalidate: false,
           })
+          void mutate(simulationFieldsKey(farmId, simulationId))
           await invalidateOptimizationDisplays(farmId, simulationId)
           putRun({
             ...running,
