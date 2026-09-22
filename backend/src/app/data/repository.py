@@ -36,11 +36,13 @@ from app.domain.simulation import (
     Simulation,
 )
 from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
+from app.services.rotations.afgroede_normer import is_permanent_afgrode
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import generate_candidates_for_field
 from app.services.scenario.field_history_evaluator import (
     REAL_HISTORY_END_YEAR,
     evaluate_real_history_for_field,
+    generate_permanent_crop_candidate,
 )
 from app.services.soil.jbnr import FALLBACK_JBNR
 
@@ -557,6 +559,60 @@ def create_simulation(
                 update={"id": field_id, "geometry": deepcopy(current_field.geometry)},
                 deep=True,
             )
+
+            registry_row = registry_contexts.get(copied_field.imk_id)
+            jbnr = (
+                registry_row.jbnr
+                if registry_row is not None and registry_row.jbnr is not None
+                else FALLBACK_JBNR
+            )
+            latest_crop_code = (
+                registry_row.crop_history.get(str(REAL_HISTORY_END_YEAR))
+                if registry_row is not None and registry_row.crop_history
+                else None
+            )
+            latest_crop_code = int(latest_crop_code) if latest_crop_code is not None else None
+
+            soil_data = _soil_data_for_context(registry_row)
+            percolation, org_n_topsoil, s_soil = (
+                soil_data if soil_data is not None else (None, None, None)
+            )
+
+            candidates: list[RotationCandidateEvaluation] = []
+            real_history = None
+            if registry_row is not None:
+                real_history = real_history_lookback(
+                    registry_row.crop_history or {},
+                    jbnr,
+                    registry_row.goedningsregion,
+                    bool(registry_row.oeko),
+                )
+
+                # A mark whose latest real afgrøde is permanent (ikke-omdrift -
+                # e.g. frugtplantage, skov, permanent græs) has no meaningful
+                # sædskifte to pick from: none of the chosen sædskiftevarianter
+                # ever include it. Auto-lock it to a candidate that keeps
+                # growing that same afgrøde instead of leaving it with zero
+                # candidates and failing "Optimér".
+                if is_permanent_afgrode(latest_crop_code):
+                    permanent_candidate = generate_permanent_crop_candidate(
+                        latest_crop_code,
+                        registry_row.crop_history or {},
+                        jbnr,
+                        registry_row.goedningsregion,
+                        bool(registry_row.oeko),
+                        fdato=request.eea_fdato,
+                        precision_dagsbasis=request.eea_precision_dagsbasis,
+                        percolation_by_kategori=percolation,
+                        org_n_topsoil=org_n_topsoil,
+                        s_soil=s_soil,
+                    )
+                    candidates.append(permanent_candidate)
+                    locked_id = permanent_candidate.ref.to_id()
+                    copied_field = copied_field.model_copy(
+                        update={"rotation_id": locked_id, "allowed_rotation_ids": [locked_id]},
+                    )
+
             session.execute(
                 insert(simulation_field_table).values(
                     id=copied_field.id,
@@ -566,27 +622,7 @@ def create_simulation(
             )
 
             if request.saedskiftevarianter and request.n_norm_procenter:
-                registry_row = registry_contexts.get(copied_field.imk_id)
-                jbnr = (
-                    registry_row.jbnr
-                    if registry_row is not None and registry_row.jbnr is not None
-                    else FALLBACK_JBNR
-                )
-                real_history = (
-                    real_history_lookback(
-                        registry_row.crop_history or {},
-                        jbnr,
-                        registry_row.goedningsregion,
-                        bool(registry_row.oeko),
-                    )
-                    if registry_row is not None
-                    else None
-                )
-                soil_data = _soil_data_for_context(registry_row)
-                percolation, org_n_topsoil, s_soil = (
-                    soil_data if soil_data is not None else (None, None, None)
-                )
-                candidates = generate_candidates_for_field(
+                candidates.extend(generate_candidates_for_field(
                     request.saedskiftevarianter, request.n_norm_procenter, jbnr,
                     request.godning,
                     fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
@@ -597,7 +633,9 @@ def create_simulation(
                     percolation_by_kategori=percolation,
                     org_n_topsoil=org_n_topsoil,
                     s_soil=s_soil,
-                )
+                ))
+
+            if candidates:
                 field_candidates = SimulationFieldCandidates(
                     field_id=copied_field.id, jbnr=jbnr, candidates=candidates,
                     real_history=real_history,

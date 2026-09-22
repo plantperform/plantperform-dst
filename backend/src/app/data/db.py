@@ -174,6 +174,13 @@ nuar_kode_table = Table(
     Column("wp_ambig", Boolean, nullable=False),
 )
 
+permanent_afgrode_table = Table(
+    "permanent_afgrode",
+    metadata,
+    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
+    Column("navn", Text, nullable=False),
+)
+
 afstromningskategori_table = Table(
     "afstromningskategori",
     metadata,
