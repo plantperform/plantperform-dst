@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
 import { useFarmEmissions } from '@/api/hooks'
-import type { FieldRecord } from '@/api/types'
+import type { CatchmentNLoadCap, FieldRecord } from '@/api/types'
 
 export const numberToInput = (value: number | null) =>
   value === null ? '' : String(value)
@@ -77,6 +77,45 @@ export const useCatchmentOptions = (
             ],
     }))
   }, [fields, emissions])
+}
+
+// A catchment with no explicitly saved cap defaults to its combined
+// udledningskvote instead of "no limit" - the optimizer applies the same
+// default (see orchestrator._max_n_load_by_kystvandopland), so any UI that
+// shows or edits this limit should read it through here to stay in sync.
+//
+// The quota is a per-field property from the registry (how much a mark's
+// crop history entitles it to), not something that needs a rotation to be
+// picked or optimized first - so it is summed directly from `fields` here,
+// deliberately not through computeFieldTotals/isFieldCalculated, which would
+// hide it behind "ikke beregnet" until after the first Optimér run.
+export const effectiveMaxNLoadByCatchment = (
+  fields: FieldRecord[],
+  savedCaps: CatchmentNLoadCap[],
+): Map<string, number> => {
+  const saved = new Map(
+    savedCaps.map((cap) => [catchmentKey(cap.catchmentId), cap.maxNLoadKg]),
+  )
+  const quotas = new Map<string, number>()
+  for (const field of fields) {
+    if (field.catchmentId === null || !field.quotaEligible) continue
+    const key = catchmentKey(field.catchmentId)
+    quotas.set(key, (quotas.get(key) ?? 0) + field.nLoadQuotaKgN)
+  }
+
+  const resolved = new Map<string, number>()
+  for (const key of new Set([...saved.keys(), ...quotas.keys()])) {
+    if (saved.has(key)) {
+      const value = saved.get(key) ?? null
+      if (value !== null) resolved.set(key, value)
+      continue
+    }
+    const quota = quotas.get(key) ?? 0
+    // Summed from per-field floats, so round to a whole kg N before it
+    // becomes an editable input value - nobody types ",88100000000014".
+    if (quota > 0) resolved.set(key, Math.round(quota))
+  }
+  return resolved
 }
 
 export const useCatchmentColor = (farmId: string, fields: FieldRecord[]) => {
