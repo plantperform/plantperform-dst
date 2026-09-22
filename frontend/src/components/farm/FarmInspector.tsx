@@ -21,6 +21,7 @@ import type {
 import { CatchmentPicker } from '@/components/farm/CatchmentPicker'
 import {
   catchmentKey,
+  effectiveMaxNLoadByCatchment,
   fieldInCatchment,
   useCatchmentColor,
   useCatchmentLabel,
@@ -746,6 +747,10 @@ const OptimizeDialog = ({
     ]),
   )
   const { constraints } = simulation
+  const effectiveMaxNLoad = effectiveMaxNLoadByCatchment(
+    fields,
+    constraints.maxNLoadByCatchment,
+  )
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setExcludedCropCodes(new Set())
@@ -800,20 +805,16 @@ const OptimizeDialog = ({
                   <div className="sm:col-span-3">
                     <dt className="text-muted-foreground">Maks. udledning</dt>
                     <dd>
-                      {constraints.maxNLoadByCatchment.length === 0 ? (
+                      {catchments.length === 0 ? (
                         'Ingen grænse'
                       ) : (
                         <ul className="space-y-0.5">
-                          {constraints.maxNLoadByCatchment.map((cap) => {
-                            const key = catchmentKey(cap.catchmentId)
-                            const label =
-                              catchmentLabelByKey.get(key) ??
-                              (cap.catchmentId === null
-                                ? 'Uden kystvandopland'
-                                : `Kystvandopland ${cap.catchmentId}`)
+                          {catchments.map((catchment) => {
+                            const key = catchmentKey(catchment.catchmentId)
                             return (
                               <li key={key}>
-                                {label}: {formatLimit(cap.maxNLoadKg, 'kg N')}
+                                {catchmentLabelByKey.get(key) ?? catchment.label}:{' '}
+                                {formatLimit(effectiveMaxNLoad.get(key) ?? null, 'kg N')}
                               </li>
                             )
                           })}
@@ -943,9 +944,18 @@ const YearlyOptimizeDialog = ({
     simulation.id,
   )
   const catchments = useCatchmentOptions(farmId, fields)
+  // Års-optimering has no saved constraint to read back (each run sends its
+  // own fresh caps), so the quota is always the default here - same udledningskvote
+  // as Regler/Optimér, kept in sync through the shared helper.
+  const catchmentQuota = effectiveMaxNLoadByCatchment(fields, [])
 
-  const catchmentInput = (key: string): CatchmentYearlyInput =>
-    catchmentInputs[key] ?? DEFAULT_CATCHMENT_YEARLY_INPUT
+  const catchmentInput = (key: string): CatchmentYearlyInput => {
+    if (catchmentInputs[key]) return catchmentInputs[key]
+    const quota = catchmentQuota.get(key)
+    return quota === undefined
+      ? DEFAULT_CATCHMENT_YEARLY_INPUT
+      : { sameForAllYears: true, uniform: String(quota), perYear: {} }
+  }
 
   const updateCatchmentInput = (
     key: string,

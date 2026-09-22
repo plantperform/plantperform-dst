@@ -19,7 +19,7 @@ from app.domain.rotation_candidate import (
     RotationCandidateRef,
     RotationPositionOverride,
 )
-from app.domain.simulation import GodningSettings
+from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
 from app.services.optimization.engine import solve
 from app.services.optimization.yearly_engine import solve_yearly
@@ -114,6 +114,42 @@ def _build_options(
     return tuple(options)
 
 
+def _max_n_load_by_kystvandopland(
+    fields: list[FieldRecord],
+    saved_caps: list[KystvandoplandNLoadCap],
+) -> dict[int | None, float]:
+    """Resolve the per-kystvandopland N-load cap for a run.
+
+    An explicitly saved cap (set from "Regler") always wins, including an
+    explicit `None` (the user cleared it back to no limit). A kystvandopland
+    with no saved entry at all - the common case when the user has never
+    opened "Regler" - defaults to its combined udledningskvote instead of
+    running unconstrained, mirroring the default shown in the Regler panel.
+    Fields with no kystvandopland have no quota to default to, so that
+    bucket only ever gets a cap if one was explicitly saved for it.
+    """
+    saved_by_kystvand = {cap.kystvand_id: cap.max_n_load_kg for cap in saved_caps}
+
+    quota_by_kystvand: dict[int, float] = {}
+    for field in fields:
+        if field.kystvand_id is not None:
+            quota_by_kystvand[field.kystvand_id] = (
+                quota_by_kystvand.get(field.kystvand_id, 0.0)
+                + field.udledningskvote_mark_kgn
+            )
+
+    resolved: dict[int | None, float] = {}
+    for kystvand_id in {*saved_by_kystvand, *quota_by_kystvand}:
+        if kystvand_id in saved_by_kystvand:
+            value = saved_by_kystvand[kystvand_id]
+        else:
+            quota = quota_by_kystvand.get(kystvand_id, 0.0)
+            value = quota if quota > 0 else None
+        if value is not None:
+            resolved[kystvand_id] = value
+    return resolved
+
+
 def run_optimization(
     farm_id: str,
     simulation_id: str,
@@ -155,11 +191,9 @@ def run_optimization(
         input=OptimizationInput(
             fields=tuple(field_inputs),
             constraints=ConstraintsInput(
-                max_n_load_by_kystvandopland={
-                    cap.kystvand_id: cap.max_n_load_kg
-                    for cap in simulation.constraints.max_n_load_by_kystvandopland
-                    if cap.max_n_load_kg is not None
-                },
+                max_n_load_by_kystvandopland=_max_n_load_by_kystvandopland(
+                    fields, simulation.constraints.max_n_load_by_kystvandopland,
+                ),
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
             ),
@@ -397,6 +431,42 @@ def _expand_yearly_options(
     return tuple(options)
 
 
+# Same 8-position window as candidate_evaluator.START_CALENDAR_YEAR - not
+# imported from there to avoid a cross-module dependency for one constant.
+_NUM_ROTATION_YEARS = 8
+
+
+def _max_n_load_by_kystvandopland_and_year(
+    fields: list[FieldRecord],
+    requested: dict[int | None, tuple[float | None, ...]],
+) -> dict[int | None, tuple[float | None, ...]]:
+    """Resolve the per-kystvandopland, per-year N-load cap for a yearly run.
+
+    Same default-to-udledningskvote principle as _max_n_load_by_kystvandopland,
+    applied independently per year: a year with no explicit value (None) -
+    whether because the kystvandopland is missing from the request entirely or
+    just that one year is blank - defaults to the kystvandopland's combined
+    quota instead of running that year unconstrained.
+    """
+    quota_by_kystvand: dict[int, float] = {}
+    for field in fields:
+        if field.kystvand_id is not None:
+            quota_by_kystvand[field.kystvand_id] = (
+                quota_by_kystvand.get(field.kystvand_id, 0.0)
+                + field.udledningskvote_mark_kgn
+            )
+
+    resolved: dict[int | None, tuple[float | None, ...]] = {}
+    for kystvand_id in {*requested, *quota_by_kystvand}:
+        quota = quota_by_kystvand.get(kystvand_id) if kystvand_id is not None else None
+        values = requested.get(kystvand_id, (None,) * _NUM_ROTATION_YEARS)
+        resolved[kystvand_id] = tuple(
+            value if value is not None else (quota if quota and quota > 0 else None)
+            for value in values
+        )
+    return resolved
+
+
 def run_yearly_optimization(
     farm_id: str,
     simulation_id: str,
@@ -472,7 +542,9 @@ def run_yearly_optimization(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
             constraints=YearlyConstraintsInput(
-                max_n_load_by_kystvandopland_and_year=max_n_load_by_kystvandopland,
+                max_n_load_by_kystvandopland_and_year=_max_n_load_by_kystvandopland_and_year(
+                    fields, max_n_load_by_kystvandopland,
+                ),
                 db2_swing_pct=db2_swing_pct,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
