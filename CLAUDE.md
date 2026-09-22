@@ -54,6 +54,7 @@ Before claiming work is done:
 ```bash
 cd frontend && npm run build      # tsc -b && vite build
 cd frontend && npm run lint
+cd frontend && npm run test       # vitest run
 cd backend && pixi run ruff check .
 ```
 
