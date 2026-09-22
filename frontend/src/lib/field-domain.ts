@@ -305,7 +305,12 @@ export const changedFieldIds = (
   for (const field of viewFields) {
     if (field.imkId === null) continue
     const liveRotation = liveRotationByImk.get(field.imkId)
-    if (!liveRotation) continue
+    if (!liveRotation) {
+      // The field no longer exists in the live crop history (e.g. removed
+      // from the farm) - that is a difference too, not something to ignore.
+      changed.add(field.id)
+      continue
+    }
     if (
       !rotationsEqual(field.cropRotation, liveRotation) ||
       !measuresEqual(field.measures, emptyMeasures())
