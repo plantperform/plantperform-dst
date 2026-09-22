@@ -14,6 +14,14 @@ one year. If the CURRENT position's afgrøde is a vinterafgrøde, it occupies th
 winter period between the forfrugt and the current year; otherwise WP falls
 back to the previous position's static WP field (see _resolve_wp).
 
+M, W and MP all shift when the forfrugt was a langvarig afgrøde (græs,
+kløvergræs, frøgræs or brak - see _LANGVARIG_FORFRUGT_KODER): M overrides to an
+afgrøde-specific category (M10/M11/M12, see _FORFRUGT_M_OVERRIDE and
+_resolve_m), W overrides the vintersæd group (W1) to W7 (see
+_FORFRUGT_W_OVERRIDE and _resolve_w), MP always overrides to the fixed MP4
+(see _resolve_mp). Source: Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark
+M/W/MP.
+
 P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
 services.rotations.afstromning looks up the afgrødekode in Bilag 7, table 1
@@ -41,12 +49,54 @@ from app.services.virkemidler import KORN_OG_RAPS_KODER
 _NEXT_M_TO_W: dict[int, int] = {1: 1, 9: 6, 10: 7, 11: 8, 12: 8}
 _AUTUMNSOWN_M = frozenset({1, 9, 10})
 
+# Forfrugtskoder (last year's afgrøde) that trigger the "efter græs, kløvergræs,
+# frøgræs eller brak" M/MP override below. Bilag 2, table M/MP's "Afgrødekoder
+# som forfrugt der udløser en ændring i kategorien" column - the same 69 codes
+# for both M and MP (Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark M/MP).
+_LANGVARIG_FORFRUGT_KODER: frozenset[int] = frozenset({
+    101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+    116, 117, 118, 126, 170, 171, 172, 173, 174, 236, 237, 247, 250, 251, 252,
+    254, 255, 256, 257, 259, 260, 261, 262, 263, 264, 266, 267, 268, 271, 272,
+    273, 274, 276, 277, 278, 279, 284, 285, 286, 305, 306, 310, 312, 316, 326,
+    327, 328, 345, 361, 362, 363, 596, 597, 598,
+})
+
+# This afgrødekode's own M -> the M to use instead when the forfrugt is one of
+# _LANGVARIG_FORFRUGT_KODER (same source ark as above). MP has no per-afgrøde
+# variant: every afgrøde with an MP override always overrides to MP4 (see
+# _resolve_mp), so no equivalent dict is needed for MP.
+_FORFRUGT_M_OVERRIDE: dict[int, int] = {
+    1: 12, 2: 12, 3: 12, 4: 12, 5: 11, 6: 12, 8: 12, 9: 10, 10: 10, 11: 10,
+    13: 10, 14: 10, 15: 10, 16: 10, 17: 10, 19: 11, 24: 11, 40: 12, 41: 12,
+    52: 12, 53: 12, 55: 12, 56: 12, 57: 10, 58: 11, 122: 12, 123: 12, 124: 12,
+    149: 12, 150: 12, 151: 12, 152: 12, 154: 12, 155: 12, 156: 12, 157: 11,
+    210: 12, 211: 12, 212: 12, 213: 12, 214: 12, 216: 11, 218: 11, 220: 10,
+    221: 10, 222: 10, 223: 10, 224: 10, 230: 12, 235: 10, 402: 11, 403: 11,
+    404: 11, 409: 11, 410: 11, 420: 11, 422: 11, 423: 11, 425: 11, 428: 11,
+    430: 11, 431: 11, 432: 11, 434: 11, 450: 11, 497: 11, 502: 11, 540: 11,
+    541: 11, 542: 11, 543: 11, 544: 11, 579: 12, 583: 12, 650: 12, 651: 12,
+    652: 12, 653: 12, 654: 12, 655: 12, 661: 12, 668: 12, 701: 12, 702: 12,
+    703: 12, 704: 12, 705: 12, 706: 10, 707: 10, 708: 10, 709: 10, 710: 10,
+    711: 10, 921: 12,
+}
+
+# This afgrødekode's own W -> the W to use instead when the forfrugt is one of
+# _LANGVARIG_FORFRUGT_KODER (Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark W,
+# columns "W"/"Efter græs, brak og frøgræs"). Unlike M, only the vintersæd
+# group (baseline W1) has a real override, always to W7 - every other afgrøde
+# in the sheet has the same value in both columns, i.e. no actual override.
+_FORFRUGT_W_OVERRIDE: dict[int, int] = {
+    9: 7, 10: 7, 11: 7, 13: 7, 14: 7, 15: 7, 16: 7, 17: 7, 57: 7,
+    70: 7, 71: 7, 72: 7, 220: 7, 221: 7, 222: 7, 223: 7, 224: 7,
+}
+
 # Udlægskode -> W when the udlæg itself determines the winter cover, such as
 # efterafgrøde, mellemafgrøde, or udlæg til frø. Ported from UDL_W_MAPPING in
 # streamlit_app.py.
 _UDL_W_MAPPING: dict[int, int | None] = {
     960: 4, 961: 4, 962: 4, 963: 4, 964: 4, 965: 4, 966: 4,
     968: 5,     # "Efterafgrøde, pligtig"
+    950: 5, 951: 5, 952: 5, 953: 5, 954: 5,  # "Efterafgrøde" renbestand/udlæg varianter
     9680: 4,    # "Efterafgrøde e. frøgræs"
     9682: 4,    # Mellemafgrøde
     9683: None, # "Tidlig såning"; W is determined by the afgrøde itself
@@ -67,6 +117,11 @@ _UDL_W_MAPPING: dict[int, int | None] = {
 # udl_kode 3000/None/968 in position 4).
 _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
     968:  {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde, pligtig"
+    950:  {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde" renbestand/udlæg varianter
+    951:  {"eea": True,  "ema": False, "ets": False},
+    952:  {"eea": True,  "ema": False, "ets": False},
+    953:  {"eea": True,  "ema": False, "ets": False},
+    954:  {"eea": True,  "ema": False, "ets": False},
     9680: {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde e. frøgræs"
     9682: {"eea": False, "ema": True,  "ets": False},  # Mellemafgrøde
     9683: {"eea": False, "ema": False, "ets": True},   # "Tidlig såning"
@@ -96,9 +151,17 @@ _PRAECISIONSJORDBRUG_EPJ = 0.04
 
 
 def _resolve_w(
-    this_params: dict, next_params: dict, udlaeg_kode: int | None
+    afgrode_kode: int,
+    this_params: dict,
+    next_params: dict,
+    udlaeg_kode: int | None,
+    prev_afgrode_kode: int | None,
 ) -> int:
     auto_w = this_params.get("W")
+    if prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
+        forfrugt_override = _FORFRUGT_W_OVERRIDE.get(afgrode_kode)
+        if forfrugt_override is not None:
+            auto_w = forfrugt_override
     next_m = next_params.get("M") if next_params else None
     next_w_from_m = _NEXT_M_TO_W.get(next_m) if next_m is not None else None
     has_lookup_w = auto_w is not None
@@ -114,6 +177,32 @@ def _resolve_w(
     if next_is_spring:
         return 5
     return auto_w if auto_w is not None else 5
+
+
+def _resolve_m(afgrode_kode: int, this_params: dict, prev_afgrode_kode: int | None) -> int:
+    """Resolve M, overridden when the forfrugt was a langvarig afgrøde.
+
+    Bilag 2, table M: this position's M is normally the afgrøde's own static
+    M category, but shifts to a afgrøde-specific override (M10/M11/M12) when
+    last year's afgrøde (forfrugt) was græs, kløvergræs, frøgræs or brak.
+    """
+    if prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
+        override = _FORFRUGT_M_OVERRIDE.get(afgrode_kode)
+        if override is not None:
+            return override
+    return this_params.get("M") or 1
+
+
+def _resolve_mp(prev_params: dict, prev_afgrode_kode: int | None) -> int:
+    """Resolve MP, overridden to MP4 when the forfrugt's own forfrugt-equivalent applies.
+
+    Bilag 2, table MP: this position's MP is normally the forfrugt's own static
+    MP category, but becomes MP4 (fixed, no per-afgrøde variant) when the
+    forfrugt itself was græs, kløvergræs, frøgræs or brak.
+    """
+    if prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
+        return 4
+    return prev_params.get("MP") or 1
 
 
 # Next-year M code -> WP when this year's winter period is occupied by the NEXT
@@ -172,11 +261,11 @@ def evaluate_leaching_position(
     next_params = afgroede_normer.lookup_crop_params(next_afgrode_kode) if next_afgrode_kode else {}
     prev_params = afgroede_normer.lookup_crop_params(prev_afgrode_kode) if prev_afgrode_kode else {}
 
-    m = this_params.get("M") or 1
+    m = _resolve_m(afgrode_kode, this_params, prev_afgrode_kode)
     wc = this_params.get("WC") or 1
-    mp = prev_params.get("MP") or 1
+    mp = _resolve_mp(prev_params, prev_afgrode_kode)
     wp = _resolve_wp(prev_params, this_params)
-    w = _resolve_w(this_params, next_params, udlaeg_kode)
+    w = _resolve_w(afgrode_kode, this_params, next_params, udlaeg_kode, prev_afgrode_kode)
 
     vk = (
         _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL)
