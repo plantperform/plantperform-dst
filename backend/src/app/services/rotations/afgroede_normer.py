@@ -14,6 +14,7 @@ from app.data.db import (
     afgroede_nfix_lookup_table,
     afgroede_norm_lookup_table,
     nuar_kode_table,
+    permanent_afgrode_table,
 )
 
 # Potatoes use M2 (Vårsæd) in NLES5 per the NUAR AU recommendation applicable
@@ -114,11 +115,19 @@ def _load_nuar_koder() -> dict[int, dict]:
     }
 
 
+@lru_cache(maxsize=1)
+def _load_permanente_afgrodekoder() -> frozenset[int]:
+    with SessionLocal() as session:
+        rows = session.execute(select(permanent_afgrode_table.c.afgroedekode)).scalars()
+    return frozenset(rows)
+
+
 def clear_lookup_cache() -> None:
     """Clear process-local lookup caches after an administrative reload."""
     _load_lang_lookup.cache_clear()
     _load_nfix_lookup.cache_clear()
     _load_nuar_koder.cache_clear()
+    _load_permanente_afgrodekoder.cache_clear()
 
 
 def lookup_norm(crop_code, jb_nr, irrigated: bool = False):
@@ -143,6 +152,19 @@ def lookup_nfix(crop_code, jb_nr, irrigated: bool = False) -> float:
         if result is not None:
             return result
     return 0.0
+
+
+def is_permanent_afgrode(crop_code: int | None) -> bool:
+    """Return whether ``crop_code`` is a permanent (ikke-omdrift) afgrøde.
+
+    Backed by ``permanent_afgrode``, loaded from
+    ``Permanente_afgroder_ikke_omdrift.csv`` by ``load_permanente_afgrodekoder.py``.
+    An empty/unloaded table degrades to "no crop is permanent" rather than
+    failing marks that would otherwise calculate fine.
+    """
+    if crop_code is None:
+        return False
+    return crop_code in _load_permanente_afgrodekoder()
 
 
 def lookup_crop_params(crop_code):
