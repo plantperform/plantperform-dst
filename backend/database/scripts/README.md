@@ -52,6 +52,7 @@ men hele kæden er ikke én fælles transaction.
 | 5 | `load-historisk-goedningsfordeling` | Erstatter referencen for faktisk gødningstildeling i 2025/2026. |
 | 6 | `load-saedskifte-lookup` | Erstatter sædskifte-rotationer og kategorier. |
 | 7 | `load-afgroede-normer` | Erstatter afgrødenormer, N-fiksering og NUAR-koder fra master-workbooken. |
+| 7b | `load-permanente-afgrodekoder` | Erstatter listen over permanente (ikke-omdrift) afgrødekoder. |
 | 8 | `load-afstromningskategorier` | Erstatter P-afstrømningskategorier. |
 | 9 | `load-salgspriser` | Erstatter afgrøde-salgspriser. |
 | 10 | `load-halmudbytte` | Erstatter halmudbytter. |
