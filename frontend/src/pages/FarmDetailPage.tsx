@@ -205,6 +205,9 @@ export const FarmDetailPage = () => {
   const changeMode = (next: FarmInspectorMode) => {
     setMode(next)
     if (next !== mode) setSelectedFieldId(null)
+    // Regler only renders in the list pane, so switch away from a pure map
+    // view - otherwise the mode changes but nothing visible opens.
+    if (next === 'rules' && effectiveView === 'map') selectView('split')
   }
 
   const selectFieldFromSearch = (fieldId: string) => {
