@@ -14,11 +14,13 @@ one year. If the CURRENT position's afgrøde is a vinterafgrøde, it occupies th
 winter period between the forfrugt and the current year; otherwise WP falls
 back to the previous position's static WP field (see _resolve_wp).
 
-M and MP both shift when the forfrugt was a langvarig afgrøde (græs,
+M, W and MP all shift when the forfrugt was a langvarig afgrøde (græs,
 kløvergræs, frøgræs or brak - see _LANGVARIG_FORFRUGT_KODER): M overrides to an
 afgrøde-specific category (M10/M11/M12, see _FORFRUGT_M_OVERRIDE and
-_resolve_m), MP always overrides to the fixed MP4 (see _resolve_mp). Source:
-Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark M/MP.
+_resolve_m), W overrides the vintersæd group (W1) to W7 (see
+_FORFRUGT_W_OVERRIDE and _resolve_w), MP always overrides to the fixed MP4
+(see _resolve_mp). Source: Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark
+M/W/MP.
 
 P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
@@ -76,6 +78,16 @@ _FORFRUGT_M_OVERRIDE: dict[int, int] = {
     652: 12, 653: 12, 654: 12, 655: 12, 661: 12, 668: 12, 701: 12, 702: 12,
     703: 12, 704: 12, 705: 12, 706: 10, 707: 10, 708: 10, 709: 10, 710: 10,
     711: 10, 921: 12,
+}
+
+# This afgrødekode's own W -> the W to use instead when the forfrugt is one of
+# _LANGVARIG_FORFRUGT_KODER (Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark W,
+# columns "W"/"Efter græs, brak og frøgræs"). Unlike M, only the vintersæd
+# group (baseline W1) has a real override, always to W7 - every other afgrøde
+# in the sheet has the same value in both columns, i.e. no actual override.
+_FORFRUGT_W_OVERRIDE: dict[int, int] = {
+    9: 7, 10: 7, 11: 7, 13: 7, 14: 7, 15: 7, 16: 7, 17: 7, 57: 7,
+    70: 7, 71: 7, 72: 7, 220: 7, 221: 7, 222: 7, 223: 7, 224: 7,
 }
 
 # Udlægskode -> W when the udlæg itself determines the winter cover, such as
@@ -139,9 +151,17 @@ _PRAECISIONSJORDBRUG_EPJ = 0.04
 
 
 def _resolve_w(
-    this_params: dict, next_params: dict, udlaeg_kode: int | None
+    afgrode_kode: int,
+    this_params: dict,
+    next_params: dict,
+    udlaeg_kode: int | None,
+    prev_afgrode_kode: int | None,
 ) -> int:
     auto_w = this_params.get("W")
+    if prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
+        forfrugt_override = _FORFRUGT_W_OVERRIDE.get(afgrode_kode)
+        if forfrugt_override is not None:
+            auto_w = forfrugt_override
     next_m = next_params.get("M") if next_params else None
     next_w_from_m = _NEXT_M_TO_W.get(next_m) if next_m is not None else None
     has_lookup_w = auto_w is not None
@@ -245,7 +265,7 @@ def evaluate_leaching_position(
     wc = this_params.get("WC") or 1
     mp = _resolve_mp(prev_params, prev_afgrode_kode)
     wp = _resolve_wp(prev_params, this_params)
-    w = _resolve_w(this_params, next_params, udlaeg_kode)
+    w = _resolve_w(afgrode_kode, this_params, next_params, udlaeg_kode, prev_afgrode_kode)
 
     vk = (
         _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL)
