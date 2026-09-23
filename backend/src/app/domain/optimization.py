@@ -27,6 +27,24 @@ class FieldInput:
 
 
 @dataclass(frozen=True)
+class FixedFieldContribution:
+    """A locked mark's already-decided db2/n_load/leaching/fen.
+
+    Locked marks (allowed_rotation_ids restricts them to one candidate) are
+    not solver decision variables - there is nothing to choose. Their
+    contribution is added directly to the totals and to the kystvandopland
+    they draw quota from, without a CP-SAT variable.
+    """
+
+    kystvand_id: int | None
+    db2: float
+    n_load: float
+    leaching: float
+    fen: float
+    kvotegivende: bool = True
+
+
+@dataclass(frozen=True)
 class ConstraintsInput:
     # Udledning cap per kystvandopland (key=kystvand_id, None for marker without
     # an associated opland). The bekendtgørelse calculates udledning per opland,
@@ -43,6 +61,7 @@ class OptimizationInput:
     fields: tuple[FieldInput, ...]
     constraints: ConstraintsInput
     time_limit_seconds: float
+    fixed_fields: tuple[FixedFieldContribution, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,6 +112,23 @@ class YearlyFieldInput:
 
 
 @dataclass(frozen=True)
+class FixedYearlyFieldContribution:
+    """A locked mark's already-decided per-calendar-year contribution.
+
+    Same role as FixedFieldContribution, but per year - db2_by_year,
+    n_load_by_year and leaching_by_year each hold NUM_YEARS entries, taken
+    as-is from the mark's locked candidate (no re-evaluation, no shifting).
+    """
+
+    kystvand_id: int | None
+    db2_by_year: tuple[float, ...]
+    n_load_by_year: tuple[float, ...]
+    leaching_by_year: tuple[float, ...]
+    fen: float
+    kvotegivende: bool = True
+
+
+@dataclass(frozen=True)
 class YearlyConstraintsInput:
     # Same per-kystvandopland principle as ConstraintsInput, but with an
     # eight-item per-calendar-year cap tuple per opland instead of one value.
@@ -107,6 +143,7 @@ class YearlyOptimizationInput:
     fields: tuple[YearlyFieldInput, ...]
     constraints: YearlyConstraintsInput
     time_limit_seconds: float
+    fixed_fields: tuple[FixedYearlyFieldContribution, ...] = ()
 
 
 @dataclass(frozen=True)

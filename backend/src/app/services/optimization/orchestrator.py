@@ -5,6 +5,8 @@ from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import (
     ConstraintsInput,
     FieldInput,
+    FixedFieldContribution,
+    FixedYearlyFieldContribution,
     OptimizationInput,
     OptimizationOutput,
     RotationOption,
@@ -86,15 +88,11 @@ def _build_options(
     expansion here; decision 7 reserves virkemidler as a future candidate
     facet that has not yet been built.
 
-    If the mark has `allowed_rotation_ids`, for example after Phase 10's
-    "Rediger manuelt" locks a manual adjustment to that choice, restrict the
-    candidate set to those IDs. "Optimér" then cannot overwrite an intentional
-    manual adjustment until the user unlocks it.
+    Only called for marks without `allowed_rotation_ids` - a locked mark (for
+    example after Phase 10's "Rediger manuelt") is not a decision variable at
+    all; see _locked_field_contribution and run_optimization.
     """
     retention_factor = 1 - (field.retention or 0) / 100
-    if field.allowed_rotation_ids:
-        allowed = set(field.allowed_rotation_ids)
-        candidates = [c for c in candidates if c.ref.to_id() in allowed]
     candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
     options = []
     for candidate in candidates:
@@ -134,6 +132,24 @@ def _kvote_by_kystvandopland(fields: list[FieldRecord]) -> dict[int, float]:
         for kystvand_id, quota in quota_by_kystvand.items()
         if quota > 0
     }
+
+
+def _locked_field_contribution(field: FieldRecord) -> FixedFieldContribution:
+    """A locked mark's fixed contribution, straight from its current state.
+
+    A locked mark's rotation was already decided - by "Rediger manuelt" or
+    the permanent-afgrøde auto-lock - and its db2/n_load/leaching/fen already
+    reflect that choice, so no candidate lookup or recomputation is needed
+    here at all.
+    """
+    return FixedFieldContribution(
+        kystvand_id=field.kystvand_id,
+        db2=field.db2,
+        n_load=field.n_load,
+        leaching=field.leaching,
+        fen=field.fen,
+        kvotegivende=field.kvotegivende,
+    )
 
 
 def _max_n_load_by_kystvandopland(
@@ -186,7 +202,12 @@ def run_optimization(
     candidates_by_field_id = {fc.field_id: fc.candidates for fc in field_candidates}
 
     field_inputs = []
+    fixed_fields = []
     for field in fields:
+        if field.allowed_rotation_ids:
+            fixed_fields.append(_locked_field_contribution(field))
+            continue
+
         options = _build_options(
             field, candidates_by_field_id.get(field.id, []), excluded_afgrodekoder,
         )
@@ -210,6 +231,7 @@ def run_optimization(
     output = solve(
         input=OptimizationInput(
             fields=tuple(field_inputs),
+            fixed_fields=tuple(fixed_fields),
             constraints=ConstraintsInput(
                 max_n_load_by_kystvandopland=_max_n_load_by_kystvandopland(
                     fields, simulation.constraints.max_n_load_by_kystvandopland,
@@ -233,7 +255,7 @@ def run_optimization(
             "prøv en længere tidsgrænse."
         )
 
-    updated_fields = []
+    updated_by_id: dict[str, FieldRecord] = {}
     for assignment in output.assignments:
         updated_field = repository.update_simulation_field(
             farm_id,
@@ -251,9 +273,14 @@ def run_optimization(
         )
         if updated_field is None:
             raise OptimizationNotFoundError
-        updated_fields.append(updated_field)
+        updated_by_id[assignment.field_id] = updated_field
 
-    return OptimizationRunResult(output=output, fields=tuple(updated_fields))
+    # Locked marks never receive an assignment (see _locked_field_contribution),
+    # so the caller's full field list - not just the freshly solved ones - is
+    # rebuilt here in the original order, with locked marks passed through
+    # unchanged.
+    result_fields = tuple(updated_by_id.get(field.id, field) for field in fields)
+    return OptimizationRunResult(output=output, fields=result_fields)
 
 
 class ManualRotationNotFoundError(Exception):
@@ -366,28 +393,25 @@ def _expand_yearly_options(
     evaluate_with_overrides. Phase 11's additional "Års-optimering" decision
     variable uses these variants to shift a mark's sædskifte forward or
     backward to better satisfy annual udledning caps and the DB fluctuation
-    limit. The allowed_rotation_ids lock from _build_options still applies: a
-    locked mark's candidate set is restricted to its locked candidate before
-    shifting.
+    limit.
+
+    Only called for marks without `allowed_rotation_ids` - a locked mark is
+    not shifted or re-evaluated at all; see _locked_yearly_field_contribution
+    and run_yearly_optimization.
 
     Every candidate can be shifted. The run-level afgrøde exclusion filter
     alone determines which candidates are removed entirely.
     """
     retention_factor = 1 - (field.retention or 0) / 100
-    if field.allowed_rotation_ids:
-        allowed = set(field.allowed_rotation_ids)
-        candidates = [c for c in candidates if c.ref.to_id() in allowed]
     candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
 
     # A candidate with base_ref and no overrides is a pure shift of another
     # candidate left by an earlier run. Shifting it again would only recreate
     # sequences already covered by its base_ref's shift expansion. Skip it to
     # prevent the candidate set, and thus the CP-SAT model, from growing on
-    # every repeated run, but only while base_ref is still present. After the
-    # allowed_rotation_ids filter above, a locked mark's only remaining
-    # candidate may itself be a pure shift and must then remain to keep the
-    # mark solvable. A candidate with actual Phase 10 "Rediger manuelt"
-    # overrides is unique and is always retained.
+    # every repeated run, but only while base_ref is still present. A
+    # candidate with actual Phase 10 "Rediger manuelt" overrides is unique
+    # and is always retained.
     present_ids = {c.ref.to_id() for c in candidates}
     candidates = [
         c
@@ -470,6 +494,35 @@ def _max_n_load_by_kystvandopland_and_year(
     return resolved
 
 
+def _locked_yearly_field_contribution(
+    field: FieldRecord,
+    candidates: list[RotationCandidateEvaluation],
+) -> FixedYearlyFieldContribution | None:
+    """A locked mark's fixed per-year contribution, from its own locked candidate.
+
+    No shifting, no re-evaluation - Års-optimering does not get to phase a
+    locked mark's rotation either, it is exactly as static as its db2/
+    n_load/leaching already are everywhere else. Returns None if the locked
+    candidate can no longer be found (stale allowed_rotation_ids), so the
+    caller can fail with a clear error instead of silently dropping the
+    mark's quota use from the model.
+    """
+    allowed = set(field.allowed_rotation_ids)
+    candidate = next((c for c in candidates if c.ref.to_id() in allowed), None)
+    if candidate is None:
+        return None
+    retention_factor = 1 - (field.retention or 0) / 100
+    leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in candidate.years)
+    return FixedYearlyFieldContribution(
+        kystvand_id=field.kystvand_id,
+        db2_by_year=tuple(y.db_kr_ha * field.area_ha for y in candidate.years),
+        n_load_by_year=tuple(leaching * retention_factor for leaching in leaching_by_year),
+        leaching_by_year=leaching_by_year,
+        fen=candidate.avg_fen * field.area_ha,
+        kvotegivende=field.kvotegivende,
+    )
+
+
 def run_yearly_optimization(
     farm_id: str,
     simulation_id: str,
@@ -506,10 +559,22 @@ def run_yearly_optimization(
     )
 
     field_inputs = []
+    fixed_fields = []
     options_by_field_id: dict[str, tuple[YearlyRotationOption, ...]] = {}
     for field in fields:
         field_candidates_row = candidates_by_field_id.get(field.id)
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
+
+        if field.allowed_rotation_ids:
+            fixed = _locked_yearly_field_contribution(field, base_candidates)
+            if fixed is None:
+                raise OptimizationInfeasibleError(
+                    f"Marken {field.name} er låst til en sædskiftekandidat, der ikke "
+                    "længere findes — lås marken op og lås den igen."
+                )
+            fixed_fields.append(fixed)
+            continue
+
         jbnr = field_candidates_row.jbnr if field_candidates_row else 0
         real_history = field_candidates_row.real_history if field_candidates_row else None
         soil_data = soil_data_by_imk_id.get(field.imk_id)
@@ -548,6 +613,7 @@ def run_yearly_optimization(
     output = solve_yearly(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
+            fixed_fields=tuple(fixed_fields),
             constraints=YearlyConstraintsInput(
                 max_n_load_by_kystvandopland_and_year=_max_n_load_by_kystvandopland_and_year(
                     fields, max_n_load_by_kystvandopland,
@@ -572,7 +638,7 @@ def run_yearly_optimization(
             "prøv en længere tidsgrænse."
         )
 
-    updated_fields = []
+    updated_by_id: dict[str, FieldRecord] = {}
     for assignment in output.assignments:
         winning_option = next(
             option
@@ -603,9 +669,14 @@ def run_yearly_optimization(
         )
         if updated_field is None:
             raise OptimizationNotFoundError
-        updated_fields.append(updated_field)
+        updated_by_id[assignment.field_id] = updated_field
 
-    return YearlyOptimizationRunResult(output=output, fields=tuple(updated_fields))
+    # Locked marks never receive an assignment (see
+    # _locked_yearly_field_contribution), so the caller's full field list -
+    # not just the freshly solved ones - is rebuilt here in the original
+    # order, with locked marks passed through unchanged.
+    result_fields = tuple(updated_by_id.get(field.id, field) for field in fields)
+    return YearlyOptimizationRunResult(output=output, fields=result_fields)
 
 
 def compute_yearly_summary(
