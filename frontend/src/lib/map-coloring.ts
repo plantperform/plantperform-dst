@@ -1,5 +1,6 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 
+import { BRAND_COLORS, UI_COLORS } from '@/lib/brand-colors'
 import { CROP_GROUP_INDEX, presentCropGroups } from '@/lib/crop-groups'
 
 export type ColorAttribute =
@@ -95,10 +96,10 @@ const numericLegend = (
   })
 }
 
-const NEUTRAL_FALLBACK = '#cbd5e1'
+const NEUTRAL_FALLBACK = UI_COLORS.sandBorder
 
-export const HOVER_FIELD_FILL_COLOR = '#0f172a'
-export const HOVER_FIELD_LINE_COLOR = '#334155'
+export const HOVER_FIELD_FILL_COLOR = UI_COLORS.ink
+export const HOVER_FIELD_LINE_COLOR = UI_COLORS.inkSoft
 
 export const DIMMED_FIELD_FILL_OPACITY = 0.12
 
@@ -280,8 +281,8 @@ const CATCHMENT: HashedSpec = {
 
 // Highlights fields whose simulation rotation differs from the live ("Aktuel")
 // rotation. Farm-only: registry tiles carry no simulation context. Unchanged
-// fields keep the default farm green so the Aktuel view looks normal; only
-// changed fields light up blue.
+// fields keep the default farm colour so the Aktuel view looks normal; only
+// changed fields light up in the app-wide ændret colour.
 const ROTATION_CHANGED: CategorySpec = {
   kind: 'category',
   label: 'Ændret sædskifte',
@@ -289,10 +290,10 @@ const ROTATION_CHANGED: CategorySpec = {
   source: 'farm',
   property: 'rotationChanged',
   bins: [
-    { value: 1, color: '#2563eb', label: 'Ændret' },
-    { value: 0, color: '#16a34a', label: 'Uændret' },
+    { value: 1, color: BRAND_COLORS.sun, label: 'Ændret' },
+    { value: 0, color: BRAND_COLORS.forest, label: 'Uændret' },
   ],
-  fallbackColor: '#16a34a',
+  fallbackColor: BRAND_COLORS.forest,
 }
 
 // Whether a field is part of the takeout/conversion plan ("i omlægning"). Works
@@ -335,7 +336,7 @@ const FIELD_LOCKED: CategorySpec = {
   source: 'farm',
   property: 'fieldLocked',
   bins: [
-    { value: 1, color: '#d97706', label: 'Låst - Optimér må ikke ændre' },
+    { value: 1, color: BRAND_COLORS.soil, label: 'Låst - Optimér må ikke ændre' },
     { value: 0, color: NEUTRAL_FALLBACK, label: 'Fri - Optimér vælger' },
   ],
   fallbackColor: NEUTRAL_FALLBACK,
@@ -352,17 +353,17 @@ const YEAR_N_LOAD: CategorySpec = {
   bins: [
     {
       value: YEAR_QUOTA_STATUS_VALUES.ok,
-      color: '#16a34a',
+      color: BRAND_COLORS.freshGreen,
       label: 'Under markens kvote',
     },
     {
       value: YEAR_QUOTA_STATUS_VALUES.near,
-      color: '#d97706',
+      color: BRAND_COLORS.carrot,
       label: 'Tæt på markens kvote',
     },
     {
       value: YEAR_QUOTA_STATUS_VALUES.over,
-      color: '#dc2626',
+      color: UI_COLORS.destructive,
       label: 'Over markens kvote',
     },
   ],
