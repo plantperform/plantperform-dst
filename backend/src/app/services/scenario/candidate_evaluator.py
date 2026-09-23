@@ -90,9 +90,9 @@ def compute_n_inputs(
     MNCA (autumn mineral N) is not part of the gødning choice in the original
     model. It is a separate, independent input that defaults to 0.
     """
-    norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated)
+    norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated, only_organic)
     prev_norm = (
-        afgroede_normer.lookup_norm(prev_afgrode_kode, jbnr, irrigated)
+        afgroede_normer.lookup_norm(prev_afgrode_kode, jbnr, irrigated, only_organic)
         if prev_afgrode_kode is not None
         else None
     )

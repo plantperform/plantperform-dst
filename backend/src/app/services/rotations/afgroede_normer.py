@@ -27,6 +27,14 @@ _VANDING_PRIORITY = {
     False: ["Uvandet", "Ikke særskilt vanding", "Vandet"],
 }
 
+# Most afgrødekoder only have a "Konventionel" row (no separate økologisk norm
+# published for them), so a request for the økologisk norm still needs to fall
+# back to the conventional one rather than come back empty.
+_DRIFTSFORM_PRIORITY = {
+    True: ("Økologisk", "Konventionel"),
+    False: ("Konventionel", "Økologisk"),
+}
+
 
 def _missing_lookup(table_name: str, task_name: str) -> RuntimeError:
     return RuntimeError(f"{table_name} is empty; run pixi run {task_name}")
@@ -40,7 +48,7 @@ def apply_kartoffel_regel(sample: dict) -> dict:
 
 
 @lru_cache(maxsize=1)
-def _load_lang_lookup() -> dict[tuple[int, int, str], dict]:
+def _load_lang_lookup() -> dict[tuple[int, int, str, str], dict]:
     """Return the historic source-order-resolved norm lookup from PostgreSQL."""
     with SessionLocal() as session:
         rows = session.execute(
@@ -52,11 +60,14 @@ def _load_lang_lookup() -> dict[tuple[int, int, str], dict]:
     if not rows:
         raise _missing_lookup("afgroede_norm_lookup", "load-afgroede-normer")
 
-    lookup: dict[tuple[int, int, str], dict] = {}
-    # Assignment in source order deliberately preserves the previous workbook
-    # behavior when conventional and organic rows share a lookup key.
+    lookup: dict[tuple[int, int, str, str], dict] = {}
+    # driftsform is part of the key: konventionel and økologisk rows for the
+    # same afgrøde/jb/vanding are genuinely different norms (previously they
+    # silently overwrote each other in source order, so whichever driftsform
+    # happened to load last "won" regardless of which one a simulation
+    # actually asked for).
     for row in rows:
-        lookup[(row.afgroedekode, row.jb_nr, row.vanding)] = {
+        lookup[(row.afgroedekode, row.jb_nr, row.vanding, row.driftsform)] = {
             "afgroede": row.afgroede,
             "jb_gruppe": row.jb_gruppe,
             "vanding": row.vanding,
@@ -130,15 +141,21 @@ def clear_lookup_cache() -> None:
     _load_permanente_afgrodekoder.cache_clear()
 
 
-def lookup_norm(crop_code, jb_nr, irrigated: bool = False):
-    """Return norm data for a crop/JB/irrigation combination, or ``None``."""
+def lookup_norm(crop_code, jb_nr, irrigated: bool = False, only_organic: bool = False):
+    """Return norm data for a crop/JB/irrigation/driftsform combination, or ``None``.
+
+    ``only_organic`` is the simulation's own gødning choice (GodningSettings),
+    not the field's registered oeko flag — driftsform for a norm lookup is
+    decided per simulation, not per mark.
+    """
     if crop_code is None or jb_nr is None:
         return None
     lookup = _load_lang_lookup()
-    for vanding in _VANDING_PRIORITY[bool(irrigated)]:
-        result = lookup.get((crop_code, jb_nr, vanding))
-        if result is not None:
-            return result
+    for driftsform in _DRIFTSFORM_PRIORITY[bool(only_organic)]:
+        for vanding in _VANDING_PRIORITY[bool(irrigated)]:
+            result = lookup.get((crop_code, jb_nr, vanding, driftsform))
+            if result is not None:
+                return result
     return None
 
 
