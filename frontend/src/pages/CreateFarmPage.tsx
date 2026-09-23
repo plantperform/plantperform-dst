@@ -55,7 +55,7 @@ const FormField = ({
       aria-describedby={error ? `${id}-error` : undefined}
       className={cn(
         'h-[46px] w-full rounded-xl border bg-card px-3.5 text-[15px] outline-none placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15',
-        error && 'border-red-600',
+        error && 'border-destructive',
         className,
       )}
       {...inputProps}
@@ -290,12 +290,12 @@ export const CreateFarmPage = () => {
                 </Button>
               </div>
               {hasErrors ? (
-                <p className="text-[13px] text-red-700">
+                <p className="text-[13px] text-destructive">
                   Udfyld de markerede felter for at fortsætte.
                 </p>
               ) : null}
               {submitError ? (
-                <p className="text-[13px] text-red-700">{submitError}</p>
+                <p className="text-[13px] text-destructive">{submitError}</p>
               ) : null}
             </div>
           </form>

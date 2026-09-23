@@ -30,7 +30,7 @@ export const EmailField = ({
       autoFocus={autoFocus}
       aria-invalid={invalid || Boolean(error) || undefined}
       aria-describedby={error ? `${id}-error` : undefined}
-      className="h-11 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
+      className="h-11 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive"
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onBlur={onBlur}

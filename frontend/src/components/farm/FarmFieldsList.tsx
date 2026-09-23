@@ -211,7 +211,7 @@ const FieldRow = memo(
             : isHovered
               ? 'bg-muted'
               : isChanged
-                ? 'bg-blue-50'
+                ? 'bg-changed/30'
                 : undefined,
         )}
       >

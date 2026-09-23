@@ -34,7 +34,7 @@ export const PasswordInput = ({
         autoFocus={autoFocus}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
-        className="h-11 pr-16 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
+        className="h-11 pr-16 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}

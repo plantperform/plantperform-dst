@@ -178,7 +178,7 @@ export const HomePage = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CircleAlert
-                  className="h-5 w-5 text-red-700"
+                  className="h-5 w-5 text-destructive"
                   aria-hidden="true"
                 />
                 Bedriften kunne ikke oprettes
@@ -241,7 +241,7 @@ export const HomePage = () => {
         />
 
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-foreground sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm">
               Ved oprettelsen angav du bedriften "{pending.name}". Vil du
               oprette den nu?

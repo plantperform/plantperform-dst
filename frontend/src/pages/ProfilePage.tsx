@@ -195,7 +195,7 @@ export const ProfilePage = () => {
             <button
               type="button"
               onClick={() => void signOut()}
-              className="mt-2 inline-flex w-fit items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-red-700 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="mt-2 inline-flex w-fit items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <LogOut className="size-4" aria-hidden="true" />
               Log ud
