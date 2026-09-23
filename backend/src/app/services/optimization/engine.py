@@ -40,12 +40,27 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
                 )
             fen_terms.append(_scale(option.fen) * variable)
 
-    total_db2 = sum(db2_terms)
+    # Locked marks are not decision variables - there is nothing to choose -
+    # but their already-decided contribution still counts toward the
+    # kystvandopland cap and the FEN/DB2 totals, so it is added as a plain
+    # constant alongside the CP-SAT terms above.
+    fixed_db2_total = 0
+    fixed_fen_total = 0
+    fixed_n_load_by_kystvand: dict[int | None, int] = defaultdict(int)
+    for fixed in input.fixed_fields:
+        fixed_db2_total += _scale(fixed.db2)
+        fixed_fen_total += _scale(fixed.fen)
+        if fixed.kvotegivende:
+            fixed_n_load_by_kystvand[fixed.kystvand_id] += _scale(fixed.n_load)
+    for kystvand_id, amount in fixed_n_load_by_kystvand.items():
+        kvotegivende_n_load_terms_by_kystvand[kystvand_id].append(amount)
+
+    total_db2 = sum(db2_terms) + fixed_db2_total
     kvotegivende_n_load_by_kystvand = {
         kystvand_id: sum(terms)
         for kystvand_id, terms in kvotegivende_n_load_terms_by_kystvand.items()
     }
-    total_fen = sum(fen_terms)
+    total_fen = sum(fen_terms) + fixed_fen_total
     constraints = input.constraints
 
     for kystvand_id, cap in constraints.max_n_load_by_kystvandopland.items():
@@ -89,10 +104,10 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         )
 
     assignments = []
-    total_db2_value = 0.0
-    total_n_load_value = 0.0
-    total_leaching_value = 0.0
-    total_fen_value = 0.0
+    total_db2_value = sum(fixed.db2 for fixed in input.fixed_fields)
+    total_n_load_value = sum(fixed.n_load for fixed in input.fixed_fields)
+    total_leaching_value = sum(fixed.leaching for fixed in input.fixed_fields)
+    total_fen_value = sum(fixed.fen for fixed in input.fixed_fields)
     for field in input.fields:
         for option in field.options:
             if solver.BooleanValue(choice_vars[(field.id, option.key)]):

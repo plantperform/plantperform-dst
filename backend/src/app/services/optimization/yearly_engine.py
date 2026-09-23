@@ -72,6 +72,26 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
                     kvotegivende_year_terms[y].append(n_load_term)
             fen_terms.append(_scale(option.fen) * variable)
 
+    # Locked marks are not decision variables - there is nothing to choose -
+    # but their already-decided per-year contribution still counts toward
+    # the per-year kystvandopland cap, the db2_swing_pct stability check, and
+    # the FEN/DB2 totals, so it is added as a plain constant per year
+    # alongside the CP-SAT terms above.
+    for fixed in input.fixed_fields:
+        year_terms = n_load_terms_by_kystvand_year[fixed.kystvand_id]
+        kvotegivende_year_terms = (
+            kvotegivende_n_load_terms_by_kystvand_year[fixed.kystvand_id]
+            if fixed.kvotegivende
+            else None
+        )
+        for y in range(NUM_YEARS):
+            db2_terms_by_year[y].append(_scale(fixed.db2_by_year[y]))
+            n_load_term = _scale(fixed.n_load_by_year[y])
+            year_terms[y].append(n_load_term)
+            if kvotegivende_year_terms is not None:
+                kvotegivende_year_terms[y].append(n_load_term)
+        fen_terms.append(_scale(fixed.fen))
+
     total_db2_by_year = [sum(terms) for terms in db2_terms_by_year]
     total_n_load_by_kystvand_year = {
         kystvand_id: [sum(terms) for terms in year_terms]
@@ -132,10 +152,16 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
         return _infeasible_output("UNKNOWN")
 
     assignments = []
-    total_db2_value = 0.0
-    total_n_load_value = 0.0
-    total_leaching_value = 0.0
-    total_fen_value = 0.0
+    # Same averaging convention as the solved fields below: db2_by_year/
+    # n_load_by_year/leaching_by_year hold one real calendar-year value each.
+    total_db2_value = sum(sum(fixed.db2_by_year) / NUM_YEARS for fixed in input.fixed_fields)
+    total_n_load_value = sum(
+        sum(fixed.n_load_by_year) / NUM_YEARS for fixed in input.fixed_fields
+    )
+    total_leaching_value = sum(
+        sum(fixed.leaching_by_year) / NUM_YEARS for fixed in input.fixed_fields
+    )
+    total_fen_value = sum(fixed.fen for fixed in input.fixed_fields)
     for field in input.fields:
         for option in field.options:
             if solver.BooleanValue(choice_vars[(field.id, option.key)]):
