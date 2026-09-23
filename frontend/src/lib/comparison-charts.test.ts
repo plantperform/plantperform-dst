@@ -25,6 +25,7 @@ const share = (id: CropGroup, value: number): CropShare => {
     id,
     label: group.label,
     group,
+    color: group.color,
     areaHa: value * 100,
     share: value,
     nLoadKg: 0,

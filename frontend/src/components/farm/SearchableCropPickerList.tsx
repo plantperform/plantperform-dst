@@ -10,6 +10,7 @@ import {
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cropEdgeColor } from '@/lib/crop-groups'
 
 export type CropPickerItem = {
   key: string
@@ -144,7 +145,10 @@ export const SearchableCropPickerList = ({
                         <span
                           key={colorIndex}
                           className="h-[14px] w-[10px] shrink-0 rounded-[3px]"
-                          style={{ backgroundColor: color }}
+                          style={{
+                            backgroundColor: color,
+                            boxShadow: `inset 0 0 0 1px ${cropEdgeColor(color)}`,
+                          }}
                           aria-hidden="true"
                         />
                       ))}

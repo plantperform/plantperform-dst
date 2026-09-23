@@ -2,6 +2,7 @@ import { Fragment, useState, type CSSProperties } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
+import { cropEdgeColor } from '@/lib/crop-groups'
 import {
   EXCLUDED_FROM_CALCULATION,
   formatNumber,
@@ -14,6 +15,8 @@ import { cn } from '@/lib/utils'
 const DONUT_RADIUS = 40
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 const DONUT_GAP = 0.8
+const DONUT_WIDTH = 16
+const DONUT_EDGE = 0.6
 const TWO_COLUMN_MIN_ROWS = 6
 const ROW_CLASS_NAME = 'col-span-4 grid grid-cols-subgrid px-1'
 
@@ -95,25 +98,43 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
         )}
         onMouseLeave={() => setHovered(null)}
       >
-        {arcs.map(({ entry, length, offset: start }) => (
-          <circle
-            key={entry.id}
-            cx="50"
-            cy="50"
-            r={DONUT_RADIUS}
-            fill="none"
-            stroke={entry.group.color}
-            strokeWidth="16"
-            strokeDasharray={`${length} ${DONUT_CIRCUMFERENCE - length}`}
-            strokeDashoffset={-start}
-            transform="rotate(-90 50 50)"
-            className={cn(
-              'motion-safe:transition-opacity',
-              hovered !== null && hovered !== entry.id && 'opacity-45',
-            )}
-            onMouseEnter={() => setHovered(entry.id)}
-          />
-        ))}
+        {arcs.map(({ entry, length, offset: start }) => {
+          // The fill arc sits inside a slightly wider arc in the edge colour,
+          // shortened at both ends, so every slice gets an outline.
+          const fillLength = Math.max(length - 2 * DONUT_EDGE, 0.25)
+          return (
+            <g
+              key={entry.id}
+              transform="rotate(-90 50 50)"
+              className={cn(
+                'motion-safe:transition-opacity',
+                hovered !== null && hovered !== entry.id && 'opacity-45',
+              )}
+              onMouseEnter={() => setHovered(entry.id)}
+            >
+              <circle
+                cx="50"
+                cy="50"
+                r={DONUT_RADIUS}
+                fill="none"
+                stroke={cropEdgeColor(entry.color)}
+                strokeWidth={DONUT_WIDTH}
+                strokeDasharray={`${length} ${DONUT_CIRCUMFERENCE - length}`}
+                strokeDashoffset={-start}
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r={DONUT_RADIUS}
+                fill="none"
+                stroke={entry.color}
+                strokeWidth={DONUT_WIDTH - 2 * DONUT_EDGE}
+                strokeDasharray={`${fillLength} ${DONUT_CIRCUMFERENCE - fillLength}`}
+                strokeDashoffset={-(start + DONUT_EDGE)}
+              />
+            </g>
+          )
+        })}
         <text
           x="50"
           y="49"
@@ -174,7 +195,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
               onMouseEnter={() => setHovered(entry.id)}
               onMouseLeave={() => setHovered(null)}
             >
-              <CropGroupTile group={entry.group} />
+              <CropGroupTile group={entry.group} color={entry.color} />
               <TruncatedTooltip content={entry.label} className="truncate">
                 {entry.label}
               </TruncatedTooltip>

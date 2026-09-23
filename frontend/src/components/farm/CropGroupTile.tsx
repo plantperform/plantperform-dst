@@ -17,6 +17,7 @@ import {
 import { WinterCoverBand } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
+  cropEdgeColor,
   readableTextColor,
   type CropGroup,
   type CropGroupDefinition,
@@ -53,6 +54,8 @@ type TileSize = 'sm' | 'md'
 
 type CropGroupTileProps = {
   group: CropGroupDefinition
+  // Overrides the group colour, e.g. with a crop's shade of it.
+  color?: string
   size?: TileSize
   title?: string
   className?: string
@@ -60,6 +63,7 @@ type CropGroupTileProps = {
 
 export const CropGroupTile = ({
   group,
+  color = group.color,
   size = 'sm',
   title,
   className,
@@ -76,8 +80,9 @@ export const CropGroupTile = ({
         className,
       )}
       style={{
-        backgroundColor: group.color,
-        color: readableTextColor(group.color),
+        backgroundColor: color,
+        color: readableTextColor(color),
+        boxShadow: `inset 0 0 0 1px ${cropEdgeColor(color)}`,
       }}
     >
       <Icon className={size === 'sm' ? 'size-3' : 'size-4'} />
