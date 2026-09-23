@@ -51,7 +51,7 @@ const HEADER_CELL_CLASS = `${CELL_X_PADDING} py-2 align-top text-xs font-medium 
 const HEADER_SUBLINE_CLASS = 'block text-[11px] leading-4 font-normal'
 const BODY_CELL_CLASS = `${CELL_X_PADDING} py-1 whitespace-nowrap full:py-1.5`
 const NUMERIC_HEADER_CLASS = `${HEADER_CELL_CLASS} text-right`
-const NUMERIC_CELL_CLASS = `${BODY_CELL_CLASS} text-right`
+const NUMERIC_CELL_CLASS = `${BODY_CELL_CLASS} text-right tabular-nums`
 const SECONDARY_LINE_CLASS =
   'hidden text-xs font-normal text-muted-foreground full:block'
 
