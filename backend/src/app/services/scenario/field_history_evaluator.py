@@ -97,12 +97,12 @@ def evaluate_real_history_for_field(
         )
 
         norm = (
-            afgroede_normer.lookup_norm(this_code, jbnr, irrigated)
+            afgroede_normer.lookup_norm(this_code, jbnr, irrigated, oeko)
             if this_code is not None
             else None
         )
         prev_norm = (
-            afgroede_normer.lookup_norm(prev_code, jbnr, irrigated)
+            afgroede_normer.lookup_norm(prev_code, jbnr, irrigated, oeko)
             if prev_code is not None
             else None
         )
@@ -230,9 +230,9 @@ def generate_permanent_crop_candidate(
             if prev2_code is not None else 0.0
         )
 
-        norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated)
+        norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated, oeko)
         prev_norm = (
-            afgroede_normer.lookup_norm(prev_code, jbnr, irrigated)
+            afgroede_normer.lookup_norm(prev_code, jbnr, irrigated, oeko)
             if prev_code is not None
             else None
         )
