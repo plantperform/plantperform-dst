@@ -1,41 +1,28 @@
+import icoelLogoWhite from '@/assets/icoel-logo-white.svg'
 import { cn } from '@/lib/utils'
 
-// Placeholder drawing of the ICOEL bomærke (circle and sprout) until the
-// official logo package arrives. Strokes use currentColor, so the mark takes
-// the text colour: white on the brand red, brand red on light grounds.
+// The ICOEL bomærke (circle and sprout) from the logo package. Filled with
+// currentColor, so it takes the text colour: white on the brand red, brand red
+// on light grounds.
 export const IcoelMark = ({ className }: { className?: string }) => (
   <svg
-    viewBox="0 0 48 48"
-    fill="none"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    viewBox="0 0 108 118.4"
+    fill="currentColor"
     aria-hidden="true"
     className={className}
   >
-    <path d="M16.5 34A15 15 0 1 1 31.5 34" strokeWidth="3.5" />
-    <path
-      d="M24 45V19M24 38q-2-5-7-6M24 38q2-5 7-6M24 31q-2-5-7-6M24 31q2-5 7-6M24 24q-1.5-4-5-5M24 24q1.5-4 5-5"
-      strokeWidth="3"
-    />
+    <path d="M54.3,5C29.3,5,8.9,25.3,8.9,50.4c0,11.1,4,21.7,11.3,30c0.9,1,2.4,1.1,3.4,0.2c1-0.9,1.1-2.4,0.2-3.4c-6.5-7.4-10.1-16.9-10.1-26.8C13.7,28,31.9,9.8,54.3,9.8c22.4,0,40.6,18.2,40.6,40.6c0,9.9-3.6,19.4-10.1,26.8c-0.9,1-0.8,2.5,0.2,3.4c0.5,0.4,1,0.6,1.6,0.6c0.7,0,1.3-0.3,1.8-0.8c7.3-8.3,11.3-18.9,11.3-30C99.6,25.4,79.3,5,54.3,5z" />
+    <path d="M73.4,107.7c1.2,0,2.2-1,2.2-2.2s-1-2.2-2.2-2.2c-6.9,0-13.1,3.6-17,9.1v-6.6c0-10.4,7.6-18.8,17-18.8c1.2,0,2.2-1,2.2-2.2c0-1.2-1-2.2-2.2-2.2c-6.9,0-13.1,3.6-17,9.1v-8.3c0.1-10.4,7.7-18.8,17-18.8c1.2,0,2.2-1,2.2-2.2c0-1.2-1-2.2-2.2-2.2c-8.4,0-15.7,5.3-19.2,13c-3.5-7.7-10.8-13-19.2-13c-1.2,0-2.2,1-2.2,2.2c0,1.2,1,2.2,2.2,2.2c9.4,0,17,8.4,17,18.8v8.3c-3.9-5.5-10.1-9.1-17-9.1c-1.2,0-2.2,1-2.2,2.2s1,2.2,2.2,2.2c9.4,0,17,8.4,17,18.8v6.6c-3.9-5.5-10.1-9.1-17-9.1c-1.2,0-2.2,1-2.2,2.2s1,2.2,2.2,2.2c6.8,0,12.7,4.4,15.4,10.8H58C60.7,112.2,66.6,107.7,73.4,107.7z" />
   </svg>
 )
 
-// Placeholder for the ICOEL logo lockup: the mark with the name set in the
-// display font. Replace with the logo package's primary logo when it arrives.
+// The ICOEL primary logo (Danish) in white, for use on the brand red.
 export const IcoelLogo = ({ className }: { className?: string }) => (
-  <span
-    role="img"
-    aria-label="Innovationscenter for Økologisk Landbrug"
-    className={cn('flex items-center gap-2.5', className)}
-  >
-    <IcoelMark className="size-10 shrink-0" />
-    <span aria-hidden="true" className="font-display text-[15px] leading-[1.15]">
-      Innovationscenter
-      <br />
-      for Økologisk Landbrug
-    </span>
-  </span>
+  <img
+    src={icoelLogoWhite}
+    alt="Innovationscenter for Økologisk Landbrug"
+    className={cn('h-12 w-auto', className)}
+  />
 )
 
 type BrandMarkProps = {
