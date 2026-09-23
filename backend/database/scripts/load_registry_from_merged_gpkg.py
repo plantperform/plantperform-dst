@@ -9,6 +9,7 @@ import json
 import math
 import time
 from pathlib import Path
+from threading import Event, Thread
 
 import geopandas as gpd
 import psycopg
@@ -23,6 +24,7 @@ MERGED_GPKG = ROOT / "data" / "raw" / "V1_1_IMK2026_n604144_gpkg_merged.gpkg"
 LAYER = "PlantPerform"
 BATCH_SIZE = 50_000
 ROUND_DIGITS = 3
+STATUS_INTERVAL_SECONDS = 10.0
 CROP_HISTORY_YEARS = range(2016, 2027)
 PERCOLATION_COLUMNS_BY_KATEGORI = (
     "P_vaarbygudl",
@@ -43,6 +45,48 @@ def format_duration(seconds: float) -> str:
     minutes, seconds = divmod(total_seconds, 60)
     hours, minutes = divmod(minutes, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
+
+
+class StageReporter:
+    """Report activity while PostgreSQL executes a long-running operation.
+
+    PostgreSQL does not expose row-level progress for COPY, UPDATE, or INSERT.
+    A heartbeat makes the active operation visible without polling the database
+    or adding work to a database that is already busy loading data.
+    """
+
+    def __init__(self, description: str, *, interval: float = STATUS_INTERVAL_SECONDS) -> None:
+        self.description = description
+        self.interval = interval
+        self.start_time = 0.0
+        self.done = Event()
+        self.thread: Thread | None = None
+
+    def __enter__(self) -> "StageReporter":
+        self.start_time = time.monotonic()
+        print(f"{self.description}...", flush=True)
+        self.thread = Thread(target=self._report_until_done, daemon=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        self.done.set()
+        if self.thread is not None:
+            self.thread.join()
+        outcome = "completed" if exc_type is None else "failed"
+        print(
+            f"  {self.description} {outcome} in "
+            f"{format_duration(time.monotonic() - self.start_time)}",
+            flush=True,
+        )
+
+    def _report_until_done(self) -> None:
+        while not self.done.wait(self.interval):
+            print(
+                f"  still {self.description.lower()} "
+                f"(elapsed {format_duration(time.monotonic() - self.start_time)})",
+                flush=True,
+            )
 
 
 def to_multipolygon_wkt(geometry: Polygon | MultiPolygon) -> str:
@@ -100,23 +144,24 @@ def load_staging(dsn: str) -> None:
     )
 
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
-        cursor.execute(
-            f"""
-            CREATE TABLE {STAGING_TABLE} (
-                imk_id bigint PRIMARY KEY, marknr text, markblok text, journalnr text, cvr text,
-                area_ha double precision, crop_history jsonb, jbnr smallint,
-                kystvand_id integer, kystvand_navn text, retention double precision,
-                udledningsgraense_kgn_ha double precision, goedningsregion text, oeko boolean,
-                oestoette boolean, hoejeste_hnv smallint, kvotegivende boolean,
-                omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
-                percolation_by_kategori jsonb, org_n_topsoil double precision,
-                s_soil double precision, banned boolean NOT NULL,
-                geom geometry(MULTIPOLYGON, 4326) NOT NULL
+        with StageReporter("Preparing the staging table"):
+            cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
+            cursor.execute(
+                f"""
+                CREATE TABLE {STAGING_TABLE} (
+                    imk_id bigint PRIMARY KEY, marknr text, markblok text, journalnr text, cvr text,
+                    area_ha double precision, crop_history jsonb, jbnr smallint,
+                    kystvand_id integer, kystvand_navn text, retention double precision,
+                    udledningsgraense_kgn_ha double precision, goedningsregion text, oeko boolean,
+                    oestoette boolean, hoejeste_hnv smallint, kvotegivende boolean,
+                    omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
+                    percolation_by_kategori jsonb, org_n_topsoil double precision,
+                    s_soil double precision, banned boolean NOT NULL,
+                    geom geometry(MULTIPOLYGON, 4326) NOT NULL
+                )
+                """
             )
-            """
-        )
-        with cursor.copy(
+        with StageReporter("Copying rows into staging"), cursor.copy(
             f"""COPY {STAGING_TABLE} (
                 imk_id, marknr, markblok, journalnr, cvr, area_ha, crop_history, jbnr,
                 kystvand_id, kystvand_navn, retention, udledningsgraense_kgn_ha,
@@ -196,25 +241,29 @@ def load_staging(dsn: str) -> None:
                 )
         print(
             f"Loaded {loaded:,} rows ({skipped_no_geom:,} missing geometry, "
-            f"{skipped_dup_imk_id:,} duplicate/invalid IMK_ID), repairing geometries...",
+            f"{skipped_dup_imk_id:,} duplicate/invalid IMK_ID)",
             flush=True,
         )
-        cursor.execute(
-            f"""UPDATE {STAGING_TABLE}
-                SET geom = ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3))
-                WHERE NOT ST_IsValid(geom)"""
-        )
+        with StageReporter("Repairing invalid staged geometries"):
+            cursor.execute(
+                f"""UPDATE {STAGING_TABLE}
+                    SET geom = ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3))
+                    WHERE NOT ST_IsValid(geom)"""
+            )
         print(f"  repaired {cursor.rowcount:,} rows", flush=True)
-        connection.commit()
+        with StageReporter("Committing staged rows"):
+            connection.commit()
 
 
 def finalize_registry_field(dsn: str) -> None:
     print("Replacing registry_field with merged-gpkg rows...", flush=True)
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute("TRUNCATE registry_field")
-        cursor.execute(
-            f"""
-            INSERT INTO registry_field (
+        with StageReporter("Waiting to truncate registry_field"):
+            cursor.execute("TRUNCATE registry_field")
+        with StageReporter("Inserting registry fields and updating indexes"):
+            cursor.execute(
+                f"""
+                INSERT INTO registry_field (
                 imk_id, cvr, marknr, markblok, journalnr, area_ha, crop_rotation, crop_history,
                 geom, centroid, sample_bucket, in_takeout_plan, udledningsgraense_kgn_ha,
                 udledningskvote_mark_kgn, jbnr, kystvand_id, kystvand_navn, retention,
@@ -233,16 +282,18 @@ def finalize_registry_field(dsn: str) -> None:
                 omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned
             FROM {STAGING_TABLE}
             WHERE area_ha IS NOT NULL AND area_ha > 0
-            """
-        )
+                """
+            )
         print(f"Inserted {cursor.rowcount:,} registry fields", flush=True)
-        connection.commit()
+        with StageReporter("Committing registry fields"):
+            connection.commit()
 
 
 def drop_staging(dsn: str) -> None:
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
-        connection.commit()
+        with StageReporter("Dropping the staging table"):
+            cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
+            connection.commit()
 
 
 def load_registry_from_merged_gpkg(*, keep_staging: bool = False) -> None:
