@@ -56,10 +56,7 @@ export const AuthLayout = ({
         <p className="mt-2 text-xs font-medium uppercase tracking-[0.24em] text-brand-foreground/85 lg:text-sm">
           Beslutningsstøtte til sædskifte
         </p>
-        <p className="mt-6 hidden max-w-sm font-display text-3xl leading-snug lg:block xl:text-4xl">
-          Mest muligt ud af hver mark. Inden for kvoten.
-        </p>
-        <p className="mt-5 hidden max-w-sm text-base leading-relaxed text-brand-foreground/85 lg:block">
+        <p className="mt-6 hidden max-w-sm text-base leading-relaxed text-brand-foreground/85 lg:block">
           Planlæg sædskiftet, og se udledningen mod kvoten for hver mark.
         </p>
       </div>
