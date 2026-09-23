@@ -244,7 +244,7 @@ const nameColumn = (
         {isFieldLocked(rowField) ? (
           <span title={formatLockTooltip(rowField)}>
             <Lock
-              className="h-3.5 w-3.5 shrink-0 text-amber-600"
+              className="h-3.5 w-3.5 shrink-0 text-locked"
               aria-hidden="true"
             />
             <span className="sr-only">Låst</span>
@@ -351,7 +351,7 @@ const buildRulesColumns = ({
         isFieldLocked(row.original) ? (
           <span
             title={formatLockTooltip(row.original)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+            className="inline-flex items-center gap-1.5 rounded-full bg-locked/15 px-2 py-0.5 text-xs font-medium text-locked-strong"
           >
             <Lock className="h-3 w-3" aria-hidden="true" />
             Låst
@@ -442,7 +442,7 @@ const buildRulesColumns = ({
               loading={lockingFieldId === field.id}
               className={
                 locked
-                  ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
+                  ? 'gap-1.5 px-2.5 bg-locked/15 text-locked-strong hover:bg-locked/25 hover:text-locked-strong'
                   : 'gap-1.5 px-2.5 text-muted-foreground'
               }
               title={

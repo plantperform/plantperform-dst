@@ -14,7 +14,7 @@ export const AuthNotice = ({ tone, children, className }: AuthNoticeProps) =>
     <p
       role="alert"
       className={cn(
-        'flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700',
+        'flex items-start gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive',
         className,
       )}
     >

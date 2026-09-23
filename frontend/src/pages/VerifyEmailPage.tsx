@@ -121,7 +121,7 @@ export const VerifyEmailPage = () => {
           autoComplete="email"
           aria-invalid={emailError ? true : undefined}
           aria-describedby={emailError ? 'verification-email-error' : undefined}
-          className="h-11 aria-invalid:border-red-600 aria-invalid:ring-1 aria-invalid:ring-red-600"
+          className="h-11 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive"
           value={email}
           onChange={(event) => changeEmail(event.target.value)}
           onBlur={blurEmail}

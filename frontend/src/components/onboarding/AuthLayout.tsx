@@ -20,7 +20,7 @@ export const AuthIcon = ({
     className={cn(
       'flex size-12 items-center justify-center rounded-full',
       tone === 'danger'
-        ? 'bg-red-50 text-red-700'
+        ? 'bg-destructive/10 text-destructive'
         : 'bg-primary/10 text-primary',
     )}
   >

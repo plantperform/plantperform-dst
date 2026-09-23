@@ -231,7 +231,7 @@ export const SimulationRulesPanel = ({
               {isSaving ? 'Gemmer...' : 'Gem grænser'}
             </Button>
             {isDirty ? (
-              <span className="text-xs font-medium text-amber-700">
+              <span className="text-xs font-medium text-warning-strong">
                 Ikke gemt
               </span>
             ) : null}
@@ -248,7 +248,7 @@ export const SimulationRulesPanel = ({
               <span
                 role="status"
                 aria-live="polite"
-                className="text-xs text-red-700"
+                className="text-xs text-destructive"
               >
                 {saveError}
               </span>

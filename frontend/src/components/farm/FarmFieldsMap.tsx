@@ -1616,10 +1616,10 @@ export const FarmFieldsMap = ({
                     <span
                       role="img"
                       aria-label={`Låst mark ${field.name}`}
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-white/95 shadow-md"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-locked/50 bg-white/95 shadow-md"
                     >
                       <Lock
-                        className="h-4 w-4 text-amber-600"
+                        className="h-4 w-4 text-locked"
                         strokeWidth={2.5}
                         aria-hidden="true"
                       />

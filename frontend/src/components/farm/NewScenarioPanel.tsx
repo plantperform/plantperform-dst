@@ -306,7 +306,7 @@ export const NewScenarioPanel = ({
       {stepIndex === 0 ? (
         <div className="space-y-6">
           {!hasFields ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-strong">
               Vælg mindst én mark under Afgrødehistorik, før du opretter en
               simulering.
             </p>

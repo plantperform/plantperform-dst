@@ -87,7 +87,7 @@ export const MapRuleCard = ({
           {field.name}
         </span>
         {locked ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-locked/15 px-1.5 py-0.5 font-medium text-locked-strong">
             <Lock className="size-3" aria-hidden="true" />
             Låst
           </span>
@@ -175,7 +175,7 @@ export const MapRuleCard = ({
               className={cn(
                 'w-full gap-1.5 px-2',
                 locked &&
-                  'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900',
+                  'border-locked/40 bg-locked/15 text-locked-strong hover:bg-locked/25 hover:text-locked-strong',
               )}
               disabled={noRotation}
               loading={locking}

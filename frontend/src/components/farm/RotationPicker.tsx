@@ -96,9 +96,9 @@ export const RotationPicker = ({
         <FieldError id="rotation-picker-error" message={error} />
 
         {mismatchCount > 0 ? (
-          <p className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-strong">
             <AlertTriangle
-              className="mt-0.5 size-3.5 shrink-0 text-amber-700"
+              className="mt-0.5 size-3.5 shrink-0 text-warning-strong"
               aria-hidden="true"
             />
             {farmingSystemMismatchMessage(mismatchCount, farmingSystem)}

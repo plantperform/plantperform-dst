@@ -160,7 +160,7 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
       style={{ height: `${heightPct}%` }}
     >
       {overPct > 0 ? (
-        <span className="bg-red-600" style={{ height: `${overPct}%` }} />
+        <span className="bg-destructive" style={{ height: `${overPct}%` }} />
       ) : null}
     </span>
   )
@@ -727,7 +727,7 @@ export const YearWalkthrough = ({
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className="h-2 w-3 rounded-[2px] bg-red-600"
+                    className="h-2 w-3 rounded-[2px] bg-destructive"
                   />
                   Over kvoten
                 </span>
