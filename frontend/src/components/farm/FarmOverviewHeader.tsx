@@ -46,7 +46,7 @@ export const FarmOverviewHeader = ({
             <dd
               className={cn(
                 'mt-1 font-display text-3xl leading-none',
-                stat.alert && 'text-red-700',
+                stat.alert && 'text-destructive',
               )}
             >
               {stat.pending ? (

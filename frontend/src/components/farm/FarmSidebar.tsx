@@ -37,6 +37,7 @@ import {
   useOptimizationRun,
   type OptimizationRun,
 } from '@/api/optimization-runs'
+import { IcoelMark } from '@/components/BrandMark'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
@@ -416,16 +417,14 @@ export const FarmSidebar = ({
   )
 }
 
+// A full-bleed band in the brand red, cancelling the header's padding, so the
+// sidebar reads like the ICOEL guide's pages: red top, sand column below.
 export const SidebarBrand = () => (
-  <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-    <img
-      src="/plant-perform-tab-icon.svg"
-      alt=""
-      className="size-8 shrink-0 rounded-md"
-    />
+  <div className="-mx-3 -mt-3 mb-1 flex items-center gap-2 self-stretch bg-brand px-3 py-3 text-brand-foreground group-data-[collapsible=icon]:-mx-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
+    <IcoelMark className="size-8 shrink-0" />
     <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
       <span className="truncate text-sm font-semibold">PlantPerform</span>
-      <span className="truncate text-xs text-muted-foreground">
+      <span className="truncate text-xs text-brand-foreground/85">
         Sædskifteplanlægning
       </span>
     </div>

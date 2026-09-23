@@ -23,7 +23,7 @@ const LoadError = ({
   <div
     role="alert"
     className={cn(
-      'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700',
+      'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive',
       className,
     )}
   >
@@ -34,7 +34,7 @@ const LoadError = ({
         type="button"
         size="xs"
         variant="outline"
-        className="border-red-200 bg-white text-red-700 hover:bg-red-100"
+        className="border-destructive/30 bg-white text-destructive hover:bg-destructive/15"
         loading={retrying}
         onClick={onRetry}
       >
@@ -46,7 +46,7 @@ const LoadError = ({
         type="button"
         size="xs"
         variant="ghost"
-        className="px-2 text-red-700 hover:bg-red-100 hover:text-red-700"
+        className="px-2 text-destructive hover:bg-destructive/15 hover:text-destructive"
         aria-label="Luk fejlbeskeden"
         onClick={onDismiss}
       >

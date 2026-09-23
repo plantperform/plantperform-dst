@@ -5,16 +5,16 @@ import { UserMenu } from '@/components/UserMenu'
 import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 
 export const AppTopBar = () => (
-  <header className="border-b bg-card">
+  <header className="bg-brand text-brand-foreground">
     <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-6 px-6 sm:px-10">
       <Link
         to="/"
         state={HOME_OVERVIEW_STATE}
-        className="rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="rounded-lg focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:outline-none"
       >
-        <BrandMark />
+        <BrandMark variant="onDark" />
       </Link>
-      <UserMenu className="shrink-0" />
+      <UserMenu variant="onDark" className="shrink-0" />
     </div>
   </header>
 )

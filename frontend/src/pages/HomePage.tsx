@@ -14,6 +14,7 @@ import { useAuth } from '@/auth/context'
 import { farmsKey, useFarms, useFarmsFields } from '@/api/hooks'
 import { createFarm } from '@/api/mutations'
 import { AppTopBar } from '@/components/AppTopBar'
+import { IcoelMark } from '@/components/BrandMark'
 import {
   FARM_LIST_CLASS,
   FarmRow,
@@ -178,7 +179,7 @@ export const HomePage = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CircleAlert
-                  className="h-5 w-5 text-red-700"
+                  className="h-5 w-5 text-destructive"
                   aria-hidden="true"
                 />
                 Bedriften kunne ikke oprettes
@@ -241,7 +242,7 @@ export const HomePage = () => {
         />
 
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-foreground sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm">
               Ved oprettelsen angav du bedriften "{pending.name}". Vil du
               oprette den nu?
@@ -290,7 +291,8 @@ export const HomePage = () => {
         ) : null}
 
         {!isLoading && !error && farmList.length === 0 ? (
-          <div className="rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
+          <div className="relative isolate overflow-hidden rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
+            <IcoelMark className="pointer-events-none absolute -right-16 -bottom-20 -z-10 size-72 text-brand opacity-[0.07]" />
             <p id="get-started-heading" className="text-lg font-semibold">
               Kom i gang
             </p>

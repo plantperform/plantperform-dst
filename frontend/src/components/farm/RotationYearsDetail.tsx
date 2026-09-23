@@ -94,7 +94,7 @@ const DetailTable = ({ rows }: { rows: Row[] }) => (
 )
 
 const Callout = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+  <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-foreground">
     {children}
   </div>
 )
@@ -513,7 +513,7 @@ const LeachingDetailSection = ({
             afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
             egen perkolationsværdi for denne kategori.
             {detail.runoffCategoryUnknown ? (
-              <span className="text-amber-700">
+              <span className="text-warning-strong">
                 {' '}
                 ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1
                 er brugt som et rent gæt, ikke et opslag.
@@ -745,7 +745,7 @@ const EconomicDetailSection = ({
         hektar - ganget med markens areal til sidst.
       </p>
       {detail.yieldNormMissing ? (
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-warning-strong">
           Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og
           indtægt er sat til 0.
         </p>

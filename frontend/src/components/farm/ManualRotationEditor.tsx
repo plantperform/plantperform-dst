@@ -69,7 +69,7 @@ const chipClassName = (selected: boolean) =>
       : 'bg-background hover:bg-muted'
   }`
 
-const AMBER_PILL_CLASSES = 'rounded-full border border-amber-200 bg-amber-50 text-amber-800'
+const CHANGED_PILL_CLASSES = 'rounded-full border border-changed bg-changed/40 text-foreground'
 
 export const ManualRotationEditor = ({
   farmId,
@@ -531,7 +531,7 @@ export const ManualRotationEditor = ({
                     </div>
 
                     {previewError ? (
-                      <p className="text-sm text-red-700">{previewError}</p>
+                      <p className="text-sm text-destructive">{previewError}</p>
                     ) : null}
 
                     {years.length > 0 ? (
@@ -541,13 +541,13 @@ export const ManualRotationEditor = ({
                           <div className="flex items-center gap-2">
                             {startYearOffset !== 0 ? (
                               <div
-                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${AMBER_PILL_CLASSES}`}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${CHANGED_PILL_CLASSES}`}
                               >
                                 <span>Forskudt +{startYearOffset} år</span>
                                 <button
                                   type="button"
                                   onClick={() => shiftStartYear(baselineStartYear - startYear)}
-                                  className="font-medium text-amber-900 underline hover:no-underline"
+                                  className="font-medium text-foreground underline hover:no-underline"
                                 >
                                   Nulstil
                                 </button>
@@ -621,7 +621,7 @@ export const ManualRotationEditor = ({
                                 </span>
                                 {cellWrap ? (
                                   <span
-                                    className={`pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 px-1.5 text-[10px] ${AMBER_PILL_CLASSES}`}
+                                    className={`pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 px-1.5 text-[10px] ${CHANGED_PILL_CLASSES}`}
                                   >
                                     <RotateCw className="h-2.5 w-2.5" aria-hidden="true" />
                                     fra {cellWrap.fromYear}

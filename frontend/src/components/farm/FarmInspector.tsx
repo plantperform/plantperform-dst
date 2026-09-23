@@ -1023,12 +1023,12 @@ const YearlyOptimizeDialog = ({
           <OptimizationRunProgress run={run} />
         ) : (
           <>
-            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
               <Info
-                className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+                className="mt-0.5 h-4 w-4 shrink-0 text-warning-strong"
                 aria-hidden="true"
               />
-              <p className="text-xs text-amber-900">
+              <p className="text-xs text-warning-strong">
                 Indstillingerne herunder gælder <strong>kun denne kørsel</strong> og
                 gemmes ikke på simuleringen - de nulstilles, når dialogen lukkes, og
                 vises derfor ikke under Regler. Noter dem, hvis du skal kunne

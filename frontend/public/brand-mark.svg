@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">PlantPerform</title>
+  <rect width="48" height="48" rx="10" fill="#A5343F"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" transform="translate(4.8 4.8) scale(0.8)">
+    <path d="M16.5 34A15 15 0 1 1 31.5 34" stroke-width="3.5"/>
+    <path d="M24 45V19M24 38q-2-5-7-6M24 38q2-5 7-6M24 31q-2-5-7-6M24 31q2-5 7-6M24 24q-1.5-4-5-5M24 24q1.5-4 5-5" stroke-width="3"/>
+  </g>
+</svg>

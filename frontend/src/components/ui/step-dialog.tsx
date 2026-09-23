@@ -84,7 +84,7 @@ const StepIndicator = ({
                       'border-primary bg-primary/10 text-primary',
                     !isCurrent &&
                       step.status === 'invalid' &&
-                      'border-amber-500 bg-amber-50 text-amber-700',
+                      'border-warning bg-warning/10 text-warning-strong',
                     !isCurrent &&
                       step.status === 'upcoming' &&
                       'bg-background text-muted-foreground',

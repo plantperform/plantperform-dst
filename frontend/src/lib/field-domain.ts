@@ -9,6 +9,7 @@ import type {
   RotationYear,
   YearlySummaryEntry,
 } from '@/api/types'
+import { UI_COLORS } from '@/lib/brand-colors'
 import {
   cropGroupFor,
   shortCropName,
@@ -424,25 +425,25 @@ const QUOTA_STATUS_STYLE_UNKNOWN: QuotaStatusStyle = {
 
 export const QUOTA_STATUS_STYLES: Record<QuotaStatusLevel, QuotaStatusStyle> = {
   ok: {
-    dot: 'bg-green-600',
-    accent: 'border-l-green-600',
+    dot: 'bg-success',
+    accent: 'border-l-success',
     rowAccent: null,
-    surface: 'border-green-200 bg-green-50',
-    text: 'text-green-800',
+    surface: 'border-success/30 bg-success/10',
+    text: 'text-success-strong',
   },
   near: {
-    dot: 'bg-amber-600',
-    accent: 'border-l-amber-600',
-    rowAccent: 'before:bg-amber-600',
-    surface: 'border-amber-200 bg-amber-50',
-    text: 'text-amber-800',
+    dot: 'bg-warning',
+    accent: 'border-l-warning',
+    rowAccent: 'before:bg-warning',
+    surface: 'border-warning/30 bg-warning/10',
+    text: 'text-warning-strong',
   },
   over: {
-    dot: 'bg-red-600',
-    accent: 'border-l-red-600',
-    rowAccent: 'before:bg-red-600',
-    surface: 'border-red-200 bg-red-50',
-    text: 'text-red-800',
+    dot: 'bg-destructive',
+    accent: 'border-l-destructive',
+    rowAccent: 'before:bg-destructive',
+    surface: 'border-destructive/30 bg-destructive/10',
+    text: 'text-destructive',
   },
   uncalculated: QUOTA_STATUS_STYLE_UNKNOWN,
   noData: QUOTA_STATUS_STYLE_UNKNOWN,
@@ -680,8 +681,8 @@ export const catchmentRuns = (
   return runs
 }
 
-export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
-export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
+export const CROP_YEAR_COVER_CROP_BORDER = UI_COLORS.freshGreenDark
+export const CROP_YEAR_COVER_CROP_SEPARATOR = '#ffffff'
 
 export const coverCropShadow = (
   hasUndersownCrop: boolean,

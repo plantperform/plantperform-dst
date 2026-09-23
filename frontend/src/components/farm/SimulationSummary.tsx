@@ -113,7 +113,7 @@ export const SimulationSummary = ({
               .join(' · ')}
           </p>
           {mismatchCount > 0 ? (
-            <p className="flex gap-1.5 text-amber-800">
+            <p className="flex gap-1.5 text-warning-strong">
               <AlertTriangle
                 className="mt-0.5 size-3.5 shrink-0"
                 aria-hidden="true"

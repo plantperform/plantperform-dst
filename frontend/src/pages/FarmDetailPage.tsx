@@ -285,7 +285,7 @@ export const FarmDetailPage = () => {
           aria-label="Vis eller skjul sidepanelet"
         />
         {toast ? (
-          <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
+          <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg">
             <p role="alert">{toast.message}</p>
           </div>
         ) : null}
