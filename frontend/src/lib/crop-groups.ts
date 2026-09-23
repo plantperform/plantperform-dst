@@ -20,18 +20,20 @@ export type CropGroupDefinition = {
 }
 
 // Crop colours come from the ICOEL palette, whose accent colours the guide
-// reserves for crops. Chosen to stay apart (CIEDE2000 >= 13) for normal vision
-// and for simulated deuteranopia and protanopia.
+// reserves for crops, using only full colours and 75 % tints. Cereals and
+// oilseed stay in the yellow family farmers know from crop maps; the closest
+// pair (Vårsæd and Raps) is CIEDE2000 5.9 apart even under simulated
+// deuteranopia and protanopia, and the edge from cropEdgeColor separates them.
 export const CROP_GROUPS: readonly CropGroupDefinition[] = [
   {
     id: 'springCereal',
     label: 'Vårsæd',
-    color: '#FAECB8', // Sol 50 %
+    color: BRAND_COLORS.sun,
   },
   {
     id: 'winterCereal',
     label: 'Vintersæd',
-    color: BRAND_COLORS.soil,
+    color: '#D9A167', // Gulerod 75 %
   },
   {
     id: 'maize',
@@ -61,22 +63,22 @@ export const CROP_GROUPS: readonly CropGroupDefinition[] = [
   {
     id: 'seedGrass',
     label: 'Frøgræs',
-    color: BRAND_COLORS.forestTertiary,
+    color: '#86B0A8', // Tertiær skov 75 %
   },
   {
     id: 'grass',
     label: 'Græs',
-    color: '#90AA81', // Skov 75 %
+    color: BRAND_COLORS.forest,
   },
   {
     id: 'fallow',
     label: 'Brak og natur',
-    color: '#AECAC5', // Tertiær skov 50 %
+    color: '#A78284', // Tertiær jord 75 %
   },
   {
     id: 'other',
     label: 'Andet',
-    color: '#A0C2E2', // Tertiær vand 50 %
+    color: BRAND_COLORS.sand,
   },
 ]
 
@@ -185,6 +187,37 @@ export const presentCropGroups = (
     crops.map((crop) => classifyCrop(crop.cropCode, crop.cropName)),
   )
   return CROP_GROUPS.filter((group) => present.has(group.id))
+}
+
+const mixHex = (hex: string, target: string, amount: number): string => {
+  const channel = (value: string, offset: number) =>
+    parseInt(value.replace('#', '').slice(offset, offset + 2), 16)
+  return `#${[0, 2, 4]
+    .map((offset) => {
+      const from = channel(hex, offset)
+      const mixed = Math.round(from + (channel(target, offset) - from) * amount)
+      return mixed.toString(16).padStart(2, '0')
+    })
+    .join('')}`
+}
+
+// Several guide colours (Sol, Raps, Sand) barely show on white, so crop
+// swatches carry an edge in a darker shade of their own colour. At least 3.6:1
+// against white for every group.
+export const cropEdgeColor = (color: string): string =>
+  mixHex(color, '#000000', 0.38)
+
+// At crop level several crops share a group. They keep the group's hue in
+// steps by area: the group colour, a darker step, one lighter step that is no
+// paler than a 75 % tint, then darker again.
+const SHADE_STEPS = [0, -0.22, 0.25, -0.4, -0.55] as const
+
+export const cropShadeColor = (color: string, index: number): string => {
+  const step = SHADE_STEPS[Math.min(index, SHADE_STEPS.length - 1)]
+  if (step === 0) return color
+  return step < 0
+    ? mixHex(color, '#000000', -step)
+    : mixHex(color, '#ffffff', step)
 }
 
 const DARK_TEXT = UI_COLORS.ink

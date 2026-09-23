@@ -12,6 +12,7 @@ import type {
 import { UI_COLORS } from '@/lib/brand-colors'
 import {
   cropGroupFor,
+  cropShadeColor,
   shortCropName,
   type CropGroupDefinition,
 } from '@/lib/crop-groups'
@@ -816,6 +817,7 @@ export type CropShare = {
   id: string
   label: string
   group: CropGroupDefinition
+  color: string
   areaHa: number
   share: number
   nLoadKgHa: number
@@ -863,14 +865,20 @@ export const summarizeCropDistribution = (
     }
   }
   if (totalHa === 0) return []
+  const shadeIndexByGroup = new Map<string, number>()
   return [...totalsById.entries()]
-    .map(([id, totals]) => ({
-      id,
-      label: totals.label,
-      group: totals.group,
-      areaHa: totals.areaHa,
-      share: totals.areaHa / totalHa,
-      nLoadKgHa: totals.nLoadKg / totals.areaHa,
-    }))
-    .sort((left, right) => right.areaHa - left.areaHa)
+    .sort(([, left], [, right]) => right.areaHa - left.areaHa)
+    .map(([id, totals]) => {
+      const shadeIndex = shadeIndexByGroup.get(totals.group.id) ?? 0
+      shadeIndexByGroup.set(totals.group.id, shadeIndex + 1)
+      return {
+        id,
+        label: totals.label,
+        group: totals.group,
+        color: cropShadeColor(totals.group.color, shadeIndex),
+        areaHa: totals.areaHa,
+        share: totals.areaHa / totalHa,
+        nLoadKgHa: totals.nLoadKg / totals.areaHa,
+      }
+    })
 }

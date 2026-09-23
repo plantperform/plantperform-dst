@@ -14,6 +14,7 @@ import {
   WheatOutline,
 } from '@/components/farm/crop-icons'
 import {
+  cropEdgeColor,
   readableTextColor,
   type CropGroup,
   type CropGroupDefinition,
@@ -37,6 +38,8 @@ const ICONS: Record<CropGroup, ComponentType<{ className?: string }>> = {
 
 type CropGroupTileProps = {
   group: CropGroupDefinition
+  // Overrides the group colour, e.g. with a crop's shade of it.
+  color?: string
   hasUndersownCrop: boolean
   size?: 'sm' | 'md'
   title?: string
@@ -45,6 +48,7 @@ type CropGroupTileProps = {
 
 export const CropGroupTile = ({
   group,
+  color = group.color,
   hasUndersownCrop,
   size = 'sm',
   title,
@@ -62,9 +66,14 @@ export const CropGroupTile = ({
         className,
       )}
       style={{
-        backgroundColor: group.color,
-        color: readableTextColor(group.color),
-        boxShadow: coverCropShadow(hasUndersownCrop),
+        backgroundColor: color,
+        color: readableTextColor(color),
+        boxShadow: [
+          coverCropShadow(hasUndersownCrop),
+          `inset 0 0 0 1px ${cropEdgeColor(color)}`,
+        ]
+          .filter(Boolean)
+          .join(', '),
       }}
     >
       <Icon className={size === 'sm' ? 'size-3' : 'size-4'} />
