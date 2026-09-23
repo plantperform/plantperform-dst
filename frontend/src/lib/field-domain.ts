@@ -9,6 +9,7 @@ import type {
   RotationYear,
   YearlySummaryEntry,
 } from '@/api/types'
+import { UI_COLORS } from '@/lib/brand-colors'
 import {
   cropGroupFor,
   shortCropName,
@@ -680,8 +681,8 @@ export const catchmentRuns = (
   return runs
 }
 
-export const CROP_YEAR_COVER_CROP_BORDER = '#176433'
-export const CROP_YEAR_COVER_CROP_SEPARATOR = '#faf9f5'
+export const CROP_YEAR_COVER_CROP_BORDER = UI_COLORS.freshGreenDark
+export const CROP_YEAR_COVER_CROP_SEPARATOR = '#ffffff'
 
 export const coverCropShadow = (
   hasUndersownCrop: boolean,

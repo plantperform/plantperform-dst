@@ -1,3 +1,5 @@
+import { BRAND_COLORS, UI_COLORS } from '@/lib/brand-colors'
+
 export type CropGroup =
   | 'springCereal'
   | 'winterCereal'
@@ -17,61 +19,64 @@ export type CropGroupDefinition = {
   color: string
 }
 
+// Crop colours come from the ICOEL palette, whose accent colours the guide
+// reserves for crops. Chosen to stay apart (CIEDE2000 >= 13) for normal vision
+// and for simulated deuteranopia and protanopia.
 export const CROP_GROUPS: readonly CropGroupDefinition[] = [
   {
     id: 'springCereal',
     label: 'Vårsæd',
-    color: '#64b04a',
+    color: '#FAECB8', // Sol 50 %
   },
   {
     id: 'winterCereal',
     label: 'Vintersæd',
-    color: '#3d7a2b',
+    color: BRAND_COLORS.soil,
   },
   {
     id: 'maize',
     label: 'Majs',
-    color: '#e8b022',
+    color: BRAND_COLORS.carrot,
   },
   {
     id: 'oilseed',
     label: 'Raps og olie',
-    color: '#fbe64a',
+    color: BRAND_COLORS.rapeseed,
   },
   {
     id: 'legume',
     label: 'Bælgsæd',
-    color: '#2b8c62',
+    color: BRAND_COLORS.waterTertiary,
   },
   {
     id: 'potato',
     label: 'Kartofler',
-    color: '#8a5a2b',
+    color: BRAND_COLORS.redBrown,
   },
   {
     id: 'beet',
     label: 'Roer og industri',
-    color: '#c0392b',
+    color: BRAND_COLORS.berry,
   },
   {
     id: 'seedGrass',
     label: 'Frøgræs',
-    color: '#a3cc45',
+    color: BRAND_COLORS.forestTertiary,
   },
   {
     id: 'grass',
     label: 'Græs',
-    color: '#1e5e34',
+    color: '#90AA81', // Skov 75 %
   },
   {
     id: 'fallow',
     label: 'Brak og natur',
-    color: '#8b6fb5',
+    color: '#AECAC5', // Tertiær skov 50 %
   },
   {
     id: 'other',
     label: 'Andet',
-    color: '#b5b9c0',
+    color: '#A0C2E2', // Tertiær vand 50 %
   },
 ]
 
@@ -182,8 +187,8 @@ export const presentCropGroups = (
   return CROP_GROUPS.filter((group) => present.has(group.id))
 }
 
-const DARK_TEXT = '#1a2821'
-const LIGHT_TEXT = '#faf9f5'
+const DARK_TEXT = UI_COLORS.ink
+const LIGHT_TEXT = '#ffffff'
 
 export const readableTextColor = (hex: string): string => {
   const value = hex.replace('#', '')

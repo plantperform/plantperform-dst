@@ -79,6 +79,7 @@ import {
 } from '@/lib/geo'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
+import { BRAND_COLORS, UI_COLORS } from '@/lib/brand-colors'
 import {
   cropGroupColor,
   readableTextColor,
@@ -148,16 +149,16 @@ const EDIT_MODE_LAYER_IDS = [
 ]
 
 const EDIT_BASE_LEGEND = [
-  { label: 'Bedriftens marker', color: 'rgba(22, 163, 74, 0.28)' },
+  { label: 'Bedriftens marker', color: 'rgba(107, 141, 87, 0.28)' },
   { label: 'Registermarker', color: 'rgba(100, 116, 139, 0.3)' },
 ]
 
 const EDIT_CHANGE_LEGEND = [
-  { label: 'Tilføjes', color: 'rgba(37, 99, 235, 0.55)' },
-  { label: 'Fjernes', color: 'rgba(220, 38, 38, 0.5)' },
+  { label: 'Tilføjes', color: 'rgba(65, 133, 197, 0.55)' },
+  { label: 'Fjernes', color: 'rgba(204, 43, 29, 0.5)' },
 ]
 
-const CVR_LEGEND_ENTRY = { label: 'Fremhævet CVR', color: 'rgba(250, 204, 21, 0.48)' }
+const CVR_LEGEND_ENTRY = { label: 'Fremhævet CVR', color: 'rgba(245, 216, 114, 0.48)' }
 
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
@@ -1342,7 +1343,7 @@ export const FarmFieldsMap = ({
               id="farm-fields-fill"
               type="fill"
               paint={{
-                'fill-color': farmThemedColor ?? '#16a34a',
+                'fill-color': farmThemedColor ?? BRAND_COLORS.forest,
                 'fill-opacity': buildCatchmentFillOpacity(
                   addMode ? 0.28 : farmThemedColor ? 0.7 : 0.5,
                   highlightedCatchmentKey,
@@ -1355,7 +1356,7 @@ export const FarmFieldsMap = ({
               id="farm-fields-outline"
               type="line"
               paint={{
-                'line-color': '#15803d',
+                'line-color': UI_COLORS.forestDark,
                 'line-width': 1.8,
                 'line-opacity': 0.9,
               }}
@@ -1392,9 +1393,9 @@ export const FarmFieldsMap = ({
                 maxzoom={registryPolygonMinZoom}
                 filter={highlightedCvrFilter}
                 paint={{
-                  'circle-color': '#facc15',
+                  'circle-color': BRAND_COLORS.sun,
                   'circle-radius': registryPointRadius,
-                  'circle-stroke-color': '#ca8a04',
+                  'circle-stroke-color': UI_COLORS.sunDark,
                   'circle-stroke-width': 0.8,
                 }}
               />
@@ -1406,10 +1407,10 @@ export const FarmFieldsMap = ({
                 maxzoom={registryPolygonMinZoom}
                 filter={['==', ['get', 'owned'], true] as FilterSpecification}
                 paint={{
-                  'circle-color': registryThemedColor ?? '#16a34a',
+                  'circle-color': registryThemedColor ?? BRAND_COLORS.forest,
                   'circle-opacity': 0.9,
                   'circle-radius': registryPointRadius,
-                  'circle-stroke-color': '#1f2937',
+                  'circle-stroke-color': UI_COLORS.ink,
                   'circle-stroke-width': 0.8,
                 }}
               />
@@ -1442,7 +1443,7 @@ export const FarmFieldsMap = ({
                 type="fill"
                 minzoom={registryPolygonMinZoom}
                 filter={highlightedCvrFilter}
-                paint={{ 'fill-color': '#facc15', 'fill-opacity': 0.48 }}
+                paint={{ 'fill-color': BRAND_COLORS.sun, 'fill-opacity': 0.48 }}
               />
               <Layer
                 id="registry-cvr-highlight-outline"
@@ -1451,7 +1452,7 @@ export const FarmFieldsMap = ({
                 minzoom={registryPolygonMinZoom}
                 filter={highlightedCvrFilter}
                 paint={{
-                  'line-color': '#ca8a04',
+                  'line-color': UI_COLORS.sunDark,
                   'line-width': 1.8,
                   'line-opacity': 0.9,
                 }}
@@ -1462,7 +1463,7 @@ export const FarmFieldsMap = ({
                 type="fill"
                 minzoom={registryPolygonMinZoom}
                 filter={selectedRegistryFilter}
-                paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.55 }}
+                paint={{ 'fill-color': BRAND_COLORS.waterTertiary, 'fill-opacity': 0.55 }}
               />
               <Layer
                 id="registry-selected-outline"
@@ -1471,7 +1472,7 @@ export const FarmFieldsMap = ({
                 minzoom={registryPolygonMinZoom}
                 filter={selectedRegistryFilter}
                 paint={{
-                  'line-color': '#1d4ed8',
+                  'line-color': BRAND_COLORS.water,
                   'line-width': 2.5,
                   'line-opacity': 0.95,
                 }}
@@ -1511,13 +1512,13 @@ export const FarmFieldsMap = ({
               <Layer
                 id="detach-farm-fields-fill"
                 type="fill"
-                paint={{ 'fill-color': '#dc2626', 'fill-opacity': 0.5 }}
+                paint={{ 'fill-color': UI_COLORS.destructive, 'fill-opacity': 0.5 }}
               />
               <Layer
                 id="detach-farm-fields-outline"
                 type="line"
                 paint={{
-                  'line-color': '#b91c1c',
+                  'line-color': UI_COLORS.destructiveDark,
                   'line-width': 2.5,
                   'line-opacity': 0.95,
                 }}
@@ -1593,12 +1594,12 @@ export const FarmFieldsMap = ({
             <Layer
               id="selected-farm-field-fill"
               type="fill"
-              paint={{ 'fill-color': '#2563eb', 'fill-opacity': 0.2 }}
+              paint={{ 'fill-color': BRAND_COLORS.waterTertiary, 'fill-opacity': 0.2 }}
             />
             <Layer
               id="selected-farm-field-outline"
               type="line"
-              paint={{ 'line-color': '#1d4ed8', 'line-width': 3 }}
+              paint={{ 'line-color': BRAND_COLORS.water, 'line-width': 3 }}
             />
           </Source>
 
