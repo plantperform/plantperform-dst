@@ -33,6 +33,15 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
   --color-rules: hsl(var(--rules));
   --color-rules-foreground: hsl(var(--rules-foreground));
+  --color-brand: hsl(var(--brand));
+  --color-brand-foreground: hsl(var(--brand-foreground));
+  --color-changed: hsl(var(--changed));
+  --color-locked: hsl(var(--locked));
+  --color-locked-strong: hsl(var(--locked-strong));
+  --color-warning: hsl(var(--warning));
+  --color-warning-strong: hsl(var(--warning-strong));
+  --color-success: hsl(var(--success));
+  --color-success-strong: hsl(var(--success-strong));
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -40,46 +49,57 @@
   --animate-skeleton-in: skeleton-in 150ms ease-out 200ms both;
   --animate-check-draw: check-draw 400ms ease-out 200ms both;
   --animate-success-pop: success-pop 450ms ease-out;
-  --font-display:
-    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
-    serif;
+  /* The ICOEL guide's system fonts, which stand in for Como and Lapture Display. */
+  --font-sans: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  --font-display: Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
 }
 
 :root {
-  --background: 48 33% 97%;
-  --foreground: 150 21% 13%;
+  /* ICOEL palette: 25/50/75 % Sand, Vand for actions, Inno-Øko rød for identity only. */
+  --background: 42 36% 95%;
+  --foreground: 30 15% 11%;
   --card: 0 0% 100%;
-  --card-foreground: 150 21% 13%;
+  --card-foreground: 30 15% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 150 21% 13%;
-  --primary: 142 63% 24%;
-  --primary-deep: 142 63% 12%;
-  --primary-foreground: 48 33% 97%;
-  --secondary: 91 31% 88%;
-  --secondary-foreground: 142 63% 18%;
-  --muted: 80 20% 92%;
-  --muted-foreground: 142 8% 40%;
-  --accent: 91 31% 88%;
-  --accent-foreground: 142 63% 18%;
-  --destructive: 0 72% 45%;
+  --popover-foreground: 30 15% 11%;
+  --primary: 208 47% 30%;
+  --primary-deep: 209 47% 20%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 207 21% 92%;
+  --secondary-foreground: 208 47% 30%;
+  --muted: 42 36% 89%;
+  --muted-foreground: 30 11% 35%;
+  --accent: 207 21% 92%;
+  --accent-foreground: 208 47% 30%;
+  /* Deliberately brighter than the brand red so an error never reads as branding. */
+  --destructive: 5 75% 46%;
   --destructive-foreground: 0 0% 100%;
-  --border: 82 19% 84%;
-  --input: 82 19% 84%;
-  --ring: 142 63% 24%;
-  --sidebar: 80 20% 96%;
-  --sidebar-foreground: 150 21% 13%;
-  --sidebar-primary: 142 63% 24%;
-  --sidebar-primary-foreground: 48 33% 97%;
-  --sidebar-accent: 91 31% 88%;
-  --sidebar-accent-foreground: 142 63% 18%;
-  --sidebar-border: 82 19% 84%;
-  --sidebar-ring: 142 63% 24%;
-  --rules: 243 75% 59%;
+  --border: 42 36% 84%;
+  --input: 42 36% 84%;
+  --ring: 208 47% 30%;
+  --sidebar: 42 36% 95%;
+  --sidebar-foreground: 30 15% 11%;
+  --sidebar-primary: 208 47% 30%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 42 36% 89%;
+  --sidebar-accent-foreground: 30 15% 11%;
+  --sidebar-border: 42 36% 84%;
+  --sidebar-ring: 208 47% 30%;
+  --rules: 324 42% 34%;
   --rules-foreground: 0 0% 100%;
+  --brand: 354 52% 43%;
+  --brand-foreground: 0 0% 100%;
+  /* Status colours. The -strong variants darken the guide colour to pass 4.5:1
+     as text on the colour's own tint. */
+  --changed: 47 87% 70%;
+  --locked: 30 19% 44%;
+  --locked-strong: 29 19% 28%;
+  --warning: 31 60% 50%;
+  --warning-strong: 31 59% 30%;
+  --success: 94 40% 43%;
+  --success-strong: 94 40% 25%;
   --radius: 0.85rem;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  font-family: var(--font-sans);
   color: hsl(var(--foreground));
   background: hsl(var(--background));
   font-synthesis: none;
