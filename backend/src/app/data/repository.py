@@ -26,6 +26,7 @@ from app.domain.field import (
 )
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
+    RotationCandidateRef,
     RotationCandidateYearResult,
     SimulationFieldCandidates,
 )
@@ -36,6 +37,7 @@ from app.domain.simulation import (
     Simulation,
 )
 from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
+from app.services.rotations import saedskifte_library
 from app.services.rotations.afgroede_normer import is_permanent_afgrode
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import generate_candidates_for_field
@@ -674,23 +676,53 @@ def list_simulation_field_candidates(
 def list_scenario_afgrodekoder(
     farm_id: str, simulation_id: str, email: str,
 ) -> set[int] | None:
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
+    """Return every distinct afgrode_kode the simulering's chosen sædskifter can use.
 
-        rows = session.execute(
-            select(simulation_field_candidates_table.c.data)
-            .where(simulation_field_candidates_table.c.simulation_id == simulation_id),
-        ).scalars()
-        codes: set[int] = set()
-        for data in rows:
-            field_candidates = _load(SimulationFieldCandidates, data)
-            for candidate in field_candidates.candidates:
-                codes.update(
-                    year.year.afgrode_kode
-                    for year in candidate.years[: candidate.active_len]
-                )
-        return codes
+    A rotation's afgrode_kode per position comes straight from
+    saedskifte_library.generate_rotation(saedskiftevariant, variant) - jbnr,
+    gødning and every other per-mark input only affect that position's N/DB2/
+    udvaskning, never which afgrøde is there
+    (candidate_evaluator._strip_disabled_virkemidler only ever clears
+    udlæg_kode/udlæg_navn). The set is therefore identical for every mark in
+    the simulering and derivable straight from
+    simulation.rotation_saedskiftevarianter, without touching
+    simulation_field_candidates at all - no per-mark ~1.6 MB candidate set
+    (db/leaching breakdown included) needs to be loaded just to read off one
+    integer per position.
+
+    A permanent-afgrøde auto-lock (repository.create_simulation,
+    is_permanent_afgrode) is the one exception: its synthetic
+    "permanent:<afgrode_kode>:100" ref never comes from the sædskifte
+    library, so it would otherwise be missing here. Every mark's own
+    rotation_id/allowed_rotation_ids is still cheap - simulation_field, not
+    simulation_field_candidates - so those are scanned too.
+    """
+    with SessionLocal() as session:
+        simulation = _get_simulation(session, farm_id, simulation_id, email)
+    if simulation is None:
+        return None
+
+    codes: set[int] = set()
+    for saedskiftevariant in simulation.rotation_saedskiftevarianter:
+        for variant in saedskifte_library.list_variants(saedskiftevariant):
+            raw_rotation = saedskifte_library.generate_rotation(saedskiftevariant, variant)
+            active_len = saedskifte_library.rotation_active_len(raw_rotation)
+            codes.update(
+                afgrode_kode
+                for afgrode_kode, _, _ in raw_rotation[:active_len]
+                if afgrode_kode is not None
+            )
+
+    for field in list_simulation_fields(farm_id, simulation_id, email) or []:
+        rotation_ids = set(field.allowed_rotation_ids)
+        if field.rotation_id:
+            rotation_ids.add(field.rotation_id)
+        for rotation_id in rotation_ids:
+            ref = RotationCandidateRef.from_id(rotation_id)
+            if ref.saedskiftevariant == "permanent":
+                codes.add(int(ref.variant))
+
+    return codes
 
 
 def get_simulation_field_candidates(
