@@ -497,7 +497,14 @@ export const computeFieldTotals = (
 
   for (const field of fields) {
     totals.areaHa += field.areaHa
-    if (!field.quotaEligible) totals.excludedCount += 1
+    // The quota is a property of the mark/kystvandopland, not of whether a
+    // rotation has been assigned to it yet - an unoptimised mark still draws
+    // on the catchment's quota, so this must not wait for isFieldCalculated.
+    if (field.quotaEligible) {
+      totals.nLoadQuotaKgN += field.nLoadQuotaKgN
+    } else {
+      totals.excludedCount += 1
+    }
     if (!isFieldCalculated(field, isSimulationView)) continue
     totals.calculatedCount += 1
     totals.db2 += field.db2
@@ -506,7 +513,6 @@ export const computeFieldTotals = (
     // contribute to the N load it is compared against either - see
     // getFieldQuotaStatus.
     if (field.quotaEligible) {
-      totals.nLoadQuotaKgN += field.nLoadQuotaKgN
       totals.nLoad += field.nLoad
       totals.leaching += field.leaching
     }
