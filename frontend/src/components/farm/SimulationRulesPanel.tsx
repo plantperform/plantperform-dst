@@ -4,14 +4,10 @@ import { mutate } from 'swr'
 
 import { simulationsKey } from '@/api/hooks'
 import { updateSimulationConstraints } from '@/api/mutations'
-import type {
-  FieldRecord,
-  CatchmentNLoadCap,
-  OptimizationConstraints,
-  Simulation,
-} from '@/api/types'
+import type { FieldRecord, CatchmentNLoadCap, Simulation } from '@/api/types'
 import {
   catchmentKey,
+  effectiveMaxNLoadByCatchment,
   inputToOptionalNumber,
   numberToInput,
   useCatchmentOptions,
@@ -40,13 +36,11 @@ const ReadOnlyRule = ({ label, value }: ReadOnlyRuleProps) => (
 )
 
 const buildMaxNLoadInputs = (
-  constraints: OptimizationConstraints,
+  catchmentKeys: string[],
+  effective: Map<string, number>,
 ): Record<string, string> =>
   Object.fromEntries(
-    constraints.maxNLoadByCatchment.map((cap) => [
-      catchmentKey(cap.catchmentId),
-      numberToInput(cap.maxNLoadKg),
-    ]),
+    catchmentKeys.map((key) => [key, numberToInput(effective.get(key) ?? null)]),
   )
 
 type SimulationRulesPanelProps = {
@@ -60,16 +54,23 @@ export const SimulationRulesPanel = ({
   simulation,
   fields,
 }: SimulationRulesPanelProps) => {
+  const catchments = useCatchmentOptions(farmId, fields)
+  const catchmentKeys = catchments.map((catchment) =>
+    catchmentKey(catchment.catchmentId),
+  )
+
   const [minFeedUnits, setMinFeedUnits] = useState(simulation.constraints.minFeedUnits)
   const [maxFeedUnits, setMaxFeedUnits] = useState(simulation.constraints.maxFeedUnits)
   const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(
-    () => buildMaxNLoadInputs(simulation.constraints),
+    () =>
+      buildMaxNLoadInputs(
+        catchmentKeys,
+        effectiveMaxNLoadByCatchment(fields, simulation.constraints.maxNLoadByCatchment),
+      ),
   )
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isSaved, setIsSaved] = useState(false)
-
-  const catchments = useCatchmentOptions(farmId, fields)
 
   const maxNLoadByCatchment: CatchmentNLoadCap[] = catchments.map(
     (catchment) => ({
@@ -127,7 +128,12 @@ export const SimulationRulesPanel = ({
       )
       setMinFeedUnits(updated.constraints.minFeedUnits)
       setMaxFeedUnits(updated.constraints.maxFeedUnits)
-      setMaxNLoadInputs(buildMaxNLoadInputs(updated.constraints))
+      setMaxNLoadInputs(
+        buildMaxNLoadInputs(
+          catchmentKeys,
+          effectiveMaxNLoadByCatchment(fields, updated.constraints.maxNLoadByCatchment),
+        ),
+      )
       setSaveError(null)
       setIsSaved(true)
     } catch {
