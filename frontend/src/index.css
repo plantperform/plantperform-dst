@@ -240,9 +240,3 @@ body {
     opacity: 0;
   }
 }
-
-@keyframes mosaic-in {
-  from {
-    opacity: 0;
-  }
-}
