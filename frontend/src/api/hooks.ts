@@ -103,6 +103,18 @@ export const useSimulations = (farmId?: string) =>
 export const useSimulationFields = (farmId?: string, simulationId?: string) =>
   useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
 
+export const fetchSimulationFields = async (
+  farmId: string,
+  simulationId: string,
+): Promise<FieldRecord[]> => {
+  const key = simulationFieldsKey(farmId, simulationId)
+  if (!key) return []
+  const fields = await mutate<FieldRecord[]>(key, fetcher<FieldRecord[]>(key), {
+    revalidate: false,
+  })
+  return fields ?? []
+}
+
 export const scenarioCropCodesKey = (
   farmId?: string,
   simulationId?: string,

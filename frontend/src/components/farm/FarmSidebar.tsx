@@ -17,6 +17,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
 
 import {
+  fetchSimulationFields,
   simulationFieldsKey,
   simulationsKey,
   useSimulationFields,
@@ -35,6 +36,7 @@ import type {
 import { useAuth } from '@/auth/context'
 import {
   useOptimizationRun,
+  useStartDefaultOptimization,
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
@@ -229,6 +231,7 @@ export const FarmSidebar = ({
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
+  const startDefaultRun = useStartDefaultOptimization()
   const historyFigures = describeKeyFigures(
     resolveFarmQuota(fields, false),
     false,
@@ -259,13 +262,12 @@ export const FarmSidebar = ({
     try {
       created = await createSimulation(farm.id, buildCopyInput(simulation))
       await mutate(simulationsKey(farm.id))
-      onSelectionChange({ kind: 'simulation', id: created.id })
-      onError(null)
     } catch {
       onError('Kunne ikke kopiere simuleringen.')
       setCopyingSimulationId(null)
       return
     }
+    let copyError: string | null = null
     try {
       await updateSimulationConstraints(
         farm.id,
@@ -274,10 +276,24 @@ export const FarmSidebar = ({
       )
       await mutate(simulationsKey(farm.id))
     } catch {
-      onError('Simuleringen blev kopieret, men reglerne kunne ikke kopieres.')
-    } finally {
-      setCopyingSimulationId(null)
+      copyError =
+        'Simuleringen blev kopieret, men reglerne kunne ikke kopieres.'
     }
+    if (!copyError) {
+      try {
+        startDefaultRun(
+          farm.id,
+          created.id,
+          await fetchSimulationFields(farm.id, created.id),
+        )
+      } catch {
+        copyError =
+          'Simuleringen blev kopieret, men Optimér kunne ikke startes.'
+      }
+    }
+    onError(copyError)
+    onSelectionChange({ kind: 'simulation', id: created.id })
+    setCopyingSimulationId(null)
   }
 
   return (
@@ -730,7 +746,7 @@ const SimulationMenuItem = ({
         <DropdownMenuContent side="right" align="start">
           <DropdownMenuItem
             disabled={copying}
-            title="Opretter en ny simulering med samme indstillinger og regler. Markernes låse følger ikke med."
+            title="Opretter en ny simulering med samme indstillinger og regler. Kører Optimér på kopien med det samme. Markernes låse følger ikke med."
             onSelect={onCopy}
           >
             <Copy className="mr-2 size-4" aria-hidden="true" />
