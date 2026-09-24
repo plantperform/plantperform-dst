@@ -381,3 +381,21 @@ describe('toCreateSimulationInput', () => {
     ).toBe('3/9')
   })
 })
+
+describe('optimize on create', () => {
+  it('is on by default and stays out of the createSimulation payload', () => {
+    expect(DEFAULT_SIMULATION_FORM_VALUES.optimizeOnCreate).toBe(true)
+    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty(
+      'optimizeOnCreate',
+    )
+  })
+
+  it('accepts both choices on the confirm step', () => {
+    expect(
+      isStepValid(stepIndex('confirm'), {
+        ...filledValues,
+        optimizeOnCreate: false,
+      }),
+    ).toBe(true)
+  })
+})

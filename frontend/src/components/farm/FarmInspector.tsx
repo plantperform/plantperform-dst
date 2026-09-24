@@ -11,7 +11,10 @@ import {
   useYearlyOptimizationCandidates,
 } from '@/api/hooks'
 import { updateSimulationField } from '@/api/mutations'
-import { useOptimizationRun } from '@/api/optimization-runs'
+import {
+  DEFAULT_TIME_LIMIT_SECONDS,
+  useOptimizationRun,
+} from '@/api/optimization-runs'
 import type {
   Farm,
   FieldRecord,
@@ -734,7 +737,9 @@ const OptimizeDialog = ({
     'optimize',
     open,
   )
-  const [timeLimitSeconds, setTimeLimitSeconds] = useState(15)
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(
+    DEFAULT_TIME_LIMIT_SECONDS.optimize,
+  )
   const [excludedCropCodes, setExcludedCropCodes] = useState<Set<number>>(
     new Set(),
   )
@@ -916,7 +921,9 @@ const YearlyOptimizeDialog = ({
     'yearly',
     open,
   )
-  const [timeLimitSeconds, setTimeLimitSeconds] = useState(20)
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(
+    DEFAULT_TIME_LIMIT_SECONDS.yearly,
+  )
   const [catchmentInputs, setCatchmentInputs] = useState<
     Record<string, CatchmentYearlyInput>
   >({})

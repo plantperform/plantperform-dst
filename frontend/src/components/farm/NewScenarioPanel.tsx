@@ -4,13 +4,14 @@ import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
 
 import {
-  simulationFieldsKey,
+  fetchSimulationFields,
   simulationsKey,
   useFertiliserPresets,
   useRotationCategories,
   useRotationNNormPercentages,
 } from '@/api/hooks'
 import { createSimulation } from '@/api/mutations'
+import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type {
   FieldRecord,
   FertiliserSettings,
@@ -117,6 +118,7 @@ export const NewScenarioPanel = ({
   const [furthestStepIndex, setFurthestStepIndex] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const startDefaultRun = useStartDefaultOptimization()
 
   const hasFields = fields.length > 0
 
@@ -198,8 +200,9 @@ export const NewScenarioPanel = ({
 
     setIsCreating(true)
     setCreateError(null)
+    let simulation: Simulation
     try {
-      const simulation = await createSimulation(
+      simulation = await createSimulation(
         farmId,
         toCreateSimulationInput(getValues()),
       )
@@ -208,17 +211,29 @@ export const NewScenarioPanel = ({
         (current: Simulation[] = []) => [...current, simulation],
         { revalidate: false },
       )
-      await mutate(simulationFieldsKey(farmId, simulation.id))
-      void mutate(simulationsKey(farmId))
-      onSimulationCreated(simulation)
-      onError(null)
-      onOpenChange(false)
-      startOver()
     } catch {
       setCreateError('Kunne ikke oprette simuleringen. Prøv igen.')
-    } finally {
       setIsCreating(false)
+      return
     }
+    void mutate(simulationsKey(farmId))
+    let runError: string | null = null
+    if (getValues().optimizeOnCreate) {
+      try {
+        startDefaultRun(
+          farmId,
+          simulation.id,
+          await fetchSimulationFields(farmId, simulation.id),
+        )
+      } catch {
+        runError = 'Simuleringen blev oprettet, men Optimér kunne ikke startes.'
+      }
+    }
+    onSimulationCreated(simulation)
+    onError(runError)
+    onOpenChange(false)
+    startOver()
+    setIsCreating(false)
   }
 
   const steps: StepDialogStep[] = SIMULATION_FORM_STEPS.map((step, index) => ({
@@ -290,7 +305,11 @@ export const NewScenarioPanel = ({
               disabled={!hasFields || referenceBlocked}
               loading={isCreating}
             >
-              {isCreating ? 'Opretter simulering...' : 'Opret simulering'}
+              {isCreating
+                ? 'Opretter simulering...'
+                : values.optimizeOnCreate
+                  ? 'Opret og optimér'
+                  : 'Opret simulering'}
             </Button>
           ) : (
             <Button
@@ -696,13 +715,29 @@ export const NewScenarioPanel = ({
       ) : null}
 
       {!referenceBlocked && stepIndex === 4 ? (
-        <SimulationSummary
-          values={values}
-          categories={categories}
-          fertiliserPresets={fertiliserPresets}
-          fieldCount={fields.length}
-          onEditStep={(index) => void goToStep(index)}
-        />
+        <div className="space-y-4">
+          <SimulationSummary
+            values={values}
+            categories={categories}
+            fertiliserPresets={fertiliserPresets}
+            fieldCount={fields.length}
+            onEditStep={(index) => void goToStep(index)}
+          />
+          <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              {...register('optimizeOnCreate')}
+            />
+            <span>
+              <span className="font-medium">Optimér med det samme</span>
+              <span className="block text-xs text-muted-foreground">
+                Kører Optimér med simuleringens regler, så snart den er
+                oprettet. Du kan køre igen med andre indstillinger bagefter.
+              </span>
+            </span>
+          </label>
+        </div>
       ) : null}
     </StepDialog>
   )
