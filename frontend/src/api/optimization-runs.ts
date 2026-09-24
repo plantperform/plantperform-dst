@@ -32,6 +32,7 @@ export type OptimizationRun = OptimizationRunBase &
         finishedAt: number
         response: OptimizeSimulationResponse
         changes: OptimizationChanges
+        refreshing: boolean
       }
   )
 

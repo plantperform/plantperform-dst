@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
 
+import { fetcher } from '@/api/client'
 import { simulationFieldsKey, simulationYearlySummaryKey } from '@/api/hooks'
 import {
   runSimulationOptimization,
@@ -12,21 +13,25 @@ import {
   type OptimizationRun,
   type StartOptimizationRun,
 } from '@/api/optimization-runs'
+import type { YearlySummaryEntry } from '@/api/types'
 import { summarizeOptimizationChanges } from '@/lib/optimization-run'
 
 // After a run, simulationFieldsKey is updated directly from the response. The
-// yearly overview strip uses a separate SWR key and would otherwise keep data
-// from before the run, which makes new constraints or caps look ignored.
+// yearly overview strip uses a separate SWR key that takes a while to
+// recompute, so the run is marked succeeded as soon as the fields are in and
+// stays "refreshing" until the strip has caught up; the strip shows that
+// instead of the numbers from before the run.
 //
 // Candidate detail is deliberately not invalidated: a broad key match used to
 // refetch every detail panel ever opened in the simulation, causing a burst of
 // failed requests (422 "ikke optimeret endnu") for unoptimised fields. SWR
 // reloads it when the panel next mounts.
-const invalidateOptimizationDisplays = async (
-  farmId: string,
-  simulationId: string,
-) => {
-  await mutate(simulationYearlySummaryKey(farmId, simulationId))
+const refreshYearlySummary = async (farmId: string, simulationId: string) => {
+  const key = simulationYearlySummaryKey(farmId, simulationId)
+  if (!key) return
+  await mutate(key, fetcher<YearlySummaryEntry[]>(key), {
+    revalidate: false,
+  }).catch(() => undefined)
 }
 
 // Owns running optimizations above the routes, so a run keeps its result or
@@ -87,14 +92,15 @@ export const OptimizationRunsProvider = ({
             revalidate: false,
           })
           void mutate(simulationFieldsKey(farmId, simulationId))
-          await invalidateOptimizationDisplays(farmId, simulationId)
-          putRun({
+          const succeeded: OptimizationRun = {
             ...running,
             status: 'succeeded',
             finishedAt: Date.now(),
             response,
             changes: summarizeOptimizationChanges(fieldsBefore, response.fields),
-          })
+            refreshing: true,
+          }
+          putRun(succeeded)
           setStaleSince((current) => {
             const markedAt = current.get(simulationId)
             if (markedAt === undefined || markedAt > running.startedAt) {
@@ -104,6 +110,10 @@ export const OptimizationRunsProvider = ({
             next.delete(simulationId)
             return next
           })
+          await refreshYearlySummary(farmId, simulationId)
+          if (runsRef.current.get(simulationId)?.id === succeeded.id) {
+            putRun({ ...succeeded, refreshing: false })
+          }
         } catch (error) {
           putRun({
             ...running,
