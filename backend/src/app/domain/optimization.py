@@ -23,6 +23,7 @@ class FieldInput:
     area_ha: float
     kystvand_id: int | None
     options: tuple[RotationOption, ...]
+    kvotegivende: bool = True
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class YearlyFieldInput:
     area_ha: float
     kystvand_id: int | None
     options: tuple[YearlyRotationOption, ...]
+    kvotegivende: bool = True
 
 
 @dataclass(frozen=True)

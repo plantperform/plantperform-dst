@@ -28,26 +28,30 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         model.Add(sum(field_choice_vars) == 1)
 
     db2_terms = []
-    n_load_terms_by_kystvand: dict[int | None, list] = defaultdict(list)
+    kvotegivende_n_load_terms_by_kystvand: dict[int | None, list] = defaultdict(list)
     fen_terms = []
     for field in input.fields:
         for option in field.options:
             variable = choice_vars[(field.id, option.key)]
             db2_terms.append(_scale(option.db2) * variable)
-            n_load_terms_by_kystvand[field.kystvand_id].append(_scale(option.n_load) * variable)
+            if field.kvotegivende:
+                kvotegivende_n_load_terms_by_kystvand[field.kystvand_id].append(
+                    _scale(option.n_load) * variable
+                )
             fen_terms.append(_scale(option.fen) * variable)
 
     total_db2 = sum(db2_terms)
-    total_n_load_by_kystvand = {
-        kystvand_id: sum(terms) for kystvand_id, terms in n_load_terms_by_kystvand.items()
+    kvotegivende_n_load_by_kystvand = {
+        kystvand_id: sum(terms)
+        for kystvand_id, terms in kvotegivende_n_load_terms_by_kystvand.items()
     }
     total_fen = sum(fen_terms)
     constraints = input.constraints
 
     for kystvand_id, cap in constraints.max_n_load_by_kystvandopland.items():
-        total_for_kystvand = total_n_load_by_kystvand.get(kystvand_id)
-        if cap is not None and total_for_kystvand is not None:
-            model.Add(total_for_kystvand <= _scale(cap))
+        n_load_for_kystvand = kvotegivende_n_load_by_kystvand.get(kystvand_id)
+        if cap is not None and n_load_for_kystvand is not None:
+            model.Add(n_load_for_kystvand <= _scale(cap))
 
     if constraints.min_fen is not None:
         model.Add(total_fen >= _scale(constraints.min_fen))

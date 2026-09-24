@@ -114,6 +114,28 @@ def _build_options(
     return tuple(options)
 
 
+def _kvote_by_kystvandopland(fields: list[FieldRecord]) -> dict[int, float]:
+    """Sum each kystvandopland's udledningskvote over its kvotegivende marker.
+
+    Only kvotegivende marker draw on the quota, and only their udledning counts
+    against a cap in the engines, so the default cap is their quota alone. It is
+    rounded half up to whole kg N, exactly as the frontend rounds the value that
+    Regler shows and saves.
+    """
+    quota_by_kystvand: dict[int, float] = {}
+    for field in fields:
+        if field.kystvand_id is None or not field.kvotegivende:
+            continue
+        quota_by_kystvand[field.kystvand_id] = (
+            quota_by_kystvand.get(field.kystvand_id, 0.0) + field.udledningskvote_mark_kgn
+        )
+    return {
+        kystvand_id: float(int(quota + 0.5))
+        for kystvand_id, quota in quota_by_kystvand.items()
+        if quota > 0
+    }
+
+
 def _max_n_load_by_kystvandopland(
     fields: list[FieldRecord],
     saved_caps: list[KystvandoplandNLoadCap],
@@ -123,28 +145,22 @@ def _max_n_load_by_kystvandopland(
     An explicitly saved cap (set from "Regler") always wins, including an
     explicit `None` (the user cleared it back to no limit). A kystvandopland
     with no saved entry at all - the common case when the user has never
-    opened "Regler" - defaults to its combined udledningskvote instead of
-    running unconstrained, mirroring the default shown in the Regler panel.
-    Fields with no kystvandopland have no quota to default to, so that
-    bucket only ever gets a cap if one was explicitly saved for it.
+    opened "Regler" - defaults to the combined udledningskvote of its
+    kvotegivende marker instead of running unconstrained, mirroring the
+    default shown in the Regler panel. Fields with no kystvandopland have no
+    quota to default to, so that bucket only ever gets a cap if one was
+    explicitly saved for it.
     """
     saved_by_kystvand = {cap.kystvand_id: cap.max_n_load_kg for cap in saved_caps}
-
-    quota_by_kystvand: dict[int, float] = {}
-    for field in fields:
-        if field.kystvand_id is not None:
-            quota_by_kystvand[field.kystvand_id] = (
-                quota_by_kystvand.get(field.kystvand_id, 0.0)
-                + field.udledningskvote_mark_kgn
-            )
+    quota_by_kystvand = _kvote_by_kystvandopland(fields)
 
     resolved: dict[int | None, float] = {}
     for kystvand_id in {*saved_by_kystvand, *quota_by_kystvand}:
-        if kystvand_id in saved_by_kystvand:
-            value = saved_by_kystvand[kystvand_id]
-        else:
-            quota = quota_by_kystvand.get(kystvand_id, 0.0)
-            value = quota if quota > 0 else None
+        value = (
+            saved_by_kystvand[kystvand_id]
+            if kystvand_id in saved_by_kystvand
+            else quota_by_kystvand.get(kystvand_id)
+        )
         if value is not None:
             resolved[kystvand_id] = value
     return resolved
@@ -183,7 +199,11 @@ def run_optimization(
 
         field_inputs.append(
             FieldInput(
-                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+                id=field.id,
+                area_ha=field.area_ha,
+                kystvand_id=field.kystvand_id,
+                options=options,
+                kvotegivende=field.kvotegivende,
             )
         )
 
@@ -448,22 +468,13 @@ def _max_n_load_by_kystvandopland_and_year(
     just that one year is blank - defaults to the kystvandopland's combined
     quota instead of running that year unconstrained.
     """
-    quota_by_kystvand: dict[int, float] = {}
-    for field in fields:
-        if field.kystvand_id is not None:
-            quota_by_kystvand[field.kystvand_id] = (
-                quota_by_kystvand.get(field.kystvand_id, 0.0)
-                + field.udledningskvote_mark_kgn
-            )
+    quota_by_kystvand = _kvote_by_kystvandopland(fields)
 
     resolved: dict[int | None, tuple[float | None, ...]] = {}
     for kystvand_id in {*requested, *quota_by_kystvand}:
         quota = quota_by_kystvand.get(kystvand_id) if kystvand_id is not None else None
         values = requested.get(kystvand_id, (None,) * _NUM_ROTATION_YEARS)
-        resolved[kystvand_id] = tuple(
-            value if value is not None else (quota if quota and quota > 0 else None)
-            for value in values
-        )
+        resolved[kystvand_id] = tuple(value if value is not None else quota for value in values)
     return resolved
 
 
@@ -534,7 +545,11 @@ def run_yearly_optimization(
         options_by_field_id[field.id] = options
         field_inputs.append(
             YearlyFieldInput(
-                id=field.id, area_ha=field.area_ha, kystvand_id=field.kystvand_id, options=options,
+                id=field.id,
+                area_ha=field.area_ha,
+                kystvand_id=field.kystvand_id,
+                options=options,
+                kvotegivende=field.kvotegivende,
             )
         )
 
