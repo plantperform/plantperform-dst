@@ -162,6 +162,7 @@ const CVR_LEGEND_ENTRY = { label: 'Fremhævet CVR', color: 'rgba(250, 204, 21, 0
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
 const marsPolygonMinZoom = 11
+const paragraf3PolygonMinZoom = 11
 const CROP_LABEL_MIN_ZOOM = 12
 const CROP_LABEL_CLUSTER_PX = 48
 const defaultMapViewState = { longitude: 10.1, latitude: 56.1, zoom: 7 }
@@ -208,6 +209,61 @@ const marsFillColor = [
   MARS_OTHER_COLOR,
 ] as unknown as ExpressionSpecification
 
+// Colour groups for the §3 "natyp_navn" layer. Everything not listed
+// (Ukendt, ...) falls back to PARAGRAF3_OTHER_COLOR.
+const PARAGRAF3_LEGEND: { label: string; color: string }[] = [
+  { label: 'Eng', color: '#65a30d' },
+  { label: 'Mose', color: '#92400e' },
+  { label: 'Overdrev', color: '#ca8a04' },
+  { label: 'Strandeng', color: '#0d9488' },
+  { label: 'Hede', color: '#a21caf' },
+]
+const PARAGRAF3_OTHER_COLOR = '#94a3b8'
+const PARAGRAF3_LEGEND_ENTRIES: { label: string; color: string }[] = [
+  ...PARAGRAF3_LEGEND,
+  { label: 'Andet', color: PARAGRAF3_OTHER_COLOR },
+]
+const paragraf3FillColor = [
+  'match',
+  ['get', 'natyp_navn'],
+  ...PARAGRAF3_LEGEND.flatMap(({ label, color }) => [label, color]),
+  PARAGRAF3_OTHER_COLOR,
+] as unknown as ExpressionSpecification
+
+// §3 fills use a diagonal hatch instead of a solid fill so the layer stays
+// visually distinct from MARS/crop-colour fills at a glance, not just by
+// legend lookup.
+const paragraf3HatchPatternId = (color: string) =>
+  `paragraf3-hatch-${color.replace('#', '')}`
+
+const createDiagonalHatchPattern = (color: string, size = 8): ImageData => {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return new ImageData(size, size)
+  ctx.strokeStyle = color
+  ctx.globalAlpha = 0.65
+  ctx.lineWidth = 2
+  for (const offset of [-size, 0, size]) {
+    ctx.beginPath()
+    ctx.moveTo(offset, 0)
+    ctx.lineTo(offset + size, size)
+    ctx.stroke()
+  }
+  return ctx.getImageData(0, 0, size, size)
+}
+
+const paragraf3FillPattern = [
+  'match',
+  ['get', 'natyp_navn'],
+  ...PARAGRAF3_LEGEND.flatMap(({ label, color }) => [
+    label,
+    paragraf3HatchPatternId(color),
+  ]),
+  paragraf3HatchPatternId(PARAGRAF3_OTHER_COLOR),
+] as unknown as ExpressionSpecification
+
 type FarmFieldsMapProps = {
   farm: Farm
   fields: FieldRecord[]
@@ -248,6 +304,12 @@ type HoveredMars = {
   status: string | null
   subsidyScheme: string | null
   areaHa: number | null
+}
+
+type HoveredParagraf3 = {
+  longitude: number
+  latitude: number
+  natype: string | null
 }
 
 const MAP_CONTROLS_INSET = 44
@@ -367,9 +429,13 @@ export const FarmFieldsMap = ({
     setColorBySelection({ forMode: mode, value })
   const showLockMarkers = mode === 'rules' || colorBy === 'fieldLocked'
   const [showMars, setShowMars] = useState(false)
+  const [showParagraf3, setShowParagraf3] = useState(false)
   const [showCropLabels, setShowCropLabels] = useState(true)
   const [mapZoom, setMapZoom] = useState(initialViewState.zoom)
   const [hoveredMars, setHoveredMars] = useState<HoveredMars | null>(null)
+  const [hoveredParagraf3, setHoveredParagraf3] = useState<HoveredParagraf3 | null>(
+    null,
+  )
   const [ruleRotationOpen, setRuleRotationOpen] = useState(true)
   const ruleCardRef = useRef<HTMLDivElement>(null)
   const [overflowingLegend, setOverflowingLegend] = useState<string | null>(
@@ -667,6 +733,7 @@ export const FarmFieldsMap = ({
   }
   const tileUrl = `${window.location.origin}${API_BASE}/registry/tiles/{z}/{x}/{y}.pbf?${tileParams}`
   const marsTileUrl = `${window.location.origin}${API_BASE}/mars/tiles/{z}/{x}/{y}.pbf`
+  const paragraf3TileUrl = `${window.location.origin}${API_BASE}/paragraf3/tiles/{z}/{x}/{y}.pbf`
 
   useEffect(() => {
     const map = mapRef.current
@@ -1037,6 +1104,7 @@ export const FarmFieldsMap = ({
     if (isFromMapOverlay(event)) {
       setHoveredField(null)
       setHoveredMars(null)
+      setHoveredParagraf3(null)
       reportHoveredField(null)
       mapRef.current?.getCanvas().style.setProperty('cursor', '')
       return
@@ -1052,6 +1120,7 @@ export const FarmFieldsMap = ({
       mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
       setHoveredField(null)
       reportHoveredField(null)
+      setHoveredParagraf3(null)
       setHoveredMars({
         longitude: event.lngLat.lng,
         latitude: event.lngLat.lat,
@@ -1070,6 +1139,28 @@ export const FarmFieldsMap = ({
     }
 
     setHoveredMars(null)
+
+    const paragraf3Feature = showParagraf3
+      ? event.features?.find((item) =>
+          ['paragraf3-fill', 'paragraf3-points'].includes(item.layer.id),
+        )
+      : undefined
+
+    if (paragraf3Feature) {
+      mapRef.current?.getCanvas().style.setProperty('cursor', 'pointer')
+      setHoveredField(null)
+      reportHoveredField(null)
+      setHoveredParagraf3({
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
+        natype:
+          (paragraf3Feature.properties?.natyp_navn as string | undefined) ??
+          null,
+      })
+      return
+    }
+
+    setHoveredParagraf3(null)
 
     const feature = event.features?.find((item) =>
       addMode
@@ -1249,6 +1340,31 @@ export const FarmFieldsMap = ({
                 ))}
               </ul>
             ) : null}
+            <DropdownMenuCheckboxItem
+              checked={showParagraf3}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(checked) => setShowParagraf3(Boolean(checked))}
+            >
+              §3-beskyttet natur
+            </DropdownMenuCheckboxItem>
+            {showParagraf3 ? (
+              <ul className="space-y-1 pb-1 pl-8 pr-2">
+                {PARAGRAF3_LEGEND_ENTRIES.map((entry) => (
+                  <li
+                    key={entry.label}
+                    className="flex items-center gap-2 text-xs"
+                  >
+                    <span
+                      className="inline-block h-3 w-4 shrink-0 rounded-sm border border-black/10"
+                      style={{
+                        backgroundImage: `repeating-linear-gradient(45deg, ${entry.color}, ${entry.color} 2px, transparent 2px, transparent 4px)`,
+                      }}
+                    />
+                    <span>{entry.label}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -1318,8 +1434,19 @@ export const FarmFieldsMap = ({
           interactiveLayerIds={[
             ...(addMode ? EDIT_MODE_LAYER_IDS : ['farm-fields-fill']),
             ...(showMars ? ['mars-fill', 'mars-points'] : []),
+            ...(showParagraf3 ? ['paragraf3-fill', 'paragraf3-points'] : []),
           ]}
-          onLoad={() => setIsMapLoaded(true)}
+          onLoad={() => {
+            setIsMapLoaded(true)
+            const map = mapRef.current?.getMap()
+            if (!map) return
+            for (const { color } of PARAGRAF3_LEGEND_ENTRIES) {
+              const id = paragraf3HatchPatternId(color)
+              if (!map.hasImage(id)) {
+                map.addImage(id, createDiagonalHatchPattern(color))
+              }
+            }
+          }}
           onMoveEnd={saveMapViewState}
           onClick={handleMapClick}
           onMouseMove={handleMapHover}
@@ -1327,6 +1454,7 @@ export const FarmFieldsMap = ({
             setHoveredField(null)
             reportHoveredField(null)
             setHoveredMars(null)
+            setHoveredParagraf3(null)
             mapRef.current?.getCanvas().style.setProperty('cursor', '')
           }}
           style={{ width: '100%', height: '100%' }}
@@ -1558,6 +1686,46 @@ export const FarmFieldsMap = ({
                 minzoom={marsPolygonMinZoom}
                 paint={{
                   'line-color': marsFillColor,
+                  'line-width': 1.5,
+                  'line-opacity': 0.9,
+                }}
+              />
+            </Source>
+          ) : null}
+
+          {showParagraf3 ? (
+            <Source
+              key={paragraf3TileUrl}
+              id="paragraf3-omraader"
+              type="vector"
+              tiles={[paragraf3TileUrl]}
+              maxzoom={16}
+            >
+              <Layer
+                id="paragraf3-points"
+                source-layer="paragraf3"
+                type="circle"
+                maxzoom={paragraf3PolygonMinZoom}
+                paint={{
+                  'circle-color': paragraf3FillColor,
+                  'circle-opacity': 0.85,
+                  'circle-radius': registryPointRadius,
+                }}
+              />
+              <Layer
+                id="paragraf3-fill"
+                source-layer="paragraf3"
+                type="fill"
+                minzoom={paragraf3PolygonMinZoom}
+                paint={{ 'fill-pattern': paragraf3FillPattern, 'fill-opacity': 0.9 }}
+              />
+              <Layer
+                id="paragraf3-outline"
+                source-layer="paragraf3"
+                type="line"
+                minzoom={paragraf3PolygonMinZoom}
+                paint={{
+                  'line-color': paragraf3FillColor,
                   'line-width': 1.5,
                   'line-opacity': 0.9,
                 }}
@@ -1802,6 +1970,23 @@ export const FarmFieldsMap = ({
                   {hoveredMars.areaHa !== null
                     ? ` · ${formatNumber(hoveredMars.areaHa)} ha`
                     : ''}
+                </span>
+              </div>
+            </Popup>
+          ) : null}
+
+          {hoveredParagraf3 ? (
+            <Popup
+              longitude={hoveredParagraf3.longitude}
+              latitude={hoveredParagraf3.latitude}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="top"
+              offset={8}
+            >
+              <div className="flex flex-col gap-0.5 text-xs">
+                <span className="font-medium">
+                  {hoveredParagraf3.natype ?? '§3-natur'}
                 </span>
               </div>
             </Popup>
