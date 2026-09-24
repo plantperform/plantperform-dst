@@ -51,20 +51,35 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     n_load_terms_by_kystvand_year: dict[int | None, list[list]] = defaultdict(
         lambda: [[] for _ in range(NUM_YEARS)]
     )
+    kvotegivende_n_load_terms_by_kystvand_year: dict[int | None, list[list]] = defaultdict(
+        lambda: [[] for _ in range(NUM_YEARS)]
+    )
     fen_terms = []
     for field in input.fields:
         year_terms = n_load_terms_by_kystvand_year[field.kystvand_id]
+        kvotegivende_year_terms = (
+            kvotegivende_n_load_terms_by_kystvand_year[field.kystvand_id]
+            if field.kvotegivende
+            else None
+        )
         for option in field.options:
             variable = choice_vars[(field.id, option.key)]
             for y in range(NUM_YEARS):
                 db2_terms_by_year[y].append(_scale(option.db2_by_year[y]) * variable)
-                year_terms[y].append(_scale(option.n_load_by_year[y]) * variable)
+                n_load_term = _scale(option.n_load_by_year[y]) * variable
+                year_terms[y].append(n_load_term)
+                if kvotegivende_year_terms is not None:
+                    kvotegivende_year_terms[y].append(n_load_term)
             fen_terms.append(_scale(option.fen) * variable)
 
     total_db2_by_year = [sum(terms) for terms in db2_terms_by_year]
     total_n_load_by_kystvand_year = {
         kystvand_id: [sum(terms) for terms in year_terms]
         for kystvand_id, year_terms in n_load_terms_by_kystvand_year.items()
+    }
+    kvotegivende_n_load_by_kystvand_year = {
+        kystvand_id: [sum(terms) for terms in year_terms]
+        for kystvand_id, year_terms in kvotegivende_n_load_terms_by_kystvand_year.items()
     }
     total_n_load_by_year = [
         sum(
@@ -79,7 +94,7 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     constraints = input.constraints
 
     for kystvand_id, caps in constraints.max_n_load_by_kystvandopland_and_year.items():
-        year_totals = total_n_load_by_kystvand_year.get(kystvand_id)
+        year_totals = kvotegivende_n_load_by_kystvand_year.get(kystvand_id)
         if year_totals is None:
             continue
         for y in range(NUM_YEARS):
