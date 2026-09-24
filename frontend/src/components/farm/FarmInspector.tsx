@@ -14,6 +14,7 @@ import { updateSimulationField } from '@/api/mutations'
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
   useOptimizationRun,
+  useOptimizationRunActions,
 } from '@/api/optimization-runs'
 import type {
   Farm,
@@ -52,7 +53,7 @@ import type {
   FarmView,
   FarmViewSelection,
 } from '@/components/farm/types'
-import { OptimizationRunBanner } from '@/components/farm/OptimizationRunStatus'
+import { OptimizationBanner } from '@/components/farm/OptimizationRunStatus'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { Button } from '@/components/ui/button'
 import {
@@ -140,6 +141,7 @@ export const FarmInspector = ({
   onError,
 }: FarmInspectorProps) => {
   const optimizationRun = useOptimizationRun(selectedSimulation?.id)
+  const { markStale } = useOptimizationRunActions()
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
@@ -248,7 +250,8 @@ export const FarmInspector = ({
     async (field: FieldRecord) => {
       if (!selectedSimulationId || field.rotationId === null) return
 
-      const target = isFieldLocked(field) ? [] : [field.rotationId]
+      const unlocking = isFieldLocked(field)
+      const target = unlocking ? [] : [field.rotationId]
       setLockingFieldId(field.id)
       try {
         const updatedField = await updateSimulationField(
@@ -265,6 +268,7 @@ export const FarmInspector = ({
             ),
           { revalidate: false },
         )
+        if (unlocking) markStale(selectedSimulationId)
         onError(null)
       } catch {
         onError('Kunne ikke ændre låsningen af marken.')
@@ -272,7 +276,7 @@ export const FarmInspector = ({
         setLockingFieldId(null)
       }
     },
-    [farm.id, selectedSimulationId, onError],
+    [farm.id, selectedSimulationId, onError, markStale],
   )
   const onToggleLock = useCallback(
     (field: FieldRecord) => void toggleFieldLock(field),
@@ -439,14 +443,16 @@ export const FarmInspector = ({
             isRules && 'bg-rules/5',
           )}
         >
+          {isSimulationView && selectedSimulation ? (
+            <OptimizationBanner
+              farmId={farm.id}
+              simulationId={selectedSimulation.id}
+              run={optimizationRun}
+              fields={fieldsLoading || fieldsError ? undefined : fields}
+            />
+          ) : null}
           {showYearWalkthrough ? (
             <div className="flex flex-wrap gap-3">
-              {isSimulationView && optimizationRun ? (
-                <OptimizationRunBanner
-                  run={optimizationRun}
-                  fields={fieldsLoading ? undefined : fields}
-                />
-              ) : null}
               {!fieldsLoading &&
               fields.length > 0 &&
               singleCatchmentKey === null ? (

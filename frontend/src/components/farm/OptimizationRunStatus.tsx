@@ -1,9 +1,15 @@
-import type { OptimizationRun } from '@/api/optimization-runs'
+import {
+  useOptimizationStale,
+  useStartDefaultOptimization,
+  type OptimizationRun,
+} from '@/api/optimization-runs'
 import type { FieldRecord } from '@/api/types'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
+import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
+import { formatFieldCount, isFieldCalculated } from '@/lib/field-domain'
 import {
   formatElapsed,
   OPTIMIZATION_KIND_LABELS,
@@ -25,21 +31,30 @@ export const OptimizationRunElapsed = ({ run }: RunProps) => {
   )
 }
 
-type OptimizationRunBannerProps = RunProps & {
+type OptimizationBannerProps = {
+  farmId: string
+  simulationId: string
+  run: OptimizationRun | undefined
   fields: FieldRecord[] | undefined
   className?: string
 }
 
-// Tells the reader that the figures below are about to change, or that the
-// run that should have changed them failed.
-export const OptimizationRunBanner = ({
+// Tells the reader that the figures below are about to change, that the run
+// that should have changed them failed, or that a run is still missing.
+export const OptimizationBanner = ({
+  farmId,
+  simulationId,
   run,
   fields,
   className,
-}: OptimizationRunBannerProps) => {
+}: OptimizationBannerProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
+  const startDefaultRun = useStartDefaultOptimization()
+  const stale = useOptimizationStale(simulationId)
+  const uncalculatedCount =
+    fields?.filter((field) => !isFieldCalculated(field, true)).length ?? 0
 
-  if (run.status === 'running') {
+  if (run?.status === 'running') {
     return (
       <div
         role="status"
@@ -55,21 +70,48 @@ export const OptimizationRunBanner = ({
           </span>
           <span className="text-muted-foreground">
             {' '}
-            kører. Tallene herunder er fra før kørslen.
+            {fields && uncalculatedCount === fields.length
+              ? 'kører. Tallene kommer, når kørslen er færdig.'
+              : 'kører. Tallene er fra før kørslen.'}
           </span>
         </p>
       </div>
     )
   }
 
-  if (run.status !== 'failed') return null
+  if (run?.status === 'failed') {
+    return (
+      <LoadError
+        className={cn('w-full whitespace-pre-wrap', className)}
+        message={`${OPTIMIZATION_KIND_LABELS[run.kind]} fejlede: ${run.error}`}
+        onRetry={retry}
+        onDismiss={dismiss}
+      />
+    )
+  }
+
+  if (!fields || (uncalculatedCount === 0 && !stale)) return null
 
   return (
-    <LoadError
-      className={cn('w-full whitespace-pre-wrap', className)}
-      message={`${OPTIMIZATION_KIND_LABELS[run.kind]} fejlede: ${run.error}`}
-      onRetry={retry}
-      onDismiss={dismiss}
-    />
+    <div
+      role="status"
+      className={cn(
+        'flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm',
+        className,
+      )}
+    >
+      <p className="min-w-0 flex-1">
+        {uncalculatedCount > 0
+          ? `${formatFieldCount(uncalculatedCount)} er ikke beregnet.`
+          : 'Reglerne er ændret siden sidste kørsel.'}
+      </p>
+      <Button
+        size="xs"
+        variant="outline"
+        onClick={() => startDefaultRun(farmId, simulationId, fields)}
+      >
+        Kør Optimér
+      </Button>
+    </div>
   )
 }

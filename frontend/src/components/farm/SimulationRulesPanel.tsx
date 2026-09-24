@@ -4,6 +4,7 @@ import { mutate } from 'swr'
 
 import { simulationsKey } from '@/api/hooks'
 import { updateSimulationConstraints } from '@/api/mutations'
+import { useOptimizationRunActions } from '@/api/optimization-runs'
 import type { FieldRecord, CatchmentNLoadCap, Simulation } from '@/api/types'
 import {
   catchmentKey,
@@ -71,6 +72,7 @@ export const SimulationRulesPanel = ({
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isSaved, setIsSaved] = useState(false)
+  const { markStale } = useOptimizationRunActions()
 
   const maxNLoadByCatchment: CatchmentNLoadCap[] = catchments.map(
     (catchment) => ({
@@ -136,6 +138,7 @@ export const SimulationRulesPanel = ({
       )
       setSaveError(null)
       setIsSaved(true)
+      markStale(simulation.id)
     } catch {
       setSaveError('Kunne ikke gemme grænserne.')
     } finally {

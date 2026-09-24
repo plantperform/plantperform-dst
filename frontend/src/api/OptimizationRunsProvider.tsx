@@ -39,6 +39,9 @@ export const OptimizationRunsProvider = ({
   const [runs, setRuns] = useState<ReadonlyMap<string, OptimizationRun>>(
     () => new Map(),
   )
+  const [staleSince, setStaleSince] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  )
   // Mirrors `runs` synchronously, so two quick clicks cannot start two runs.
   const runsRef = useRef(runs)
   const nextId = useRef(1)
@@ -92,6 +95,15 @@ export const OptimizationRunsProvider = ({
             response,
             changes: summarizeOptimizationChanges(fieldsBefore, response.fields),
           })
+          setStaleSince((current) => {
+            const markedAt = current.get(simulationId)
+            if (markedAt === undefined || markedAt > running.startedAt) {
+              return current
+            }
+            const next = new Map(current)
+            next.delete(simulationId)
+            return next
+          })
         } catch (error) {
           putRun({
             ...running,
@@ -118,9 +130,13 @@ export const OptimizationRunsProvider = ({
     setRuns(next)
   }, [])
 
+  const markStale = useCallback((simulationId: string) => {
+    setStaleSince((current) => new Map(current).set(simulationId, Date.now()))
+  }, [])
+
   const value = useMemo(
-    () => ({ runs, startRun, dismissRun }),
-    [runs, startRun, dismissRun],
+    () => ({ runs, staleSince, startRun, dismissRun, markStale }),
+    [runs, staleSince, startRun, dismissRun, markStale],
   )
 
   return (

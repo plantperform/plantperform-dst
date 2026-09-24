@@ -46,9 +46,11 @@ export type StartOptimizationRun = (
 
 export type OptimizationRunsContextValue = {
   runs: ReadonlyMap<string, OptimizationRun>
+  staleSince: ReadonlyMap<string, number>
   // Returns the run id, or null when the simulation already has a run going.
   startRun: StartOptimizationRun
   dismissRun: (simulationId: string) => void
+  markStale: (simulationId: string) => void
 }
 
 export const OptimizationRunsContext =
@@ -70,9 +72,14 @@ export const useOptimizationRun = (simulationId?: string) => {
   return simulationId ? runs.get(simulationId) : undefined
 }
 
+export const useOptimizationStale = (simulationId?: string) => {
+  const { staleSince } = useOptimizationRunsContext()
+  return simulationId !== undefined && staleSince.has(simulationId)
+}
+
 export const useOptimizationRunActions = () => {
-  const { startRun, dismissRun } = useOptimizationRunsContext()
-  return { startRun, dismissRun }
+  const { startRun, dismissRun, markStale } = useOptimizationRunsContext()
+  return { startRun, dismissRun, markStale }
 }
 
 export const DEFAULT_TIME_LIMIT_SECONDS: Record<OptimizationKind, number> = {
