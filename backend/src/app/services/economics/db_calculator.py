@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.data.db import (
     SessionLocal,
     afgroede_norm_lookup_table,
+    afgroede_table,
     arbejdsmaengde_table,
     arbejdssats_table,
     dyrkningsomkostning_table,
@@ -78,11 +79,15 @@ def _fetch_rows(table, task_name: str):
 @lru_cache(maxsize=1)
 def _load_udbyttenormer() -> dict[tuple[int, int, str, str], dict]:
     """Index database-loaded crop norms by crop, JB, irrigation, and system."""
-    rows = _fetch_rows(afgroede_norm_lookup_table, "load-afgroede-normer")
+    rows = _fetch_rows(afgroede_norm_lookup_table, "load-afgroeder")
+    with SessionLocal() as session:
+        units = dict(session.execute(select(
+            afgroede_table.c.afgroedekode, afgroede_table.c.udbytteenhed,
+        )).all())
     lookup: dict[tuple[int, int, str, str], dict] = {}
     for row in rows:
         data = {
-            "udbytteenhed": row.udbytteenhed,
+            "udbytteenhed": units[row.afgroedekode],
             "udbyttenorm": row.udbyttenorm,
             "n_norm": row.n_norm,
         }

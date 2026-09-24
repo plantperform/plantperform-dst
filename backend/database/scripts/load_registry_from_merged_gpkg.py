@@ -285,6 +285,16 @@ def finalize_registry_field(dsn: str) -> None:
                 """
             )
         print(f"Inserted {cursor.rowcount:,} registry fields", flush=True)
+        with StageReporter("Adding registry-only crop codes"):
+            cursor.execute("""
+                INSERT INTO afgroede (afgroedekode)
+                SELECT DISTINCT value::integer
+                FROM registry_field,
+                     LATERAL json_each_text(crop_history) AS history(year, value)
+                WHERE value ~ '^[0-9]+$' AND value::integer > 0
+                ON CONFLICT (afgroedekode) DO NOTHING
+            """)
+        print(f"Inserted {cursor.rowcount:,} registry-only crop codes", flush=True)
         with StageReporter("Committing registry fields"):
             connection.commit()
 

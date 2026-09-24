@@ -1,4 +1,4 @@
-"""Load crop norms, N fixation, and NUAR codes from the master workbook."""
+"""Parse crop norms, N fixation, and NUAR codes from the master workbook."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import openpyxl
 
-from database.scripts.runtime_lookup_loader import replace_tables, source_path
+from database.scripts.runtime_lookup_loader import source_path
 
 XLSX_PATH = source_path(
     "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx",
@@ -216,39 +216,10 @@ def parse_afgroede_normer(path: Path = XLSX_PATH) -> tuple[list[tuple], list[tup
 
 
 def load_afgroede_normer(path: Path = XLSX_PATH, database_url: str | None = None) -> None:
-    norm_rows, nfix_rows, nuar_rows = parse_afgroede_normer(path)
-    replace_tables(
-        [
-            (
-                "afgroede_norm_lookup",
-                (
-                    "source_order", "jb_nr", "afgroedekode", "afgroede", "jb_gruppe", "vanding",
-                    "udbytteenhed", "udbyttenorm", "udbyttenorm_alt", "n_norm", "p_norm",
-                    "forfrugtsvaerdi", "indregn_ffv", "driftsform",
-                ),
-                norm_rows,
-            ),
-            (
-                "afgroede_nfix_lookup",
-                ("source_order", "jb_nr", "afgroedekode", "vanding", "nfix_kgn_ha"),
-                nfix_rows,
-            ),
-            (
-                "nuar_kode",
-                (
-                    "afgroedekode", "navn", "m", "w", "wc", "mp", "wp", "m_ambig",
-                    "w_ambig", "wc_ambig", "mp_ambig", "wp_ambig",
-                ),
-                nuar_rows,
-            ),
-        ],
-        database_url=database_url,
-    )
-    print(
-        f"Loaded {len(norm_rows):,} crop-norm rows, {len(nfix_rows):,} N-fixation rows, "
-        f"and {len(nuar_rows):,} NUAR codes",
-        flush=True,
-    )
+    """Compatibility entry point; crop-code sources now reload together."""
+    from database.scripts.load_afgroeder import load_afgroeder
+
+    load_afgroeder(workbook_path=path, database_url=database_url)
 
 
 if __name__ == "__main__":
