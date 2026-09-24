@@ -63,6 +63,7 @@ registry_field_table = Table(
     Column("hoejeste_hnv", SmallInteger, nullable=True),
     Column("omlaegningsplan_virkemiddel", Text, nullable=True),
     Column("omlaegningsplan_status", Text, nullable=True),
+    Column("paragraf3_natyp", Text, nullable=True),
     Column("goedningsregion", Text, nullable=True),
     Column("kvotegivende", Boolean, nullable=False, server_default=false()),
     Column("crop_history", JSON, nullable=False),
@@ -91,6 +92,14 @@ mars_projekt_table = Table(
     Column("skovrejsningseffekt_ha", Float, nullable=True),
     Column("virkemiddel", Text, nullable=True),
     Column("bemaerkning", Text, nullable=True),
+    Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False),
+)
+
+paragraf3_omraade_table = Table(
+    "paragraf3_omraade",
+    metadata,
+    Column("fid", Text, primary_key=True),
+    Column("natyp_navn", Text, nullable=True),
     Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=False),
 )
 
