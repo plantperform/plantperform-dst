@@ -1,8 +1,5 @@
-"""Database-backed crop norms and NUAR parameters.
+"""Database-backed crop norms and per-code crop parameters."""
 
-The authoritative workbook is parsed by ``load_afgroede_normer.py`` during
-administration. Runtime callers use only the expanded lookup tables here.
-"""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -13,8 +10,7 @@ from app.data.db import (
     SessionLocal,
     afgroede_nfix_lookup_table,
     afgroede_norm_lookup_table,
-    nuar_kode_table,
-    permanent_afgrode_table,
+    afgroede_table,
 )
 
 # Potatoes use M2 (Vårsæd) in NLES5 per the NUAR AU recommendation applicable
@@ -48,6 +44,15 @@ def apply_kartoffel_regel(sample: dict) -> dict:
 
 
 @lru_cache(maxsize=1)
+def _load_afgroeder() -> dict[int, object]:
+    with SessionLocal() as session:
+        rows = session.execute(select(afgroede_table)).all()
+    if not rows:
+        raise _missing_lookup("afgroede", "load-afgroeder")
+    return {row.afgroedekode: row for row in rows}
+
+
+@lru_cache(maxsize=1)
 def _load_lang_lookup() -> dict[tuple[int, int, str, str], dict]:
     """Return the historic source-order-resolved norm lookup from PostgreSQL."""
     with SessionLocal() as session:
@@ -58,7 +63,7 @@ def _load_lang_lookup() -> dict[tuple[int, int, str, str], dict]:
             )
         ).all()
     if not rows:
-        raise _missing_lookup("afgroede_norm_lookup", "load-afgroede-normer")
+        raise _missing_lookup("afgroede_norm_lookup", "load-afgroeder")
 
     lookup: dict[tuple[int, int, str, str], dict] = {}
     # driftsform is part of the key: konventionel and økologisk rows for the
@@ -66,18 +71,20 @@ def _load_lang_lookup() -> dict[tuple[int, int, str, str], dict]:
     # silently overwrote each other in source order, so whichever driftsform
     # happened to load last "won" regardless of which one a simulation
     # actually asked for).
+    crops = _load_afgroeder()
     for row in rows:
+        crop = crops[row.afgroedekode]
         lookup[(row.afgroedekode, row.jb_nr, row.vanding, row.driftsform)] = {
-            "afgroede": row.afgroede,
+            "afgroede": crop.norm_navn,
             "jb_gruppe": row.jb_gruppe,
             "vanding": row.vanding,
-            "udbytteenhed": row.udbytteenhed,
+            "udbytteenhed": crop.udbytteenhed,
             "udbyttenorm": row.udbyttenorm,
             "udbyttenorm_alt": row.udbyttenorm_alt,
             "n_norm": row.n_norm,
-            "p_norm": row.p_norm,
-            "forfrugtsvaerdi": row.forfrugtsvaerdi,
-            "indregn_ffv": row.indregn_ffv,
+            "p_norm": crop.p_norm,
+            "forfrugtsvaerdi": crop.forfrugtsvaerdi,
+            "indregn_ffv": crop.indregn_ffv,
         }
     return lookup
 
@@ -92,7 +99,7 @@ def _load_nfix_lookup() -> dict[tuple[int, int, str], float]:
             )
         ).all()
     if not rows:
-        raise _missing_lookup("afgroede_nfix_lookup", "load-afgroede-normer")
+        raise _missing_lookup("afgroede_nfix_lookup", "load-afgroeder")
 
     lookup: dict[tuple[int, int, str], float] = {}
     for row in rows:
@@ -102,13 +109,8 @@ def _load_nfix_lookup() -> dict[tuple[int, int, str], float]:
 
 @lru_cache(maxsize=1)
 def _load_nuar_koder() -> dict[int, dict]:
-    with SessionLocal() as session:
-        rows = session.execute(
-            select(nuar_kode_table).order_by(nuar_kode_table.c.afgroedekode),
-        ).all()
-    if not rows:
-        raise _missing_lookup("nuar_kode", "load-afgroede-normer")
-    return {
+    rows = _load_afgroeder().values()
+    lookup = {
         row.afgroedekode: {
             "navn": row.navn,
             "M": row.m,
@@ -123,18 +125,25 @@ def _load_nuar_koder() -> dict[int, dict]:
             "WP_ambig": row.wp_ambig,
         }
         for row in rows
+        if row.has_nuar
     }
+    if not lookup:
+        raise _missing_lookup("afgroede NUAR values", "load-afgroeder")
+    return lookup
 
 
 @lru_cache(maxsize=1)
 def _load_permanente_afgrodekoder() -> frozenset[int]:
     with SessionLocal() as session:
-        rows = session.execute(select(permanent_afgrode_table.c.afgroedekode)).scalars()
-    return frozenset(rows)
+        rows = session.execute(
+            select(afgroede_table.c.afgroedekode).where(afgroede_table.c.permanent)
+        ).scalars()
+        return frozenset(rows)
 
 
 def clear_lookup_cache() -> None:
     """Clear process-local lookup caches after an administrative reload."""
+    _load_afgroeder.cache_clear()
     _load_lang_lookup.cache_clear()
     _load_nfix_lookup.cache_clear()
     _load_nuar_koder.cache_clear()
@@ -172,13 +181,7 @@ def lookup_nfix(crop_code, jb_nr, irrigated: bool = False) -> float:
 
 
 def is_permanent_afgrode(crop_code: int | None) -> bool:
-    """Return whether ``crop_code`` is a permanent (ikke-omdrift) afgrøde.
-
-    Backed by ``permanent_afgrode``, loaded from
-    ``Permanente_afgroder_ikke_omdrift.csv`` by ``load_permanente_afgrodekoder.py``.
-    An empty/unloaded table degrades to "no crop is permanent" rather than
-    failing marks that would otherwise calculate fine.
-    """
+    """Return whether ``crop_code`` is a permanent (ikke-omdrift) afgrøde."""
     if crop_code is None:
         return False
     return crop_code in _load_permanente_afgrodekoder()

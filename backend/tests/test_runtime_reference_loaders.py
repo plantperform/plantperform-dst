@@ -31,8 +31,8 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             runoff = base / "runoff.csv"
             write_csv(
                 runoff,
-                ["Afgrødekode", "P_afstrømningskategori", "P_afstrømningskategori_med_W"],
-                ["1", "3", "1"],
+                ["Afgrødekode", "Navn", "P_afstrømningskategori", "P_afstrømningskategori_med_W"],
+                ["1", "Vårbyg", "3", "1"],
                 delimiter=";",
             )
             sales = base / "sales.csv"
@@ -76,7 +76,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
                 delimiter=";",
             )
 
-            self.assertEqual(parse_afstromningskategorier(runoff), [(1, 3, 1)])
+            self.assertEqual(parse_afstromningskategorier(runoff), [(1, "Vårbyg", 3, 1)])
             self.assertEqual(parse_salgspriser(sales)[0][-2:], ("kg", 0.0))
             self.assertEqual(parse_halmudbytte(straw)[0][-1], 2.0)
             self.assertIsNone(parse_arbejdssatser(rates)[0][3])

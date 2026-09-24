@@ -1,7 +1,7 @@
 """Database-backed P-runoff categories per crop code.
 
-``load_afstromningskategorier.py`` imports Bilag 1's authoritative lookup;
-the NLES5 runtime reads only the resulting table.
+``load_afgroeder.py`` imports Bilag 1's authoritative lookup;
+the NLES5 runtime reads the consolidated crop table.
 """
 from __future__ import annotations
 
@@ -9,18 +9,20 @@ from functools import lru_cache
 
 from sqlalchemy import select
 
-from app.data.db import SessionLocal, afstromningskategori_table
+from app.data.db import SessionLocal, afgroede_table
 
 
 @lru_cache(maxsize=1)
 def _load() -> dict[int, tuple[int, int | None]]:
     with SessionLocal() as session:
         rows = session.execute(
-            select(afstromningskategori_table).order_by(afstromningskategori_table.c.afgroedekode)
+            select(afgroede_table).where(
+                afgroede_table.c.standard_kategori.is_not(None)
+            ).order_by(afgroede_table.c.afgroedekode)
         ).all()
     if not rows:
         raise RuntimeError(
-            "afstromningskategori is empty; run pixi run load-afstromningskategorier",
+            "afgroede runoff categories are empty; run pixi run load-afgroeder",
         )
     return {
         row.afgroedekode: (row.standard_kategori, row.vinterdaekke_kategori)

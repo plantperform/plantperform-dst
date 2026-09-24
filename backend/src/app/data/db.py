@@ -114,22 +114,44 @@ saedskifte_category_table = Table(
 # by the focused loaders under database/scripts/.  These tables deliberately
 # contain the lookup-ready, expanded form of the sources so the API never has
 # to open a source workbook or CSV at request time.
+afgroede_table = Table(
+    "afgroede",
+    metadata,
+    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
+    Column("navn", Text, nullable=True),
+    Column("norm_navn", Text, nullable=True),
+    Column("permanent", Boolean, nullable=False, server_default=false()),
+    Column("has_nuar", Boolean, nullable=False, server_default=false()),
+    Column("m", SmallInteger, nullable=True),
+    Column("w", SmallInteger, nullable=True),
+    Column("wc", SmallInteger, nullable=True),
+    Column("mp", SmallInteger, nullable=True),
+    Column("wp", SmallInteger, nullable=True),
+    Column("m_ambig", Boolean, nullable=True),
+    Column("w_ambig", Boolean, nullable=True),
+    Column("wc_ambig", Boolean, nullable=True),
+    Column("mp_ambig", Boolean, nullable=True),
+    Column("wp_ambig", Boolean, nullable=True),
+    Column("standard_kategori", SmallInteger, nullable=True),
+    Column("vinterdaekke_kategori", SmallInteger, nullable=True),
+    Column("udbytteenhed", Text, nullable=True),
+    Column("p_norm", Float, nullable=True),
+    Column("forfrugtsvaerdi", Float, nullable=True),
+    Column("indregn_ffv", Boolean, nullable=True),
+    CheckConstraint("afgroedekode > 0", name="ck_afgroede_positive_code"),
+)
+
 afgroede_norm_lookup_table = Table(
     "afgroede_norm_lookup",
     metadata,
     Column("source_order", Integer, primary_key=True, autoincrement=False),
     Column("jb_nr", SmallInteger, primary_key=True),
     Column("afgroedekode", Integer, nullable=False),
-    Column("afgroede", Text, nullable=False),
     Column("jb_gruppe", Text, nullable=False),
     Column("vanding", Text, nullable=False),
-    Column("udbytteenhed", Text, nullable=False),
     Column("udbyttenorm", Float, nullable=True),
     Column("udbyttenorm_alt", Float, nullable=True),
     Column("n_norm", Float, nullable=True),
-    Column("p_norm", Float, nullable=True),
-    Column("forfrugtsvaerdi", Float, nullable=False),
-    Column("indregn_ffv", Boolean, nullable=False),
     Column("driftsform", Text, nullable=False),
     Index(
         "ix_afgroede_norm_lookup_runtime",
@@ -155,38 +177,6 @@ afgroede_nfix_lookup_table = Table(
         "vanding",
         "source_order",
     ),
-)
-
-nuar_kode_table = Table(
-    "nuar_kode",
-    metadata,
-    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
-    Column("navn", Text, nullable=False),
-    Column("m", SmallInteger, nullable=True),
-    Column("w", SmallInteger, nullable=True),
-    Column("wc", SmallInteger, nullable=True),
-    Column("mp", SmallInteger, nullable=True),
-    Column("wp", SmallInteger, nullable=True),
-    Column("m_ambig", Boolean, nullable=False),
-    Column("w_ambig", Boolean, nullable=False),
-    Column("wc_ambig", Boolean, nullable=False),
-    Column("mp_ambig", Boolean, nullable=False),
-    Column("wp_ambig", Boolean, nullable=False),
-)
-
-permanent_afgrode_table = Table(
-    "permanent_afgrode",
-    metadata,
-    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
-    Column("navn", Text, nullable=False),
-)
-
-afstromningskategori_table = Table(
-    "afstromningskategori",
-    metadata,
-    Column("afgroedekode", Integer, primary_key=True, autoincrement=False),
-    Column("standard_kategori", SmallInteger, nullable=False),
-    Column("vinterdaekke_kategori", SmallInteger, nullable=True),
 )
 
 salgspris_table = Table(

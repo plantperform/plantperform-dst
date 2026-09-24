@@ -51,20 +51,25 @@ men hele kæden er ikke én fælles transaction.
 | 4 | `load-mars-projekter` | Erstatter MARS-laget og genberegner markerens MARS-/omlægningsfelter. |
 | 5 | `load-historisk-goedningsfordeling` | Erstatter referencen for faktisk gødningstildeling i 2025/2026. |
 | 6 | `load-saedskifte-lookup` | Erstatter sædskifte-rotationer og kategorier. |
-| 7 | `load-afgroede-normer` | Erstatter afgrødenormer, N-fiksering og NUAR-koder fra master-workbooken. |
-| 7b | `load-permanente-afgrodekoder` | Erstatter listen over permanente (ikke-omdrift) afgrødekoder. |
-| 8 | `load-afstromningskategorier` | Erstatter P-afstrømningskategorier. |
-| 9 | `load-salgspriser` | Erstatter afgrøde-salgspriser. |
-| 10 | `load-halmudbytte` | Erstatter halmudbytter. |
-| 11 | `load-arbejdssatser` | Erstatter priser pr. arbejdsenhed. |
-| 12 | `load-arbejdsmaengder` | Erstatter afgrødespecifikke arbejdsmængder. |
-| 13 | `load-dyrkningsomkostninger` | Erstatter faste dyrkningsomkostninger. |
-| 14 | `load-prisliste` | Erstatter den fælles pris- og tilskudsliste. |
+| 7 | `load-afgroeder` | Erstatter `afgroede`, afgrødenormer og N-fiksering samlet fra master-workbooken, permanent-listen, P-afstrømningskategorier og registrerede historiske koder. |
+| 8 | `load-salgspriser` | Erstatter afgrøde-salgspriser. |
+| 9 | `load-halmudbytte` | Erstatter halmudbytter. |
+| 10 | `load-arbejdssatser` | Erstatter priser pr. arbejdsenhed. |
+| 11 | `load-arbejdsmaengder` | Erstatter afgrødespecifikke arbejdsmængder. |
+| 12 | `load-dyrkningsomkostninger` | Erstatter faste dyrkningsomkostninger. |
+| 13 | `load-prisliste` | Erstatter den fælles pris- og tilskudsliste. |
 
 Trin 2 er destruktivt: det erstatter `registry_field`, så gemte bedrifter og
 scenarier med gamle `imk_id` kan blive forældreløse. Brug derfor ikke denne
 kommando blot for at opdatere én lookup-fil; kør i stedet det konkrete script
 nedenfor og genstart backend’en, så process-caches læser de nye værdier.
+
+Stop backend’en, kør migrationen og derefter `pixi run load-afgroeder`, og
+start først backend’en igen når begge trin er gennemført. Loaderen kræver de
+git-ignorerede ANGJ-kilder. `load-registry-data` kører den automatisk.
+En enkeltstående genindlæsning af registeret indsætter også nye historiske
+afgrødekoder i `afgroede`; kør `load-afgroeder` bagefter for navne og
+referenceværdier.
 
 Backend’en læser ikke `ANGJ-data`-workbooks eller CSV-filer under API-kald.
 Filerne er kun administrative importkilder; produktions-API'en bruger de
@@ -110,8 +115,7 @@ hvert enkelt script i den aktuelle kæde.
 | `load_mars_projekter.py` | `Mars_data.gpkg` | Erstatter `mars_projekt` og genberegner markernes MARS-/omlægningsfelter. |
 | `load_historisk_goedningsfordeling.py` | `Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv` | Erstatter historiske mineral- og organiske N-input pr. region, driftsform, afgrøde og JB-nr. |
 | `load_saedskifte_lookup.py` | `Ny_sædskifte_lookup_sammenlagt.csv` | Validerer og erstatter `saedskifte_rotation` og `saedskifte_category`; det er rotation-candidates' datakilde. |
-| `load_afgroede_normer.py` | Master-workbooken for afgrødenormer | Indlæser `Lang_lookup`, `N_fixering_lookup` og `NUAR_koder` samlet i norm-, N-fikserings- og NUAR-tabeller. |
-| `load_afstromningskategorier.py` | `Bilag_1_tabel_1_med_P_noegle.csv` | Erstatter P-afstrømningskategori med standard- og vinterdækkeværdi pr. afgrødekode. |
+| `load_afgroeder.py` | Master-workbook, `Permanente_afgroder_ikke_omdrift.csv`, `Bilag_1_tabel_1_med_P_noegle.csv`, registrerede afgrødekoder | Validerer alle per-kode værdier og erstatter `afgroede`, normer og N-fiksering i én transaktion. Historiske koder uden referenceværdier får tomme valgfrie felter; et tilgængeligt merged GeoPackage giver navn. |
 | `load_salgspriser.py` | `Salgspriser_afgroedekoder.csv` | Erstatter salgspris, enhed og halmpris pr. afgrøde, driftsform og kvalitet. |
 | `load_halmudbytte.py` | `Halmudbytte_afgroedekoder.csv` | Erstatter halmudbytte pr. afgrøde og jordbonitetsgruppe. |
 | `load_arbejdssatser.py` | `Arbejdssatser.csv` | Erstatter enhedspriser pr. behandling og jordbonitet, med eventuelle afgrøde-/driftsformsoverrides. |

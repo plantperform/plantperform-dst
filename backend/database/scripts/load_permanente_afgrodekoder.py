@@ -1,4 +1,4 @@
-"""Load permanent (ikke-omdrift) afgrødekoder into the runtime lookup table."""
+"""Parse permanent (ikke-omdrift) afgrødekoder."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from pathlib import Path
 from database.scripts.runtime_lookup_loader import (
     integer,
     read_csv_rows,
-    replace_tables,
     source_path,
     text,
 )
@@ -21,7 +20,7 @@ def parse_permanente_afgrodekoder(path: Path = CSV_PATH) -> list[tuple]:
         delimiter=",",
         required_columns={"afgrode_kode", "afgrode_navn", "klassifikation"},
     )
-    return [
+    rows = [
         (
             integer(row["afgrode_kode"], field="afgrode_kode", row_number=row_number),
             text(row["afgrode_navn"], field="afgrode_navn", row_number=row_number),
@@ -29,17 +28,16 @@ def parse_permanente_afgrodekoder(path: Path = CSV_PATH) -> list[tuple]:
         for row_number, row in enumerate(source_rows, start=2)
         if row["klassifikation"].strip() == "Ikke-omdrift"
     ]
+    if len({row[0] for row in rows}) != len(rows):
+        raise ValueError("Permanent crop source contains duplicate afgrødekoder")
+    return rows
 
 
 def load_permanente_afgrodekoder(path: Path = CSV_PATH, database_url: str | None = None) -> None:
-    rows = parse_permanente_afgrodekoder(path)
-    replace_tables(
-        [
-            ("permanent_afgrode", ("afgroedekode", "navn"), rows),
-        ],
-        database_url=database_url,
-    )
-    print(f"Loaded {len(rows):,} permanente afgrødekoder", flush=True)
+    """Compatibility entry point; crop-code sources now reload together."""
+    from database.scripts.load_afgroeder import load_afgroeder
+
+    load_afgroeder(permanent_path=path, database_url=database_url)
 
 
 if __name__ == "__main__":
