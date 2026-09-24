@@ -22,7 +22,7 @@ from app.domain.rotation_candidate import (
 from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
 from app.services.optimization.engine import solve
-from app.services.optimization.yearly_engine import solve_yearly
+from app.services.optimization.yearly_engine import NUM_YEARS, solve_yearly
 from app.services.scenario import candidate_evaluator
 
 
@@ -451,30 +451,22 @@ def _expand_yearly_options(
     return tuple(options)
 
 
-# Same 8-position window as candidate_evaluator.START_CALENDAR_YEAR - not
-# imported from there to avoid a cross-module dependency for one constant.
-_NUM_ROTATION_YEARS = 8
-
-
 def _max_n_load_by_kystvandopland_and_year(
     fields: list[FieldRecord],
     requested: dict[int | None, tuple[float | None, ...]],
 ) -> dict[int | None, tuple[float | None, ...]]:
     """Resolve the per-kystvandopland, per-year N-load cap for a yearly run.
 
-    Same default-to-udledningskvote principle as _max_n_load_by_kystvandopland,
-    applied independently per year: a year with no explicit value (None) -
-    whether because the kystvandopland is missing from the request entirely or
-    just that one year is blank - defaults to the kystvandopland's combined
-    quota instead of running that year unconstrained.
+    A kystvandopland in the request is taken as sent: a blank year (None) means
+    no limit that year, which is what the dialog's "Ingen grænse" promises. A
+    kystvandopland missing from the request entirely defaults to the combined
+    udledningskvote of its kvotegivende marker for every year, like
+    _max_n_load_by_kystvandopland does when nothing was saved.
     """
-    quota_by_kystvand = _kvote_by_kystvandopland(fields)
-
-    resolved: dict[int | None, tuple[float | None, ...]] = {}
-    for kystvand_id in {*requested, *quota_by_kystvand}:
-        quota = quota_by_kystvand.get(kystvand_id) if kystvand_id is not None else None
-        values = requested.get(kystvand_id, (None,) * _NUM_ROTATION_YEARS)
-        resolved[kystvand_id] = tuple(value if value is not None else quota for value in values)
+    resolved = dict(requested)
+    for kystvand_id, quota in _kvote_by_kystvandopland(fields).items():
+        if kystvand_id not in resolved:
+            resolved[kystvand_id] = (quota,) * NUM_YEARS
     return resolved
 
 
