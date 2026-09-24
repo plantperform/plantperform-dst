@@ -362,10 +362,8 @@ const YearPanel = ({
   const pendingNote = column
     ? history
       ? `Ingen historik for ${column.calendarYear}.`
-      : `Ingen årstal for ${column.calendarYear} endnu - kør Optimér for at beregne markerne.`
-    : history
-      ? 'Ingen marker er beregnet endnu.'
-      : 'Kør Optimér for at beregne markerne.'
+      : `Ingen årstal for ${column.calendarYear} endnu.`
+    : 'Ingen marker er beregnet endnu.'
   const message = pending
     ? fixedCrops
       ? null

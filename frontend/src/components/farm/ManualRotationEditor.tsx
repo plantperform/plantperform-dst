@@ -12,6 +12,7 @@ import {
   useSimulationFieldCandidateDetail,
 } from '@/api/hooks'
 import { applyFieldRotation, previewFieldRotation } from '@/api/mutations'
+import { useOptimizationRunActions } from '@/api/optimization-runs'
 import type {
   FieldRecord,
   RotationCandidateEvaluation,
@@ -83,6 +84,7 @@ export const ManualRotationEditor = ({
   onOpenChange,
   onError,
 }: ManualRotationEditorProps) => {
+  const { markStale } = useOptimizationRunActions()
   const {
     data: current,
     isLoading: isLoadingCurrent,
@@ -359,6 +361,7 @@ export const ManualRotationEditor = ({
       )
       void mutate(simulationFieldCandidateDetailKey(farmId, simulationId, field.id))
       void mutate(simulationYearlySummaryKey(farmId, simulationId))
+      markStale(simulationId)
       onError(null)
       close()
     } catch (error) {
