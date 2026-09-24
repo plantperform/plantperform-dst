@@ -470,7 +470,10 @@ export const FarmInspector = ({
               loading={
                 fieldsLoading ||
                 yearValuesLoading ||
-                (!isCatchmentScoped && yearlySummaryLoading)
+                (!isCatchmentScoped &&
+                  (yearlySummaryLoading ||
+                    (optimizationRun?.status === 'succeeded' &&
+                      optimizationRun.refreshing)))
               }
               fields={highlightedFields}
               scopeLabel={scopeLabel}
