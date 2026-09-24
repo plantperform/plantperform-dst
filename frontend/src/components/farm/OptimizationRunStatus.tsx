@@ -20,15 +20,10 @@ type RunProps = {
   run: OptimizationRun
 }
 
-// "Års-optimering · 0:12 / maks. 0:20", ticking while the run is going.
+// "Års-optimering · 0:12", ticking while the run is going.
 export const OptimizationRunElapsed = ({ run }: RunProps) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
-  return (
-    <>
-      {OPTIMIZATION_KIND_LABELS[run.kind]} · {formatElapsed(elapsed)} / maks.{' '}
-      {formatElapsed(run.timeLimitSeconds * 1000)}
-    </>
-  )
+  return `${OPTIMIZATION_KIND_LABELS[run.kind]} · ${formatElapsed(elapsed)}`
 }
 
 type OptimizationBannerProps = {
