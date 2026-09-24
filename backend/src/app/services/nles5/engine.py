@@ -167,13 +167,15 @@ def N_func(NT,
            beta_udb=0.016314,
            beta_m1_M=0.026499,
            beta_f0=0.038245,
-           beta_f1=0.025499,
+           beta_f1=0.0265,
            beta_g0=0.014099,
-           beta_m1_G=0.026499,
+           beta_g1=0.0265,
            theta_2=1.205144):
     """Nitrogen effect Ntheta based on mineral, fixation, organic, and historical N.
 
-    Beta values are from Bilag 2, table 9.
+    Beta values are from Bilag 2, table 9, cross-checked against
+    Parametre og konstanter_pr_11_09_2026.xlsx (B_f1, B_g1 - two distinct
+    constants, not the same value as beta_m1_M reused for the G-term).
     """
     N = (
         beta_t * NT
@@ -184,7 +186,7 @@ def N_func(NT,
         + beta_f0 * F0
         + beta_f1 * ((F1 + F2) / 2)
         + beta_g0 * G0
-        + beta_m1_G * ((G1 + G2) / 2)
+        + beta_g1 * ((G1 + G2) / 2)
     )
     return N if WC == 1 else N * theta_2
 
@@ -494,13 +496,18 @@ def calculate_leaching(sample):
         ETS=ets,
         EPJ=sample.get("EPJ", 0.04),
     )
-    # M11 correction: adjust udvaskning for majshelsæd with a græs/kløvergræs forfrugt by MNCS
-    m11_anvendt = sample.get("M") == 11
-    m11_mncs = sample.get("MNCS", 0)
-    m11_faktor = majs_m11_korrektionsfaktor(m11_mncs) if m11_anvendt else None
-    if m11_anvendt:
-        result["L"] *= m11_faktor
-        result["L_nuar"] *= m11_faktor
+    # Fmajs correction: adjust udvaskning for the specific maize/forfrugt
+    # combination flagged by the caller (bridge_v2.py's _FMAJS_HOVEDAFGRODE_
+    # KODER/_FMAJS_FORFRUGT_KODER) - NOT every afgrøde whose M happens to
+    # resolve to 11 (that set also includes unrelated vegetable codes).
+    # Looked up on total mineral N applied: forår + efterår + udegående dyr
+    # (PUMR 2027 kravspec, Tabel A, felt A66), not spring (MNCS) alone.
+    fmajs_anvendt = sample.get("Fmajs_anvendt", False)
+    fmajs_mineralsk_n = sample.get("MNCS", 0) + sample.get("MNCA", 0) + sample.get("MNudb", 0)
+    fmajs_faktor = majs_m11_korrektionsfaktor(fmajs_mineralsk_n) if fmajs_anvendt else None
+    if fmajs_anvendt:
+        result["L"] *= fmajs_faktor
+        result["L_nuar"] *= fmajs_faktor
 
     result.update({
         "mellemafgroede": sample.get("mellemafgroede", False),
@@ -519,9 +526,9 @@ def calculate_leaching(sample):
         "W_original": w_original,
         "W_ref": w_ref,
         "W_used": w_used,
-        "M11_korrektion_anvendt": m11_anvendt,
-        "M11_korrektionsfaktor": m11_faktor,
-        "M11_MNCS": m11_mncs if m11_anvendt else None,
+        "Fmajs_anvendt": fmajs_anvendt,
+        "Fmajs_korrektionsfaktor": fmajs_faktor,
+        "Fmajs_mineralsk_n": fmajs_mineralsk_n if fmajs_anvendt else None,
     })
     return result
 

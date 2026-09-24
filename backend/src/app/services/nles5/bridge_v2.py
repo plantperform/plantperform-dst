@@ -18,9 +18,19 @@ M, W and MP all shift when the forfrugt was a langvarig afgrøde (græs,
 kløvergræs, frøgræs or brak - see _LANGVARIG_FORFRUGT_KODER): M overrides to an
 afgrøde-specific category (M10/M11/M12, see _FORFRUGT_M_OVERRIDE and
 _resolve_m), W overrides the vintersæd group (W1) to W7 (see
-_FORFRUGT_W_OVERRIDE and _resolve_w), MP always overrides to the fixed MP4
-(see _resolve_mp). Source: Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark
-M/W/MP.
+_FORFRUGT_W_OVERRIDE and _resolve_w), MP overrides to the fixed MP4 but only
+for the 161 afgrøder in _MP4_BERETTIGET_KODER, not universally (see
+_resolve_mp). Source: Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark M/W/MP,
+cross-checked against PUMR 2027 kravspec, Tabel A.
+
+Two further additive corrections are applied directly in
+evaluate_leaching_position rather than via a _resolve_* helper, since neither
+depends on the afgrøde's own static M/W/MP/WP lookup: FOx adds a flat 35 kg
+N/ha to F0 when the udlægskode is a kvælstoffikserende efterafgrøde (952/953),
+and Fmajs (engine.py's majs_m11_korrektionsfaktor) is only triggered for the
+specific maize/forfrugt combination in _FMAJS_HOVEDAFGRODE_KODER /
+_FMAJS_FORFRUGT_KODER - not for every afgrøde whose M happens to resolve to
+11.
 
 P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
@@ -80,6 +90,25 @@ _FORFRUGT_M_OVERRIDE: dict[int, int] = {
     711: 10, 921: 12,
 }
 
+# Afgrødekoder where the MP4 override (see _resolve_mp) actually applies.
+# Unlike M, MP4 is NOT universal across every afgrøde whenever the forfrugt is
+# in _LANGVARIG_FORFRUGT_KODER - only these 161 codes are eligible (source:
+# Afgrødetabel2027_07092026_Udkast_3_pr_10_9_2026.xlsx, column "Udv.kat.
+# Forfrugt Undt. (MP)" - codes with a value there, always MP4 in practice).
+_MP4_BERETTIGET_KODER: frozenset[int] = frozenset({
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 21, 22,
+    23, 24, 25, 26, 27, 30, 31, 32, 35, 36, 40, 41, 42, 51, 52, 53, 54, 55,
+    56, 57, 58, 70, 71, 72, 120, 121, 122, 123, 124, 125, 127, 149, 150,
+    151, 152, 154, 155, 156, 157, 160, 161, 162, 182, 210, 211, 212, 213,
+    214, 215, 216, 217, 218, 220, 221, 222, 223, 224, 225, 230, 234, 235,
+    280, 281, 282, 283, 310, 324, 328, 342, 400, 401, 402, 403, 404, 405,
+    406, 407, 408, 409, 410, 411, 412, 413, 415, 416, 417, 418, 420, 421,
+    422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432, 434, 435, 440,
+    448, 449, 450, 497, 501, 502, 510, 512, 513, 540, 541, 542, 543, 544,
+    547, 548, 551, 552, 553, 579, 650, 651, 652, 653, 654, 655, 661, 701,
+    702, 703, 704, 705, 706, 707, 708, 709, 710, 711,
+})
+
 # This afgrødekode's own W -> the W to use instead when the forfrugt is one of
 # _LANGVARIG_FORFRUGT_KODER (Afgrøde beslutningstræ_pr_11_06_27.xlsx, ark W,
 # columns "W"/"Efter græs, brak og frøgræs"). Unlike M, only the vintersæd
@@ -89,6 +118,16 @@ _FORFRUGT_W_OVERRIDE: dict[int, int] = {
     9: 7, 10: 7, 11: 7, 13: 7, 14: 7, 15: 7, 16: 7, 17: 7, 57: 7,
     70: 7, 71: 7, 72: 7, 220: 7, 221: 7, 222: 7, 223: 7, 224: 7,
 }
+
+# Fmajs (see engine.py's majs_m11_korrektionsfaktor) only applies when the
+# CURRENT afgrøde is one of these six maize codes AND the forfrugt is one of
+# these fourteen græs/kløvergræs codes (PUMR 2027 kravspec, Tabel A, felt
+# A66) - NOT for every afgrøde whose M resolves to 11 via _FORFRUGT_M_OVERRIDE
+# (that set also includes unrelated vegetable codes, e.g. Bladselleri).
+_FMAJS_HOVEDAFGRODE_KODER: frozenset[int] = frozenset({5, 19, 216, 218, 423, 425})
+_FMAJS_FORFRUGT_KODER: frozenset[int] = frozenset({
+    173, 174, 236, 237, 256, 261, 277, 279, 285, 286, 943, 944, 945, 946,
+})
 
 # Udlægskode -> W when the udlæg itself determines the winter cover, such as
 # efterafgrøde, mellemafgrøde, or udlæg til frø. Ported from UDL_W_MAPPING in
@@ -193,14 +232,16 @@ def _resolve_m(afgrode_kode: int, this_params: dict, prev_afgrode_kode: int | No
     return this_params.get("M") or 1
 
 
-def _resolve_mp(prev_params: dict, prev_afgrode_kode: int | None) -> int:
+def _resolve_mp(afgrode_kode: int, prev_params: dict, prev_afgrode_kode: int | None) -> int:
     """Resolve MP, overridden to MP4 when the forfrugt's own forfrugt-equivalent applies.
 
     Bilag 2, table MP: this position's MP is normally the forfrugt's own static
     MP category, but becomes MP4 (fixed, no per-afgrøde variant) when the
-    forfrugt itself was græs, kløvergræs, frøgræs or brak.
+    forfrugt was græs, kløvergræs, frøgræs or brak AND the CURRENT afgrøde is
+    one of the 161 codes eligible for the override (_MP4_BERETTIGET_KODER) -
+    not every afgrøde, even though the fixed target value never varies.
     """
-    if prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
+    if afgrode_kode in _MP4_BERETTIGET_KODER and prev_afgrode_kode in _LANGVARIG_FORFRUGT_KODER:
         return 4
     return prev_params.get("MP") or 1
 
@@ -263,9 +304,22 @@ def evaluate_leaching_position(
 
     m = _resolve_m(afgrode_kode, this_params, prev_afgrode_kode)
     wc = this_params.get("WC") or 1
-    mp = _resolve_mp(prev_params, prev_afgrode_kode)
+    mp = _resolve_mp(afgrode_kode, prev_params, prev_afgrode_kode)
     wp = _resolve_wp(prev_params, this_params)
     w = _resolve_w(afgrode_kode, this_params, next_params, udlaeg_kode, prev_afgrode_kode)
+
+    # §24(7-9): N-fixing efterafgrøde (kvælstoffikserende renbestand/udlæg)
+    # adds a flat 35 kg N/ha bonus, folded into F0 before the beta_f0 weighting
+    # (PUMR 2027 kravspec, Tabel A, felt A57 + A82).
+    fox = 35.0 if udlaeg_kode in (952, 953) else 0.0
+
+    # Fmajs (majs_m11_korrektionsfaktor in engine.py) only applies to this
+    # specific maize/forfrugt combination, not every afgrøde whose M happens
+    # to resolve to 11 (PUMR 2027 kravspec, Tabel A, felt A66).
+    fmajs_anvendt = (
+        afgrode_kode in _FMAJS_HOVEDAFGRODE_KODER
+        and prev_afgrode_kode in _FMAJS_FORFRUGT_KODER
+    )
 
     vk = (
         _UDL_VIRKEMIDDEL.get(udlaeg_kode, _NO_VIRKEMIDDEL)
@@ -301,11 +355,13 @@ def evaluate_leaching_position(
         "NT_source": "manual", "NT": org_n_topsoil,
         "MNCS": mncs, "MNCA": mnca, "MNudb": 0.0,
         "M1": m1, "M2": m2,
-        "F0": f0, "F1": f1, "F2": f2,
+        "F0": f0 + fox, "F1": f1, "F2": f2,
+        "FOx": fox,
         "G0": g0, "G1": g1, "G2": g2,
         "P_override": p_value, "S_override": s_soil,
         "afstromningskategori": kategori,
         "afstromningskategori_ukendt": kategori_ukendt,
+        "Fmajs_anvendt": fmajs_anvendt,
         # EEA/EMA/ETS are derived from the rotation's udlægskode (see
         # _UDL_VIRKEMIDDEL above), not freely selected. Fdato/precision_dagsbasis
         # is a scenarie-level Phase 8 setting applied equally to every year with
