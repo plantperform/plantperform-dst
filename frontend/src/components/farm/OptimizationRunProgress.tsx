@@ -51,7 +51,7 @@ const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
           : `Kører ${OPTIMIZATION_KIND_LABELS[run.kind]}...`}
       </p>
       <p className="text-sm tabular-nums text-muted-foreground">
-        {formatElapsed(elapsed)} / maks. {formatElapsed(limitMs)}
+        {formatElapsed(elapsed)}
       </p>
       <div
         className="mx-auto h-1 w-48 overflow-hidden rounded-full bg-muted"
