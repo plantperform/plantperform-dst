@@ -5,6 +5,7 @@ from app.api.v0.farm_fields import router as farm_fields_router
 from app.api.v0.farms import router as farms_router
 from app.api.v0.healthz import router as healthz_router
 from app.api.v0.mars import router as mars_router
+from app.api.v0.paragraf3 import router as paragraf3_router
 from app.api.v0.registry import router as registry_router
 from app.api.v0.rotation_candidates import router as rotation_candidates_router
 from app.api.v0.simulations import router as simulations_router
@@ -16,5 +17,6 @@ router.include_router(farms_router)
 router.include_router(farm_fields_router)
 router.include_router(registry_router)
 router.include_router(mars_router)
+router.include_router(paragraf3_router)
 router.include_router(rotation_candidates_router)
 router.include_router(simulations_router)

@@ -54,6 +54,7 @@ load-saedskifte-lookup = "PYTHONPATH=src python database/scripts/load_saedskifte
 load-afgroede-normer = "PYTHONPATH=src:. python database/scripts/load_afgroede_normer.py"
 load-permanente-afgrodekoder = "PYTHONPATH=src:. python database/scripts/load_permanente_afgrodekoder.py"
 load-afstromningskategorier = "PYTHONPATH=src:. python database/scripts/load_afstromningskategorier.py"
+load-paragraf3 = "PYTHONPATH=src:. python database/scripts/load_paragraf3.py"
 load-salgspriser = "PYTHONPATH=src:. python database/scripts/load_salgspriser.py"
 load-halmudbytte = "PYTHONPATH=src:. python database/scripts/load_halmudbytte.py"
 load-arbejdssatser = "PYTHONPATH=src:. python database/scripts/load_arbejdssatser.py"
