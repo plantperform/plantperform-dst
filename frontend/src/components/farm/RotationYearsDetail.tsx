@@ -380,7 +380,7 @@ const LeachingDetailSection = ({
   const wpCoef = WP_P[wp] ?? 0
   const cTotal = mCoef + wCoef + mpCoef + wpCoef
 
-  const { bt, bCS, bCA, budb, bm1M, bf0, bf1, bg0, bm1G, theta2 } =
+  const { bt, bCS, bCA, budb, bm1M, bf0, bf1, bg0, bg1, theta2 } =
     NTHETA_COEFFICIENTS
   const nt = num(detail.NT)
   const mncs = num(detail.MNCS)
@@ -403,7 +403,7 @@ const LeachingDetailSection = ({
   const tF0 = bf0 * f0
   const tFHist = bf1 * ((f1 + f2) / 2)
   const tG0 = bg0 * g0
-  const tGHist = bm1G * ((g1 + g2) / 2)
+  const tGHist = bg1 * ((g1 + g2) / 2)
   const nRaw = tNT + tMNCS + tMNCA + tUdb + tMHist + tF0 + tFHist + tG0 + tGHist
   const ntheta = num(detail.Ntheta)
 
@@ -420,7 +420,7 @@ const LeachingDetailSection = ({
   const lNuar = num(detail.L_nuar)
   const { nLoadPerHa, nLoadField } = calculateNLoad(lNuar, retention, areaHa)
 
-  const m11Applied = Boolean(detail.m11CorrectionApplied)
+  const fmajsApplied = Boolean(detail.Fmajs_anvendt)
   const eeaRed = num(detail.EEA) * num(detail.Fdato_factor)
   const measureSum = eeaRed + num(detail.EMA) + num(detail.ETS)
   const factor1 = 1 - measureSum
@@ -489,8 +489,8 @@ const LeachingDetailSection = ({
             },
             { label: `β_g0 · G0`, detail: `${bg0} × ${fmt(g0, 1)}`, value: fmt(tG0, 4) },
             {
-              label: `β_m1G · (G1+G2)/2`,
-              detail: `${bm1G} × (${fmt(g1, 1)}+${fmt(g2, 1)})/2`,
+              label: `β_g1 · (G1+G2)/2`,
+              detail: `${bg1} × (${fmt(g1, 1)}+${fmt(g2, 1)})/2`,
               value: fmt(tGHist, 4),
             },
             { label: 'Sum', detail: '', value: fmt(nRaw, 4), strong: true },
@@ -576,31 +576,31 @@ const LeachingDetailSection = ({
           ]}
         />
         <Callout>
-          L (før evt. M11-korrektion) = {fmt(trend, 4)} + {fmt(cropSoil, 4)} ={' '}
+          L (før evt. Fmajs-korrektion) = {fmt(trend, 4)} + {fmt(cropSoil, 4)} ={' '}
           <strong>{fmt(lRaw, 3)} kg N/ha</strong>
         </Callout>
       </div>
 
-      {m11Applied ? (
+      {fmajsApplied ? (
         <div className="space-y-1.5">
           <SectionHeading>
-            M11-korrektion — majshelsæd efter græs/kløvergræs
+            Majs efter kløvergræs (Fmajs)
           </SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Tabel-korrektionsfaktor baseret på tilført mineralsk N om foråret
-            (MNCS), trin på 10 kg N/ha.
+            Tabel-korrektionsfaktor baseret på tilført mineralsk N (forår,
+            efterår og udegående dyr), trin på 10 kg N/ha.
           </p>
           <DetailTable
             rows={[
-              { label: 'MNCS (forår)', value: `${fmt(num(detail.M11_MNCS), 1)} kg N/ha` },
-              { label: 'Korrektionsfaktor', value: fmt(num(detail.m11CorrectionFactor), 3), strong: true },
+              { label: 'Mineralsk N i alt', value: `${fmt(num(detail.Fmajs_mineralsk_n), 1)} kg N/ha` },
+              { label: 'Korrektionsfaktor', value: fmt(num(detail.Fmajs_korrektionsfaktor), 3), strong: true },
               { label: 'L (før korrektion)', value: `${fmt(lRaw, 3)} kg N/ha` },
               { label: 'L (efter korrektion)', value: `${fmt(l, 3)} kg N/ha`, strong: true },
             ]}
           />
           <Callout>
-            L = {fmt(lRaw, 3)} × {fmt(num(detail.m11CorrectionFactor), 3)} ={' '}
-            <strong>{fmt(l, 3)} kg N/ha</strong> (M11-korrektion anvendt)
+            L = {fmt(lRaw, 3)} × {fmt(num(detail.Fmajs_korrektionsfaktor), 3)} ={' '}
+            <strong>{fmt(l, 3)} kg N/ha</strong> (Fmajs anvendt)
           </Callout>
         </div>
       ) : null}
