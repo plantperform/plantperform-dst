@@ -152,6 +152,12 @@ export const formatCompactDkk = (value: number): string => {
   return `${formatWholeNumber(value)} kr`
 }
 
+export const formatSigned = (
+  value: number,
+  format: (value: number) => string,
+): string =>
+  `${value > 0 ? '+' : value < 0 ? '−' : '±'}${format(Math.abs(value))}`
+
 export const formatLockTooltip = (field: FieldRecord): string => {
   const lines = [`${field.name} - låst sædskifte`]
 

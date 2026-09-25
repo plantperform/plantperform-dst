@@ -4,6 +4,7 @@ import { useElapsed } from '@/hooks/use-elapsed'
 import {
   fieldTitle,
   formatCompactDkk,
+  formatSigned,
   formatWholeNumber,
 } from '@/lib/field-domain'
 import {
@@ -69,9 +70,6 @@ const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
   )
 }
 
-const signed = (value: number, format: (value: number) => string) =>
-  `${value > 0 ? '+' : value < 0 ? '−' : '±'}${format(Math.abs(value))}`
-
 const SucceededDetails = ({
   run,
 }: {
@@ -108,7 +106,10 @@ const SucceededDetails = ({
               {formatCompactDkk(changes.db2After)}
             </dd>
             <dd className="text-muted-foreground">
-              {signed(changes.db2After - changes.db2Before, formatCompactDkk)}
+              {formatSigned(
+                changes.db2After - changes.db2Before,
+                formatCompactDkk,
+              )}
             </dd>
             <dt className="text-muted-foreground">Udledning</dt>
             <dd>
@@ -116,7 +117,7 @@ const SucceededDetails = ({
               {formatWholeNumber(changes.nLoadAfter)} kg N
             </dd>
             <dd className="text-muted-foreground">
-              {signed(
+              {formatSigned(
                 changes.nLoadAfter - changes.nLoadBefore,
                 (value) => `${formatWholeNumber(value)} kg N`,
               )}

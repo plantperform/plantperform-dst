@@ -13,34 +13,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
-import { mutate } from 'swr'
+import { useMemo, type ReactNode } from 'react'
 
-import {
-  fetchSimulationFields,
-  simulationFieldsKey,
-  simulationsKey,
-  useSimulationFields,
-} from '@/api/hooks'
-import {
-  createSimulation,
-  deleteSimulation,
-  updateSimulationConstraints,
-} from '@/api/mutations'
-import type {
-  CreateSimulationInput,
-  Farm,
-  FieldRecord,
-  Simulation,
-} from '@/api/types'
+import { useSimulationFields } from '@/api/hooks'
+import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import {
   useOptimizationRun,
-  useStartDefaultOptimization,
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
-import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
@@ -50,16 +32,6 @@ import type {
   FarmViewSelection,
 } from '@/components/farm/types'
 import { ViewModeSwitch } from '@/components/farm/ViewModeSwitch'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,22 +80,8 @@ import {
   ROLE_LABELS,
 } from '@/lib/onboarding'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
+import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
-
-const formatCreatedAt = (value: string) => {
-  const createdAt = new Date(value).getTime()
-  if (Number.isNaN(createdAt)) return 'Oprettet for nylig'
-
-  const diffMinutes = Math.max(0, Math.round((Date.now() - createdAt) / 60_000))
-  if (diffMinutes < 1) return 'Oprettet netop nu'
-  if (diffMinutes < 60) return `Oprettet for ${diffMinutes} min. siden`
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) return `Oprettet for ${diffHours} t. siden`
-
-  const diffDays = Math.round(diffHours / 24)
-  return `Oprettet for ${diffDays} d. siden`
-}
 
 type ViewKeyFigures = {
   level: QuotaStatusLevel
@@ -162,16 +120,6 @@ const describeKeyFigures = (
   }
 }
 
-
-const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
-  name: `${simulation.name} (kopi)`,
-  allowedRotationVariants: simulation.rotationVariants,
-  allowedNNormPercentages: simulation.nNormPercentages,
-  fertiliser: simulation.fertiliser,
-  catchCropSowingDate: simulation.catchCropSowingDate,
-  catchCropDailyBasis: simulation.catchCropDailyBasis,
-})
-
 export const GROUP_CLASS = 'px-3 py-1 group-data-[collapsible=icon]:px-2'
 
 export const GROUP_LABEL_CLASS =
@@ -194,6 +142,11 @@ type FarmSidebarProps = {
   splitAvailable: boolean
   onViewChange: (view: FarmView) => void
   onError: (message: string | null) => void
+  copyingSimulationId: string | null
+  deletingSimulationId: string | null
+  onCopySimulation: (simulation: Simulation) => void
+  onDeleteSimulation: (simulation: Simulation) => void
+  onNewSimulation: () => void
   width: number
   onWidthChange: (width: number) => void
 }
@@ -219,82 +172,18 @@ export const FarmSidebar = ({
   splitAvailable,
   onViewChange,
   onError,
+  copyingSimulationId,
+  deletingSimulationId,
+  onCopySimulation,
+  onDeleteSimulation,
+  onNewSimulation,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
-  const [deletingSimulationId, setDeletingSimulationId] = useState<
-    string | null
-  >(null)
-  const [copyingSimulationId, setCopyingSimulationId] = useState<string | null>(
-    null,
-  )
-  const [simulationToDelete, setSimulationToDelete] =
-    useState<Simulation | null>(null)
-  const [newSimulationOpen, setNewSimulationOpen] = useState(false)
-  const startDefaultRun = useStartDefaultOptimization()
   const historyFigures = describeKeyFigures(
     resolveFarmQuota(fields, false),
     false,
   )
-
-  const removeSimulation = async (simulationId: string) => {
-    setDeletingSimulationId(simulationId)
-    try {
-      await deleteSimulation(farm.id, simulationId)
-      await mutate(simulationsKey(farm.id))
-      await mutate(simulationFieldsKey(farm.id, simulationId), undefined, {
-        revalidate: false,
-      })
-      if (selection.kind === 'simulation' && selection.id === simulationId) {
-        onSelectionChange({ kind: 'current' })
-      }
-      onError(null)
-    } catch {
-      onError('Kunne ikke slette simuleringen.')
-    } finally {
-      setDeletingSimulationId(null)
-    }
-  }
-
-  const copySimulation = async (simulation: Simulation) => {
-    setCopyingSimulationId(simulation.id)
-    let created: Simulation
-    try {
-      created = await createSimulation(farm.id, buildCopyInput(simulation))
-      await mutate(simulationsKey(farm.id))
-    } catch {
-      onError('Kunne ikke kopiere simuleringen.')
-      setCopyingSimulationId(null)
-      return
-    }
-    let copyError: string | null = null
-    try {
-      await updateSimulationConstraints(
-        farm.id,
-        created.id,
-        simulation.constraints,
-      )
-      await mutate(simulationsKey(farm.id))
-    } catch {
-      copyError =
-        'Simuleringen blev kopieret, men reglerne kunne ikke kopieres.'
-    }
-    if (!copyError) {
-      try {
-        startDefaultRun(
-          farm.id,
-          created.id,
-          await fetchSimulationFields(farm.id, created.id),
-        )
-      } catch {
-        copyError =
-          'Simuleringen blev kopieret, men Optimér kunne ikke startes.'
-      }
-    }
-    onError(copyError)
-    onSelectionChange({ kind: 'simulation', id: created.id })
-    setCopyingSimulationId(null)
-  }
 
   return (
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
@@ -371,8 +260,8 @@ export const FarmSidebar = ({
                         id: simulation.id,
                       })
                     }
-                    onCopy={() => void copySimulation(simulation)}
-                    onDelete={() => setSimulationToDelete(simulation)}
+                    onCopy={() => onCopySimulation(simulation)}
+                    onDelete={() => onDeleteSimulation(simulation)}
                   />
                 )
               })}
@@ -380,7 +269,7 @@ export const FarmSidebar = ({
                 <SidebarMenuButton
                   className="rounded-md px-3 font-medium text-primary hover:text-primary"
                   tooltip="Ny simulering"
-                  onClick={() => setNewSimulationOpen(true)}
+                  onClick={onNewSimulation}
                 >
                   <Plus />
                   <span>Ny simulering</span>
@@ -410,24 +299,6 @@ export const FarmSidebar = ({
       </SidebarFooter>
 
       <SidebarWidthHandle width={width} onWidthChange={onWidthChange} />
-
-      <NewScenarioPanel
-        farmId={farm.id}
-        fields={fields}
-        open={newSimulationOpen}
-        onOpenChange={setNewSimulationOpen}
-        onSimulationCreated={(simulation) =>
-          onSelectionChange({ kind: 'simulation', id: simulation.id })
-        }
-        onError={onError}
-      />
-      <DeleteSimulationDialog
-        simulation={simulationToDelete}
-        onOpenChange={(open) => {
-          if (!open) setSimulationToDelete(null)
-        }}
-        onConfirm={(simulationId) => void removeSimulation(simulationId)}
-      />
     </Sidebar>
   )
 }
@@ -898,45 +769,6 @@ const SimulationSubMenu = ({
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
   </SidebarMenuSub>
-)
-
-type DeleteSimulationDialogProps = {
-  simulation: Simulation | null
-  onOpenChange: (open: boolean) => void
-  onConfirm: (simulationId: string) => void
-}
-
-const DeleteSimulationDialog = ({
-  simulation,
-  onOpenChange,
-  onConfirm,
-}: DeleteSimulationDialogProps) => (
-  <Dialog open={simulation !== null} onOpenChange={onOpenChange}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Slet {simulation?.name}?</DialogTitle>
-        <DialogDescription>
-          Simuleringen og dens kopierede marker slettes. Bedriftens egne marker
-          berøres ikke. Handlingen kan ikke fortrydes.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <DialogClose asChild>
-          <Button variant="outline">Annuller</Button>
-        </DialogClose>
-        <DialogClose asChild>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (simulation) onConfirm(simulation.id)
-            }}
-          >
-            Slet simulering
-          </Button>
-        </DialogClose>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
 )
 
 type SidebarWidthHandleProps = {
