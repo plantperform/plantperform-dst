@@ -1,6 +1,14 @@
 import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useMatch,
+  useNavigate,
+  useParams,
+} from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
 import {
@@ -21,6 +29,7 @@ import { FarmSidebar } from '@/components/farm/FarmSidebar'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSimulationActions } from '@/components/farm/simulation-actions'
+import { SimulationOverview } from '@/components/farm/SimulationOverview'
 import {
   resolveEffectiveView,
   useSplitLayout,
@@ -53,6 +62,9 @@ const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
+  const navigate = useNavigate()
+  const onOverview = useMatch('/farms/:farmId/simulations') !== null
+  const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const email = user?.email ?? ''
   const {
@@ -230,6 +242,16 @@ export const FarmDetailPage = () => {
     onError: showErrorToast,
   })
 
+  const leaveOverview = () => {
+    if (onOverview) navigate(farmPath)
+  }
+
+  const openView = (next: FarmViewSelection, nextMode: FarmInspectorMode) => {
+    changeSelection(next)
+    changeMode(nextMode)
+    navigate(farmPath)
+  }
+
   if (notFound || loadFailed) {
     return (
       <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
@@ -280,15 +302,31 @@ export const FarmDetailPage = () => {
           fields={fields}
           simulations={simulations}
           selection={activeSelection}
+          overviewActive={onOverview}
           loadingSelection={simulationFieldsLoading}
-          onSelectionChange={changeSelection}
+          onSelectionChange={(next) => {
+            changeSelection(next)
+            leaveOverview()
+          }}
           mode={mode}
-          onModeChange={changeMode}
-          onOptimize={() => setOptimizeDialogOpen(true)}
-          onYearlyOptimize={() => setYearlyOptimizeDialogOpen(true)}
+          onModeChange={(next) => {
+            changeMode(next)
+            leaveOverview()
+          }}
+          onOptimize={() => {
+            setOptimizeDialogOpen(true)
+            leaveOverview()
+          }}
+          onYearlyOptimize={() => {
+            setYearlyOptimizeDialogOpen(true)
+            leaveOverview()
+          }}
           view={effectiveView}
           splitAvailable={splitAvailable}
-          onViewChange={selectView}
+          onViewChange={(next) => {
+            selectView(next)
+            leaveOverview()
+          }}
           onError={showErrorToast}
           copyingSimulationId={simulationActions.copyingSimulationId}
           deletingSimulationId={simulationActions.deletingSimulationId}
@@ -314,44 +352,71 @@ export const FarmDetailPage = () => {
           </div>
         ) : null}
         {loadedFarm ? (
-          <FarmInspector
-            farm={loadedFarm}
-            fields={activeFields}
-            selection={activeSelection}
-            selectedSimulation={
-              activeSelection.kind === 'simulation'
-                ? simulations.find(
-                    (simulation) => simulation.id === activeSelection.id,
-                  )
-                : undefined
-            }
-            fieldsLoading={simulationFieldsLoading}
-            fieldsError={
-              Boolean(simulationFieldsError) &&
-              simulationFieldsData === undefined
-            }
-            fieldsRetrying={simulationFieldsValidating}
-            onRetryFields={() => void retrySimulationFields()}
-            mode={mode}
-            onModeChange={changeMode}
-            view={snappedView}
-            effectiveView={effectiveView}
-            onViewChange={selectView}
-            onSplitAvailableChange={setSplitAvailable}
-            onAddModeChange={setAddModeSnap}
-            listSlack={listSlack}
-            onListSlackChange={changeListSlack}
-            selectedFieldId={selectedFieldId}
-            onSelectedFieldChange={setSelectedFieldId}
-            onSelectField={selectFieldFromSearch}
-            selectedYearIndex={selectedYearIndex}
-            onSelectedYearIndexChange={setSelectedYearIndex}
-            optimizeDialogOpen={optimizeDialogOpen}
-            onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-            yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
-            onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
-            onError={showErrorToast}
-          />
+          <Routes>
+            <Route
+              index
+              element={
+                <FarmInspector
+                  farm={loadedFarm}
+                  fields={activeFields}
+                  selection={activeSelection}
+                  selectedSimulation={
+                    activeSelection.kind === 'simulation'
+                      ? simulations.find(
+                          (simulation) => simulation.id === activeSelection.id,
+                        )
+                      : undefined
+                  }
+                  fieldsLoading={simulationFieldsLoading}
+                  fieldsError={
+                    Boolean(simulationFieldsError) &&
+                    simulationFieldsData === undefined
+                  }
+                  fieldsRetrying={simulationFieldsValidating}
+                  onRetryFields={() => void retrySimulationFields()}
+                  mode={mode}
+                  onModeChange={changeMode}
+                  view={snappedView}
+                  effectiveView={effectiveView}
+                  onViewChange={selectView}
+                  onSplitAvailableChange={setSplitAvailable}
+                  onAddModeChange={setAddModeSnap}
+                  listSlack={listSlack}
+                  onListSlackChange={changeListSlack}
+                  selectedFieldId={selectedFieldId}
+                  onSelectedFieldChange={setSelectedFieldId}
+                  onSelectField={selectFieldFromSearch}
+                  selectedYearIndex={selectedYearIndex}
+                  onSelectedYearIndexChange={setSelectedYearIndex}
+                  optimizeDialogOpen={optimizeDialogOpen}
+                  onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                  yearlyOptimizeDialogOpen={yearlyOptimizeDialogOpen}
+                  onYearlyOptimizeDialogOpenChange={setYearlyOptimizeDialogOpen}
+                  onError={showErrorToast}
+                />
+              }
+            />
+            <Route
+              path="simulations"
+              element={
+                <SimulationOverview
+                  farmId={loadedFarm.id}
+                  fields={fields}
+                  simulations={simulations}
+                  selection={activeSelection}
+                  copyingSimulationId={simulationActions.copyingSimulationId}
+                  deletingSimulationId={simulationActions.deletingSimulationId}
+                  onOpen={openView}
+                  onCopySimulation={(simulation) =>
+                    void simulationActions.copySimulation(simulation)
+                  }
+                  onDeleteSimulation={setSimulationToDelete}
+                  onNewSimulation={() => setNewSimulationOpen(true)}
+                />
+              }
+            />
+            <Route path="*" element={<Navigate to={farmPath} replace />} />
+          </Routes>
         ) : (
           <>
             <p role="status" className="sr-only">
