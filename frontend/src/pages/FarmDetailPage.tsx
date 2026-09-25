@@ -9,14 +9,18 @@ import {
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
+import type { Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
   FarmContentSkeleton,
   FarmSidebarSkeleton,
 } from '@/components/farm/FarmLoadingShell'
 import { FarmSidebar } from '@/components/farm/FarmSidebar'
+import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
+import { useSimulationActions } from '@/components/farm/simulation-actions'
 import {
   resolveEffectiveView,
   useSplitLayout,
@@ -110,6 +114,9 @@ export const FarmDetailPage = () => {
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [yearlyOptimizeDialogOpen, setYearlyOptimizeDialogOpen] =
     useState(false)
+  const [newSimulationOpen, setNewSimulationOpen] = useState(false)
+  const [simulationToDelete, setSimulationToDelete] =
+    useState<Simulation | null>(null)
   const [toast, setToast] = useState<{ id: number; message: string } | null>(
     null,
   )
@@ -216,6 +223,13 @@ export const FarmDetailPage = () => {
     if (mode === 'rules') setMode('values')
   }
 
+  const simulationActions = useSimulationActions({
+    farmId,
+    selection: activeSelection,
+    onSelectionChange: changeSelection,
+    onError: showErrorToast,
+  })
+
   if (notFound || loadFailed) {
     return (
       <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
@@ -276,6 +290,13 @@ export const FarmDetailPage = () => {
           splitAvailable={splitAvailable}
           onViewChange={selectView}
           onError={showErrorToast}
+          copyingSimulationId={simulationActions.copyingSimulationId}
+          deletingSimulationId={simulationActions.deletingSimulationId}
+          onCopySimulation={(simulation) =>
+            void simulationActions.copySimulation(simulation)
+          }
+          onDeleteSimulation={setSimulationToDelete}
+          onNewSimulation={() => setNewSimulationOpen(true)}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />
@@ -340,6 +361,29 @@ export const FarmDetailPage = () => {
           </>
         )}
       </SidebarInset>
+      {loadedFarm ? (
+        <>
+          <NewScenarioPanel
+            farmId={loadedFarm.id}
+            fields={fields}
+            open={newSimulationOpen}
+            onOpenChange={setNewSimulationOpen}
+            onSimulationCreated={(simulation) =>
+              changeSelection({ kind: 'simulation', id: simulation.id })
+            }
+            onError={showErrorToast}
+          />
+          <DeleteSimulationDialog
+            simulation={simulationToDelete}
+            onOpenChange={(open) => {
+              if (!open) setSimulationToDelete(null)
+            }}
+            onConfirm={(simulationId) =>
+              void simulationActions.removeSimulation(simulationId)
+            }
+          />
+        </>
+      ) : null}
     </SidebarProvider>
   )
 }
