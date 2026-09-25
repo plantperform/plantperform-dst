@@ -1,9 +1,11 @@
 import {
   CalendarRange,
+  ChevronRight,
   ChevronsUpDown,
   Copy,
   FlaskConical,
   History,
+  LayoutGrid,
   MoreHorizontal,
   PanelLeft,
   Play,
@@ -13,7 +15,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
+import { NavLink } from 'react-router-dom'
 
 import { useSimulationFields } from '@/api/hooks'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
@@ -80,7 +83,10 @@ import {
   ROLE_LABELS,
 } from '@/lib/onboarding'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
-import { formatCreatedAt } from '@/lib/simulation-overview'
+import {
+  describeFieldChanges,
+  formatCreatedAt,
+} from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type ViewKeyFigures = {
@@ -132,6 +138,7 @@ type FarmSidebarProps = {
   fields: FieldRecord[]
   simulations: Simulation[]
   selection: FarmViewSelection
+  overviewActive: boolean
   loadingSelection?: boolean
   onSelectionChange: (selection: FarmViewSelection) => void
   mode: FarmInspectorMode
@@ -162,6 +169,7 @@ export const FarmSidebar = ({
   fields,
   simulations,
   selection,
+  overviewActive,
   loadingSelection = false,
   onSelectionChange,
   mode,
@@ -184,6 +192,13 @@ export const FarmSidebar = ({
     resolveFarmQuota(fields, false),
     false,
   )
+  const { state: sidebarState, isMobile } = useSidebar()
+  const iconRail = sidebarState === 'collapsed' && !isMobile
+  const [simulationsOpen, setSimulationsOpen] = useState(true)
+  const simulationListId = useId()
+  const historyActive = !overviewActive && selection.kind === 'current'
+  const selectedSimulationId =
+    !overviewActive && selection.kind === 'simulation' ? selection.id : null
 
   return (
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
@@ -202,10 +217,8 @@ export const FarmSidebar = ({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   size="lg"
-                  isActive={selection.kind === 'current'}
-                  aria-current={
-                    selection.kind === 'current' ? 'page' : undefined
-                  }
+                  isActive={historyActive}
+                  aria-current={historyActive ? 'page' : undefined}
                   className={cn(
                     VIEW_BUTTON_CLASS,
                     'group-data-[collapsible=icon]:justify-center',
@@ -226,55 +239,76 @@ export const FarmSidebar = ({
                   </ViewMenuLabel>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className={GROUP_CLASS}>
-          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-            Simuleringer
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {simulations.map((simulation) => {
-                const selected =
-                  selection.kind === 'simulation' &&
-                  selection.id === simulation.id
-                return (
-                  <SimulationMenuItem
-                    key={simulation.id}
-                    farmId={farm.id}
-                    simulation={simulation}
-                    liveFields={fields}
-                    selected={selected}
-                    loading={loadingSelection && selected}
-                    deleting={deletingSimulationId === simulation.id}
-                    copying={copyingSimulationId === simulation.id}
-                    mode={mode}
-                    onModeChange={onModeChange}
-                    onOptimize={onOptimize}
-                    onYearlyOptimize={onYearlyOptimize}
-                    onSelect={() =>
-                      onSelectionChange({
-                        kind: 'simulation',
-                        id: simulation.id,
-                      })
-                    }
-                    onCopy={() => onCopySimulation(simulation)}
-                    onDelete={() => onDeleteSimulation(simulation)}
-                  />
-                )
-              })}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  className="rounded-md px-3 font-medium text-primary hover:text-primary"
-                  tooltip="Ny simulering"
-                  onClick={onNewSimulation}
+                  asChild
+                  isActive={overviewActive}
+                  className="rounded-md px-3 font-medium data-[active=true]:[&>svg]:text-primary"
+                  tooltip="Simuleringer"
                 >
-                  <Plus />
-                  <span>Ny simulering</span>
+                  <NavLink to={`/farms/${farm.id}/simulations`} end>
+                    <LayoutGrid />
+                    <span>Simuleringer</span>
+                  </NavLink>
                 </SidebarMenuButton>
+                <SidebarMenuAction
+                  aria-expanded={simulationsOpen}
+                  aria-controls={simulationListId}
+                  aria-label="Vis eller skjul simuleringerne"
+                  onClick={() => setSimulationsOpen((open) => !open)}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'motion-safe:transition-transform',
+                      simulationsOpen && 'rotate-90',
+                    )}
+                  />
+                </SidebarMenuAction>
               </SidebarMenuItem>
+              <li id={simulationListId}>
+                <SidebarMenu className="ml-3.5 w-auto border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
+                  {simulations.map((simulation) => {
+                    const selected = simulation.id === selectedSimulationId
+                    return (
+                      <SimulationMenuItem
+                        key={simulation.id}
+                        farmId={farm.id}
+                        simulation={simulation}
+                        liveFields={fields}
+                        selected={selected}
+                        folded={!simulationsOpen && !iconRail}
+                        loading={loadingSelection && selected}
+                        deleting={deletingSimulationId === simulation.id}
+                        copying={copyingSimulationId === simulation.id}
+                        mode={mode}
+                        onModeChange={onModeChange}
+                        onOptimize={onOptimize}
+                        onYearlyOptimize={onYearlyOptimize}
+                        onSelect={() =>
+                          onSelectionChange({
+                            kind: 'simulation',
+                            id: simulation.id,
+                          })
+                        }
+                        onCopy={() => onCopySimulation(simulation)}
+                        onDelete={() => onDeleteSimulation(simulation)}
+                      />
+                    )
+                  })}
+                  {simulationsOpen || iconRail ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        className="rounded-md px-3 font-medium text-primary hover:text-primary"
+                        tooltip="Ny simulering"
+                        onClick={onNewSimulation}
+                      >
+                        <Plus />
+                        <span>Ny simulering</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : null}
+                </SidebarMenu>
+              </li>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -459,10 +493,6 @@ const SimulationDetailLine = ({
 }: SimulationDetailLineProps) => {
   if (changedCount === 0 && lockedCount === 0) return null
 
-  const parts: string[] = []
-  if (changedCount > 0) parts.push(`${formatFieldCount(changedCount)} ændret`)
-  if (lockedCount > 0) parts.push(`${formatFieldCount(lockedCount)} låst`)
-
   return (
     <span
       className="truncate pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums"
@@ -470,7 +500,11 @@ const SimulationDetailLine = ({
         lockedCount > 0 ? `, ${lockedCount} er låst` : ''
       }`}
     >
-      {parts.join(' · ')}
+      {describeFieldChanges({
+        changed: changedCount,
+        locked: lockedCount,
+        uncalculated: 0,
+      })}
     </span>
   )
 }
@@ -480,6 +514,7 @@ type SimulationMenuItemProps = {
   simulation: Simulation
   liveFields: FieldRecord[]
   selected: boolean
+  folded: boolean
   loading: boolean
   deleting: boolean
   copying: boolean
@@ -497,6 +532,7 @@ const SimulationMenuItem = ({
   simulation,
   liveFields,
   selected,
+  folded,
   loading,
   deleting,
   copying,
@@ -534,6 +570,8 @@ const SimulationMenuItem = ({
       simulationFields ? simulationFields.filter(isFieldLocked).length : 0,
     [simulationFields],
   )
+
+  if (folded && !selected && !runningRun && !failedRun) return null
 
   return (
     <SidebarMenuItem>

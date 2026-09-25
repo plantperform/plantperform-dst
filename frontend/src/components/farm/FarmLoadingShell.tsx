@@ -44,17 +44,13 @@ export const FarmSidebarSkeleton = ({
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
           Visninger
         </SidebarGroupLabel>
-        <SidebarGroupContent className="pt-1">
-          <Skeleton className={SIDEBAR_ROW_CLASS} />
-        </SidebarGroupContent>
-      </SidebarGroup>
-      <SidebarGroup className={GROUP_CLASS}>
-        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-          Simuleringer
-        </SidebarGroupLabel>
         <SidebarGroupContent className="space-y-2 pt-1">
           <Skeleton className={SIDEBAR_ROW_CLASS} />
-          <Skeleton className={`${SIDEBAR_ROW_CLASS} w-5/6`} />
+          <Skeleton className="h-8 w-2/3 rounded-md bg-sidebar-accent" />
+          <div className="ml-3.5 space-y-2 border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
+            <Skeleton className={SIDEBAR_ROW_CLASS} />
+            <Skeleton className={`${SIDEBAR_ROW_CLASS} w-5/6`} />
+          </div>
         </SidebarGroupContent>
       </SidebarGroup>
     </SidebarContent>
