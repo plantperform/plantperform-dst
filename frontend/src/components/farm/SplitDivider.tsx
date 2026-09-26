@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { SPLIT_STEP } from '@/components/farm/split-layout'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,9 @@ type SplitDividerProps = {
   onJump: (edge: 'start' | 'end') => void
   onReset: () => void
   onDraggingChange: (dragging: boolean) => void
+  label?: string
+  className?: string
+  style?: CSSProperties
 }
 
 export const SplitDivider = ({
@@ -25,6 +28,9 @@ export const SplitDivider = ({
   onJump,
   onReset,
   onDraggingChange,
+  label = 'Skillelinje mellem liste og kort',
+  className,
+  style,
 }: SplitDividerProps) => {
   const [isDragging, setIsDragging] = useState(false)
   const grabOffsetRef = useRef(0)
@@ -91,7 +97,7 @@ export const SplitDivider = ({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Skillelinje mellem liste og kort"
+      aria-label={label}
       aria-valuenow={Math.round(listWidth)}
       aria-valuemin={minListWidth}
       aria-valuemax={maxListWidth}
@@ -99,7 +105,9 @@ export const SplitDivider = ({
       className={cn(
         'group relative z-20 flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center self-stretch transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isDragging ? 'bg-primary/10' : 'bg-transparent hover:bg-primary/5',
+        className,
       )}
+      style={style}
       onPointerDown={startDrag}
       onPointerMove={drag}
       onPointerUp={stopDrag}

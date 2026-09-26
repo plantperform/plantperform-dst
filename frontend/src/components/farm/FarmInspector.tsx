@@ -1,5 +1,5 @@
 import { Info, SlidersHorizontal } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -54,6 +54,8 @@ import type {
   FarmViewSelection,
 } from '@/components/farm/types'
 import { OptimizationBanner } from '@/components/farm/OptimizationRunStatus'
+import { useOverviewCollapsed } from '@/components/farm/overview-layout'
+import { OverviewCollapseToggle } from '@/components/farm/OverviewCollapseToggle'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { Button } from '@/components/ui/button'
 import {
@@ -306,6 +308,11 @@ export const FarmInspector = ({
   useEscapeKey(handleEscape)
 
   const showYearWalkthrough = !isRules && !fieldsError
+  const {
+    collapsed: overviewCollapsed,
+    changeCollapsed: changeOverviewCollapsed,
+  } = useOverviewCollapsed()
+  const overviewId = useId()
   const effectiveSelectedYearIndex = showYearWalkthrough
     ? selectedYearIndex
     : null
@@ -452,8 +459,10 @@ export const FarmInspector = ({
             />
           ) : null}
           {showYearWalkthrough ? (
-            <div className="flex flex-wrap gap-3">
-              {!fieldsLoading &&
+            <>
+            <div id={overviewId} className="flex flex-wrap gap-3">
+              {!overviewCollapsed &&
+              !fieldsLoading &&
               fields.length > 0 &&
               singleCatchmentKey === null ? (
                 <CatchmentPicker
@@ -478,6 +487,7 @@ export const FarmInspector = ({
               fields={highlightedFields}
               scopeLabel={scopeLabel}
               splitPanels={singleCatchmentKey !== null}
+              collapsed={overviewCollapsed}
               catchmentTotalsByYear={catchmentTotalsByYear}
               yearValues={yearValues}
               selectedYearIndex={selectedYearIndex}
@@ -497,6 +507,12 @@ export const FarmInspector = ({
               }
             />
             </div>
+            <OverviewCollapseToggle
+              collapsed={overviewCollapsed}
+              onCollapsedChange={changeOverviewCollapsed}
+              controls={overviewId}
+            />
+            </>
           ) : null}
           {fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
