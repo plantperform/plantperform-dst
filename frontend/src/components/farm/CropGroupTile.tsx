@@ -36,6 +36,16 @@ const ICONS: Record<CropGroup, ComponentType<{ className?: string }>> = {
   other: OakLeaf,
 }
 
+type CropGroupIconProps = {
+  group: CropGroupDefinition
+  className?: string
+}
+
+export const CropGroupIcon = ({ group, className }: CropGroupIconProps) => {
+  const Icon = ICONS[group.id]
+  return <Icon className={className} />
+}
+
 type TileSize = 'sm' | 'md'
 
 type CropGroupTileProps = {

@@ -610,7 +610,7 @@ export const FarmFieldsList = ({
           <Table
             ref={tableRef}
             containerClassName="min-h-0 flex-1 scroll-pt-[calc(var(--list-header-height)_+_29px)] scroll-pb-24"
-            className="border-separate border-spacing-0 text-left"
+            className="h-full border-separate border-spacing-0 text-left"
           >
             <TableHeader
               ref={headerRef}
@@ -653,7 +653,7 @@ export const FarmFieldsList = ({
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody className="[&_td]:border-b [&_tr:last-child_td]:border-b-0">
+            <TableBody className="[&_td]:border-b [&_tr:nth-last-child(-n+2)_td]:border-b-0">
               {table.getRowModel().rows.map((row) => {
                 const field = row.original
                 const cells = row.getVisibleCells()
@@ -702,6 +702,12 @@ export const FarmFieldsList = ({
                   </Fragment>
                 )
               })}
+              <tr aria-hidden="true" className="h-full">
+                <td
+                  colSpan={table.getVisibleLeafColumns().length}
+                  className="p-0"
+                />
+              </tr>
             </TableBody>
             <TableFooter className="bg-transparent font-semibold [&_td]:sticky [&_td]:bottom-0 [&_td]:z-20 [&_td]:border-t [&_td]:bg-muted [&_td]:py-2">
               {table.getFooterGroups().map((footerGroup) => (

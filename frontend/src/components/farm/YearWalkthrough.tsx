@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react'
 import { CalendarRange, Droplets, Layers, Wheat } from 'lucide-react'
 
 import type {
@@ -9,6 +15,8 @@ import type {
 } from '@/api/types'
 import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropDistribution } from '@/components/farm/CropDistribution'
+import { CropGroupIcon } from '@/components/farm/CropGroupTile'
+import { useOverviewCards } from '@/components/farm/overview-cards'
 import {
   SegmentedControl,
   type SegmentedControlOption,
@@ -37,6 +45,7 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
@@ -278,6 +287,119 @@ const PanelRow = ({ row, label, colorClass }: PanelRowProps) => {
   )
 }
 
+const worstYearLevel = (rows: CatchmentYear[]): QuotaStatusLevel | null => {
+  for (const level of ['over', 'near', 'ok'] as const) {
+    if (rows.some((row) => row.quotaKgN > 0 && row.level === level)) {
+      return level
+    }
+  }
+  return null
+}
+
+const describeCollapsedFallback = (
+  rows: CatchmentYear[],
+  column: YearColumn | null,
+) => {
+  if (column !== null && column.entry === null) return 'Ingen årstal for året'
+  if (rows.every((row) => row.level === 'uncalculated')) {
+    return 'Ikke beregnet endnu'
+  }
+  return QUOTA_STATUS_LABELS.noData
+}
+
+type CollapsedQuotaMeterProps = {
+  row: CatchmentYear
+  label: string
+  colorClass: string
+  showLevel: boolean
+}
+
+const CollapsedQuotaMeter = ({
+  row,
+  label,
+  colorClass,
+  showLevel,
+}: CollapsedQuotaMeterProps) => {
+  const style = QUOTA_STATUS_STYLES[row.level]
+  const ratio = row.nLoadKg / row.quotaKgN
+  const percent = formatQuotaPercent(row.nLoadKg, row.quotaKgN)
+  return (
+    <span
+      title={`${label}: ${formatQuotaAmount(row.nLoadKg, row.quotaKgN, formatWholeNumber)}`}
+      className="flex min-w-0 items-center gap-2 text-[13px]"
+    >
+      <span
+        aria-hidden="true"
+        className={cn('size-2.5 shrink-0 rounded-[3px]', colorClass)}
+      />
+      <span className="max-w-44 truncate font-medium">{label}</span>
+      <span
+        aria-hidden="true"
+        className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted"
+      >
+        <span
+          className={cn(
+            'block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300',
+            ratio > 1 ? 'bg-red-600' : colorClass,
+          )}
+          style={{ width: `${Math.min(1, ratio) * 100}%` }}
+        />
+      </span>
+      <span
+        className={cn('font-medium whitespace-nowrap tabular-nums', style.text)}
+      >
+        {showLevel
+          ? `${percent} ${QUOTA_STATUS_LABELS[row.level].toLowerCase()}`
+          : percent}
+      </span>
+    </span>
+  )
+}
+
+const formatSharePercent = (share: number) =>
+  `${formatWholeNumber(share * 100)} %`
+
+const CollapsedCropBar = ({ shares }: { shares: CropShare[] }) => {
+  const totalHa = shares.reduce((sum, entry) => sum + entry.areaHa, 0)
+  return (
+    <span className="flex min-w-40 flex-1 items-center gap-2.5">
+      <span
+        role="img"
+        aria-label={`Afgrøder: ${shares
+          .map((entry) => `${entry.label} ${formatSharePercent(entry.share)}`)
+          .join(', ')}`}
+        className="flex h-5 min-w-0 flex-1 gap-px overflow-hidden rounded-md bg-muted"
+      >
+        {shares.map((entry) => (
+          <span
+            key={entry.id}
+            title={`${entry.label} · ${formatNumber(entry.areaHa)} ha · ${formatSharePercent(entry.share)}`}
+            className="@container flex h-full min-w-0 basis-0 items-center justify-center motion-safe:transition-[flex-grow] motion-safe:duration-300"
+            style={{
+              flexGrow: entry.share,
+              backgroundColor: entry.group.color,
+              color: readableTextColor(entry.group.color),
+            }}
+          >
+            <span className="hidden min-w-0 items-center gap-1 px-1 text-[11px] leading-none font-medium whitespace-nowrap tabular-nums @min-[1.25rem]:flex">
+              <CropGroupIcon group={entry.group} className="size-3 shrink-0" />
+              <span className="hidden truncate @min-[9rem]:inline">
+                {entry.label}
+              </span>
+              <span className="hidden @min-[4rem]:inline">
+                {formatSharePercent(entry.share)}
+              </span>
+            </span>
+          </span>
+        ))}
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
+        {formatWholeNumber(totalHa)} ha
+      </span>
+    </span>
+  )
+}
+
 type YearPanelProps = {
   loading: boolean
   column: YearColumn | null
@@ -297,6 +419,7 @@ type YearPanelProps = {
   view: PanelView
   viewOptions?: SegmentedControlOption<PanelView>[]
   onViewChange?: (view: PanelView) => void
+  style?: CSSProperties
 }
 
 const YearPanel = ({
@@ -318,6 +441,7 @@ const YearPanel = ({
   view,
   viewOptions,
   onViewChange,
+  style,
 }: YearPanelProps) => {
   const showCrops = view !== 'nLoad'
   const canShowNLoad =
@@ -386,6 +510,7 @@ const YearPanel = ({
             : 'Afgrøder'
       }
       className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
+      style={style}
     >
       <div
         key={loading ? 'loading' : (column?.index ?? 'all')}
@@ -506,6 +631,7 @@ type YearWalkthroughProps = {
   catchmentTotalsByYear?: CatchmentTotalsByYear
   yearValues?: FieldYearValues
   splitPanels?: boolean
+  collapsed: boolean
 }
 
 export const YearWalkthrough = ({
@@ -523,6 +649,7 @@ export const YearWalkthrough = ({
   catchmentTotalsByYear,
   yearValues,
   splitPanels = false,
+  collapsed,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -649,9 +776,27 @@ export const YearWalkthrough = ({
       ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
       : ''
   const chartHint = scopeLabel ? null : 'Hvert opland mod sin egen kvote'
+  const yearTitle = (column: YearColumn) => {
+    const entry = column.entry
+    if (loading) return `${column.calendarYear}: indlæser årstal`
+    if (!entry) {
+      return history
+        ? `${column.calendarYear}: ingen historik`
+        : `${column.calendarYear}: ingen årstal endnu`
+    }
+    const overCount = catchmentYears(entry).filter(
+      (row) => row.level === 'over',
+    ).length
+    return `${column.calendarYear}: DB2 ${formatCompactDkk(entry.totalDb2)}, udledning ${formatWholeNumber(entry.totalNLoadKg)} kg N${describeYearQuota(quotaCatchmentCount, overCount)}`
+  }
+  const yearTabIndex = (position: number) =>
+    columns[position].index === selectedYearIndex ||
+    (selectedPosition < 0 && position === 0)
+      ? 0
+      : -1
   const panelProps: Omit<
     YearPanelProps,
-    'view' | 'viewOptions' | 'onViewChange'
+    'view' | 'viewOptions' | 'onViewChange' | 'style'
   > = {
     loading,
     column: selectedColumn,
@@ -677,12 +822,153 @@ export const YearWalkthrough = ({
     unavailableMessage,
   }
 
+  const {
+    measureRow,
+    rowStyle,
+    groupStyle,
+    cardStyle,
+    handles,
+  } = useOverviewCards(
+    splitPanels ? 'threeCards' : 'twoCards',
+    splitPanels
+      ? ['Årsgennemgang', 'udledning', 'afgrøder']
+      : ['Årsgennemgang', 'årsoversigten'],
+  )
+
+  const meterRows = panelProps.rows.filter(
+    (row) => row.quotaKgN > 0 && row.level !== 'uncalculated',
+  )
+
+  if (collapsed) {
+    return (
+      <section
+        aria-label="Gennemgang af årrække"
+        aria-busy={loading}
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border bg-card px-4 py-1.5"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <button
+            type="button"
+            aria-pressed={allYearsSelected}
+            title="Vis alle år samlet"
+            onClick={() => selectYear(null)}
+            className={cn(
+              'cursor-pointer rounded-md border px-2 py-0.5 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+              allYearsSelected
+                ? cn(CHOICE_SELECTED_CLASS, 'text-foreground')
+                : 'border-transparent text-muted-foreground hover:bg-muted',
+            )}
+          >
+            Alle år
+          </button>
+          <div
+            role="radiogroup"
+            aria-label="Vælg år"
+            onKeyDown={handleYearKeyDown}
+            className="flex flex-wrap items-center gap-0.5"
+          >
+            {columns.map((column, position) => {
+              const isSelected = selectedYearIndex === column.index
+              const title = yearTitle(column)
+              const level =
+                !loading && column.entry
+                  ? worstYearLevel(catchmentYears(column.entry))
+                  : null
+              return (
+                <button
+                  key={column.index}
+                  ref={(element) => {
+                    cellRefs.current[position] = element
+                  }}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  aria-label={title}
+                  title={title}
+                  tabIndex={yearTabIndex(position)}
+                  onClick={() => selectYear(isSelected ? null : column.index)}
+                  className={cn(
+                    'relative cursor-pointer rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                    isSelected
+                      ? cn(CHOICE_SELECTED_CLASS, 'text-foreground')
+                      : 'border-transparent text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {column.calendarYear}
+                  {level ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'absolute inset-x-1.5 bottom-0 h-0.5 rounded-full',
+                        QUOTA_STATUS_STYLES[level].dot,
+                      )}
+                    />
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1"
+        >
+          {loading ? (
+            <>
+              <span className="sr-only">Indlæser årstal</span>
+              <Skeleton className="h-3.5 w-48" />
+            </>
+          ) : meterRows.length > 0 ? (
+            meterRows.map((row) => (
+              <CollapsedQuotaMeter
+                key={row.catchment.catchmentId}
+                row={row}
+                label={
+                  scopeLabel ?? catchmentLabel(row.catchment.catchmentId)
+                }
+                colorClass={catchmentColor(row.catchment.catchmentId)}
+                showLevel={meterRows.length === 1}
+              />
+            ))
+          ) : (
+            <span className="flex min-w-0 items-baseline gap-1.5 text-[13px]">
+              {scopeLabel ? (
+                <>
+                  <span className="truncate font-medium">{scopeLabel}</span>
+                  <span aria-hidden="true" className="text-muted-foreground">
+                    ·
+                  </span>
+                </>
+              ) : null}
+              <span className="font-medium whitespace-nowrap text-muted-foreground">
+                {describeCollapsedFallback(panelProps.rows, selectedColumn)}
+              </span>
+            </span>
+          )}
+        </div>
+        {!loading && cropShares.length > 0 ? (
+          <>
+            <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+            <CollapsedCropBar shares={cropShares} />
+          </>
+        ) : null}
+      </section>
+    )
+  }
+
   return (
-    <div className="flex min-w-0 flex-1 basis-[36rem] flex-wrap gap-3">
+    <div
+      ref={measureRow}
+      className="flex min-w-0 flex-1 basis-[36rem] flex-wrap gap-3"
+      style={rowStyle}
+    >
       <section
         aria-label="Gennemgang af årrække"
         aria-busy={loading}
         className="flex min-w-0 flex-[2_1_28rem] flex-col gap-3 rounded-2xl border bg-card px-4.5 pt-3.5 pb-3"
+        style={cardStyle(0)}
       >
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <div className="flex min-w-0 items-baseline gap-2.5">
@@ -768,20 +1054,8 @@ export const YearWalkthrough = ({
                 const isSelected = selectedYearIndex === column.index
                 const entry = column.entry
                 const rows = entry ? catchmentYears(entry) : []
-                const overCount = rows.filter(
-                  (row) => row.level === 'over',
-                ).length
-                const title = loading
-                  ? `${column.calendarYear}: indlæser årstal`
-                  : !entry
-                    ? history
-                      ? `${column.calendarYear}: ingen historik`
-                      : `${column.calendarYear}: ingen årstal endnu`
-                    : `${column.calendarYear}: DB2 ${formatCompactDkk(entry.totalDb2)}, udledning ${formatWholeNumber(entry.totalNLoadKg)} kg N${describeYearQuota(quotaCatchmentCount, overCount)}`
-                const tabIndex =
-                  isSelected || (selectedPosition < 0 && position === 0)
-                    ? 0
-                    : -1
+                const title = yearTitle(column)
+                const tabIndex = yearTabIndex(position)
                 const dimmed = selectedPosition >= 0 && !isSelected
                 return (
                   <button
@@ -875,13 +1149,17 @@ export const YearWalkthrough = ({
       </section>
 
       {splitPanels ? (
-        <div className="flex min-w-0 flex-[1_1_37.5rem] flex-wrap gap-3">
-          <YearPanel {...panelProps} view="nLoad" />
+        <div
+          className="flex min-w-0 flex-[1_1_37.5rem] flex-wrap gap-3"
+          style={groupStyle}
+        >
+          <YearPanel {...panelProps} view="nLoad" style={cardStyle(1)} />
           <YearPanel
             {...panelProps}
             view={cropLevel}
             viewOptions={CROP_LEVEL_OPTIONS}
             onViewChange={setPanelView}
+            style={cardStyle(2)}
           />
         </div>
       ) : (
@@ -890,8 +1168,10 @@ export const YearWalkthrough = ({
           view={panelView}
           viewOptions={PANEL_VIEW_OPTIONS}
           onViewChange={setPanelView}
+          style={cardStyle(1)}
         />
       )}
+      {handles}
     </div>
   )
 }

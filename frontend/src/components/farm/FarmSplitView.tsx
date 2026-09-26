@@ -222,10 +222,10 @@ export const FarmSplitView = ({
           {renderPanel ? (
             <div
               className={cn(
-                'absolute inset-y-0 z-30 flex min-h-0 flex-col bg-card shadow-xl',
+                'absolute inset-y-0 z-30 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-xl',
                 panelFromRight
-                  ? 'panel-slide-in-right right-0 border-l'
-                  : 'panel-slide-in left-0 border-r',
+                  ? 'panel-slide-in-right right-0'
+                  : 'panel-slide-in left-0',
                 !isDragging && 'pane-width-transition',
               )}
               style={{ width: panelWidth }}

@@ -35,18 +35,22 @@ export const clampListPaneWidth = (width: number, innerWidth: number) =>
     ),
   )
 
-export const snapListPaneWidth = (width: number, innerWidth: number) => {
-  const space = splitPaneSpace(innerWidth)
-  let snapped = Math.round(width)
-  for (const fraction of SPLIT_SNAP_FRACTIONS) {
-    const stop = Math.round(fraction * space)
-    if (Math.abs(snapped - stop) <= SPLIT_SNAP_TOLERANCE) {
-      snapped = stop
-      break
-    }
+export const snapToStops = (position: number, stops: number[]) => {
+  const rounded = Math.round(position)
+  for (const stop of stops) {
+    if (Math.abs(rounded - stop) <= SPLIT_SNAP_TOLERANCE) return stop
   }
-  return clampListPaneWidth(snapped, innerWidth)
+  return rounded
 }
+
+export const splitSnapStops = (space: number) =>
+  SPLIT_SNAP_FRACTIONS.map((fraction) => Math.round(fraction * space))
+
+export const snapListPaneWidth = (width: number, innerWidth: number) =>
+  clampListPaneWidth(
+    snapToStops(width, splitSnapStops(splitPaneSpace(innerWidth))),
+    innerWidth,
+  )
 
 export const resolveEffectiveView = (
   view: FarmView,
