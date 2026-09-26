@@ -40,6 +40,7 @@
   --animate-skeleton-in: skeleton-in 150ms ease-out 200ms both;
   --animate-check-draw: check-draw 400ms ease-out 200ms both;
   --animate-success-pop: success-pop 450ms ease-out;
+  --animate-indeterminate: indeterminate 1.5s ease-in-out infinite;
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman',
     serif;
@@ -187,6 +188,15 @@ body {
 @keyframes success-pop {
   50% {
     scale: 1.08;
+  }
+}
+
+@keyframes indeterminate {
+  from {
+    translate: -100%;
+  }
+  to {
+    translate: 300%;
   }
 }
 
