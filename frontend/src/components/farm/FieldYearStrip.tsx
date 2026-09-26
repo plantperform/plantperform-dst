@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
 import { CropGroupTile, CropYearBlock } from '@/components/farm/CropGroupTile'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   WinterCoverLegend,
   WinterCoverSwatch,
@@ -24,14 +25,9 @@ import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 type YearMetric = 'nLoad' | 'leaching' | 'db2'
 
 const METRIC_OPTIONS: SegmentedControlOption<YearMetric>[] = [
-  { value: 'nLoad', label: 'Udledning', icon: Droplets, title: 'Udledning' },
-  {
-    value: 'leaching',
-    label: 'Udvaskning',
-    icon: ArrowDownToLine,
-    title: 'Udvaskning',
-  },
-  { value: 'db2', label: 'DB2', icon: Coins, title: 'DB2' },
+  { value: 'nLoad', label: 'Udledning', icon: Droplets },
+  { value: 'leaching', label: 'Udvaskning', icon: ArrowDownToLine },
+  { value: 'db2', label: 'DB2', icon: Coins },
 ]
 
 const metricValue = (
@@ -236,6 +232,7 @@ export const FieldYearStrip = ({
                 <CropYearBlock
                   group={group}
                   covers={yearCovers?.[index]}
+                  showCoverTooltip={false}
                   size="md"
                   className="mt-[3px]"
                 />
@@ -267,21 +264,22 @@ export const FieldYearStrip = ({
               onSelect && !isSelected && 'hover:bg-muted/60',
             )
             return onSelect ? (
-              <button
-                key={index}
-                type="button"
-                aria-pressed={isSelected}
-                aria-label={title}
-                title={title}
-                onClick={() => onSelect(isSelected ? null : index)}
-                className={className}
-              >
-                {content}
-              </button>
+              <AppTooltip key={index} content={isSelected ? null : title}>
+                <button
+                  key={index}
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={title}
+                  onClick={() => onSelect(isSelected ? null : index)}
+                  className={className}
+                >
+                  {content}
+                </button>
+              </AppTooltip>
             ) : (
-              <div key={index} title={title} className={className}>
-                {content}
-              </div>
+              <AppTooltip key={index} content={title}>
+                <div className={className}>{content}</div>
+              </AppTooltip>
             )
           })}
         </div>

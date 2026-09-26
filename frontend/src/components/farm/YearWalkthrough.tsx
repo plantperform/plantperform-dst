@@ -9,6 +9,7 @@ import type {
 } from '@/api/types'
 import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropDistribution } from '@/components/farm/CropDistribution'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   SegmentedControl,
   type SegmentedControlOption,
@@ -49,12 +50,12 @@ const QUOTA_LINE_PCT = 34
 type PanelView = 'nLoad' | CropShareLevel
 
 const CROP_LEVEL_OPTIONS: SegmentedControlOption<PanelView>[] = [
-  { value: 'group', label: 'Grupper', icon: Layers, title: 'Afgrødegrupper' },
-  { value: 'crop', label: 'Afgrøder', icon: Wheat, title: 'Afgrøder' },
+  { value: 'group', label: 'Grupper', icon: Layers },
+  { value: 'crop', label: 'Afgrøder', icon: Wheat },
 ]
 
 const PANEL_VIEW_OPTIONS: SegmentedControlOption<PanelView>[] = [
-  { value: 'nLoad', label: 'Udledning', icon: Droplets, title: 'Udledning' },
+  { value: 'nLoad', label: 'Udledning', icon: Droplets },
   ...CROP_LEVEL_OPTIONS,
 ]
 
@@ -149,20 +150,21 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
   const overPct =
     ratio > 1 ? ((heightPct - QUOTA_LINE_PCT) / heightPct) * 100 : 0
   return (
-    <span
-      title={title}
-      className={cn(
-        'relative z-10 flex flex-col overflow-hidden rounded-t-[3px] motion-safe:transition-[height] motion-safe:duration-300',
-        widthClass,
-        colorClass,
-        heightPct > 0 && 'min-h-0.5',
-      )}
-      style={{ height: `${heightPct}%` }}
-    >
-      {overPct > 0 ? (
-        <span className="bg-red-600" style={{ height: `${overPct}%` }} />
-      ) : null}
-    </span>
+    <AppTooltip content={title}>
+      <span
+        className={cn(
+          'relative z-10 flex flex-col overflow-hidden rounded-t-[3px] motion-safe:transition-[height] motion-safe:duration-300',
+          widthClass,
+          colorClass,
+          heightPct > 0 && 'min-h-0.5',
+        )}
+        style={{ height: `${heightPct}%` }}
+      >
+        {overPct > 0 ? (
+          <span className="bg-red-600" style={{ height: `${overPct}%` }} />
+        ) : null}
+      </span>
+    </AppTooltip>
   )
 }
 
@@ -738,7 +740,6 @@ export const YearWalkthrough = ({
           <button
             type="button"
             aria-pressed={allYearsSelected}
-            title="Vis alle år samlet"
             onClick={() => selectYear(null)}
             className={cn(
               'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border px-1.5 py-2.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
@@ -784,89 +785,93 @@ export const YearWalkthrough = ({
                     : -1
                 const dimmed = selectedPosition >= 0 && !isSelected
                 return (
-                  <button
-                    key={column.index}
-                    ref={(element) => {
-                      cellRefs.current[position] = element
-                    }}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    aria-label={title}
-                    title={title}
-                    tabIndex={tabIndex}
-                    onClick={() => selectYear(isSelected ? null : column.index)}
-                    className={cn(
-                      'flex min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-md border px-1 pt-1.5 pb-[7px] transition-[background-color,border-color,opacity] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                      isSelected
-                        ? 'border-primary bg-muted'
-                        : 'border-transparent hover:bg-muted/60',
-                      dimmed && 'opacity-45',
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
+                  <AppTooltip key={column.index} content={title}>
+                    <button
+                      ref={(element) => {
+                        cellRefs.current[position] = element
+                      }}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      aria-label={title}
+                      tabIndex={tabIndex}
+                      onClick={() =>
+                        selectYear(isSelected ? null : column.index)
+                      }
                       className={cn(
-                        'relative flex w-full items-end justify-center gap-1 border-b border-border/70',
-                        barAreaHeight,
+                        'flex min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-md border px-1 pt-1.5 pb-[7px] transition-[background-color,border-color,opacity] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        isSelected
+                          ? 'border-primary bg-muted'
+                          : 'border-transparent hover:bg-muted/60',
+                        dimmed && 'opacity-45',
                       )}
                     >
-                      {quotaCatchmentCount === 1 ? (
-                        <span
-                          className="pointer-events-none absolute inset-x-0 z-20 border-t-[1.5px] border-dashed border-foreground/45"
-                          style={{ bottom: `${QUOTA_LINE_PCT}%` }}
-                        />
-                      ) : null}
-                      {loading
-                        ? catchments.map((catchment, index) => (
-                            <span
-                              key={catchment.catchmentId}
-                              className={cn(
-                                'rounded-t-[3px] bg-muted-foreground/20 motion-safe:animate-pulse',
-                                barWidth,
-                              )}
-                              style={{
-                                height: `${PLACEHOLDER_BAR_HEIGHTS[(position + index) % PLACEHOLDER_BAR_HEIGHTS.length]}%`,
-                              }}
-                            />
-                          ))
-                        : rows.map((row) => (
-                            <QuotaBar
-                              key={row.catchment.catchmentId}
-                              row={row}
-                              title={`${column.calendarYear} · ${describeCatchmentYear(
-                                catchmentLabel(row.catchment.catchmentId),
-                                row,
-                              )}`}
-                              colorClass={catchmentColor(
-                                row.catchment.catchmentId,
-                              )}
-                              widthClass={barWidth}
-                            />
-                          ))}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'text-[13px] font-semibold tabular-nums',
-                        isSelected ? 'text-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {column.calendarYear}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
-                    >
-                      {loading ? (
-                        <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
-                      ) : entry ? (
-                        `DB2 ${formatCompactDkk(entry.totalDb2)}`
-                      ) : (
-                        '-'
-                      )}
-                    </span>
-                  </button>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'relative flex w-full items-end justify-center gap-1 border-b border-border/70',
+                          barAreaHeight,
+                        )}
+                      >
+                        {quotaCatchmentCount === 1 ? (
+                          <span
+                            className="pointer-events-none absolute inset-x-0 z-20 border-t-[1.5px] border-dashed border-foreground/45"
+                            style={{ bottom: `${QUOTA_LINE_PCT}%` }}
+                          />
+                        ) : null}
+                        {loading
+                          ? catchments.map((catchment, index) => (
+                              <span
+                                key={catchment.catchmentId}
+                                className={cn(
+                                  'rounded-t-[3px] bg-muted-foreground/20 motion-safe:animate-pulse',
+                                  barWidth,
+                                )}
+                                style={{
+                                  height: `${PLACEHOLDER_BAR_HEIGHTS[(position + index) % PLACEHOLDER_BAR_HEIGHTS.length]}%`,
+                                }}
+                              />
+                            ))
+                          : rows.map((row) => (
+                              <QuotaBar
+                                key={row.catchment.catchmentId}
+                                row={row}
+                                title={`${column.calendarYear} · ${describeCatchmentYear(
+                                  catchmentLabel(row.catchment.catchmentId),
+                                  row,
+                                )}`}
+                                colorClass={catchmentColor(
+                                  row.catchment.catchmentId,
+                                )}
+                                widthClass={barWidth}
+                              />
+                            ))}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'text-[13px] font-semibold tabular-nums',
+                          isSelected
+                            ? 'text-foreground'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {column.calendarYear}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+                      >
+                        {loading ? (
+                          <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
+                        ) : entry ? (
+                          `DB2 ${formatCompactDkk(entry.totalDb2)}`
+                        ) : (
+                          '-'
+                        )}
+                      </span>
+                    </button>
+                  </AppTooltip>
                 )
               })}
             </div>

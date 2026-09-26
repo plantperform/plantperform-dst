@@ -2,11 +2,9 @@ import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { Farm } from '@/api/types'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  describeFarmQuota,
-  type FarmOverview,
-} from '@/lib/farm-overview'
+import { describeFarmQuota, type FarmOverview } from '@/lib/farm-overview'
 import {
   formatNumber,
   QUOTA_STATUS_LABELS,
@@ -55,18 +53,24 @@ export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
       >
         <div className="min-w-0">
           <p className="flex items-center gap-2.5">
-            <span className="truncate font-display text-[19px] leading-6">
+            <TruncatedTooltip
+              content={farm.name}
+              className="truncate font-display text-[19px] leading-6"
+            >
               {farm.name}
-            </span>
+            </TruncatedTooltip>
             {latest ? (
               <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
                 Senest åbnet
               </span>
             ) : null}
           </p>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+          <TruncatedTooltip
+            content={farm.ownerName}
+            className="mt-0.5 block truncate text-sm text-muted-foreground"
+          >
             {farm.ownerName}
-          </p>
+          </TruncatedTooltip>
         </div>
         {!totals ? (
           <>
@@ -108,30 +112,31 @@ export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
                 </span>
               ) : null}
               {quota && quota.quotaKgN === null ? (
-                <div className="flex h-1.5 gap-0.5" title={quotaLine}>
-                  {quota.catchments.map((catchment) => (
-                    <div
-                      key={catchment.catchmentId}
-                      className={cn(
-                        'h-full flex-1 rounded-full',
-                        QUOTA_STATUS_STYLES[catchment.level].dot,
-                      )}
-                    />
-                  ))}
-                </div>
+                <AppTooltip content={quotaLine}>
+                  <div className="flex h-1.5 gap-0.5">
+                    {quota.catchments.map((catchment) => (
+                      <div
+                        key={catchment.catchmentId}
+                        className={cn(
+                          'h-full flex-1 rounded-full',
+                          QUOTA_STATUS_STYLES[catchment.level].dot,
+                        )}
+                      />
+                    ))}
+                  </div>
+                </AppTooltip>
               ) : (
-                <div
-                  className="h-1.5 overflow-hidden rounded-full bg-muted"
-                  title={quotaLine}
-                >
-                  <div
-                    className={cn(
-                      'h-full rounded-full',
-                      style?.dot ?? 'bg-muted-foreground/60',
-                    )}
-                    style={{ width: `${quotaPct ?? 100}%` }}
-                  />
-                </div>
+                <AppTooltip content={quotaLine}>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        'h-full rounded-full',
+                        style?.dot ?? 'bg-muted-foreground/60',
+                      )}
+                      style={{ width: `${quotaPct ?? 100}%` }}
+                    />
+                  </div>
+                </AppTooltip>
               )}
               <p className="text-xs whitespace-nowrap text-muted-foreground">
                 {quotaLine}

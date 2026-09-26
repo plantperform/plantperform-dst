@@ -22,9 +22,13 @@ import type {
 } from '@/api/types'
 import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
-import { BigMetricTile, RotationYearsDetail } from '@/components/farm/RotationYearsDetail'
+import {
+  BigMetricTile,
+  RotationYearsDetail,
+} from '@/components/farm/RotationYearsDetail'
 import { SearchableCropPickerList } from '@/components/farm/SearchableCropPickerList'
 import { WinterCoverLegend } from '@/components/farm/WinterCoverBand'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -54,7 +58,7 @@ type ManualRotationEditorProps = {
   onError: (message: string | null) => void
 }
 
-const fmt =(value: number, digits = 1) =>
+const fmt = (value: number, digits = 1) =>
   new Intl.NumberFormat('da-DK', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -72,7 +76,8 @@ const chipClassName = (selected: boolean) =>
       : 'bg-background hover:bg-muted'
   }`
 
-const AMBER_PILL_CLASSES = 'rounded-full border border-amber-200 bg-amber-50 text-amber-800'
+const AMBER_PILL_CLASSES =
+  'rounded-full border border-amber-200 bg-amber-50 text-amber-800'
 
 export const ManualRotationEditor = ({
   farmId,
@@ -141,11 +146,15 @@ export const ManualRotationEditor = ({
   const [startYear, setStartYear] = useState(1)
   const [baselineStartYear, setBaselineStartYear] = useState(1)
   const [activeYearIndex, setActiveYearIndex] = useState<number | null>(null)
-  const [preview, setPreview] = useState<RotationCandidateEvaluation | null>(null)
+  const [preview, setPreview] = useState<RotationCandidateEvaluation | null>(
+    null,
+  )
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [shiftAnimation, setShiftAnimation] = useState<'left' | 'right' | null>(null)
+  const [shiftAnimation, setShiftAnimation] = useState<'left' | 'right' | null>(
+    null,
+  )
   const requestId = useRef(0)
   const pendingShiftDirectionRef = useRef<'left' | 'right' | null>(null)
 
@@ -331,7 +340,11 @@ export const ManualRotationEditor = ({
 
   const shiftStartYear = (delta: number) => {
     pendingShiftDirectionRef.current =
-      years.length > 1 && Math.abs(delta) === 1 ? (delta > 0 ? 'right' : 'left') : null
+      years.length > 1 && Math.abs(delta) === 1
+        ? delta > 0
+          ? 'right'
+          : 'left'
+        : null
     setShiftAnimation(null)
     setStartYear((prev) => prev + delta)
     setOverrides([])
@@ -348,25 +361,34 @@ export const ManualRotationEditor = ({
     if (!baseRef) return
     setIsSaving(true)
     try {
-      const updatedField = await applyFieldRotation(farmId, simulationId, field.id, {
-        baseRef,
-        overrides,
-        startYear,
-      })
+      const updatedField = await applyFieldRotation(
+        farmId,
+        simulationId,
+        field.id,
+        {
+          baseRef,
+          overrides,
+          startYear,
+        },
+      )
       await mutate(
         simulationFieldsKey(farmId, simulationId),
         (current: FieldRecord[] = []) =>
           current.map((f) => (f.id === updatedField.id ? updatedField : f)),
         { revalidate: false },
       )
-      void mutate(simulationFieldCandidateDetailKey(farmId, simulationId, field.id))
+      void mutate(
+        simulationFieldCandidateDetailKey(farmId, simulationId, field.id),
+      )
       void mutate(simulationYearlySummaryKey(farmId, simulationId))
       markStale(simulationId)
       onError(null)
       close()
     } catch (error) {
       onError(
-        error instanceof Error ? error.message : 'Kunne ikke gemme den manuelle rettelse.',
+        error instanceof Error
+          ? error.message
+          : 'Kunne ikke gemme den manuelle rettelse.',
       )
     } finally {
       setIsSaving(false)
@@ -378,7 +400,8 @@ export const ManualRotationEditor = ({
     years.map((y) => y.year),
     years.map((y) => y.leachingDetail),
   )
-  const activeYear = activeYearIndex !== null ? years[activeYearIndex] : undefined
+  const activeYear =
+    activeYearIndex !== null ? years[activeYearIndex] : undefined
   const rotationLength = years.length
   const startYearOffset =
     rotationLength > 0
@@ -400,7 +423,10 @@ export const ManualRotationEditor = ({
       : null
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => (next ? onOpenChange(true) : close())}
+    >
       <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -469,7 +495,9 @@ export const ManualRotationEditor = ({
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {variantsForRotation.length > 1 ? (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">Variant</span>
+                      <span className="text-xs text-muted-foreground">
+                        Variant
+                      </span>
                       {variantsForRotation.map((v) => (
                         <button
                           key={v}
@@ -488,7 +516,9 @@ export const ManualRotationEditor = ({
                   ) : null}
 
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">N-norm</span>
+                    <span className="text-xs text-muted-foreground">
+                      N-norm
+                    </span>
                     {nNormsForVariant.map((n) => (
                       <button
                         key={n}
@@ -507,9 +537,9 @@ export const ManualRotationEditor = ({
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Varianter har samme afgrøder - forskellen er hvor mange efterafgrøder
-                  og andre virkemidler der er lagt ind. N-norm er andelen af fuld
-                  kvælstofnorm.
+                  Varianter har samme afgrøder - forskellen er hvor mange
+                  efterafgrøder og andre virkemidler der er lagt ind. N-norm er
+                  andelen af fuld kvælstofnorm.
                 </p>
               </div>
 
@@ -555,7 +585,11 @@ export const ManualRotationEditor = ({
                                 <span>Forskudt +{startYearOffset} år</span>
                                 <button
                                   type="button"
-                                  onClick={() => shiftStartYear(baselineStartYear - startYear)}
+                                  onClick={() =>
+                                    shiftStartYear(
+                                      baselineStartYear - startYear,
+                                    )
+                                  }
                                   className="font-medium text-amber-900 underline hover:no-underline"
                                 >
                                   Nulstil
@@ -563,7 +597,11 @@ export const ManualRotationEditor = ({
                               </div>
                             ) : null}
                             {overrides.length > 0 ? (
-                              <Button size="sm" variant="ghost" onClick={resetOverrides}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={resetOverrides}
+                              >
                                 Nulstil rettelser
                               </Button>
                             ) : null}
@@ -574,10 +612,16 @@ export const ManualRotationEditor = ({
                         </p>
                         <div className="grid grid-cols-4 gap-2">
                           {years.map((y, index) => {
-                            const calendarYear = ROTATION_START_CALENDAR_YEAR + index
-                            const isOverridden = overrides.some((o) => o.position === index)
+                            const calendarYear =
+                              ROTATION_START_CALENDAR_YEAR + index
+                            const isOverridden = overrides.some(
+                              (o) => o.position === index,
+                            )
                             const isActive = activeYearIndex === index
-                            const cellWrap = wrapCell && wrapCell.index === index ? wrapCell : null
+                            const cellWrap =
+                              wrapCell && wrapCell.index === index
+                                ? wrapCell
+                                : null
                             const group = cropGroupFor(
                               y.year.cropCode,
                               y.year.cropName,
@@ -586,55 +630,65 @@ export const ManualRotationEditor = ({
                               ? `Afgrøden rullede rundt fra ${cellWrap.fromYear}`
                               : formatRotationYear(y.year)
                             return (
-                              <button
-                                key={index}
-                                type="button"
-                                aria-pressed={isActive}
-                                title={cellTitle}
-                                onClick={() => setActiveYearIndex(isActive ? null : index)}
-                                className={`relative flex flex-col items-start gap-1 overflow-hidden rounded-md border px-2 py-1.5 text-xs transition-colors ${
-                                  isActive
-                                    ? 'border-primary bg-primary text-primary-foreground'
-                                    : isOverridden
-                                      ? 'border-primary bg-primary/10'
-                                      : 'bg-background hover:bg-muted'
-                                }`}
-                              >
-                                <span
-                                  className={`text-[11px] ${
-                                    isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                              <AppTooltip key={index} content={cellTitle}>
+                                <button
+                                  type="button"
+                                  aria-pressed={isActive}
+                                  onClick={() =>
+                                    setActiveYearIndex(isActive ? null : index)
+                                  }
+                                  className={`relative flex flex-col items-start gap-1 overflow-hidden rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                                    isActive
+                                      ? 'border-primary bg-primary text-primary-foreground'
+                                      : isOverridden
+                                        ? 'border-primary bg-primary/10'
+                                        : 'bg-background hover:bg-muted'
                                   }`}
                                 >
-                                  {calendarYear}
-                                </span>
-                                <span
-                                  key={slideAnimationKey}
-                                  className={`flex w-full min-w-0 items-center gap-1.5 ${slideAnimationClassName}`}
-                                  style={
-                                    shiftAnimation
-                                      ? ({
-                                          '--slide-from': shiftAnimation === 'left' ? '-100%' : '100%',
-                                        } as React.CSSProperties)
-                                      : undefined
-                                  }
-                                >
-                                  <CropYearBlock
-                                    group={group}
-                                    covers={yearCovers?.[index]}
-                                  />
-                                  <span className="min-w-0 truncate">
-                                    {y.year.cropName}
-                                  </span>
-                                </span>
-                                {cellWrap ? (
                                   <span
-                                    className={`pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 px-1.5 text-[10px] ${AMBER_PILL_CLASSES}`}
+                                    className={`text-[11px] ${
+                                      isActive
+                                        ? 'text-primary-foreground/80'
+                                        : 'text-muted-foreground'
+                                    }`}
                                   >
-                                    <RotateCw className="h-2.5 w-2.5" aria-hidden="true" />
-                                    fra {cellWrap.fromYear}
+                                    {calendarYear}
                                   </span>
-                                ) : null}
-                              </button>
+                                  <span
+                                    key={slideAnimationKey}
+                                    className={`flex w-full min-w-0 items-center gap-1.5 ${slideAnimationClassName}`}
+                                    style={
+                                      shiftAnimation
+                                        ? ({
+                                            '--slide-from':
+                                              shiftAnimation === 'left'
+                                                ? '-100%'
+                                                : '100%',
+                                          } as React.CSSProperties)
+                                        : undefined
+                                    }
+                                  >
+                                    <CropYearBlock
+                                      group={group}
+                                      covers={yearCovers?.[index]}
+                                    />
+                                    <span className="min-w-0 truncate">
+                                      {y.year.cropName}
+                                    </span>
+                                  </span>
+                                  {cellWrap ? (
+                                    <span
+                                      className={`pointer-events-none absolute right-1 top-1 flex items-center gap-0.5 px-1.5 text-[10px] ${AMBER_PILL_CLASSES}`}
+                                    >
+                                      <RotateCw
+                                        className="h-2.5 w-2.5"
+                                        aria-hidden="true"
+                                      />
+                                      fra {cellWrap.fromYear}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </AppTooltip>
                             )
                           })}
                         </div>
@@ -646,31 +700,41 @@ export const ManualRotationEditor = ({
                         ) : null}
 
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Ryk alle afgrøder</span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => shiftStartYear(1)}
-                            title="Ryk hele sædskiftet et år tilbage"
-                          >
-                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                            Et år tilbage
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => shiftStartYear(-1)}
-                            title="Ryk hele sædskiftet et år frem"
-                          >
-                            Et år frem
-                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                          </Button>
+                          <span className="text-xs text-muted-foreground">
+                            Ryk alle afgrøder
+                          </span>
+                          <AppTooltip content="Ryk hele sædskiftet et år tilbage">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => shiftStartYear(1)}
+                            >
+                              <ChevronLeft
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                              Et år tilbage
+                            </Button>
+                          </AppTooltip>
+                          <AppTooltip content="Ryk hele sædskiftet et år frem">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => shiftStartYear(-1)}
+                            >
+                              Et år frem
+                              <ChevronRight
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </AppTooltip>
                         </div>
 
                         {startYearOffset !== 0 ? (
                           <p className="text-xs text-muted-foreground">
-                            Samme rækkefølge - kun startåret flytter sig. Gennemsnittet
-                            påvirkes ikke.
+                            Samme rækkefølge - kun startåret flytter sig.
+                            Gennemsnittet påvirkes ikke.
                           </p>
                         ) : null}
 
@@ -679,7 +743,9 @@ export const ManualRotationEditor = ({
                             key={activeYearIndex}
                             items={cropPickerItems}
                             selectedKey={String(activeYear.year.cropCode)}
-                            onSelect={(key) => setPositionOverride(activeYearIndex, Number(key))}
+                            onSelect={(key) =>
+                              setPositionOverride(activeYearIndex, Number(key))
+                            }
                             searchLabel="Søg afgrøde"
                             searchPlaceholder="Søg afgrøde..."
                             emptyMessage="Ingen afgrøder matcher søgningen"
@@ -729,7 +795,11 @@ export const ManualRotationEditor = ({
                 disabled={!preview || isLoadingCandidates}
                 loading={isSaving}
               >
-                {isSaving ? 'Gemmer...' : intent === 'lock' ? 'Gem og lås' : 'Gem'}
+                {isSaving
+                  ? 'Gemmer...'
+                  : intent === 'lock'
+                    ? 'Gem og lås'
+                    : 'Gem'}
               </Button>
               <Button variant="outline" onClick={close} disabled={isSaving}>
                 Annuller

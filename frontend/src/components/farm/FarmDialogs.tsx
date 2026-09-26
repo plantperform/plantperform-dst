@@ -7,6 +7,7 @@ import { farmMembersKey, farmsKey, useFarmMembers } from '@/api/hooks'
 import { addFarmMember, deleteFarm, removeFarmMember } from '@/api/mutations'
 import type { Farm } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -44,9 +45,7 @@ export const ShareFarmDialog = ({
     isLoading,
     isValidating: membersValidating,
     mutate: retryMembers,
-  } = useFarmMembers(
-    open ? farm.id : undefined,
-  )
+  } = useFarmMembers(open ? farm.id : undefined)
   const [memberEmail, setMemberEmail] = useState('')
   const [isSharing, setIsSharing] = useState(false)
   const [removingEmail, setRemovingEmail] = useState<string | null>(null)
@@ -136,33 +135,43 @@ export const ShareFarmDialog = ({
                     className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="truncate">{member.email}</span>
+                      <TruncatedTooltip
+                        content={member.email}
+                        className="truncate"
+                      >
+                        {member.email}
+                      </TruncatedTooltip>
                       {isSelf ? (
                         <span className="shrink-0 rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
                           dig
                         </span>
                       ) : null}
                     </span>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      className="shrink-0 gap-1 text-muted-foreground hover:text-destructive"
-                      disabled={isLastMember}
-                      loading={removingEmail === member.email}
-                      title={
+                    <AppTooltip
+                      content={
                         isLastMember
                           ? 'Den sidste med adgang kan ikke fjernes'
                           : isSelf
                             ? 'Forlad bedriften'
                             : `Fjern ${member.email}`
                       }
-                      onClick={() => void revokeMember(member.email)}
                     >
-                      {removingEmail === member.email ? null : (
-                        <X className="size-3.5" aria-hidden="true" />
-                      )}
-                      {isSelf ? 'Forlad' : 'Fjern'}
-                    </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="shrink-0 gap-1 text-muted-foreground hover:text-destructive"
+                          disabled={isLastMember}
+                          loading={removingEmail === member.email}
+                          onClick={() => void revokeMember(member.email)}
+                        >
+                          {removingEmail === member.email ? null : (
+                            <X className="size-3.5" aria-hidden="true" />
+                          )}
+                          {isSelf ? 'Forlad' : 'Fjern'}
+                        </Button>
+                      </span>
+                    </AppTooltip>
                   </li>
                 )
               })}

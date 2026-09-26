@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import type { FieldRecord } from '@/api/types'
 import { RotationSwatches } from '@/components/farm/RotationSwatches'
 import { RotationYearRow } from '@/components/farm/RotationYearRow'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
@@ -83,9 +84,12 @@ export const MapRuleCard = ({
       className="w-72 max-w-[calc(100vw-2rem)] rounded-lg border bg-card text-xs text-card-foreground shadow-lg motion-safe:animate-[rise-in_180ms_ease-out_both]"
     >
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
-        <span className="min-w-0 truncate text-sm font-semibold">
+        <TruncatedTooltip
+          content={field.name}
+          className="min-w-0 truncate text-sm font-semibold"
+        >
           {field.name}
-        </span>
+        </TruncatedTooltip>
         {locked ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
             <Lock className="size-3" aria-hidden="true" />
@@ -100,16 +104,17 @@ export const MapRuleCard = ({
         <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
           {formatNumber(field.areaHa)} ha
         </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className="-mr-1.5 size-6 shrink-0 bg-transparent p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Luk"
-          title="Luk"
-          onClick={onClose}
-        >
-          <X className="size-3.5" aria-hidden="true" />
-        </Button>
+        <AppTooltip content="Luk">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="-mr-1.5 size-6 shrink-0 bg-transparent p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Luk"
+            onClick={onClose}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </Button>
+        </AppTooltip>
       </div>
 
       <div className="border-t">
@@ -154,7 +159,7 @@ export const MapRuleCard = ({
         )}
       </div>
 
-      <TooltipProvider delayDuration={200}>
+      <TooltipProvider>
         <div className="grid grid-cols-2 gap-2 border-t p-2">
           <ActionTooltip text={editTooltip}>
             <Button
