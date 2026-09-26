@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { readableTextColor } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
 import type {
@@ -28,20 +29,25 @@ const ICONS: Record<WinterCoverKind, LucideIcon> = {
 type WinterCoverBandProps = {
   covers: YearCover[]
   className?: string
+  showTooltip?: boolean
 }
 
 export const WinterCoverBand = ({
   covers,
   className,
+  showTooltip = true,
 }: WinterCoverBandProps) => (
   <span className={cn('flex gap-px', className)}>
     {covers.map((yearCover) => (
-      <span
+      <AppTooltip
         key={yearCover.cover.id}
-        className="flex-1"
-        style={{ backgroundColor: yearCover.cover.color }}
-        title={`${yearCover.cover.label}. ${yearCover.description}`}
-      />
+        content={showTooltip ? `${yearCover.cover.label}. ${yearCover.description}` : null}
+      >
+        <span
+          className="flex-1"
+          style={{ backgroundColor: yearCover.cover.color }}
+        />
+      </AppTooltip>
     ))}
   </span>
 )
@@ -90,11 +96,7 @@ export const WinterCoverLegend = ({
   >
     <span className="font-medium text-foreground">Efter høst</span>
     {covers.map((cover) => (
-      <span
-        key={cover.id}
-        className="inline-flex items-center gap-1.5"
-        title={cover.description}
-      >
+      <span key={cover.id} className="inline-flex items-center gap-1.5">
         <WinterCoverSwatch cover={cover} />
         <span>{cover.label}</span>
       </span>

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { shortCropName } from '@/lib/crop-groups'
 import { ROTATION_START_CALENDAR_YEAR, yearNLoadKgHa } from '@/lib/field-domain'
 import {
@@ -125,18 +127,25 @@ export const BigMetricTile = ({
   label,
   value,
   caption,
+  term,
 }: {
   label: string
   value: string
   caption?: string
+  term?: GlossaryTerm
 }) => (
   <div className="rounded-lg border bg-background p-3.5">
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
+      {term ? <GlossaryInfo term={term} /> : null}
+    </div>
+    <p className="mt-1 text-2xl font-bold leading-tight tabular-nums text-foreground">
+      {value}
     </p>
-    <p className="mt-1 text-2xl font-bold leading-tight tabular-nums text-foreground">{value}</p>
     {caption ? (
-      <p className="mt-1 text-xs leading-snug text-muted-foreground">{caption}</p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">
+        {caption}
+      </p>
     ) : null}
   </div>
 )
@@ -147,29 +156,40 @@ const DefinitionRow = ({
   title,
   muted,
   strong,
+  term,
 }: {
   label: string
   value: string
   title?: string
+  term?: GlossaryTerm
   muted?: boolean
   strong?: boolean
-}) => (
-  <div
-    className="flex items-baseline justify-between gap-3 border-t py-1.5 text-xs first:border-t-0"
-    title={title}
-  >
-    <span className={strong ? 'font-medium text-foreground' : 'text-muted-foreground'}>
-      {label}
-    </span>
-    <span
-      className={`shrink-0 tabular-nums ${
-        muted ? 'text-muted-foreground' : strong ? 'font-semibold' : 'font-medium'
-      }`}
-    >
-      {value}
-    </span>
-  </div>
-)
+}) => {
+  const row = (
+    <div className="flex items-baseline justify-between gap-3 border-t py-1.5 text-xs first:border-t-0">
+      <span
+        className={
+          strong ? 'font-medium text-foreground' : 'text-muted-foreground'
+        }
+      >
+        {label}
+        {term ? <GlossaryInfo term={term} /> : null}
+      </span>
+      <span
+        className={`shrink-0 tabular-nums ${
+          muted
+            ? 'text-muted-foreground'
+            : strong
+              ? 'font-semibold'
+              : 'font-medium'
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  )
+  return title ? <AppTooltip content={title}>{row}</AppTooltip> : row
+}
 
 // The key figures layer shows the same annual metrics as the old app
 // (Normudbytte, Forfrugt FV, Tildelt N), plus DB and feed units, which DST2
@@ -223,13 +243,19 @@ const KeyMetricsSection = ({
       <div className="space-y-3 @2xl:col-span-5">
         <BigMetricTile
           label={`Udledning (${calendarYear})`}
+          term="nLoad"
           value={`${fmt(nLoad, 1)} kg N/ha`}
           caption={`Udvaskning ${fmt(leaching, 1)} kg N/ha - ${retentionText}`}
         />
         <BigMetricTile
           label={`DB2 (${calendarYear})`}
+          term="db2"
           value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
-          caption={yieldAmount ? `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}` : 'Normudbytte -'}
+          caption={
+            yieldAmount
+              ? `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
+              : 'Normudbytte -'
+          }
         />
       </div>
 
@@ -243,6 +269,7 @@ const KeyMetricsSection = ({
         <div>
           <DefinitionRow
             label="Afgrøde-norm"
+            term="nNorm"
             value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
             title={
               reducedNorm !== null
@@ -255,7 +282,10 @@ const KeyMetricsSection = ({
             value={`${fmt(availableN, 0)} kg N/ha`}
             title={`Forfrugt ${fmt(precedingCropValue, 0)} + husdyrgødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
-          <DefinitionRow label="Forfrugtsværdi" value={`${fmt(precedingCropValue, 0)} kg N/ha`} />
+          <DefinitionRow
+            label="Forfrugtsværdi"
+            value={`${fmt(precedingCropValue, 0)} kg N/ha`}
+          />
           <DefinitionRow
             label="Tildelt gødning"
             value={`${fmt(appliedFertiliser, 0)} kg N/ha`}
@@ -268,7 +298,11 @@ const KeyMetricsSection = ({
             }
           />
           {showFeedUnits ? (
-            <DefinitionRow label="Foderenheder" value={`${fmt(yieldAmount, 0)} FE/ha`} />
+            <DefinitionRow
+              label="Foderenheder"
+              term="feedUnits"
+              value={`${fmt(yieldAmount, 0)} FE/ha`}
+            />
           ) : null}
           <DefinitionRow
             label="Ton gødning"
@@ -293,7 +327,9 @@ const StepRow = ({
 }) => (
   <div className="flex items-baseline justify-between gap-3">
     <p className={`text-sm ${strong ? 'font-semibold' : ''}`}>{text}</p>
-    <span className={`shrink-0 tabular-nums text-sm ${strong ? 'font-semibold' : ''}`}>
+    <span
+      className={`shrink-0 tabular-nums text-sm ${strong ? 'font-semibold' : ''}`}
+    >
       {value}
     </span>
   </div>
@@ -378,7 +414,9 @@ const CalculationStepsSection = ({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Ingen virkemidler på denne mark</p>
+          <p className="text-sm text-muted-foreground">
+            Ingen virkemidler på denne mark
+          </p>
         )}
         <StepRow
           text="Udvaskning efter virkemidler"
@@ -538,22 +576,46 @@ const LeachingDetailSection = ({
         <SectionHeading>Nθ — Kvælstoftilgængelighed</SectionHeading>
         <DetailTable
           rows={[
-            { label: `β_t · NT`, detail: `${bt} × ${fmt(nt, 3)}`, value: fmt(tNT, 4) },
-            { label: `β_CS · MNCS`, detail: `${bCS} × ${fmt(mncs, 1)}`, value: fmt(tMNCS, 4) },
-            { label: `β_CA · MNCA`, detail: `${bCA} × ${fmt(mnca, 1)}`, value: fmt(tMNCA, 4) },
-            { label: `β_udb · MNudb`, detail: `${budb} × ${fmt(mnudb, 1)}`, value: fmt(tUdb, 4) },
+            {
+              label: `β_t · NT`,
+              detail: `${bt} × ${fmt(nt, 3)}`,
+              value: fmt(tNT, 4),
+            },
+            {
+              label: `β_CS · MNCS`,
+              detail: `${bCS} × ${fmt(mncs, 1)}`,
+              value: fmt(tMNCS, 4),
+            },
+            {
+              label: `β_CA · MNCA`,
+              detail: `${bCA} × ${fmt(mnca, 1)}`,
+              value: fmt(tMNCA, 4),
+            },
+            {
+              label: `β_udb · MNudb`,
+              detail: `${budb} × ${fmt(mnudb, 1)}`,
+              value: fmt(tUdb, 4),
+            },
             {
               label: `β_m1 · (M1+M2)/2`,
               detail: `${bm1M} × (${fmt(m1, 1)}+${fmt(m2, 1)})/2`,
               value: fmt(tMHist, 4),
             },
-            { label: `β_f0 · F0`, detail: `${bf0} × ${fmt(f0, 1)}`, value: fmt(tF0, 4) },
+            {
+              label: `β_f0 · F0`,
+              detail: `${bf0} × ${fmt(f0, 1)}`,
+              value: fmt(tF0, 4),
+            },
             {
               label: `β_f1 · (F1+F2)/2`,
               detail: `${bf1} × (${fmt(f1, 1)}+${fmt(f2, 1)})/2`,
               value: fmt(tFHist, 4),
             },
-            { label: `β_g0 · G0`, detail: `${bg0} × ${fmt(g0, 1)}`, value: fmt(tG0, 4) },
+            {
+              label: `β_g0 · G0`,
+              detail: `${bg0} × ${fmt(g0, 1)}`,
+              value: fmt(tG0, 4),
+            },
             {
               label: `β_m1G · (G1+G2)/2`,
               detail: `${bm1G} × (${fmt(g1, 1)}+${fmt(g2, 1)})/2`,
@@ -574,23 +636,28 @@ const LeachingDetailSection = ({
         <div className="space-y-1.5">
           <SectionHeading>P — Perkolationsfaktor</SectionHeading>
           <p className="text-xs text-muted-foreground">
-            Afstrømningskategori <strong>{String(detail.runoffCategory ?? '—')}</strong>
+            Afstrømningskategori{' '}
+            <strong>{String(detail.runoffCategory ?? '—')}</strong>
             {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
             afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
             egen perkolationsværdi for denne kategori.
             {detail.runoffCategoryUnknown ? (
               <span className="text-amber-700">
                 {' '}
-                ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1
-                er brugt som et rent gæt, ikke et opslag.
+                ⚠️ Afgrødekoden findes ikke i Bilag 7 tabel 1 — kategori 1 er
+                brugt som et rent gæt, ikke et opslag.
               </span>
             ) : null}
           </p>
           <Callout>
             {hasValue(detail.P) ? (
-              <>P = <strong>{fmt(p, 5)}</strong></>
+              <>
+                P = <strong>{fmt(p, 5)}</strong>
+              </>
             ) : (
-              <span className="text-muted-foreground">Ingen perkolationsdata</span>
+              <span className="text-muted-foreground">
+                Ingen perkolationsdata
+              </span>
             )}
           </Callout>
         </div>
@@ -601,7 +668,9 @@ const LeachingDetailSection = ({
           </p>
           <Callout>
             {hasValue(detail.S) ? (
-              <>S = <strong>{fmt(s, 5)}</strong></>
+              <>
+                S = <strong>{fmt(s, 5)}</strong>
+              </>
             ) : (
               <span className="text-muted-foreground">Ingen jorddata</span>
             )}
@@ -614,7 +683,9 @@ const LeachingDetailSection = ({
           </p>
           <Callout>
             {hasValue(detail.NT) ? (
-              <>NT = <strong>{fmt(nt, 5)}</strong></>
+              <>
+                NT = <strong>{fmt(nt, 5)}</strong>
+              </>
             ) : (
               <span className="text-muted-foreground">Ingen jorddata</span>
             )}
@@ -629,11 +700,31 @@ const LeachingDetailSection = ({
         </p>
         <DetailTable
           rows={[
-            { label: 'Tidstrend τ·(Y−1991)', detail: `${tau}·(${y}−1991)`, value: fmt(trend, 4) },
-            { label: 'μ + Nθ + C', detail: `${mu} + ${fmt(ntheta, 4)} + ${fmt(num(detail.C), 4)}`, value: fmt(base, 4) },
-            { label: '(μ+Nθ+C)^κ', detail: `${fmt(base, 4)}^${kappa}`, value: fmt(base ** kappa, 4) },
-            { label: 'P·S', detail: `${fmt(p, 5)}·${fmt(s, 5)}`, value: fmt(ps, 5) },
-            { label: '(P·S)^ρ', detail: `${fmt(ps, 5)}^${rho}`, value: fmt(ps ** rho, 5) },
+            {
+              label: 'Tidstrend τ·(Y−1991)',
+              detail: `${tau}·(${y}−1991)`,
+              value: fmt(trend, 4),
+            },
+            {
+              label: 'μ + Nθ + C',
+              detail: `${mu} + ${fmt(ntheta, 4)} + ${fmt(num(detail.C), 4)}`,
+              value: fmt(base, 4),
+            },
+            {
+              label: '(μ+Nθ+C)^κ',
+              detail: `${fmt(base, 4)}^${kappa}`,
+              value: fmt(base ** kappa, 4),
+            },
+            {
+              label: 'P·S',
+              detail: `${fmt(p, 5)}·${fmt(s, 5)}`,
+              value: fmt(ps, 5),
+            },
+            {
+              label: '(P·S)^ρ',
+              detail: `${fmt(ps, 5)}^${rho}`,
+              value: fmt(ps ** rho, 5),
+            },
             {
               label: 'Afgrøde/jord-led',
               detail: `${fmt(base ** kappa, 4)}·${fmt(ps ** rho, 5)}`,
@@ -658,10 +749,21 @@ const LeachingDetailSection = ({
           </p>
           <DetailTable
             rows={[
-              { label: 'MNCS (forår)', value: `${fmt(num(detail.M11_MNCS), 1)} kg N/ha` },
-              { label: 'Korrektionsfaktor', value: fmt(num(detail.m11CorrectionFactor), 3), strong: true },
+              {
+                label: 'MNCS (forår)',
+                value: `${fmt(num(detail.M11_MNCS), 1)} kg N/ha`,
+              },
+              {
+                label: 'Korrektionsfaktor',
+                value: fmt(num(detail.m11CorrectionFactor), 3),
+                strong: true,
+              },
               { label: 'L (før korrektion)', value: `${fmt(lRaw, 3)} kg N/ha` },
-              { label: 'L (efter korrektion)', value: `${fmt(l, 3)} kg N/ha`, strong: true },
+              {
+                label: 'L (efter korrektion)',
+                value: `${fmt(l, 3)} kg N/ha`,
+                strong: true,
+              },
             ]}
           />
           <Callout>
@@ -683,11 +785,27 @@ const LeachingDetailSection = ({
               detail: `EEA=${fmt(num(detail.EEA), 2)} · Fdato=${fmt(num(detail.Fdato_factor), 3)}`,
               value: fmt(eeaRed, 4),
             },
-            { label: 'Mellemafgrøde', detail: 'EMA', value: fmt(num(detail.EMA), 4) },
-            { label: 'Tidlig såning', detail: 'ETS', value: fmt(num(detail.ETS), 4) },
+            {
+              label: 'Mellemafgrøde',
+              detail: 'EMA',
+              value: fmt(num(detail.EMA), 4),
+            },
+            {
+              label: 'Tidlig såning',
+              detail: 'ETS',
+              value: fmt(num(detail.ETS), 4),
+            },
             { label: 'Sum virkemidler', detail: '', value: fmt(measureSum, 4) },
-            { label: 'Faktor 1 (virkemidler)', detail: `1 − ${fmt(measureSum, 4)}`, value: fmt(factor1, 4) },
-            { label: 'Faktor 2 (EPJ)', detail: `1 − ${fmt(num(detail.EPJ), 2)}`, value: fmt(factor2, 4) },
+            {
+              label: 'Faktor 1 (virkemidler)',
+              detail: `1 − ${fmt(measureSum, 4)}`,
+              value: fmt(factor1, 4),
+            },
+            {
+              label: 'Faktor 2 (EPJ)',
+              detail: `1 − ${fmt(num(detail.EPJ), 2)}`,
+              value: fmt(factor2, 4),
+            },
           ]}
         />
         <Callout>
@@ -704,16 +822,22 @@ const LeachingDetailSection = ({
       </div>
 
       <div className="space-y-1.5">
-        <SectionHeading>Udledning — efter retention og markareal</SectionHeading>
+        <SectionHeading>
+          Udledning — efter retention og markareal
+        </SectionHeading>
         <p className="font-mono text-xs text-muted-foreground">
-          Udledning = L_nuar × (1 − retention) ; Udledning (mark) = Udledning × areal
+          Udledning = L_nuar × (1 − retention) ; Udledning (mark) = Udledning ×
+          areal
         </p>
         <DetailTable
           rows={[
             { label: 'L_nuar', value: `${fmt(lNuar, 3)} kg N/ha` },
             {
               label: 'Retention',
-              detail: retention === null ? 'ikke sat — bruger 0%' : `${fmt(retention, 1)}%`,
+              detail:
+                retention === null
+                  ? 'ikke sat — bruger 0%'
+                  : `${fmt(retention, 1)}%`,
               value: `× ${fmt((100 - (retention ?? 0)) / 100, 4)}`,
             },
             {
@@ -768,7 +892,10 @@ const CategoryBreakdownRow = ({
       {open && hasBreakdown ? (
         <div className="mt-1 space-y-0.5 border-l pl-3">
           {lines.map((l, index) => (
-            <div key={index} className="flex justify-between gap-2 text-xs text-muted-foreground">
+            <div
+              key={index}
+              className="flex justify-between gap-2 text-xs text-muted-foreground"
+            >
               <span>{l.treatment}</span>
               <span className="tabular-nums">−{fmt(l.costDkkHa, 0)} kr/ha</span>
             </div>
@@ -800,45 +927,82 @@ const EconomicDetailSection = ({
   const db = num(detail.db)
 
   const lines = Array.isArray(detail.lines) ? (detail.lines as CostLine[]) : []
-  const linesFor = (category: string) => lines.filter((l) => l.category === category)
+  const linesFor = (category: string) =>
+    lines.filter((l) => l.category === category)
 
   return (
     <div className="space-y-1.5 border-t pt-3">
       <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
       <p className="text-sm">
-        Indtægt og tilskud, minus omkostninger til gødning, udsæd,
-        planteværn, markarbejde og tørring, giver dækningsbidraget (DB2) pr.
-        hektar - ganget med markens areal til sidst.
+        Indtægt og tilskud, minus omkostninger til gødning, udsæd, planteværn,
+        markarbejde og tørring, giver dækningsbidraget (DB2) pr. hektar - ganget
+        med markens areal til sidst.
       </p>
       {detail.yieldNormMissing ? (
         <p className="text-xs text-amber-700">
-          Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og
-          indtægt er sat til 0.
+          Ingen udbyttenorm fundet for denne afgrøde/JB-nr — udbytte og indtægt
+          er sat til 0.
         </p>
       ) : null}
       <DetailTable
         rows={[
           { label: 'Udbytte', value: `${fmt(yieldAmount, 1)} ${unit}` },
-          { label: 'Salgspris', value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}` },
-          { label: 'Indtægt', detail: 'udbytte × salgspris', value: `${fmt(revenue, 0)} kr/ha`, strong: true },
+          {
+            label: 'Salgspris',
+            value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}`,
+          },
+          {
+            label: 'Indtægt',
+            detail: 'udbytte × salgspris',
+            value: `${fmt(revenue, 0)} kr/ha`,
+            strong: true,
+          },
           { label: 'Tilskud', value: `+${fmt(subsidy, 0)} kr/ha` },
         ]}
       />
       <div>
-        <CategoryBreakdownRow label="Gødning" total={fertiliserCost} lines={linesFor('Gødning')} />
-        <CategoryBreakdownRow label="Udsæd" total={seed} lines={linesFor('Udsæd')} />
-        <CategoryBreakdownRow label="Planteværn" total={cropProtection} lines={linesFor('Planteværn')} />
-        <CategoryBreakdownRow label="Markarbejde" total={fieldWork} lines={linesFor('Markarbejde')} />
-        <CategoryBreakdownRow label="Tørring/lagring" total={drying} lines={linesFor('Tørring/lagring')} />
+        <CategoryBreakdownRow
+          label="Gødning"
+          total={fertiliserCost}
+          lines={linesFor('Gødning')}
+        />
+        <CategoryBreakdownRow
+          label="Udsæd"
+          total={seed}
+          lines={linesFor('Udsæd')}
+        />
+        <CategoryBreakdownRow
+          label="Planteværn"
+          total={cropProtection}
+          lines={linesFor('Planteværn')}
+        />
+        <CategoryBreakdownRow
+          label="Markarbejde"
+          total={fieldWork}
+          lines={linesFor('Markarbejde')}
+        />
+        <CategoryBreakdownRow
+          label="Tørring/lagring"
+          total={drying}
+          lines={linesFor('Tørring/lagring')}
+        />
       </div>
       <DetailTable
-        rows={[{ label: 'Omkostninger i alt', value: `−${fmt(totalCosts, 0)} kr/ha`, strong: true }]}
+        rows={[
+          {
+            label: 'Omkostninger i alt',
+            value: `−${fmt(totalCosts, 0)} kr/ha`,
+            strong: true,
+          },
+        ]}
       />
       <Callout>
         DB2 = {fmt(revenue, 0)} + {fmt(subsidy, 0)} − {fmt(totalCosts, 0)} ={' '}
         <strong>{fmt(db, 0)} kr/ha</strong>
       </Callout>
-      <DetailTable rows={[{ label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` }]} />
+      <DetailTable
+        rows={[{ label: 'Markareal', value: `× ${fmt(areaHa, 2)} ha` }]}
+      />
       <Callout>
         DB2 (mark) = {fmt(db, 0)} × {fmt(areaHa, 2)} ={' '}
         <strong>{fmt(db * areaHa, 0)} kr</strong>
@@ -902,30 +1066,33 @@ export const RotationYearsDetail = ({
           {years.map((y, index) => {
             const isSelected = index === selectedYear
             return (
-              <button
+              <AppTooltip
                 key={index}
-                type="button"
-                onClick={() =>
-                  onSelectedYearIndexChange
-                    ? onSelectedYearIndexChange(index)
-                    : setInternalSelectedYear(index)
-                }
-                title={fullTabLabel(y.year, index, startCalendarYear + index)}
-                aria-pressed={isSelected}
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 tabular-nums transition-colors ${
-                  isSelected
-                    ? 'border-primary bg-primary font-medium text-primary-foreground'
-                    : 'bg-background hover:bg-muted'
-                }`}
+                content={fullTabLabel(y.year, index, startCalendarYear + index)}
               >
-                {isSelected ? (
-                  <span
-                    className="size-1.5 shrink-0 rounded-full bg-primary-foreground/70"
-                    aria-hidden="true"
-                  />
-                ) : null}
-                {startCalendarYear + index} {shortTabLabel(y.year)}
-              </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSelectedYearIndexChange
+                      ? onSelectedYearIndexChange(index)
+                      : setInternalSelectedYear(index)
+                  }
+                  aria-pressed={isSelected}
+                  className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 tabular-nums transition-colors ${
+                    isSelected
+                      ? 'border-primary bg-primary font-medium text-primary-foreground'
+                      : 'bg-background hover:bg-muted'
+                  }`}
+                >
+                  {isSelected ? (
+                    <span
+                      className="size-1.5 shrink-0 rounded-full bg-primary-foreground/70"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {startCalendarYear + index} {shortTabLabel(y.year)}
+                </button>
+              </AppTooltip>
             )
           })}
         </div>
@@ -950,7 +1117,11 @@ export const RotationYearsDetail = ({
       {showFullDetail ? (
         <div className="space-y-4">
           <h4 className="text-sm font-semibold">Sådan er tallet beregnet</h4>
-          <CalculationStepsSection detail={year.leachingDetail} areaHa={areaHa} retention={retention} />
+          <CalculationStepsSection
+            detail={year.leachingDetail}
+            areaHa={areaHa}
+            retention={retention}
+          />
           <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
 
           <div className="border-t pt-3">

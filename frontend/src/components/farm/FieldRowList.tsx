@@ -1,5 +1,6 @@
 import { Undo2 } from 'lucide-react'
 
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { formatNumber } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -39,16 +40,17 @@ export const FieldRowList = ({ rows, className }: FieldRowListProps) => (
             </span>
           ) : null}
           {row.onUndo ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="size-7 p-0 text-muted-foreground"
-              aria-label={`Fortryd ${row.label}`}
-              title="Fortryd"
-              onClick={row.onUndo}
-            >
-              <Undo2 className="size-4" aria-hidden="true" />
-            </Button>
+            <AppTooltip content="Fortryd">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="size-7 p-0 text-muted-foreground"
+                aria-label={`Fortryd ${row.label}`}
+                onClick={row.onUndo}
+              >
+                <Undo2 className="size-4" aria-hidden="true" />
+              </Button>
+            </AppTooltip>
           ) : null}
         </span>
       </li>

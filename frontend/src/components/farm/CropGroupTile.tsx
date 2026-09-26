@@ -14,6 +14,7 @@ import {
   WheatOutline,
 } from '@/components/farm/crop-icons'
 import { WinterCoverBand } from '@/components/farm/WinterCoverBand'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   readableTextColor,
   type CropGroup,
@@ -52,9 +53,10 @@ export const CropGroupTile = ({
   className,
 }: CropGroupTileProps) => {
   const Icon = ICONS[group.id]
-  return (
+  const tile = (
     <span
-      title={title}
+      role={title ? 'img' : undefined}
+      aria-label={title}
       aria-hidden={title ? undefined : 'true'}
       className={cn(
         'flex shrink-0 items-center justify-center',
@@ -69,6 +71,7 @@ export const CropGroupTile = ({
       <Icon className={size === 'sm' ? 'size-3' : 'size-4'} />
     </span>
   )
+  return title ? <AppTooltip content={title}>{tile}</AppTooltip> : tile
 }
 
 type CropYearBlockProps = {
@@ -78,6 +81,7 @@ type CropYearBlockProps = {
   title?: string
   className?: string
   tileClassName?: string
+  showCoverTooltip?: boolean
 }
 
 export const CropYearBlock = ({
@@ -87,6 +91,7 @@ export const CropYearBlock = ({
   title,
   className,
   tileClassName,
+  showCoverTooltip,
 }: CropYearBlockProps) =>
   covers ? (
     <span
@@ -105,6 +110,7 @@ export const CropYearBlock = ({
       <WinterCoverBand
         covers={covers}
         className={size === 'sm' ? 'h-1' : 'h-2.5'}
+        showTooltip={showCoverTooltip}
       />
     </span>
   ) : (

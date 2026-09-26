@@ -1,6 +1,7 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import {
   formatNumber,
   formatWholeNumber,
@@ -180,9 +181,9 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
               onMouseLeave={() => setHovered(null)}
             >
               <CropGroupTile group={entry.group} />
-              <span className="truncate" title={entry.label}>
+              <TruncatedTooltip content={entry.label} className="truncate">
                 {entry.label}
-              </span>
+              </TruncatedTooltip>
               <span
                 className={cn(
                   'text-right text-[11px] text-muted-foreground tabular-nums',
@@ -195,13 +196,14 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
                 {formatShare(entry.share)}
                 <span className="sr-only"> af arealet, udledning</span>
               </span>
-              <span
-                className="text-right tabular-nums"
-                title={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
+              <AppTooltip
+                content={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
               >
-                {formatNumber(entry.nLoadKgHa)}
-                <span className="sr-only"> kg N pr. hektar</span>
-              </span>
+                <span className="text-right tabular-nums">
+                  {formatNumber(entry.nLoadKgHa)}
+                  <span className="sr-only"> kg N pr. hektar</span>
+                </span>
+              </AppTooltip>
             </li>
           </Fragment>
         ))}

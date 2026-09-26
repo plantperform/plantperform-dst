@@ -10,6 +10,8 @@ import {
   CHOICE_IDLE_CLASS,
   CHOICE_SELECTED_CLASS,
 } from '@/components/farm/choice-styles'
+import { GlossaryInfo } from '@/components/GlossaryInfo'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   computeFieldTotals,
   formatFieldCount,
@@ -40,32 +42,33 @@ const CatchmentRow = ({
   selected,
   onSelect,
 }: CatchmentRowProps) => (
-  <button
-    type="button"
-    aria-pressed={selected}
-    onClick={onSelect}
-    title={describeTotals(totals)}
-    className={cn(
-      ROW_CLASS,
-      'items-start py-[7px]',
-      selected ? CHOICE_SELECTED_CLASS : CHOICE_IDLE_CLASS,
-    )}
-  >
-    <span
-      aria-hidden="true"
-      className={cn('mt-[5px] size-[7px] shrink-0 rounded-[2px]', colorClass)}
-    />
-    <span className="min-w-0 flex-1 text-[13px] leading-4 font-medium text-pretty">
-      {label}
-    </span>
-    {selected ? (
-      <Check
-        className="mt-px size-3.5 shrink-0 text-primary"
-        strokeWidth={2.5}
+  <AppTooltip content={describeTotals(totals)}>
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        ROW_CLASS,
+        'items-start py-[7px]',
+        selected ? CHOICE_SELECTED_CLASS : CHOICE_IDLE_CLASS,
+      )}
+    >
+      <span
         aria-hidden="true"
+        className={cn('mt-[5px] size-[7px] shrink-0 rounded-[2px]', colorClass)}
       />
-    ) : null}
-  </button>
+      <span className="min-w-0 flex-1 text-[13px] leading-4 font-medium text-pretty">
+        {label}
+      </span>
+      {selected ? (
+        <Check
+          className="mt-px size-3.5 shrink-0 text-primary"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+      ) : null}
+    </button>
+  </AppTooltip>
 )
 
 type CatchmentPickerProps = {
@@ -121,40 +124,41 @@ export const CatchmentPicker = ({
       aria-label="Kystvandopland"
       className="flex w-58 shrink-0 flex-col rounded-2xl border bg-card px-3.5 pt-3.5 pb-3"
     >
-      <h2 className="mb-2.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
-        Kystvandopland
+      <h2 className="mb-2.5 flex items-center gap-1 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
+        Kystvandopland <GlossaryInfo term="catchment" />
       </h2>
       <div
         role="group"
         aria-label="Vis hele bedriften eller et kystvandopland"
         className="flex min-h-0 flex-1 flex-col"
       >
-        <button
-          type="button"
-          aria-pressed={wholeFarmSelected}
-          onClick={() => onHighlightedKeyChange(null)}
-          title={describeTotals(farmTotals)}
-          className={cn(
-            ROW_CLASS,
-            'items-center py-2',
-            wholeFarmSelected ? CHOICE_SELECTED_CLASS : 'hover:bg-muted',
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className="size-[7px] shrink-0 rounded-full bg-muted-foreground"
-          />
-          <span className="flex-1 text-[13px] font-semibold">
-            Hele bedriften
-          </span>
-          {wholeFarmSelected ? (
-            <Check
-              className="size-3.5 shrink-0 text-primary"
-              strokeWidth={2.5}
+        <AppTooltip content={describeTotals(farmTotals)}>
+          <button
+            type="button"
+            aria-pressed={wholeFarmSelected}
+            onClick={() => onHighlightedKeyChange(null)}
+            className={cn(
+              ROW_CLASS,
+              'items-center py-2',
+              wholeFarmSelected ? CHOICE_SELECTED_CLASS : 'hover:bg-muted',
+            )}
+          >
+            <span
               aria-hidden="true"
+              className="size-[7px] shrink-0 rounded-full bg-muted-foreground"
             />
-          ) : null}
-        </button>
+            <span className="flex-1 text-[13px] font-semibold">
+              Hele bedriften
+            </span>
+            {wholeFarmSelected ? (
+              <Check
+                className="size-3.5 shrink-0 text-primary"
+                strokeWidth={2.5}
+                aria-hidden="true"
+              />
+            ) : null}
+          </button>
+        </AppTooltip>
         <div className="my-1.5 h-px bg-muted" aria-hidden="true" />
         <div className="relative min-h-24 flex-1">
           <div className="absolute inset-0 -mr-1.5 flex flex-col gap-0.5 overflow-y-auto pr-1.5">

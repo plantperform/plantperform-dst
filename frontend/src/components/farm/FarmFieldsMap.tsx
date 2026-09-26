@@ -39,19 +39,12 @@ import {
 } from '@/components/farm/catchment-options'
 import { refreshFarmFields } from '@/components/farm/detach-fields'
 import { FieldRowList, type FieldRow } from '@/components/farm/FieldRowList'
-import {
-  FieldTooltip,
-  type HoveredField,
-} from '@/components/farm/FieldTooltip'
+import { FieldTooltip, type HoveredField } from '@/components/farm/FieldTooltip'
 import { MapRuleCard } from '@/components/farm/MapRuleCard'
 import type { FarmInspectorMode } from '@/components/farm/types'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import {
   DropdownMenu,
@@ -157,7 +150,10 @@ const EDIT_CHANGE_LEGEND = [
   { label: 'Fjernes', color: 'rgba(220, 38, 38, 0.5)' },
 ]
 
-const CVR_LEGEND_ENTRY = { label: 'Fremhævet CVR', color: 'rgba(250, 204, 21, 0.48)' }
+const CVR_LEGEND_ENTRY = {
+  label: 'Fremhævet CVR',
+  color: 'rgba(250, 204, 21, 0.48)',
+}
 
 const registryPointMinZoom = 6
 const registryPolygonMinZoom = 11
@@ -772,7 +768,9 @@ export const FarmFieldsMap = ({
     }
 
     const bounds = getFieldsBounds(
-      fields.filter((field) => fieldInCatchment(field, highlightedCatchmentKey)),
+      fields.filter((field) =>
+        fieldInCatchment(field, highlightedCatchmentKey),
+      ),
     )
     if (!bounds) return
 
@@ -1060,7 +1058,8 @@ export const FarmFieldsMap = ({
           (marsFeature.properties?.virkemiddel as string | undefined) ?? null,
         status: (marsFeature.properties?.status as string | undefined) ?? null,
         subsidyScheme:
-          (marsFeature.properties?.tilskudsordning as string | undefined) ?? null,
+          (marsFeature.properties?.tilskudsordning as string | undefined) ??
+          null,
         areaHa:
           typeof marsFeature.properties?.areal_ha === 'number'
             ? marsFeature.properties.areal_ha
@@ -1121,7 +1120,8 @@ export const FarmFieldsMap = ({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
       primary,
-      fieldId: typeof hoveredFarmFieldId === 'string' ? hoveredFarmFieldId : null,
+      fieldId:
+        typeof hoveredFarmFieldId === 'string' ? hoveredFarmFieldId : null,
       properties: feature.properties ?? {},
       registry: isRegistry,
       hasRotation,
@@ -1146,36 +1146,40 @@ export const FarmFieldsMap = ({
           <span className="hidden shrink-0 text-xs text-muted-foreground @md:inline">
             Farvelæg
           </span>
-          <select
-            aria-label="Farvelæg marker"
-            title="Farvelæg marker"
-            className="h-full w-full min-w-0 max-w-40 rounded-r-md bg-transparent pr-2 text-xs outline-none"
-            value={colorBy}
-            onChange={(event) =>
-              setColorBy(event.target.value as ColorAttribute)
-            }
-          >
-            {colorOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <AppTooltip content="Farvelæg marker">
+            <select
+              aria-label="Farvelæg marker"
+              className="h-full w-full min-w-0 max-w-40 rounded-r-md bg-transparent pr-2 text-xs outline-none"
+              value={colorBy}
+              onChange={(event) =>
+                setColorBy(event.target.value as ColorAttribute)
+              }
+            >
+              {colorOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </AppTooltip>
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="xs"
-              className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
-              aria-label="Lag på kortet"
-              title="Lag på kortet"
-            >
-              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden @lg:inline">Lag</span>
-            </Button>
-          </DropdownMenuTrigger>
+          <AppTooltip content="Lag på kortet">
+            <span className="inline-flex shrink-0">
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
+                  aria-label="Lag på kortet"
+                >
+                  <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden @lg:inline">Lag</span>
+                </Button>
+              </DropdownMenuTrigger>
+            </span>
+          </AppTooltip>
           <DropdownMenuContent align="start" className="w-64">
             {activeColorSpec !== null ? (
               <>
@@ -1252,22 +1256,27 @@ export const FarmFieldsMap = ({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          variant="outline"
-          size="xs"
-          className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
-          aria-label="Vis alle marker"
-          title={
+        <AppTooltip
+          content={
             hasFieldGeometry ? 'Vis alle marker' : 'Ingen marker at vise endnu'
           }
-          disabled={!hasFieldGeometry}
-          onClick={() => {
-            fitAllFields()
-          }}
         >
-          <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="hidden @lg:inline">Vis alle</span>
-        </Button>
+          <span className="inline-flex shrink-0">
+            <Button
+              variant="outline"
+              size="xs"
+              className="pointer-events-auto shrink-0 gap-1.5 bg-card shadow-sm"
+              aria-label="Vis alle marker"
+              disabled={!hasFieldGeometry}
+              onClick={() => {
+                fitAllFields()
+              }}
+            >
+              <Maximize className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden @lg:inline">Vis alle</span>
+            </Button>
+          </span>
+        </AppTooltip>
 
         {readOnly ? (
           <span className="ml-auto hidden min-w-0 truncate rounded-md bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm @2xl:block">
@@ -1284,7 +1293,9 @@ export const FarmFieldsMap = ({
               !addMode &&
                 'bg-card font-semibold text-primary hover:text-primary',
             )}
-            onClick={() => void (addMode ? saveFieldChanges() : toggleAddMode())}
+            onClick={() =>
+              void (addMode ? saveFieldChanges() : toggleAddMode())
+            }
             size="xs"
             variant={addMode ? 'default' : 'outline'}
             loading={isSavingFieldChanges}
@@ -1661,7 +1672,6 @@ export const FarmFieldsMap = ({
                   <span
                     role="img"
                     aria-label={marker.title}
-                    title={marker.title}
                     className={cn(
                       'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
                       marker.color === null && 'bg-background text-foreground',
@@ -1733,16 +1743,17 @@ export const FarmFieldsMap = ({
                   <span className="shrink-0 text-muted-foreground tabular-nums">
                     {formatNumber(actionPopupField.areaHa)} ha
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="size-7 shrink-0 p-0 text-muted-foreground"
-                    aria-label="Luk"
-                    title="Luk"
-                    onClick={() => setFieldActionPopup(null)}
-                  >
-                    <X className="size-4" aria-hidden="true" />
-                  </Button>
+                  <AppTooltip content="Luk">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="size-7 shrink-0 p-0 text-muted-foreground"
+                      aria-label="Luk"
+                      onClick={() => setFieldActionPopup(null)}
+                    >
+                      <X className="size-4" aria-hidden="true" />
+                    </Button>
+                  </AppTooltip>
                 </div>
                 {actionPopupMarked ? (
                   <p className="px-3 pb-2 text-muted-foreground">
@@ -1840,12 +1851,13 @@ export const FarmFieldsMap = ({
               </span>
             ))}
             {yearStatusText !== null ? (
-              <span
-                role="status"
-                title={yearStatusText}
-                className="min-w-24 truncate text-muted-foreground"
-              >
-                {yearStatusText}
+              <span role="status" className="min-w-24 text-muted-foreground">
+                <TruncatedTooltip
+                  content={yearStatusText}
+                  className="block truncate"
+                >
+                  {yearStatusText}
+                </TruncatedTooltip>
               </span>
             ) : null}
           </div>

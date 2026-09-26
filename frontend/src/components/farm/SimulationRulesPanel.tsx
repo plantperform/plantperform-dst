@@ -13,6 +13,7 @@ import {
   numberToInput,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -27,11 +28,15 @@ import { Label } from '@/components/ui/label'
 type ReadOnlyRuleProps = {
   label: string
   value: string
+  term?: GlossaryTerm
 }
 
-const ReadOnlyRule = ({ label, value }: ReadOnlyRuleProps) => (
+const ReadOnlyRule = ({ label, value, term }: ReadOnlyRuleProps) => (
   <div className="space-y-1">
-    <div className="text-xs font-medium text-muted-foreground">{label}</div>
+    <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+      {label}
+      {term ? <GlossaryInfo term={term} /> : null}
+    </div>
     <div className="text-sm">{value}</div>
   </div>
 )
@@ -41,7 +46,10 @@ const buildMaxNLoadInputs = (
   effective: Map<string, number>,
 ): Record<string, string> =>
   Object.fromEntries(
-    catchmentKeys.map((key) => [key, numberToInput(effective.get(key) ?? null)]),
+    catchmentKeys.map((key) => [
+      key,
+      numberToInput(effective.get(key) ?? null),
+    ]),
   )
 
 type SimulationRulesPanelProps = {
@@ -60,13 +68,20 @@ export const SimulationRulesPanel = ({
     catchmentKey(catchment.catchmentId),
   )
 
-  const [minFeedUnits, setMinFeedUnits] = useState(simulation.constraints.minFeedUnits)
-  const [maxFeedUnits, setMaxFeedUnits] = useState(simulation.constraints.maxFeedUnits)
+  const [minFeedUnits, setMinFeedUnits] = useState(
+    simulation.constraints.minFeedUnits,
+  )
+  const [maxFeedUnits, setMaxFeedUnits] = useState(
+    simulation.constraints.maxFeedUnits,
+  )
   const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(
     () =>
       buildMaxNLoadInputs(
         catchmentKeys,
-        effectiveMaxNLoadByCatchment(fields, simulation.constraints.maxNLoadByCatchment),
+        effectiveMaxNLoadByCatchment(
+          fields,
+          simulation.constraints.maxNLoadByCatchment,
+        ),
       ),
   )
   const [isSaving, setIsSaving] = useState(false)
@@ -133,7 +148,10 @@ export const SimulationRulesPanel = ({
       setMaxNLoadInputs(
         buildMaxNLoadInputs(
           catchmentKeys,
-          effectiveMaxNLoadByCatchment(fields, updated.constraints.maxNLoadByCatchment),
+          effectiveMaxNLoadByCatchment(
+            fields,
+            updated.constraints.maxNLoadByCatchment,
+          ),
         ),
       )
       setSaveError(null)
@@ -170,6 +188,7 @@ export const SimulationRulesPanel = ({
           <fieldset className="min-w-0 space-y-2">
             <legend className="text-sm font-medium leading-none text-foreground">
               Maks. tilladt udledning pr. kystvandopland
+              <GlossaryInfo term="nLoad" />
             </legend>
             {catchments.length === 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -206,7 +225,10 @@ export const SimulationRulesPanel = ({
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="rules-min-feed-units">Min. foderenheder</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="rules-min-feed-units">Min. foderenheder</Label>
+                <GlossaryInfo term="feedUnits" />
+              </div>
               <Input
                 id="rules-min-feed-units"
                 type="number"
@@ -273,6 +295,7 @@ export const SimulationRulesPanel = ({
           <div className="grid gap-4 sm:grid-cols-3">
             <ReadOnlyRule
               label="Sædskiftevarianter"
+              term="rotation"
               value={
                 simulation.rotationVariants.length > 0
                   ? `${simulation.rotationVariants.length} valgt`
@@ -281,6 +304,7 @@ export const SimulationRulesPanel = ({
             />
             <ReadOnlyRule
               label="N-norm%"
+              term="nNorm"
               value={
                 simulation.nNormPercentages.length > 0
                   ? simulation.nNormPercentages.join(', ')
@@ -306,6 +330,7 @@ export const SimulationRulesPanel = ({
             />
             <ReadOnlyRule
               label="Efterafgrøde-etablering"
+              term="catchCrop"
               value={simulation.catchCropSowingDate}
             />
             <ReadOnlyRule

@@ -7,6 +7,7 @@ import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { RotationSwatches } from '@/components/farm/RotationSwatches'
 import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHeaderContent'
 import type { FarmInspectorMode } from '@/components/farm/types'
+import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -55,7 +56,10 @@ const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
 }
 
 const cropFirstWord = (name: string): string =>
-  name.trim().split(/\s+/)[0].replace(/[,.-]+$/, '')
+  name
+    .trim()
+    .split(/\s+/)[0]
+    .replace(/[,.-]+$/, '')
 
 const uniqueCropNamesLabel = (
   rotation: FieldRecord['cropRotation'],
@@ -220,12 +224,11 @@ const renderRotationSwatches = (
       highlightIndex={highlightIndex}
       tileClassName="size-4 full:size-[18px]"
     />
-    <span
-      className="hidden min-w-0 max-w-40 truncate text-sm full:block"
-      title={uniqueCropNames(rotation).join(' · ')}
-    >
-      {uniqueCropNamesLabel(rotation)}
-    </span>
+    <AppTooltip content={uniqueCropNames(rotation).join(' · ')}>
+      <span className="hidden min-w-0 max-w-40 truncate text-sm full:block">
+        {uniqueCropNamesLabel(rotation)}
+      </span>
+    </AppTooltip>
   </div>
 )
 
@@ -242,13 +245,13 @@ const nameColumn = (
       <span className="flex items-center gap-1.5">
         <span>{rowField.name}</span>
         {isFieldLocked(rowField) ? (
-          <span title={formatLockTooltip(rowField)}>
+          <AppTooltip content={formatLockTooltip(rowField)}>
             <Lock
               className="h-3.5 w-3.5 shrink-0 text-amber-600"
               aria-hidden="true"
             />
             <span className="sr-only">Låst</span>
-          </span>
+          </AppTooltip>
         ) : null}
       </span>
     )
@@ -300,22 +303,25 @@ const detachColumn = (
   cell: ({ row }) => {
     const rowField = row.original
     return (
-      <Button
-        variant="ghost"
-        size="xs"
-        className="size-7 p-0 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 pointer-coarse:opacity-100"
-        disabled={detachingFieldIds.includes(rowField.id)}
-        aria-label={`Fjern mark ${rowField.name} fra bedriften`}
-        title="Fjern fra bedriften"
-        onClick={(event) => {
-          event.stopPropagation()
-          onRequestDetach(rowField)
-        }}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <X className="size-4" aria-hidden="true" />
-      </Button>
+      <AppTooltip content="Fjern fra bedriften">
+        <span className="inline-flex">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="size-7 p-0 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 pointer-coarse:opacity-100"
+            disabled={detachingFieldIds.includes(rowField.id)}
+            aria-label={`Fjern mark ${rowField.name} fra bedriften`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRequestDetach(rowField)
+            }}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </span>
+      </AppTooltip>
     )
   },
   enableSorting: false,
@@ -349,13 +355,12 @@ const buildRulesColumns = ({
       header: () => 'Status',
       cell: ({ row }) =>
         isFieldLocked(row.original) ? (
-          <span
-            title={formatLockTooltip(row.original)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
-          >
-            <Lock className="h-3 w-3" aria-hidden="true" />
-            Låst
-          </span>
+          <AppTooltip content={formatLockTooltip(row.original)}>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <Lock className="h-3 w-3" aria-hidden="true" />
+              Låst
+            </span>
+          </AppTooltip>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             <LockOpen className="h-3 w-3" aria-hidden="true" />
@@ -392,9 +397,9 @@ const buildRulesColumns = ({
     {
       id: 'allowedRotations',
       header: () => (
-        <span title="Kan ikke ændres endnu - låsning giver 1, ellers alle">
-          Tilladte sædskifter
-        </span>
+        <AppTooltip content="Kan ikke ændres endnu - låsning giver 1, ellers alle">
+          <span>Tilladte sædskifter</span>
+        </AppTooltip>
       ),
       cell: ({ row }) =>
         row.original.allowedRotationIds.length === 0 ? (
@@ -420,44 +425,54 @@ const buildRulesColumns = ({
         const noRotation = field.rotationId === null
         return (
           <div className="flex flex-nowrap items-center justify-end gap-2">
-            <Button
-              size="xs"
-              variant="outline"
-              className="px-2.5"
-              disabled={noRotation}
-              onClick={() => onBindRotation(field)}
-              title={
+            <AppTooltip
+              content={
                 noRotation
                   ? 'Kør Optimér for denne mark, før du kan binde et sædskifte.'
                   : 'Vælg et bestemt sædskifte og lås marken til det, så optimeringen respekterer valget.'
               }
             >
-              Vælg og lås sædskifte...
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => onToggleLock(field)}
-              disabled={noRotation}
-              loading={lockingFieldId === field.id}
-              className={
-                locked
-                  ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
-                  : 'gap-1.5 px-2.5 text-muted-foreground'
-              }
-              title={
+              <span className="inline-flex">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="px-2.5"
+                  disabled={noRotation}
+                  onClick={() => onBindRotation(field)}
+                >
+                  Vælg og lås sædskifte...
+                </Button>
+              </span>
+            </AppTooltip>
+            <AppTooltip
+              content={
                 locked
                   ? 'Marken er låst til det valgte sædskifte - Optimér ændrer den ikke. Klik for at låse op.'
                   : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse til det nuværende sædskifte.'
               }
             >
-              {lockingFieldId === field.id ? null : locked ? (
-                <Lock className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <LockOpen className="h-4 w-4" aria-hidden="true" />
-              )}
-              {locked ? 'Lås op' : 'Lås'}
-            </Button>
+              <span className="inline-flex">
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => onToggleLock(field)}
+                  disabled={noRotation}
+                  loading={lockingFieldId === field.id}
+                  className={
+                    locked
+                      ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
+                      : 'gap-1.5 px-2.5 text-muted-foreground'
+                  }
+                >
+                  {lockingFieldId === field.id ? null : locked ? (
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <LockOpen className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {locked ? 'Lås op' : 'Lås'}
+                </Button>
+              </span>
+            </AppTooltip>
           </div>
         )
       },
@@ -603,9 +618,12 @@ export const buildFarmFieldsColumns = ({
       if (!year) return <span className="text-muted-foreground">-</span>
       const label = formatRotationYear(year)
       return (
-        <span className="block max-w-24 truncate full:max-w-40" title={label}>
+        <TruncatedTooltip
+          content={label}
+          className="block max-w-24 truncate full:max-w-40"
+        >
           {label}
-        </span>
+        </TruncatedTooltip>
       )
     },
     footer: () => null,
@@ -633,11 +651,16 @@ export const buildFarmFieldsColumns = ({
         unit: 'kr',
         emptyCell: (placement) =>
           placement === 'cell' ? (
-            <Badge variant="outline" className="font-normal text-muted-foreground">
+            <Badge
+              variant="outline"
+              className="font-normal text-muted-foreground"
+            >
               Ikke beregnet
             </Badge>
           ) : (
-            <span className="font-normal text-muted-foreground">Ikke beregnet</span>
+            <span className="font-normal text-muted-foreground">
+              Ikke beregnet
+            </span>
           ),
         compactValue: formatCompactDkk,
       },
@@ -648,11 +671,8 @@ export const buildFarmFieldsColumns = ({
       id: 'quotaStatus',
       header: () => 'Udledning mod kvote',
       cell: ({ row }) =>
-        renderQuotaStatus(
-          getFieldQuotaStatus(row.original, isSimulationView),
-        ),
-      footer: () =>
-        renderQuotaStatusFooter(quota),
+        renderQuotaStatus(getFieldQuotaStatus(row.original, isSimulationView)),
+      footer: () => renderQuotaStatusFooter(quota),
       enableSorting: false,
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
@@ -673,9 +693,9 @@ export const buildFarmFieldsColumns = ({
           return <span className="text-muted-foreground">{label}</span>
         }
         return (
-          <span className="block max-w-40 truncate" title={label}>
+          <TruncatedTooltip content={label} className="block max-w-40 truncate">
             {label}
-          </span>
+          </TruncatedTooltip>
         )
       },
       footer: () => null,
@@ -731,7 +751,11 @@ export const buildFarmFieldsColumns = ({
       cell: ({ row }) => {
         const field = row.original
         if (!field.quotaEligible) {
-          return <span className="text-muted-foreground">Ikke kvotegivende areal</span>
+          return (
+            <span className="text-muted-foreground">
+              Ikke kvotegivende areal
+            </span>
+          )
         }
         if (field.nLoadQuotaKgN === 0) {
           return <span className="text-muted-foreground">Ingen data</span>
@@ -783,10 +807,7 @@ export const buildFarmFieldsColumns = ({
     {
       accessorKey: 'inTakeoutPlan',
       header: ({ column }) => (
-        <SortableColumnHeaderContent
-          label="Omlægningsplan"
-          column={column}
-        />
+        <SortableColumnHeaderContent label="Omlægningsplan" column={column} />
       ),
       cell: ({ row }) => row.original.inTakeoutPlan,
       meta: {

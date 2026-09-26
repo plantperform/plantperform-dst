@@ -7,6 +7,7 @@ import type {
   Simulation,
 } from '@/api/types'
 import { FieldPanel } from '@/components/farm/FieldPanel'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 
 type FieldDetailPanelProps = {
@@ -106,28 +107,34 @@ export const FieldDetailPanel = ({
           <span className="text-xs font-medium tabular-nums text-muted-foreground">
             {position >= 0 ? position + 1 : 0} af {sortedFields.length}
           </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="size-7 p-0 text-muted-foreground"
-            onClick={goToPrevious}
-            disabled={previousField === null}
-            aria-label="Forrige mark"
-            title="Forrige mark (Alt+Pil op)"
-          >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="size-7 p-0 text-muted-foreground"
-            onClick={goToNext}
-            disabled={nextField === null}
-            aria-label="Næste mark"
-            title="Næste mark (Alt+Pil ned)"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Button>
+          <AppTooltip content="Forrige mark (Alt+Pil op)">
+            <span className="inline-flex">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="size-7 p-0 text-muted-foreground"
+                onClick={goToPrevious}
+                disabled={previousField === null}
+                aria-label="Forrige mark"
+              >
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </Button>
+            </span>
+          </AppTooltip>
+          <AppTooltip content="Næste mark (Alt+Pil ned)">
+            <span className="inline-flex">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="size-7 p-0 text-muted-foreground"
+                onClick={goToNext}
+                disabled={nextField === null}
+                aria-label="Næste mark"
+              >
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </Button>
+            </span>
+          </AppTooltip>
         </div>
         <div className="ml-auto flex items-center gap-1">
           {mapVisible ? (
@@ -141,16 +148,17 @@ export const FieldDetailPanel = ({
               Zoom til mark
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="xs"
-            className="size-8 p-0 text-muted-foreground"
-            onClick={onClose}
-            aria-label="Luk panel"
-            title="Luk panel"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
+          <AppTooltip content="Luk panel">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="size-8 p-0 text-muted-foreground"
+              onClick={onClose}
+              aria-label="Luk panel"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </AppTooltip>
         </div>
       </div>
 

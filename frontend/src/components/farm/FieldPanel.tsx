@@ -6,12 +6,14 @@ import type {
   RotationCandidateYearResult,
   Simulation,
 } from '@/api/types'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { RotationDetailPanel } from '@/components/farm/RotationDetailPanel'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
@@ -44,7 +46,8 @@ const buildStatusMessage = (
   const pct =
     status.quotaKgn > 0 ? Math.round((status.nLoad / status.quotaKgn) * 100) : 0
 
-  if (status.level === 'near') return `${amount} - tæt på markens kvote (${pct}%)`
+  if (status.level === 'near')
+    return `${amount} - tæt på markens kvote (${pct}%)`
   if (status.level === 'over') return `${amount} - over markens kvote (${pct}%)`
   return `${amount} - ${pct}% af markens kvote`
 }
@@ -76,18 +79,21 @@ const QuotaStatusPill = ({
 
 const PrimaryMetricCard = ({
   label,
+  term,
   value,
   unit,
   muted = false,
 }: {
   label: string
+  term?: GlossaryTerm
   value: string
   unit?: string
   muted?: boolean
 }) => (
   <div className="rounded-lg border bg-card p-3 @2xl:border-2 @2xl:border-primary/20 @2xl:p-4">
-    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground @2xl:text-primary">
+    <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground @2xl:text-primary">
       {label}
+      {term ? <GlossaryInfo term={term} /> : null}
     </div>
     <div
       className={cn(
@@ -107,20 +113,23 @@ const PrimaryMetricCard = ({
 
 const SupportMetricCard = ({
   label,
+  term,
   value,
   detail,
   detailItalic = false,
   muted = false,
 }: {
   label: string
+  term?: GlossaryTerm
   value: string
   detail?: string
   detailItalic?: boolean
   muted?: boolean
 }) => (
   <div className="rounded-lg border bg-card px-3 py-2 @2xl:p-4 @2xl:opacity-90">
-    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
       {label}
+      {term ? <GlossaryInfo term={term} /> : null}
     </div>
     <div
       className={cn(
@@ -231,7 +240,10 @@ export const FieldPanel = ({
               {metaParts.map((part, index) => (
                 <span key={index} className="flex items-center gap-x-2">
                   {index > 0 ? (
-                    <span className="size-1 rounded-full bg-border" aria-hidden="true" />
+                    <span
+                      className="size-1 rounded-full bg-border"
+                      aria-hidden="true"
+                    />
                   ) : null}
                   {part}
                 </span>
@@ -248,7 +260,10 @@ export const FieldPanel = ({
         <div className="grid grid-cols-2 gap-x-2 gap-y-4 @2xl:grid-cols-4 @2xl:gap-3">
           <PrimaryMetricCard
             label="DB2"
-            value={calculated ? `${formatNumber(field.db2)} kr` : 'Ikke beregnet'}
+            term="db2"
+            value={
+              calculated ? `${formatNumber(field.db2)} kr` : 'Ikke beregnet'
+            }
             unit={
               calculated && field.areaHa > 0
                 ? `${formatNumber(field.db2 / field.areaHa)} kr/ha`
@@ -258,6 +273,7 @@ export const FieldPanel = ({
           />
           <PrimaryMetricCard
             label="Udledning"
+            term="nLoad"
             value={
               calculated ? `${formatNumber(field.nLoad)} kg N` : 'Ikke beregnet'
             }
@@ -284,6 +300,7 @@ export const FieldPanel = ({
           />
           <SupportMetricCard
             label="Foderenheder"
+            term="feedUnits"
             value={
               !calculated
                 ? 'Ikke beregnet'
@@ -307,8 +324,11 @@ export const FieldPanel = ({
 
         <div className="@container rounded-lg border bg-card p-3.5 @2xl:p-4">
           <div className="border-b pb-2">
-            <h3 className="text-sm font-semibold">
-              {isSimulationView ? 'Sædskifte år for år' : 'Afgrødehistorik år for år'}
+            <h3 className="flex items-center gap-1 text-sm font-semibold">
+              {isSimulationView
+                ? 'Sædskifte år for år'
+                : 'Afgrødehistorik år for år'}
+              {isSimulationView ? <GlossaryInfo term="rotation" /> : null}
             </h3>
             {field.cropRotation.length > 0 ? (
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
@@ -320,7 +340,9 @@ export const FieldPanel = ({
           </div>
           {field.cropRotation.length === 0 ? (
             <p className="pt-2 text-sm text-muted-foreground">
-              {isSimulationView ? 'Intet sædskifte endnu' : 'Ingen afgrødehistorik endnu'}
+              {isSimulationView
+                ? 'Intet sædskifte endnu'
+                : 'Ingen afgrødehistorik endnu'}
             </p>
           ) : (
             <>
@@ -333,7 +355,8 @@ export const FieldPanel = ({
               />
               {yearOutsideRotation ? (
                 <p className="pt-2 text-xs text-muted-foreground">
-                  {selectedCalendarYear} ligger uden for markens sædskifte ({rotationYearCount} år)
+                  {selectedCalendarYear} ligger uden for markens sædskifte (
+                  {rotationYearCount} år)
                 </p>
               ) : null}
               {!hasYearValues && !yearValuesLoading ? (
@@ -359,7 +382,9 @@ export const FieldPanel = ({
 
         {canShowCalcSection ? (
           <div className="rounded-lg border bg-card">
-            <div className={cn(calcOpen && 'rounded-t-lg border-b bg-background')}>
+            <div
+              className={cn(calcOpen && 'rounded-t-lg border-b bg-background')}
+            >
               <DisclosureButton
                 open={calcOpen}
                 onToggle={() => setCalcOpen((current) => !current)}
@@ -405,22 +430,27 @@ export const FieldPanel = ({
 
       <div className="border-t bg-background p-4 @2xl:flex @2xl:justify-end @2xl:px-6">
         {isSimulationView ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full @2xl:w-auto @2xl:px-5"
-            disabled={!canEditRotation || field.rotationId === null}
-            onClick={() => setManualEditorOpen(true)}
-            title={
+          <AppTooltip
+            content={
               !canEditRotation
                 ? 'Opret en simulering for at redigere sædskifter.'
                 : field.rotationId === null
                   ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
-                  : undefined
+                  : 'Rediger sædskifte manuelt'
             }
           >
-            Rediger sædskifte
-          </Button>
+            <span className="block w-full @2xl:w-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full @2xl:w-auto @2xl:px-5"
+                disabled={!canEditRotation || field.rotationId === null}
+                onClick={() => setManualEditorOpen(true)}
+              >
+                Rediger sædskifte
+              </Button>
+            </span>
+          </AppTooltip>
         ) : (
           <Button
             variant="destructive"

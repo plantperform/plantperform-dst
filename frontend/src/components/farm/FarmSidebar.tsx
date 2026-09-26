@@ -4,7 +4,7 @@ import {
   Copy,
   FlaskConical,
   History,
-  MoreHorizontal,
+  MoreVertical,
   PanelLeft,
   Play,
   Plus,
@@ -50,6 +50,7 @@ import type {
   FarmViewSelection,
 } from '@/components/farm/types'
 import { ViewModeSwitch } from '@/components/farm/ViewModeSwitch'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -103,10 +104,7 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-import {
-  getStoredRole,
-  ROLE_LABELS,
-} from '@/lib/onboarding'
+import { getStoredRole, ROLE_LABELS } from '@/lib/onboarding'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
@@ -161,7 +159,6 @@ const describeKeyFigures = (
     title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr`,
   }
 }
-
 
 const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
   name: `${simulation.name} (kopi)`,
@@ -559,19 +556,18 @@ const KeyFiguresLine = ({
   }
 
   return (
-    <span
-      className="flex min-w-0 items-center gap-1.5 text-xs font-normal text-sidebar-foreground/70"
-      title={figures.title}
-    >
-      <span
-        className={cn(
-          'size-1.5 shrink-0 rounded-full',
-          QUOTA_STATUS_STYLES[figures.level].dot,
-        )}
-        aria-hidden="true"
-      />
-      <span className="truncate">{figures.label}</span>
-    </span>
+    <AppTooltip content={figures.title} side="right">
+      <span className="flex w-full min-w-0 items-center gap-1.5 text-xs font-normal text-sidebar-foreground/70">
+        <span
+          className={cn(
+            'size-1.5 shrink-0 rounded-full',
+            QUOTA_STATUS_STYLES[figures.level].dot,
+          )}
+          aria-hidden="true"
+        />
+        <span className="truncate">{figures.label}</span>
+      </span>
+    </AppTooltip>
   )
 }
 
@@ -593,14 +589,16 @@ const SimulationDetailLine = ({
   if (lockedCount > 0) parts.push(`${formatFieldCount(lockedCount)} låst`)
 
   return (
-    <span
-      className="truncate pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums"
-      title={`${changedCount} af ${fieldCount} marker har et andet sædskifte end afgrødehistorikken${
+    <AppTooltip
+      side="right"
+      content={`${changedCount} af ${fieldCount} marker har et andet sædskifte end afgrødehistorikken${
         lockedCount > 0 ? `, ${lockedCount} er låst` : ''
       }`}
     >
-      {parts.join(' · ')}
-    </span>
+      <span className="truncate pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums">
+        {parts.join(' · ')}
+      </span>
+    </AppTooltip>
   )
 }
 
@@ -666,102 +664,97 @@ const SimulationMenuItem = ({
 
   return (
     <SidebarMenuItem>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <SidebarMenuButton
-            size="lg"
-            isActive={selected}
-            aria-current={selected ? 'page' : undefined}
-            aria-busy={running || undefined}
-            className={cn(
-              VIEW_BUTTON_CLASS,
-              'relative group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
-            )}
-            title={iconRail ? undefined : createdLabel}
-            onClick={onSelect}
-          >
-            {loading || running ? <Spinner /> : <FlaskConical />}
-            {failedRun ? (
-              <span
-                className="absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
-                aria-hidden="true"
-              />
-            ) : null}
-            <ViewMenuLabel name={simulation.name}>
-              <KeyFiguresLine
-                figures={figures}
-                loading={fieldsLoading}
-                error={Boolean(fieldsError)}
-              />
-              {runningRun ? (
-                <span className="truncate pl-3 text-[11px] font-normal text-primary tabular-nums">
-                  <OptimizationRunElapsed run={runningRun} />
-                </span>
-              ) : simulationFields ? (
-                <SimulationDetailLine
-                  changedCount={changedCount}
-                  lockedCount={lockedCount}
-                  fieldCount={simulationFields.length}
+      <div className="relative">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              isActive={selected}
+              aria-current={selected ? 'page' : undefined}
+              aria-busy={running || undefined}
+              className={cn(
+                VIEW_BUTTON_CLASS,
+                'relative group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
+              )}
+              onClick={onSelect}
+            >
+              {loading || running ? <Spinner /> : <FlaskConical />}
+              {failedRun ? (
+                <span
+                  className="absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
+                  aria-hidden="true"
                 />
               ) : null}
-            </ViewMenuLabel>
-          </SidebarMenuButton>
-        </TooltipTrigger>
-        <TooltipContent side="right" align="center" hidden={!iconRail}>
-          {iconRail ? (
-            <div className="grid gap-0.5">
-              <span>{simulation.name}</span>
-              <span>{createdLabel}</span>
-              {figures ? <span>{figures.label}</span> : null}
-              {runningRun ? (
-                <span className="tabular-nums">
-                  <OptimizationRunElapsed run={runningRun} />
-                </span>
-              ) : failedRun ? (
-                <span>
-                  {OPTIMIZATION_KIND_LABELS[failedRun.kind]} fejlede
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            createdLabel
-          )}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuAction
-            showOnHover
-            disabled={deleting || copying}
-            className="peer-data-[size=lg]/menu-button:top-3.5"
-            aria-label={`Handlinger for ${simulation.name}`}
-          >
-            {copying || deleting ? (
-              <Spinner />
+              <ViewMenuLabel name={simulation.name}>
+                <KeyFiguresLine
+                  figures={figures}
+                  loading={fieldsLoading}
+                  error={Boolean(fieldsError)}
+                />
+                {runningRun ? (
+                  <span className="truncate pl-3 text-[11px] font-normal text-primary tabular-nums">
+                    <OptimizationRunElapsed run={runningRun} />
+                  </span>
+                ) : simulationFields ? (
+                  <SimulationDetailLine
+                    changedCount={changedCount}
+                    lockedCount={lockedCount}
+                    fieldCount={simulationFields.length}
+                  />
+                ) : null}
+              </ViewMenuLabel>
+            </SidebarMenuButton>
+          </TooltipTrigger>
+          <TooltipContent side="right" align="center" hidden={!iconRail}>
+            {iconRail ? (
+              <div className="grid gap-0.5">
+                <span>{simulation.name}</span>
+                <span>{createdLabel}</span>
+                {figures ? <span>{figures.label}</span> : null}
+                {runningRun ? (
+                  <span className="tabular-nums">
+                    <OptimizationRunElapsed run={runningRun} />
+                  </span>
+                ) : failedRun ? (
+                  <span>
+                    {OPTIMIZATION_KIND_LABELS[failedRun.kind]} fejlede
+                  </span>
+                ) : null}
+              </div>
             ) : (
-              <MoreHorizontal />
+              createdLabel
             )}
-          </SidebarMenuAction>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start">
-          <DropdownMenuItem
-            disabled={copying}
-            title="Opretter en ny simulering med samme indstillinger og regler. Kører Optimér på kopien med det samme. Markernes låse følger ikke med."
-            onSelect={onCopy}
-          >
-            <Copy className="mr-2 size-4" aria-hidden="true" />
-            Kopier som ny
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            disabled={deleting}
-            onSelect={onDelete}
-          >
-            <Trash2 className="mr-2 size-4" aria-hidden="true" />
-            Slet
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction
+              showOnHover
+              disabled={deleting || copying}
+              className="top-1/2! -translate-y-1/2"
+              aria-label={`Handlinger for ${simulation.name}`}
+            >
+              {copying || deleting ? <Spinner /> : <MoreVertical />}
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start">
+            <AppTooltip content="Opretter en ny simulering med samme indstillinger og regler. Kører Optimér på kopien med det samme. Markernes låse følger ikke med.">
+              <DropdownMenuItem disabled={copying} onSelect={onCopy}>
+                <Copy className="mr-2 size-4" aria-hidden="true" />
+                Kopier som ny
+              </DropdownMenuItem>
+            </AppTooltip>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              disabled={deleting}
+              onSelect={onDelete}
+            >
+              <Trash2 className="mr-2 size-4" aria-hidden="true" />
+              Slet
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {failedRun ? (
         <SimulationRunFailure run={failedRun} fields={simulationFields} />
       ) : null}
@@ -792,12 +785,11 @@ const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
       role="alert"
       className="flex items-center gap-1 pr-1 pl-9 text-[11px] text-destructive group-data-[collapsible=icon]:hidden"
     >
-      <span
-        className="min-w-0 flex-1 truncate"
-        title={run.status === 'failed' ? run.error : undefined}
-      >
-        {OPTIMIZATION_KIND_LABELS[run.kind]} fejlede
-      </span>
+      <AppTooltip content={run.status === 'failed' ? run.error : undefined}>
+        <span className="min-w-0 flex-1 truncate">
+          {OPTIMIZATION_KIND_LABELS[run.kind]} fejlede
+        </span>
+      </AppTooltip>
       <button
         type="button"
         className="shrink-0 rounded px-1 font-medium underline-offset-2 hover:underline disabled:opacity-50"
@@ -818,7 +810,6 @@ const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
   )
 }
 
-// On the list item, because a disabled button does not show its title.
 const RUN_IN_PROGRESS_TITLE = 'En optimering kører allerede'
 
 type SimulationSubMenuProps = {
@@ -839,64 +830,70 @@ const SimulationSubMenu = ({
   onYearlyOptimize,
 }: SimulationSubMenuProps) => (
   <SidebarMenuSub>
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton
-        asChild
-        className="w-full"
-        isActive={mode === 'values'}
-      >
-        <button
-          type="button"
-          aria-current={mode === 'values' ? 'page' : undefined}
-          title="Vis hvad optimeringen har beregnet for markerne"
-          onClick={() => onModeChange('values')}
+    <AppTooltip content="Vis hvad optimeringen har beregnet for markerne">
+      <SidebarMenuSubItem>
+        <SidebarMenuSubButton
+          asChild
+          className="w-full"
+          isActive={mode === 'values'}
         >
-          <Table2 />
-          <span>Værdier</span>
-        </button>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton
-        asChild
-        isActive={mode === 'rules'}
-        className="w-full data-[active=true]:text-rules! data-[active=true]:[&>svg]:text-rules!"
-      >
-        <button
-          type="button"
-          aria-current={mode === 'rules' ? 'page' : undefined}
-          title="Sæt hvad optimeringen må gøre"
-          onClick={() => onModeChange('rules')}
+          <button
+            type="button"
+            aria-current={mode === 'values' ? 'page' : undefined}
+            onClick={() => onModeChange('values')}
+          >
+            <Table2 />
+            <span>Værdier</span>
+          </button>
+        </SidebarMenuSubButton>
+      </SidebarMenuSubItem>
+    </AppTooltip>
+    <AppTooltip content="Sæt hvad optimeringen må gøre">
+      <SidebarMenuSubItem>
+        <SidebarMenuSubButton
+          asChild
+          isActive={mode === 'rules'}
+          className="w-full data-[active=true]:text-rules! data-[active=true]:[&>svg]:text-rules!"
         >
-          <SlidersHorizontal />
-          <span>Regler</span>
-        </button>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
-    <SidebarMenuSubItem title={running ? RUN_IN_PROGRESS_TITLE : undefined}>
-      <SidebarMenuSubButton asChild className="w-full">
-        <button
-          type="button"
-          disabled={disabled || running}
-          onClick={onOptimize}
-        >
-          <Play />
-          <span>Optimér</span>
-        </button>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
-    <SidebarMenuSubItem title={running ? RUN_IN_PROGRESS_TITLE : undefined}>
-      <SidebarMenuSubButton asChild className="w-full">
-        <button
-          type="button"
-          disabled={disabled || running}
-          onClick={onYearlyOptimize}
-        >
-          <CalendarRange />
-          <span>Års-optimering</span>
-        </button>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
+          <button
+            type="button"
+            aria-current={mode === 'rules' ? 'page' : undefined}
+            onClick={() => onModeChange('rules')}
+          >
+            <SlidersHorizontal />
+            <span>Regler</span>
+          </button>
+        </SidebarMenuSubButton>
+      </SidebarMenuSubItem>
+    </AppTooltip>
+    <AppTooltip content={running ? RUN_IN_PROGRESS_TITLE : undefined}>
+      <SidebarMenuSubItem>
+        <SidebarMenuSubButton asChild className="w-full">
+          <button
+            type="button"
+            disabled={disabled || running}
+            onClick={onOptimize}
+          >
+            <Play />
+            <span>Optimér</span>
+          </button>
+        </SidebarMenuSubButton>
+      </SidebarMenuSubItem>
+    </AppTooltip>
+    <AppTooltip content={running ? RUN_IN_PROGRESS_TITLE : undefined}>
+      <SidebarMenuSubItem>
+        <SidebarMenuSubButton asChild className="w-full">
+          <button
+            type="button"
+            disabled={disabled || running}
+            onClick={onYearlyOptimize}
+          >
+            <CalendarRange />
+            <span>Års-optimering</span>
+          </button>
+        </SidebarMenuSubButton>
+      </SidebarMenuSubItem>
+    </AppTooltip>
   </SidebarMenuSub>
 )
 
