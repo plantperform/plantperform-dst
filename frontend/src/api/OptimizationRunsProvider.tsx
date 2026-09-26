@@ -8,7 +8,7 @@ import {
   runYearlySimulationOptimization,
 } from '@/api/mutations'
 import {
-  DEFAULT_TIME_LIMIT_SECONDS,
+  OPTIMIZATION_TIME_LIMIT_SECONDS,
   OptimizationRunsContext,
   type OptimizationRun,
   type StartOptimizationRun,
@@ -68,9 +68,6 @@ export const OptimizationRunsProvider = ({
         id: nextId.current++,
         status: 'running',
         startedAt: Date.now(),
-        timeLimitSeconds:
-          request.input.timeLimitSeconds ??
-          DEFAULT_TIME_LIMIT_SECONDS[request.kind],
       }
       putRun(running)
 
@@ -78,16 +75,14 @@ export const OptimizationRunsProvider = ({
         try {
           const response =
             request.kind === 'optimize'
-              ? await runSimulationOptimization(
-                  farmId,
-                  simulationId,
-                  request.input,
-                )
-              : await runYearlySimulationOptimization(
-                  farmId,
-                  simulationId,
-                  request.input,
-                )
+              ? await runSimulationOptimization(farmId, simulationId, {
+                  ...request.input,
+                  timeLimitSeconds: OPTIMIZATION_TIME_LIMIT_SECONDS,
+                })
+              : await runYearlySimulationOptimization(farmId, simulationId, {
+                  ...request.input,
+                  timeLimitSeconds: OPTIMIZATION_TIME_LIMIT_SECONDS,
+                })
           await mutate(simulationFieldsKey(farmId, simulationId), response.fields, {
             revalidate: false,
           })

@@ -6,10 +6,7 @@ import type {
   OptimizeSimulationResponse,
   YearlyOptimizeSimulationInput,
 } from '@/api/types'
-import type {
-  OptimizationChanges,
-  OptimizationKind,
-} from '@/lib/optimization-run'
+import type { OptimizationChanges } from '@/lib/optimization-run'
 
 export type OptimizationRunRequest =
   | { kind: 'optimize'; input: OptimizeSimulationInput }
@@ -20,7 +17,6 @@ type OptimizationRunBase = OptimizationRunRequest & {
   farmId: string
   simulationId: string
   startedAt: number
-  timeLimitSeconds: number
 }
 
 export type OptimizationRun = OptimizationRunBase &
@@ -83,14 +79,11 @@ export const useOptimizationRunActions = () => {
   return { startRun, dismissRun, markStale }
 }
 
-export const DEFAULT_TIME_LIMIT_SECONDS: Record<OptimizationKind, number> = {
-  optimize: 15,
-  yearly: 20,
-}
+export const OPTIMIZATION_TIME_LIMIT_SECONDS = 600
 
 const DEFAULT_OPTIMIZATION_REQUEST: OptimizationRunRequest = {
   kind: 'optimize',
-  input: { timeLimitSeconds: DEFAULT_TIME_LIMIT_SECONDS.optimize },
+  input: {},
 }
 
 export const useStartDefaultOptimization = () => {

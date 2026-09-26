@@ -1,4 +1,7 @@
-import type { OptimizationRun } from '@/api/optimization-runs'
+import {
+  OPTIMIZATION_TIME_LIMIT_SECONDS,
+  type OptimizationRun,
+} from '@/api/optimization-runs'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
 import {
@@ -40,7 +43,7 @@ const SuccessCheck = () => (
 
 const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
-  const limitMs = run.timeLimitSeconds * 1000
+  const limitMs = OPTIMIZATION_TIME_LIMIT_SECONDS * 1000
   const overLimit = elapsed >= limitMs
 
   return (
