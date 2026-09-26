@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
 
-import { fetcher } from '@/api/client'
+import { ApiError, fetcher } from '@/api/client'
 import { simulationFieldsKey, simulationYearlySummaryKey } from '@/api/hooks'
 import {
   runSimulationOptimization,
@@ -14,7 +14,10 @@ import {
   type StartOptimizationRun,
 } from '@/api/optimization-runs'
 import type { YearlySummaryEntry } from '@/api/types'
-import { summarizeOptimizationChanges } from '@/lib/optimization-run'
+import {
+  optimizationFailureMessage,
+  summarizeOptimizationChanges,
+} from '@/lib/optimization-run'
 
 // After a run, simulationFieldsKey is updated directly from the response. The
 // yearly overview strip uses a separate SWR key that takes a while to
@@ -113,10 +116,16 @@ export const OptimizationRunsProvider = ({
           putRun({
             ...running,
             status: 'failed',
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Kunne ikke køre optimeringen.',
+            error: optimizationFailureMessage(
+              {
+                status: error instanceof ApiError ? error.status : undefined,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Kunne ikke køre optimeringen.',
+              },
+              OPTIMIZATION_TIME_LIMIT_SECONDS,
+            ),
           })
         }
       }
