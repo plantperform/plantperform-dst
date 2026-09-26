@@ -1,4 +1,7 @@
-import type { OptimizationRun } from '@/api/optimization-runs'
+import {
+  OPTIMIZATION_TIME_LIMIT_SECONDS,
+  type OptimizationRun,
+} from '@/api/optimization-runs'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
 import {
@@ -40,8 +43,7 @@ const SuccessCheck = () => (
 
 const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
-  const limitMs = run.timeLimitSeconds * 1000
-  const overLimit = elapsed >= limitMs
+  const overLimit = elapsed >= OPTIMIZATION_TIME_LIMIT_SECONDS * 1000
 
   return (
     <>
@@ -57,10 +59,7 @@ const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
         className="mx-auto h-1 w-48 overflow-hidden rounded-full bg-muted"
         aria-hidden="true"
       >
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear"
-          style={{ width: `${Math.min(100, (elapsed / limitMs) * 100)}%` }}
-        />
+        <div className="h-full w-1/3 rounded-full bg-primary motion-safe:animate-indeterminate" />
       </div>
       <p className="pt-1 text-xs text-muted-foreground">
         Du kan lukke vinduet. Optimeringen kører videre.

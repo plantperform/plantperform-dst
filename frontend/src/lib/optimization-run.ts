@@ -13,6 +13,19 @@ export const RUN_STATUS_LABELS: Record<OptimizationStatus, string> = {
   FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
 }
 
+const OUT_OF_TIME_STATUS = 503
+
+export const optimizationFailureMessage = (
+  failure: { status?: number; message: string },
+  timeLimitSeconds: number,
+) =>
+  failure.status === OUT_OF_TIME_STATUS
+    ? `Optimeringen fandt ikke en løsning inden for ${Math.round(
+        timeLimitSeconds / 60,
+      )} minutter. Prøv at lempe reglerne, fx en højere maks. udledning, ` +
+      'eller udeluk nogle afgrøder, så der er færre muligheder at gennemgå.'
+    : failure.message
+
 export type OptimizationChanges = {
   // Fields whose sædskifte or its placement in the years changed, as returned
   // by the run.
