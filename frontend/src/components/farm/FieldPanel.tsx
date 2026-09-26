@@ -6,6 +6,7 @@ import type {
   RotationCandidateYearResult,
   Simulation,
 } from '@/api/types'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
@@ -78,18 +79,21 @@ const QuotaStatusPill = ({
 
 const PrimaryMetricCard = ({
   label,
+  term,
   value,
   unit,
   muted = false,
 }: {
   label: string
+  term?: GlossaryTerm
   value: string
   unit?: string
   muted?: boolean
 }) => (
   <div className="rounded-lg border bg-card p-3 @2xl:border-2 @2xl:border-primary/20 @2xl:p-4">
-    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground @2xl:text-primary">
+    <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground @2xl:text-primary">
       {label}
+      {term ? <GlossaryInfo term={term} /> : null}
     </div>
     <div
       className={cn(
@@ -109,20 +113,23 @@ const PrimaryMetricCard = ({
 
 const SupportMetricCard = ({
   label,
+  term,
   value,
   detail,
   detailItalic = false,
   muted = false,
 }: {
   label: string
+  term?: GlossaryTerm
   value: string
   detail?: string
   detailItalic?: boolean
   muted?: boolean
 }) => (
   <div className="rounded-lg border bg-card px-3 py-2 @2xl:p-4 @2xl:opacity-90">
-    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
       {label}
+      {term ? <GlossaryInfo term={term} /> : null}
     </div>
     <div
       className={cn(
@@ -253,6 +260,7 @@ export const FieldPanel = ({
         <div className="grid grid-cols-2 gap-x-2 gap-y-4 @2xl:grid-cols-4 @2xl:gap-3">
           <PrimaryMetricCard
             label="DB2"
+            term="db2"
             value={
               calculated ? `${formatNumber(field.db2)} kr` : 'Ikke beregnet'
             }
@@ -265,6 +273,7 @@ export const FieldPanel = ({
           />
           <PrimaryMetricCard
             label="Udledning"
+            term="nLoad"
             value={
               calculated ? `${formatNumber(field.nLoad)} kg N` : 'Ikke beregnet'
             }
@@ -291,6 +300,7 @@ export const FieldPanel = ({
           />
           <SupportMetricCard
             label="Foderenheder"
+            term="feedUnits"
             value={
               !calculated
                 ? 'Ikke beregnet'
@@ -314,10 +324,11 @@ export const FieldPanel = ({
 
         <div className="@container rounded-lg border bg-card p-3.5 @2xl:p-4">
           <div className="border-b pb-2">
-            <h3 className="text-sm font-semibold">
+            <h3 className="flex items-center gap-1 text-sm font-semibold">
               {isSimulationView
                 ? 'Sædskifte år for år'
                 : 'Afgrødehistorik år for år'}
+              {isSimulationView ? <GlossaryInfo term="rotation" /> : null}
             </h3>
             {field.cropRotation.length > 0 ? (
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">

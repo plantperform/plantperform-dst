@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import type {
   FertiliserPresetOption,
   RotationCategoryOption,
@@ -36,18 +37,23 @@ const yesNo = (value: boolean) => (value ? 'Ja' : 'Nej')
 
 const Section = ({
   title,
+  term,
   stepIndex,
   onEditStep,
   children,
 }: {
   title: string
+  term?: GlossaryTerm
   stepIndex: number
   onEditStep: (stepIndex: number) => void
   children: ReactNode
 }) => (
   <section className="space-y-1.5 py-3 first:pt-0">
     <div className="flex items-baseline justify-between gap-2">
-      <h3 className="text-sm font-medium">{title}</h3>
+      <h3 className="flex items-center gap-1 text-sm font-medium">
+        {title}
+        {term ? <GlossaryInfo term={term} /> : null}
+      </h3>
       <button
         type="button"
         className="rounded-sm text-xs font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -95,14 +101,24 @@ export const SimulationSummary = ({
   return (
     <div className="space-y-4">
       <div className="divide-y">
-        <Section title="Grundlag" stepIndex={0} onEditStep={onEditStep}>
+        <Section
+          title="Grundlag"
+          term="simulation"
+          stepIndex={0}
+          onEditStep={onEditStep}
+        >
           <p className="text-foreground">{input.name}</p>
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
         </Section>
 
-        <Section title="Sædskifter" stepIndex={1} onEditStep={onEditStep}>
+        <Section
+          title="Sædskifter"
+          term="rotation"
+          stepIndex={1}
+          onEditStep={onEditStep}
+        >
           <p>
             <span className="text-foreground">
               {rotationVariants.length} valgt
@@ -118,7 +134,10 @@ export const SimulationSummary = ({
                 className="mt-0.5 size-3.5 shrink-0"
                 aria-hidden="true"
               />
-              {farmingSystemMismatchMessage(mismatchCount, values.farmingSystem)}
+              {farmingSystemMismatchMessage(
+                mismatchCount,
+                values.farmingSystem,
+              )}
             </p>
           ) : null}
           <details className="group">
@@ -149,12 +168,15 @@ export const SimulationSummary = ({
             </p>
           )}
           <p>Kun organisk gødning: {yesNo(fertiliser.onlyOrganic)}</p>
-          <p>N-norm: {nNormPercentages.map((value) => `${value} %`).join(', ')}</p>
+          <p>
+            N-norm <GlossaryInfo term="nNorm" />:{' '}
+            {nNormPercentages.map((value) => `${value} %`).join(', ')}
+          </p>
         </Section>
 
         <Section title="Dyrkningspraksis" stepIndex={3} onEditStep={onEditStep}>
           <p>
-            Efterafgrøde:{' '}
+            Efterafgrøde <GlossaryInfo term="catchCrop" />:{' '}
             {input.catchCropDailyBasis
               ? `${input.catchCropSowingDate} · dagsbasis §38`
               : `${sowingInterval?.label ?? input.catchCropSowingDate} · trappesats §37`}{' '}

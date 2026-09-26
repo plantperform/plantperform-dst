@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { shortCropName } from '@/lib/crop-groups'
@@ -126,15 +127,18 @@ export const BigMetricTile = ({
   label,
   value,
   caption,
+  term,
 }: {
   label: string
   value: string
   caption?: string
+  term?: GlossaryTerm
 }) => (
   <div className="rounded-lg border bg-background p-3.5">
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
-    </p>
+      {term ? <GlossaryInfo term={term} /> : null}
+    </div>
     <p className="mt-1 text-2xl font-bold leading-tight tabular-nums text-foreground">
       {value}
     </p>
@@ -152,10 +156,12 @@ const DefinitionRow = ({
   title,
   muted,
   strong,
+  term,
 }: {
   label: string
   value: string
   title?: string
+  term?: GlossaryTerm
   muted?: boolean
   strong?: boolean
 }) => {
@@ -167,6 +173,7 @@ const DefinitionRow = ({
         }
       >
         {label}
+        {term ? <GlossaryInfo term={term} /> : null}
       </span>
       <span
         className={`shrink-0 tabular-nums ${
@@ -236,11 +243,13 @@ const KeyMetricsSection = ({
       <div className="space-y-3 @2xl:col-span-5">
         <BigMetricTile
           label={`Udledning (${calendarYear})`}
+          term="nLoad"
           value={`${fmt(nLoad, 1)} kg N/ha`}
           caption={`Udvaskning ${fmt(leaching, 1)} kg N/ha - ${retentionText}`}
         />
         <BigMetricTile
           label={`DB2 (${calendarYear})`}
+          term="db2"
           value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
           caption={
             yieldAmount
@@ -260,6 +269,7 @@ const KeyMetricsSection = ({
         <div>
           <DefinitionRow
             label="Afgrøde-norm"
+            term="nNorm"
             value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
             title={
               reducedNorm !== null
@@ -290,6 +300,7 @@ const KeyMetricsSection = ({
           {showFeedUnits ? (
             <DefinitionRow
               label="Foderenheder"
+              term="feedUnits"
               value={`${fmt(yieldAmount, 0)} FE/ha`}
             />
           ) : null}

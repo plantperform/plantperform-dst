@@ -10,6 +10,7 @@ import {
   CHOICE_IDLE_CLASS,
   CHOICE_SELECTED_CLASS,
 } from '@/components/farm/choice-styles'
+import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   computeFieldTotals,
@@ -123,8 +124,8 @@ export const CatchmentPicker = ({
       aria-label="Kystvandopland"
       className="flex w-58 shrink-0 flex-col rounded-2xl border bg-card px-3.5 pt-3.5 pb-3"
     >
-      <h2 className="mb-2.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
-        Kystvandopland
+      <h2 className="mb-2.5 flex items-center gap-1 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
+        Kystvandopland <GlossaryInfo term="catchment" />
       </h2>
       <div
         role="group"

@@ -7,6 +7,7 @@ import type {
   OptimizeSimulationResponse,
   YearlySummaryEntry,
 } from '@/api/types'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropDistribution } from '@/components/farm/CropDistribution'
 import { AppTooltip } from '@/components/ui/app-tooltip'
@@ -168,9 +169,20 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
   )
 }
 
-const ScopedFact = ({ label, value }: { label: string; value: string }) => (
+const ScopedFact = ({
+  label,
+  value,
+  term,
+}: {
+  label: string
+  value: string
+  term?: GlossaryTerm
+}) => (
   <div className="min-w-0">
-    <dt className="text-[11px] text-muted-foreground">{label}</dt>
+    <dt className="flex items-center gap-1 text-[11px] text-muted-foreground">
+      {label}
+      {term ? <GlossaryInfo term={term} /> : null}
+    </dt>
     <dd className="text-[13px] font-medium tabular-nums">{value}</dd>
   </div>
 )
@@ -219,6 +231,7 @@ const ScopedSummary = ({
         />
         <ScopedFact
           label="Kvote pr. ha"
+          term="quota"
           value={
             areaHa > 0
               ? `${formatNumber(row.catchment.totals.nLoadQuotaKgN / areaHa)} kg N/ha`
@@ -227,6 +240,7 @@ const ScopedSummary = ({
         />
         <ScopedFact
           label={column ? 'DB2' : 'DB2 gns. pr. år'}
+          term="db2"
           value={formatCompactDkk(db2)}
         />
         <ScopedFact
