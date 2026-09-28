@@ -4,12 +4,15 @@ import { useId, useState, type ReactNode } from 'react'
 import { CatchmentYearCurves } from '@/components/farm/CatchmentYearCurves'
 import {
   BEST_TEXT_CLASS,
+  columnCellClass,
   columnFigure,
   completeFigure,
-  HISTORY_CELL_CLASS,
+  HIGHLIGHT_HEAD_CLASS,
+  highlightHandlers,
   HISTORY_HEAD_CLASS,
   TABLE_HEAD_CLASS,
   type ComparedColumn,
+  type OnHighlight,
 } from '@/components/farm/comparison-column'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
@@ -42,10 +45,10 @@ import { cn } from '@/lib/utils'
 const LABEL_CELL_CLASS =
   'h-auto px-4.5 align-top font-normal whitespace-normal text-foreground'
 
-const cellClass = (column: ComparedColumn) =>
+const cellClass = (column: ComparedColumn, highlightedKey: string | null) =>
   cn(
-    'border-l border-border/60 px-4 align-top whitespace-normal',
-    column.history && HISTORY_CELL_CLASS,
+    'border-l border-border/60 px-4 align-top whitespace-normal transition-colors duration-120',
+    columnCellClass(column, highlightedKey),
   )
 
 const statusClass = (status: CatchmentYearStatus) =>
@@ -61,6 +64,10 @@ type CatchmentRowProps = {
   quotaKgN: number | undefined
   open: boolean
   onToggle: () => void
+  highlightedKey: string | null
+  onHighlight: OnHighlight
+  hoveredYear: number | null
+  onHoverYear: (index: number | null) => void
 }
 
 const CatchmentRow = ({
@@ -69,6 +76,10 @@ const CatchmentRow = ({
   quotaKgN,
   open,
   onToggle,
+  highlightedKey,
+  onHighlight,
+  hoveredYear,
+  onHoverYear,
 }: CatchmentRowProps) => {
   const detailId = useId()
   const comparisons = columns.map((column) =>
@@ -83,7 +94,7 @@ const CatchmentRow = ({
   return (
     <>
       <TableRow
-        className="cursor-pointer border-border hover:bg-transparent"
+        className="cursor-pointer border-border hover:bg-transparent has-aria-expanded:bg-transparent"
         onClick={onToggle}
       >
         <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-3.5')}>
@@ -121,7 +132,8 @@ const CatchmentRow = ({
           return (
             <TableCell
               key={column.key}
-              className={cn(cellClass(column), 'py-3')}
+              className={cn(cellClass(column, highlightedKey), 'py-3')}
+              {...highlightHandlers(column.key, onHighlight)}
             >
               {comparison === undefined ? (
                 <div onClick={(event) => event.stopPropagation()}>
@@ -159,6 +171,10 @@ const CatchmentRow = ({
           <TableCell colSpan={columns.length + 1} className="p-0">
             <CatchmentYearCurves
               id={detailId}
+              hoveredYear={hoveredYear}
+              onHoverYear={onHoverYear}
+              highlightedKey={highlightedKey}
+              onHighlight={onHighlight}
               rows={columns.map((column, index) => ({
                 key: column.key,
                 title: column.title,
@@ -179,10 +195,19 @@ type FigureRowProps = {
   label: ReactNode
   note?: string | null
   columns: ComparedColumn[]
+  highlightedKey: string | null
+  onHighlight: OnHighlight
   children: (column: ComparedColumn, index: number) => ReactNode
 }
 
-const FigureRow = ({ label, note, columns, children }: FigureRowProps) => (
+const FigureRow = ({
+  label,
+  note,
+  columns,
+  highlightedKey,
+  onHighlight,
+  children,
+}: FigureRowProps) => (
   <TableRow className="border-border/60 hover:bg-transparent">
     <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-3 text-[13px]')}>
       {label}
@@ -193,7 +218,11 @@ const FigureRow = ({ label, note, columns, children }: FigureRowProps) => (
       ) : null}
     </TableHead>
     {columns.map((column, index) => (
-      <TableCell key={column.key} className={cn(cellClass(column), 'py-2.5')}>
+      <TableCell
+        key={column.key}
+        className={cn(cellClass(column, highlightedKey), 'py-2.5')}
+        {...highlightHandlers(column.key, onHighlight)}
+      >
         {children(column, index)}
       </TableCell>
     ))}
@@ -206,6 +235,8 @@ type CatchmentQuotaTableProps = {
   quotaByCatchment: ReadonlyMap<number, number>
   showFeedUnits: boolean
   feedUnitRequirements: FeedUnitRequirementPlacement
+  highlightedKey: string | null
+  onHighlight: OnHighlight
 }
 
 export const CatchmentQuotaTable = ({
@@ -214,7 +245,10 @@ export const CatchmentQuotaTable = ({
   quotaByCatchment,
   showFeedUnits,
   feedUnitRequirements,
+  highlightedKey,
+  onHighlight,
 }: CatchmentQuotaTableProps) => {
+  const [hoveredYear, setHoveredYear] = useState<number | null>(null)
   const [openIds, setOpenIds] = useState<ReadonlySet<number>>(
     () => new Set(catchments.slice(0, 1).map(({ catchmentId }) => catchmentId)),
   )
@@ -262,9 +296,14 @@ export const CatchmentQuotaTable = ({
               key={column.key}
               scope="col"
               className={cn(
-                'h-auto border-l border-border/60 px-4 py-2.5 align-top font-normal whitespace-normal',
-                column.history ? HISTORY_HEAD_CLASS : TABLE_HEAD_CLASS,
+                'h-auto border-l border-border/60 px-4 py-2.5 align-top font-normal whitespace-normal transition-colors duration-120',
+                column.history
+                  ? HISTORY_HEAD_CLASS
+                  : column.key === highlightedKey
+                    ? HIGHLIGHT_HEAD_CLASS
+                    : TABLE_HEAD_CLASS,
               )}
+              {...highlightHandlers(column.key, onHighlight)}
             >
               <span className="block font-display text-[17px] leading-tight">
                 {column.title}
@@ -295,6 +334,10 @@ export const CatchmentQuotaTable = ({
             quotaKgN={quotaByCatchment.get(catchment.catchmentId)}
             open={openIds.has(catchment.catchmentId)}
             onToggle={() => toggle(catchment.catchmentId)}
+            highlightedKey={highlightedKey}
+            onHighlight={onHighlight}
+            hoveredYear={hoveredYear}
+            onHoverYear={setHoveredYear}
           />
         ))}
         {showFeedUnits ? (
@@ -307,6 +350,8 @@ export const CatchmentQuotaTable = ({
             }
             note={feedUnitRequirements.label}
             columns={columns}
+            highlightedKey={highlightedKey}
+            onHighlight={onHighlight}
           >
             {(column, index) => {
               const value = feedUnits[index]
@@ -357,6 +402,8 @@ export const CatchmentQuotaTable = ({
           label="Marker ændret"
           note="i forhold til afgrødehistorikken"
           columns={columns}
+          highlightedKey={highlightedKey}
+          onHighlight={onHighlight}
         >
           {(column) =>
             column.changedCount === null ? (

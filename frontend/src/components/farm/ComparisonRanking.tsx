@@ -2,11 +2,13 @@ import type { ReactNode } from 'react'
 
 import {
   BEST_TEXT_CLASS,
+  columnCellClass,
   columnFigure,
   completeFigure,
-  HISTORY_CELL_CLASS,
+  highlightHandlers,
   TABLE_HEAD_CLASS,
   type ComparedColumn,
+  type OnHighlight,
 } from '@/components/farm/comparison-column'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
@@ -196,6 +198,8 @@ type ComparisonRankingProps = {
   catchmentCount: number
   sort: ComparisonSort
   onSortChange: (sort: ComparisonSort) => void
+  highlightedKey: string | null
+  onHighlight: OnHighlight
 }
 
 export const ComparisonRanking = ({
@@ -204,6 +208,8 @@ export const ComparisonRanking = ({
   catchmentCount,
   sort,
   onSortChange,
+  highlightedKey,
+  onHighlight,
 }: ComparisonRankingProps) => {
   const [history, ...simulations] = columns
   const sortable = simulations.length > 1
@@ -286,13 +292,19 @@ export const ComparisonRanking = ({
             className={cn(
               'hover:bg-transparent',
               column.history
-                ? cn(HISTORY_CELL_CLASS, 'border-b-[#D6CFBC] border-dashed')
+                ? 'border-b-[#D6CFBC] border-dashed'
                 : 'border-border/60',
             )}
+            {...(column.history
+              ? {}
+              : highlightHandlers(column.key, onHighlight))}
           >
             <TableHead
               scope="row"
-              className="h-auto px-4.5 py-3 align-top font-normal whitespace-normal"
+              className={cn(
+                'h-auto px-4.5 py-3 align-top font-normal whitespace-normal transition-colors duration-120',
+                columnCellClass(column, highlightedKey),
+              )}
             >
               <span className="block font-display text-[19px] leading-tight">
                 {column.title}
@@ -316,7 +328,10 @@ export const ComparisonRanking = ({
             {METRICS.map((metric, metricIndex) => (
               <TableCell
                 key={metric.key}
-                className="px-0 py-3 pr-8 align-top whitespace-normal"
+                className={cn(
+                  'px-0 py-3 pr-8 align-top whitespace-normal transition-colors duration-120',
+                  columnCellClass(column, highlightedKey),
+                )}
               >
                 <MetricCell
                   metric={metric}

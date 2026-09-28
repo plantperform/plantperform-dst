@@ -1,8 +1,8 @@
-import { useState } from 'react'
-
 import {
+  columnCellClass,
   DETAIL_CLASS,
-  HISTORY_CELL_CLASS,
+  highlightHandlers,
+  type OnHighlight,
 } from '@/components/farm/comparison-column'
 import {
   formatWholeNumber,
@@ -43,12 +43,6 @@ const dotClass = (level: CatchmentYearQuota['level'], hovered: boolean) => {
     : 'size-1.5 border-[#8F8F89] bg-card'
 }
 
-const rowHoverClass = (history: boolean) =>
-  history ? 'hover:bg-[#ECE6D6]' : 'hover:bg-muted'
-
-const labelHoverClass = (history: boolean) =>
-  history ? 'group-hover/curve:bg-[#ECE6D6]' : 'group-hover/curve:bg-muted'
-
 const labelClass = (level: CatchmentYearQuota['level']) =>
   level === 'over' || level === 'near'
     ? QUOTA_STATUS_STYLES[level].text
@@ -84,6 +78,8 @@ type CurveRowViewProps = {
   ceilingPct: number
   hovered: number | null
   onHover: (index: number) => void
+  highlightedKey: string | null
+  onHighlight: OnHighlight
 }
 
 const CurveRowView = ({
@@ -91,22 +87,25 @@ const CurveRowView = ({
   ceilingPct,
   hovered,
   onHover,
+  highlightedKey,
+  onHighlight,
 }: CurveRowViewProps) => {
   const count = describeCount(row.status)
-  const background = row.history ? HISTORY_CELL_CLASS : DETAIL_CLASS
+  const highlighted = row.key === highlightedKey
+  const background = columnCellClass(row, highlightedKey)
   return (
     <div
       className={cn(
-        'group/curve flex items-stretch border-t border-border/60 px-4.5 transition-colors',
-        row.history && HISTORY_CELL_CLASS,
-        rowHoverClass(row.history),
+        'flex items-stretch border-t border-border/60 px-4.5 transition-colors duration-120',
+        background,
       )}
+      {...highlightHandlers(row.key, onHighlight)}
     >
       <div
         className={cn(
           'flex w-51.5 min-w-0 shrink-0 items-center py-2 pr-2 pl-5.5 text-[13px]',
-          row.history &&
-            'text-muted-foreground group-hover/curve:text-foreground',
+          row.history && 'text-muted-foreground',
+          highlighted && 'font-semibold',
         )}
       >
         <span className="truncate">{row.title}</span>
@@ -138,8 +137,11 @@ const CurveRowView = ({
                     key={points}
                     points={points}
                     fill="none"
-                    className="stroke-[#8F8F89] transition-colors group-hover/curve:stroke-[#4A4A45]"
-                    strokeWidth={1.5}
+                    className={cn(
+                      'transition-colors',
+                      highlighted ? 'stroke-[#1C1C1A]' : 'stroke-[#8F8F89]',
+                    )}
+                    strokeWidth={highlighted ? 2 : 1.5}
                     vectorEffect="non-scaling-stroke"
                   />
                 ))}
@@ -163,8 +165,7 @@ const CurveRowView = ({
                         className={cn(
                           'absolute rounded-[3px] px-[3px] py-px text-[11px] leading-none font-semibold whitespace-nowrap tabular-nums',
                           labelClass(level),
-                          background,
-                          labelHoverClass(row.history),
+                          background ?? DETAIL_CLASS,
                         )}
                         style={{
                           left,
@@ -214,15 +215,29 @@ const CurveRowView = ({
 type CatchmentYearCurvesProps = {
   id: string
   rows: CurveRow[]
+  hoveredYear: number | null
+  onHoverYear: (index: number | null) => void
+  highlightedKey: string | null
+  onHighlight: OnHighlight
 }
 
-export const CatchmentYearCurves = ({ id, rows }: CatchmentYearCurvesProps) => {
-  const [hovered, setHovered] = useState<number | null>(null)
+export const CatchmentYearCurves = ({
+  id,
+  rows,
+  hoveredYear,
+  onHoverYear,
+  highlightedKey,
+  onHighlight,
+}: CatchmentYearCurvesProps) => {
   const ceilingPct = curveCeilingPct(
     rows.flatMap((row) => row.years?.map((year) => year.quotaPct) ?? []),
   )
   return (
-    <div id={id} className={DETAIL_CLASS} onMouseLeave={() => setHovered(null)}>
+    <div
+      id={id}
+      className={DETAIL_CLASS}
+      onMouseLeave={() => onHoverYear(null)}
+    >
       <div className="flex items-center px-4.5">
         <p className="w-51.5 shrink-0 py-2.5 pr-2 pl-5.5 text-xs leading-snug text-muted-foreground">
           Procent af kvoten pr. år
@@ -235,12 +250,12 @@ export const CatchmentYearCurves = ({ id, rows }: CatchmentYearCurvesProps) => {
               key={year}
               type="button"
               aria-label={describeYear(index, rows)}
-              onFocus={() => setHovered(index)}
-              onBlur={() => setHovered(null)}
-              onMouseEnter={() => setHovered(index)}
+              onFocus={() => onHoverYear(index)}
+              onBlur={() => onHoverYear(null)}
+              onMouseEnter={() => onHoverYear(index)}
               className={cn(
                 'min-w-0 flex-1 rounded-sm py-2.5 text-center text-xs tabular-nums focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                hovered === index
+                hoveredYear === index
                   ? 'font-semibold text-foreground'
                   : 'text-muted-foreground',
               )}
@@ -261,8 +276,10 @@ export const CatchmentYearCurves = ({ id, rows }: CatchmentYearCurvesProps) => {
           key={row.key}
           row={row}
           ceilingPct={ceilingPct}
-          hovered={hovered}
-          onHover={setHovered}
+          hovered={hoveredYear}
+          onHover={onHoverYear}
+          highlightedKey={highlightedKey}
+          onHighlight={onHighlight}
         />
       ))}
     </div>

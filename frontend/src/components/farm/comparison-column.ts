@@ -34,3 +34,20 @@ export const TABLE_HEAD_CLASS = 'bg-muted/30'
 export const DETAIL_CLASS =
   'bg-[color:color-mix(in_oklab,var(--color-muted)_30%,var(--color-card))]'
 export const BEST_TEXT_CLASS = 'text-green-700'
+export const HIGHLIGHT_CELL_CLASS = 'bg-[#F3F3EF]'
+export const HIGHLIGHT_HEAD_CLASS = 'bg-[#EFEFEA]'
+
+export type OnHighlight = (key: string | null) => void
+
+export const columnCellClass = (
+  column: Pick<ComparedColumn, 'key' | 'history'>,
+  highlightedKey: string | null,
+): string | undefined => {
+  if (column.history) return HISTORY_CELL_CLASS
+  return column.key === highlightedKey ? HIGHLIGHT_CELL_CLASS : undefined
+}
+
+export const highlightHandlers = (key: string, onHighlight: OnHighlight) => ({
+  onMouseEnter: () => onHighlight(key),
+  onMouseLeave: () => onHighlight(null),
+})

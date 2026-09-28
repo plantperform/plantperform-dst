@@ -159,6 +159,7 @@ export const SimulationComparison = ({
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null)
   const simulationsFields = useSimulationsFields(farmId, simulations)
   const fieldsBySimulationId =
     simulations.length === 0 ? NO_SIMULATION_FIELDS : simulationsFields.data
@@ -380,6 +381,8 @@ export const SimulationComparison = ({
               catchmentCount={catchments.length}
               sort={sort}
               onSortChange={setSort}
+              highlightedKey={highlightedKey}
+              onHighlight={setHighlightedKey}
             />
             <section className="space-y-2.5">
               <h2 className="pt-1 font-display text-[22px] leading-tight">
@@ -391,6 +394,8 @@ export const SimulationComparison = ({
                 quotaByCatchment={quotaByCatchment}
                 showFeedUnits={showFeedUnits}
                 feedUnitRequirements={requirements}
+                highlightedKey={highlightedKey}
+                onHighlight={setHighlightedKey}
               />
             </section>
           </>
