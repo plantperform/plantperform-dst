@@ -1,12 +1,15 @@
+import type { FieldRecord } from '@/api/types'
 import {
   formatCompactDkk,
   formatFieldCount,
   formatNumber,
   formatSigned,
   formatWholeNumber,
+  groupFieldsByCatchment,
   QUOTA_STATUS_NEAR_THRESHOLD,
   ROTATION_START_CALENDAR_YEAR,
   type CatchmentTotalsByYear,
+  type CatchmentYearTotals,
 } from '@/lib/field-domain'
 
 export const formatCreatedAt = (value: string) => {
@@ -24,7 +27,7 @@ export const formatCreatedAt = (value: string) => {
   return `Oprettet for ${diffDays} d. siden`
 }
 
-export type CatchmentQuotaLevel = 'ok' | 'near' | 'over' | 'noData'
+export type CatchmentQuotaLevel = 'ok' | 'near' | 'over' | 'noData' | 'partial'
 
 export type CatchmentYearStatus = {
   catchmentId: number
@@ -35,18 +38,26 @@ export type CatchmentYearStatus = {
 export const summarizeCatchmentYearStatuses = (
   totalsByYear: CatchmentTotalsByYear,
   history: boolean,
+  partialQuotas: ReadonlyMap<number, number> = new Map(),
 ): CatchmentYearStatus[] => {
+  const catchmentIds = new Set(partialQuotas.keys())
+  for (const catchmentId of totalsByYear.keys()) {
+    if (catchmentId !== null) catchmentIds.add(catchmentId)
+  }
   const statuses: CatchmentYearStatus[] = []
-  for (const [catchmentId, byYear] of totalsByYear) {
-    if (catchmentId === null) continue
+  for (const catchmentId of catchmentIds) {
+    const byYear: Record<number, CatchmentYearTotals> =
+      totalsByYear.get(catchmentId) ?? {}
+    const fullQuotaKgN = partialQuotas.get(catchmentId)
     let nLoadKg = 0
     let quotaKgN = 0
     const overYears: number[] = []
     for (const [year, totals] of Object.entries(byYear)) {
-      if (totals.quotaKgN <= 0) continue
+      const yearQuotaKgN = fullQuotaKgN ?? totals.quotaKgN
+      if (yearQuotaKgN <= 0) continue
       nLoadKg += totals.nLoadKg
-      quotaKgN += totals.quotaKgN
-      if (totals.nLoadKg > totals.quotaKgN) {
+      quotaKgN += yearQuotaKgN
+      if (totals.nLoadKg > yearQuotaKgN) {
         overYears.push(
           history
             ? Number(year)
@@ -55,13 +66,15 @@ export const summarizeCatchmentYearStatuses = (
       }
     }
     const level: CatchmentQuotaLevel =
-      quotaKgN === 0
-        ? 'noData'
-        : overYears.length > 0
-          ? 'over'
-          : nLoadKg / quotaKgN >= QUOTA_STATUS_NEAR_THRESHOLD
-            ? 'near'
-            : 'ok'
+      overYears.length > 0
+        ? 'over'
+        : fullQuotaKgN !== undefined
+          ? 'partial'
+          : quotaKgN === 0
+            ? 'noData'
+            : nLoadKg / quotaKgN >= QUOTA_STATUS_NEAR_THRESHOLD
+              ? 'near'
+              : 'ok'
     statuses.push({
       catchmentId,
       level,
@@ -70,6 +83,21 @@ export const summarizeCatchmentYearStatuses = (
   }
   return statuses.sort((left, right) => left.catchmentId - right.catchmentId)
 }
+
+export const partialCatchmentQuotas = (
+  fields: FieldRecord[],
+  isSimulationView: boolean,
+): Map<number, number> =>
+  new Map(
+    groupFieldsByCatchment(fields, isSimulationView).flatMap(
+      ({ catchmentId, totals }) =>
+        catchmentId !== null &&
+        totals.uncalculatedCount > 0 &&
+        totals.nLoadQuotaKgN > 0
+          ? [[catchmentId, totals.nLoadQuotaKgN] as const]
+          : [],
+    ),
+  )
 
 const describeYears = (years: number[]): string => {
   const periods: string[] = []
@@ -96,6 +124,7 @@ const CATCHMENT_LEVEL_LABELS: Record<
   near: 'Tæt på kvoten',
   ok: 'Under kvoten',
   noData: 'Ingen kvote',
+  partial: 'Delvist beregnet',
 }
 
 export const describeCatchmentYearStatus = (

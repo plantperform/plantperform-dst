@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CatchmentTotalsByYear } from '@/lib/field-domain'
+import type { FieldRecord } from '@/api/types'
+import { emptyMeasures, type CatchmentTotalsByYear } from '@/lib/field-domain'
 import {
   describeCatchmentYearStatus,
   describeDb2Delta,
   describeFieldChanges,
   describeNLoadDelta,
+  partialCatchmentQuotas,
   summarizeCatchmentYearStatuses,
 } from '@/lib/simulation-overview'
 
@@ -16,6 +18,31 @@ const years = (entries: Record<number, [nLoadKg: number, quotaKgN: number]>) =>
       { nLoadKg, quotaKgN, fieldCount: 1 },
     ]),
   )
+
+const field = (overrides: Partial<FieldRecord>): FieldRecord => ({
+  id: 'field',
+  farmId: 'farm',
+  imkId: null,
+  catchmentId: null,
+  retention: null,
+  soilTypeNumber: null,
+  cropRotation: [],
+  rotationId: null,
+  measures: emptyMeasures(),
+  allowedRotationIds: [],
+  db2: 0,
+  nLoad: 0,
+  leaching: 0,
+  feedUnits: 0,
+  name: 'Mark',
+  areaHa: 1,
+  inTakeoutPlan: '',
+  nLoadLimitKgNHa: 0,
+  nLoadQuotaKgN: 0,
+  quotaEligible: true,
+  geometry: null,
+  ...overrides,
+})
 
 describe('summarizeCatchmentYearStatuses', () => {
   it('lists the calendar years a simulation is over the quota', () => {
@@ -78,6 +105,57 @@ describe('summarizeCatchmentYearStatuses', () => {
 
   it('has no statuses before any field has figures', () => {
     expect(summarizeCatchmentYearStatuses(new Map(), false)).toEqual([])
+  })
+
+  it('is partly calculated when a catchment has fields without figures', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [7, years({ 1: [60, 50], 2: [70, 50] })],
+    ])
+    expect(
+      summarizeCatchmentYearStatuses(totals, false, new Map([[7, 150]])),
+    ).toEqual([{ catchmentId: 7, level: 'partial', overYears: [] }])
+  })
+
+  it('keeps the years over the full quota when a catchment is partly calculated', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [7, years({ 1: [160, 100], 2: [70, 100] })],
+    ])
+    expect(
+      summarizeCatchmentYearStatuses(totals, false, new Map([[7, 150]])),
+    ).toEqual([{ catchmentId: 7, level: 'over', overYears: [2027] }])
+  })
+
+  it('lists a partly calculated catchment that has no figures yet', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [3, years({ 1: [10, 100] })],
+    ])
+    expect(
+      summarizeCatchmentYearStatuses(totals, false, new Map([[7, 150]])),
+    ).toEqual([
+      { catchmentId: 3, level: 'ok', overYears: [] },
+      { catchmentId: 7, level: 'partial', overYears: [] },
+    ])
+  })
+})
+
+describe('partialCatchmentQuotas', () => {
+  it('gives the full quota of each catchment with a field that is not calculated', () => {
+    const fields = [
+      field({ id: '1', catchmentId: 7, rotationId: 'r1', nLoadQuotaKgN: 100 }),
+      field({ id: '2', catchmentId: 7, nLoadQuotaKgN: 50 }),
+      field({ id: '3', catchmentId: 3, rotationId: 'r3', nLoadQuotaKgN: 80 }),
+      field({ id: '4', catchmentId: 9, nLoadQuotaKgN: 0 }),
+      field({ id: '5', nLoadQuotaKgN: 40 }),
+    ]
+    expect(partialCatchmentQuotas(fields, true)).toEqual(new Map([[7, 150]]))
+  })
+
+  it('counts crop history fields without figures as not calculated', () => {
+    const fields = [
+      field({ id: '1', catchmentId: 7, db2: 1_000, nLoadQuotaKgN: 100 }),
+      field({ id: '2', catchmentId: 7, nLoadQuotaKgN: 50 }),
+    ]
+    expect(partialCatchmentQuotas(fields, false)).toEqual(new Map([[7, 150]]))
   })
 })
 
@@ -155,6 +233,13 @@ describe('describeCatchmentYearStatus', () => {
         overYears: [],
       }),
     ).toBe('Ingen kvote')
+    expect(
+      describeCatchmentYearStatus({
+        catchmentId: 1,
+        level: 'partial',
+        overYears: [],
+      }),
+    ).toBe('Delvist beregnet')
   })
 })
 

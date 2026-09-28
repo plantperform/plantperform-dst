@@ -33,6 +33,7 @@ import {
   describeFieldChanges,
   describeNLoadDelta,
   formatCreatedAt,
+  partialCatchmentQuotas,
   summarizeCatchmentYearStatuses,
   type KeyFigureDelta,
 } from '@/lib/simulation-overview'
@@ -141,6 +142,7 @@ const CatchmentStatusList = ({
         ? summarizeCatchmentYearStatuses(
             summarizeCatchmentYearTotals(fields, yearValues.data, history),
             history,
+            partialCatchmentQuotas(fields, !history),
           )
             .map((status) => ({
               status,
