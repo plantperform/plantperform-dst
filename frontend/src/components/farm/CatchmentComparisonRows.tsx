@@ -10,7 +10,6 @@ import {
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { LoadError } from '@/components/ui/load-error'
-import { Skeleton } from '@/components/ui/skeleton'
 import { TableCell, TableRow } from '@/components/ui/table'
 import {
   formatWholeNumber,
@@ -30,25 +29,9 @@ export type CatchmentColumn = {
   title: string
   catchments: CatchmentTotalsByYear | undefined
   partialQuotas: ReadonlyMap<number, number>
-  failed: boolean
   retrying: boolean
   onRetry: () => void
 }
-
-type ColumnStateProps = {
-  column: CatchmentColumn
-}
-
-const ColumnState = ({ column }: ColumnStateProps) =>
-  column.failed ? (
-    <LoadError
-      message="Kunne ikke hente tallene."
-      onRetry={column.onRetry}
-      retrying={column.retrying}
-    />
-  ) : (
-    <Skeleton className="h-24 w-full" />
-  )
 
 type CatchmentFiguresProps = {
   comparison: CatchmentComparison
@@ -127,9 +110,7 @@ const CatchmentRow = ({
           const comparison = comparisons[index]
           return (
             <ComparisonCell key={column.key}>
-              {comparison === undefined ? (
-                <ColumnState column={column} />
-              ) : comparison === null ? (
+              {comparison === undefined ? null : comparison === null ? (
                 <span className="text-sm text-muted-foreground">
                   {QUOTA_STATUS_LABELS.noData}
                 </span>
@@ -177,25 +158,25 @@ export const CatchmentComparisonRows = ({
 }: CatchmentComparisonRowsProps) => {
   const [openCatchmentId, setOpenCatchmentId] = useState<number | null>(null)
   const catchments = listComparedCatchments(columns, catchmentLabel)
-  if (catchments.length === 0) {
-    if (columns.every((column) => column.catchments !== undefined)) {
-      return null
-    }
-    return (
-      <TableRow className="hover:bg-transparent">
-        <ComparisonRowHeader>Kystvandoplande</ComparisonRowHeader>
-        {columns.map((column) => (
-          <ComparisonCell key={column.key}>
-            {column.catchments === undefined ? (
-              <ColumnState column={column} />
-            ) : null}
-          </ComparisonCell>
-        ))}
-      </TableRow>
-    )
-  }
+  const failed = columns.some((column) => column.catchments === undefined)
   return (
     <>
+      {failed ? (
+        <TableRow className="hover:bg-transparent">
+          <ComparisonRowHeader>Kystvandoplande</ComparisonRowHeader>
+          {columns.map((column) => (
+            <ComparisonCell key={column.key}>
+              {column.catchments === undefined ? (
+                <LoadError
+                  message="Kunne ikke hente tallene."
+                  onRetry={column.onRetry}
+                  retrying={column.retrying}
+                />
+              ) : null}
+            </ComparisonCell>
+          ))}
+        </TableRow>
+      ) : null}
       {catchments.map(({ catchmentId, label }) => (
         <CatchmentRow
           key={catchmentId}

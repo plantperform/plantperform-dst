@@ -1,7 +1,11 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useSyncExternalStore } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
+import {
+  createRequestProgress,
+  type RequestProgress,
+} from '@/api/request-progress'
 import { createRequestQueue } from '@/api/request-queue'
 import type {
   FieldYearValues,
@@ -225,6 +229,8 @@ const YEAR_VALUES_CONCURRENCY = 6
 
 const queueYearValuesRequest = createRequestQueue(YEAR_VALUES_CONCURRENCY)
 
+const requestProgress = createRequestProgress()
+
 const yearValuesCache = new Map<string, RotationCandidateYearResult[]>()
 
 type YearValuesSource = {
@@ -265,6 +271,7 @@ const historyYearValuesSource = (farmId: string): YearValuesSource => ({
 const fetchFieldYearValues = async (
   entries: string[],
   source: YearValuesSource,
+  progressKey: string,
 ): Promise<FieldYearValues> => {
   const result: FieldYearValues = {}
   const missing: { fieldId: string; cacheKey: string }[] = []
@@ -278,6 +285,11 @@ const fetchFieldYearValues = async (
       missing.push({ fieldId, cacheKey })
     }
   }
+  requestProgress.start(
+    progressKey,
+    entries.length,
+    entries.length - missing.length,
+  )
   await Promise.all(
     missing.map(({ fieldId, cacheKey }) =>
       queueYearValuesRequest(async () => {
@@ -288,41 +300,78 @@ const fetchFieldYearValues = async (
           result[fieldId] = years
         } catch {
           return
+        } finally {
+          requestProgress.advance(progressKey)
         }
       }),
     ),
   )
+  requestProgress.finish(progressKey)
   return result
 }
+
+const fieldYearValuesEntries = (
+  simulationId: string | undefined,
+  fields: FieldRecord[],
+) =>
+  (simulationId
+    ? fields
+        .filter((field) => field.rotationId !== null)
+        .map((field) => `${field.id}:${field.rotationId}`)
+    : fields.map((field) => field.id)
+  ).sort()
+
+const fieldYearValuesKey = (
+  farmId: string | undefined,
+  simulationId: string | undefined,
+  entries: string[],
+  enabled: boolean,
+) =>
+  enabled && farmId && entries.length > 0
+    ? ['field-year-values', farmId, simulationId ?? '', entries.join(',')]
+    : null
 
 export const useFieldYearValues = (
   farmId: string | undefined,
   simulationId: string | undefined,
   fields: FieldRecord[],
   enabled: boolean,
-) => {
-  const entries = (
-    simulationId
-      ? fields
-          .filter((field) => field.rotationId !== null)
-          .map((field) => `${field.id}:${field.rotationId}`)
-      : fields.map((field) => field.id)
-  ).sort()
-  const key =
-    enabled && farmId && entries.length > 0
-      ? ['field-year-values', farmId, simulationId ?? '', entries.join(',')]
-      : null
-  return useSWR<FieldYearValues>(
-    key,
-    ([, keyFarmId, keySimulationId, joinedEntries]: string[]) =>
-      fetchFieldYearValues(
+) =>
+  useSWR<FieldYearValues>(
+    fieldYearValuesKey(
+      farmId,
+      simulationId,
+      fieldYearValuesEntries(simulationId, fields),
+      enabled,
+    ),
+    (key: string[]) => {
+      const [, keyFarmId, keySimulationId, joinedEntries] = key
+      return fetchFieldYearValues(
         joinedEntries.split(','),
         keySimulationId
           ? simulationYearValuesSource(keyFarmId, keySimulationId)
           : historyYearValuesSource(keyFarmId),
-      ),
+        key.join('|'),
+      )
+    },
     { revalidateOnFocus: false, revalidateIfStale: false },
   )
+
+export const useFieldYearValuesProgress = (
+  farmId: string | undefined,
+  simulationId: string | undefined,
+  fields: FieldRecord[],
+  enabled: boolean,
+): RequestProgress => {
+  const entries = fieldYearValuesEntries(simulationId, fields)
+  const key = fieldYearValuesKey(farmId, simulationId, entries, enabled)
+  const running = useSyncExternalStore(requestProgress.subscribe, () =>
+    key === null ? undefined : requestProgress.get(key.join('|')),
+  )
+  return {
+    done: running?.done ?? 0,
+    total: key === null ? 0 : entries.length,
+  }
 }
 
 export const simulationYearlySummaryKey = (

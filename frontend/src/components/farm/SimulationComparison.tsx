@@ -4,9 +4,11 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   useFieldYearValues,
+  useFieldYearValuesProgress,
   useSimulationsFields,
   type FieldsBySimulationId,
 } from '@/api/hooks'
+import { combineProgress, type RequestProgress } from '@/api/request-progress'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import {
@@ -21,6 +23,7 @@ import {
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -79,15 +82,20 @@ type ComparisonColumn = {
 const useColumnCatchments = (
   farmId: string,
   column: ComparisonColumn | undefined,
-): Omit<CatchmentColumn, 'key' | 'title'> => {
+): Omit<CatchmentColumn, 'key' | 'title'> & {
+  failed: boolean
+  progress: RequestProgress
+} => {
   const simulationId = column?.simulationId
   const history = simulationId === undefined
   const fields = column?.fields ?? NO_FIELDS
-  const yearValues = useFieldYearValues(
+  const enabled = fields.length > 0
+  const yearValues = useFieldYearValues(farmId, simulationId, fields, enabled)
+  const yearValuesProgress = useFieldYearValuesProgress(
     farmId,
     simulationId,
     fields,
-    fields.length > 0,
+    enabled,
   )
   const incomplete =
     yearValues.data !== undefined &&
@@ -104,14 +112,18 @@ const useColumnCatchments = (
     () => partialCatchmentQuotas(fields, !history),
     [fields, history],
   )
+  const failed =
+    incomplete || (Boolean(yearValues.error) && yearValues.data === undefined)
   return {
     catchments,
     partialQuotas,
-    failed:
-      incomplete ||
-      (Boolean(yearValues.error) && yearValues.data === undefined),
+    failed,
     retrying: yearValues.isValidating,
     onRetry: () => void yearValues.mutate(),
+    progress:
+      catchments === undefined && !failed
+        ? yearValuesProgress
+        : { done: yearValuesProgress.total, total: yearValuesProgress.total },
   }
 }
 
@@ -173,6 +185,31 @@ const FigureRow = ({
     </TableRow>
   )
 }
+
+type LoadProgressProps = {
+  label: string
+  progress?: RequestProgress
+}
+
+const LoadProgress = ({ label, progress }: LoadProgressProps) => (
+  <div
+    role="progressbar"
+    aria-label={label}
+    aria-valuemin={progress ? 0 : undefined}
+    aria-valuemax={progress?.total}
+    aria-valuenow={progress?.done}
+    className="max-w-md space-y-1.5"
+  >
+    <p className="text-xs text-muted-foreground tabular-nums">
+      {progress
+        ? `${label}: ${progress.done} af ${progress.total} marker`
+        : label}
+    </p>
+    <ProgressBar
+      valuePct={progress && (progress.done * 100) / Math.max(progress.total, 1)}
+    />
+  </div>
+)
 
 type SimulationComparisonProps = {
   farmId: string
@@ -253,6 +290,12 @@ export const SimulationComparison = ({
     useColumnCatchments(farmId, columns[2]),
     useColumnCatchments(farmId, columns[3]),
   ]
+  const yearValuesLoading = catchmentSlots.some(
+    (slot) => slot.catchments === undefined && !slot.failed,
+  )
+  const yearValuesProgress = combineProgress(
+    catchmentSlots.map((slot) => slot.progress),
+  )
 
   const canonical = ids.join(',')
   if (availability !== undefined && requested !== canonical) {
@@ -298,20 +341,32 @@ export const SimulationComparison = ({
             onChange={selectIds}
           />
         </header>
-        {availability === undefined ? (
-          simulationsFields.error ? (
-            <LoadError
-              message="Kunne ikke hente simuleringerne."
-              onRetry={() => void simulationsFields.mutate()}
-              retrying={simulationsFields.isValidating}
-            />
-          ) : (
-            <div className="space-y-3" aria-busy="true">
-              <span className="sr-only">Henter simuleringerne.</span>
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-64 w-full" />
+        {availability === undefined && simulationsFields.error ? (
+          <LoadError
+            message="Kunne ikke hente simuleringerne."
+            onRetry={() => void simulationsFields.mutate()}
+            retrying={simulationsFields.isValidating}
+          />
+        ) : availability === undefined || yearValuesLoading ? (
+          <div
+            className="space-y-5 rounded-lg border bg-card p-6"
+            aria-busy="true"
+          >
+            {availability === undefined ? (
+              <LoadProgress label="Henter simuleringerne" />
+            ) : (
+              <LoadProgress
+                label="Henter tal pr. år"
+                progress={yearValuesProgress}
+              />
+            )}
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-28 w-full" />
             </div>
-          )
+          </div>
         ) : (
           <>
             {noneSelectable ? (
