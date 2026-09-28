@@ -396,6 +396,7 @@ export const SimulationComparison = ({
                 feedUnitRequirements={requirements}
                 highlightedKey={highlightedKey}
                 onHighlight={setHighlightedKey}
+                bestBalanceKey={bestBalance?.key ?? null}
               />
             </section>
           </>

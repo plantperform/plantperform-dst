@@ -19,6 +19,7 @@ import {
   describeCatchmentYearsOver,
   describeComparisonAvailability,
   describeComparisonVerdict,
+  describeCurveLegend,
   describeFeedUnitRequirement,
   formatDkkDelta,
   formatFeedUnits,
@@ -26,6 +27,7 @@ import {
   formatYearsDelta,
   hasMissingYearValues,
   listComparedCatchments,
+  overlayCurveTone,
   parseComparisonIds,
   placeFeedUnitRequirements,
   rankByBalance,
@@ -35,6 +37,7 @@ import {
   summarizeCatchmentComparison,
   summarizeColumnQuota,
   toggleComparisonId,
+  type CatchmentYearQuota,
   type ComparisonSort,
 } from '@/lib/simulation-comparison'
 
@@ -456,6 +459,64 @@ describe('sortComparison', () => {
   it('puts the highest DB2 or the lowest N load first and no figures last', () => {
     expect(keys('db2')).toEqual(['c', 'a', 'd', 'b', 'e'])
     expect(keys('nLoad')).toEqual(['b', 'c', 'a', 'd', 'e'])
+  })
+})
+
+describe('overlayCurveTone', () => {
+  it('draws the crop history, the best simulation and the rest in their own tone', () => {
+    expect(overlayCurveTone({ key: 'history', history: true }, 'b', null)).toBe(
+      'history',
+    )
+    expect(overlayCurveTone({ key: 'b', history: false }, 'b', null)).toBe(
+      'best',
+    )
+    expect(overlayCurveTone({ key: 'c', history: false }, 'b', null)).toBe(
+      'plain',
+    )
+  })
+
+  it('dims every curve but the highlighted one', () => {
+    expect(overlayCurveTone({ key: 'c', history: false }, 'b', 'c')).toBe(
+      'highlighted',
+    )
+    expect(overlayCurveTone({ key: 'b', history: false }, 'b', 'c')).toBe(
+      'dimmed',
+    )
+    expect(overlayCurveTone({ key: 'history', history: true }, 'b', 'c')).toBe(
+      'dimmed',
+    )
+  })
+})
+
+describe('describeCurveLegend', () => {
+  const years: CatchmentYearQuota[] = [
+    { year: 2027, quotaPct: 138, level: 'over' },
+    { year: 2028, quotaPct: null, level: 'noData' },
+  ]
+
+  it('shows the average until a year is hovered', () => {
+    expect(describeCurveLegend(years, 76, null)).toEqual({
+      text: 'Gns. 76 % af kvoten',
+      level: null,
+    })
+  })
+
+  it('shows the hovered year with its status', () => {
+    expect(describeCurveLegend(years, 76, 0)).toEqual({
+      text: '2027 · 138 %',
+      level: 'over',
+    })
+    expect(describeCurveLegend(years, 76, 1)).toEqual({
+      text: '2028 · ingen tal',
+      level: null,
+    })
+  })
+
+  it('has no figures without years', () => {
+    expect(describeCurveLegend(null, null, 0)).toEqual({
+      text: 'Ingen tal',
+      level: null,
+    })
   })
 })
 

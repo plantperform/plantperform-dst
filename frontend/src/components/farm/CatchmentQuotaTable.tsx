@@ -68,6 +68,9 @@ type CatchmentRowProps = {
   onHighlight: OnHighlight
   hoveredYear: number | null
   onHoverYear: (index: number | null) => void
+  bestKey: string | null
+  overlay: boolean
+  onToggleOverlay: () => void
 }
 
 const CatchmentRow = ({
@@ -80,6 +83,9 @@ const CatchmentRow = ({
   onHighlight,
   hoveredYear,
   onHoverYear,
+  bestKey,
+  overlay,
+  onToggleOverlay,
 }: CatchmentRowProps) => {
   const detailId = useId()
   const comparisons = columns.map((column) =>
@@ -175,6 +181,9 @@ const CatchmentRow = ({
               onHoverYear={onHoverYear}
               highlightedKey={highlightedKey}
               onHighlight={onHighlight}
+              bestKey={bestKey}
+              overlay={overlay}
+              onToggleOverlay={onToggleOverlay}
               rows={columns.map((column, index) => ({
                 key: column.key,
                 title: column.title,
@@ -229,6 +238,12 @@ const FigureRow = ({
   </TableRow>
 )
 
+const toggled = (ids: ReadonlySet<number>, id: number): ReadonlySet<number> => {
+  const next = new Set(ids)
+  if (!next.delete(id)) next.add(id)
+  return next
+}
+
 type CatchmentQuotaTableProps = {
   columns: ComparedColumn[]
   catchments: ComparedCatchment[]
@@ -237,6 +252,7 @@ type CatchmentQuotaTableProps = {
   feedUnitRequirements: FeedUnitRequirementPlacement
   highlightedKey: string | null
   onHighlight: OnHighlight
+  bestBalanceKey: string | null
 }
 
 export const CatchmentQuotaTable = ({
@@ -247,17 +263,15 @@ export const CatchmentQuotaTable = ({
   feedUnitRequirements,
   highlightedKey,
   onHighlight,
+  bestBalanceKey,
 }: CatchmentQuotaTableProps) => {
   const [hoveredYear, setHoveredYear] = useState<number | null>(null)
   const [openIds, setOpenIds] = useState<ReadonlySet<number>>(
     () => new Set(catchments.slice(0, 1).map(({ catchmentId }) => catchmentId)),
   )
-  const toggle = (catchmentId: number) =>
-    setOpenIds((current) => {
-      const next = new Set(current)
-      if (!next.delete(catchmentId)) next.add(catchmentId)
-      return next
-    })
+  const [overlayIds, setOverlayIds] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  )
   const feedUnits = columns.map((column) =>
     columnFigure(column, column.totals.feedUnits),
   )
@@ -333,11 +347,18 @@ export const CatchmentQuotaTable = ({
             columns={columns}
             quotaKgN={quotaByCatchment.get(catchment.catchmentId)}
             open={openIds.has(catchment.catchmentId)}
-            onToggle={() => toggle(catchment.catchmentId)}
+            onToggle={() =>
+              setOpenIds((ids) => toggled(ids, catchment.catchmentId))
+            }
             highlightedKey={highlightedKey}
             onHighlight={onHighlight}
             hoveredYear={hoveredYear}
             onHoverYear={setHoveredYear}
+            bestKey={bestBalanceKey}
+            overlay={overlayIds.has(catchment.catchmentId)}
+            onToggleOverlay={() =>
+              setOverlayIds((ids) => toggled(ids, catchment.catchmentId))
+            }
           />
         ))}
         {showFeedUnits ? (

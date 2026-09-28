@@ -477,3 +477,43 @@ export const catchmentQuotas = (fields: FieldRecord[]): Map<number, number> =>
         : [],
     ),
   )
+
+export type CurveTone = 'plain' | 'history' | 'best' | 'highlighted' | 'dimmed'
+
+export const overlayCurveTone = (
+  row: { key: string; history: boolean },
+  bestKey: string | null,
+  highlightedKey: string | null,
+): CurveTone => {
+  if (highlightedKey !== null) {
+    return row.key === highlightedKey ? 'highlighted' : 'dimmed'
+  }
+  if (row.history) return 'history'
+  return row.key === bestKey ? 'best' : 'plain'
+}
+
+export type CurveLegend = {
+  text: string
+  level: QuotaStatusLevel | null
+}
+
+export const describeCurveLegend = (
+  years: CatchmentYearQuota[] | null,
+  averagePct: number | null,
+  hoveredYear: number | null,
+): CurveLegend => {
+  if (years === null) return { text: 'Ingen tal', level: null }
+  if (hoveredYear === null) {
+    return {
+      text:
+        averagePct === null
+          ? 'Ingen tal'
+          : `Gns. ${formatWholeNumber(averagePct)} % af kvoten`,
+      level: null,
+    }
+  }
+  const { year, quotaPct, level } = years[hoveredYear]
+  return quotaPct === null
+    ? { text: `${year} · ingen tal`, level: null }
+    : { text: `${year} · ${formatWholeNumber(quotaPct)} %`, level }
+}
