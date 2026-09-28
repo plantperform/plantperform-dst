@@ -3,6 +3,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeatureCollection } from 'geojson'
 import { Layers, Lock, Maximize, X } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import {
   useCallback,
   useEffect,
@@ -93,6 +94,12 @@ import {
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
+
+const loadMaplibre = () =>
+  import('maplibre-gl').then((maplibre) => {
+    maplibre.setWorkerUrl(maplibreWorkerUrl)
+    return maplibre
+  })
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 2 }).format(value)
@@ -299,6 +306,7 @@ export const FarmFieldsMap = ({
   search,
 }: FarmFieldsMapProps) => {
   const mapRef = useRef<MapRef>(null)
+  const [mapLib] = useState(loadMaplibre)
   const initialViewState =
     savedMapViewStates.get(farm.id) ?? defaultMapViewState
   const hasFitBounds = useRef(savedMapViewStates.has(farm.id))
@@ -1319,6 +1327,7 @@ export const FarmFieldsMap = ({
       >
         <Map
           ref={mapRef}
+          mapLib={mapLib}
           initialViewState={initialViewState}
           mapStyle="https://tiles.openfreemap.org/styles/liberty"
           transformRequest={(url) => {
