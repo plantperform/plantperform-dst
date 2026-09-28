@@ -41,7 +41,7 @@ export const SimulationOverview = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="@container mx-auto flex max-w-6xl flex-col gap-8 px-6 pt-10 pb-16 sm:px-10">
+      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-8 px-6 pt-10 pb-16 sm:px-10">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="font-display text-4xl tracking-tight">
@@ -67,7 +67,7 @@ export const SimulationOverview = ({
             </Button>
           </div>
         </header>
-        <div className="grid gap-4 @3xl:grid-cols-2">
+        <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
           <HistoryCard
             farmId={farmId}
             fields={fields}

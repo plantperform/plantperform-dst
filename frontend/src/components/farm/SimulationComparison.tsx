@@ -317,7 +317,7 @@ export const SimulationComparison = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
+      <div className="mx-auto flex max-w-[96rem] flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
         <Link
           to={`/farms/${farmId}/simulations`}
           className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
