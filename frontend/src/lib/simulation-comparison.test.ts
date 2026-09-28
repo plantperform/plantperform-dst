@@ -11,18 +11,28 @@ import {
   bestColumnIndex,
   catchmentQuotas,
   comparisonAvailability,
+  curveCeilingPct,
+  curveLeftPct,
+  curveSegments,
+  curveTopPct,
   defaultComparisonIds,
+  describeCatchmentYearsOver,
   describeComparisonAvailability,
+  describeComparisonVerdict,
   describeFeedUnitRequirement,
+  formatDkkDelta,
   formatFeedUnits,
   formatKgN,
+  formatYearsDelta,
   hasMissingYearValues,
   listComparedCatchments,
   parseComparisonIds,
   placeFeedUnitRequirements,
-  quotaBarShare,
+  rankByBalance,
   resolveComparisonIds,
+  shareOfMax,
   summarizeCatchmentComparison,
+  summarizeColumnQuota,
   toggleComparisonId,
 } from '@/lib/simulation-comparison'
 
@@ -399,12 +409,177 @@ describe('hasMissingYearValues', () => {
   })
 })
 
-describe('quotaBarShare', () => {
-  it('scales 0-130 % of the quota to the whole bar', () => {
-    expect(quotaBarShare(65)).toBe(50)
-    expect(quotaBarShare(130)).toBe(100)
-    expect(quotaBarShare(200)).toBe(100)
-    expect(quotaBarShare(-5)).toBe(0)
+describe('summarizeColumnQuota', () => {
+  it('counts the years over the quota across catchments and the catchments with any', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [3, years({ 2027: [110, 100], 2028: [120, 100], 2029: [90, 100] })],
+      [7, years({ 2027: [50, 100] })],
+    ])
+    expect(summarizeColumnQuota([3, 7, 9], totals, new Map())).toEqual({
+      yearsOver: 2,
+      catchmentsOver: 1,
+    })
+  })
+})
+
+describe('rankByBalance', () => {
+  it('puts the fewest years over the quota first and the highest DB2 among equals', () => {
+    const ranked = rankByBalance([
+      { key: 'a', db2: 500, yearsOver: 2 },
+      { key: 'b', db2: 300, yearsOver: 0 },
+      { key: 'c', db2: 900, yearsOver: 2 },
+      { key: 'd', db2: 400, yearsOver: 0 },
+      { key: 'e', db2: 1000, yearsOver: null },
+    ])
+    expect(ranked.map(({ key }) => key)).toEqual(['d', 'b', 'c', 'a', 'e'])
+  })
+})
+
+describe('formatDkkDelta', () => {
+  it('signs the difference in the unit of the larger figure', () => {
+    expect(formatDkkDelta(249_000, 572_000)).toBe('+249 t.kr')
+    expect(formatDkkDelta(877_000, 1_200_000)).toBe('+0,9 mio. kr')
+    expect(formatDkkDelta(-737_000, 586_000)).toBe('−737 t.kr')
+    expect(formatDkkDelta(0, 323_000)).toBe('±0 t.kr')
+  })
+})
+
+describe('formatYearsDelta', () => {
+  it('signs the change in years over the quota', () => {
+    expect(formatYearsDelta(-6)).toBe('−6 år')
+    expect(formatYearsDelta(0)).toBe('±0 år')
+    expect(formatYearsDelta(2)).toBe('+2 år')
+  })
+})
+
+describe('describeComparisonVerdict', () => {
+  const historyDb2 = 323_000
+  const test3 = { title: 'Test3', db2: 1_200_000, yearsOver: 0 }
+
+  it('names the only simulation under the quota and what it earns more', () => {
+    expect(
+      describeComparisonVerdict({
+        best: test3,
+        compliantCount: 1,
+        simulationCount: 3,
+        historyDb2,
+      }),
+    ).toBe(
+      'Test3 giver den bedste balance: eneste simulering under kvoten i alle år og alle oplande, og 0,9 mio. kr mere end afgrødehistorikken.',
+    )
+  })
+
+  it('picks the highest DB2 when several are under the quota', () => {
+    expect(
+      describeComparisonVerdict({
+        best: test3,
+        compliantCount: 2,
+        simulationCount: 3,
+        historyDb2,
+      }),
+    ).toBe(
+      'Test3 giver den bedste balance: højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande, og 0,9 mio. kr mere end afgrødehistorikken.',
+    )
+  })
+
+  it('names the one closest to the quota when none keeps it', () => {
+    expect(
+      describeComparisonVerdict({
+        best: { title: 'Test2', db2: 1_300_000, yearsOver: 4 },
+        compliantCount: 0,
+        simulationCount: 3,
+        historyDb2,
+      }),
+    ).toBe(
+      'Ingen simulering holder kvoten i alle år. Test2 kommer tættest på med 4 år over kvoten.',
+    )
+  })
+
+  it('describes a single simulation on its own', () => {
+    expect(
+      describeComparisonVerdict({
+        best: test3,
+        compliantCount: 1,
+        simulationCount: 1,
+        historyDb2,
+      }),
+    ).toBe(
+      'Test3 holder kvoten i alle år og alle oplande og giver 0,9 mio. kr mere end afgrødehistorikken.',
+    )
+    expect(
+      describeComparisonVerdict({
+        best: { ...test3, yearsOver: 3 },
+        compliantCount: 0,
+        simulationCount: 1,
+        historyDb2,
+      }),
+    ).toBe('Test3 holder ikke kvoten i alle år: 3 år over kvoten.')
+  })
+
+  it('has nothing to say without simulations or years', () => {
+    expect(
+      describeComparisonVerdict({
+        best: { ...test3, yearsOver: null },
+        compliantCount: 0,
+        simulationCount: 1,
+        historyDb2,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('describeCatchmentYearsOver', () => {
+  it('lists the years over the quota and says when there are none', () => {
+    expect(
+      describeCatchmentYearsOver({
+        catchmentId: 7,
+        level: 'over',
+        overYears: [2029, 2031, 2032],
+      }),
+    ).toBe('over kvoten i 2029, 2031 og 2032')
+    expect(
+      describeCatchmentYearsOver({
+        catchmentId: 7,
+        level: 'near',
+        overYears: [],
+      }),
+    ).toBe('under kvoten alle år')
+    expect(
+      describeCatchmentYearsOver({
+        catchmentId: 7,
+        level: 'partial',
+        overYears: [],
+      }),
+    ).toBe('delvist beregnet')
+  })
+})
+
+describe('shareOfMax', () => {
+  it('gives a value as a share of the largest one', () => {
+    expect(shareOfMax(50, 200)).toBe(25)
+    expect(shareOfMax(-10, 200)).toBe(0)
+    expect(shareOfMax(10, 0)).toBe(0)
+  })
+})
+
+describe('curve geometry', () => {
+  it('leaves room above the quota and the highest year', () => {
+    expect(curveCeilingPct([140, null, 5])).toBe(150)
+    expect(curveCeilingPct([138, 133, 160])).toBe(170)
+  })
+
+  it('places a year in the middle of its column and 100 % on the quota line', () => {
+    expect(curveLeftPct(0, 8)).toBe(6.25)
+    expect(curveLeftPct(7, 8)).toBe(93.75)
+    expect(curveTopPct(100, 150)).toBeCloseTo(36)
+    expect(curveTopPct(150, 150)).toBe(8)
+  })
+
+  it('breaks the curve where a year has no value', () => {
+    expect(curveSegments([150, 150, null, 150], 150)).toEqual([
+      '12.5,8 37.5,8',
+      '87.5,8',
+    ])
   })
 })
 

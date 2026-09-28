@@ -143,8 +143,11 @@ const compactMillionFormat = new Intl.NumberFormat('da-DK', {
   maximumFractionDigits: 1,
 })
 
-export const formatCompactDkk = (value: number): string => {
-  const magnitude = Math.abs(value)
+export const formatCompactDkk = (
+  value: number,
+  unitOf: number = value,
+): string => {
+  const magnitude = Math.max(Math.abs(value), Math.abs(unitOf))
   if (magnitude >= 999_500) {
     return `${compactMillionFormat.format(value / 1_000_000)} mio. kr`
   }

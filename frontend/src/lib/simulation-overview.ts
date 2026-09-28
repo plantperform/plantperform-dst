@@ -99,7 +99,7 @@ export const partialCatchmentQuotas = (
     ),
   )
 
-const describeYears = (years: number[]): string => {
+export const describeYears = (years: number[]): string => {
   const periods: string[] = []
   let start = 0
   for (let end = 1; end <= years.length; end += 1) {

@@ -5,10 +5,13 @@ import type {
   Simulation,
 } from '@/api/types'
 import {
+  formatCompactDkk,
   formatFieldCount,
+  formatSigned,
   formatWholeNumber,
   groupFieldsByCatchment,
   isFieldCalculated,
+  NUM_ROTATION_YEARS,
   quotaPercent,
   quotaStatusLevel,
   REAL_HISTORY_START_CALENDAR_YEAR,
@@ -19,11 +22,14 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import {
+  describeYears,
   summarizeCatchmentYearStatuses,
   type CatchmentYearStatus,
 } from '@/lib/simulation-overview'
 
 export const MAX_COMPARED_SIMULATIONS = 3
+
+export const COMPARISON_PERIOD = `${ROTATION_START_CALENDAR_YEAR}-${ROTATION_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
 
 export const parseComparisonIds = (value: string | null): string[] =>
   (value ?? '')
@@ -281,11 +287,152 @@ export const hasMissingYearValues = (
       isFieldCalculated(field, !history) && !(field.id in yearsByFieldId),
   )
 
-export const QUOTA_BAR_CEILING_PCT = 130
+export type ColumnQuotaSummary = {
+  yearsOver: number
+  catchmentsOver: number
+}
 
-export const quotaBarShare = (quotaPct: number): number =>
-  (Math.min(Math.max(quotaPct, 0), QUOTA_BAR_CEILING_PCT) * 100) /
-  QUOTA_BAR_CEILING_PCT
+export const summarizeColumnQuota = (
+  catchmentIds: number[],
+  totalsByYear: CatchmentTotalsByYear,
+  partialQuotas: ReadonlyMap<number, number>,
+): ColumnQuotaSummary => {
+  let yearsOver = 0
+  let catchmentsOver = 0
+  for (const catchmentId of catchmentIds) {
+    const over =
+      summarizeCatchmentComparison(
+        catchmentId,
+        totalsByYear,
+        partialQuotas.get(catchmentId),
+      )?.status.overYears.length ?? 0
+    yearsOver += over
+    if (over > 0) catchmentsOver += 1
+  }
+  return { yearsOver, catchmentsOver }
+}
+
+export type BalanceCandidate = {
+  db2: number | null
+  yearsOver: number | null
+}
+
+const db2ForRanking = (candidate: BalanceCandidate): number =>
+  candidate.db2 ?? Number.MIN_SAFE_INTEGER
+
+export const rankByBalance = <T extends BalanceCandidate>(
+  candidates: T[],
+): T[] =>
+  [...candidates].sort((left, right) => {
+    if (left.yearsOver === null || right.yearsOver === null) {
+      return Number(left.yearsOver === null) - Number(right.yearsOver === null)
+    }
+    return (
+      left.yearsOver - right.yearsOver ||
+      db2ForRanking(right) - db2ForRanking(left)
+    )
+  })
+
+export const formatDkkDelta = (difference: number, unitOf: number): string =>
+  formatSigned(Math.round(difference), (value) =>
+    formatCompactDkk(value, unitOf),
+  )
+
+export const formatYears = (count: number): string => `${count} år`
+
+export const formatYearsDelta = (difference: number): string =>
+  `${formatSigned(difference, String)} år`
+
+const describeDb2AgainstHistory = (db2: number, historyDb2: number): string => {
+  const difference = Math.round(db2 - historyDb2)
+  if (difference === 0) return 'samme dækningsbidrag som afgrødehistorikken'
+  return `${formatCompactDkk(Math.abs(difference), db2)} ${difference > 0 ? 'mere' : 'mindre'} end afgrødehistorikken`
+}
+
+export type ComparisonVerdictInput = {
+  best: { title: string; db2: number | null; yearsOver: number | null }
+  compliantCount: number
+  simulationCount: number
+  historyDb2: number | null
+}
+
+export const describeComparisonVerdict = ({
+  best,
+  compliantCount,
+  simulationCount,
+  historyDb2,
+}: ComparisonVerdictInput): string | null => {
+  if (best.yearsOver === null || simulationCount === 0) return null
+  const db2 =
+    best.db2 === null || historyDb2 === null
+      ? null
+      : describeDb2AgainstHistory(best.db2, historyDb2)
+  if (best.yearsOver > 0) {
+    return simulationCount === 1
+      ? `${best.title} holder ikke kvoten i alle år: ${formatYears(best.yearsOver)} over kvoten.`
+      : `Ingen simulering holder kvoten i alle år. ${best.title} kommer tættest på med ${formatYears(best.yearsOver)} over kvoten.`
+  }
+  if (simulationCount === 1) {
+    return db2 === null
+      ? `${best.title} holder kvoten i alle år og alle oplande.`
+      : `${best.title} holder kvoten i alle år og alle oplande og giver ${db2}.`
+  }
+  const reason =
+    compliantCount === 1
+      ? 'eneste simulering under kvoten i alle år og alle oplande'
+      : 'højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande'
+  return db2 === null
+    ? `${best.title} giver den bedste balance: ${reason}.`
+    : `${best.title} giver den bedste balance: ${reason}, og ${db2}.`
+}
+
+export const describeCatchmentYearsOver = (
+  status: CatchmentYearStatus,
+): string => {
+  if (status.level === 'over') {
+    return `over kvoten i ${describeYears(status.overYears)}`
+  }
+  if (status.level === 'partial') return 'delvist beregnet'
+  if (status.level === 'noData') return 'ingen kvote'
+  return 'under kvoten alle år'
+}
+
+export const shareOfMax = (value: number, max: number): number =>
+  max > 0 ? (Math.max(value, 0) / max) * 100 : 0
+
+export const curveCeilingPct = (values: (number | null)[]): number => {
+  const highest = Math.max(
+    0,
+    ...values.filter((value): value is number => value !== null),
+  )
+  return Math.max(150, Math.ceil(highest / 10) * 10 + 10)
+}
+
+export const curveTopPct = (quotaPct: number, ceilingPct: number): number =>
+  8 + (1 - quotaPct / ceilingPct) * 84
+
+export const curveLeftPct = (index: number, count: number): number =>
+  ((index + 0.5) / count) * 100
+
+export const curveSegments = (
+  values: (number | null)[],
+  ceilingPct: number,
+): string[] => {
+  const segments: string[] = []
+  let points: string[] = []
+  values.forEach((value, index) => {
+    if (value === null) {
+      if (points.length > 0) segments.push(points.join(' '))
+      points = []
+      return
+    }
+    points.push(
+      `${curveLeftPct(index, values.length)},${curveTopPct(value, ceilingPct)}`,
+    )
+  })
+  if (points.length > 0) segments.push(points.join(' '))
+  return segments
+}
 
 export const catchmentQuotas = (fields: FieldRecord[]): Map<number, number> =>
   new Map(
