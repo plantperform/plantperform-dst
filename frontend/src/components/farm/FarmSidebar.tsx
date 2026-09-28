@@ -10,13 +10,14 @@ import {
   PanelLeft,
   Play,
   Plus,
+  Scale,
   SlidersHorizontal,
   Table2,
   Trash2,
   X,
 } from 'lucide-react'
 import { useId, useMemo, useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useMatch } from 'react-router-dom'
 
 import { useSimulationFields } from '@/api/hooks'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
@@ -197,6 +198,23 @@ export const FarmSidebar = ({
   const historyActive = !overviewActive && selection.kind === 'current'
   const selectedSimulationId =
     !overviewActive && selection.kind === 'simulation' ? selection.id : null
+  const compareActive = useMatch('/farms/:farmId/simulations/compare') !== null
+  const simulationPages = [
+    {
+      to: `/farms/${farm.id}/simulations`,
+      label: 'Oversigt',
+      tooltip: 'Simuleringsoversigt',
+      icon: LayoutGrid,
+      active: overviewActive && !compareActive,
+    },
+    {
+      to: `/farms/${farm.id}/simulations/compare`,
+      label: 'Sammenlign',
+      tooltip: 'Sammenlign simuleringer',
+      icon: Scale,
+      active: compareActive,
+    },
+  ]
 
   return (
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
@@ -237,34 +255,44 @@ export const FarmSidebar = ({
                   </ViewMenuLabel>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton
-                  asChild
-                  isActive={overviewActive}
-                  className="rounded-md px-3 font-medium data-[active=true]:[&>svg]:text-primary"
-                  tooltip="Simuleringer"
-                >
-                  <NavLink to={`/farms/${farm.id}/simulations`} end>
-                    <LayoutGrid />
-                    <span>Simuleringer</span>
-                  </NavLink>
-                </SidebarMenuButton>
-                <SidebarMenuAction
                   aria-expanded={simulationsOpen}
                   aria-controls={simulationListId}
-                  aria-label="Vis eller skjul simuleringerne"
+                  className="rounded-md px-3 font-medium"
                   onClick={() => setSimulationsOpen((open) => !open)}
                 >
+                  <FlaskConical />
+                  <span>Simuleringer</span>
                   <ChevronRight
                     className={cn(
-                      'motion-safe:transition-transform',
+                      'ml-auto motion-safe:transition-transform',
                       simulationsOpen && 'rotate-90',
                     )}
                   />
-                </SidebarMenuAction>
+                </SidebarMenuButton>
               </SidebarMenuItem>
               <li id={simulationListId}>
                 <SidebarMenu className="ml-3.5 w-auto border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
+                  {simulationPages.map(
+                    ({ to, label, tooltip, icon: Icon, active }) =>
+                      simulations.length > 0 &&
+                      (simulationsOpen || iconRail) ? (
+                        <SidebarMenuItem key={to}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={active}
+                            className="rounded-md px-3 font-medium data-[active=true]:[&>svg]:text-primary"
+                            tooltip={tooltip}
+                          >
+                            <NavLink to={to} end>
+                              <Icon />
+                              <span>{label}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ) : null,
+                  )}
                   {simulations.map((simulation) => {
                     const selected = simulation.id === selectedSimulationId
                     return (
