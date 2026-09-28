@@ -333,6 +333,41 @@ export const rankByBalance = <T extends BalanceCandidate>(
     )
   })
 
+export type ComparisonSort = 'balance' | 'db2' | 'nLoad' | 'yearsOver'
+
+export const COMPARISON_SORT_LABELS: Record<ComparisonSort, string> = {
+  balance: 'bedste balance',
+  db2: 'dækningsbidrag',
+  nLoad: 'udledning',
+  yearsOver: 'år over kvoten',
+}
+
+export type SortCandidate = BalanceCandidate & { nLoad: number | null }
+
+const nullsLast = (left: number | null, right: number | null): number =>
+  Number(left === null) - Number(right === null)
+
+export const sortComparison = <T extends SortCandidate>(
+  candidates: T[],
+  sort: ComparisonSort,
+): T[] => {
+  const ranked = rankByBalance(candidates)
+  if (sort === 'db2') {
+    return ranked.sort(
+      (left, right) =>
+        nullsLast(left.db2, right.db2) || (right.db2 ?? 0) - (left.db2 ?? 0),
+    )
+  }
+  if (sort === 'nLoad') {
+    return ranked.sort(
+      (left, right) =>
+        nullsLast(left.nLoad, right.nLoad) ||
+        (left.nLoad ?? 0) - (right.nLoad ?? 0),
+    )
+  }
+  return ranked
+}
+
 export const formatDkkDelta = (difference: number, unitOf: number): string =>
   formatSigned(Math.round(difference), (value) =>
     formatCompactDkk(value, unitOf),

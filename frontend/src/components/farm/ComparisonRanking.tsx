@@ -8,7 +8,7 @@ import {
   TABLE_HEAD_CLASS,
   type ComparedColumn,
 } from '@/components/farm/comparison-column'
-import { GlossaryInfo } from '@/components/GlossaryInfo'
+import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
 import {
   Table,
@@ -22,19 +22,22 @@ import { formatCompactDkk, QUOTA_STATUS_STYLES } from '@/lib/field-domain'
 import {
   bestColumnIndex,
   COMPARISON_PERIOD,
+  COMPARISON_SORT_LABELS,
   formatDkkDelta,
   formatKgN,
   formatYears,
   formatYearsDelta,
   shareOfMax,
   type BestDirection,
+  type ComparisonSort,
 } from '@/lib/simulation-comparison'
 import { describeNLoadDelta } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type Metric = {
-  key: string
-  label: ReactNode
+  key: Exclude<ComparisonSort, 'balance'>
+  label: string
+  term?: GlossaryTerm
   valueOf: (column: ComparedColumn) => number | null
   format: (value: number) => string
   describeDelta: (value: number, history: number) => string
@@ -56,12 +59,8 @@ const METRICS: Metric[] = [
   },
   {
     key: 'nLoad',
-    label: (
-      <span className="inline-flex items-center gap-1">
-        Udledning pr. år
-        <GlossaryInfo term="nLoad" />
-      </span>
-    ),
+    label: 'Udledning pr. år',
+    term: 'nLoad',
     valueOf: (column) => columnFigure(column, column.totals.nLoad),
     format: formatKgN,
     describeDelta: (value, history) => describeNLoadDelta(value, history).text,
@@ -163,18 +162,51 @@ const MetricCell = ({
   )
 }
 
+type SortButtonProps = {
+  sort: ComparisonSort
+  active: boolean
+  onSortChange: (sort: ComparisonSort) => void
+  children: ReactNode
+}
+
+const SortButton = ({
+  sort,
+  active,
+  onSortChange,
+  children,
+}: SortButtonProps) => (
+  <button
+    type="button"
+    title={`Sorter efter ${COMPARISON_SORT_LABELS[sort]}`}
+    onClick={() => onSortChange(sort)}
+    className={cn(
+      'rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+      active
+        ? 'font-semibold text-foreground'
+        : 'text-muted-foreground hover:text-foreground',
+    )}
+  >
+    {children}
+  </button>
+)
+
 type ComparisonRankingProps = {
   columns: ComparedColumn[]
   bestBalanceKey: string | null
   catchmentCount: number
+  sort: ComparisonSort
+  onSortChange: (sort: ComparisonSort) => void
 }
 
 export const ComparisonRanking = ({
   columns,
   bestBalanceKey,
   catchmentCount,
+  sort,
+  onSortChange,
 }: ComparisonRankingProps) => {
   const [history, ...simulations] = columns
+  const sortable = simulations.length > 1
   const bestIndexes = METRICS.map((metric) =>
     bestColumnIndex(
       columns.map((column) => completeFigure(column, metric.valueOf(column))),
@@ -198,18 +230,51 @@ export const ComparisonRanking = ({
       </colgroup>
       <TableHeader className={TABLE_HEAD_CLASS}>
         <TableRow className="hover:bg-transparent">
-          <TableHead className="h-auto px-4.5 py-2.5 text-xs font-normal text-muted-foreground">
-            {simulations.length > 1
-              ? 'Simulering · sorteret efter bedste balance'
-              : 'Simulering'}
+          <TableHead
+            scope="col"
+            aria-sort={sortable && sort === 'balance' ? 'other' : undefined}
+            className="h-auto px-4.5 py-2.5 text-xs font-normal text-muted-foreground"
+          >
+            {sortable ? (
+              <SortButton
+                sort="balance"
+                active={sort === 'balance'}
+                onSortChange={onSortChange}
+              >
+                Simulering · sorteret efter {COMPARISON_SORT_LABELS[sort]}
+              </SortButton>
+            ) : (
+              'Simulering'
+            )}
           </TableHead>
           {METRICS.map((metric) => (
             <TableHead
               key={metric.key}
               scope="col"
+              aria-sort={
+                sortable && sort === metric.key
+                  ? metric.direction === 'highest'
+                    ? 'descending'
+                    : 'ascending'
+                  : undefined
+              }
               className="h-auto px-0 py-2.5 text-xs font-normal text-muted-foreground"
             >
-              {metric.label}
+              <span className="inline-flex items-center gap-1">
+                {sortable ? (
+                  <SortButton
+                    sort={metric.key}
+                    active={sort === metric.key}
+                    onSortChange={onSortChange}
+                  >
+                    {metric.label}
+                    {sort === metric.key ? ' ▾' : null}
+                  </SortButton>
+                ) : (
+                  metric.label
+                )}
+                {metric.term ? <GlossaryInfo term={metric.term} /> : null}
+              </span>
             </TableHead>
           ))}
         </TableRow>

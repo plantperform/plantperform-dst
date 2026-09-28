@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
@@ -42,7 +42,9 @@ import {
   placeFeedUnitRequirements,
   rankByBalance,
   resolveComparisonIds,
+  sortComparison,
   summarizeColumnQuota,
+  type ComparisonSort,
 } from '@/lib/simulation-comparison'
 import {
   formatCreatedAt,
@@ -156,6 +158,7 @@ export const SimulationComparison = ({
 }: SimulationComparisonProps) => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const [sort, setSort] = useState<ComparisonSort>('balance')
   const simulationsFields = useSimulationsFields(farmId, simulations)
   const fieldsBySimulationId =
     simulations.length === 0 ? NO_SIMULATION_FIELDS : simulationsFields.data
@@ -273,14 +276,13 @@ export const SimulationComparison = ({
     }
   })
   const [history, ...simulationColumns] = compared
-  const ranked = rankByBalance(
-    simulationColumns.map((column) => ({
-      column,
-      db2: columnFigure(column, column.totals.db2),
-      yearsOver: column.yearsOver,
-    })),
-  ).map(({ column }) => column)
-  const bestBalance = ranked.at(0)
+  const candidates = simulationColumns.map((column) => ({
+    column,
+    db2: columnFigure(column, column.totals.db2),
+    nLoad: columnFigure(column, column.totals.nLoad),
+    yearsOver: column.yearsOver,
+  }))
+  const bestBalance = rankByBalance(candidates).at(0)?.column
   const verdict =
     bestBalance === undefined
       ? null
@@ -296,7 +298,10 @@ export const SimulationComparison = ({
           simulationCount: simulationColumns.length,
           historyDb2: columnFigure(history, history.totals.db2),
         })
-  const ordered = [history, ...ranked]
+  const ordered = [
+    history,
+    ...sortComparison(candidates, sort).map(({ column }) => column),
+  ]
   const requirements = placeFeedUnitRequirements(
     ordered.map((column) => column.requirement),
   )
@@ -373,6 +378,8 @@ export const SimulationComparison = ({
               columns={ordered}
               bestBalanceKey={bestBalance?.key ?? null}
               catchmentCount={catchments.length}
+              sort={sort}
+              onSortChange={setSort}
             />
             <section className="space-y-2.5">
               <h2 className="pt-1 font-display text-[22px] leading-tight">

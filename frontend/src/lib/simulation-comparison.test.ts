@@ -31,9 +31,11 @@ import {
   rankByBalance,
   resolveComparisonIds,
   shareOfMax,
+  sortComparison,
   summarizeCatchmentComparison,
   summarizeColumnQuota,
   toggleComparisonId,
+  type ComparisonSort,
 } from '@/lib/simulation-comparison'
 
 const field = (id: string, rotationId: string | null): FieldRecord => ({
@@ -432,6 +434,28 @@ describe('rankByBalance', () => {
       { key: 'e', db2: 1000, yearsOver: null },
     ])
     expect(ranked.map(({ key }) => key)).toEqual(['d', 'b', 'c', 'a', 'e'])
+  })
+})
+
+describe('sortComparison', () => {
+  const candidates = [
+    { key: 'a', db2: 500, nLoad: 30, yearsOver: 2 },
+    { key: 'b', db2: 300, nLoad: 10, yearsOver: 0 },
+    { key: 'c', db2: 900, nLoad: 20, yearsOver: 2 },
+    { key: 'd', db2: 400, nLoad: 40, yearsOver: 0 },
+    { key: 'e', db2: null, nLoad: null, yearsOver: null },
+  ]
+  const keys = (sort: ComparisonSort) =>
+    sortComparison(candidates, sort).map(({ key }) => key)
+
+  it('orders by balance and by years over the quota the same way', () => {
+    expect(keys('balance')).toEqual(['d', 'b', 'c', 'a', 'e'])
+    expect(keys('yearsOver')).toEqual(['d', 'b', 'c', 'a', 'e'])
+  })
+
+  it('puts the highest DB2 or the lowest N load first and no figures last', () => {
+    expect(keys('db2')).toEqual(['c', 'a', 'd', 'b', 'e'])
+    expect(keys('nLoad')).toEqual(['b', 'c', 'a', 'd', 'e'])
   })
 })
 
