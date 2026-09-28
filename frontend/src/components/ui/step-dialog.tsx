@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { cn } from '@/lib/utils'
 
 // Status is decided by the form that owns the steps. The dialog only renders it.
@@ -41,12 +42,7 @@ const StepIndicator = ({
         <p className="text-xs font-medium text-muted-foreground">
           Trin {currentIndex + 1} af {steps.length} · {current?.label}
         </p>
-        <div className="h-1 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-[width]"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
+        <ProgressBar valuePct={progressPct} />
       </div>
 
       {/* Equal columns keep every connector the same length, whatever the labels. */}

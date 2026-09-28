@@ -2,6 +2,7 @@ import {
   OPTIMIZATION_TIME_LIMIT_SECONDS,
   type OptimizationRun,
 } from '@/api/optimization-runs'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
 import {
@@ -56,12 +57,7 @@ const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
       <p className="text-sm tabular-nums text-muted-foreground">
         {formatElapsed(elapsed)}
       </p>
-      <div
-        className="mx-auto h-1 w-48 overflow-hidden rounded-full bg-muted"
-        aria-hidden="true"
-      >
-        <div className="h-full w-1/3 rounded-full bg-primary motion-safe:animate-indeterminate" />
-      </div>
+      <ProgressBar className="mx-auto w-48" />
       <p className="pt-1 text-xs text-muted-foreground">
         Du kan lukke vinduet. Optimeringen kører videre.
       </p>
