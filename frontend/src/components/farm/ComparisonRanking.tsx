@@ -124,7 +124,7 @@ const MetricCell = ({
       <span
         aria-hidden="true"
         className={cn(
-          'mt-2 mr-7 block h-1.5 overflow-hidden rounded-full',
+          'mt-2 block h-1.5 overflow-hidden rounded-full',
           column.history ? 'bg-[#E8E4D8]' : 'bg-muted',
         )}
       >
@@ -191,9 +191,9 @@ export const ComparisonRanking = ({
       className="table-fixed"
     >
       <colgroup>
-        <col />
+        <col className="w-70" />
         {METRICS.map((metric) => (
-          <col key={metric.key} className="w-50" />
+          <col key={metric.key} />
         ))}
       </colgroup>
       <TableHeader className={TABLE_HEAD_CLASS}>
@@ -227,7 +227,7 @@ export const ComparisonRanking = ({
           >
             <TableHead
               scope="row"
-              className="h-auto px-4.5 py-3.5 align-top font-normal whitespace-normal"
+              className="h-auto px-4.5 py-3 align-top font-normal whitespace-normal"
             >
               <span className="block font-display text-[19px] leading-tight">
                 {column.title}
@@ -251,7 +251,7 @@ export const ComparisonRanking = ({
             {METRICS.map((metric, metricIndex) => (
               <TableCell
                 key={metric.key}
-                className="px-0 py-3.5 pr-4 align-top whitespace-normal"
+                className="px-0 py-3 pr-8 align-top whitespace-normal"
               >
                 <MetricCell
                   metric={metric}

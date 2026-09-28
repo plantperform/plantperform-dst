@@ -86,7 +86,7 @@ const CatchmentRow = ({
         className="cursor-pointer border-border hover:bg-transparent"
         onClick={onToggle}
       >
-        <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-4')}>
+        <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-3.5')}>
           <button
             type="button"
             aria-expanded={open}
@@ -121,7 +121,7 @@ const CatchmentRow = ({
           return (
             <TableCell
               key={column.key}
-              className={cn(cellClass(column), 'py-3.5')}
+              className={cn(cellClass(column), 'py-3')}
             >
               {comparison === undefined ? (
                 <div onClick={(event) => event.stopPropagation()}>
@@ -137,7 +137,7 @@ const CatchmentRow = ({
                 </span>
               ) : (
                 <>
-                  <span className="block font-display text-[26px] leading-tight tabular-nums">
+                  <span className="block font-display text-2xl leading-tight tabular-nums">
                     {formatYears(comparison.status.overYears.length)}
                   </span>
                   <span
@@ -215,7 +215,9 @@ export const CatchmentQuotaTable = ({
   showFeedUnits,
   feedUnitRequirements,
 }: CatchmentQuotaTableProps) => {
-  const [openIds, setOpenIds] = useState<ReadonlySet<number>>(() => new Set())
+  const [openIds, setOpenIds] = useState<ReadonlySet<number>>(
+    () => new Set(catchments.slice(0, 1).map(({ catchmentId }) => catchmentId)),
+  )
   const toggle = (catchmentId: number) =>
     setOpenIds((current) => {
       const next = new Set(current)

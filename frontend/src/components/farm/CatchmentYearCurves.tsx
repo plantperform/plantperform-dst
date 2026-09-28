@@ -111,14 +111,14 @@ const CurveRowView = ({
       >
         <span className="truncate">{row.title}</span>
       </div>
-      <div aria-hidden="true" className="relative h-20 min-w-0 flex-8">
+      <div aria-hidden="true" className="relative h-15 min-w-0 flex-8">
         {hovered === null ? null : (
           <div
             className="absolute inset-y-0 border-l border-[#C9C9C4]"
             style={{ left: `${curveLeftPct(hovered, YEAR_COUNT)}%` }}
           />
         )}
-        <div className="absolute inset-x-0 inset-y-3">
+        <div className="absolute inset-0">
           <div
             className="absolute inset-x-0 border-t border-dashed border-red-600/55"
             style={{ top: `${curveTopPct(100, ceilingPct)}%` }}
