@@ -42,8 +42,7 @@ export const CatchmentYearStatusIndicator = ({
   <QuotaStatusIndicator
     level={status.level}
     className={cn(
-      'gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium whitespace-normal',
-      QUOTA_STATUS_STYLES[status.level].surface,
+      'gap-1.5 text-xs font-medium whitespace-normal',
       QUOTA_STATUS_STYLES[status.level].text,
       className,
     )}
