@@ -1,6 +1,7 @@
 import useSWR, { mutate, preload } from 'swr'
 
 import { fetcher } from '@/api/client'
+import { createRequestQueue } from '@/api/request-queue'
 import type {
   FieldYearValues,
   CropCodeOption,
@@ -160,25 +161,7 @@ export const useFieldHistoricalDetail = (farmId?: string, fieldId?: string) =>
   )
 const YEAR_VALUES_CONCURRENCY = 6
 
-const mapWithConcurrency = async <T, R>(
-  items: T[],
-  limit: number,
-  run: (item: T) => Promise<R>,
-): Promise<R[]> => {
-  const results: R[] = new Array(items.length)
-  let nextIndex = 0
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex
-      nextIndex += 1
-      results[index] = await run(items[index])
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  )
-  return results
-}
+const queueYearValuesRequest = createRequestQueue(YEAR_VALUES_CONCURRENCY)
 
 const yearValuesCache = new Map<string, RotationCandidateYearResult[]>()
 
@@ -233,19 +216,19 @@ const fetchFieldYearValues = async (
       missing.push({ fieldId, cacheKey })
     }
   }
-  await mapWithConcurrency(
-    missing,
-    YEAR_VALUES_CONCURRENCY,
-    async ({ fieldId, cacheKey }) => {
-      try {
-        const years = await source.load(fieldId)
-        if (!years) return
-        yearValuesCache.set(cacheKey, years)
-        result[fieldId] = years
-      } catch {
-        return
-      }
-    },
+  await Promise.all(
+    missing.map(({ fieldId, cacheKey }) =>
+      queueYearValuesRequest(async () => {
+        try {
+          const years = await source.load(fieldId)
+          if (!years) return
+          yearValuesCache.set(cacheKey, years)
+          result[fieldId] = years
+        } catch {
+          return
+        }
+      }),
+    ),
   )
   return result
 }
