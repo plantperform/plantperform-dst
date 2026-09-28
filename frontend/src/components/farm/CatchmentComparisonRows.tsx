@@ -1,13 +1,17 @@
+import { useId, useState } from 'react'
+
 import { CatchmentYearBars } from '@/components/farm/CatchmentYearBars'
+import { CatchmentYearTable } from '@/components/farm/CatchmentYearTable'
 import {
   ComparisonCell,
   ComparisonRowHeader,
   ComparisonValue,
 } from '@/components/farm/ComparisonTableParts'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
+import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
-import { TableRow } from '@/components/ui/table'
+import { TableCell, TableRow } from '@/components/ui/table'
 import {
   formatWholeNumber,
   QUOTA_STATUS_LABELS,
@@ -23,6 +27,7 @@ import {
 
 export type CatchmentColumn = {
   key: string
+  title: string
   catchments: CatchmentTotalsByYear | undefined
   partialQuotas: ReadonlyMap<number, number>
   failed: boolean
@@ -75,6 +80,8 @@ type CatchmentRowProps = {
   catchmentId: number
   label: string
   columns: CatchmentColumn[]
+  open: boolean
+  onToggle: () => void
   quotaKgN: number | undefined
 }
 
@@ -82,8 +89,11 @@ const CatchmentRow = ({
   catchmentId,
   label,
   columns,
+  open,
+  onToggle,
   quotaKgN,
 }: CatchmentRowProps) => {
+  const detailId = useId()
   const comparisons = columns.map((column) =>
     column.catchments === undefined
       ? undefined
@@ -101,29 +111,56 @@ const CatchmentRow = ({
     formatKgN,
   )
   return (
-    <TableRow className="hover:bg-transparent">
-      <ComparisonRowHeader
-        note={quotaKgN === undefined ? null : `Kvote ${formatKgN(quotaKgN)}`}
-      >
-        {label}
-      </ComparisonRowHeader>
-      {columns.map((column, index) => {
-        const comparison = comparisons[index]
-        return (
-          <ComparisonCell key={column.key}>
-            {comparison === undefined ? (
-              <ColumnState column={column} />
-            ) : comparison === null ? (
-              <span className="text-sm text-muted-foreground">
-                {QUOTA_STATUS_LABELS.noData}
-              </span>
-            ) : (
-              <CatchmentFigures comparison={comparison} best={index === best} />
-            )}
-          </ComparisonCell>
-        )
-      })}
-    </TableRow>
+    <>
+      <TableRow className="hover:bg-transparent has-aria-expanded:bg-transparent">
+        <ComparisonRowHeader
+          note={quotaKgN === undefined ? null : `Kvote ${formatKgN(quotaKgN)}`}
+        >
+          <DisclosureButton
+            open={open}
+            onToggle={onToggle}
+            label={label}
+            aria-controls={detailId}
+          />
+        </ComparisonRowHeader>
+        {columns.map((column, index) => {
+          const comparison = comparisons[index]
+          return (
+            <ComparisonCell key={column.key}>
+              {comparison === undefined ? (
+                <ColumnState column={column} />
+              ) : comparison === null ? (
+                <span className="text-sm text-muted-foreground">
+                  {QUOTA_STATUS_LABELS.noData}
+                </span>
+              ) : (
+                <CatchmentFigures
+                  comparison={comparison}
+                  best={index === best}
+                />
+              )}
+            </ComparisonCell>
+          )
+        })}
+      </TableRow>
+      {open ? (
+        <TableRow className="bg-muted/30 hover:bg-muted/30">
+          <TableCell
+            colSpan={columns.length + 1}
+            className="p-0 whitespace-normal"
+          >
+            <CatchmentYearTable
+              id={detailId}
+              columns={columns.map((column, index) => ({
+                key: column.key,
+                title: column.title,
+                years: comparisons[index]?.years ?? null,
+              }))}
+            />
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
   )
 }
 
@@ -138,6 +175,7 @@ export const CatchmentComparisonRows = ({
   catchmentLabel,
   quotaByCatchment,
 }: CatchmentComparisonRowsProps) => {
+  const [openCatchmentId, setOpenCatchmentId] = useState<number | null>(null)
   const catchments = listComparedCatchments(columns, catchmentLabel)
   if (catchments.length === 0) {
     if (columns.every((column) => column.catchments !== undefined)) {
@@ -164,6 +202,12 @@ export const CatchmentComparisonRows = ({
           catchmentId={catchmentId}
           label={label}
           columns={columns}
+          open={openCatchmentId === catchmentId}
+          onToggle={() =>
+            setOpenCatchmentId((current) =>
+              current === catchmentId ? null : catchmentId,
+            )
+          }
           quotaKgN={quotaByCatchment.get(catchmentId)}
         />
       ))}

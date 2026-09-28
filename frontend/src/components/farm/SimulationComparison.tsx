@@ -79,7 +79,7 @@ type ComparisonColumn = {
 const useColumnCatchments = (
   farmId: string,
   column: ComparisonColumn | undefined,
-): Omit<CatchmentColumn, 'key'> => {
+): Omit<CatchmentColumn, 'key' | 'title'> => {
   const simulationId = column?.simulationId
   const history = simulationId === undefined
   const fields = column?.fields ?? NO_FIELDS
@@ -366,6 +366,7 @@ export const SimulationComparison = ({
                 <CatchmentComparisonRows
                   columns={columns.map((column, index) => ({
                     key: column.key,
+                    title: column.title,
                     ...catchmentSlots[index],
                   }))}
                   catchmentLabel={catchmentLabel}
