@@ -2,8 +2,17 @@ import { ArrowLeft } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { useSimulationsFields, type FieldsBySimulationId } from '@/api/hooks'
+import {
+  useFieldYearValues,
+  useSimulationsFields,
+  type FieldsBySimulationId,
+} from '@/api/hooks'
 import type { FieldRecord, Simulation } from '@/api/types'
+import { useCatchmentLabel } from '@/components/farm/catchment-options'
+import {
+  CatchmentComparisonRows,
+  type CatchmentColumn,
+} from '@/components/farm/CatchmentComparisonRows'
 import {
   ComparisonCell,
   ComparisonRowHeader,
@@ -26,34 +35,84 @@ import {
   formatCompactDkk,
   NUM_ROTATION_YEARS,
   ROTATION_START_CALENDAR_YEAR,
+  summarizeCatchmentYearTotals,
+  type CatchmentTotalsByYear,
   type FieldTotals,
 } from '@/lib/field-domain'
 import {
+  alignCatchmentYears,
   bestColumnIndex,
+  catchmentQuotas,
   comparisonAvailability,
   defaultComparisonIds,
   describeFeedUnitRequirement,
   formatFeedUnits,
   formatKgN,
+  hasMissingYearValues,
   parseComparisonIds,
   placeFeedUnitRequirements,
   resolveComparisonIds,
   type BestDirection,
 } from '@/lib/simulation-comparison'
-import { formatCreatedAt } from '@/lib/simulation-overview'
+import {
+  formatCreatedAt,
+  partialCatchmentQuotas,
+} from '@/lib/simulation-overview'
 
 const PERIOD = `${ROTATION_START_CALENDAR_YEAR}-${ROTATION_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
 const HISTORY_COLUMN_KEY = 'history'
 const NO_SIMULATION_FIELDS: FieldsBySimulationId = {}
+const NO_FIELDS: FieldRecord[] = []
+const EMPTY_CATCHMENTS: CatchmentTotalsByYear = new Map()
 
 type ComparisonColumn = {
   key: string
   title: string
   subtitle: string
+  simulationId: string | undefined
   fields: FieldRecord[]
   totals: FieldTotals
   requirement: string | null
   changedCount: number | null
+}
+
+const useColumnCatchments = (
+  farmId: string,
+  column: ComparisonColumn | undefined,
+): Omit<CatchmentColumn, 'key'> => {
+  const simulationId = column?.simulationId
+  const history = simulationId === undefined
+  const fields = column?.fields ?? NO_FIELDS
+  const yearValues = useFieldYearValues(
+    farmId,
+    simulationId,
+    fields,
+    fields.length > 0,
+  )
+  const incomplete =
+    yearValues.data !== undefined &&
+    hasMissingYearValues(fields, yearValues.data, history)
+  const catchments = useMemo(() => {
+    if (fields.length === 0) return EMPTY_CATCHMENTS
+    if (yearValues.data === undefined || incomplete) return undefined
+    return alignCatchmentYears(
+      summarizeCatchmentYearTotals(fields, yearValues.data, history),
+      history,
+    )
+  }, [fields, history, incomplete, yearValues.data])
+  const partialQuotas = useMemo(
+    () => partialCatchmentQuotas(fields, !history),
+    [fields, history],
+  )
+  return {
+    catchments,
+    partialQuotas,
+    failed:
+      incomplete ||
+      (Boolean(yearValues.error) && yearValues.data === undefined),
+    retrying: yearValues.isValidating,
+    onRetry: () => void yearValues.mutate(),
+  }
 }
 
 type FigureRowProps = {
@@ -160,6 +219,7 @@ export const SimulationComparison = ({
       key: HISTORY_COLUMN_KEY,
       title: 'Afgrødehistorik',
       subtitle: `Fremskrevet til ${PERIOD}`,
+      simulationId: undefined,
       fields,
       totals: computeFieldTotals(fields, false),
       requirement: null,
@@ -174,6 +234,7 @@ export const SimulationComparison = ({
           key: id,
           title: simulation.name,
           subtitle: formatCreatedAt(simulation.createdAt),
+          simulationId: id,
           fields: simulationFields,
           totals: computeFieldTotals(simulationFields, true),
           requirement: describeFeedUnitRequirement(simulation.constraints),
@@ -183,6 +244,15 @@ export const SimulationComparison = ({
     })
     return [history, ...chosen]
   }, [fields, fieldsBySimulationId, ids, simulations])
+
+  const catchmentLabel = useCatchmentLabel(farmId, fields)
+  const quotaByCatchment = useMemo(() => catchmentQuotas(fields), [fields])
+  const catchmentSlots = [
+    useColumnCatchments(farmId, columns[0]),
+    useColumnCatchments(farmId, columns[1]),
+    useColumnCatchments(farmId, columns[2]),
+    useColumnCatchments(farmId, columns[3]),
+  ]
 
   const canonical = ids.join(',')
   if (availability !== undefined && requested !== canonical) {
@@ -292,6 +362,14 @@ export const SimulationComparison = ({
                   valueOf={(totals) => totals.nLoad}
                   format={formatKgN}
                   direction="lowest"
+                />
+                <CatchmentComparisonRows
+                  columns={columns.map((column, index) => ({
+                    key: column.key,
+                    ...catchmentSlots[index],
+                  }))}
+                  catchmentLabel={catchmentLabel}
+                  quotaByCatchment={quotaByCatchment}
                 />
                 {showFeedUnits ? (
                   <FigureRow

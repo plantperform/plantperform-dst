@@ -1,13 +1,27 @@
 import type {
   FieldRecord,
+  FieldYearValues,
   OptimizationConstraints,
   Simulation,
 } from '@/api/types'
 import {
   formatFieldCount,
   formatWholeNumber,
+  groupFieldsByCatchment,
   isFieldCalculated,
+  quotaPercent,
+  quotaStatusLevel,
+  REAL_HISTORY_START_CALENDAR_YEAR,
+  ROTATION_CALENDAR_YEARS,
+  ROTATION_START_CALENDAR_YEAR,
+  type CatchmentTotalsByYear,
+  type CatchmentYearTotals,
+  type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import {
+  summarizeCatchmentYearStatuses,
+  type CatchmentYearStatus,
+} from '@/lib/simulation-overview'
 
 export const MAX_COMPARED_SIMULATIONS = 3
 
@@ -141,3 +155,143 @@ export const placeFeedUnitRequirements = (
     cells: requirements.map(() => null),
   }
 }
+
+const HISTORY_YEAR_OFFSET =
+  ROTATION_START_CALENDAR_YEAR - REAL_HISTORY_START_CALENDAR_YEAR
+
+export const alignCatchmentYears = (
+  totalsByYear: CatchmentTotalsByYear,
+  history: boolean,
+): CatchmentTotalsByYear => {
+  const aligned: CatchmentTotalsByYear = new Map()
+  for (const [catchmentId, byYear] of totalsByYear) {
+    const years: Record<number, CatchmentYearTotals> = {}
+    for (const [year, totals] of Object.entries(byYear)) {
+      const calendarYear = history
+        ? Number(year) + HISTORY_YEAR_OFFSET
+        : ROTATION_START_CALENDAR_YEAR + Number(year) - 1
+      years[calendarYear] = totals
+    }
+    aligned.set(catchmentId, years)
+  }
+  return aligned
+}
+
+export type CatchmentYearQuota = {
+  year: number
+  quotaPct: number | null
+  level: QuotaStatusLevel
+}
+
+export type CatchmentAverage = {
+  nLoadKg: number
+  quotaPct: number
+}
+
+export type CatchmentComparison = {
+  status: CatchmentYearStatus
+  complete: boolean
+  average: CatchmentAverage | null
+  years: CatchmentYearQuota[]
+}
+
+export const summarizeCatchmentComparison = (
+  catchmentId: number,
+  totalsByYear: CatchmentTotalsByYear,
+  partialQuotaKgN?: number,
+): CatchmentComparison | null => {
+  const byYear: Record<number, CatchmentYearTotals> =
+    totalsByYear.get(catchmentId) ?? {}
+  const yearQuotaKgN = (year: number): number =>
+    byYear[year] === undefined ? 0 : (partialQuotaKgN ?? byYear[year].quotaKgN)
+  const quotaYears = ROTATION_CALENDAR_YEARS.filter(
+    (year) => yearQuotaKgN(year) > 0,
+  )
+  if (quotaYears.length === 0 && partialQuotaKgN === undefined) return null
+  const single: CatchmentTotalsByYear = new Map([[catchmentId, byYear]])
+  const [status] = summarizeCatchmentYearStatuses(
+    single,
+    true,
+    partialQuotaKgN === undefined
+      ? undefined
+      : new Map([[catchmentId, partialQuotaKgN]]),
+  )
+  const nLoadKg = quotaYears.reduce(
+    (sum, year) => sum + byYear[year].nLoadKg,
+    0,
+  )
+  const quotaKgN = quotaYears.reduce((sum, year) => sum + yearQuotaKgN(year), 0)
+  return {
+    status,
+    complete: partialQuotaKgN === undefined,
+    average:
+      quotaYears.length === 0
+        ? null
+        : {
+            nLoadKg: nLoadKg / quotaYears.length,
+            quotaPct: quotaPercent(nLoadKg, quotaKgN) ?? 0,
+          },
+    years: ROTATION_CALENDAR_YEARS.map((year) => {
+      const yearNLoadKg = byYear[year]?.nLoadKg ?? 0
+      return {
+        year,
+        quotaPct: quotaPercent(yearNLoadKg, yearQuotaKgN(year)),
+        level: quotaStatusLevel(yearNLoadKg, yearQuotaKgN(year), true),
+      }
+    }),
+  }
+}
+
+export type ComparedCatchment = {
+  catchmentId: number
+  label: string
+}
+
+export const listComparedCatchments = (
+  columns: {
+    catchments: CatchmentTotalsByYear | undefined
+    partialQuotas: ReadonlyMap<number, number>
+  }[],
+  labelOf: (catchmentId: number) => string,
+): ComparedCatchment[] => {
+  const catchmentIds = new Set<number>()
+  for (const { catchments, partialQuotas } of columns) {
+    for (const catchmentId of partialQuotas.keys())
+      catchmentIds.add(catchmentId)
+    if (!catchments) continue
+    for (const [catchmentId, byYear] of catchments) {
+      if (catchmentId === null) continue
+      if (Object.values(byYear).some((totals) => totals.quotaKgN > 0)) {
+        catchmentIds.add(catchmentId)
+      }
+    }
+  }
+  return [...catchmentIds]
+    .map((catchmentId) => ({ catchmentId, label: labelOf(catchmentId) }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'da-DK'))
+}
+
+export const hasMissingYearValues = (
+  fields: FieldRecord[],
+  yearsByFieldId: FieldYearValues,
+  history: boolean,
+): boolean =>
+  fields.some(
+    (field) =>
+      isFieldCalculated(field, !history) && !(field.id in yearsByFieldId),
+  )
+
+export const QUOTA_BAR_CEILING_PCT = 130
+
+export const quotaBarShare = (quotaPct: number): number =>
+  (Math.min(Math.max(quotaPct, 0), QUOTA_BAR_CEILING_PCT) * 100) /
+  QUOTA_BAR_CEILING_PCT
+
+export const catchmentQuotas = (fields: FieldRecord[]): Map<number, number> =>
+  new Map(
+    groupFieldsByCatchment(fields, false).flatMap(({ catchmentId, totals }) =>
+      catchmentId !== null && totals.nLoadQuotaKgN > 0
+        ? [[catchmentId, totals.nLoadQuotaKgN] as const]
+        : [],
+    ),
+  )
