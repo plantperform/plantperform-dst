@@ -7,13 +7,11 @@ from unittest.mock import patch
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
-from database.scripts.load_arbejdsmaengder import parse_arbejdsmaengder
-from database.scripts.load_arbejdssatser import parse_arbejdssatser
-from database.scripts.load_dyrkningsomkostninger import parse_dyrkningsomkostninger
-from database.scripts.load_halmudbytte import parse_halmudbytte
+from database.scripts.load_oekonomital_afgroedebundet import parse_oekonomital_afgroedebundet
+from database.scripts.load_oekonomital_generelle_satser import (
+    parse_oekonomital_generelle_satser,
+)
 from database.scripts.load_permanente_afgrodekoder import parse_permanente_afgrodekoder
-from database.scripts.load_prisliste import parse_prisliste
-from database.scripts.load_salgspriser import parse_salgspriser
 
 
 def write_csv(
@@ -85,56 +83,80 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             )
             self.assertEqual(parse_permanente_afgrodekoder(master), [(1, "Vårbyg")])
 
-    def test_each_csv_loader_parses_its_own_source(self) -> None:
+    def test_oekonomital_loaders_split_on_kilde_tabel(self) -> None:
+        afgroedebundet_headers = [
+            "kilde_tabel", "afgroedekode", "driftsform", "jordbonitet", "kvalitet",
+            "kategori", "behandling", "antal", "enhed", "beloeb", "beloeb_type",
+        ]
+
+        def afgroedebundet_row(**overrides: str) -> list[str]:
+            row = {header: "" for header in afgroedebundet_headers}
+            row.update(overrides)
+            return [row[header] for header in afgroedebundet_headers]
+
+        generelle_satser_headers = [
+            "kilde_tabel", "aar", "type", "afgroedekode", "driftsform", "jordbonitet",
+            "kategori", "post", "pris", "enhed",
+        ]
+
+        def generelle_satser_row(**overrides: str) -> list[str]:
+            row = {header: "" for header in generelle_satser_headers}
+            row.update(overrides)
+            return [row[header] for header in generelle_satser_headers]
+
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory)
-            sales = base / "sales.csv"
+            afgroedebundet = Path(directory) / "afgroedebundet.csv"
             write_csv(
-                sales,
-                ["afgroedekode", "driftsform", "kvalitet", "salgspris", "enhed", "halm_pris_kr_kg"],
-                [["1", "Konventionel", "", "1.5", "kg", ""]],
-            )
-            straw = base / "straw.csv"
-            write_csv(
-                straw,
-                ["afgroedekode", "jordbonitet", "halm_udbytte_kg_ha"],
-                [["1", "JB1-3", "2"]],
-            )
-            rates = base / "rates.csv"
-            write_csv(
-                rates,
-                ["behandling", "jordbonitet", "afgroedekode", "driftsform", "pris_kr_per_enhed"],
-                [["Såning", "JB1-3", "", "", "3"]],
-            )
-            quantities = base / "quantities.csv"
-            write_csv(
-                quantities,
+                afgroedebundet,
+                afgroedebundet_headers,
                 [
-                    "afgroedekode", "driftsform", "jordbonitet", "kvalitet", "kategori",
-                    "behandling", "antal",
+                    afgroedebundet_row(
+                        kilde_tabel="arbejdsmaengde", afgroedekode="1", driftsform="Konventionel",
+                        jordbonitet="JB1-3", kategori="Udsæd", behandling="Såning", antal="2",
+                    ),
+                    afgroedebundet_row(
+                        kilde_tabel="dyrkningsomkostning", afgroedekode="1",
+                        driftsform="Konventionel", kategori="Udsæd", behandling="Korn",
+                        beloeb="12", beloeb_type="udgift_kr_ha",
+                    ),
+                    afgroedebundet_row(
+                        kilde_tabel="halmudbytte", afgroedekode="1", jordbonitet="JB1-3",
+                        kategori="Udbytte", behandling="Halmudbytte", antal="2", enhed="kg/ha",
+                    ),
+                    afgroedebundet_row(
+                        kilde_tabel="salgspris", afgroedekode="1", driftsform="Konventionel",
+                        kategori="Salg", behandling="Salg af afgrøde", enhed="kg", beloeb="1.5",
+                        beloeb_type="salgspris",
+                    ),
                 ],
-                [["1", "Konventionel", "JB1-3", "", "Udsæd", "Såning", "2"]],
             )
-            costs = base / "costs.csv"
+            generelle_satser = Path(directory) / "generelle_satser.csv"
             write_csv(
-                costs,
-                ["afgroedekode", "driftsform", "kategori", "behandling", "udgift_kr_ha"],
-                [["1", "Konventionel", "Udsæd", "Korn", "12"]],
-            )
-            prices = base / "prices.csv"
-            write_csv(
-                prices,
-                ["post", "kategori", "type", "pris", "enhed"],
-                [["N", "Gødning", "Omkostning", "4", "kr/kg"]],
-                delimiter=";",
+                generelle_satser,
+                generelle_satser_headers,
+                [
+                    generelle_satser_row(
+                        kilde_tabel="arbejdssats", aar="2026", type="Omkostning",
+                        jordbonitet="JB1-3", post="Såning", pris="3",
+                    ),
+                    generelle_satser_row(
+                        kilde_tabel="prisliste_2026", aar="2026", type="Omkostning",
+                        kategori="Gødning", post="N", pris="4", enhed="kr/kg",
+                    ),
+                ],
             )
 
-            self.assertEqual(parse_salgspriser(sales)[0][-2:], ("kg", 0.0))
-            self.assertEqual(parse_halmudbytte(straw)[0][-1], 2.0)
-            self.assertIsNone(parse_arbejdssatser(rates)[0][3])
-            self.assertEqual(parse_arbejdsmaengder(quantities)[0][-1], 2.0)
-            self.assertEqual(parse_dyrkningsomkostninger(costs)[0][-1], 12.0)
-            self.assertEqual(parse_prisliste(prices)[0][-1], "kr/kg")
+            arbejdsmaengde, dyrkningsomkostning, halmudbytte, salgspris = (
+                parse_oekonomital_afgroedebundet(afgroedebundet)
+            )
+            arbejdssats, prisliste = parse_oekonomital_generelle_satser(generelle_satser)
+
+        self.assertEqual(arbejdsmaengde[0][-1], 2.0)
+        self.assertEqual(dyrkningsomkostning[0][-1], 12.0)
+        self.assertEqual(halmudbytte[0][-1], 2.0)
+        self.assertEqual(salgspris[0][-2:], ("kg", 0.0))  # halm price absent -> 0.0
+        self.assertIsNone(arbejdssats[0][3])  # afgroedekode blank -> universal rate
+        self.assertEqual(prisliste[0][-1], "kr/kg")
 
     def test_empty_replacement_never_opens_a_database_connection(self) -> None:
         with patch.object(runtime_lookup_loader.psycopg, "connect") as connect:
