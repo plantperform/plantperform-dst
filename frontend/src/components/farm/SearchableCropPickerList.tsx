@@ -32,9 +32,20 @@ export const SearchableCropPickerList = ({
 }: SearchableCropPickerListProps) => {
   const inputId = useId()
   const [query, setQuery] = useState('')
-  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const initialSelectedIndex = Math.max(
+    0,
+    items.findIndex((item) => item.key === selectedKey),
+  )
+  const [highlightedIndex, setHighlightedIndex] = useState(initialSelectedIndex)
   const [queryAtLastHighlightReset, setQueryAtLastHighlightReset] = useState(query)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const selectedLabel = items.find((item) => item.key === selectedKey)?.label
+  const displayedPlaceholder = query ? searchPlaceholder : (selectedLabel ?? searchPlaceholder)
+
+  useEffect(() => {
+    itemRefs.current[initialSelectedIndex]?.scrollIntoView({ block: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (query !== queryAtLastHighlightReset) {
     setQueryAtLastHighlightReset(query)
@@ -76,7 +87,7 @@ export const SearchableCropPickerList = ({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={searchPlaceholder}
+        placeholder={displayedPlaceholder}
       />
       <div
         role="listbox"
