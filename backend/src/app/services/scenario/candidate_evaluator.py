@@ -436,11 +436,12 @@ def evaluate_with_overrides(
     """Evaluate a candidate after applying manual changes to the library result.
 
     This works like evaluate_candidate_for_mark but overrides the hovedafgrøde
-    in one or more positions and/or shifts the rotation's cyclic starting point
-    (one-based start_year, "ryk sædskiftet frem/tilbage" in the old app's
-    "Startår i rotation"). Phase 10's live "Rediger manuelt" calculation uses
-    this function. An overridden position retains its udlæg/virkemiddel; only
-    the hovedafgrøde changes.
+    (and optionally udlæg) in one or more positions and/or shifts the
+    rotation's cyclic starting point (one-based start_year, "ryk sædskiftet
+    frem/tilbage" in the old app's "Startår i rotation"). Phase 10's live
+    "Rediger manuelt" calculation uses this function. An overridden position
+    retains its library udlæg/virkemiddel unless the override also sets
+    udlaeg_set=true, in which case its own udlaeg_kode/udlaeg_navn replace it.
 
     result.ref remains equal to base_ref when neither overrides nor start_year
     changed, making a preview without changes identical to a regular library
@@ -462,6 +463,9 @@ def evaluate_with_overrides(
     udlaeg_navn_seq = [raw_rotation[i][2] for i in range(8)]
     for override in overrides:
         afgrode_seq[override.position] = override.afgrode_kode
+        if override.udlaeg_set:
+            udlaeg_seq[override.position] = override.udlaeg_kode
+            udlaeg_navn_seq[override.position] = override.udlaeg_navn
 
     if overrides or start_year != 1:
         suffix_parts = []
@@ -470,6 +474,7 @@ def evaluate_with_overrides(
         if overrides:
             ov_signature = ",".join(
                 f"{o.position}:{o.afgrode_kode}"
+                + (f":u{o.udlaeg_kode}" if o.udlaeg_set else "")
                 for o in sorted(overrides, key=lambda o: o.position)
             )
             suffix_parts.append(f"ov[{ov_signature}]")

@@ -72,11 +72,25 @@ class RotationCandidateYearResult(CamelModel):
 
 
 class RotationPositionOverride(CamelModel):
-    """Manual hovedafgrøde override in one position (0-7) of an otherwise
-    library-generated rotation; see Phase 10 (live calculation)."""
+    """Manual hovedafgrøde/udlæg override in one position (0-7) of an
+    otherwise library-generated rotation; see Phase 10 (live calculation).
+
+    udlaeg_kode/udlaeg_navn are optional: when udlaeg_set is false (the
+    default), the position retains whatever udlæg the library rotation
+    already had there (unchanged behavior). Setting udlaeg_set=true replaces
+    it with udlaeg_kode/udlaeg_navn as given, including null/null for "intet
+    udlæg" chosen in the picker. udlaeg_navn is supplied by the caller (the
+    picker's own label) rather than re-derived server-side, since some udlæg
+    codes (fx bridge_v2.py's _MELLEMAFGROEDE_UDLAEG_KODER/
+    _TIDLIG_SAANING_UDLAEG_KODER) are virkemiddel markers, not real
+    afgrødekoder, and have no entry to look a name up from.
+    """
 
     position: int = Field(ge=0, le=7)
     afgrode_kode: int
+    udlaeg_kode: int | None = None
+    udlaeg_navn: str | None = None
+    udlaeg_set: bool = False
 
 
 class RotationCandidateEvaluation(CamelModel):
