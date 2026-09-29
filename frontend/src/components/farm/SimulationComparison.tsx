@@ -13,6 +13,7 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { ComparisonCharts } from '@/components/farm/ComparisonCharts'
+import { ComparisonLoading } from '@/components/farm/ComparisonLoading'
 import { ComparisonRanking } from '@/components/farm/ComparisonRanking'
 import {
   columnFigure,
@@ -20,8 +21,6 @@ import {
 } from '@/components/farm/comparison-column'
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { LoadError } from '@/components/ui/load-error'
-import { ProgressBar } from '@/components/ui/progress-bar'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   changedFieldIds,
   computeFieldTotals,
@@ -129,31 +128,6 @@ const useColumnYearFigures = (
         : { done: yearValuesProgress.total, total: yearValuesProgress.total },
   }
 }
-
-type LoadProgressProps = {
-  label: string
-  progress?: RequestProgress
-}
-
-const LoadProgress = ({ label, progress }: LoadProgressProps) => (
-  <div
-    role="progressbar"
-    aria-label={label}
-    aria-valuemin={progress ? 0 : undefined}
-    aria-valuemax={progress?.total}
-    aria-valuenow={progress?.done}
-    className="max-w-md space-y-1.5"
-  >
-    <p className="text-xs text-muted-foreground tabular-nums">
-      {progress
-        ? `${label}: ${progress.done} af ${progress.total} marker`
-        : label}
-    </p>
-    <ProgressBar
-      valuePct={progress && (progress.done * 100) / Math.max(progress.total, 1)}
-    />
-  </div>
-)
 
 type SimulationComparisonProps = {
   farmId: string
@@ -324,7 +298,7 @@ export const SimulationComparison = ({
 
   return (
     <div className="@container min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-[96rem] flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
+      <div className="mx-auto flex min-h-full max-w-[96rem] flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
         <Link
           to={`/farms/${farmId}/simulations`}
           className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -354,25 +328,16 @@ export const SimulationComparison = ({
             retrying={simulationsFields.isValidating}
           />
         ) : availability === undefined || yearValuesLoading ? (
-          <div
-            className="space-y-5 rounded-lg border bg-card p-6"
-            aria-busy="true"
-          >
-            {availability === undefined ? (
-              <LoadProgress label="Henter simuleringerne" />
-            ) : (
-              <LoadProgress
-                label="Henter tal pr. år"
-                progress={yearValuesProgress}
-              />
-            )}
-            <div className="space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-28 w-full" />
-            </div>
-          </div>
+          <ComparisonLoading
+            label={
+              availability === undefined
+                ? 'Henter simuleringerne'
+                : 'Henter tal pr. år'
+            }
+            progress={
+              availability === undefined ? undefined : yearValuesProgress
+            }
+          />
         ) : (
           <>
             {noneSelectable ? (
