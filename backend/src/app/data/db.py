@@ -172,6 +172,8 @@ nuar_kode_table = Table(
     Column("wc_ambig", Boolean, nullable=False),
     Column("mp_ambig", Boolean, nullable=False),
     Column("wp_ambig", Boolean, nullable=False),
+    Column("er_hovedafgrode", Boolean, nullable=False),
+    Column("grund6procent", Boolean, nullable=False),
 )
 
 permanent_afgrode_table = Table(

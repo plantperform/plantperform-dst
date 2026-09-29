@@ -51,7 +51,7 @@ men hele kæden er ikke én fælles transaction.
 | 4 | `load-mars-projekter` | Erstatter MARS-laget og genberegner markerens MARS-/omlægningsfelter. |
 | 5 | `load-historisk-goedningsfordeling` | Erstatter referencen for faktisk gødningstildeling i 2025/2026. |
 | 6 | `load-saedskifte-lookup` | Erstatter sædskifte-rotationer og kategorier. |
-| 7 | `load-afgroede-normer` | Erstatter afgrødenormer, N-fiksering og NUAR-koder fra master-workbooken. |
+| 7 | `load-afgroede-normer` | Erstatter afgrødenormer, N-fiksering og NUAR-koder fra masterarket. |
 | 7b | `load-permanente-afgrodekoder` | Erstatter listen over permanente (ikke-omdrift) afgrødekoder. |
 | 8 | `load-afstromningskategorier` | Erstatter P-afstrømningskategorier. |
 | 9 | `load-salgspriser` | Erstatter afgrøde-salgspriser. |
@@ -110,8 +110,10 @@ hvert enkelt script i den aktuelle kæde.
 | `load_mars_projekter.py` | `Mars_data.gpkg` | Erstatter `mars_projekt` og genberegner markernes MARS-/omlægningsfelter. |
 | `load_historisk_goedningsfordeling.py` | `Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv` | Erstatter historiske mineral- og organiske N-input pr. region, driftsform, afgrøde og JB-nr. |
 | `load_saedskifte_lookup.py` | `Ny_sædskifte_lookup_sammenlagt.csv` | Validerer og erstatter `saedskifte_rotation` og `saedskifte_category`; det er rotation-candidates' datakilde. |
-| `load_afgroede_normer.py` | Master-workbooken for afgrødenormer | Indlæser `Lang_lookup`, `N_fixering_lookup` og `NUAR_koder` samlet i norm-, N-fikserings- og NUAR-tabeller. |
-| `load_afstromningskategorier.py` | `Bilag_1_tabel_1_med_P_noegle.csv` | Erstatter P-afstrømningskategori med standard- og vinterdækkeværdi pr. afgrødekode. |
+| `load_afgroede_normer.py` | `Afgroedetabel2027_master.csv` | Indlæser afgrødenormer, N-fiksering og NUAR-koder samlet fra det brede masterark (én række pr. afgrødekode; jordtype-grupperne udpakkes til jb_nr, normgrupperne til N-fikserings-jb_nr). |
+| `load_permanente_afgrodekoder.py` | `Afgroedetabel2027_master.csv` | Erstatter listen over permanente (ikke-omdrift) afgrødekoder (`er_permanent_afgroede`-kolonnen). |
+| `load_afstromningskategorier.py` | `Afgroedetabel2027_master.csv` | Erstatter P-afstrømningskategori med standard- og vinterdækkeværdi pr. afgrødekode. |
+| `load_kvotegivende_areal.py` | `Afgroedetabel2027_master.csv` | Selvstændigt script (ikke en del af `load-registry-data`-kæden) — sætter `registry_field.kvotegivende` fra markens 2026-afgrødekode og `kvotegivende_areal`-kolonnen. Kør manuelt efter registerdata er indlæst. |
 | `load_salgspriser.py` | `Salgspriser_afgroedekoder.csv` | Erstatter salgspris, enhed og halmpris pr. afgrøde, driftsform og kvalitet. |
 | `load_halmudbytte.py` | `Halmudbytte_afgroedekoder.csv` | Erstatter halmudbytte pr. afgrøde og jordbonitetsgruppe. |
 | `load_arbejdssatser.py` | `Arbejdssatser.csv` | Erstatter enhedspriser pr. behandling og jordbonitet, med eventuelle afgrøde-/driftsformsoverrides. |
@@ -119,10 +121,13 @@ hvert enkelt script i den aktuelle kæde.
 | `load_dyrkningsomkostninger.py` | `Dyrkningsomkostninger_afgroedekoder.csv` | Erstatter faste dyrkningsomkostninger. Gødning beholdes i kilden, men beregnes dynamisk ved runtime. |
 | `load_prisliste.py` | `Prisliste_2026.csv` | Erstatter delte priser og tilskud, fx N-pris, udbringning, udsæd, etablering og arealstøtte. |
 
-Norm-, N-fikserings- og NUAR-data hører sammen i master-workbooken og læses
-derfor af ét script. Alle øvrige runtime-CSV'er har præcis ét loader-script.
-Hvert script validerer hele sin kilde, før det erstatter sine egne tabeller i
-én database-transaction.
+Norm-, N-fikserings-, NUAR-, P-afstrømnings-, permanent-afgrøde- og
+kvotegivende-data kommer alle fra det samme brede masterark
+(`Afgroedetabel2027_master.csv`, én række pr. afgrødekode), men læses hver
+for sig af deres eget script, så hvert script stadig kun erstatter sine egne
+tabeller. Alle øvrige runtime-CSV'er har præcis ét loader-script. Hvert
+script validerer hele sin kilde, før det erstatter sine egne tabeller i én
+database-transaction.
 
 ### Ældre og selvstændige load-scripts
 

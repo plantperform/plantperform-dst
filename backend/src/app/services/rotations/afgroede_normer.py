@@ -110,6 +110,8 @@ def _load_nuar_koder() -> dict[int, dict]:
             "WC_ambig": row.wc_ambig,
             "MP_ambig": row.mp_ambig,
             "WP_ambig": row.wp_ambig,
+            "er_hovedafgrode": row.er_hovedafgrode,
+            "grund6procent": row.grund6procent,
         }
         for row in rows
     }
@@ -157,10 +159,10 @@ def lookup_nfix(crop_code, jb_nr, irrigated: bool = False) -> float:
 def is_permanent_afgrode(crop_code: int | None) -> bool:
     """Return whether ``crop_code`` is a permanent (ikke-omdrift) afgrøde.
 
-    Backed by ``permanent_afgrode``, loaded from
-    ``Permanente_afgroder_ikke_omdrift.csv`` by ``load_permanente_afgrodekoder.py``.
-    An empty/unloaded table degrades to "no crop is permanent" rather than
-    failing marks that would otherwise calculate fine.
+    Backed by ``permanent_afgrode``, loaded from ``Afgroedetabel2027_master.csv``
+    by ``load_permanente_afgrodekoder.py``. An empty/unloaded table degrades to
+    "no crop is permanent" rather than failing marks that would otherwise
+    calculate fine.
     """
     if crop_code is None:
         return False

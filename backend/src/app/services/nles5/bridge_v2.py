@@ -35,9 +35,9 @@ _FMAJS_FORFRUGT_KODER - not for every afgrøde whose M happens to resolve to
 P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
 services.rotations.afstromning looks up the afgrødekode in Bilag 7, table 1
-(Bilag_1_tabel_1_med_P_noegle.csv), and returns its afstrømningskategori
-(1-8), with an alternative category when the position has a
-winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
+(loaded from Afgroedetabel2027_master.csv), and returns its
+afstrømningskategori (1-8), with an alternative category when the position
+has a winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
 
 Historical crop_history can reference afgrødekoder that predate or fall
 outside Bilag 1 (e.g. administrative codes like "slettet mark"). For those,

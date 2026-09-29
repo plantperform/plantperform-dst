@@ -1,221 +1,167 @@
-"""Load crop norms, N fixation, and NUAR codes from the master workbook."""
+"""Load crop norms, N fixation, and NUAR codes from the wide master CSV.
+
+Source: Afgroedetabel2027_master.csv (one row per afgrødekode), built by
+consolidating Afgrødetabel2027, the master workbook's Lang_lookup/
+N_fixering_lookup/NUAR_koder sheets, and Bilag_1_tabel_1_med_P_noegle.csv.
+Replaces the old xlsx-based loader; the three output tables
+(afgroede_norm_lookup, afgroede_nfix_lookup, nuar_kode) are unchanged.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from pathlib import Path
 
-import openpyxl
-
-from database.scripts.runtime_lookup_loader import replace_tables, source_path
-
-XLSX_PATH = source_path(
-    "PlantPerform_master_afgroedenormer_opdateret_fra_hoeringsmateriale_Bilag_1_1_2027.xlsx",
+from database.scripts.runtime_lookup_loader import (
+    integer,
+    number,
+    read_csv_rows,
+    replace_tables,
+    source_path,
+    text,
 )
+
+CSV_PATH = source_path("Afgroedetabel2027_master.csv")
 KONVENTIONEL = "Konventionel"
+OEKOLOGISK = "Økologisk"
+
+# Jordtype-gruppe (master-CSV kolonnenavn) -> de individuelle jb_nr den dækker
+# og den vanding-værdi Lang_lookup brugte for samme gruppe.
+JORDTYPE: dict[str, tuple[tuple[int, ...], str]] = {
+    "grovsand": ((1, 3), "Uvandet"),
+    "finsand": ((2, 4, 10, 12), "Uvandet"),
+    "sandjord_vandet": ((1, 2, 3, 4), "Vandet"),
+    "sandblandet_ler": ((5, 6), "Ikke særskilt vanding"),
+    "lerjord": ((7, 8, 9), "Ikke særskilt vanding"),
+    "humusjord": ((11,), "Ikke særskilt vanding"),
+}
+JORDTYPE_NAVN = {
+    "grovsand": "JB 1 + 3",
+    "finsand": "JB 2 + 4 og 10 + 12",
+    "sandjord_vandet": "JB 1 - 4",
+    "sandblandet_ler": "JB 5 - 6",
+    "lerjord": "JB 7 - 9",
+    "humusjord": "JB 11",
+}
+DRIFTSFORM_SUFFIX = {"konventionel": KONVENTIONEL, "okologisk": OEKOLOGISK}
+
+# Normgruppe (Kvælstoffiksering-kilden) -> de individuelle jb_nr den dækker.
+# Samme grupper som JORDTYPE ovenfor, minus vandet-varianten (normgruppe 3 er
+# udgået, ingen data for den i kilden).
+NORMGRUPPE_JB_NR: dict[int, tuple[int, ...]] = {
+    1: (1, 3),
+    2: (2, 4, 10, 12),
+    4: (5, 6),
+    5: (7, 8, 9),
+    6: (11,),
+}
 
 
-def _text(value: object) -> str:
-    return str(value).strip() if value is not None else ""
+def _norm_cell(row: dict[str, str], key: str, *, row_number: int) -> float | None:
+    """Parse a wide norm-column cell, tolerating the odd stray text note.
 
-
-def _number(value: object) -> float | None:
-    if value is None:
+    A handful of administrative codes (e.g. 499 "Lukket system") carry an
+    explanatory note instead of a number in Lang_lookup; treat those cells
+    as missing data rather than aborting the whole load.
+    """
+    try:
+        return number(row.get(key, ""), field=key, row_number=row_number, required=False)
+    except ValueError:
         return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        raw = _text(value)
-        if "/" in raw:
-            try:
-                return float(raw.split("/", maxsplit=1)[0])
-            except ValueError:
-                pass
-    return None
 
 
-def _integer(value: object, *, field: str, row_number: int) -> int:
-    parsed = _number(value)
-    if parsed is None or not parsed.is_integer():
-        raise ValueError(f"Invalid {field} {value!r} on row {row_number}")
-    return int(parsed)
+def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tuple], list[tuple]]:
+    """Parse the master CSV into the three table row-sets before DB writes."""
+    rows = read_csv_rows(
+        path,
+        delimiter=",",
+        required_columns={
+            "AfgroedeKode", "Navn", "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
+            "udbytteenhed", "indregn_ffv", "Hovedafgrøde", "Grund6Procent",
+        },
+    )
 
+    norm_rows: list[tuple] = []
+    nfix_rows: list[tuple] = []
+    nuar_rows: list[tuple] = []
+    source_order = 1
 
-def _optional_integer(value: object) -> int | None:
-    parsed = _number(value)
-    return int(parsed) if parsed is not None and parsed.is_integer() else None
+    for row_number, row in enumerate(rows, start=2):
+        crop_code = integer(row["AfgroedeKode"], field="AfgroedeKode", row_number=row_number)
+        navn = text(row["Navn"], field="Navn", row_number=row_number)
 
-
-def _jb_values(match_type: object, values: object, *, row_number: int) -> Iterable[int]:
-    raw = _text(values)
-    if not raw or raw.lower() == "none":
-        raise ValueError(f"Missing JB_værdier on row {row_number}")
-    kind = _text(match_type).lower()
-    try:
-        if kind == "plus":
-            return sorted({int(value) for value in raw.split(";")})
-        if kind == "til":
-            first, last = raw.split("-", maxsplit=1)
-            return range(int(first), int(last) + 1)
-        if kind == "enkelt":
-            return [int(raw)]
-    except ValueError as error:
-        raise ValueError(f"Invalid JB_værdier {raw!r} on row {row_number}") from error
-    raise ValueError(f"Invalid JB_match_type {kind!r} on row {row_number}")
-
-
-def _jb_values_inferred(values: object, *, row_number: int) -> Iterable[int]:
-    raw = _text(values)
-    if not raw or raw.lower() == "none":
-        raise ValueError(f"Missing JB_værdier on row {row_number}")
-    try:
-        if ";" in raw:
-            return sorted({int(value) for value in raw.split(";")})
-        if "-" in raw:
-            first, last = raw.split("-", maxsplit=1)
-            return range(int(first), int(last) + 1)
-        return [int(raw)]
-    except ValueError as error:
-        raise ValueError(f"Invalid JB_værdier {raw!r} on row {row_number}") from error
-
-
-def _sheet_rows(workbook, sheet_name: str, required_headers: set[str]):
-    if sheet_name not in workbook.sheetnames:
-        raise ValueError(f"Workbook is missing sheet {sheet_name!r}")
-    sheet = workbook[sheet_name]
-    headers = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-    by_name = {_text(header): index for index, header in enumerate(headers) if _text(header)}
-    missing = required_headers - set(by_name)
-    if missing:
-        raise ValueError(f"{sheet_name} is missing columns: {', '.join(sorted(missing))}")
-    return sheet, by_name
-
-
-def _cell(row: tuple, columns: dict[str, int], name: str) -> object:
-    index = columns[name]
-    return row[index] if index < len(row) else None
-
-
-def parse_afgroede_normer(path: Path = XLSX_PATH) -> tuple[list[tuple], list[tuple], list[tuple]]:
-    """Parse all workbook sheets required by crop calculations before DB writes."""
-    if not path.exists():
-        raise FileNotFoundError(f"Expected {path}")
-    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    try:
-        lang_sheet, lang_columns = _sheet_rows(
-            workbook,
-            "Lang_lookup",
-            {
-                "Afgrødekode", "Afgrøde", "JB_gruppe", "JB_match_type", "JB_værdier",
-                "Vanding", "Udbytteenhed", "Udbyttenorm", "Udbyttenorm_alt_ikke_korn",
-                "N_norm_kgN_ha", "P_norm_kgP_ha", "Forfrugtsværdi_kgN_ha",
-                "Indregn_forfrugtsværdi_i_N_norm", "Driftsform",
-            },
+        er_hovedafgrode = (
+            integer(
+                row["Hovedafgrøde"], field="Hovedafgrøde", row_number=row_number,
+            )
+            == 1
         )
-        norm_rows: list[tuple] = []
-        for source_order, row in enumerate(
-            lang_sheet.iter_rows(min_row=2, values_only=True), start=2,
-        ):
-            if not _text(_cell(row, lang_columns, "Afgrødekode")):
-                continue
-            crop_code = _integer(
-                _cell(row, lang_columns, "Afgrødekode"),
-                field="Afgrødekode",
-                row_number=source_order,
+        grund6procent = (
+            integer(
+                row["Grund6Procent"], field="Grund6Procent", row_number=row_number,
             )
-            values = _jb_values(
-                _cell(row, lang_columns, "JB_match_type"),
-                _cell(row, lang_columns, "JB_værdier"),
-                row_number=source_order,
-            )
-            common = (
+            == 1
+        )
+        nuar_rows.append(
+            (
                 crop_code,
-                _text(_cell(row, lang_columns, "Afgrøde")),
-                _text(_cell(row, lang_columns, "JB_gruppe")),
-                _text(_cell(row, lang_columns, "Vanding")),
-                _text(_cell(row, lang_columns, "Udbytteenhed")),
-                _number(_cell(row, lang_columns, "Udbyttenorm")),
-                _number(_cell(row, lang_columns, "Udbyttenorm_alt_ikke_korn")),
-                _number(_cell(row, lang_columns, "N_norm_kgN_ha")),
-                _number(_cell(row, lang_columns, "P_norm_kgP_ha")),
-                _number(_cell(row, lang_columns, "Forfrugtsværdi_kgN_ha")) or 0.0,
-                _text(_cell(row, lang_columns, "Indregn_forfrugtsværdi_i_N_norm")).lower()
-                == "ja",
-                _text(_cell(row, lang_columns, "Driftsform")) or KONVENTIONEL,
+                navn,
+                integer(row["nuar_m"], field="nuar_m", row_number=row_number, required=False),
+                integer(row["nuar_w"], field="nuar_w", row_number=row_number, required=False),
+                integer(row["nuar_wc"], field="nuar_wc", row_number=row_number, required=False),
+                integer(row["nuar_mp"], field="nuar_mp", row_number=row_number, required=False),
+                integer(row["nuar_wp"], field="nuar_wp", row_number=row_number, required=False),
+                False, False, False, False, False,  # *_ambig: unused by any consumer today
+                er_hovedafgrode,
+                grund6procent,
             )
-            norm_rows.extend((source_order, jb_nr, *common) for jb_nr in values)
-
-        nfix_sheet, nfix_columns = _sheet_rows(
-            workbook,
-            "N_fixering_lookup",
-            {"Afgrødekode", "JB_værdier", "Vanding", "Nfix_kgN_ha"},
         )
-        nfix_rows: list[tuple] = []
-        for source_order, row in enumerate(
-            nfix_sheet.iter_rows(min_row=2, values_only=True), start=2,
-        ):
-            if not _text(_cell(row, nfix_columns, "Afgrødekode")):
-                continue
-            nfix = _number(_cell(row, nfix_columns, "Nfix_kgN_ha"))
+
+        udbytteenhed = text(
+            row["udbytteenhed"], field="udbytteenhed", row_number=row_number, required=False,
+        )
+        indregn_ffv = (
+            text(
+                row["indregn_ffv"], field="indregn_ffv", row_number=row_number, required=False,
+            ).lower()
+            == "ja"
+        )
+
+        for jordtype, (jb_nrs, vanding) in JORDTYPE.items():
+            for suffix, driftsform in DRIFTSFORM_SUFFIX.items():
+                udbyttenorm = _norm_cell(
+                    row, f"udbyttenorm_{jordtype}_{suffix}", row_number=row_number,
+                )
+                n_norm = _norm_cell(row, f"n_norm_{jordtype}_{suffix}", row_number=row_number)
+                if udbyttenorm is None and n_norm is None:
+                    continue  # ingen normdata for denne jordtype/driftsform-kombination
+                p_norm = _norm_cell(row, f"p_norm_{jordtype}_{suffix}", row_number=row_number)
+                forfrugtsvaerdi = _norm_cell(
+                    row, f"forfrugtsvaerdi_{jordtype}_{suffix}", row_number=row_number,
+                ) or 0.0
+                common = (
+                    crop_code, navn, JORDTYPE_NAVN[jordtype], vanding, udbytteenhed,
+                    udbyttenorm, None, n_norm, p_norm, forfrugtsvaerdi, indregn_ffv, driftsform,
+                )
+                for jb_nr in jb_nrs:
+                    norm_rows.append((source_order, jb_nr, *common))
+                source_order += 1
+
+        for normgruppe, jb_nrs in NORMGRUPPE_JB_NR.items():
+            nfix = _norm_cell(row, f"nfix_normgrp{normgruppe}", row_number=row_number)
             if nfix is None:
                 continue
-            crop_code = _integer(
-                _cell(row, nfix_columns, "Afgrødekode"),
-                field="Afgrødekode",
-                row_number=source_order,
-            )
-            nfix_rows.extend(
-                (source_order, jb_nr, crop_code, _text(_cell(row, nfix_columns, "Vanding")), nfix)
-                for jb_nr in _jb_values_inferred(
-                    _cell(row, nfix_columns, "JB_værdier"), row_number=source_order,
-                )
-            )
-
-        nuar_sheet, nuar_columns = _sheet_rows(
-            workbook,
-            "NUAR_koder",
-            {
-                "AfgroedeKode", "Navn", "M", "W", "WC", "MP", "WP", "M_ambig",
-                "W_ambig", "WC_ambig", "MP_ambig", "WP_ambig",
-            },
-        )
-        nuar_rows: list[tuple] = []
-        for row_number, row in enumerate(
-            nuar_sheet.iter_rows(min_row=2, values_only=True), start=2,
-        ):
-            if not _text(_cell(row, nuar_columns, "AfgroedeKode")):
-                continue
-            nuar_rows.append(
-                (
-                    _integer(
-                        _cell(row, nuar_columns, "AfgroedeKode"),
-                        field="AfgroedeKode",
-                        row_number=row_number,
-                    ),
-                    _text(_cell(row, nuar_columns, "Navn")),
-                    _optional_integer(_cell(row, nuar_columns, "M")),
-                    _optional_integer(_cell(row, nuar_columns, "W")),
-                    _optional_integer(_cell(row, nuar_columns, "WC")),
-                    _optional_integer(_cell(row, nuar_columns, "MP")),
-                    _optional_integer(_cell(row, nuar_columns, "WP")),
-                    bool(_cell(row, nuar_columns, "M_ambig")),
-                    bool(_cell(row, nuar_columns, "W_ambig")),
-                    bool(_cell(row, nuar_columns, "WC_ambig")),
-                    bool(_cell(row, nuar_columns, "MP_ambig")),
-                    bool(_cell(row, nuar_columns, "WP_ambig")),
-                )
-            )
-    finally:
-        workbook.close()
+            for jb_nr in jb_nrs:
+                nfix_rows.append((source_order, jb_nr, crop_code, "", nfix))
+            source_order += 1
 
     if not norm_rows or not nfix_rows or not nuar_rows:
-        raise ValueError("Master workbook must contain norm, N fixation, and NUAR data")
+        raise ValueError("Master CSV must yield norm, N fixation, and NUAR rows")
     if len({row[0] for row in nuar_rows}) != len(nuar_rows):
-        raise ValueError("NUAR_koder contains duplicate afgrødekoder")
+        raise ValueError("Master CSV contains duplicate AfgroedeKode values")
     return norm_rows, nfix_rows, nuar_rows
 
 
-def load_afgroede_normer(path: Path = XLSX_PATH, database_url: str | None = None) -> None:
+def load_afgroede_normer(path: Path = CSV_PATH, database_url: str | None = None) -> None:
     norm_rows, nfix_rows, nuar_rows = parse_afgroede_normer(path)
     replace_tables(
         [
@@ -237,7 +183,8 @@ def load_afgroede_normer(path: Path = XLSX_PATH, database_url: str | None = None
                 "nuar_kode",
                 (
                     "afgroedekode", "navn", "m", "w", "wc", "mp", "wp", "m_ambig",
-                    "w_ambig", "wc_ambig", "mp_ambig", "wp_ambig",
+                    "w_ambig", "wc_ambig", "mp_ambig", "wp_ambig", "er_hovedafgrode",
+                    "grund6procent",
                 ),
                 nuar_rows,
             ),

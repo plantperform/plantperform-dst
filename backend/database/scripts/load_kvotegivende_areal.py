@@ -1,18 +1,15 @@
 """Set registry_field.kvotegivende from the mark's 2026 afgrødekode and the
-"Kvotegivende areal" yes/no list in Bilag 1, table 1.
+wide master CSV's "kvotegivende_areal" yes/no column.
 
-Source: database/data/raw/ANGJ-data/Bilag_1_tabel_1_Kvotegivende_areal_og_aktivitet.csv
-Columns: Afgrødekode, Navn, Kvotegivende aktivitet, Kvotegivende areal
+Intentionally uses "kvotegivende_areal", not "kvotegivende_aktivitet" (they
+are identical for 322 of 323 codes; afgrødekode 271, "Rekreative formål", is
+the only difference: areal=Ja, aktivitet=Nej).
 
-Intentionally uses the "Kvotegivende areal" column, not "Kvotegivende aktivitet"
-(they are identical for 322 of 323 codes; afgrødekode 271, "Rekreative formål",
-is the only difference: areal=Ja, aktivitet=Nej).
+Marker without a 2026 afgrødekode (crop_history lacks the key or the lookup
+list does not cover the code) are set to kvotegivende=false.
 
-Marker without a 2026 afgrødekode (crop_history lacks the key or the lookup list
-does not cover the code) are set to kvotegivende=false.
-
-Also resets udledningskvote_mark_kgn to 0 for all non-kvotegivende marker because
-such an area contributes nothing to a bedrift's udledningskvote.
+Also resets udledningskvote_mark_kgn to 0 for all non-kvotegivende marker
+because such an area contributes nothing to a bedrift's udledningskvote.
 """
 
 import csv
@@ -25,9 +22,7 @@ from dotenv import load_dotenv
 from app.data.db import DATABASE_URL
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV_PATH = (
-    ROOT / "data" / "raw" / "ANGJ-data" / "Bilag_1_tabel_1_Kvotegivende_areal_og_aktivitet.csv"
-)
+CSV_PATH = ROOT / "data" / "raw" / "ANGJ-data" / "Afgroedetabel2027_master.csv"
 
 
 def format_duration(seconds: float) -> str:
@@ -47,7 +42,9 @@ def load_kvotegivende_areal() -> None:
     with CSV_PATH.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         kvotegivende_codes = [
-            int(row["Afgrødekode"]) for row in reader if row["Kvotegivende areal"].strip() == "Ja"
+            int(row["AfgroedeKode"])
+            for row in reader
+            if row["kvotegivende_areal"].strip() == "Ja"
         ]
     print(f"  {len(kvotegivende_codes):,} kvotegivende afgrødekoder", flush=True)
 

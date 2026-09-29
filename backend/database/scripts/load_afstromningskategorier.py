@@ -1,4 +1,4 @@
-"""Load the authoritative P-runoff category lookup."""
+"""Load the authoritative P-runoff category lookup from the wide master CSV."""
 
 from __future__ import annotations
 
@@ -11,28 +11,31 @@ from database.scripts.runtime_lookup_loader import (
     source_path,
 )
 
-CSV_PATH = source_path("Bilag_1_tabel_1_med_P_noegle.csv")
+CSV_PATH = source_path("Afgroedetabel2027_master.csv")
 
 
 def parse_afstromningskategorier(path: Path = CSV_PATH) -> list[tuple]:
     rows = read_csv_rows(
         path,
-        delimiter=";",
+        delimiter=",",
         required_columns={
-            "Afgrødekode", "P_afstrømningskategori", "P_afstrømningskategori_med_W",
+            "AfgroedeKode", "nuar_afstromningskategori", "p_afstromningskategori_med_w",
         },
     )
     result = []
     for row_number, row in enumerate(rows, start=2):
-        code = integer(row["Afgrødekode"], field="Afgrødekode", row_number=row_number)
+        code = integer(row["AfgroedeKode"], field="AfgroedeKode", row_number=row_number)
         base = integer(
-            row["P_afstrømningskategori"],
-            field="P_afstrømningskategori",
+            row["nuar_afstromningskategori"],
+            field="nuar_afstromningskategori",
             row_number=row_number,
+            required=False,
         )
+        if base is None:
+            continue  # ingen afstromningskategori for denne afgrode i kilden
         alternate = integer(
-            row["P_afstrømningskategori_med_W"],
-            field="P_afstrømningskategori_med_W",
+            row["p_afstromningskategori_med_w"],
+            field="p_afstromningskategori_med_w",
             row_number=row_number,
             required=False,
         )
@@ -40,7 +43,7 @@ def parse_afstromningskategorier(path: Path = CSV_PATH) -> list[tuple]:
             raise ValueError(f"Invalid P-runoff category on row {row_number}")
         result.append((code, base, alternate))
     if len({row[0] for row in result}) != len(result):
-        raise ValueError("P-runoff source contains duplicate afgrødekoder")
+        raise ValueError("Master CSV contains duplicate AfgroedeKode values")
     return result
 
 
