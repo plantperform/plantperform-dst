@@ -348,10 +348,37 @@ export const cropCodesKey = (farmId?: string) => {
 export const useCropCodes = (farmId?: string) =>
   useSWR<CropCodeOption[]>(cropCodesKey(farmId), fetcher)
 
+export const udlaegKoderKey = (
+  farmId?: string,
+  hovedafgrodeKode?: number,
+  driftsform?: string,
+) => {
+  if (!farmId) return null
+
+  const params = new URLSearchParams()
+  if (hovedafgrodeKode !== undefined) {
+    params.set('hovedafgrode_kode', String(hovedafgrodeKode))
+  }
+  if (driftsform !== undefined) params.set('driftsform', driftsform)
+  const query = params.toString()
+
+  return (
+    `/farms/${encodeURIComponent(farmId)}/rotation-candidates/udlaeg-koder` +
+    (query ? `?${query}` : '')
+  )
+}
+
+export const useUdlaegKoder = (
+  farmId?: string,
+  hovedafgrodeKode?: number,
+  driftsform?: string,
+) => useSWR<CropCodeOption[]>(udlaegKoderKey(farmId, hovedafgrodeKode, driftsform), fetcher)
+
 export const preloadRotationCandidateCatalog = (farmId: string) => {
   void preload(rotationCategoriesKey(farmId), fetcher)
   void preload(rotationCandidatesKey(farmId), fetcher)
   void preload(cropCodesKey(farmId), fetcher)
+  void preload(udlaegKoderKey(farmId), fetcher)
 }
 
 export const fertiliserPresetsKey = (farmId?: string) => {

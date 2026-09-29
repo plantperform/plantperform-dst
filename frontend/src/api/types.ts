@@ -322,6 +322,9 @@ export type FieldYearValues = Record<string, RotationCandidateYearResult[]>
 export type RotationPositionOverride = {
   position: number
   cropCode: number
+  undersownCropCode?: number | null
+  undersownCropName?: string | null
+  udlaegSet?: boolean
 }
 
 export type RotationCandidateEvaluation = {
