@@ -142,7 +142,11 @@ _UDL_W_MAPPING: dict[int, int | None] = {
     9684: 4,    # "Mellemafgrøde e. frøgræs"
     970: 5,     # "Øvrige udlæg og efterafgrøder"
     2000: 4,    # "Udlæg til frø"
-    3000: 3,    # "Jordbearbejdning efterår"
+    # 921 "Bar jord" is the real afgrødekode the source data now uses for what
+    # used to be the pseudo-code 3000 "Jordbearbejdning efterår" (converted in
+    # Ny_sædskifte_lookup_sammenlagt.csv - see docs/nles5-kategorier.md's
+    # udlægskode discussion). Keeps the same W3 "Autumn cultivation" outcome.
+    921: 3,
     0: None,    # Explicitly no udlæg
 }
 
@@ -176,7 +180,7 @@ _UDL_WP_MAPPING: dict[int, int | None] = {
 # `variant` values for one saedskiftevariant represent different virkemiddel
 # combinations on the same afgrøde sequence (empirically confirmed:
 # saedskiftevariant 315 variants 1/2/4 have identical afgrøde sequences but
-# udl_kode 3000/None/968 in position 4).
+# udl_kode 921/None/968 in position 4).
 _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
     968:  {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde, pligtig"
     950:  {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde" renbestand/udlæg varianter
@@ -197,7 +201,9 @@ _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
     966:  {"eea": False, "ema": False, "ets": False},
     970:  {"eea": True,  "ema": False, "ets": False},  # "Øvrige udlæg og efterafgrøder"
     2000: {"eea": False, "ema": False, "ets": False},  # "Udlæg til frø"
-    3000: {"eea": False, "ema": False, "ets": False},  # "Jordbearbejdning efterår"
+    # 921 "Bar jord" (the old pseudo-code 3000 "Jordbearbejdning efterår",
+    # converted in the source data) is deliberately absent here: it has no
+    # virkemiddel, same as the default _NO_VIRKEMIDDEL below.
     0:    {"eea": False, "ema": False, "ets": False},
 }
 _NO_VIRKEMIDDEL: dict[str, bool] = {"eea": False, "ema": False, "ets": False}

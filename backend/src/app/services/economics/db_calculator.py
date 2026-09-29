@@ -54,8 +54,10 @@ _OEKO_UDBYTTE_REDUKTION = 0.32
 # udlæg. This uses the same code family as bridge_v2.py's _UDL_VIRKEMIDDEL but
 # groups by the PHYSICAL afgrøde being sown, not NUAR virkemiddel eligibility.
 # For example, 960-966 ("udlæg/eftersslæt" clover grass) and 2000 ("udlæg til
-# frø") are not NUAR virkemidler but still incur actual seed costs. Code 3000
-# (autumn tillage) is not a sown afgrøde and has no entry here.
+# frø") are not NUAR virkemidler but still incur actual seed costs. Code 921
+# ("Bar jord", replaces the old pseudo-code 3000 "Jordbearbejdning efterår"
+# in the source data - see docs/nles5-kategorier.md) is not a sown afgrøde
+# and has no entry here.
 _UDL_KOSTKATEGORI: dict[int, str] = {
     968: "Efterafgrøde", 970: "Efterafgrøde",
     9680: "Efterafgrøde, frøgræs",
