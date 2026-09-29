@@ -179,18 +179,20 @@ def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
 def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
-    """Return real afgrødekoder (Bilag 1/NUAR) with a valid NUAR M code.
+    """Return real afgrødekoder (Bilag 1/NUAR) usable as a hovedafgrøde.
 
-    These can actually be used as hovedafgrøde in an NLES5 calculation. They
-    are sorted by name for the afgrøde dropdown in the live Phase 10 "Rediger
-    manuelt" calculation. The small minority without an M code, such as
-    administrative area types, are omitted because they cannot be calculated.
+    Filtered on Afgrødetabellens own "Hovedafgrøde" flag, sorted by name for
+    the afgrøde dropdown in the live Phase 10 "Rediger manuelt" calculation.
+    Administrative/efterafgrøde-only codes (fx "Bar jord", "Ugyldig
+    afgrødekode") are excluded even though they carry a fallback NUAR M
+    value, since that value alone doesn't mean the code is a legitimate
+    hovedafgrøde choice.
     """
     names = afgroede_normer.crop_names_from_normer()
     options = [
         AfgrodeKodeOption(code=code, navn=navn)
         for code, navn in names.items()
-        if afgroede_normer.lookup_crop_params(code).get("M") is not None
+        if afgroede_normer.lookup_crop_params(code).get("er_hovedafgrode")
     ]
     return sorted(options, key=lambda o: o.navn)
 
