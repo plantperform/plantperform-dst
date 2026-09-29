@@ -12,6 +12,7 @@ import { combineProgress, type RequestProgress } from '@/api/request-progress'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
+import { ComparisonCharts } from '@/components/farm/ComparisonCharts'
 import { ComparisonRanking } from '@/components/farm/ComparisonRanking'
 import {
   columnFigure,
@@ -312,7 +313,7 @@ export const SimulationComparison = ({
     ordered.some((column) => column.totals.feedUnits !== 0)
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="@container min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-[96rem] flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
         <Link
           to={`/farms/${farmId}/simulations`}
@@ -381,6 +382,12 @@ export const SimulationComparison = ({
               catchmentCount={catchments.length}
               sort={sort}
               onSortChange={setSort}
+              highlightedKey={highlightedKey}
+              onHighlight={setHighlightedKey}
+            />
+            <ComparisonCharts
+              columns={ordered}
+              bestBalanceKey={bestBalance?.key ?? null}
               highlightedKey={highlightedKey}
               onHighlight={setHighlightedKey}
             />
