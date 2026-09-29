@@ -268,6 +268,7 @@ def evaluate_sequence_for_mark(
                 next_afgrode_kode=next_code,
                 prev_afgrode_kode=prev_code,
                 udlaeg_kode=udl_code,
+                prev_udlaeg_kode=prev_udlaeg_for(i),
                 jbnr=jbnr,
                 mncs=n_inputs[i]["mncs"],
                 mnca=n_inputs[i]["mnca"],

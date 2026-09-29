@@ -38,6 +38,7 @@ class RegistrySoilDataTests(unittest.TestCase):
                 next_afgrode_kode=None,
                 prev_afgrode_kode=None,
                 udlaeg_kode=None,
+                prev_udlaeg_kode=None,
                 jbnr=1,
                 mncs=100,
             )
@@ -53,6 +54,7 @@ class RegistrySoilDataTests(unittest.TestCase):
             next_afgrode_kode=None,
             prev_afgrode_kode=None,
             udlaeg_kode=None,
+            prev_udlaeg_kode=None,
             jbnr=1,
             mncs=100,
             percolation_by_kategori=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8),
@@ -82,6 +84,7 @@ class RegistrySoilDataTests(unittest.TestCase):
             next_afgrode_kode=None,
             prev_afgrode_kode=None,
             udlaeg_kode=None,
+            prev_udlaeg_kode=None,
             jbnr=1,
             mncs=100,
             percolation_by_kategori=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8),

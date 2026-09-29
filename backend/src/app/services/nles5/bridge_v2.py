@@ -146,6 +146,29 @@ _UDL_W_MAPPING: dict[int, int | None] = {
     0: None,    # Explicitly no udlæg
 }
 
+# Udlægskode -> WP when the PREVIOUS position's own udlæg determines what
+# covered the winter between the forfrugt and the current afgrøde (WP trin 1,
+# docs/nles5-kategorier.md). Same source codes as _UDL_W_MAPPING above, mapped
+# onto WP's 10-category scale (DCA rapport nr. 163, s. 24-25) instead of W's 8.
+_UDL_WP_MAPPING: dict[int, int | None] = {
+    960: 3, 961: 3, 962: 3, 963: 3, 964: 3, 965: 3, 966: 3,  # græs/kløvergræs udlæg -> WP3
+    968: 4,     # "Efterafgrøde, pligtig" -> WP4
+    950: 4, 951: 4, 952: 4, 953: 4, 954: 4,  # "Efterafgrøde" renbestand/udlæg varianter -> WP4
+    9680: 4,    # "Efterafgrøde e. frøgræs" -> WP4
+    9682: 4,    # Mellemafgrøde -> WP4
+    9683: None, # "Tidlig såning"; WP is determined by the afgrøde itself
+    9684: 4,    # "Mellemafgrøde e. frøgræs" -> WP4
+    970: 4,     # "Øvrige udlæg og efterafgrøder" -> WP4
+    2000: 5,    # "Udlæg til frø" -> WP5 (Frøgræs og brak)
+    # 921 "Bar jord" replaces the old pseudo-code 3000 in the source data (see
+    # _UDL_W_MAPPING above); WP has no separate "autumn cultivation" category
+    # distinct from plain bare soil (DCA rapport nr. 163's WP2 definition
+    # already covers "no information on soil cultivation"), so this maps to
+    # WP2 either way.
+    921: 2,
+    0: None,    # Explicitly no udlæg
+}
+
 # Udlægskode -> the NUAR virkemiddel automatically assigned to the position.
 # Ported from streamlit_app.py's UDL_VIRKEMIDDEL. In the "select sædskifte from
 # lookup" flow used by candidate_evaluator.py, EEA/EMA/ETS are not free user
@@ -257,17 +280,27 @@ def _resolve_mp(afgrode_kode: int, prev_params: dict, prev_afgrode_kode: int | N
 _NEXT_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
 
 
-def _resolve_wp(prev_params: dict, this_params: dict) -> int:
+def _resolve_wp(prev_params: dict, this_params: dict, prev_udlaeg_kode: int | None) -> int:
     """Resolve WP as the winter cover between the previous and current afgrøde.
 
-    If the CURRENT afgrøde's M is a vinterafgrøde, that afgrøde itself occupies
-    the winter period because it was already sown in autumn. The previous
-    afgrøde's static WP classification does not apply.
+    Docs/nles5-kategorier.md's trin 1: WP is normally read from the FORFRUGT's
+    own udlægskode (prev_udlaeg_kode) - what was actually registered in the
+    winter-cover window between the forfrugt and the current afgrøde - via
+    _UDL_WP_MAPPING, same pattern _resolve_w already uses for its own
+    position's udlæg. If the CURRENT afgrøde's M is itself a vinterafgrøde, it
+    occupies that winter period instead (already sown in autumn), which takes
+    priority. Falls back to the forfrugt's static WP classification only when
+    neither applies.
     """
     this_m = this_params.get("M")
     wp_from_next = _NEXT_M_TO_WP.get(this_m) if this_m is not None else None
     if wp_from_next is not None:
         return wp_from_next
+    wp_from_udlaeg = (
+        _UDL_WP_MAPPING.get(prev_udlaeg_kode) if prev_udlaeg_kode is not None else None
+    )
+    if wp_from_udlaeg is not None:
+        return wp_from_udlaeg
     return prev_params.get("WP") or 1
 
 
@@ -277,6 +310,7 @@ def evaluate_leaching_position(
     next_afgrode_kode: int | None,
     prev_afgrode_kode: int | None,
     udlaeg_kode: int | None,
+    prev_udlaeg_kode: int | None,
     jbnr: int,
     mncs: float,
     mnca: float = 0.0,
@@ -305,7 +339,7 @@ def evaluate_leaching_position(
     m = _resolve_m(afgrode_kode, this_params, prev_afgrode_kode)
     wc = this_params.get("WC") or 1
     mp = _resolve_mp(afgrode_kode, prev_params, prev_afgrode_kode)
-    wp = _resolve_wp(prev_params, this_params)
+    wp = _resolve_wp(prev_params, this_params, prev_udlaeg_kode)
     w = _resolve_w(afgrode_kode, this_params, next_params, udlaeg_kode, prev_afgrode_kode)
 
     # §24(7-9): N-fixing efterafgrøde (kvælstoffikserende renbestand/udlæg)
