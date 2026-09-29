@@ -10,6 +10,7 @@ import {
   useRotationCandidateOptions,
   useRotationCategories,
   useSimulationFieldCandidateDetail,
+  useUdlaegKoder,
 } from '@/api/hooks'
 import { applyFieldRotation, previewFieldRotation } from '@/api/mutations'
 import type {
@@ -109,19 +110,11 @@ export const ManualRotationEditor = ({
     error: cropCodesError,
     mutate: retryCropCodes,
   } = useCropCodes(farmId)
-
   const isLoadingCandidates =
-    isLoadingCurrent ||
-    isLoadingCategories ||
-    isLoadingAllRefs ||
-    isLoadingCropCodes
-  const candidatesError =
-    currentError ?? categoriesError ?? allRefsError ?? cropCodesError
+    isLoadingCurrent || isLoadingCategories || isLoadingAllRefs || isLoadingCropCodes
+  const candidatesError = currentError ?? categoriesError ?? allRefsError ?? cropCodesError
   const isRetryingCandidates =
-    isValidatingCurrent ||
-    isValidatingCategories ||
-    isValidatingAllRefs ||
-    isValidatingCropCodes
+    isValidatingCurrent || isValidatingCategories || isValidatingAllRefs || isValidatingCropCodes
   const retryCandidates = () => {
     if (currentError) void retryCurrent()
     if (categoriesError) void retryCategories()
@@ -314,9 +307,24 @@ export const ManualRotationEditor = ({
   }
 
   const setPositionOverride = (position: number, cropCode: number) => {
+    setOverrides((prev) => {
+      const existing = prev.find((o) => o.position === position)
+      return [
+        ...prev.filter((o) => o.position !== position),
+        { ...existing, position, cropCode },
+      ]
+    })
+  }
+
+  const setUdlaegOverride = (
+    position: number,
+    cropCode: number,
+    undersownCropCode: number | null,
+    undersownCropName: string | null,
+  ) => {
     setOverrides((prev) => [
       ...prev.filter((o) => o.position !== position),
-      { position, cropCode },
+      { position, cropCode, undersownCropCode, undersownCropName, udlaegSet: true },
     ])
   }
 
@@ -370,6 +378,40 @@ export const ManualRotationEditor = ({
 
   const years = preview ? preview.years.slice(0, preview.activeLen) : []
   const activeYear = activeYearIndex !== null ? years[activeYearIndex] : undefined
+
+  const { data: udlaegKoder = [] } = useUdlaegKoder(
+    farmId,
+    activeYear?.year.cropCode,
+    simulation.fertiliser.farmingSystem,
+  )
+  const NO_UDLAEG_KEY = 'none'
+  const udlaegPickerItems = useMemo(
+    () => [
+      { key: NO_UDLAEG_KEY, label: 'Intet udlæg', title: 'Intet udlæg', colors: [] },
+      ...udlaegKoder.map((a) => ({
+        key: String(a.code),
+        label: a.name,
+        title: a.name,
+        colors: [cropGroupColor(a.code, a.name)],
+      })),
+    ],
+    [udlaegKoder],
+  )
+
+  // PUMR, Tabel A, felt A32: hvis 953/954 var valgt som efterafgrøde-type
+  // og hovedafgrøden ændres til noget der ikke længere gør dem gyldige
+  // (majs-status/Grund6Procent), skal det tomme sig selv igen i stedet for
+  // at blive stående som et ugyldigt valg.
+  useEffect(() => {
+    if (activeYearIndex === null || !activeYear) return
+    const currentUdlaeg = activeYear.year.undersownCropCode
+    if (currentUdlaeg !== 953 && currentUdlaeg !== 954) return
+    if (udlaegKoder.some((option) => option.code === currentUdlaeg)) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUdlaegOverride(activeYearIndex, activeYear.year.cropCode, null, null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeYearIndex, activeYear?.year.cropCode, activeYear?.year.undersownCropCode, udlaegKoder])
+
   const rotationLength = years.length
   const startYearOffset =
     rotationLength > 0
@@ -672,6 +714,36 @@ export const ManualRotationEditor = ({
                             emptyMessage="Ingen afgrøder matcher søgningen"
                             maxHeightClassName="max-h-[200px]"
                           />
+                        ) : null}
+
+                        {activeYearIndex !== null && activeYear ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">
+                              Sekundær afgrøde (udlæg)
+                            </Label>
+                            <SearchableCropPickerList
+                              key={`udlaeg-${activeYearIndex}`}
+                              items={udlaegPickerItems}
+                              selectedKey={
+                                activeYear.year.undersownCropCode !== null
+                                  ? String(activeYear.year.undersownCropCode)
+                                  : NO_UDLAEG_KEY
+                              }
+                              onSelect={(key) => {
+                                const item = udlaegPickerItems.find((i) => i.key === key)
+                                setUdlaegOverride(
+                                  activeYearIndex,
+                                  activeYear.year.cropCode,
+                                  key === NO_UDLAEG_KEY ? null : Number(key),
+                                  key === NO_UDLAEG_KEY ? null : (item?.label ?? null),
+                                )
+                              }}
+                              searchLabel="Søg sekundær afgrøde"
+                              searchPlaceholder="Søg udlæg..."
+                              emptyMessage="Ingen udlæg matcher søgningen"
+                              maxHeightClassName="max-h-[200px]"
+                            />
+                          </div>
                         ) : null}
 
                         {activeYearIndex !== null && activeYear ? (
