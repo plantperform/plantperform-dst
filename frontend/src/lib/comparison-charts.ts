@@ -1,8 +1,24 @@
-import { defineChart, dot, rect, ruleX, ruleY, text } from '@tanstack/charts'
+import {
+  barX,
+  defineChart,
+  dot,
+  rect,
+  ruleX,
+  ruleY,
+  text,
+} from '@tanstack/charts'
 import { decorative } from '@tanstack/charts/mark/decorative'
+import { scaleBand } from '@tanstack/charts/scales/band'
 import { scaleLinear } from '@tanstack/charts/scales/linear'
 import { tooltip } from '@tanstack/charts/tooltip'
 
+import {
+  CROP_GROUP_INDEX,
+  readableTextColor,
+  type CropGroup,
+  type CropGroupDefinition,
+} from '@/lib/crop-groups'
+import { formatNumber, formatShare, type CropShare } from '@/lib/field-domain'
 import { overlayCurveTone, type CurveTone } from '@/lib/simulation-comparison'
 
 type ChartColumn = {
@@ -199,6 +215,212 @@ export const db2NLoadChart = (
     tooltip: {
       use: tooltip,
       format: ({ datum }) => describe(datum),
+      sticky: false,
+    },
+  })
+}
+
+export type CropColumn = ChartColumn & {
+  shares: CropShare[] | undefined
+}
+
+export type CropSegment = {
+  key: string
+  columnKey: string
+  title: string
+  group: CropGroupDefinition
+  share: number
+  areaHa: number
+  start: number
+  end: number
+}
+
+const CROP_ROW_STEP = 44
+const CROP_BAR_HEIGHT = 16
+const CROP_NAME_OFFSET = 17
+const NARROWEST_BAR = 400
+const LABEL_CHAR_WIDTH = 6
+const LABEL_PADDING = 10
+const OUTSIDE_LABEL_GAP = 4
+const OUTSIDE_LABEL_BEFORE_FROM = 0.85
+const DIMMED_OPACITY = 0.35
+
+export type CropFocus = {
+  highlightedKey: string | null
+  hoveredGroup: CropGroup | null
+}
+
+export type CropLabel = {
+  key: string
+  columnKey: string
+  text: string
+  x: number
+  anchor: 'start' | 'middle' | 'end'
+  dx: number
+  fill: string
+}
+
+export const cropDistributionHeight = (rows: number): number =>
+  rows * CROP_ROW_STEP + CROP_BAR_HEIGHT
+
+export const cropSegments = (columns: CropColumn[]): CropSegment[] =>
+  columns.flatMap(({ key, title, shares = [] }) => {
+    const ordered = shares.toSorted(
+      (left, right) =>
+        CROP_GROUP_INDEX[left.group.id] - CROP_GROUP_INDEX[right.group.id],
+    )
+    return ordered.map((entry, index) => {
+      const start = ordered
+        .slice(0, index)
+        .reduce((sum, previous) => sum + previous.share, 0)
+      return {
+        key: `${key}:${entry.id}`,
+        columnKey: key,
+        title,
+        group: entry.group,
+        share: entry.share,
+        areaHa: entry.areaHa,
+        start,
+        end: start + entry.share,
+      }
+    })
+  })
+
+export const describeCropSegment = ({
+  title,
+  group,
+  share,
+  areaHa,
+}: CropSegment): string =>
+  `${title}\n${group.label}: ${formatShare(share)} · ${formatNumber(areaHa)} ha`
+
+const isDimmed = (
+  { group, columnKey }: CropSegment,
+  { highlightedKey, hoveredGroup }: CropFocus,
+) =>
+  hoveredGroup !== null
+    ? group.id !== hoveredGroup
+    : highlightedKey !== null && columnKey !== highlightedKey
+
+const fitsIn = (label: string, share: number) =>
+  label.length * LABEL_CHAR_WIDTH + LABEL_PADDING <= share * NARROWEST_BAR
+
+export const cropLabels = (
+  segments: CropSegment[],
+  focus: CropFocus,
+): CropLabel[] =>
+  segments.flatMap((segment): CropLabel[] => {
+    if (isDimmed(segment, focus)) return []
+    const { key, columnKey, group, share, start, end } = segment
+    const percent = formatShare(share)
+    const named = `${group.label} ${percent}`
+    const inside = (label: string): CropLabel[] => [
+      {
+        key,
+        columnKey,
+        text: label,
+        x: (start + end) / 2,
+        anchor: 'middle',
+        dx: 0,
+        fill: readableTextColor(group.color),
+      },
+    ]
+    if (fitsIn(named, share)) return inside(named)
+    if (fitsIn(percent, share)) return inside(percent)
+    if (focus.hoveredGroup !== group.id) return []
+    const before = end > OUTSIDE_LABEL_BEFORE_FROM
+    return [
+      {
+        key,
+        columnKey,
+        text: percent,
+        x: before ? start : end,
+        anchor: before ? 'end' : 'start',
+        dx: before ? -OUTSIDE_LABEL_GAP : OUTSIDE_LABEL_GAP,
+        fill: TEXT_PAINT,
+      },
+    ]
+  })
+
+export const cropDistributionChart = (
+  columns: CropColumn[],
+  focus: CropFocus,
+) => {
+  const segments = cropSegments(columns)
+  const rowDimmed = (key: string) =>
+    focus.hoveredGroup === null &&
+    focus.highlightedKey !== null &&
+    key !== focus.highlightedKey
+  const names = columns.map(({ key, title, history }) => ({
+    key,
+    label: chartLabel(title),
+    muted: history || rowDimmed(key),
+  }))
+  const bars = (id: string, source: CropSegment[], fillOpacity: number) =>
+    barX(source, {
+      id,
+      x1: 'start',
+      x2: 'end',
+      y: 'columnKey',
+      key: 'key',
+      fill: ({ group }) => group.color,
+      fillOpacity,
+      stroke: CARD_PAINT,
+      strokeWidth: 1,
+    })
+  return defineChart({
+    marks: [
+      bars(
+        'shares',
+        segments.filter((segment) => !isDimmed(segment, focus)),
+        1,
+      ),
+      bars(
+        'dimmed-shares',
+        segments.filter((segment) => isDimmed(segment, focus)),
+        DIMMED_OPACITY,
+      ),
+      decorative(
+        text(names, {
+          x: () => 0,
+          y: 'key',
+          text: 'label',
+          key: 'key',
+          anchor: 'start',
+          dy: -CROP_NAME_OFFSET,
+          fill: ({ muted }) => (muted ? MUTED_TEXT_PAINT : TEXT_PAINT),
+          fontSize: 12,
+          fontWeight: 500,
+        }),
+      ),
+      decorative(
+        text(cropLabels(segments, focus), {
+          x: 'x',
+          y: 'columnKey',
+          text: 'text',
+          key: 'key',
+          anchor: ({ anchor }) => anchor,
+          dx: ({ dx }) => dx,
+          fill: ({ fill }) => fill,
+          fontSize: 11,
+          fontWeight: 500,
+        }),
+      ),
+    ],
+    scales: {
+      x: { scale: scaleLinear().domain([0, 1]) },
+      y: {
+        scale: scaleBand<string>()
+          .domain(columns.map(({ key }) => key))
+          .paddingInner(1 - CROP_BAR_HEIGHT / CROP_ROW_STEP)
+          .paddingOuter(0.5),
+      },
+    },
+    guides: false,
+    focusRing: false,
+    tooltip: {
+      use: tooltip,
+      format: ({ datum }) => describeCropSegment(datum),
       sticky: false,
     },
   })

@@ -26,6 +26,7 @@ import {
   changedFieldIds,
   computeFieldTotals,
   summarizeCatchmentYearTotals,
+  summarizeCropDistribution,
   type CatchmentTotalsByYear,
   type FieldTotals,
 } from '@/lib/field-domain'
@@ -68,18 +69,18 @@ type ComparisonColumn = {
   changedCount: number | null
 }
 
-type ColumnCatchments = Pick<
+type ColumnYearFigures = Pick<
   ComparedColumn,
-  'catchments' | 'partialQuotas' | 'retrying' | 'onRetry'
+  'catchments' | 'partialQuotas' | 'cropShares' | 'retrying' | 'onRetry'
 > & {
   failed: boolean
   progress: RequestProgress
 }
 
-const useColumnCatchments = (
+const useColumnYearFigures = (
   farmId: string,
   column: ComparisonColumn | undefined,
-): ColumnCatchments => {
+): ColumnYearFigures => {
   const simulationId = column?.simulationId
   const history = simulationId === undefined
   const fields = column?.fields ?? NO_FIELDS
@@ -106,11 +107,19 @@ const useColumnCatchments = (
     () => partialCatchmentQuotas(fields, !history),
     [fields, history],
   )
+  const cropShares = useMemo(
+    () =>
+      yearValues.data === undefined || incomplete
+        ? undefined
+        : summarizeCropDistribution(fields, yearValues.data, null, 'group'),
+    [fields, incomplete, yearValues.data],
+  )
   const failed =
     incomplete || (Boolean(yearValues.error) && yearValues.data === undefined)
   return {
     catchments,
     partialQuotas,
+    cropShares,
     failed,
     retrying: yearValues.isValidating,
     onRetry: () => void yearValues.mutate(),
@@ -221,17 +230,17 @@ export const SimulationComparison = ({
 
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const quotaByCatchment = useMemo(() => catchmentQuotas(fields), [fields])
-  const catchmentSlots = [
-    useColumnCatchments(farmId, columns[0]),
-    useColumnCatchments(farmId, columns[1]),
-    useColumnCatchments(farmId, columns[2]),
-    useColumnCatchments(farmId, columns[3]),
+  const yearFigures = [
+    useColumnYearFigures(farmId, columns[0]),
+    useColumnYearFigures(farmId, columns[1]),
+    useColumnYearFigures(farmId, columns[2]),
+    useColumnYearFigures(farmId, columns[3]),
   ]
-  const yearValuesLoading = catchmentSlots.some(
+  const yearValuesLoading = yearFigures.some(
     (slot) => slot.catchments === undefined && !slot.failed,
   )
   const yearValuesProgress = combineProgress(
-    catchmentSlots.map((slot) => slot.progress),
+    yearFigures.map((slot) => slot.progress),
   )
 
   const canonical = ids.join(',')
@@ -246,12 +255,12 @@ export const SimulationComparison = ({
     navigate({ search: `?ids=${next.join(',')}` }, { replace: true })
 
   const catchments = listComparedCatchments(
-    catchmentSlots.slice(0, columns.length),
+    yearFigures.slice(0, columns.length),
     catchmentLabel,
   )
   const catchmentIds = catchments.map(({ catchmentId }) => catchmentId)
   const compared = columns.map((column, index): ComparedColumn => {
-    const slot = catchmentSlots[index]
+    const slot = yearFigures[index]
     const quota =
       slot.catchments === undefined
         ? null
@@ -271,6 +280,7 @@ export const SimulationComparison = ({
       changedCount: column.changedCount,
       catchments: slot.catchments,
       partialQuotas: slot.partialQuotas,
+      cropShares: slot.cropShares,
       retrying: slot.retrying,
       onRetry: slot.onRetry,
       yearsOver: quota?.yearsOver ?? null,

@@ -1,16 +1,20 @@
 import { Chart } from '@tanstack/charts/react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import {
   columnFigure,
   type ComparedColumn,
   type OnHighlight,
 } from '@/components/farm/comparison-column'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import {
+  cropDistributionChart,
+  cropDistributionHeight,
   db2NLoadChart,
   db2NLoadPoints,
   type Db2NLoadPoint,
 } from '@/lib/comparison-charts'
+import { CROP_GROUPS, type CropGroup } from '@/lib/crop-groups'
 import { formatCompactDkk, formatWholeNumber } from '@/lib/field-domain'
 import { COMPARISON_PERIOD, formatKgN } from '@/lib/simulation-comparison'
 import { cn } from '@/lib/utils'
@@ -34,6 +38,65 @@ const ChartCard = ({ title, description, children }: ChartCardProps) => (
     {children}
   </section>
 )
+
+type CropDistributionCardProps = {
+  columns: ComparedColumn[]
+  highlightedKey: string | null
+}
+
+const CropDistributionCard = ({
+  columns,
+  highlightedKey,
+}: CropDistributionCardProps) => {
+  const [hoveredGroup, setHoveredGroup] = useState<CropGroup | null>(null)
+  const cropGroups = CROP_GROUPS.filter((group) =>
+    columns.some((column) =>
+      column.cropShares?.some((share) => share.group.id === group.id),
+    ),
+  )
+  return (
+    <ChartCard
+      title="Afgrødefordeling"
+      description={`Andel af arealet, gennemsnit for ${COMPARISON_PERIOD}.`}
+    >
+      <Chart
+        definition={cropDistributionChart(
+          columns.map((column) => ({
+            key: column.key,
+            title: column.title,
+            history: column.history,
+            shares: column.cropShares,
+          })),
+          { highlightedKey, hoveredGroup },
+        )}
+        height={cropDistributionHeight(columns.length)}
+        ariaLabel="Afgrødefordeling for afgrødehistorikken og de valgte simuleringer"
+        onFocusChange={(point) =>
+          setHoveredGroup(point?.datum.group.id ?? null)
+        }
+      />
+      <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+        {cropGroups.map((group) => (
+          <li
+            key={group.id}
+            className={cn(
+              'inline-flex items-center gap-1.5 transition-opacity duration-120',
+              hoveredGroup === group.id && 'text-foreground',
+              hoveredGroup !== null &&
+                hoveredGroup !== group.id &&
+                'opacity-40',
+            )}
+            onMouseEnter={() => setHoveredGroup(group.id)}
+            onMouseLeave={() => setHoveredGroup(null)}
+          >
+            <CropGroupTile group={group} />
+            {group.label}
+          </li>
+        ))}
+      </ul>
+    </ChartCard>
+  )
+}
 
 type ComparisonChartsProps = {
   columns: ComparedColumn[]
@@ -78,6 +141,7 @@ export const ComparisonCharts = ({
         />
         <p className={cn(AXIS_CAPTION_CLASS, 'text-right')}>Udledning, kg N</p>
       </ChartCard>
+      <CropDistributionCard columns={columns} highlightedKey={highlightedKey} />
     </div>
   )
 }

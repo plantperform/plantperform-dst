@@ -1,5 +1,9 @@
 import type { FieldRecord } from '@/api/types'
-import type { CatchmentTotalsByYear, FieldTotals } from '@/lib/field-domain'
+import type {
+  CatchmentTotalsByYear,
+  CropShare,
+  FieldTotals,
+} from '@/lib/field-domain'
 
 export type ComparedColumn = {
   key: string
@@ -12,6 +16,7 @@ export type ComparedColumn = {
   changedCount: number | null
   catchments: CatchmentTotalsByYear | undefined
   partialQuotas: ReadonlyMap<number, number>
+  cropShares: CropShare[] | undefined
   retrying: boolean
   onRetry: () => void
   yearsOver: number | null

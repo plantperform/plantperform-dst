@@ -132,6 +132,16 @@ export const formatNumber = (value: number) =>
 export const formatWholeNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
 
+export const formatShare = (share: number) => {
+  const percent = share * 100
+  if (percent > 0 && percent < 0.05) return '< 0,1 %'
+  const text =
+    percent > 0 && percent < 1
+      ? formatNumber(percent)
+      : formatWholeNumber(percent)
+  return `${text} %`
+}
+
 export const formatFieldCount = (count: number) =>
   `${count} ${count === 1 ? 'mark' : 'marker'}`
 

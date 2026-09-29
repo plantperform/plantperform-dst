@@ -4,6 +4,7 @@ import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import {
   formatNumber,
+  formatShare,
   formatWholeNumber,
   type CropShare,
 } from '@/lib/field-domain'
@@ -13,16 +14,6 @@ const DONUT_RADIUS = 40
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 const DONUT_GAP = 0.8
 const TWO_COLUMN_MIN_ROWS = 6
-
-const formatShare = (share: number) => {
-  const percent = share * 100
-  if (percent > 0 && percent < 0.05) return '< 0,1 %'
-  const text =
-    percent > 0 && percent < 1
-      ? formatNumber(percent)
-      : formatWholeNumber(percent)
-  return `${text} %`
-}
 
 type ColumnHeadingsProps = {
   className: string
