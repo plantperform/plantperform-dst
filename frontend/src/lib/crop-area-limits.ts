@@ -1,5 +1,6 @@
 import type { CropAreaLimit, CropAreaRange, FieldRecord } from '@/api/types'
 import { NUM_ROTATION_YEARS, ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+import { parseDecimalInput } from '@/lib/number-input'
 
 export type AreaUnit = 'ha' | '%'
 
@@ -17,13 +18,6 @@ export type CropAreaLimitDraft = {
 }
 
 const areaFormat = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 })
-
-const parseInput = (value: string): number | null => {
-  const trimmed = value.trim().replace(',', '.')
-  if (trimmed === '') return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : Number.NaN
-}
 
 const isNumber = (value: number | null): value is number =>
   value !== null && !Number.isNaN(value)
@@ -48,7 +42,7 @@ export const emptyCropAreaLimitInput = (
 ): CropAreaLimitInput => ({ cropCode, min: '', max: '', unit: 'ha' })
 
 const percentToHectares = (value: string, totalAreaHa: number) => {
-  const percent = parseInput(value)
+  const percent = parseDecimalInput(value)
   return isNumber(percent) ? String((percent / 100) * totalAreaHa) : value
 }
 
@@ -73,8 +67,8 @@ type CropAreaLimitParts = {
 export const cropAreaLimitParts = (
   input: CropAreaLimitInput,
 ): CropAreaLimitParts | null => {
-  const min = parseInput(input.min)
-  const max = parseInput(input.max)
+  const min = parseDecimalInput(input.min)
+  const max = parseDecimalInput(input.max)
   const { unit } = input
   if (isNumber(min) && isNumber(max)) {
     return {
@@ -98,8 +92,8 @@ export const isEmptyCropAreaLimit = (draft: CropAreaLimitDraft) =>
 export const cropAreaLimitError = (
   draft: CropAreaLimitDraft,
 ): string | null => {
-  const min = parseInput(draft.minHa)
-  const max = parseInput(draft.maxHa)
+  const min = parseDecimalInput(draft.minHa)
+  const max = parseDecimalInput(draft.maxHa)
   if (Number.isNaN(min) || Number.isNaN(max)) return 'Skriv et tal.'
   if (min === null && max === null) return 'Angiv et minimum eller et maksimum.'
   if ((min !== null && min < 0) || (max !== null && max < 0)) {
@@ -115,8 +109,8 @@ export const cropAreaLimitFromDraft = (
   draft: CropAreaLimitDraft,
 ): CropAreaLimit => ({
   cropCode: draft.cropCode,
-  minAreaHa: parseInput(draft.minHa),
-  maxAreaHa: parseInput(draft.maxHa),
+  minAreaHa: parseDecimalInput(draft.minHa),
+  maxAreaHa: parseDecimalInput(draft.maxHa),
 })
 
 export const sameCropAreaLimits = (
@@ -198,8 +192,8 @@ export const cropAreaLimitWarning = (
   sums: FieldAreaSums | null,
 ): string | null => {
   if (cropAreaLimitError(draft) !== null) return null
-  const min = parseInput(draft.minHa)
-  const max = parseInput(draft.maxHa)
+  const min = parseDecimalInput(draft.minHa)
+  const max = parseDecimalInput(draft.maxHa)
   if (min !== null && min > totalAreaHa) {
     return `Minimum er større end simuleringens samlede areal på ${areaFormat.format(totalAreaHa)} ha.`
   }
@@ -266,8 +260,8 @@ export const cropAreaRangeError = (
 ): string | null => {
   if (!range || cropAreaLimitError(draft) !== null) return null
   const possible = possibleCropArea(range)
-  const min = parseInput(draft.minHa)
-  const max = parseInput(draft.maxHa)
+  const min = parseDecimalInput(draft.minHa)
+  const max = parseDecimalInput(draft.maxHa)
   if (min !== null && min > possible.highestMinHa + RANGE_TOLERANCE_HA) {
     return (
       `Højst ${areaFormat.format(possible.highestMinHa)} ha er muligt med ` +
@@ -291,8 +285,8 @@ export const cropAreaRangeWarnings = (
   if (cropAreaRangeError(draft, range) !== null) return []
   const optimize = optimizeBounds(range)
   const yearly = yearlyBounds(range)
-  const min = parseInput(draft.minHa)
-  const max = parseInput(draft.maxHa)
+  const min = parseDecimalInput(draft.minHa)
+  const max = parseDecimalInput(draft.maxHa)
   const warnings: string[] = []
   const inYears = (years: number[], fallback: string) =>
     years.length > 0 ? `i ${years.join(', ')}` : fallback
