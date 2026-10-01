@@ -283,6 +283,19 @@ export const cropAreaRangeError = (
   return null
 }
 
+export const unmetCropAreaLimits = (
+  limits: CropAreaLimit[],
+  ranges: CropAreaRange[],
+): CropAreaLimit[] => {
+  const rangeByCode = new Map(ranges.map((range) => [range.cropCode, range]))
+  return limits.filter((limit) => {
+    const range = rangeByCode.get(limit.cropCode)
+    if (!range) return (limit.minAreaHa ?? 0) > RANGE_TOLERANCE_HA
+    const draft = hectareDraft(inputFromCropAreaLimit(limit), 0)
+    return cropAreaRangeError(draft, range) !== null
+  })
+}
+
 export const cropAreaRangeWarnings = (
   draft: CropAreaLimitDraft,
   range: CropAreaRange | undefined,

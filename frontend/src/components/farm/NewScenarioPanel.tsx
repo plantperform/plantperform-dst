@@ -1,16 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
 
 import {
+  fetchCropAreaRanges,
   fetchSimulationFields,
   simulationsKey,
   useFertiliserPresets,
   useRotationCategories,
   useRotationNNormPercentages,
+  useScenarioCropCodes,
 } from '@/api/hooks'
-import { createSimulation } from '@/api/mutations'
+import {
+  createSimulation,
+  updateSimulationConstraints,
+} from '@/api/mutations'
 import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type {
   FieldRecord,
@@ -27,6 +32,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { unmetCropAreaLimits } from '@/lib/crop-area-limits'
 import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
@@ -45,6 +51,7 @@ import {
   isStepValid,
   nNormPercentagesFor,
   simulationFormSchema,
+  simulationToFormValues,
   stepFields,
   toCreateSimulationInput,
   toggleNNormPercentage,
@@ -55,6 +62,7 @@ import { cn } from '@/lib/utils'
 type NewScenarioPanelProps = {
   farmId: string
   fields: FieldRecord[]
+  source: Simulation | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSimulationCreated: (simulation: Simulation) => void
@@ -62,6 +70,16 @@ type NewScenarioPanelProps = {
 }
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
+
+const cropNameList = new Intl.ListFormat('da-DK', {
+  style: 'long',
+  type: 'conjunction',
+})
+
+const unmetCropLimitsMessage = (cropNames: string[]) => {
+  const single = cropNames.length === 1
+  return `Simuleringen blev oprettet, men ${single ? 'kravet' : 'kravene'} til ${cropNameList.format(cropNames)} kan ikke opfyldes med simuleringens sædskifter. Ret ${single ? 'det' : 'dem'} under Regler, før du kører Optimér.`
+}
 
 const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'orgMineralN',
@@ -72,6 +90,7 @@ const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
 export const NewScenarioPanel = ({
   farmId,
   fields,
+  source,
   open,
   onOpenChange,
   onSimulationCreated,
@@ -84,6 +103,10 @@ export const NewScenarioPanel = ({
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
   const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
+  const { data: sourceCropCodes = [] } = useScenarioCropCodes(
+    farmId,
+    source?.id,
+  )
   const referenceLoading = referenceQueries.some((query) => query.isLoading)
   const referenceError = referenceQueries.some((query) => query.error)
   const referenceRetrying = referenceQueries.some(
@@ -124,6 +147,32 @@ export const NewScenarioPanel = ({
   const startDefaultRun = useStartDefaultOptimization()
 
   const hasFields = fields.length > 0
+
+  const prefillKey = !open
+    ? null
+    : source === null
+      ? 'blank'
+      : presetsQuery.isLoading || nNormQuery.isLoading
+        ? null
+        : source.id
+  const [prefilled, setPrefilled] = useState<{
+    key: string
+    values: SimulationFormValues | null
+  }>({ key: 'blank', values: null })
+  if (prefillKey !== null && prefillKey !== prefilled.key) {
+    setPrefilled({
+      key: prefillKey,
+      values: source
+        ? simulationToFormValues(source, fertiliserPresets, nNormOptions)
+        : DEFAULT_SIMULATION_FORM_VALUES,
+    })
+    setStepIndex(0)
+    setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)
+    setCreateError(null)
+  }
+  useEffect(() => {
+    if (prefilled.values) reset(prefilled.values)
+  }, [prefilled, reset])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -170,6 +219,7 @@ export const NewScenarioPanel = ({
     setStepIndex(0)
     setFurthestStepIndex(0)
     setCreateError(null)
+    setPrefilled({ key: 'blank', values: null })
   }
 
   const applyFertiliserChoice = (choice: string) => {
@@ -219,9 +269,41 @@ export const NewScenarioPanel = ({
       setIsCreating(false)
       return
     }
-    void mutate(simulationsKey(farmId))
     let runError: string | null = null
-    if (getValues().optimizeOnCreate) {
+    if (source) {
+      try {
+        simulation = await updateSimulationConstraints(
+          farmId,
+          simulation.id,
+          source.constraints,
+        )
+      } catch {
+        runError =
+          'Simuleringen blev oprettet, men grænserne kunne ikke kopieres.'
+      }
+    }
+    if (runError === null && simulation.constraints.cropAreaLimits.length > 0) {
+      try {
+        const unmet = unmetCropAreaLimits(
+          simulation.constraints.cropAreaLimits,
+          await fetchCropAreaRanges(farmId, simulation.id),
+        )
+        if (unmet.length > 0) {
+          runError = unmetCropLimitsMessage(
+            unmet.map(
+              (limit) =>
+                sourceCropCodes.find((crop) => crop.code === limit.cropCode)
+                  ?.name ?? `afgrødekode ${limit.cropCode}`,
+            ),
+          )
+        }
+      } catch {
+        runError =
+          'Simuleringen blev oprettet, men afgrødekravene kunne ikke tjekkes. Se dem under Regler, før du kører Optimér.'
+      }
+    }
+    void mutate(simulationsKey(farmId))
+    if (runError === null && getValues().optimizeOnCreate) {
       try {
         startDefaultRun(
           farmId,
@@ -274,9 +356,13 @@ export const NewScenarioPanel = ({
       open={open}
       onOpenChange={onOpenChange}
       title="Ny simulering"
-      description={`Simuleringen oprettes med de ${fields.length} ${
-        fields.length === 1 ? 'mark' : 'marker'
-      }, der er valgt under Afgrødehistorik.`}
+      description={
+        source
+          ? `Udfyldt med grundlaget fra ${source.name}, som ikke ændres. Grænserne for hele bedriften følger med over i den nye simulering.`
+          : `Simuleringen oprettes med de ${fields.length} ${
+              fields.length === 1 ? 'mark' : 'marker'
+            }, der er valgt under Afgrødehistorik.`
+      }
       steps={steps}
       currentIndex={stepIndex}
       onStepSelect={(index) => {

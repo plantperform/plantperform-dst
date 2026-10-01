@@ -96,6 +96,7 @@ type SimulationRulesPanelProps = {
   onHoveredFieldChange: (fieldId: string | null) => void
   onToggleLock: (field: FieldRecord) => void
   onBindRotation: (field: FieldRecord) => void
+  onEditBasis: (simulation: Simulation) => void
 }
 
 export const SimulationRulesPanel = ({
@@ -108,6 +109,7 @@ export const SimulationRulesPanel = ({
   onHoveredFieldChange,
   onToggleLock,
   onBindRotation,
+  onEditBasis,
 }: SimulationRulesPanelProps) => {
   const id = useId()
   const limits = useRulesLimits(farmId, simulation, fields)
@@ -240,7 +242,10 @@ export const SimulationRulesPanel = ({
           <RulesLimitsCard limits={limits} fields={fields} />
         </div>
         <div {...panelProps('basis')}>
-          <SimulationBasisCard simulation={simulation} />
+          <SimulationBasisCard
+            simulation={simulation}
+            onEditBasis={() => onEditBasis(simulation)}
+          />
         </div>
         <div {...panelProps('fields')}>
           <FieldRulesCard

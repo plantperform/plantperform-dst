@@ -204,6 +204,20 @@ export const cropAreaRangesKey = (farmId?: string, simulationId?: string) => {
 export const useCropAreaRanges = (farmId?: string, simulationId?: string) =>
   useSWR<CropAreaRange[]>(cropAreaRangesKey(farmId, simulationId), fetcher)
 
+export const fetchCropAreaRanges = async (
+  farmId: string,
+  simulationId: string,
+): Promise<CropAreaRange[]> => {
+  const key = cropAreaRangesKey(farmId, simulationId)
+  if (!key) return []
+  const ranges = await mutate<CropAreaRange[]>(
+    key,
+    fetcher<CropAreaRange[]>(key),
+    { revalidate: false },
+  )
+  return ranges ?? []
+}
+
 export const simulationFieldCandidateDetailKey = (
   farmId?: string,
   simulationId?: string,

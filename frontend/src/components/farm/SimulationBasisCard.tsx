@@ -1,8 +1,9 @@
-import { Lock } from 'lucide-react'
+import { Lock, Pencil } from 'lucide-react'
 import { useId } from 'react'
 
 import type { Simulation } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
+import { Button } from '@/components/ui/button'
 import { formatNumber } from '@/lib/field-domain'
 import {
   catchCropSowingLabel,
@@ -59,10 +60,12 @@ const basisValues = (simulation: Simulation): BasisValue[] => {
 
 type SimulationBasisCardProps = {
   simulation: Simulation
+  onEditBasis: () => void
 }
 
 export const SimulationBasisCard = ({
   simulation,
+  onEditBasis,
 }: SimulationBasisCardProps) => {
   const id = useId()
 
@@ -82,11 +85,24 @@ export const SimulationBasisCard = ({
           </h3>
           <p className="text-xs text-muted-foreground">Låst ved oprettelse</p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto shrink-0"
+          onClick={onEditBasis}
+        >
+          <Pencil className="size-3.5" aria-hidden="true" />
+          Ret grundlag
+        </Button>
       </div>
       <div className="border-t">
         <p className="px-5 pt-3 pl-11.5 text-xs text-muted-foreground">
           Kandidaterne blev genereret ud fra dette og kan ikke ændres på
-          simuleringen.
+          simuleringen.{' '}
+          <b className="font-semibold text-foreground">Ret grundlag</b> åbner Ny
+          simulering med værdierne udfyldt, så du kan rette dem og oprette en ny
+          simulering - grænserne følger med.
         </p>
         <dl className="grid grid-cols-3 gap-x-4 gap-y-3 px-5 pt-3 pb-4 pl-11.5">
           {basisValues(simulation).map((value) => (

@@ -19,6 +19,7 @@ import {
   possibleCropArea,
   sameCropAreaLimits,
   totalFieldAreaHa,
+  unmetCropAreaLimits,
   type CropAreaLimitDraft,
   type CropAreaLimitInput,
 } from '@/lib/crop-area-limits'
@@ -287,5 +288,20 @@ describe('possible crop area', () => {
     expect(cropAreaRangeError(limit, beans)).toBeNull()
     expect(cropAreaRangeWarnings(limit, beans)).toEqual([])
     expect(cropAreaRangeError(draft({ minHa: '10' }), undefined)).toBeNull()
+  })
+
+  it('finds the copied limits a new simulation cannot meet', () => {
+    const tooHigh = { cropCode: POTATOES, minAreaHa: 10, maxAreaHa: null }
+    const notGrown = { cropCode: 11, minAreaHa: 3, maxAreaHa: null }
+    const notGrownMax = { cropCode: 22, minAreaHa: null, maxAreaHa: 6 }
+    expect(
+      unmetCropAreaLimits([tooHigh, notGrown, notGrownMax], [beans]),
+    ).toEqual([tooHigh, notGrown])
+    expect(
+      unmetCropAreaLimits(
+        [{ cropCode: POTATOES, minAreaHa: 1, maxAreaHa: 20 }],
+        [beans],
+      ),
+    ).toEqual([])
   })
 })
