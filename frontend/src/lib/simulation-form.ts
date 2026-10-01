@@ -433,6 +433,20 @@ export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
     ? values.catchCropSowingDate
     : values.catchCropSowingInterval
 
+export const yesNo = (value: boolean) => (value ? 'Ja' : 'Nej')
+
+export const nNormPercentagesLabel = (percentages: string[]) =>
+  [...percentages]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((value) => `${value} %`)
+    .join(', ')
+
+export const catchCropSowingLabel = (date: string, dailyBasis: boolean) => {
+  if (dailyBasis) return `${date} · dagsbasis §38`
+  const interval = SOWING_DATE_INTERVALS.find((option) => option.date === date)
+  return `${interval?.label ?? date} · trappesats §37`
+}
+
 // Expects values that passed simulationFormSchema.
 export const toCreateSimulationInput = (
   values: SimulationFormValues,

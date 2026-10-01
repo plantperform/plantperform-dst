@@ -123,6 +123,8 @@ field" column is the name on the wire.
 | Fmajs-korrektion | `fmajsApplied`, `fmajsCorrectionFactor`, `fmajsMineralN` | `Fmajs_anvendt`, `Fmajs_korrektionsfaktor`, `Fmajs_mineralsk_n` | Maize after clover grass |
 | simulering | `Simulation`, simulation | | |
 | scenarie | scenario | | |
+| regler | rules, `SimulationRulesPanel`, `FieldRulesCard` | | Limits and locked fields a simulation's optimization must keep |
+| simuleringens grundlag | basis, `SimulationBasisCard` | | The settings a simulation's candidates were generated from, locked once created |
 | beregning | calculation | | |
 | årsgennemgang | `YearWalkthrough` | | |
 

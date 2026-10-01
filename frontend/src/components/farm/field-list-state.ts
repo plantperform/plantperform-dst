@@ -26,14 +26,6 @@ export const DEFAULT_FIELDS_SORT: FieldsSortState = {
   direction: 'asc',
 }
 
-const RULES_SORT_KEYS: FieldsSortKey[] = ['name', 'areaHa']
-
-export const resolveEffectiveFieldsSort = (
-  sort: FieldsSortState,
-  isRules: boolean,
-): FieldsSortState =>
-  isRules && !RULES_SORT_KEYS.includes(sort.key) ? DEFAULT_FIELDS_SORT : sort
-
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
   'nNormPct',

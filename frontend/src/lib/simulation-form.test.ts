@@ -5,6 +5,7 @@ import type {
   RotationCategoryOption,
 } from '@/api/types'
 import {
+  catchCropSowingLabel,
   combinationCount,
   copiedNNormPercentages,
   CUSTOM_FERTILISER,
@@ -15,6 +16,7 @@ import {
   isStepValid,
   nNormPercentagesFor,
   NO_FERTILISER,
+  nNormPercentagesLabel,
   selectedCountsByCategory,
   selectedInCategory,
   selectedRotations,
@@ -369,6 +371,19 @@ describe('N-norm levels', () => {
         nNormPercentages: ['100', '80'],
       }).allowedNNormPercentages,
     ).toEqual(['100'])
+  })
+})
+
+describe('summary labels', () => {
+  it('lists the N-norm levels from low to high', () => {
+    expect(nNormPercentagesLabel(['100', '85', '95'])).toBe('85 %, 95 %, 100 %')
+  })
+
+  it('names the sowing interval or the daily basis of the catch crop', () => {
+    expect(catchCropSowingLabel('24/8', false)).toBe(
+      '21.-24. august (42%) · trappesats §37',
+    )
+    expect(catchCropSowingLabel('22/8', true)).toBe('22/8 · dagsbasis §38')
   })
 })
 

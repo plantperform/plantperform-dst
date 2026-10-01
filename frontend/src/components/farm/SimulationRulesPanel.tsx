@@ -1,422 +1,267 @@
-import { Info, SlidersHorizontal } from 'lucide-react'
-import { useState } from 'react'
-import { mutate } from 'swr'
+import { SlidersHorizontal } from 'lucide-react'
+import {
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 
-import { ApiError } from '@/api/client'
-import {
-  simulationsKey,
-  useCropAreaRanges,
-  useScenarioCropCodes,
-} from '@/api/hooks'
-import { updateSimulationConstraints } from '@/api/mutations'
-import {
-  useOptimizationRun,
-  useOptimizationRunActions,
-} from '@/api/optimization-runs'
-import type { FieldRecord, CatchmentNLoadCap, Simulation } from '@/api/types'
-import {
-  catchmentKey,
-  effectiveMaxNLoadByCatchment,
-  inputToOptionalNumber,
-  numberToInput,
-  useCatchmentOptions,
-} from '@/components/farm/catchment-options'
-import { CropAreaLimitsEditor } from '@/components/farm/CropAreaLimitsEditor'
-import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
+import type { FieldRecord, Simulation } from '@/api/types'
+import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
+import { useRulesLimits } from '@/components/farm/rules-limits-state'
+import { UnsavedDot } from '@/components/farm/rules-ui'
+import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
+import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  cropAreaLimitError,
-  cropAreaLimitFromDraft,
-  cropAreaRangeError,
-  draftFromCropAreaLimit,
-  sameCropAreaLimits,
-  totalFieldAreaHa,
-  type CropAreaLimitDraft,
-} from '@/lib/crop-area-limits'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { isFieldLocked } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
-type ReadOnlyRuleProps = {
-  label: string
-  value: string
-  term?: GlossaryTerm
+type RulesTab = 'limits' | 'basis' | 'fields'
+
+const RULES_TABS: RulesTab[] = ['limits', 'basis', 'fields']
+
+const TAB_LABELS: Record<RulesTab, string> = {
+  limits: 'Grænser',
+  basis: 'Grundlag',
+  fields: 'Marker',
 }
 
-const ReadOnlyRule = ({ label, value, term }: ReadOnlyRuleProps) => (
-  <div className="space-y-1">
-    <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-      {label}
-      {term ? <GlossaryInfo term={term} /> : null}
-    </div>
-    <div className="text-sm">{value}</div>
-  </div>
-)
+type LeaveRequest = {
+  tab: RulesTab
+  sections: string
+}
 
-const buildMaxNLoadInputs = (
-  catchmentKeys: string[],
-  effective: Map<string, number>,
-): Record<string, string> =>
-  Object.fromEntries(
-    catchmentKeys.map((key) => [
-      key,
-      numberToInput(effective.get(key) ?? null),
-    ]),
-  )
+type UnsavedLimitsDialogProps = {
+  request: LeaveRequest | null
+  saving: boolean
+  onStay: () => void
+  onDiscard: () => void
+  onSave: () => void
+}
+
+const UnsavedLimitsDialog = ({
+  request,
+  saving,
+  onStay,
+  onDiscard,
+  onSave,
+}: UnsavedLimitsDialogProps) => (
+  <Dialog
+    open={request !== null}
+    onOpenChange={(open) => {
+      if (!open && !saving) onStay()
+    }}
+  >
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Grænserne er ikke gemt</DialogTitle>
+        <DialogDescription>
+          Du har ændringer i{' '}
+          <b className="font-semibold text-foreground">{request?.sections}</b>,
+          som ikke er gemt. Gem dem, eller fortryd dem, før du går til{' '}
+          {request ? TAB_LABELS[request.tab] : null}.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" disabled={saving} onClick={onStay}>
+          Bliv på Grænser
+        </Button>
+        <Button variant="outline" disabled={saving} onClick={onDiscard}>
+          Fortryd ændringer
+        </Button>
+        <Button loading={saving} onClick={onSave}>
+          Gem grænser
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+)
 
 type SimulationRulesPanelProps = {
   farmId: string
   simulation: Simulation
   fields: FieldRecord[]
+  lockingFieldId: string | null
+  hoveredFieldId: string | null
+  focusRequest?: { fieldId: string; nonce: number }
+  onHoveredFieldChange: (fieldId: string | null) => void
+  onToggleLock: (field: FieldRecord) => void
+  onBindRotation: (field: FieldRecord) => void
 }
 
 export const SimulationRulesPanel = ({
   farmId,
   simulation,
   fields,
+  lockingFieldId,
+  hoveredFieldId,
+  focusRequest,
+  onHoveredFieldChange,
+  onToggleLock,
+  onBindRotation,
 }: SimulationRulesPanelProps) => {
-  const catchments = useCatchmentOptions(farmId, fields)
-  const catchmentKeys = catchments.map((catchment) =>
-    catchmentKey(catchment.catchmentId),
+  const id = useId()
+  const limits = useRulesLimits(farmId, simulation, fields)
+  const [tab, setTab] = useState<RulesTab>('limits')
+  const [leaveRequest, setLeaveRequest] = useState<LeaveRequest | null>(null)
+  const [seenFocusNonce, setSeenFocusNonce] = useState(
+    focusRequest?.nonce ?? null,
   )
+  const tabElements = useRef(new Map<RulesTab, HTMLButtonElement>())
 
-  const [minFeedUnits, setMinFeedUnits] = useState(
-    simulation.constraints.minFeedUnits,
-  )
-  const [maxFeedUnits, setMaxFeedUnits] = useState(
-    simulation.constraints.maxFeedUnits,
-  )
-  const [maxNLoadInputs, setMaxNLoadInputs] = useState<Record<string, string>>(
-    () =>
-      buildMaxNLoadInputs(
-        catchmentKeys,
-        effectiveMaxNLoadByCatchment(
-          fields,
-          simulation.constraints.maxNLoadByCatchment,
-        ),
-      ),
-  )
-  const totalAreaHa = totalFieldAreaHa(fields)
-  const { data: cropCodes = [] } = useScenarioCropCodes(farmId, simulation.id)
-  const { data: cropAreaRanges = [] } = useCropAreaRanges(farmId, simulation.id)
-  const [cropAreaLimitDrafts, setCropAreaLimitDrafts] = useState<
-    CropAreaLimitDraft[]
-  >(() => simulation.constraints.cropAreaLimits.map(draftFromCropAreaLimit))
-  const [showCropAreaErrors, setShowCropAreaErrors] = useState(false)
-  const run = useOptimizationRun(simulation.id)
-  const cropAreaViolations =
-    run?.status === 'failed' ? run.cropAreaViolations : []
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [isSaved, setIsSaved] = useState(false)
-  const { markStale } = useOptimizationRunActions()
-
-  const maxNLoadByCatchment: CatchmentNLoadCap[] = catchments.map(
-    (catchment) => ({
-      catchmentId: catchment.catchmentId,
-      maxNLoadKg: inputToOptionalNumber(
-        maxNLoadInputs[catchmentKey(catchment.catchmentId)] ?? '',
-      ),
-    }),
-  )
-
-  const cropAreaLimits = cropAreaLimitDrafts.map(cropAreaLimitFromDraft)
-  const rangeByCode = new Map(
-    cropAreaRanges.map((range) => [range.cropCode, range]),
-  )
-  const hasCropAreaLimitErrors = cropAreaLimitDrafts.some(
-    (draft) =>
-      cropAreaLimitError(draft) !== null ||
-      cropAreaRangeError(draft, rangeByCode.get(draft.cropCode)) !== null,
-  )
-
-  const savedMaxNLoad = effectiveMaxNLoadByCatchment(
-    fields,
-    simulation.constraints.maxNLoadByCatchment,
-  )
-  const isDirty =
-    minFeedUnits !== simulation.constraints.minFeedUnits ||
-    maxFeedUnits !== simulation.constraints.maxFeedUnits ||
-    maxNLoadByCatchment.some(
-      (cap) =>
-        cap.maxNLoadKg !==
-        (savedMaxNLoad.get(catchmentKey(cap.catchmentId)) ?? null),
-    ) ||
-    !sameCropAreaLimits(cropAreaLimits, simulation.constraints.cropAreaLimits)
-
-  const editMinFeedUnits = (value: string) => {
-    setIsSaved(false)
-    setMinFeedUnits(inputToOptionalNumber(value))
-  }
-
-  const editMaxFeedUnits = (value: string) => {
-    setIsSaved(false)
-    setMaxFeedUnits(inputToOptionalNumber(value))
-  }
-
-  const editMaxNLoadInput = (key: string, value: string) => {
-    setIsSaved(false)
-    setMaxNLoadInputs((current) => ({ ...current, [key]: value }))
-  }
-
-  const editCropAreaLimits = (drafts: CropAreaLimitDraft[]) => {
-    setIsSaved(false)
-    setSaveError(null)
-    setCropAreaLimitDrafts(drafts)
-  }
-
-  const saveConstraints = async () => {
-    if (hasCropAreaLimitErrors) {
-      setShowCropAreaErrors(true)
-      setSaveError('Ret kravene under Afgrøder, før du gemmer.')
-      return
-    }
-    setIsSaving(true)
-    try {
-      const updated = await updateSimulationConstraints(farmId, simulation.id, {
-        ...simulation.constraints,
-        minFeedUnits,
-        maxFeedUnits,
-        maxNLoadByCatchment,
-        cropAreaLimits,
-      })
-      await mutate(
-        simulationsKey(farmId),
-        (current: Simulation[] = []) =>
-          current.map((entry) => (entry.id === updated.id ? updated : entry)),
-        { revalidate: false },
-      )
-      setMinFeedUnits(updated.constraints.minFeedUnits)
-      setMaxFeedUnits(updated.constraints.maxFeedUnits)
-      setMaxNLoadInputs(
-        buildMaxNLoadInputs(
-          catchmentKeys,
-          effectiveMaxNLoadByCatchment(
-            fields,
-            updated.constraints.maxNLoadByCatchment,
-          ),
-        ),
-      )
-      setCropAreaLimitDrafts(
-        updated.constraints.cropAreaLimits.map(draftFromCropAreaLimit),
-      )
-      setShowCropAreaErrors(false)
-      setSaveError(null)
-      setIsSaved(true)
-      markStale(simulation.id)
-    } catch (error) {
-      setSaveError(
-        error instanceof ApiError && error.status === 422
-          ? `Kunne ikke gemme grænserne: ${error.message}`
-          : 'Kunne ikke gemme grænserne.',
-      )
-    } finally {
-      setIsSaving(false)
+  const openTab = (next: RulesTab) => {
+    if (next === tab) return
+    if (tab === 'limits' && limits.isDirty && !limits.isSaving) {
+      setLeaveRequest({ tab: next, sections: limits.changedSectionsLabel })
+    } else {
+      setTab(next)
     }
   }
 
-  const { fertiliser } = simulation
+  if (focusRequest && focusRequest.nonce !== seenFocusNonce) {
+    setSeenFocusNonce(focusRequest.nonce)
+    openTab('fields')
+  }
+
+  const discardAndLeave = () => {
+    if (!leaveRequest) return
+    limits.discard()
+    setTab(leaveRequest.tab)
+    setLeaveRequest(null)
+  }
+
+  const saveAndLeave = async () => {
+    if (!leaveRequest) return
+    const saved = await limits.save()
+    if (saved) setTab(leaveRequest.tab)
+    setLeaveRequest(null)
+  }
+
+  const moveTabFocus = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    current: RulesTab,
+  ) => {
+    const step =
+      event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    if (step === 0) return
+    event.preventDefault()
+    const index = RULES_TABS.indexOf(current) + step + RULES_TABS.length
+    tabElements.current.get(RULES_TABS[index % RULES_TABS.length])?.focus()
+  }
+
+  const lockedCount = fields.filter(isFieldLocked).length
+  const tabStatus: Record<RulesTab, ReactNode> = {
+    limits: limits.isDirty ? (
+      <>
+        <UnsavedDot />
+        <span className="text-foreground">Ikke gemt</span>
+      </>
+    ) : (
+      'For hele bedriften'
+    ),
+    basis: 'Låst ved oprettelse',
+    fields: `${lockedCount} af ${fields.length} låst`,
+  }
+
+  const panelProps = (panel: RulesTab) => ({
+    role: 'tabpanel',
+    id: `${id}-${panel}-panel`,
+    'aria-labelledby': `${id}-${panel}-tab`,
+    hidden: tab !== panel,
+  })
 
   return (
-    <Card className="border-rules/40 bg-rules/5">
-      <CardHeader className="border-b border-rules/20">
-        <CardTitle className="flex items-center gap-2">
+    <div className="@container flex min-w-0 flex-col overflow-hidden rounded-lg border bg-background shadow-sm">
+      <div className="border-b border-rules/20 bg-rules/10 px-6 pt-4">
+        <div className="flex items-center gap-2">
           <SlidersHorizontal
-            className="h-4 w-4 text-rules"
+            className="size-4.5 text-rules"
             aria-hidden="true"
           />
-          Regler for hele bedriften
-        </CardTitle>
-        <CardDescription>
-          Her bestemmer du, hvad optimeringen må gøre. Reglerne gælder alle
-          marker i denne simulering og bruges ved næste Optimér-kørsel - de er
-          ikke tal, markerne har.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6 pt-6">
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold">Grænser</h3>
-          <fieldset className="min-w-0 space-y-2">
-            <legend className="text-sm font-medium leading-none text-foreground">
-              Maks. tilladt udledning pr. kystvandopland
-              <GlossaryInfo term="nLoad" />
-            </legend>
-            {catchments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Ingen marker med et kystvandopland i denne simulering.
-              </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {catchments.map((catchment) => {
-                  const key = catchmentKey(catchment.catchmentId)
-                  return (
-                    <div key={key} className="space-y-1">
-                      <Label
-                        htmlFor={`rules-max-n-load-${key}`}
-                        className="text-xs font-normal text-muted-foreground"
-                      >
-                        {catchment.label}
-                      </Label>
-                      <Input
-                        id={`rules-max-n-load-${key}`}
-                        type="number"
-                        min="0"
-                        value={maxNLoadInputs[key] ?? ''}
-                        placeholder="Ingen grænse"
-                        onChange={(event) =>
-                          editMaxNLoadInput(key, event.target.value)
-                        }
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">kg N pr. opland</p>
-          </fieldset>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label htmlFor="rules-min-feed-units">Min. foderenheder</Label>
-                <GlossaryInfo term="feedUnits" />
-              </div>
-              <Input
-                id="rules-min-feed-units"
-                type="number"
-                min="0"
-                value={numberToInput(minFeedUnits)}
-                placeholder="Ingen grænse"
-                onChange={(event) => editMinFeedUnits(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rules-max-feed-units">Maks. foderenheder</Label>
-              <Input
-                id="rules-max-feed-units"
-                type="number"
-                min="0"
-                value={numberToInput(maxFeedUnits)}
-                placeholder="Ingen grænse"
-                onChange={(event) => editMaxFeedUnits(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">FE</p>
-            </div>
-          </div>
+          <h2 className="text-[15px] font-semibold">Regler</h2>
         </div>
-
-        <div className="border-t border-rules/20 pt-4">
-          <CropAreaLimitsEditor
-            drafts={cropAreaLimitDrafts}
-            cropCodes={cropCodes}
+        <p className="mt-1.5 max-w-190 text-[13px] text-muted-foreground">
+          Her bestemmer du, hvad optimeringen må gøre: grænser for hele
+          bedriften og marker, den ikke må ændre.
+        </p>
+        <div role="tablist" aria-label="Regler" className="mt-4 -mb-px flex">
+          {RULES_TABS.map((entry) => {
+            const active = entry === tab
+            return (
+              <button
+                key={entry}
+                ref={(element) => {
+                  if (element) tabElements.current.set(entry, element)
+                  else tabElements.current.delete(entry)
+                }}
+                type="button"
+                role="tab"
+                id={`${id}-${entry}-tab`}
+                aria-selected={active}
+                aria-controls={`${id}-${entry}-panel`}
+                tabIndex={active ? 0 : -1}
+                className={cn(
+                  'group min-w-0 rounded-t-md border px-3.5 pt-2.5 pb-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @xl:w-44',
+                  active
+                    ? 'border-rules/20 border-b-background bg-background shadow-[inset_0_2px_0_var(--color-rules)]'
+                    : 'border-transparent hover:bg-background/60',
+                )}
+                onClick={() => openTab(entry)}
+                onKeyDown={(event) => moveTabFocus(event, entry)}
+              >
+                <span
+                  className={cn(
+                    'block text-[13px] font-semibold',
+                    !active &&
+                      'text-muted-foreground group-hover:text-foreground',
+                  )}
+                >
+                  {TAB_LABELS[entry]}
+                </span>
+                <span className="mt-px hidden items-center gap-1.5 truncate text-xs text-muted-foreground @xl:flex">
+                  {tabStatus[entry]}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div className="px-6 pt-5 pb-6">
+        <div {...panelProps('limits')}>
+          <RulesLimitsCard limits={limits} fields={fields} />
+        </div>
+        <div {...panelProps('basis')}>
+          <SimulationBasisCard simulation={simulation} />
+        </div>
+        <div {...panelProps('fields')}>
+          <FieldRulesCard
+            active={tab === 'fields'}
             fields={fields}
-            ranges={cropAreaRanges}
-            totalAreaHa={totalAreaHa}
-            violations={cropAreaViolations}
-            showErrors={showCropAreaErrors}
-            onChange={editCropAreaLimits}
+            lockingFieldId={lockingFieldId}
+            hoveredFieldId={hoveredFieldId}
+            focusRequest={focusRequest}
+            onHoveredFieldChange={onHoveredFieldChange}
+            onToggleLock={onToggleLock}
+            onBindRotation={onBindRotation}
           />
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            size="sm"
-            onClick={() => void saveConstraints()}
-            disabled={!isDirty}
-            loading={isSaving}
-          >
-            {isSaving ? 'Gemmer...' : 'Gem grænser'}
-          </Button>
-          {isDirty ? (
-            <span className="text-xs font-medium text-warning-strong">
-              Ikke gemt
-            </span>
-          ) : null}
-          {isSaved && !saveError ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="text-xs text-muted-foreground"
-            >
-              Gemt.
-            </span>
-          ) : null}
-          {saveError ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="text-xs text-destructive"
-            >
-              {saveError}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="space-y-3 border-t border-rules/20 pt-4">
-          <h3 className="text-sm font-semibold">Simuleringens grundlag</h3>
-          <p className="text-xs text-muted-foreground">
-            Låst ved oprettelse - kandidaterne blev genereret ud fra dette.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <ReadOnlyRule
-              label="Sædskiftevarianter"
-              term="rotation"
-              value={
-                simulation.rotationVariants.length > 0
-                  ? `${simulation.rotationVariants.length} valgt`
-                  : 'Ingen valgt'
-              }
-            />
-            <ReadOnlyRule
-              label="N-norm%"
-              term="nNorm"
-              value={
-                simulation.nNormPercentages.length > 0
-                  ? simulation.nNormPercentages.join(', ')
-                  : 'Ingen valgt'
-              }
-            />
-            <ReadOnlyRule label="Driftsform" value={fertiliser.farmingSystem} />
-            <ReadOnlyRule
-              label="Organisk bundet N"
-              value={`${fertiliser.orgMineralN}`}
-            />
-            <ReadOnlyRule
-              label="Mineralsk andel"
-              value={`${fertiliser.mineralSharePct} %`}
-            />
-            <ReadOnlyRule
-              label="N-indhold i husdyrgødning"
-              value={`${fertiliser.nContentKgPerTon} kg N/ton`}
-            />
-            <ReadOnlyRule
-              label="Kun organisk gødning"
-              value={fertiliser.onlyOrganic ? 'Ja' : 'Nej'}
-            />
-            <ReadOnlyRule
-              label="Efterafgrøde-etablering"
-              term="catchCrop"
-              value={simulation.catchCropSowingDate}
-            />
-            <ReadOnlyRule
-              label="Præcision på dagsbasis"
-              value={simulation.catchCropDailyBasis ? 'Ja' : 'Nej'}
-            />
-          </div>
-        </div>
-
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Indstillingerne for Optimér med loft hvert år gemmes ikke her - de
-          gælder kun den enkelte kørsel.
-        </p>
-      </CardContent>
-    </Card>
+      </div>
+      <UnsavedLimitsDialog
+        request={leaveRequest}
+        saving={limits.isSaving}
+        onStay={() => setLeaveRequest(null)}
+        onDiscard={discardAndLeave}
+        onSave={() => void saveAndLeave()}
+      />
+    </div>
   )
 }

@@ -52,11 +52,23 @@ export const CropGroupIcon = ({ group, className }: CropGroupIconProps) => {
 
 type TileSize = 'sm' | 'md'
 
+const TILE_CLASS: Record<TileSize | 'lg', string> = {
+  sm: 'size-[18px] rounded-[3px]',
+  md: 'h-6 rounded-[4px]',
+  lg: 'size-[34px] rounded-[5px]',
+}
+
+const TILE_ICON_CLASS: Record<TileSize | 'lg', string> = {
+  sm: 'size-3',
+  md: 'size-4',
+  lg: 'size-5',
+}
+
 type CropGroupTileProps = {
   group: CropGroupDefinition
   // Overrides the group colour, e.g. with a crop's shade of it.
   color?: string
-  size?: TileSize
+  size?: TileSize | 'lg'
   title?: string
   className?: string
 }
@@ -76,7 +88,7 @@ export const CropGroupTile = ({
       aria-hidden={title ? undefined : 'true'}
       className={cn(
         'flex shrink-0 items-center justify-center',
-        size === 'sm' ? 'size-[18px] rounded-[3px]' : 'h-6 rounded-[4px]',
+        TILE_CLASS[size],
         className,
       )}
       style={{
@@ -85,7 +97,7 @@ export const CropGroupTile = ({
         boxShadow: `inset 0 0 0 1px ${cropEdgeColor(color)}`,
       }}
     >
-      <Icon className={size === 'sm' ? 'size-3' : 'size-4'} />
+      <Icon className={TILE_ICON_CLASS[size]} />
     </span>
   )
   return title ? <AppTooltip content={title}>{tile}</AppTooltip> : tile
