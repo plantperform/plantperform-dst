@@ -32,13 +32,11 @@ import {
   DEFAULT_FIELDS_SORT,
   OPTIONAL_COLUMN_IDS,
   readStoredColumnVisibility,
-  resolveEffectiveFieldsSort,
   storeColumnVisibility,
   type FieldsSortKey,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { buildFarmFieldsColumns } from '@/components/farm/farm-fields-columns'
-import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -146,7 +144,6 @@ CatchmentGroupRow.displayName = 'CatchmentGroupRow'
 type FieldRowProps = {
   field: FieldRecord
   cells: Cell<FieldRecord, unknown>[]
-  isRules: boolean
   isSelected: boolean
   isHovered: boolean
   isChanged: boolean
@@ -162,7 +159,6 @@ const FieldRow = memo(
   ({
     field,
     cells,
-    isRules,
     isSelected,
     isHovered,
     isChanged,
@@ -184,27 +180,20 @@ const FieldRow = memo(
     return (
       <TableRow
         ref={setRowElement}
-        onClick={isRules ? undefined : openPanel}
-        onDoubleClick={isRules ? undefined : () => onZoom(field.id)}
+        onClick={openPanel}
+        onDoubleClick={() => onZoom(field.id)}
         onMouseEnter={() => onHover(field.id)}
         onMouseLeave={() => onHover(null)}
-        onKeyDown={
-          isRules
-            ? undefined
-            : (event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                openPanel()
-              }
-        }
-        tabIndex={isRules ? -1 : 0}
-        aria-label={isRules ? undefined : `Vis detaljer for mark ${field.name}`}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          openPanel()
+        }}
+        tabIndex={0}
+        aria-label={`Vis detaljer for mark ${field.name}`}
         data-selected={isSelected}
         className={cn(
-          'group h-10 hover:bg-muted full:h-13',
-          isRules
-            ? 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset'
-            : 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+          'group h-10 cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset full:h-13',
           isDimmed && 'opacity-50',
           isSelected
             ? 'bg-secondary hover:bg-secondary'
@@ -236,11 +225,6 @@ type FarmFieldsListProps = {
   farmId: string
   sortedFields: FieldRecord[]
   isSimulationView?: boolean
-  simulationId?: string
-  mode?: FarmInspectorMode
-  lockingFieldId: string | null
-  onToggleLock: (field: FieldRecord) => void
-  onBindRotation: (field: FieldRecord) => void
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
   selectedFieldId: string | null
@@ -252,7 +236,6 @@ type FarmFieldsListProps = {
   catchmentColor: (catchmentId: number | null) => string
   onHighlightedCatchmentKeyChange: (key: string | null) => void
   onZoomToField?: (fieldId: string) => void
-  focusRequest?: { fieldId: string; nonce: number }
   selectedYearIndex?: number | null
   paneWidth?: number
   onRequiredWidthChange?: (width: number) => void
@@ -265,11 +248,6 @@ export const FarmFieldsList = ({
   farmId,
   sortedFields,
   isSimulationView = false,
-  simulationId,
-  mode = 'values',
-  lockingFieldId,
-  onToggleLock,
-  onBindRotation,
   sort,
   onSortChange,
   selectedFieldId,
@@ -281,7 +259,6 @@ export const FarmFieldsList = ({
   catchmentColor,
   onHighlightedCatchmentKeyChange,
   onZoomToField,
-  focusRequest,
   selectedYearIndex = null,
   paneWidth,
   onRequiredWidthChange,
@@ -291,17 +268,12 @@ export const FarmFieldsList = ({
 }: FarmFieldsListProps) => {
   const rowElements = useRef(new Map<string, HTMLTableRowElement>())
   const scrolledFieldId = useRef<string | null>(null)
-  const focusedNonce = useRef(focusRequest?.nonce ?? null)
   const rootRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
   const headerRef = useRef<HTMLTableSectionElement>(null)
   const [headerHeight, setHeaderHeight] = useState(40)
   const [requiredWidth, setRequiredWidth] = useState<number | null>(null)
   const [rootWidth, setRootWidth] = useState<number | null>(null)
-
-  const isRules = mode === 'rules'
-  const canEditRules = isRules && isSimulationView && Boolean(simulationId)
-  const effectiveSort = resolveEffectiveFieldsSort(sort, isRules)
 
   const maxYears = Math.max(
     0,
@@ -310,9 +282,8 @@ export const FarmFieldsList = ({
 
   const { data: liveFields = [] } = useFarmFields(farmId)
   const changedFields = useMemo(
-    () =>
-      isRules ? new Set<string>() : changedFieldIds(sortedFields, liveFields),
-    [isRules, sortedFields, liveFields],
+    () => changedFieldIds(sortedFields, liveFields),
+    [sortedFields, liveFields],
   )
 
   const quota = useMemo(
@@ -320,15 +291,16 @@ export const FarmFieldsList = ({
     [sortedFields, isSimulationView],
   )
 
-  const runStarts = useMemo(() => {
-    if (isRules) return null
-    return new Map(
-      catchmentRuns(sortedFields, isSimulationView).map((run) => [
-        run.firstFieldId,
-        run,
-      ]),
-    )
-  }, [isRules, sortedFields, isSimulationView])
+  const runStarts = useMemo(
+    () =>
+      new Map(
+        catchmentRuns(sortedFields, isSimulationView).map((run) => [
+          run.firstFieldId,
+          run,
+        ]),
+      ),
+    [sortedFields, isSimulationView],
+  )
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => readStoredColumnVisibility(isSimulationView),
@@ -392,52 +364,33 @@ export const FarmFieldsList = ({
     tableRef.current?.parentElement?.scrollTo({ top: 0 })
   }, [highlightedCatchmentKey])
 
-  useEffect(() => {
-    if (!focusRequest || focusRequest.nonce === focusedNonce.current) return
-    focusedNonce.current = focusRequest.nonce
-    const row = rowElements.current.get(focusRequest.fieldId)
-    if (!row) return
-    row.focus({ preventScroll: true })
-    row.scrollIntoView({ block: 'nearest' })
-  }, [focusRequest])
-
   const columns = useMemo(
     () =>
       buildFarmFieldsColumns({
         isSimulationView,
-        mode,
         maxYears,
         selectedYearIndex,
         fields: sortedFields,
         quota,
         catchmentLabel,
-        canEditRules,
-        lockingFieldId,
-        onToggleLock,
-        onBindRotation,
         detachingFieldIds,
         onRequestDetach,
       }),
     [
       isSimulationView,
-      mode,
       maxYears,
       selectedYearIndex,
       sortedFields,
       quota,
       catchmentLabel,
-      canEditRules,
-      lockingFieldId,
-      onToggleLock,
-      onBindRotation,
       detachingFieldIds,
       onRequestDetach,
     ],
   )
 
   const sorting: SortingState = useMemo(
-    () => [{ id: effectiveSort.key, desc: effectiveSort.direction === 'desc' }],
-    [effectiveSort],
+    () => [{ id: sort.key, desc: sort.direction === 'desc' }],
+    [sort],
   )
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
@@ -556,22 +509,10 @@ export const FarmFieldsList = ({
         style={{ '--list-header-height': `${headerHeight}px` } as CSSProperties}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <div
-          className={cn(
-            'flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-xs',
-            isRules && 'border-rules/30',
-          )}
-        >
+        <div className="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2">
             {search}
-            {isRules ? (
-              <p className="text-xs text-muted-foreground">
-                Hvad optimeringen må gøre ved hver mark. Ændringer her styrer
-                næste kørsel - de er ikke tal, marken har.
-              </p>
-            ) : (
-              <>
-                <CropGroupLegend fields={sortedFields} />
+            <CropGroupLegend fields={sortedFields} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -604,8 +545,6 @@ export const FarmFieldsList = ({
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </>
-            )}
           </div>
           <Table
             ref={tableRef}
@@ -614,12 +553,7 @@ export const FarmFieldsList = ({
           >
             <TableHeader
               ref={headerRef}
-              className={cn(
-                '[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:border-b',
-                isRules
-                  ? '[&_th]:bg-card [&_th]:bg-linear-to-b [&_th]:from-rules/10 [&_th]:to-rules/10'
-                  : '[&_th]:bg-muted',
-              )}
+              className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:border-b [&_th]:bg-muted"
             >
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -661,14 +595,12 @@ export const FarmFieldsList = ({
                 const isDimmed =
                   highlightedCatchmentKey !== null &&
                   !fieldInCatchment(field, highlightedCatchmentKey)
-                const rowAccent = isRules
-                  ? null
-                  : isSelected
-                    ? 'before:bg-primary'
-                    : QUOTA_STATUS_STYLES[
-                        getFieldQuotaStatus(field, isSimulationView).level
-                      ].rowAccent
-                const run = runStarts?.get(field.id)
+                const rowAccent = isSelected
+                  ? 'before:bg-primary'
+                  : QUOTA_STATUS_STYLES[
+                      getFieldQuotaStatus(field, isSimulationView).level
+                    ].rowAccent
+                const run = runStarts.get(field.id)
                 return (
                   <Fragment key={field.id}>
                     {run ? (
@@ -686,7 +618,6 @@ export const FarmFieldsList = ({
                     <FieldRow
                       field={field}
                       cells={cells}
-                      isRules={isRules}
                       isSelected={isSelected}
                       accentClassName={
                         rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined

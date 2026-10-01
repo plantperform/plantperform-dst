@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 export type SegmentedControlOption<T extends string> = {
   value: T
   label: string
-  icon: LucideIcon
+  icon?: LucideIcon
   title?: string
   disabled?: boolean
   activeClassName?: string
@@ -68,7 +68,7 @@ export const SegmentedControl = <T extends string>({
             )}
             onClick={() => onValueChange(option.value)}
           >
-            <Icon className="size-3.5" aria-hidden="true" />
+            {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
             <span className={labelClassName}>{option.label}</span>
           </button>
         </AppTooltip>

@@ -7,20 +7,20 @@ import type {
   RotationCategoryOption,
 } from '@/api/types'
 import { formatFieldCount, formatNumber } from '@/lib/field-domain'
-import {
-  SOWING_DATE_INTERVALS,
-  sowingDateEffectPercent,
-} from '@/lib/nles5-detail-labels'
+import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
   CUSTOM_FERTILISER,
   NO_FERTILISER,
+  catchCropSowingLabel,
   combinationCount,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
   isPresetModified,
+  nNormPercentagesLabel,
   selectedCountsByCategory,
   selectedRotations,
   toCreateSimulationInput,
+  yesNo,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 
@@ -32,8 +32,6 @@ type SimulationSummaryProps = {
   // Indexes of the steps each section links back to.
   onEditStep: (stepIndex: number) => void
 }
-
-const yesNo = (value: boolean) => (value ? 'Ja' : 'Nej')
 
 const Section = ({
   title,
@@ -78,9 +76,7 @@ export const SimulationSummary = ({
   const input = toCreateSimulationInput(values)
   const fertiliser = input.fertiliser!
   const rotationVariants = input.allowedRotationVariants ?? []
-  const nNormPercentages = [...(input.allowedNNormPercentages ?? [])].sort(
-    (a, b) => Number(a) - Number(b),
-  )
+  const nNormPercentages = input.allowedNNormPercentages ?? []
 
   const mismatchCount = farmingSystemMismatchCount(
     categories,
@@ -93,9 +89,6 @@ export const SimulationSummary = ({
       : `${values.fertiliserChoice}${
           isPresetModified(values, fertiliserPresets) ? ' (tilpasset)' : ''
         }`
-  const sowingInterval = SOWING_DATE_INTERVALS.find(
-    (interval) => interval.date === input.catchCropSowingDate,
-  )
   const combinations = combinationCount(values, fieldCount)
 
   return (
@@ -170,16 +163,17 @@ export const SimulationSummary = ({
           <p>Kun organisk gødning: {yesNo(fertiliser.onlyOrganic)}</p>
           <p>
             N-norm <GlossaryInfo term="nNorm" />:{' '}
-            {nNormPercentages.map((value) => `${value} %`).join(', ')}
+            {nNormPercentagesLabel(nNormPercentages)}
           </p>
         </Section>
 
         <Section title="Dyrkningspraksis" stepIndex={3} onEditStep={onEditStep}>
           <p>
             Efterafgrøde <GlossaryInfo term="catchCrop" />:{' '}
-            {input.catchCropDailyBasis
-              ? `${input.catchCropSowingDate} · dagsbasis §38`
-              : `${sowingInterval?.label ?? input.catchCropSowingDate} · trappesats §37`}{' '}
+            {catchCropSowingLabel(
+              input.catchCropSowingDate ?? '',
+              Boolean(input.catchCropDailyBasis),
+            )}{' '}
             · EEA-effekt{' '}
             {formatNumber(
               sowingDateEffectPercent(
