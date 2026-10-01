@@ -694,6 +694,28 @@ export const NewScenarioPanel = ({
               message={errors.nNormPercentages?.message}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Forfrugtsværdi</Label>
+            <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                {...register('includePrecedingCropValue')}
+              />
+              <span>
+                <span className="font-medium">Regn forfrugtsværdien med</span>
+                <span className="block text-xs text-muted-foreground">
+                  Forfrugtsværdien trækkes fra næste afgrødes kvælstofnorm. Lav
+                  en kopi uden den med Ret grundlag, og sammenlign de to
+                  simuleringer.
+                </span>
+                <span className="block text-xs text-amber-800">
+                  Valget indgår ikke i beregningen endnu.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       ) : null}
 

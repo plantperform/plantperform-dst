@@ -17,6 +17,7 @@ import {
   farmingSystemMismatchMessage,
   isPresetModified,
   nNormPercentagesLabel,
+  precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
   toCreateSimulationInput,
@@ -77,6 +78,7 @@ export const SimulationSummary = ({
   const fertiliser = input.fertiliser!
   const rotationVariants = input.allowedRotationVariants ?? []
   const nNormPercentages = input.allowedNNormPercentages ?? []
+  const includePrecedingCropValue = input.includePrecedingCropValue !== false
 
   const mismatchCount = farmingSystemMismatchCount(
     categories,
@@ -164,6 +166,15 @@ export const SimulationSummary = ({
           <p>
             N-norm <GlossaryInfo term="nNorm" />:{' '}
             {nNormPercentagesLabel(nNormPercentages)}
+          </p>
+          <p>
+            Forfrugtsværdi: {precedingCropValueLabel(includePrecedingCropValue)}
+            {includePrecedingCropValue ? null : (
+              <span className="text-amber-800">
+                {' '}
+                · indgår ikke i beregningen endnu
+              </span>
+            )}
           </p>
         </Section>
 
