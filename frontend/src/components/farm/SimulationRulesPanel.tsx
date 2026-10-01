@@ -136,11 +136,9 @@ export const SimulationRulesPanel = ({
       cropAreaRangeError(draft, rangeByCode.get(draft.cropCode)) !== null,
   )
 
-  const savedMaxNLoadByKey = new Map(
-    simulation.constraints.maxNLoadByCatchment.map((cap) => [
-      catchmentKey(cap.catchmentId),
-      cap.maxNLoadKg,
-    ]),
+  const savedMaxNLoad = effectiveMaxNLoadByCatchment(
+    fields,
+    simulation.constraints.maxNLoadByCatchment,
   )
   const isDirty =
     minFeedUnits !== simulation.constraints.minFeedUnits ||
@@ -148,7 +146,7 @@ export const SimulationRulesPanel = ({
     maxNLoadByCatchment.some(
       (cap) =>
         cap.maxNLoadKg !==
-        (savedMaxNLoadByKey.get(catchmentKey(cap.catchmentId)) ?? null),
+        (savedMaxNLoad.get(catchmentKey(cap.catchmentId)) ?? null),
     ) ||
     !sameCropAreaLimits(cropAreaLimits, simulation.constraints.cropAreaLimits)
 
