@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
 import {
   computeFieldTotals,
   emptyMeasures,
   fieldFigure,
   formatPerHa,
   formatSigned,
+  summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
 } from '@/lib/field-domain'
@@ -116,6 +117,52 @@ describe('formatPerHa', () => {
     expect(formatPerHa(6123.4, 'feedUnits')).toBe('6.123 FE/ha')
     expect(formatPerHa(0.71, 'nLoad')).toBe('0,7 kg N/ha')
     expect(formatPerHa(3.64, 'leaching')).toBe('3,6 kg N/ha')
+  })
+})
+
+describe('summarizeCropDistribution', () => {
+  const yearResult = (
+    leachingKgNHa: number,
+    cropCode = 1,
+    cropName = 'Vårbyg',
+  ): RotationCandidateYearResult => ({
+    year: { cropCode, cropName, undersownCropCode: null, undersownCropName: null },
+    leachingKgNHa,
+    leachingDetail: {},
+    dbDkkHa: 0,
+    dbDetail: {},
+    precedingCropValueKgNHa: 0,
+    appliedManureUtilisedKgNHa: 0,
+    appliedMineralFertiliserKgNHa: 0,
+    manureOrganicBoundKgNHa: 0,
+    manureTonsPerHa: 0,
+    cropNormKgNHa: null,
+    nNormPct: 0,
+  })
+
+  it('excludes a non-kvotegivende mark from the udledning shown per crop', () => {
+    const quotaField = field({ id: 'a', areaHa: 2, retention: 0 })
+    const excludedField = field({
+      id: 'b',
+      areaHa: 3,
+      retention: 0,
+      quotaEligible: false,
+    })
+    const yearsByFieldId = {
+      a: [yearResult(10)],
+      b: [yearResult(10)],
+    }
+    const result = summarizeCropDistribution(
+      [quotaField, excludedField],
+      yearsByFieldId,
+      null,
+      'crop',
+    )
+    expect(result).toHaveLength(1)
+    // Both marks' area counts, but only the quota-eligible mark's leaching does -
+    // without the exclusion this would be 50 (10 kg N/ha x 2 ha + 10 kg N/ha x 3 ha).
+    expect(result[0].areaHa).toBe(5)
+    expect(result[0].nLoadKgHa * result[0].areaHa).toBe(20)
   })
 })
 
