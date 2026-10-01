@@ -15,6 +15,7 @@ type SimulationRulesPanelProps = {
   onHoveredFieldChange: (fieldId: string | null) => void
   onToggleLock: (field: FieldRecord) => void
   onBindRotation: (field: FieldRecord) => void
+  onEditBasis: (simulation: Simulation) => void
 }
 
 export const SimulationRulesPanel = ({
@@ -27,6 +28,7 @@ export const SimulationRulesPanel = ({
   onHoveredFieldChange,
   onToggleLock,
   onBindRotation,
+  onEditBasis,
 }: SimulationRulesPanelProps) => (
   <div className="@container flex min-w-0 flex-col overflow-hidden rounded-lg border bg-background shadow-sm">
     <div className="border-b border-rules/20 bg-rules/10 px-6 py-4">
@@ -46,7 +48,10 @@ export const SimulationRulesPanel = ({
         simulation={simulation}
         fields={fields}
       />
-      <SimulationBasisCard simulation={simulation} />
+      <SimulationBasisCard
+        simulation={simulation}
+        onEditBasis={() => onEditBasis(simulation)}
+      />
       <FieldRulesCard
         fields={fields}
         lockingFieldId={lockingFieldId}

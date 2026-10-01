@@ -4,8 +4,10 @@ import type {
   CreateSimulationInput,
   FarmingSystem,
   FertiliserPresetOption,
+  FertiliserSettings,
   RotationCategoryOption,
   RotationOption,
+  Simulation,
 } from '@/api/types'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
@@ -475,5 +477,60 @@ export const toCreateSimulationInput = (
     precisionFarming: values.precisionFarming,
     earlySowing: values.earlySowing,
     intermediateCrop: values.intermediateCrop,
+  }
+}
+
+export const copiedSimulationName = (name: string) => `${name} (kopi)`
+
+const fertiliserChoiceOf = (
+  fertiliser: FertiliserSettings,
+  presets: FertiliserPresetOption[],
+): string => {
+  if (fertiliser.orgMineralN === 0 && fertiliser.mineralSharePct === 100) {
+    return NO_FERTILISER
+  }
+  const preset = presets.find(
+    (option) =>
+      option.fertiliser.orgMineralN === fertiliser.orgMineralN &&
+      option.fertiliser.mineralSharePct === fertiliser.mineralSharePct,
+  )
+  return preset?.name ?? CUSTOM_FERTILISER
+}
+
+export const simulationToFormValues = (
+  simulation: Simulation,
+  presets: FertiliserPresetOption[],
+  offeredNNormPercentages: string[],
+): SimulationFormValues => {
+  const { fertiliser, catchCropDailyBasis, catchCropSowingDate } = simulation
+  const isInterval = SOWING_DATE_INTERVALS.some(
+    (interval) => interval.date === catchCropSowingDate,
+  )
+  return {
+    ...DEFAULT_SIMULATION_FORM_VALUES,
+    name: copiedSimulationName(simulation.name),
+    farmingSystem: fertiliser.farmingSystem,
+    rotationVariants: simulation.rotationVariants,
+    nNormPercentages: copiedNNormPercentages(
+      simulation.nNormPercentages,
+      fertiliser.farmingSystem,
+      offeredNNormPercentages,
+    ),
+    fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),
+    orgMineralN: String(fertiliser.orgMineralN),
+    mineralSharePct: String(fertiliser.mineralSharePct),
+    onlyOrganic: fertiliser.onlyOrganic,
+    nContentKgPerTon: String(fertiliser.nContentKgPerTon),
+    catchCropDailyBasis,
+    catchCropSowingInterval:
+      !catchCropDailyBasis && isInterval
+        ? catchCropSowingDate
+        : DEFAULT_SIMULATION_FORM_VALUES.catchCropSowingInterval,
+    catchCropSowingDate: catchCropDailyBasis
+      ? catchCropSowingDate
+      : DEFAULT_SIMULATION_FORM_VALUES.catchCropSowingDate,
+    precisionFarming: simulation.precisionFarming,
+    earlySowing: simulation.earlySowing,
+    intermediateCrop: simulation.intermediateCrop,
   }
 }

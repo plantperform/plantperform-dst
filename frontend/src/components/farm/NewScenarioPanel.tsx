@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
 
@@ -10,7 +10,10 @@ import {
   useRotationCategories,
   useRotationNNormPercentages,
 } from '@/api/hooks'
-import { createSimulation } from '@/api/mutations'
+import {
+  createSimulation,
+  updateSimulationConstraints,
+} from '@/api/mutations'
 import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type {
   FieldRecord,
@@ -45,6 +48,7 @@ import {
   isStepValid,
   nNormPercentagesFor,
   simulationFormSchema,
+  simulationToFormValues,
   stepFields,
   toCreateSimulationInput,
   toggleNNormPercentage,
@@ -55,6 +59,7 @@ import { cn } from '@/lib/utils'
 type NewScenarioPanelProps = {
   farmId: string
   fields: FieldRecord[]
+  source: Simulation | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSimulationCreated: (simulation: Simulation) => void
@@ -72,6 +77,7 @@ const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
 export const NewScenarioPanel = ({
   farmId,
   fields,
+  source,
   open,
   onOpenChange,
   onSimulationCreated,
@@ -125,6 +131,32 @@ export const NewScenarioPanel = ({
 
   const hasFields = fields.length > 0
 
+  const prefillKey = !open
+    ? null
+    : source === null
+      ? 'blank'
+      : presetsQuery.isLoading || nNormQuery.isLoading
+        ? null
+        : source.id
+  const [prefilled, setPrefilled] = useState<{
+    key: string
+    values: SimulationFormValues | null
+  }>({ key: 'blank', values: null })
+  if (prefillKey !== null && prefillKey !== prefilled.key) {
+    setPrefilled({
+      key: prefillKey,
+      values: source
+        ? simulationToFormValues(source, fertiliserPresets, nNormOptions)
+        : DEFAULT_SIMULATION_FORM_VALUES,
+    })
+    setStepIndex(0)
+    setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)
+    setCreateError(null)
+  }
+  useEffect(() => {
+    if (prefilled.values) reset(prefilled.values)
+  }, [prefilled, reset])
+
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
   const updateValue = <K extends keyof SimulationFormValues>(
@@ -170,6 +202,7 @@ export const NewScenarioPanel = ({
     setStepIndex(0)
     setFurthestStepIndex(0)
     setCreateError(null)
+    setPrefilled({ key: 'blank', values: null })
   }
 
   const applyFertiliserChoice = (choice: string) => {
@@ -219,9 +252,21 @@ export const NewScenarioPanel = ({
       setIsCreating(false)
       return
     }
-    void mutate(simulationsKey(farmId))
     let runError: string | null = null
-    if (getValues().optimizeOnCreate) {
+    if (source) {
+      try {
+        simulation = await updateSimulationConstraints(
+          farmId,
+          simulation.id,
+          source.constraints,
+        )
+      } catch {
+        runError =
+          'Simuleringen blev oprettet, men grænserne kunne ikke kopieres.'
+      }
+    }
+    void mutate(simulationsKey(farmId))
+    if (runError === null && getValues().optimizeOnCreate) {
       try {
         startDefaultRun(
           farmId,
@@ -274,9 +319,13 @@ export const NewScenarioPanel = ({
       open={open}
       onOpenChange={onOpenChange}
       title="Ny simulering"
-      description={`Simuleringen oprettes med de ${fields.length} ${
-        fields.length === 1 ? 'mark' : 'marker'
-      }, der er valgt under Afgrødehistorik.`}
+      description={
+        source
+          ? `Udfyldt med grundlaget fra ${source.name}, som ikke ændres. Grænserne for hele bedriften følger med over i den nye simulering.`
+          : `Simuleringen oprettes med de ${fields.length} ${
+              fields.length === 1 ? 'mark' : 'marker'
+            }, der er valgt under Afgrødehistorik.`
+      }
       steps={steps}
       currentIndex={stepIndex}
       onStepSelect={(index) => {

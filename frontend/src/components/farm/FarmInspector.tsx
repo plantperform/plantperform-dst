@@ -82,6 +82,7 @@ type FarmInspectorProps = {
   onSelectedYearIndexChange: (index: number | null) => void
   optimizeDialogOpen: boolean
   onOptimizeDialogOpenChange: (open: boolean) => void
+  onEditBasis: (simulation: Simulation) => void
   onError: (message: string | null) => void
 }
 
@@ -110,6 +111,7 @@ export const FarmInspector = ({
   onSelectedYearIndexChange,
   optimizeDialogOpen,
   onOptimizeDialogOpenChange,
+  onEditBasis,
   onError,
 }: FarmInspectorProps) => {
   const optimizationRun = useOptimizationRun(selectedSimulation?.id)
@@ -367,6 +369,7 @@ export const FarmInspector = ({
           onHoveredFieldChange={setHoveredFieldId}
           onToggleLock={onToggleLock}
           onBindRotation={onBindRotation}
+          onEditBasis={onEditBasis}
         />
       </div>
     ) : null

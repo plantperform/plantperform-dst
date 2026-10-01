@@ -126,6 +126,12 @@ export const FarmDetailPage = () => {
   )
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false)
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
+  const [newSimulationSource, setNewSimulationSource] =
+    useState<Simulation | null>(null)
+  const openNewSimulation = (source: Simulation | null) => {
+    setNewSimulationSource(source)
+    setNewSimulationOpen(true)
+  }
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
   const [toast, setToast] = useState<{ id: number; message: string } | null>(
@@ -329,7 +335,7 @@ export const FarmDetailPage = () => {
             void simulationActions.copySimulation(simulation)
           }
           onDeleteSimulation={setSimulationToDelete}
-          onNewSimulation={() => setNewSimulationOpen(true)}
+          onNewSimulation={() => openNewSimulation(null)}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />
@@ -385,6 +391,7 @@ export const FarmDetailPage = () => {
                   onSelectedYearIndexChange={setSelectedYearIndex}
                   optimizeDialogOpen={optimizeDialogOpen}
                   onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                  onEditBasis={openNewSimulation}
                   onError={showErrorToast}
                 />
               }
@@ -404,7 +411,7 @@ export const FarmDetailPage = () => {
                     void simulationActions.copySimulation(simulation)
                   }
                   onDeleteSimulation={setSimulationToDelete}
-                  onNewSimulation={() => setNewSimulationOpen(true)}
+                  onNewSimulation={() => openNewSimulation(null)}
                 />
               }
             />
@@ -434,6 +441,7 @@ export const FarmDetailPage = () => {
           <NewScenarioPanel
             farmId={loadedFarm.id}
             fields={fields}
+            source={newSimulationSource}
             open={newSimulationOpen}
             onOpenChange={setNewSimulationOpen}
             onSimulationCreated={(simulation) =>
