@@ -241,15 +241,31 @@ export const FieldPanel = ({
           <MetricCard
             label="Udledning"
             term="nLoad"
-            value={calculated ? nLoadFigure.value : 'Ikke beregnet'}
-            detail={calculated ? nLoadFigure.total : undefined}
-            muted={!calculated}
+            value={
+              !field.quotaEligible
+                ? 'Ikke i udledningsberegningen'
+                : calculated
+                  ? nLoadFigure.value
+                  : 'Ikke beregnet'
+            }
+            detail={
+              field.quotaEligible && calculated ? nLoadFigure.total : undefined
+            }
+            muted={!field.quotaEligible || !calculated}
           />
           <MetricCard
             label="Udvaskning"
-            value={calculated ? leachingFigure.value : 'Ikke beregnet'}
-            detail={calculated ? leachingFigure.total : undefined}
-            muted={!calculated}
+            value={
+              !field.quotaEligible
+                ? 'Ikke i udledningsberegningen'
+                : calculated
+                  ? leachingFigure.value
+                  : 'Ikke beregnet'
+            }
+            detail={
+              field.quotaEligible && calculated ? leachingFigure.total : undefined
+            }
+            muted={!field.quotaEligible || !calculated}
           />
           <MetricCard
             label="Foderenheder"

@@ -952,9 +952,14 @@ export const summarizeCropDistribution = (
         areaHa: 0,
         nLoadKg: 0,
       }
-      const yearNLoad = yearNLoadKgHa(yearResult.leachingKgNHa, field.retention)
       totals.areaHa += areaPerYear
-      totals.nLoadKg += yearNLoad * areaPerYear
+      // A non-kvotegivende mark's udledning is excluded from every other
+      // aggregate (see buildFieldTotals, byYear/byCatchment above) - keep
+      // this breakdown consistent rather than quietly counting it back in.
+      if (field.quotaEligible) {
+        const yearNLoad = yearNLoadKgHa(yearResult.leachingKgNHa, field.retention)
+        totals.nLoadKg += yearNLoad * areaPerYear
+      }
       totalsById.set(id, totals)
     }
   }

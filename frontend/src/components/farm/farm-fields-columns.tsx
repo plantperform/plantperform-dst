@@ -153,6 +153,7 @@ type NumericMetricColumnConfig = {
   label: string
   heading: string
   emptyCell: (placement: 'cell' | 'footer') => ReactNode
+  quotaGatedCell?: (placement: 'cell' | 'footer') => ReactNode
 }
 
 const renderMetricFigure = ({ value, total }: PerHaFigure): ReactNode => (
@@ -162,12 +163,16 @@ const renderMetricFigure = ({ value, total }: PerHaFigure): ReactNode => (
   </>
 )
 
+const notInUdledningCell = () => (
+  <span className="text-muted-foreground">Ikke i udledningsberegningen</span>
+)
+
 const numericMetricColumn = (
   config: NumericMetricColumnConfig,
   isSimulationView: boolean,
   totals: FieldTotals,
 ): ColumnDef<FieldRecord, unknown> => {
-  const { key, label, heading, emptyCell } = config
+  const { key, label, heading, emptyCell, quotaGatedCell } = config
   return {
     accessorKey: key,
     header: ({ column }) => (
@@ -180,6 +185,9 @@ const numericMetricColumn = (
     ),
     cell: ({ row }) => {
       const field = row.original
+      if (quotaGatedCell && !field.quotaEligible) {
+        return quotaGatedCell('cell')
+      }
       if (!isFieldCalculated(field, isSimulationView)) {
         return emptyCell('cell')
       }
@@ -694,6 +702,7 @@ export const buildFarmFieldsColumns = ({
         label: 'Kvælstofudledning (kg N/ha)',
         heading: 'Kvælstofudledning',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
+        quotaGatedCell: notInUdledningCell,
       },
       isSimulationView,
       totals,
@@ -704,6 +713,7 @@ export const buildFarmFieldsColumns = ({
         label: 'Udvaskning (kg N/ha)',
         heading: 'Udvaskning',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
+        quotaGatedCell: notInUdledningCell,
       },
       isSimulationView,
       totals,
