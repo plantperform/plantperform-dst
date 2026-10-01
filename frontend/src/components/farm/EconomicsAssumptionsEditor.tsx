@@ -7,6 +7,7 @@ import {
   CHOICE_TAB_IDLE_CLASS,
 } from '@/components/farm/choice-styles'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { useEconomics } from '@/components/farm/economics-context'
 import {
   CollapseButton,
   RULES_CARD_CLASS,
@@ -27,7 +28,6 @@ import {
   isQuantityCustomised,
   lineAmountDkkHa,
   lineQuantity,
-  NO_OVERRIDES,
   parseEconomicsInput,
   priceUsage,
   priceValue,
@@ -227,17 +227,11 @@ const LineSection = ({ title, total, children }: LineSectionProps) => (
   </section>
 )
 
-type EconomicsAssumptionsEditorProps = {
-  assumptions: EconomicsAssumptions
-}
-
-export const EconomicsAssumptionsEditor = ({
-  assumptions,
-}: EconomicsAssumptionsEditorProps) => {
+export const EconomicsAssumptionsEditor = () => {
   const id = useId()
+  const { assumptions, overrides, setOverrides } = useEconomics()
   const [expanded, setExpanded] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [overrides, setOverrides] = useState<EconomicsOverrides>(NO_OVERRIDES)
   const [activeCode, setActiveCode] = useState<number | null>(null)
   const [restoreCount, setRestoreCount] = useState(0)
   const usage = useMemo(() => priceUsage(assumptions), [assumptions])

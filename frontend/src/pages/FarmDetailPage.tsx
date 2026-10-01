@@ -20,6 +20,7 @@ import {
 import type { Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
+import { EconomicsProvider } from '@/components/farm/EconomicsProvider'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
   FarmContentSkeleton,
@@ -353,80 +354,85 @@ export const FarmDetailPage = () => {
           </div>
         ) : null}
         {loadedFarm ? (
-          <Routes>
-            <Route
-              index
-              element={
-                <FarmInspector
-                  farm={loadedFarm}
-                  fields={activeFields}
-                  selection={activeSelection}
-                  selectedSimulation={
-                    activeSelection.kind === 'simulation'
-                      ? simulations.find(
-                          (simulation) => simulation.id === activeSelection.id,
-                        )
-                      : undefined
-                  }
-                  fieldsLoading={simulationFieldsLoading}
-                  fieldsError={
-                    Boolean(simulationFieldsError) &&
-                    simulationFieldsData === undefined
-                  }
-                  fieldsRetrying={simulationFieldsValidating}
-                  onRetryFields={() => void retrySimulationFields()}
-                  mode={mode}
-                  onModeChange={changeMode}
-                  view={snappedView}
-                  effectiveView={effectiveView}
-                  onViewChange={selectView}
-                  onSplitAvailableChange={setSplitAvailable}
-                  onAddModeChange={setAddModeSnap}
-                  listSlack={listSlack}
-                  onListSlackChange={changeListSlack}
-                  selectedFieldId={selectedFieldId}
-                  onSelectedFieldChange={setSelectedFieldId}
-                  onSelectField={selectFieldFromSearch}
-                  selectedYearIndex={selectedYearIndex}
-                  onSelectedYearIndexChange={setSelectedYearIndex}
-                  optimizeDialogOpen={optimizeDialogOpen}
-                  onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-                  onEditBasis={openNewSimulation}
-                  onError={showErrorToast}
-                />
-              }
-            />
-            <Route
-              path="simulations"
-              element={
-                <SimulationOverview
-                  farmId={loadedFarm.id}
-                  fields={fields}
-                  simulations={simulations}
-                  selection={activeSelection}
-                  copyingSimulationId={simulationActions.copyingSimulationId}
-                  deletingSimulationId={simulationActions.deletingSimulationId}
-                  onOpen={openView}
-                  onCopySimulation={(simulation) =>
-                    void simulationActions.copySimulation(simulation)
-                  }
-                  onDeleteSimulation={setSimulationToDelete}
-                  onNewSimulation={() => openNewSimulation(null)}
-                />
-              }
-            />
-            <Route
-              path="simulations/compare"
-              element={
-                <SimulationComparison
-                  farmId={loadedFarm.id}
-                  fields={fields}
-                  simulations={simulations}
-                />
-              }
-            />
-            <Route path="*" element={<Navigate to={farmPath} replace />} />
-          </Routes>
+          <EconomicsProvider key={loadedFarm.id}>
+            <Routes>
+              <Route
+                index
+                element={
+                  <FarmInspector
+                    farm={loadedFarm}
+                    fields={activeFields}
+                    selection={activeSelection}
+                    selectedSimulation={
+                      activeSelection.kind === 'simulation'
+                        ? simulations.find(
+                            (simulation) =>
+                              simulation.id === activeSelection.id,
+                          )
+                        : undefined
+                    }
+                    fieldsLoading={simulationFieldsLoading}
+                    fieldsError={
+                      Boolean(simulationFieldsError) &&
+                      simulationFieldsData === undefined
+                    }
+                    fieldsRetrying={simulationFieldsValidating}
+                    onRetryFields={() => void retrySimulationFields()}
+                    mode={mode}
+                    onModeChange={changeMode}
+                    view={snappedView}
+                    effectiveView={effectiveView}
+                    onViewChange={selectView}
+                    onSplitAvailableChange={setSplitAvailable}
+                    onAddModeChange={setAddModeSnap}
+                    listSlack={listSlack}
+                    onListSlackChange={changeListSlack}
+                    selectedFieldId={selectedFieldId}
+                    onSelectedFieldChange={setSelectedFieldId}
+                    onSelectField={selectFieldFromSearch}
+                    selectedYearIndex={selectedYearIndex}
+                    onSelectedYearIndexChange={setSelectedYearIndex}
+                    optimizeDialogOpen={optimizeDialogOpen}
+                    onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                    onEditBasis={openNewSimulation}
+                    onError={showErrorToast}
+                  />
+                }
+              />
+              <Route
+                path="simulations"
+                element={
+                  <SimulationOverview
+                    farmId={loadedFarm.id}
+                    fields={fields}
+                    simulations={simulations}
+                    selection={activeSelection}
+                    copyingSimulationId={simulationActions.copyingSimulationId}
+                    deletingSimulationId={
+                      simulationActions.deletingSimulationId
+                    }
+                    onOpen={openView}
+                    onCopySimulation={(simulation) =>
+                      void simulationActions.copySimulation(simulation)
+                    }
+                    onDeleteSimulation={setSimulationToDelete}
+                    onNewSimulation={() => openNewSimulation(null)}
+                  />
+                }
+              />
+              <Route
+                path="simulations/compare"
+                element={
+                  <SimulationComparison
+                    farmId={loadedFarm.id}
+                    fields={fields}
+                    simulations={simulations}
+                  />
+                }
+              />
+              <Route path="*" element={<Navigate to={farmPath} replace />} />
+            </Routes>
+          </EconomicsProvider>
         ) : (
           <>
             <p role="status" className="sr-only">

@@ -5,7 +5,6 @@ import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptio
 import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
 import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
 import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
-import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
 
 type SimulationRulesPanelProps = {
   farmId: string
@@ -63,7 +62,7 @@ export const SimulationRulesPanel = ({
         onToggleLock={onToggleLock}
         onBindRotation={onBindRotation}
       />
-      <EconomicsAssumptionsEditor assumptions={EXAMPLE_ECONOMICS} />
+      <EconomicsAssumptionsEditor />
     </div>
   </div>
 )
