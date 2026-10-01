@@ -1,5 +1,12 @@
 import { Pencil } from 'lucide-react'
-import { useId, useMemo, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import {
   CHOICE_TAB_ACTIVE_CLASS,
@@ -120,6 +127,7 @@ type LineRowProps = {
     update: (current: EconomicsOverrides) => EconomicsOverrides,
   ) => void
   onRestore: (line: EconomicsLine) => void
+  registerRow: (lineId: string, element: HTMLDivElement | null) => void
 }
 
 const LineRow = ({
@@ -132,6 +140,7 @@ const LineRow = ({
   quantityEditable,
   onOverridesChange,
   onRestore,
+  registerRow,
 }: LineRowProps) => {
   const price = findPrice(assumptions, line.priceId)
   const customised =
@@ -145,7 +154,14 @@ const LineRow = ({
   const textClass = editing ? 'pt-1.5' : undefined
 
   return (
-    <div className={cn(ROW_GRID_CLASS, 'border-b py-2 text-[13px]')}>
+    <div
+      ref={(element) => registerRow(line.id, element)}
+      tabIndex={-1}
+      className={cn(
+        ROW_GRID_CLASS,
+        'border-b py-2 text-[13px] focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset',
+      )}
+    >
       <div className={cn('min-w-0', textClass)}>
         <p>
           {line.label}
@@ -229,12 +245,39 @@ const LineSection = ({ title, total, children }: LineSectionProps) => (
 
 export const EconomicsAssumptionsEditor = () => {
   const id = useId()
-  const { assumptions, overrides, setOverrides } = useEconomics()
+  const {
+    assumptions,
+    overrides,
+    setOverrides,
+    focusRequest,
+    clearFocusRequest,
+  } = useEconomics()
   const [expanded, setExpanded] = useState(true)
   const [editing, setEditing] = useState(false)
   const [activeCode, setActiveCode] = useState<number | null>(null)
   const [restoreCount, setRestoreCount] = useState(0)
+  const [shownFocus, setShownFocus] = useState<number | null>(null)
+  const rowElements = useRef(new Map<string, HTMLDivElement>())
   const usage = useMemo(() => priceUsage(assumptions), [assumptions])
+
+  if (focusRequest && focusRequest.nonce !== shownFocus) {
+    setShownFocus(focusRequest.nonce)
+    setExpanded(true)
+    setActiveCode(focusRequest.cropCode)
+  }
+
+  useEffect(() => {
+    if (!focusRequest) return
+    const row = rowElements.current.get(focusRequest.lineId)
+    row?.focus({ preventScroll: true })
+    row?.scrollIntoView({ block: 'center' })
+    clearFocusRequest()
+  }, [focusRequest, clearFocusRequest])
+
+  const registerRow = (lineId: string, element: HTMLDivElement | null) => {
+    if (element) rowElements.current.set(lineId, element)
+    else rowElements.current.delete(lineId)
+  }
 
   const active =
     assumptions.crops.find((crop) => crop.cropCode === activeCode) ??
@@ -268,6 +311,7 @@ export const EconomicsAssumptionsEditor = () => {
         quantityEditable={quantityEditable}
         onOverridesChange={setOverrides}
         onRestore={restore}
+        registerRow={registerRow}
       />
     ))
 

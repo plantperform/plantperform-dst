@@ -118,7 +118,8 @@ field" column is the name on the wire.
 | mængde | `quantity`, `quantityUnit`, `lineQuantity` | | Per hectare, e.g. 3 sprøjtninger or 140 kg udsæd |
 | kilde | `source` | | Where a standard price comes from |
 | fælles pris | shared price, `priceUsage` | | A price used by several crops, e.g. Pløjning med pakning |
-| tilpasset | `EconomicsOverrides`, `isPriceCustomised`, `isQuantityCustomised`, `isCropCustomised` | | The user's own value on top of the SEGES standard |
+| tilpasset | `EconomicsOverrides`, `isPriceCustomised`, `isQuantityCustomised`, `isLineCustomised`, `isCropCustomised` | | The user's own value on top of the SEGES standard |
+| sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine` | | The calculation under a field, where a changed economics line is marked (tilpasset) |
 
 ## Soil and calculation
 

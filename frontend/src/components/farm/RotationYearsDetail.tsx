@@ -1,11 +1,17 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
+import { EconomicsContext } from '@/components/farm/economics-context'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { shortCropName } from '@/lib/crop-groups'
+import {
+  customisedBreakdownLine,
+  type BreakdownRow,
+  type EconomicsLine,
+} from '@/lib/economics'
 import {
   nNormTargetKgNHa,
   ROTATION_START_CALENDAR_YEAR,
@@ -88,7 +94,7 @@ const calculateNLoad = (
 }
 
 type Row = {
-  label: string
+  label: React.ReactNode
   detail?: React.ReactNode
   value: string
   strong?: boolean
@@ -918,19 +924,72 @@ const LeachingDetailSection = ({
 
 type CostLine = { category: string; treatment: string; costDkkHa: number }
 
+const useCustomisedLine = (cropCode: number) => {
+  const economics = useContext(EconomicsContext)
+  return (row: BreakdownRow) =>
+    economics
+      ? customisedBreakdownLine(
+          economics.assumptions,
+          economics.overrides,
+          cropCode,
+          row,
+        )
+      : null
+}
+
+const CustomisedLabel = ({
+  label,
+  cropCode,
+  line,
+}: {
+  label: string
+  cropCode: number
+  line: EconomicsLine | null
+}) => {
+  const showLine = useContext(EconomicsContext)?.showLine
+  if (!line) return label
+  return (
+    <>
+      {label} (tilpasset)
+      <span className="block text-[11px] text-muted-foreground">
+        Beregnet med standarden
+        {showLine ? (
+          <>
+            {' · '}
+            <button
+              type="button"
+              className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => showLine(cropCode, line.id)}
+            >
+              Se i Økonomi
+            </button>
+          </>
+        ) : null}
+      </span>
+    </>
+  )
+}
+
 // One category total (for example, "Gødning") with the line items that add up
 // to it, expanded on click instead of showing only the aggregated sum.
 const CategoryBreakdownRow = ({
   label,
   total,
   lines,
+  cropCode,
 }: {
   label: string
   total: number
   lines: CostLine[]
+  cropCode: number
 }) => {
   const [open, setOpen] = useState(false)
   const hasBreakdown = lines.length > 0
+  const customisedLine = useCustomisedLine(cropCode)
+  const customisedLines = lines.map((l) =>
+    customisedLine({ kind: 'cost', category: label, treatment: l.treatment }),
+  )
+  const anyCustomised = customisedLines.some((line) => line !== null)
 
   return (
     <div className="border-t py-1.5">
@@ -944,6 +1003,7 @@ const CategoryBreakdownRow = ({
         <span className="text-muted-foreground">
           {hasBreakdown ? (open ? '▾ ' : '▸ ') : ''}
           {label}
+          {anyCustomised ? ' (tilpasset)' : null}
         </span>
         <span className="tabular-nums">−{fmt(total, 0)} kr/ha</span>
       </button>
@@ -954,7 +1014,13 @@ const CategoryBreakdownRow = ({
               key={index}
               className="flex justify-between gap-2 text-xs text-muted-foreground"
             >
-              <span>{l.treatment}</span>
+              <span>
+                <CustomisedLabel
+                  label={l.treatment}
+                  cropCode={cropCode}
+                  line={customisedLines[index]}
+                />
+              </span>
               <span className="tabular-nums">−{fmt(l.costDkkHa, 0)} kr/ha</span>
             </div>
           ))}
@@ -967,10 +1033,20 @@ const CategoryBreakdownRow = ({
 const EconomicDetailSection = ({
   detail,
   areaHa,
+  cropCode,
 }: {
   detail: Record<string, unknown>
   areaHa: number
+  cropCode: number
 }) => {
+  const customisedLine = useCustomisedLine(cropCode)
+  const customisedLabel = (label: string, row: BreakdownRow) => (
+    <CustomisedLabel
+      label={label}
+      cropCode={cropCode}
+      line={customisedLine(row)}
+    />
+  )
   const yieldAmount = num(detail.yieldAmount)
   const unit = String(detail.yieldUnit ?? '')
   const response = yieldResponse(yieldAmount, detail.yieldFactor)
@@ -1006,23 +1082,26 @@ const EconomicDetailSection = ({
       <DetailTable
         rows={[
           {
-            label: 'Udbytte',
+            label: customisedLabel('Udbytte', { kind: 'yield' }),
             detail: response
               ? `normudbytte ${fmt(response.normYield, 1)} × ${fmt(response.factor * 100, 1)} % (N under normen)`
               : undefined,
             value: `${fmt(yieldAmount, 1)} ${unit}`,
           },
           {
-            label: 'Salgspris',
+            label: customisedLabel('Salgspris', { kind: 'salePrice' }),
             value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}`,
           },
           {
-            label: 'Indtægt',
+            label: customisedLabel('Indtægt', { kind: 'revenue' }),
             detail: 'udbytte × salgspris',
             value: `${fmt(revenue, 0)} kr/ha`,
             strong: true,
           },
-          { label: 'Tilskud', value: `+${fmt(subsidy, 0)} kr/ha` },
+          {
+            label: customisedLabel('Tilskud', { kind: 'subsidy' }),
+            value: `+${fmt(subsidy, 0)} kr/ha`,
+          },
         ]}
       />
       <div>
@@ -1030,26 +1109,31 @@ const EconomicDetailSection = ({
           label="Gødning"
           total={fertiliserCost}
           lines={linesFor('Gødning')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Udsæd"
           total={seed}
           lines={linesFor('Udsæd')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Planteværn"
           total={cropProtection}
           lines={linesFor('Planteværn')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Markarbejde"
           total={fieldWork}
           lines={linesFor('Markarbejde')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Tørring/lagring"
           total={drying}
           lines={linesFor('Tørring/lagring')}
+          cropCode={cropCode}
         />
       </div>
       <DetailTable
@@ -1190,7 +1274,11 @@ export const RotationYearsDetail = ({
             areaHa={areaHa}
             retention={retention}
           />
-          <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
+          <EconomicDetailSection
+            detail={year.dbDetail}
+            areaHa={areaHa}
+            cropCode={year.year.cropCode}
+          />
 
           <div className="border-t pt-3">
             <button

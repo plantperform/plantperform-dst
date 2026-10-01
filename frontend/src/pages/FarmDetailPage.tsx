@@ -354,7 +354,14 @@ export const FarmDetailPage = () => {
           </div>
         ) : null}
         {loadedFarm ? (
-          <EconomicsProvider key={loadedFarm.id}>
+          <EconomicsProvider
+            key={loadedFarm.id}
+            onShowLine={
+              activeSelection.kind === 'simulation'
+                ? () => changeMode('rules')
+                : undefined
+            }
+          >
             <Routes>
               <Route
                 index

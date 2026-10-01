@@ -7,10 +7,19 @@ import {
 
 import type { EconomicsAssumptions, EconomicsOverrides } from '@/lib/economics'
 
+export type EconomicsFocusRequest = {
+  cropCode: number
+  lineId: string
+  nonce: number
+}
+
 export type EconomicsContextValue = {
   assumptions: EconomicsAssumptions
   overrides: EconomicsOverrides
   setOverrides: Dispatch<SetStateAction<EconomicsOverrides>>
+  focusRequest: EconomicsFocusRequest | null
+  clearFocusRequest: () => void
+  showLine?: (cropCode: number, lineId: string) => void
 }
 
 export const EconomicsContext = createContext<EconomicsContextValue | null>(

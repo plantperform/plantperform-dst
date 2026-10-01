@@ -171,15 +171,67 @@ export const isQuantityCustomised = (
   lineId: string,
 ): boolean => overrides.quantities[quantityKey(crop, lineId)] !== undefined
 
+export const isLineCustomised = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+  line: EconomicsLine,
+): boolean =>
+  isPriceCustomised(overrides, line.priceId) ||
+  isQuantityCustomised(overrides, crop, line.id)
+
 export const isCropCustomised = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
 ): boolean =>
-  cropLines(crop).some(
-    (line) =>
-      isPriceCustomised(overrides, line.priceId) ||
-      isQuantityCustomised(overrides, crop, line.id),
-  )
+  cropLines(crop).some((line) => isLineCustomised(overrides, crop, line))
+
+export type BreakdownRow =
+  | { kind: 'yield' }
+  | { kind: 'salePrice' }
+  | { kind: 'revenue' }
+  | { kind: 'subsidy' }
+  | { kind: 'cost'; category: string; treatment: string }
+
+const YIELD_LINE_LABEL = 'Udbytte'
+
+export const customisedBreakdownLine = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  cropCode: number,
+  row: BreakdownRow,
+): EconomicsLine | null => {
+  const crop = assumptions.crops.find((entry) => entry.cropCode === cropCode)
+  if (!crop) return null
+  const customised = (line: EconomicsLine) =>
+    isLineCustomised(overrides, crop, line)
+  const yieldLine = crop.revenue.find((line) => line.label === YIELD_LINE_LABEL)
+  switch (row.kind) {
+    case 'yield':
+      return yieldLine && isQuantityCustomised(overrides, crop, yieldLine.id)
+        ? yieldLine
+        : null
+    case 'salePrice':
+      return yieldLine && isPriceCustomised(overrides, yieldLine.priceId)
+        ? yieldLine
+        : null
+    case 'revenue':
+      return (
+        crop.revenue.find((line) => line !== yieldLine && customised(line)) ??
+        null
+      )
+    case 'subsidy':
+      return crop.subsidies.find(customised) ?? null
+    case 'cost': {
+      const category = COST_CATEGORIES.find(
+        (entry) => entry.label === row.category,
+      )
+      const line = category
+        ? crop.costs[category.id].find((entry) => entry.label === row.treatment)
+        : undefined
+      return line && customised(line) ? line : null
+    }
+  }
+}
 
 export const priceUsage = (
   assumptions: EconomicsAssumptions,

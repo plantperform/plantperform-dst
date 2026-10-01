@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cropTotals,
+  customisedBreakdownLine,
   formatEconomicsNumber,
   isCropCustomised,
   isPriceCustomised,
@@ -247,5 +248,139 @@ describe('formatEconomicsNumber', () => {
     expect(formatEconomicsNumber(0.05)).toBe('0,05')
     expect(formatEconomicsNumber(562.5)).toBe('562,5')
     expect(formatEconomicsNumber(1575)).toBe('1.575')
+  })
+})
+
+describe('customisedBreakdownLine', () => {
+  const BARLEY = crop(1, 'Vårbyg', {
+    revenue: [
+      line('Udbytte', 66, 'hkg/ha', 'barleyPrice'),
+      line('Halm', 3500, 'kg/ha', 'strawPrice'),
+    ],
+  })
+  const WITH_BARLEY: EconomicsAssumptions = {
+    prices: [
+      ...ASSUMPTIONS.prices,
+      {
+        id: 'barleyPrice',
+        label: 'Salgspris',
+        unit: 'kr/hkg',
+        valueDkk: 140,
+        source: 'SEGES',
+      },
+      {
+        id: 'strawPrice',
+        label: 'Halmpris',
+        unit: 'kr/kg',
+        valueDkk: 0.6,
+        source: 'SEGES',
+      },
+    ],
+    crops: [...ASSUMPTIONS.crops, BARLEY],
+  }
+  const ploughing = {
+    kind: 'cost',
+    category: 'Markarbejde',
+    treatment: 'ploughing',
+  } as const
+  const spraying = {
+    kind: 'cost',
+    category: 'Markarbejde',
+    treatment: 'spraying',
+  } as const
+
+  it('marks a cost line whose unit price or quantity is changed', () => {
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, NO_OVERRIDES, 22, ploughing),
+    ).toBeNull()
+    const ploughingPrice = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'ploughing',
+      900,
+    )
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, ploughingPrice, 22, ploughing)?.id,
+    ).toBe('ploughing')
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, ploughingPrice, 30, ploughing)?.id,
+    ).toBe('ploughing')
+    const peasSpraying = withQuantityOverride(NO_OVERRIDES, PEAS, 'spraying', 3)
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, peasSpraying, 30, spraying)?.id,
+    ).toBe('spraying')
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, peasSpraying, 22, spraying),
+    ).toBeNull()
+  })
+
+  it('tells a changed yield from a changed sale price', () => {
+    const moreYield = withQuantityOverride(NO_OVERRIDES, BARLEY, 'Udbytte', 70)
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'yield' })?.id,
+    ).toBe('Udbytte')
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'salePrice' }),
+    ).toBeNull()
+    const higherPrice = withPriceOverride(
+      WITH_BARLEY,
+      NO_OVERRIDES,
+      'barleyPrice',
+      150,
+    )
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, higherPrice, 1, {
+        kind: 'salePrice',
+      })?.id,
+    ).toBe('Udbytte')
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, higherPrice, 1, { kind: 'yield' }),
+    ).toBeNull()
+  })
+
+  it('marks Indtægt for halm and Tilskud for a subsidy', () => {
+    const strawPrice = withPriceOverride(
+      WITH_BARLEY,
+      NO_OVERRIDES,
+      'strawPrice',
+      0.8,
+    )
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, strawPrice, 1, { kind: 'revenue' })
+        ?.id,
+    ).toBe('Halm')
+    const moreYield = withQuantityOverride(NO_OVERRIDES, BARLEY, 'Udbytte', 70)
+    expect(
+      customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'revenue' }),
+    ).toBeNull()
+    const basicPayment = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'basicPayment',
+      1600,
+    )
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, basicPayment, 22, {
+        kind: 'subsidy',
+      })?.id,
+    ).toBe('basicPayment')
+  })
+
+  it('finds nothing outside the assumptions', () => {
+    const ploughingPrice = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'ploughing',
+      900,
+    )
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, ploughingPrice, 999, ploughing),
+    ).toBeNull()
+    expect(
+      customisedBreakdownLine(ASSUMPTIONS, ploughingPrice, 22, {
+        ...ploughing,
+        category: 'Gødning',
+      }),
+    ).toBeNull()
   })
 })
