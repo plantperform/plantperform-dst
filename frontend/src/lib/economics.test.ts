@@ -2,17 +2,24 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cropTotals,
+  cropYieldPct,
   customisedBreakdownLine,
   formatEconomicsNumber,
+  formatYieldPct,
   isCropCustomised,
   isPriceCustomised,
   isQuantityCustomised,
+  isYieldCustomised,
+  lineQuantity,
   NO_OVERRIDES,
   parseEconomicsInput,
+  parseYieldPctInput,
   priceUsage,
   quantityUnitLabel,
   withPriceOverride,
   withQuantityOverride,
+  withYieldPct,
+  YIELD_ADJUSTMENT_ID,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
@@ -195,6 +202,50 @@ describe('overrides', () => {
   })
 })
 
+describe('yield percentage', () => {
+  it('raises or lowers the yield of one crop and leaves its costs alone', () => {
+    const [grain] = RAPESEED.revenue
+    const moreYield = withYieldPct(NO_OVERRIDES, RAPESEED, 10)
+    expect(lineQuantity(moreYield, RAPESEED, grain)).toBeCloseTo(48.4)
+    expect(
+      cropTotals(ASSUMPTIONS, moreYield, RAPESEED).revenueDkkHa,
+    ).toBeCloseTo(16214)
+    expect(cropTotals(ASSUMPTIONS, moreYield, RAPESEED).costsDkkHa).toEqual(
+      cropTotals(ASSUMPTIONS, NO_OVERRIDES, RAPESEED).costsDkkHa,
+    )
+    expect(
+      lineQuantity(withYieldPct(NO_OVERRIDES, RAPESEED, -25), RAPESEED, grain),
+    ).toBe(33)
+    expect(isCropCustomised(moreYield, RAPESEED)).toBe(true)
+    expect(isCropCustomised(moreYield, PEAS)).toBe(false)
+  })
+
+  it('goes back to the standard when the percentage is cleared or set to 0', () => {
+    const moreYield = withYieldPct(NO_OVERRIDES, RAPESEED, 10)
+    expect(cropYieldPct(moreYield, RAPESEED)).toBe(10)
+    expect(isYieldCustomised(moreYield, RAPESEED)).toBe(true)
+    expect(
+      isYieldCustomised(withYieldPct(moreYield, RAPESEED, null), RAPESEED),
+    ).toBe(false)
+    expect(
+      isYieldCustomised(withYieldPct(moreYield, RAPESEED, 0), RAPESEED),
+    ).toBe(false)
+  })
+
+  it('reads a percentage above -100 and shows its sign', () => {
+    expect(parseYieldPctInput('12,5')).toEqual({ value: 12.5 })
+    expect(parseYieldPctInput('-15')).toEqual({ value: -15 })
+    expect(parseYieldPctInput('−15')).toEqual({ value: -15 })
+    expect(parseYieldPctInput('-100')).toEqual({
+      error: 'Skriv et tal over -100.',
+    })
+    expect(parseYieldPctInput('mere')).toEqual({ error: 'Skriv et tal.' })
+    expect(formatYieldPct(10)).toBe('+10')
+    expect(formatYieldPct(-12.5)).toBe('−12,5')
+    expect(formatYieldPct(0)).toBe('0')
+  })
+})
+
 describe('priceUsage', () => {
   it('counts the crops that use each price', () => {
     const usage = priceUsage(ASSUMPTIONS)
@@ -315,10 +366,10 @@ describe('customisedBreakdownLine', () => {
   })
 
   it('tells a changed yield from a changed sale price', () => {
-    const moreYield = withQuantityOverride(NO_OVERRIDES, BARLEY, 'Udbytte', 70)
+    const moreYield = withYieldPct(NO_OVERRIDES, BARLEY, 10)
     expect(
       customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'yield' })?.id,
-    ).toBe('Udbytte')
+    ).toBe(YIELD_ADJUSTMENT_ID)
     expect(
       customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'salePrice' }),
     ).toBeNull()
@@ -349,7 +400,7 @@ describe('customisedBreakdownLine', () => {
       customisedBreakdownLine(WITH_BARLEY, strawPrice, 1, { kind: 'revenue' })
         ?.id,
     ).toBe('Halm')
-    const moreYield = withQuantityOverride(NO_OVERRIDES, BARLEY, 'Udbytte', 70)
+    const moreYield = withYieldPct(NO_OVERRIDES, BARLEY, 10)
     expect(
       customisedBreakdownLine(WITH_BARLEY, moreYield, 1, { kind: 'revenue' }),
     ).toBeNull()

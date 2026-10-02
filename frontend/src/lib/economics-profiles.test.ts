@@ -22,6 +22,7 @@ import {
 const barleyPrice = (value: number): EconomicsOverrides => ({
   prices: { 'sale:1': value },
   quantities: {},
+  yieldPct: {},
 })
 
 const farm: EconomicsProfiles = {
@@ -132,6 +133,22 @@ describe('economics profiles', () => {
     expect(deleteProfileMessage(2)).toBe(
       '2 simuleringer bruger profilen og går tilbage til Standard.',
     )
+  })
+
+  it('reads profiles stored before the yield percentage existed', () => {
+    const stored = {
+      profiles: [
+        {
+          id: 'careful',
+          name: 'Forsigtig 2027',
+          overrides: { prices: { 'sale:1': 125 }, quantities: {} },
+        },
+      ],
+      simulationProfileIds: {},
+    }
+    expect(
+      parseStoredProfiles(JSON.stringify(stored)).profiles[0].overrides,
+    ).toEqual(barleyPrice(125))
   })
 
   it('reads what was stored and leaves out what it cannot use', () => {

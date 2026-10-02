@@ -25,22 +25,29 @@ import { cropGroupFor } from '@/lib/crop-groups'
 import {
   COST_CATEGORIES,
   cropTotals,
+  cropYieldPct,
   economicsInputText,
   findPrice,
   formatEconomicsNumber,
+  formatYieldPct,
   isCropCustomised,
   isPriceCustomised,
   isQuantityCustomised,
+  isYieldCustomised,
   lineAmountDkkHa,
   lineQuantity,
   parseEconomicsInput,
+  parseYieldPctInput,
   priceUsage,
   priceValue,
   quantityUnitLabel,
   withPriceOverride,
   withQuantityOverride,
+  withYieldPct,
+  YIELD_ADJUSTMENT_ID,
   type CropEconomics,
   type EconomicsAssumptions,
+  type EconomicsInput,
   type EconomicsLine,
   type EconomicsOverrides,
 } from '@/lib/economics'
@@ -56,19 +63,32 @@ const OVERVIEW_GRID_CLASS =
 const TABLE_HEAD_CLASS =
   'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
 
+const LINE_ROW_CLASS =
+  'border-b py-2 text-[13px] focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset'
+
 type OverridesChange = (current: EconomicsOverrides) => EconomicsOverrides
+
+type QuantityMode = 'editable' | 'fixed' | 'hidden'
 
 type NumberInputProps = {
   value: number
   unit: string
   label: string
+  parse?: (text: string) => EconomicsInput
+  format?: (value: number) => string
   onChange: (value: number) => void
 }
 
-const NumberInput = ({ value, unit, label, onChange }: NumberInputProps) => {
+const NumberInput = ({
+  value,
+  unit,
+  label,
+  parse = parseEconomicsInput,
+  onChange,
+}: NumberInputProps) => {
   const errorId = useId()
   const [draft, setDraft] = useState<string | null>(null)
-  const parsed = draft === null ? null : parseEconomicsInput(draft)
+  const parsed = draft === null ? null : parse(draft)
   const error = parsed !== null && 'error' in parsed ? parsed.error : null
 
   return (
@@ -84,7 +104,7 @@ const NumberInput = ({ value, unit, label, onChange }: NumberInputProps) => {
           onChange={(event) => {
             const text = event.target.value
             setDraft(text)
-            const next = parseEconomicsInput(text)
+            const next = parse(text)
             if ('value' in next) onChange(next.value)
           }}
           onBlur={() => {
@@ -100,19 +120,33 @@ const NumberInput = ({ value, unit, label, onChange }: NumberInputProps) => {
 
 type ValueCellProps = NumberInputProps & {
   editing: boolean
+  className?: string
 }
 
-const ValueCell = ({ editing, ...input }: ValueCellProps) =>
+const ValueCell = ({ editing, className, ...input }: ValueCellProps) =>
   editing ? (
     <NumberInput {...input} />
   ) : (
-    <div className="flex items-baseline justify-end gap-1.5">
+    <div className={cn('flex items-baseline justify-end gap-1.5', className)}>
       <span className="w-20 px-2.5 text-right tabular-nums">
-        {formatEconomicsNumber(input.value)}
+        {(input.format ?? formatEconomicsNumber)(input.value)}
       </span>
       <span className="w-16 text-xs text-muted-foreground">{input.unit}</span>
     </div>
   )
+
+const RestoreButton = ({ onClick }: { onClick: () => void }) => (
+  <>
+    {' · '}
+    <button
+      type="button"
+      className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={onClick}
+    >
+      Gendan standard
+    </button>
+  </>
+)
 
 const ValueHeading = ({ children }: { children: ReactNode }) => (
   <span className="flex justify-end gap-1.5">
@@ -128,7 +162,7 @@ type LineRowProps = {
   line: EconomicsLine
   usage: number
   editing: boolean
-  quantityEditable: boolean
+  quantityMode: QuantityMode
   onOverridesChange: (
     update: (current: EconomicsOverrides) => EconomicsOverrides,
   ) => void
@@ -143,7 +177,7 @@ const LineRow = ({
   line,
   usage,
   editing,
-  quantityEditable,
+  quantityMode,
   onOverridesChange,
   onRestore,
   registerRow,
@@ -163,10 +197,7 @@ const LineRow = ({
     <div
       ref={(element) => registerRow(line.id, element)}
       tabIndex={-1}
-      className={cn(
-        ROW_GRID_CLASS,
-        'border-b py-2 text-[13px] focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset',
-      )}
+      className={cn(ROW_GRID_CLASS, LINE_ROW_CLASS)}
     >
       <div className={cn('min-w-0', textClass)}>
         <p>
@@ -179,23 +210,17 @@ const LineRow = ({
           {source}
           {usage > 1 ? ` · fælles pris for ${usage} afgrøder` : null}
           {customised ? (
-            <>
-              {' · '}
-              <button
-                type="button"
-                className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => onRestore(line)}
-              >
-                Gendan standard
-              </button>
-            </>
+            <RestoreButton onClick={() => onRestore(line)} />
           ) : null}
         </p>
       </div>
-      {quantityEditable ? (
+      {quantityMode === 'hidden' ? (
+        <span className="col-span-2" aria-hidden="true" />
+      ) : (
         <>
           <ValueCell
-            editing={editing}
+            editing={editing && quantityMode === 'editable'}
+            className={textClass}
             value={quantity}
             unit={quantityUnitLabel(line.quantityUnit, quantity)}
             label={`Mængde for ${line.label}`}
@@ -212,8 +237,6 @@ const LineRow = ({
             ×
           </span>
         </>
-      ) : (
-        <span className="col-span-2" aria-hidden="true" />
       )}
       <ValueCell
         editing={editing}
@@ -229,6 +252,60 @@ const LineRow = ({
       <span className={cn('text-right tabular-nums', textClass)}>
         {formatWholeNumber(lineAmountDkkHa(assumptions, overrides, crop, line))}
       </span>
+    </div>
+  )
+}
+
+type YieldAdjustmentRowProps = {
+  overrides: EconomicsOverrides
+  crop: CropEconomics
+  editing: boolean
+  onOverridesChange: (change: OverridesChange) => void
+  onRestore: () => void
+  registerRow: (lineId: string, element: HTMLDivElement | null) => void
+}
+
+const YieldAdjustmentRow = ({
+  overrides,
+  crop,
+  editing,
+  onOverridesChange,
+  onRestore,
+  registerRow,
+}: YieldAdjustmentRowProps) => {
+  const customised = isYieldCustomised(overrides, crop)
+
+  return (
+    <div
+      ref={(element) => registerRow(YIELD_ADJUSTMENT_ID, element)}
+      tabIndex={-1}
+      className={cn(ROW_GRID_CLASS, LINE_ROW_CLASS)}
+    >
+      <div className={cn('min-w-0', editing ? 'pt-1.5' : undefined)}>
+        <p>
+          Udbytte i forhold til normen
+          {customised ? (
+            <span className="text-muted-foreground"> (tilpasset)</span>
+          ) : null}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Procenten lægges oven på hver marks eget udbytte, som afhænger af
+          jordtype og vanding. Tallene herunder er et eksempel for JB 5-6.
+          {customised ? <RestoreButton onClick={onRestore} /> : null}
+        </p>
+      </div>
+      <ValueCell
+        editing={editing}
+        value={cropYieldPct(overrides, crop)}
+        unit="%"
+        label="Udbytte i forhold til normen"
+        parse={parseYieldPctInput}
+        format={formatYieldPct}
+        onChange={(value) =>
+          onOverridesChange((current) => withYieldPct(current, crop, value))
+        }
+      />
+      <span className="col-span-3" aria-hidden="true" />
     </div>
   )
 }
@@ -284,7 +361,15 @@ const CropTable = ({
     setRestoreCount((count) => count + 1)
   }
 
-  const renderLines = (lines: EconomicsLine[], quantityEditable = true) =>
+  const restoreYield = () => {
+    changeOverrides((current) => withYieldPct(current, crop, null))
+    setRestoreCount((count) => count + 1)
+  }
+
+  const renderLines = (
+    lines: EconomicsLine[],
+    quantityMode: QuantityMode = 'editable',
+  ) =>
     lines.map((line) => (
       <LineRow
         key={`${crop.cropCode}:${line.id}:${restoreCount}`}
@@ -294,7 +379,7 @@ const CropTable = ({
         line={line}
         usage={usage.get(line.priceId) ?? 0}
         editing={editing}
-        quantityEditable={quantityEditable}
+        quantityMode={quantityMode}
         onOverridesChange={changeOverrides}
         onRestore={restore}
         registerRow={registerRow}
@@ -316,14 +401,25 @@ const CropTable = ({
           title="Indtægt"
           total={formatWholeNumber(totals.revenueDkkHa)}
         >
-          {renderLines(crop.revenue)}
+          {crop.revenue.length > 0 ? (
+            <YieldAdjustmentRow
+              key={`${crop.cropCode}:${YIELD_ADJUSTMENT_ID}:${restoreCount}`}
+              overrides={overrides}
+              crop={crop}
+              editing={editing}
+              onOverridesChange={changeOverrides}
+              onRestore={restoreYield}
+              registerRow={registerRow}
+            />
+          ) : null}
+          {renderLines(crop.revenue, 'fixed')}
         </LineSection>
 
         <LineSection
           title="Tilskud"
           total={`+${formatWholeNumber(totals.subsidyDkkHa)}`}
         >
-          {renderLines(crop.subsidies, false)}
+          {renderLines(crop.subsidies, 'hidden')}
         </LineSection>
 
         {COST_CATEGORIES.filter(

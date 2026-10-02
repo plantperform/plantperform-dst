@@ -42,6 +42,7 @@ export type EconomicsAssumptions = {
 export type EconomicsOverrides = {
   prices: Readonly<Record<string, number>>
   quantities: Readonly<Record<string, number>>
+  yieldPct: Readonly<Record<string, number>>
 }
 
 export type CropTotals = {
@@ -53,10 +54,21 @@ export type CropTotals = {
 
 export type EconomicsInput = { value: number } | { error: string }
 
-export const NO_OVERRIDES: EconomicsOverrides = { prices: {}, quantities: {} }
+export const NO_OVERRIDES: EconomicsOverrides = {
+  prices: {},
+  quantities: {},
+  yieldPct: {},
+}
+
+export const YIELD_ADJUSTMENT_ID = 'yieldPct'
 
 const quantityKey = (crop: CropEconomics, lineId: string) =>
   `${crop.cropCode}/${lineId}`
+
+const cropKey = (crop: CropEconomics) => String(crop.cropCode)
+
+const isRevenueLine = (crop: CropEconomics, lineId: string) =>
+  crop.revenue.some((line) => line.id === lineId)
 
 const withoutKey = (record: Readonly<Record<string, number>>, key: string) =>
   Object.fromEntries(Object.entries(record).filter(([entry]) => entry !== key))
@@ -80,11 +92,19 @@ export const priceValue = (
 ): number =>
   overrides.prices[priceId] ?? findPrice(assumptions, priceId)?.valueDkk ?? 0
 
+export const cropYieldPct = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): number => overrides.yieldPct[cropKey(crop)] ?? 0
+
 export const lineQuantity = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
   line: EconomicsLine,
-): number => overrides.quantities[quantityKey(crop, line.id)] ?? line.quantity
+): number =>
+  isRevenueLine(crop, line.id)
+    ? line.quantity * (1 + cropYieldPct(overrides, crop) / 100)
+    : (overrides.quantities[quantityKey(crop, line.id)] ?? line.quantity)
 
 export const lineAmountDkkHa = (
   assumptions: EconomicsAssumptions,
@@ -160,6 +180,20 @@ export const withQuantityOverride = (
   }
 }
 
+export const withYieldPct = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+  value: number | null,
+): EconomicsOverrides => {
+  const key = cropKey(crop)
+  const rest = withoutKey(overrides.yieldPct, key)
+  const isStandard = value === null || value === 0
+  return {
+    ...overrides,
+    yieldPct: isStandard ? rest : { ...rest, [key]: value },
+  }
+}
+
 export const isPriceCustomised = (
   overrides: EconomicsOverrides,
   priceId: string,
@@ -169,7 +203,14 @@ export const isQuantityCustomised = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
   lineId: string,
-): boolean => overrides.quantities[quantityKey(crop, lineId)] !== undefined
+): boolean =>
+  !isRevenueLine(crop, lineId) &&
+  overrides.quantities[quantityKey(crop, lineId)] !== undefined
+
+export const isYieldCustomised = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): boolean => overrides.yieldPct[cropKey(crop)] !== undefined
 
 export const isLineCustomised = (
   overrides: EconomicsOverrides,
@@ -183,6 +224,7 @@ export const isCropCustomised = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
 ): boolean =>
+  isYieldCustomised(overrides, crop) ||
   cropLines(crop).some((line) => isLineCustomised(overrides, crop, line))
 
 export type BreakdownRow =
@@ -192,6 +234,8 @@ export type BreakdownRow =
   | { kind: 'subsidy' }
   | { kind: 'cost'; category: string; treatment: string }
 
+export type BreakdownTarget = Pick<EconomicsLine, 'id'>
+
 const YIELD_LINE_LABEL = 'Udbytte'
 
 export const customisedBreakdownLine = (
@@ -199,7 +243,7 @@ export const customisedBreakdownLine = (
   overrides: EconomicsOverrides,
   cropCode: number,
   row: BreakdownRow,
-): EconomicsLine | null => {
+): BreakdownTarget | null => {
   const crop = assumptions.crops.find((entry) => entry.cropCode === cropCode)
   if (!crop) return null
   const customised = (line: EconomicsLine) =>
@@ -207,8 +251,8 @@ export const customisedBreakdownLine = (
   const yieldLine = crop.revenue.find((line) => line.label === YIELD_LINE_LABEL)
   switch (row.kind) {
     case 'yield':
-      return yieldLine && isQuantityCustomised(overrides, crop, yieldLine.id)
-        ? yieldLine
+      return isYieldCustomised(overrides, crop)
+        ? { id: YIELD_ADJUSTMENT_ID }
         : null
     case 'salePrice':
       return yieldLine && isPriceCustomised(overrides, yieldLine.priceId)
@@ -253,6 +297,13 @@ export const parseEconomicsInput = (text: string): EconomicsInput => {
   return { value }
 }
 
+export const parseYieldPctInput = (text: string): EconomicsInput => {
+  const value = parseDecimalInput(text.replace('−', '-'))
+  if (value === null || Number.isNaN(value)) return { error: 'Skriv et tal.' }
+  if (value <= -100) return { error: 'Skriv et tal over -100.' }
+  return { value }
+}
+
 export const economicsInputText = (value: number): string =>
   String(value).replace('.', ',')
 
@@ -262,6 +313,12 @@ const economicsNumberFormat = new Intl.NumberFormat('da-DK', {
 
 export const formatEconomicsNumber = (value: number): string =>
   economicsNumberFormat.format(value)
+
+export const formatYieldPct = (value: number): string => {
+  if (value > 0) return `+${formatEconomicsNumber(value)}`
+  if (value < 0) return `−${formatEconomicsNumber(-value)}`
+  return '0'
+}
 
 export const quantityUnitLabel = (unit: string, quantity: number): string =>
   unit === 'gange' && quantity === 1 ? 'gang' : unit

@@ -11,7 +11,7 @@ import { shortCropName } from '@/lib/crop-groups'
 import {
   customisedBreakdownLine,
   type BreakdownRow,
-  type EconomicsLine,
+  type BreakdownTarget,
 } from '@/lib/economics'
 import {
   nNormTargetKgNHa,
@@ -945,7 +945,7 @@ const CustomisedLabel = ({
 }: {
   label: string
   cropCode: number
-  line: EconomicsLine | null
+  line: BreakdownTarget | null
 }) => {
   const profilePath = useContext(BreakdownEconomicsContext)?.profilePath
   if (!line) return label

@@ -120,6 +120,7 @@ field" column is the name on the wire.
 | kilde | `source` | | Where a standard price comes from |
 | fælles pris | shared price, `priceUsage` | | A price used by several crops, e.g. Pløjning med pakning |
 | tilpasset | `EconomicsOverrides`, `isPriceCustomised`, `isQuantityCustomised`, `isLineCustomised`, `isCropCustomised` | | The user's own value on top of the SEGES standard |
+| udbytte i forhold til normen | `yieldPct`, `cropYieldPct`, `withYieldPct`, `isYieldCustomised`, `YieldAdjustmentRow` | | Percent added to or taken from each field's own yield for a crop in an economics profile. Grain and straw follow it, the costs do not |
 | alle afgrøder | `CropsOverview` | | The first tab under Økonomi, with income, subsidy and costs per hectare for every crop |
 | økonomiprofil | `EconomicsProfile`, `EconomicsProfiles`, `EconomicsProfilePage`, `EconomicsProfilesMenu`, `useEconomicsProfiles`, `profileForSimulation`, `economicsProfileId`, `SimulationEconomicsCard` | | A farm's named set of economics changes. Each simulation uses one, and they are kept in the browser until the backend can store them |
 | Standard (SEGES 2026) | `STANDARD_PROFILE` | | The economics profile without changes. It cannot be edited, renamed or deleted |

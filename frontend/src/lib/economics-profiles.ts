@@ -180,6 +180,7 @@ const storedProfilesSchema = z.object({
       overrides: z.object({
         prices: z.record(z.string(), z.number()),
         quantities: z.record(z.string(), z.number()),
+        yieldPct: z.record(z.string(), z.number()).default({}),
       }),
     }),
   ),
