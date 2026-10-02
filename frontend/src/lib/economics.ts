@@ -50,6 +50,15 @@ export type CropTotals = {
   subsidyDkkHa: number
   costsDkkHa: Record<CostCategory, number>
   totalCostsDkkHa: number
+  dbDkkHa: number
+}
+
+export type EconomicsGroupId = 'revenue' | 'subsidy' | CostCategory
+
+export type IncomeShare = {
+  id: CostCategory | 'db'
+  valueDkkHa: number
+  share: number
 }
 
 export type EconomicsInput = { value: number } | { error: string }
@@ -138,15 +147,69 @@ export const cropTotals = (
       sumLines(assumptions, overrides, crop, crop.costs[category.id]),
     ]),
   ) as Record<CostCategory, number>
+  const revenueDkkHa = sumLines(assumptions, overrides, crop, crop.revenue)
+  const subsidyDkkHa = sumLines(assumptions, overrides, crop, crop.subsidies)
+  const totalCostsDkkHa = COST_CATEGORIES.reduce(
+    (total, category) => total + costsDkkHa[category.id],
+    0,
+  )
   return {
-    revenueDkkHa: sumLines(assumptions, overrides, crop, crop.revenue),
-    subsidyDkkHa: sumLines(assumptions, overrides, crop, crop.subsidies),
+    revenueDkkHa,
+    subsidyDkkHa,
     costsDkkHa,
-    totalCostsDkkHa: COST_CATEGORIES.reduce(
-      (total, category) => total + costsDkkHa[category.id],
-      0,
-    ),
+    totalCostsDkkHa,
+    dbDkkHa: revenueDkkHa + subsidyDkkHa - totalCostsDkkHa,
   }
+}
+
+export const incomeSplit = (totals: CropTotals): IncomeShare[] => {
+  const parts = [
+    ...COST_CATEGORIES.map((category) => ({
+      id: category.id,
+      valueDkkHa: totals.costsDkkHa[category.id],
+    })),
+    { id: 'db' as const, valueDkkHa: Math.max(totals.dbDkkHa, 0) },
+  ].filter((part) => part.valueDkkHa > 0)
+  const whole = parts.reduce((total, part) => total + part.valueDkkHa, 0)
+  return parts.map((part) => ({ ...part, share: part.valueDkkHa / whole }))
+}
+
+export const lineGroupId = (
+  crop: CropEconomics,
+  lineId: string,
+): EconomicsGroupId | null => {
+  if (lineId === YIELD_ADJUSTMENT_ID || isRevenueLine(crop, lineId)) {
+    return 'revenue'
+  }
+  if (crop.subsidies.some((line) => line.id === lineId)) return 'subsidy'
+  return (
+    COST_CATEGORIES.find((category) =>
+      crop.costs[category.id].some((line) => line.id === lineId),
+    )?.id ?? null
+  )
+}
+
+export const cropSources = (
+  assumptions: EconomicsAssumptions,
+  crop: CropEconomics,
+): string[] => [
+  ...new Set(
+    cropLines(crop)
+      .map((line) => findPrice(assumptions, line.priceId)?.source)
+      .filter((source): source is string => source !== undefined),
+  ),
+]
+
+export const searchCrops = (
+  crops: CropEconomics[],
+  query: string,
+): CropEconomics[] => {
+  const wanted = query.trim().toLocaleLowerCase('da-DK')
+  return wanted === ''
+    ? crops
+    : crops.filter((crop) =>
+        crop.cropName.toLocaleLowerCase('da-DK').includes(wanted),
+      )
 }
 
 export const withPriceOverride = (
@@ -277,6 +340,22 @@ export const customisedBreakdownLine = (
   }
 }
 
+export const withoutCropChanges = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): EconomicsOverrides =>
+  cropLines(crop).reduce(
+    (current, line) =>
+      withPriceOverride(
+        assumptions,
+        withQuantityOverride(current, crop, line.id, null),
+        line.priceId,
+        null,
+      ),
+    withYieldPct(overrides, crop, null),
+  )
+
 export const priceUsage = (
   assumptions: EconomicsAssumptions,
 ): Map<string, number> => {
@@ -318,6 +397,24 @@ export const formatYieldPct = (value: number): string => {
   if (value > 0) return `+${formatEconomicsNumber(value)}`
   if (value < 0) return `−${formatEconomicsNumber(-value)}`
   return '0'
+}
+
+export const YIELD_PCT_STEP = 5
+
+export const stepYieldPct = (current: number, direction: 1 | -1): number => {
+  const next = current + direction * YIELD_PCT_STEP
+  return next > -100 ? next : current
+}
+
+const wholeDkkFormat = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 0,
+})
+
+export const formatDbDkk = (value: number): string => {
+  const rounded = Math.round(value)
+  return rounded < 0
+    ? `−${wholeDkkFormat.format(-rounded)}`
+    : wholeDkkFormat.format(rounded)
 }
 
 export const quantityUnitLabel = (unit: string, quantity: number): string =>

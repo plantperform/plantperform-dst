@@ -1,21 +1,28 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  cropSources,
   cropTotals,
   cropYieldPct,
   customisedBreakdownLine,
+  formatDbDkk,
   formatEconomicsNumber,
   formatYieldPct,
+  incomeSplit,
   isCropCustomised,
   isPriceCustomised,
   isQuantityCustomised,
   isYieldCustomised,
+  lineGroupId,
   lineQuantity,
   NO_OVERRIDES,
   parseEconomicsInput,
   parseYieldPctInput,
   priceUsage,
   quantityUnitLabel,
+  searchCrops,
+  stepYieldPct,
+  withoutCropChanges,
   withPriceOverride,
   withQuantityOverride,
   withYieldPct,
@@ -143,6 +150,78 @@ describe('cropTotals', () => {
   })
 })
 
+describe('dækningsbidrag', () => {
+  it('gives the dækningsbidrag as income and subsidy minus costs', () => {
+    const totals = cropTotals(ASSUMPTIONS, NO_OVERRIDES, RAPESEED)
+    expect(totals.dbDkkHa).toBe(14740 + 1575 - 1945)
+    expect(formatDbDkk(totals.dbDkkHa)).toBe('14.370')
+    expect(formatDbDkk(-1234)).toBe('−1.234')
+  })
+
+  it('splits income and subsidy into the cost groups and the dækningsbidrag', () => {
+    const split = incomeSplit(cropTotals(ASSUMPTIONS, NO_OVERRIDES, RAPESEED))
+    expect(split.map((part) => part.id)).toEqual(['fieldWork', 'db'])
+    expect(split[0].share).toBeCloseTo(1945 / 16315)
+    expect(split[1].share).toBeCloseTo(14370 / 16315)
+  })
+
+  it('leaves out the dækningsbidrag when the costs are higher than the income', () => {
+    expect(
+      incomeSplit({
+        revenueDkkHa: 100,
+        subsidyDkkHa: 0,
+        costsDkkHa: { seed: 50, cropProtection: 0, fieldWork: 150, drying: 0 },
+        totalCostsDkkHa: 200,
+        dbDkkHa: -100,
+      }),
+    ).toEqual([
+      { id: 'seed', valueDkkHa: 50, share: 0.25 },
+      { id: 'fieldWork', valueDkkHa: 150, share: 0.75 },
+    ])
+  })
+})
+
+describe('one crop', () => {
+  it('restores every change in one crop, shared prices included', () => {
+    const rapeseedYield = withYieldPct(NO_OVERRIDES, RAPESEED, 10)
+    const rapeseedSpraying = withQuantityOverride(
+      rapeseedYield,
+      RAPESEED,
+      'spraying',
+      5,
+    )
+    const ploughing = withPriceOverride(
+      ASSUMPTIONS,
+      rapeseedSpraying,
+      'ploughing',
+      900,
+    )
+    const peasSpraying = withQuantityOverride(ploughing, PEAS, 'spraying', 3)
+    const restored = withoutCropChanges(ASSUMPTIONS, peasSpraying, RAPESEED)
+    expect(isCropCustomised(restored, RAPESEED)).toBe(false)
+    expect(isPriceCustomised(restored, 'ploughing')).toBe(false)
+    expect(isQuantityCustomised(restored, PEAS, 'spraying')).toBe(true)
+  })
+
+  it('tells which group a line or the yield adjustment belongs to', () => {
+    expect(lineGroupId(RAPESEED, 'grain')).toBe('revenue')
+    expect(lineGroupId(RAPESEED, YIELD_ADJUSTMENT_ID)).toBe('revenue')
+    expect(lineGroupId(RAPESEED, 'basicPayment')).toBe('subsidy')
+    expect(lineGroupId(RAPESEED, 'spraying')).toBe('fieldWork')
+    expect(lineGroupId(RAPESEED, 'missing')).toBeNull()
+  })
+
+  it('names each source of its prices once', () => {
+    expect(cropSources(ASSUMPTIONS, RAPESEED)).toEqual(['SEGES', 'Prisliste'])
+  })
+
+  it('finds crops by part of their name', () => {
+    expect(searchCrops([RAPESEED, PEAS], ' raps ')).toEqual([RAPESEED])
+    expect(searchCrops([RAPESEED, PEAS], 'ÆR')).toEqual([PEAS])
+    expect(searchCrops([RAPESEED, PEAS], '')).toEqual([RAPESEED, PEAS])
+  })
+})
+
 describe('overrides', () => {
   it('restores the standard when the value is cleared or typed back', () => {
     const changed = withPriceOverride(
@@ -230,6 +309,12 @@ describe('yield percentage', () => {
     expect(
       isYieldCustomised(withYieldPct(moreYield, RAPESEED, 0), RAPESEED),
     ).toBe(false)
+  })
+
+  it('steps the percentage by 5 and stays above -100', () => {
+    expect(stepYieldPct(10, 1)).toBe(15)
+    expect(stepYieldPct(-90, -1)).toBe(-95)
+    expect(stepYieldPct(-95, -1)).toBe(-95)
   })
 
   it('reads a percentage above -100 and shows its sign', () => {

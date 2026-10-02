@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Check, Pencil, Plus, TextCursorInput, Trash2 } from 'lucide-react'
 import { Fragment, useId, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -93,11 +93,15 @@ const ProfileView = ({
   const request = profilePageRequestSchema.safeParse(location.state)
   const nameRequestKey = request.success && !isStandard ? location.key : null
   const [editingName, setEditingName] = useState(false)
+  const [editingEconomics, setEditingEconomics] = useState(false)
   const [shownRequest, setShownRequest] = useState<string | null>(null)
 
   if (nameRequestKey !== null && nameRequestKey !== shownRequest) {
     setShownRequest(nameRequestKey)
     setEditingName(true)
+    if (request.success && request.data.request === 'new') {
+      setEditingEconomics(true)
+    }
   }
 
   const users = economics.simulationsUsingProfile(simulations, profile.id)
@@ -135,8 +139,23 @@ const ProfileView = ({
               </Button>
             ) : (
               <>
+                <Button
+                  onClick={() => setEditingEconomics((current) => !current)}
+                >
+                  {editingEconomics ? (
+                    <>
+                      <Check aria-hidden="true" />
+                      Færdig
+                    </>
+                  ) : (
+                    <>
+                      <Pencil aria-hidden="true" />
+                      Rediger økonomi
+                    </>
+                  )}
+                </Button>
                 <Button variant="outline" onClick={() => setEditingName(true)}>
-                  <Pencil aria-hidden="true" />
+                  <TextCursorInput aria-hidden="true" />
                   Omdøb
                 </Button>
                 <Button
@@ -188,11 +207,10 @@ const ProfileView = ({
           assumptions={economics.assumptions}
           overrides={profile.overrides}
           onOverridesChange={
-            isStandard
-              ? undefined
-              : (change) => economics.changeOverrides(profile.id, change)
+            editingEconomics && !isStandard
+              ? (change) => economics.changeOverrides(profile.id, change)
+              : undefined
           }
-          defaultEditing={request.success && request.data.request === 'new'}
           focus={
             focus.success ? { ...focus.data, key: location.key } : undefined
           }
