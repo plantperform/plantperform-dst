@@ -204,27 +204,28 @@ kilde har endnu givet en værdi for dem).
 Dette er ikke hentet fra en kilde, men en beskrivelse af den faktiske kode,
 som en del af den efterfølgende kode-gennemgang — kun for WP, efter aftale.
 
-`bridge_v2.py`s `_resolve_wp(prev_params, this_params)` implementerer
-**hverken** trin 1/trin 2 ovenfor, **eller** den flade 2027-konstant. I
-stedet er mekanikken en "næste-år-overtager"-regel, portet fra det gamle
-`streamlit_app.py`, analog med W-reglen men forskudt ét år:
+Aftalt med brugeren 2026-10-02. `bridge_v2.py`s `_resolve_wp` går
+igennem fire trin og bruger det første, der giver en kategori:
 
-1. Slå den **indeværende** positions allerede udregnede M-kategori (`this_m`,
-   fra `_resolve_m`) op i `_NEXT_M_TO_WP = {1: 1, 9: 8}`.
-2. **Hvis** `this_m` er `1` eller `9` (dvs. den nuværende afgrøde er en
-   vintersæd/vinterafgrøde, der selv lægger sig i vinterperioden mellem
-   forfrugten og nu) → brug den tilsvarende WP-værdi direkte (WP1 hhv. WP8).
-3. **Ellers** → brug **forfrugtens** (forrige positions) egen statiske
-   `WP`-kolonneværdi fra `nuar_kode`, med `1` som fallback hvis den mangler
-   (`prev_params.get("WP") or 1`).
+1. **Sekundær afgrøde året før** (`prev_udlaeg_kode`) → dens WP fra
+   afgrødetabellen. Har tabellen ingen WP1-10 for koden (lookupens egne
+   markører 2000/9680/9682/9684, og 960-966 der står på WP11), bruges
+   `_UDL_WP_MAPPING`. 9683 "Tidlig såning" giver ingen WP og går videre.
+2. **Beregningsårets hovedafgrøde er sået om efteråret** (WP1 eller WP8 i
+   tabellen) → WP1 hhv. WP8. Tabellens WP1/WP8 beskriver en afgrøde, der
+   selv står i vinteren før sit eget høstår, ikke vinteren efter. Har
+   afgrøden ingen WP-kategori i tabellen (WP11 eller tom, fx en database
+   indlæst før WP-værdierne kom med), afgør dens M i stedet: M1 → WP1,
+   M9 → WP8.
+3. **Hovedafgrøden året før står hen over vinteren** (WP3, WP5 eller WP6
+   i tabellen) → dens WP.
+4. **Ellers har jorden været bar**: forfrugten er majs eller kartofler →
+   WP7, alt andet → WP2.
 
-Efter opdateringen 2026-09-25 (ovenfor) giver trin 3 nu reelle,
-differentierede værdier for 133 af 362 afgrøder (før gav den altid WP11).
-Men koden mangler stadig hele trin 2 (WP7/WP9/WP10 — bar jord/vintersæd
-der stammer fra en ompløjet græs/kløvergræs- eller majs/kartoffel-forfrugt)
-og bruger `engine.py`'s `WP`-nøgle, ikke den nyligt fundne ηwp-tabel fra
-DCA-rapportens Tabel 3.3 — det er et af de punkter, kode-gennemgangsfasen
-skal tage stilling til.
+Kendes forfrugten slet ikke, gives WP11, og `engine.py`s `C_func` bruger
+den faste værdi 7,2595 (`WP_FALLBACK`), som den gør for enhver WP uden for
+WP1-10. WP9/WP10 (græs pløjet forår/efterår) bruges ikke, da
+pløjetidspunktet ikke kendes; græs som forfrugt giver WP3 via trin 3.
 
 ## Udlægskode — sekundær afgrøde og pseudo-koder (2026-09-28)
 
