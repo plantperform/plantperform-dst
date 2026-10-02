@@ -14,9 +14,7 @@ import {
   CHOICE_TAB_IDLE_CLASS,
 } from '@/components/farm/choice-styles'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import { useEconomics } from '@/components/farm/economics-context'
 import {
-  CollapseButton,
   RULES_CARD_CLASS,
   RULES_CARD_HEAD_CLASS,
 } from '@/components/farm/rules-ui'
@@ -57,6 +55,8 @@ const OVERVIEW_GRID_CLASS =
 
 const TABLE_HEAD_CLASS =
   'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
+
+type OverridesChange = (current: EconomicsOverrides) => EconomicsOverrides
 
 type NumberInputProps = {
   value: number
@@ -250,19 +250,30 @@ const LineSection = ({ title, total, children }: LineSectionProps) => (
 )
 
 type CropTableProps = {
+  assumptions: EconomicsAssumptions
+  overrides: EconomicsOverrides
   crop: CropEconomics
   editing: boolean
+  onOverridesChange?: (change: OverridesChange) => void
   registerRow: (lineId: string, element: HTMLDivElement | null) => void
 }
 
-const CropTable = ({ crop, editing, registerRow }: CropTableProps) => {
-  const { assumptions, overrides, setOverrides } = useEconomics()
+const CropTable = ({
+  assumptions,
+  overrides,
+  crop,
+  editing,
+  onOverridesChange,
+  registerRow,
+}: CropTableProps) => {
   const [restoreCount, setRestoreCount] = useState(0)
   const usage = useMemo(() => priceUsage(assumptions), [assumptions])
   const totals = cropTotals(assumptions, overrides, crop)
+  const changeOverrides = (change: OverridesChange) =>
+    onOverridesChange?.(change)
 
   const restore = (line: EconomicsLine) => {
-    setOverrides((current) =>
+    changeOverrides((current) =>
       withPriceOverride(
         assumptions,
         withQuantityOverride(current, crop, line.id, null),
@@ -284,7 +295,7 @@ const CropTable = ({ crop, editing, registerRow }: CropTableProps) => {
         usage={usage.get(line.priceId) ?? 0}
         editing={editing}
         quantityEditable={quantityEditable}
-        onOverridesChange={setOverrides}
+        onOverridesChange={changeOverrides}
         onRestore={restore}
         registerRow={registerRow}
       />
@@ -345,12 +356,16 @@ const CropTable = ({ crop, editing, registerRow }: CropTableProps) => {
 }
 
 type CropsOverviewProps = {
+  assumptions: EconomicsAssumptions
+  overrides: EconomicsOverrides
   onOpenCrop: (cropCode: number) => void
 }
 
-const CropsOverview = ({ onOpenCrop }: CropsOverviewProps) => {
-  const { assumptions, overrides } = useEconomics()
-
+const CropsOverview = ({
+  assumptions,
+  overrides,
+  onOpenCrop,
+}: CropsOverviewProps) => {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-128">
@@ -404,29 +419,41 @@ const CropsOverview = ({ onOpenCrop }: CropsOverviewProps) => {
   )
 }
 
-export const EconomicsAssumptionsEditor = () => {
-  const id = useId()
-  const { assumptions, overrides, focusRequest, clearFocusRequest } =
-    useEconomics()
-  const [expanded, setExpanded] = useState(true)
-  const [editing, setEditing] = useState(false)
-  const [activeCode, setActiveCode] = useState<number | null>(null)
-  const [shownFocus, setShownFocus] = useState<number | null>(null)
-  const rowElements = useRef(new Map<string, HTMLDivElement>())
+type EconomicsAssumptionsEditorProps = {
+  assumptions: EconomicsAssumptions
+  overrides: EconomicsOverrides
+  onOverridesChange?: (change: OverridesChange) => void
+  defaultEditing?: boolean
+  focus?: { cropCode: number; lineId: string; key: string }
+}
 
-  if (focusRequest && focusRequest.nonce !== shownFocus) {
-    setShownFocus(focusRequest.nonce)
-    setExpanded(true)
-    setActiveCode(focusRequest.cropCode)
+export const EconomicsAssumptionsEditor = ({
+  assumptions,
+  overrides,
+  onOverridesChange,
+  defaultEditing = false,
+  focus,
+}: EconomicsAssumptionsEditorProps) => {
+  const id = useId()
+  const [editing, setEditing] = useState(defaultEditing)
+  const [activeCode, setActiveCode] = useState<number | null>(null)
+  const [shownFocus, setShownFocus] = useState<string | null>(null)
+  const rowElements = useRef(new Map<string, HTMLDivElement>())
+  const canEdit = onOverridesChange !== undefined
+  const focusKey = focus?.key
+  const focusLineId = focus?.lineId
+
+  if (focus && focus.key !== shownFocus) {
+    setShownFocus(focus.key)
+    setActiveCode(focus.cropCode)
   }
 
   useEffect(() => {
-    if (!focusRequest) return
-    const row = rowElements.current.get(focusRequest.lineId)
+    if (focusKey === undefined || focusLineId === undefined) return
+    const row = rowElements.current.get(focusLineId)
     row?.focus({ preventScroll: true })
     row?.scrollIntoView({ block: 'center' })
-    clearFocusRequest()
-  }, [focusRequest, clearFocusRequest])
+  }, [focusKey, focusLineId])
 
   const registerRow = (lineId: string, element: HTMLDivElement | null) => {
     if (element) rowElements.current.set(lineId, element)
@@ -441,117 +468,101 @@ export const EconomicsAssumptionsEditor = () => {
       aria-labelledby={`${id}-title`}
     >
       <div className={RULES_CARD_HEAD_CLASS}>
-        <div className="min-w-0">
-          <h3 id={`${id}-title`} className="text-sm font-semibold">
-            Økonomi
-          </h3>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Priser og mængder bag dækningsbidraget for hver afgrøde. Standarden
-            er SEGES Budgetkalkuler 2026, og du kan rette den, så den passer til
-            bedriften.
-          </p>
-          <p className="mt-1 text-[13px] text-amber-800">
-            Eksempeldata for konventionel drift på JB 5-6. Ændringer gemmes ikke
-            og indgår ikke i beregningen endnu.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <h2 id={`${id}-title`} className="text-sm font-semibold">
+          Priser og mængder
+        </h2>
+        {canEdit ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
             aria-expanded={editing}
-            onClick={() => {
-              setEditing((current) => !current)
-              setExpanded(true)
-            }}
+            onClick={() => setEditing((current) => !current)}
           >
             <Pencil className="size-3.5" aria-hidden="true" />
             {editing ? 'Luk redigering' : 'Rediger økonomi'}
           </Button>
-          <CollapseButton
-            expanded={expanded}
-            controls={`${id}-content`}
-            onExpandedChange={setExpanded}
-          />
-        </div>
+        ) : null}
       </div>
 
-      {expanded ? (
-        <div id={`${id}-content`}>
-          <div className="space-y-2.5 border-t px-5 py-3">
-            <div
-              role="tablist"
-              aria-label="Afgrøder"
-              className="flex flex-wrap gap-1.5"
-            >
+      <div className="space-y-2.5 border-t px-5 py-3">
+        <div
+          role="tablist"
+          aria-label="Afgrøder"
+          className="flex flex-wrap gap-1.5"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!active}
+            onClick={() => setActiveCode(null)}
+            className={cn(
+              CHOICE_TAB_CLASS,
+              active ? CHOICE_TAB_IDLE_CLASS : CHOICE_TAB_ACTIVE_CLASS,
+            )}
+          >
+            Alle afgrøder
+          </button>
+          {assumptions.crops.map((crop) => {
+            const isActive = crop === active
+            return (
               <button
+                key={crop.cropCode}
                 type="button"
                 role="tab"
-                aria-selected={!active}
-                onClick={() => setActiveCode(null)}
+                aria-selected={isActive}
+                onClick={() => setActiveCode(crop.cropCode)}
                 className={cn(
                   CHOICE_TAB_CLASS,
-                  active ? CHOICE_TAB_IDLE_CLASS : CHOICE_TAB_ACTIVE_CLASS,
+                  isActive ? CHOICE_TAB_ACTIVE_CLASS : CHOICE_TAB_IDLE_CLASS,
                 )}
               >
-                Alle afgrøder
+                <CropGroupTile
+                  group={cropGroupFor(crop.cropCode, crop.cropName)}
+                />
+                {crop.cropName}
+                {isCropCustomised(overrides, crop) ? (
+                  <span className="font-normal text-muted-foreground">
+                    (tilpasset)
+                  </span>
+                ) : null}
               </button>
-              {assumptions.crops.map((crop) => {
-                const isActive = crop === active
-                return (
-                  <button
-                    key={crop.cropCode}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setActiveCode(crop.cropCode)}
-                    className={cn(
-                      CHOICE_TAB_CLASS,
-                      isActive
-                        ? CHOICE_TAB_ACTIVE_CLASS
-                        : CHOICE_TAB_IDLE_CLASS,
-                    )}
-                  >
-                    <CropGroupTile
-                      group={cropGroupFor(crop.cropCode, crop.cropName)}
-                    />
-                    {crop.cropName}
-                    {isCropCustomised(overrides, crop) ? (
-                      <span className="font-normal text-muted-foreground">
-                        (tilpasset)
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="text-[13px] text-muted-foreground">
-              {active ? (
-                <>
-                  {active.cropName} har en forfrugtsværdi på{' '}
-                  <b className="font-semibold text-foreground">
-                    {formatNumber(active.precedingCropValueKgNHa)} kg N/ha
-                  </b>
-                  , som trækkes fra næste afgrødes kvælstofnorm.
-                </>
-              ) : (
-                'Tallene er i kr/ha. Klik på en afgrøde for at se og rette dens priser og mængder.'
-              )}
-            </p>
-          </div>
-
-          {active ? (
-            <CropTable
-              crop={active}
-              editing={editing}
-              registerRow={registerRow}
-            />
-          ) : (
-            <CropsOverview onOpenCrop={setActiveCode} />
-          )}
+            )
+          })}
         </div>
-      ) : null}
+        <p className="text-[13px] text-muted-foreground">
+          {active ? (
+            <>
+              {active.cropName} har en forfrugtsværdi på{' '}
+              <b className="font-semibold text-foreground">
+                {formatNumber(active.precedingCropValueKgNHa)} kg N/ha
+              </b>
+              , som trækkes fra næste afgrødes kvælstofnorm.
+            </>
+          ) : canEdit ? (
+            'Tallene er i kr/ha. Klik på en afgrøde for at se og rette dens priser og mængder.'
+          ) : (
+            'Tallene er i kr/ha. Klik på en afgrøde for at se dens priser og mængder.'
+          )}
+        </p>
+      </div>
+
+      {active ? (
+        <CropTable
+          assumptions={assumptions}
+          overrides={overrides}
+          crop={active}
+          editing={editing}
+          onOverridesChange={onOverridesChange}
+          registerRow={registerRow}
+        />
+      ) : (
+        <CropsOverview
+          assumptions={assumptions}
+          overrides={overrides}
+          onOpenCrop={setActiveCode}
+        />
+      )}
     </section>
   )
 }

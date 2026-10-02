@@ -1,8 +1,9 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
-import { EconomicsContext } from '@/components/farm/economics-context'
+import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
@@ -925,7 +926,7 @@ const LeachingDetailSection = ({
 type CostLine = { category: string; treatment: string; costDkkHa: number }
 
 const useCustomisedLine = (cropCode: number) => {
-  const economics = useContext(EconomicsContext)
+  const economics = useContext(BreakdownEconomicsContext)
   return (row: BreakdownRow) =>
     economics
       ? customisedBreakdownLine(
@@ -946,23 +947,23 @@ const CustomisedLabel = ({
   cropCode: number
   line: EconomicsLine | null
 }) => {
-  const showLine = useContext(EconomicsContext)?.showLine
+  const profilePath = useContext(BreakdownEconomicsContext)?.profilePath
   if (!line) return label
   return (
     <>
       {label} (tilpasset)
       <span className="block text-[11px] text-muted-foreground">
         Beregnet med standarden
-        {showLine ? (
+        {profilePath ? (
           <>
             {' · '}
-            <button
-              type="button"
+            <Link
+              to={profilePath}
+              state={{ cropCode, lineId: line.id }}
               className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => showLine(cropCode, line.id)}
             >
-              Se i Økonomi
-            </button>
+              Se i økonomiprofilen
+            </Link>
           </>
         ) : null}
       </span>

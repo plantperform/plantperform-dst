@@ -19,8 +19,15 @@ import {
 } from '@/api/hooks'
 import type { Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import { DeleteEconomicsProfileDialog } from '@/components/farm/DeleteEconomicsProfileDialog'
 import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
-import { EconomicsProvider } from '@/components/farm/EconomicsProvider'
+import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
+import {
+  EconomicsProfilesContext,
+  useEconomicsProfiles,
+  useEconomicsProfilesStore,
+} from '@/components/farm/economics-profiles-state'
+import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
   FarmContentSkeleton,
@@ -55,6 +62,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
 
 const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
@@ -62,13 +70,15 @@ const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
     ? right.kind === 'simulation' && left.id === right.id
     : right.kind === 'current'
 
-export const FarmDetailPage = () => {
+const FarmDetail = () => {
   const { farmId } = useParams()
   const navigate = useNavigate()
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
+  const onProfilePage = useMatch('/farms/:farmId/economics/*') !== null
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const email = user?.email ?? ''
+  const economicsProfiles = useEconomicsProfiles()
   const {
     data: farm,
     error: farmError,
@@ -135,6 +145,8 @@ export const FarmDetailPage = () => {
   }
   const [simulationToDelete, setSimulationToDelete] =
     useState<Simulation | null>(null)
+  const [profileToDelete, setProfileToDelete] =
+    useState<EconomicsProfile | null>(null)
   const [toast, setToast] = useState<{ id: number; message: string } | null>(
     null,
   )
@@ -248,8 +260,8 @@ export const FarmDetailPage = () => {
     onError: showErrorToast,
   })
 
-  const leaveOverview = () => {
-    if (onOverview) navigate(farmPath)
+  const leavePage = () => {
+    if (onOverview || onProfilePage) navigate(farmPath)
   }
 
   const openView = (next: FarmViewSelection, nextMode: FarmInspectorMode) => {
@@ -296,6 +308,18 @@ export const FarmDetailPage = () => {
   }
 
   const loadedFarm = isReady ? farm : undefined
+  const selectedProfile =
+    selectedSimulationId === undefined
+      ? null
+      : economicsProfiles.profileForSimulation(selectedSimulationId)
+  const breakdownEconomics =
+    selectedProfile === null
+      ? null
+      : {
+          assumptions: economicsProfiles.assumptions,
+          overrides: selectedProfile.overrides,
+          profilePath: economicsProfiles.profilePath(selectedProfile.id),
+        }
 
   return (
     <SidebarProvider
@@ -312,22 +336,22 @@ export const FarmDetailPage = () => {
           loadingSelection={simulationFieldsLoading}
           onSelectionChange={(next) => {
             changeSelection(next)
-            leaveOverview()
+            leavePage()
           }}
           mode={mode}
           onModeChange={(next) => {
             changeMode(next)
-            leaveOverview()
+            leavePage()
           }}
           onOptimize={() => {
             setOptimizeDialogOpen(true)
-            leaveOverview()
+            leavePage()
           }}
           view={effectiveView}
           splitAvailable={splitAvailable}
           onViewChange={(next) => {
             selectView(next)
-            leaveOverview()
+            leavePage()
           }}
           onError={showErrorToast}
           copyingSimulationId={simulationActions.copyingSimulationId}
@@ -337,6 +361,7 @@ export const FarmDetailPage = () => {
           }
           onDeleteSimulation={setSimulationToDelete}
           onNewSimulation={() => openNewSimulation(null)}
+          onDeleteProfile={setProfileToDelete}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />
@@ -354,14 +379,7 @@ export const FarmDetailPage = () => {
           </div>
         ) : null}
         {loadedFarm ? (
-          <EconomicsProvider
-            key={loadedFarm.id}
-            onShowLine={
-              activeSelection.kind === 'simulation'
-                ? () => changeMode('rules')
-                : undefined
-            }
-          >
+          <BreakdownEconomicsContext.Provider value={breakdownEconomics}>
             <Routes>
               <Route
                 index
@@ -437,9 +455,24 @@ export const FarmDetailPage = () => {
                   />
                 }
               />
+              <Route
+                path="economics/:profileId"
+                element={
+                  <EconomicsProfilePage
+                    simulations={simulations}
+                    onOpenSimulation={(simulationId) =>
+                      openView(
+                        { kind: 'simulation', id: simulationId },
+                        'values',
+                      )
+                    }
+                    onDeleteProfile={setProfileToDelete}
+                  />
+                }
+              />
               <Route path="*" element={<Navigate to={farmPath} replace />} />
             </Routes>
-          </EconomicsProvider>
+          </BreakdownEconomicsContext.Provider>
         ) : (
           <>
             <p role="status" className="sr-only">
@@ -471,8 +504,34 @@ export const FarmDetailPage = () => {
               void simulationActions.removeSimulation(simulationId)
             }
           />
+          <DeleteEconomicsProfileDialog
+            profile={profileToDelete}
+            simulationCount={
+              profileToDelete
+                ? economicsProfiles.simulationsUsingProfile(
+                    simulations,
+                    profileToDelete.id,
+                  ).length
+                : 0
+            }
+            onOpenChange={(open) => {
+              if (!open) setProfileToDelete(null)
+            }}
+            onConfirm={economicsProfiles.deleteProfile}
+          />
         </>
       ) : null}
     </SidebarProvider>
+  )
+}
+
+export const FarmDetailPage = () => {
+  const { farmId } = useParams()
+  const economicsProfiles = useEconomicsProfilesStore(farmId)
+
+  return (
+    <EconomicsProfilesContext.Provider value={economicsProfiles}>
+      <FarmDetail />
+    </EconomicsProfilesContext.Provider>
   )
 }

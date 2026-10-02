@@ -1,7 +1,6 @@
 import { SlidersHorizontal } from 'lucide-react'
 
 import type { FieldRecord, Simulation } from '@/api/types'
-import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
 import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
 import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
 import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
@@ -62,7 +61,6 @@ export const SimulationRulesPanel = ({
         onToggleLock={onToggleLock}
         onBindRotation={onBindRotation}
       />
-      <EconomicsAssumptionsEditor />
     </div>
   </div>
 )

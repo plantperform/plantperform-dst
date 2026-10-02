@@ -26,6 +26,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
+import { EconomicsProfilesMenu } from '@/components/farm/EconomicsProfilesMenu'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -67,6 +68,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserMenuContent } from '@/components/UserMenu'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   describeSeparateQuotas,
@@ -160,6 +162,7 @@ type FarmSidebarProps = {
   onCopySimulation: (simulation: Simulation) => void
   onDeleteSimulation: (simulation: Simulation) => void
   onNewSimulation: () => void
+  onDeleteProfile: (profile: EconomicsProfile) => void
   width: number
   onWidthChange: (width: number) => void
 }
@@ -190,6 +193,7 @@ export const FarmSidebar = ({
   onCopySimulation,
   onDeleteSimulation,
   onNewSimulation,
+  onDeleteProfile,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
@@ -201,9 +205,11 @@ export const FarmSidebar = ({
   const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
-  const historyActive = !overviewActive && selection.kind === 'current'
+  const profilePageActive = useMatch('/farms/:farmId/economics/*') !== null
+  const pageActive = overviewActive || profilePageActive
+  const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
-    !overviewActive && selection.kind === 'simulation' ? selection.id : null
+    !pageActive && selection.kind === 'simulation' ? selection.id : null
   const compareActive = useMatch('/farms/:farmId/simulations/compare') !== null
   const simulationPages = [
     {
@@ -341,6 +347,7 @@ export const FarmSidebar = ({
                   ) : null}
                 </SidebarMenu>
               </li>
+              <EconomicsProfilesMenu onDeleteProfile={onDeleteProfile} />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
