@@ -14,9 +14,10 @@ import {
 import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type { CreateSimulationInput, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
+import { copiedSimulationName } from '@/lib/simulation-form'
 
 const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
-  name: `${simulation.name} (kopi)`,
+  name: copiedSimulationName(simulation.name),
   allowedRotationVariants: simulation.rotationVariants,
   allowedNNormPercentages: simulation.nNormPercentages,
   fertiliser: simulation.fertiliser,

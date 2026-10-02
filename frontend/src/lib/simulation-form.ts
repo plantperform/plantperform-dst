@@ -4,8 +4,10 @@ import type {
   CreateSimulationInput,
   FarmingSystem,
   FertiliserPresetOption,
+  FertiliserSettings,
   RotationCategoryOption,
   RotationOption,
+  Simulation,
 } from '@/api/types'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
@@ -375,6 +377,20 @@ export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
     ? values.catchCropSowingDate
     : values.catchCropSowingInterval
 
+export const yesNo = (value: boolean) => (value ? 'Ja' : 'Nej')
+
+export const nNormPercentagesLabel = (percentages: string[]) =>
+  [...percentages]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((value) => `${value} %`)
+    .join(', ')
+
+export const catchCropSowingLabel = (date: string, dailyBasis: boolean) => {
+  if (dailyBasis) return `${date} · dagsbasis §38`
+  const interval = SOWING_DATE_INTERVALS.find((option) => option.date === date)
+  return `${interval?.label ?? date} · trappesats §37`
+}
+
 // Expects values that passed simulationFormSchema.
 export const toCreateSimulationInput = (
   values: SimulationFormValues,
@@ -400,5 +416,55 @@ export const toCreateSimulationInput = (
     precisionFarming: values.precisionFarming,
     earlySowing: values.earlySowing,
     intermediateCrop: values.intermediateCrop,
+  }
+}
+
+export const copiedSimulationName = (name: string) => `${name} (kopi)`
+
+const fertiliserChoiceOf = (
+  fertiliser: FertiliserSettings,
+  presets: FertiliserPresetOption[],
+): string => {
+  if (fertiliser.orgMineralN === 0 && fertiliser.mineralSharePct === 100) {
+    return NO_FERTILISER
+  }
+  const preset = presets.find(
+    (option) =>
+      option.fertiliser.orgMineralN === fertiliser.orgMineralN &&
+      option.fertiliser.mineralSharePct === fertiliser.mineralSharePct,
+  )
+  return preset?.name ?? CUSTOM_FERTILISER
+}
+
+export const simulationToFormValues = (
+  simulation: Simulation,
+  presets: FertiliserPresetOption[],
+): SimulationFormValues => {
+  const { fertiliser, catchCropDailyBasis, catchCropSowingDate } = simulation
+  const isInterval = SOWING_DATE_INTERVALS.some(
+    (interval) => interval.date === catchCropSowingDate,
+  )
+  return {
+    ...DEFAULT_SIMULATION_FORM_VALUES,
+    name: copiedSimulationName(simulation.name),
+    farmingSystem: fertiliser.farmingSystem,
+    rotationVariants: simulation.rotationVariants,
+    nNormPercentages: simulation.nNormPercentages,
+    fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),
+    orgMineralN: String(fertiliser.orgMineralN),
+    mineralSharePct: String(fertiliser.mineralSharePct),
+    onlyOrganic: fertiliser.onlyOrganic,
+    nContentKgPerTon: String(fertiliser.nContentKgPerTon),
+    catchCropDailyBasis,
+    catchCropSowingInterval:
+      !catchCropDailyBasis && isInterval
+        ? catchCropSowingDate
+        : DEFAULT_SIMULATION_FORM_VALUES.catchCropSowingInterval,
+    catchCropSowingDate: catchCropDailyBasis
+      ? catchCropSowingDate
+      : DEFAULT_SIMULATION_FORM_VALUES.catchCropSowingDate,
+    precisionFarming: simulation.precisionFarming,
+    earlySowing: simulation.earlySowing,
+    intermediateCrop: simulation.intermediateCrop,
   }
 }

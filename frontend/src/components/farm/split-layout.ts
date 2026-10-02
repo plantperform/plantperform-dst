@@ -12,6 +12,7 @@ export const SPLIT_DIVIDER_WIDTH = 8
 export const DEFAULT_LIST_SLACK = 0
 export const PANEL_WIDTH = 460
 export const PANEL_WIDE_WIDTH = 950
+export const RULES_PANEL_WIDTH = 1040
 
 const VIEW_STORAGE_KEY = 'plantperform.farmView'
 const SLACK_STORAGE_KEY = 'plantperform.farmListSlack'

@@ -1,12 +1,11 @@
 import type { ColumnDef, RowData } from '@tanstack/react-table'
-import { ChevronRight, Lock, LockOpen, X } from 'lucide-react'
+import { ChevronRight, Lock, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import { RotationSwatches } from '@/components/farm/RotationSwatches'
 import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHeaderContent'
-import type { FarmInspectorMode } from '@/components/farm/types'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -325,204 +324,28 @@ const detachColumn = (
   },
 })
 
-type RulesColumnsArgs = {
-  fields: FieldRecord[]
-  canEditRules: boolean
-  lockingFieldId: string | null
-  onToggleLock: (field: FieldRecord) => void
-  onBindRotation: (field: FieldRecord) => void
-}
-
-const buildRulesColumns = ({
-  fields,
-  canEditRules,
-  lockingFieldId,
-  onToggleLock,
-  onBindRotation,
-}: RulesColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
-  const lockedCount = fields.filter(isFieldLocked).length
-  const list: ColumnDef<FieldRecord, unknown>[] = [
-    nameColumn(() => `${lockedCount} af ${fields.length} marker låst`),
-    areaColumn(() => null),
-    {
-      id: 'lockStatus',
-      header: () => 'Status',
-      cell: ({ row }) =>
-        isFieldLocked(row.original) ? (
-          <AppTooltip content={formatLockTooltip(row.original)}>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-              <Lock className="h-3 w-3" aria-hidden="true" />
-              Låst
-            </span>
-          </AppTooltip>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            <LockOpen className="h-3 w-3" aria-hidden="true" />
-            Fri
-          </span>
-        ),
-      enableSorting: false,
-      meta: {
-        headerClassName: HEADER_CELL_CLASS,
-        cellClassName: BODY_CELL_CLASS,
-      },
-    },
-    {
-      id: 'boundRotation',
-      header: () => 'Bundet sædskifte',
-      cell: ({ row }) => {
-        const field = row.original
-        if (!isFieldLocked(field) || field.cropRotation.length === 0) {
-          return (
-            <span className="text-muted-foreground">Optimeringen vælger</span>
-          )
-        }
-        return renderRotationSwatches(
-          field.cropRotation,
-          ROTATION_START_CALENDAR_YEAR,
-        )
-      },
-      enableSorting: false,
-      meta: {
-        headerClassName: cn('hidden md:table-cell', HEADER_CELL_CLASS),
-        cellClassName: cn('hidden md:table-cell', BODY_CELL_CLASS),
-      },
-    },
-    {
-      id: 'allowedRotations',
-      header: () => (
-        <AppTooltip content="Kan ikke ændres endnu - låsning giver 1, ellers alle">
-          <span>Tilladte sædskifter</span>
-        </AppTooltip>
-      ),
-      cell: ({ row }) =>
-        row.original.allowedRotationIds.length === 0 ? (
-          <span className="text-muted-foreground">Alle i simuleringen</span>
-        ) : (
-          `${row.original.allowedRotationIds.length} valgt`
-        ),
-      enableSorting: false,
-      meta: {
-        headerClassName: cn('hidden md:table-cell', HEADER_CELL_CLASS),
-        cellClassName: cn('hidden md:table-cell', BODY_CELL_CLASS),
-      },
-    },
-  ]
-
-  if (canEditRules) {
-    list.push({
-      id: 'ruleActions',
-      header: () => 'Handlinger',
-      cell: ({ row }) => {
-        const field = row.original
-        const locked = isFieldLocked(field)
-        const noRotation = field.rotationId === null
-        return (
-          <div className="flex flex-nowrap items-center justify-end gap-2">
-            <AppTooltip
-              content={
-                noRotation
-                  ? 'Kør Optimér for denne mark, før du kan binde et sædskifte.'
-                  : 'Vælg et bestemt sædskifte og lås marken til det, så optimeringen respekterer valget.'
-              }
-            >
-              <span className="inline-flex">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="px-2.5"
-                  disabled={noRotation}
-                  onClick={() => onBindRotation(field)}
-                >
-                  Vælg og lås sædskifte...
-                </Button>
-              </span>
-            </AppTooltip>
-            <AppTooltip
-              content={
-                locked
-                  ? 'Marken er låst til det valgte sædskifte - Optimér ændrer den ikke. Klik for at låse op.'
-                  : 'Marken er ikke låst - Optimér kan frit ændre den. Klik for at låse til det nuværende sædskifte.'
-              }
-            >
-              <span className="inline-flex">
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => onToggleLock(field)}
-                  disabled={noRotation}
-                  loading={lockingFieldId === field.id}
-                  className={
-                    locked
-                      ? 'gap-1.5 px-2.5 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-900'
-                      : 'gap-1.5 px-2.5 text-muted-foreground'
-                  }
-                >
-                  {lockingFieldId === field.id ? null : locked ? (
-                    <Lock className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <LockOpen className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {locked ? 'Lås op' : 'Lås'}
-                </Button>
-              </span>
-            </AppTooltip>
-          </div>
-        )
-      },
-      enableSorting: false,
-      meta: {
-        headerClassName: cn(HEADER_CELL_CLASS, 'text-right whitespace-nowrap'),
-        cellClassName: NUMERIC_CELL_CLASS,
-      },
-    })
-  }
-
-  return list
-}
-
 export type FarmFieldsColumnsArgs = {
   isSimulationView: boolean
-  mode: FarmInspectorMode
   maxYears: number
   selectedYearIndex: number | null
   fields: FieldRecord[]
   quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
-  canEditRules: boolean
-  lockingFieldId: string | null
-  onToggleLock: (field: FieldRecord) => void
-  onBindRotation: (field: FieldRecord) => void
   detachingFieldIds: string[]
   onRequestDetach?: (field: FieldRecord) => void
 }
 
 export const buildFarmFieldsColumns = ({
   isSimulationView,
-  mode,
   maxYears,
   selectedYearIndex,
   fields,
   quota,
   catchmentLabel,
-  canEditRules,
-  lockingFieldId,
-  onToggleLock,
-  onBindRotation,
   detachingFieldIds,
   onRequestDetach,
 }: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
   const { totals } = quota
-  if (mode === 'rules') {
-    return buildRulesColumns({
-      fields,
-      canEditRules,
-      lockingFieldId,
-      onToggleLock,
-      onBindRotation,
-    })
-  }
-
   const list: ColumnDef<FieldRecord, unknown>[] = []
 
   list.push(

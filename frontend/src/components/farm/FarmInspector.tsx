@@ -25,7 +25,6 @@ import { DetachFieldsDialog } from '@/components/farm/DetachFieldsDialog'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
-  resolveEffectiveFieldsSort,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
 import { FarmFieldsMap } from '@/components/farm/FarmFieldsMap'
@@ -36,6 +35,7 @@ import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { OptimizeDialog } from '@/components/farm/OptimizeDialog'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
+import { RULES_PANEL_WIDTH } from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
   FarmView,
@@ -82,6 +82,7 @@ type FarmInspectorProps = {
   onSelectedYearIndexChange: (index: number | null) => void
   optimizeDialogOpen: boolean
   onOptimizeDialogOpenChange: (open: boolean) => void
+  onEditBasis: (simulation: Simulation) => void
   onError: (message: string | null) => void
 }
 
@@ -110,6 +111,7 @@ export const FarmInspector = ({
   onSelectedYearIndexChange,
   optimizeDialogOpen,
   onOptimizeDialogOpenChange,
+  onEditBasis,
   onError,
 }: FarmInspectorProps) => {
   const optimizationRun = useOptimizationRun(selectedSimulation?.id)
@@ -212,7 +214,6 @@ export const FarmInspector = ({
           ),
     [fields, effectiveHighlightedCatchmentKey],
   )
-  const effectiveSort = resolveEffectiveFieldsSort(fieldsSort, isRules)
   const panelField = isRules
     ? null
     : (fields.find((field) => field.id === selectedFieldId) ?? null)
@@ -302,11 +303,9 @@ export const FarmInspector = ({
   )
   const sortedFields = useMemo(() => {
     const sorted = [...listFields].sort((left, right) =>
-      compareFields(left, right, effectiveSort, catchmentLabel),
+      compareFields(left, right, fieldsSort, catchmentLabel),
     )
-    const ordered = isRules
-      ? sorted
-      : orderFieldsByCatchment(sorted, catchmentLabel)
+    const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
     if (effectiveHighlightedCatchmentKey === null) return ordered
     const inCatchment = (field: FieldRecord) =>
       fieldInCatchment(field, effectiveHighlightedCatchmentKey)
@@ -316,9 +315,8 @@ export const FarmInspector = ({
     ]
   }, [
     listFields,
-    effectiveSort,
+    fieldsSort,
     catchmentLabel,
-    isRules,
     effectiveHighlightedCatchmentKey,
   ])
   const simulationSummary = useSimulationYearlySummary(
@@ -360,12 +358,20 @@ export const FarmInspector = ({
 
   const rulesPanel =
     isRules && selectedSimulation && !fieldsLoading ? (
-      <SimulationRulesPanel
-        key={selectedSimulation.id}
-        farmId={farm.id}
-        simulation={selectedSimulation}
-        fields={fields}
-      />
+      <div className="pr-4">
+        <SimulationRulesPanel
+          farmId={farm.id}
+          simulation={selectedSimulation}
+          fields={fields}
+          lockingFieldId={lockingFieldId}
+          hoveredFieldId={hoveredFieldId}
+          focusRequest={rowFocusRequest ?? undefined}
+          onHoveredFieldChange={setHoveredFieldId}
+          onToggleLock={onToggleLock}
+          onBindRotation={onBindRotation}
+          onEditBasis={onEditBasis}
+        />
+      </div>
     ) : null
 
   const fieldSearch = (
@@ -476,37 +482,28 @@ export const FarmInspector = ({
           {fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
           ) : fieldsError ? (
-            <>
-              {rulesPanel}
-              <LoadError
-                message="Kunne ikke hente simuleringens marker."
-                onRetry={onRetryFields}
-                retrying={fieldsRetrying}
-              />
-            </>
+            <LoadError
+              message="Kunne ikke hente simuleringens marker."
+              onRetry={onRetryFields}
+              retrying={fieldsRetrying}
+            />
           ) : (
             <FarmSplitView
               view={view}
               onViewChange={onViewChange}
               listSlack={listSlack}
               onListSlackChange={onListSlackChange}
-              listRequiredWidth={listRequiredWidth}
+              listRequiredWidth={
+                isRules ? RULES_PANEL_WIDTH : listRequiredWidth
+              }
               onSplitAvailableChange={onSplitAvailableChange}
-              list={({ width }) => (
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  {rulesPanel}
+              list={({ width }) =>
+                rulesPanel ?? (
                   <FarmFieldsList
                     farmId={farm.id}
                     search={fieldSearch}
                     sortedFields={sortedFields}
                     isSimulationView={isSimulationView}
-                    simulationId={
-                      selection.kind === 'simulation' ? selection.id : undefined
-                    }
-                    mode={effectiveMode}
-                    lockingFieldId={lockingFieldId}
-                    onToggleLock={onToggleLock}
-                    onBindRotation={onBindRotation}
                     sort={fieldsSort}
                     onSortChange={setFieldsSort}
                     selectedFieldId={selectedFieldId}
@@ -520,7 +517,6 @@ export const FarmInspector = ({
                     onZoomToField={
                       effectiveView === 'list' ? undefined : requestZoomToField
                     }
-                    focusRequest={rowFocusRequest ?? undefined}
                     selectedYearIndex={effectiveSelectedYearIndex}
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
@@ -529,8 +525,8 @@ export const FarmInspector = ({
                       isSimulationView ? undefined : requestDetach
                     }
                   />
-                </div>
-              )}
+                )
+              }
               map={
                 <FarmFieldsMap
                   key={selectionKey}

@@ -1,7 +1,14 @@
 import type { CropAreaLimit, CropAreaRange, FieldRecord } from '@/api/types'
 import { NUM_ROTATION_YEARS, ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 
-export type AreaBound = 'min' | 'max'
+export type AreaUnit = 'ha' | '%'
+
+export type CropAreaLimitInput = {
+  cropCode: number
+  min: string
+  max: string
+  unit: AreaUnit
+}
 
 export type CropAreaLimitDraft = {
   cropCode: number
@@ -9,14 +16,7 @@ export type CropAreaLimitDraft = {
   maxHa: string
 }
 
-const PERCENT_DECIMALS = 1
-
 const areaFormat = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 })
-
-const round = (value: number, decimals: number) => {
-  const factor = 10 ** decimals
-  return Math.round(value * factor) / factor
-}
 
 const parseInput = (value: string): number | null => {
   const trimmed = value.trim().replace(',', '.')
@@ -25,34 +25,72 @@ const parseInput = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
+const isNumber = (value: number | null): value is number =>
+  value !== null && !Number.isNaN(value)
+
 export const totalFieldAreaHa = (fields: FieldRecord[]) =>
   fields.reduce((total, field) => total + field.areaHa, 0)
-
-export const hectaresToPercent = (areaHa: number, totalAreaHa: number) =>
-  totalAreaHa > 0 ? round((areaHa / totalAreaHa) * 100, PERCENT_DECIMALS) : null
-
-const hectaresKey = (bound: AreaBound) => (bound === 'min' ? 'minHa' : 'maxHa')
-
-export const withHectares = (
-  draft: CropAreaLimitDraft,
-  bound: AreaBound,
-  value: string,
-): CropAreaLimitDraft => ({ ...draft, [hectaresKey(bound)]: value })
 
 const areaToInput = (value: number | null) =>
   value === null ? '' : String(value)
 
-export const emptyCropAreaLimitDraft = (
-  cropCode: number,
-): CropAreaLimitDraft => ({ cropCode, minHa: '', maxHa: '' })
-
-export const draftFromCropAreaLimit = (
+export const inputFromCropAreaLimit = (
   limit: CropAreaLimit,
-): CropAreaLimitDraft => ({
+): CropAreaLimitInput => ({
   cropCode: limit.cropCode,
-  minHa: areaToInput(limit.minAreaHa),
-  maxHa: areaToInput(limit.maxAreaHa),
+  min: areaToInput(limit.minAreaHa),
+  max: areaToInput(limit.maxAreaHa),
+  unit: 'ha',
 })
+
+export const emptyCropAreaLimitInput = (
+  cropCode: number,
+): CropAreaLimitInput => ({ cropCode, min: '', max: '', unit: 'ha' })
+
+const percentToHectares = (value: string, totalAreaHa: number) => {
+  const percent = parseInput(value)
+  return isNumber(percent) ? String((percent / 100) * totalAreaHa) : value
+}
+
+export const hectareDraft = (
+  input: CropAreaLimitInput,
+  totalAreaHa: number,
+): CropAreaLimitDraft =>
+  input.unit === 'ha'
+    ? { cropCode: input.cropCode, minHa: input.min, maxHa: input.max }
+    : {
+        cropCode: input.cropCode,
+        minHa: percentToHectares(input.min, totalAreaHa),
+        maxHa: percentToHectares(input.max, totalAreaHa),
+      }
+
+type CropAreaLimitParts = {
+  prefix: string | null
+  amount: string
+  unit: AreaUnit
+}
+
+export const cropAreaLimitParts = (
+  input: CropAreaLimitInput,
+): CropAreaLimitParts | null => {
+  const min = parseInput(input.min)
+  const max = parseInput(input.max)
+  const { unit } = input
+  if (isNumber(min) && isNumber(max)) {
+    return {
+      prefix: null,
+      amount: `${areaFormat.format(min)}–${areaFormat.format(max)}`,
+      unit,
+    }
+  }
+  if (isNumber(min)) {
+    return { prefix: 'mindst', amount: areaFormat.format(min), unit }
+  }
+  if (isNumber(max)) {
+    return { prefix: 'højst', amount: areaFormat.format(max), unit }
+  }
+  return null
+}
 
 export const isEmptyCropAreaLimit = (draft: CropAreaLimitDraft) =>
   draft.minHa.trim() === '' && draft.maxHa.trim() === ''
@@ -68,7 +106,7 @@ export const cropAreaLimitError = (
     return 'Arealet kan ikke være negativt.'
   }
   if (min !== null && max !== null && min > max) {
-    return 'Minimum må ikke være større end maksimum.'
+    return 'Min. er større end maks.'
   }
   return null
 }
@@ -93,62 +131,25 @@ export const sameCropAreaLimits = (
       limit.maxAreaHa === right[index].maxAreaHa,
   )
 
-export const percentRangeLabel = (
-  draft: CropAreaLimitDraft,
-  totalAreaHa: number,
-): string | null => {
-  const percentOf = (value: string) => {
-    const areaHa = parseInput(value)
-    return areaHa === null || Number.isNaN(areaHa)
-      ? null
-      : hectaresToPercent(areaHa, totalAreaHa)
-  }
-  const min = percentOf(draft.minHa)
-  const max = percentOf(draft.maxHa)
-  const format = (value: number) => areaFormat.format(value)
-  if (min !== null && max !== null) {
-    return `${format(min)}–${format(max)} % af arealet`
-  }
-  if (min !== null) return `Mindst ${format(min)} % af arealet`
-  if (max !== null) return `Højst ${format(max)} % af arealet`
-  return null
-}
-
-export type CurrentCropArea = {
-  averageHa: number
-  minYearHa: number
-  maxYearHa: number
-}
-
-export const currentCropArea = (
+export const currentCropAreaHa = (
   fields: FieldRecord[],
   cropCode: number,
-): CurrentCropArea => {
-  const areaByYear = Array.from({ length: NUM_ROTATION_YEARS }, () => 0)
+): number => {
+  let totalHa = 0
   for (const field of fields) {
     const rotation = field.cropRotation
     if (rotation.length === 0) continue
-    areaByYear.forEach((_, year) => {
+    for (let year = 0; year < NUM_ROTATION_YEARS; year += 1) {
       if (rotation[year % rotation.length].cropCode === cropCode) {
-        areaByYear[year] += field.areaHa
+        totalHa += field.areaHa
       }
-    })
+    }
   }
-  return {
-    averageHa:
-      areaByYear.reduce((total, area) => total + area, 0) / NUM_ROTATION_YEARS,
-    minYearHa: Math.min(...areaByYear),
-    maxYearHa: Math.max(...areaByYear),
-  }
+  return totalHa / NUM_ROTATION_YEARS
 }
 
-export const currentCropAreaLabel = (area: CurrentCropArea) => {
-  const minYear = areaFormat.format(area.minYearHa)
-  const maxYear = areaFormat.format(area.maxYearHa)
-  if (area.maxYearHa === 0) return 'Nu: ingen'
-  if (minYear === maxYear) return `Nu: ${maxYear} ha hvert år`
-  return `Nu: ${areaFormat.format(area.averageHa)} ha i gns. (${minYear}–${maxYear} ha pr. år)`
-}
+export const currentCropAreaLabel = (areaHa: number) =>
+  `Nuværende ${areaFormat.format(areaHa)} ha`
 
 export type FieldAreaSums = {
   reachable: Uint8Array
@@ -204,11 +205,7 @@ export const cropAreaLimitWarning = (
   }
   if (min === null || max === null || sums === null) return null
   if (hasSumBetween(sums, min, max)) return null
-  return (
-    `Ingen kombination af hele marker giver mellem ${areaFormat.format(min)} ` +
-    `og ${areaFormat.format(max)} ha, så års-optimeringen kan ikke opfylde ` +
-    'kravet. Gør spændet større.'
-  )
+  return 'Spændet kan ikke nås, fordi marker ikke deles. Gør det bredere.'
 }
 
 export const formatAreaHa = (areaHa: number) => areaFormat.format(areaHa)
@@ -263,50 +260,25 @@ export const possibleCropArea = (range: CropAreaRange): PossibleCropArea => {
   }
 }
 
-export const possibleCropAreaLabel = (possible: PossibleCropArea) =>
-  `Muligt: ${areaFormat.format(possible.lowestMaxHa)}–${areaFormat.format(possible.highestMinHa)} ha`
-
-const roundDown = (value: number) => Math.floor(value * 10 + 1e-9) / 10
-const roundUp = (value: number) => Math.ceil(value * 10 - 1e-9) / 10
-
-export type CropAreaRangeError = {
-  message: string
-  fix: { bound: AreaBound; areaHa: number; label: string }
-}
-
 export const cropAreaRangeError = (
   draft: CropAreaLimitDraft,
   range: CropAreaRange | undefined,
-): CropAreaRangeError | null => {
+): string | null => {
   if (!range || cropAreaLimitError(draft) !== null) return null
   const possible = possibleCropArea(range)
   const min = parseInput(draft.minHa)
   const max = parseInput(draft.maxHa)
   if (min !== null && min > possible.highestMinHa + RANGE_TOLERANCE_HA) {
-    const areaHa = roundDown(possible.highestMinHa)
-    return {
-      message:
-        `Højst ${areaFormat.format(possible.highestMinHa)} ha er muligt med ` +
-        'simuleringens sædskifter og låste marker.',
-      fix: {
-        bound: 'min',
-        areaHa,
-        label: `Brug ${areaFormat.format(areaHa)} ha`,
-      },
-    }
+    return (
+      `Højst ${areaFormat.format(possible.highestMinHa)} ha er muligt med ` +
+      'simuleringens sædskifter og låste marker.'
+    )
   }
   if (max !== null && max < possible.lowestMaxHa - RANGE_TOLERANCE_HA) {
-    const areaHa = roundUp(possible.lowestMaxHa)
-    return {
-      message:
-        `Mindst ${areaFormat.format(possible.lowestMaxHa)} ha ligger fast med ` +
-        'simuleringens sædskifter og låste marker.',
-      fix: {
-        bound: 'max',
-        areaHa,
-        label: `Brug ${areaFormat.format(areaHa)} ha`,
-      },
-    }
+    return (
+      `Mindst ${areaFormat.format(possible.lowestMaxHa)} ha ligger fast med ` +
+      'simuleringens sædskifter og låste marker.'
+    )
   }
   return null
 }
@@ -328,14 +300,14 @@ export const cropAreaRangeWarnings = (
   if (min !== null) {
     if (min > optimize.highestMinHa + RANGE_TOLERANCE_HA) {
       warnings.push(
-        'Kun Års-optimeringen kan opfylde minimum - Optimér kan højst nå ' +
-          `${areaFormat.format(optimize.highestMinHa)} ha i gennemsnit.`,
+        'Kun Loft hvert år kan opfylde minimum - Gennemsnit for perioden kan ' +
+          `højst nå ${areaFormat.format(optimize.highestMinHa)} ha i gennemsnit.`,
       )
     }
     if (min > yearly.highestMinHa + RANGE_TOLERANCE_HA) {
       warnings.push(
-        'Kun Optimér kan opfylde minimum - Års-optimeringen kan højst nå ' +
-          `${areaFormat.format(yearly.highestMinHa)} ha ` +
+        'Kun Gennemsnit for perioden kan opfylde minimum - Loft hvert år kan ' +
+          `højst nå ${areaFormat.format(yearly.highestMinHa)} ha ` +
           `${inYears(yearly.highestMinYears, 'hvert år')}.`,
       )
     }
@@ -343,14 +315,14 @@ export const cropAreaRangeWarnings = (
   if (max !== null) {
     if (max < optimize.lowestMaxHa - RANGE_TOLERANCE_HA) {
       warnings.push(
-        'Kun Års-optimeringen kan overholde maksimum - Optimér har mindst ' +
-          `${areaFormat.format(optimize.lowestMaxHa)} ha i gennemsnit.`,
+        'Kun Loft hvert år kan overholde maksimum - Gennemsnit for perioden ' +
+          `har mindst ${areaFormat.format(optimize.lowestMaxHa)} ha i gennemsnit.`,
       )
     }
     if (max < yearly.lowestMaxHa - RANGE_TOLERANCE_HA) {
       warnings.push(
-        'Kun Optimér kan overholde maksimum - Års-optimeringen har mindst ' +
-          `${areaFormat.format(yearly.lowestMaxHa)} ha ` +
+        'Kun Gennemsnit for perioden kan overholde maksimum - Loft hvert år ' +
+          `har mindst ${areaFormat.format(yearly.lowestMaxHa)} ha ` +
           `${inYears(yearly.lowestMaxYears, 'hvert år')}.`,
       )
     }
