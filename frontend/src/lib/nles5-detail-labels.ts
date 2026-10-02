@@ -55,6 +55,10 @@ export const WP_P: Record<number, number> = {
   6: 5.483, 7: -1.572, 8: 7.413, 9: 7.396, 10: 10.975,
 }
 
+// ηwp for a WP outside WP1-10, such as the afgrøde table's WP11 placeholder
+// (matches engine.py's WP_FALLBACK, the fixed 2027 "WP" constant).
+export const WP_FALLBACK = 7.2595
+
 // Coefficients (beta values) for the N-theta formula and the theta2 correction.
 export const NTHETA_COEFFICIENTS = {
   bt: 0.456793,
