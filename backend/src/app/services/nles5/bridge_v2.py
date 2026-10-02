@@ -9,10 +9,9 @@ The W calculation is ported from c:\\plantperform-nles\\streamlit_app.py
 (lines ~344-369). W for a position depends on what is sown/ploughed in autumn,
 hence on the NEXT position's afgrøde rather than only the current afgrøde. MP
 for a position is the PREVIOUS position's own MP field (the forfrugt's
-category). WP uses the same "next year overrides" principle as W, shifted by
-one year. If the CURRENT position's afgrøde is a vinterafgrøde, it occupies the
-winter period between the forfrugt and the current year; otherwise WP falls
-back to the previous position's static WP field (see _resolve_wp).
+category). WP is the winter cover between the forfrugt and the current
+afgrøde: the forfrugt's sekundær afgrøde, an autumn-sown current afgrøde, an
+overwintering forfrugt, or else bare soil (see _resolve_wp).
 
 M, W and MP all shift when the forfrugt was a langvarig afgrøde (græs,
 kløvergræs, frøgræs or brak - see _LANGVARIG_FORFRUGT_KODER): M overrides to an
@@ -154,6 +153,9 @@ _UDL_W_MAPPING: dict[int, int | None] = {
 # covered the winter between the forfrugt and the current afgrøde (WP trin 1,
 # docs/nles5-kategorier.md). Same source codes as _UDL_W_MAPPING above, mapped
 # onto WP's 10-category scale (DCA rapport nr. 163, s. 24-25) instead of W's 8.
+# Only used when the afgrøde table has no WP category for the code: the
+# lookup's own markers (2000, 968x) are not afgrødekoder, and 960-966 still
+# carry the table's WP11 placeholder.
 _UDL_WP_MAPPING: dict[int, int | None] = {
     960: 3, 961: 3, 962: 3, 963: 3, 964: 3, 965: 3, 966: 3,  # græs/kløvergræs udlæg -> WP3
     968: 4,     # "Efterafgrøde, pligtig" -> WP4
@@ -277,39 +279,71 @@ def _resolve_mp(afgrode_kode: int, prev_params: dict, prev_afgrode_kode: int | N
     return prev_params.get("MP") or 1
 
 
-# Next-year M code -> WP when this year's winter period is occupied by the NEXT
-# year's winter afgrøde. This uses the same "next year overrides" principle as
-# _NEXT_M_TO_W, but on WP's richer category scale. For example, WP has a
-# separate Vinterraps category (8), unlike W's broader
-# "græs/kløvergræs/vinterraps/roer" category (6). Only the two unambiguous cases
-# are mapped (M=1 Vintersæd, M=9 Vinterraps). M=10/11/12 ("... after græs") have
-# no unambiguous WP counterpart and therefore fall back to the static
-# per-afgrødekode WP table rather than a guessed mapping.
-_NEXT_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
+# The afgrøde table's WP column classifies what an afgrøde represents when it
+# stands in the WP window (the winter between the forfrugt and the current
+# afgrøde). WP1/WP8 are autumn-sown afgrøder, so they describe the CURRENT
+# afgrøde occupying that winter; WP3/WP5/WP6 are afgrøder that stand through
+# the winter after their own year, so they describe the FORFRUGT.
+_WP_CATEGORIES = range(1, 11)
+_AUTUMN_SOWN_WP = frozenset({1, 8})
+_OVERWINTERING_WP = frozenset({3, 5, 6})
+
+# M1 Vintersæd / M9 Vinterraps -> WP1/WP8, only for an afgrøde without a WP
+# category in the table (WP11 or missing), e.g. a database loaded before the
+# per-afgrødekode WP values were added.
+_AUTUMN_SOWN_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
+
+# Forfrugter after which a bare winter is WP7 ("Bar jord efter majs eller
+# kartofler", DCA rapport nr. 163, s. 24-25) rather than WP2.
+_MAJS_KARTOFFEL_KODER: frozenset[int] = frozenset({
+    5, 19, 216, 218, 423, 425,  # majs
+    149, 150, 151, 152, 153, 154, 155, 156, 157,  # kartofler
+})
+
+# WP for a forfrugt that is not in the afgrøde table at all. Outside
+# WP1-10, so engine.py's C_func applies its fixed WP_FALLBACK value.
+_WP_UKENDT = 11
 
 
-def _resolve_wp(prev_params: dict, this_params: dict, prev_udlaeg_kode: int | None) -> int:
+def _wp_category(params: dict) -> int | None:
+    wp = params.get("WP")
+    return wp if wp in _WP_CATEGORIES else None
+
+
+def _resolve_wp(
+    prev_afgrode_kode: int | None,
+    prev_params: dict,
+    this_params: dict,
+    prev_udlaeg_kode: int | None,
+) -> int:
     """Resolve WP as the winter cover between the previous and current afgrøde.
 
-    Docs/nles5-kategorier.md's trin 1: WP is normally read from the FORFRUGT's
-    own udlægskode (prev_udlaeg_kode) - what was actually registered in the
-    winter-cover window between the forfrugt and the current afgrøde - via
-    _UDL_WP_MAPPING, same pattern _resolve_w already uses for its own
-    position's udlæg. If the CURRENT afgrøde's M is itself a vinterafgrøde, it
-    occupies that winter period instead (already sown in autumn), which takes
-    priority. Falls back to the forfrugt's static WP classification only when
-    neither applies.
+    In order (docs/nles5-kategorier.md):
+    1. The forfrugt's sekundær afgrøde (prev_udlaeg_kode) stood in the WP
+       window: its own WP from the afgrøde table, or _UDL_WP_MAPPING for the
+       udlægskoder the table has no WP category for.
+    2. The current afgrøde is autumn-sown (WP1/WP8) and occupies the window.
+       Without a WP category in the table, its M (M1/M9) decides instead.
+    3. The forfrugt stood through the winter (WP3/WP5/WP6): its own WP.
+    4. Otherwise the soil was bare: WP7 after majs or kartofler, else WP2.
     """
-    this_m = this_params.get("M")
-    wp_from_next = _NEXT_M_TO_WP.get(this_m) if this_m is not None else None
-    if wp_from_next is not None:
-        return wp_from_next
-    wp_from_udlaeg = (
-        _UDL_WP_MAPPING.get(prev_udlaeg_kode) if prev_udlaeg_kode is not None else None
-    )
-    if wp_from_udlaeg is not None:
-        return wp_from_udlaeg
-    return prev_params.get("WP") or 1
+    if prev_udlaeg_kode is not None:
+        udlaeg_wp = _wp_category(afgroede_normer.lookup_crop_params(prev_udlaeg_kode))
+        if udlaeg_wp is None:
+            udlaeg_wp = _UDL_WP_MAPPING.get(prev_udlaeg_kode)
+        if udlaeg_wp is not None:
+            return udlaeg_wp
+    this_wp = _wp_category(this_params)
+    if this_wp is None:
+        this_wp = _AUTUMN_SOWN_M_TO_WP.get(this_params.get("M"))
+    if this_wp in _AUTUMN_SOWN_WP:
+        return this_wp
+    if prev_afgrode_kode is None:
+        return _WP_UKENDT
+    prev_wp = _wp_category(prev_params)
+    if prev_wp in _OVERWINTERING_WP:
+        return prev_wp
+    return 7 if prev_afgrode_kode in _MAJS_KARTOFFEL_KODER else 2
 
 
 @lru_cache(maxsize=20_000)
@@ -347,7 +381,7 @@ def evaluate_leaching_position(
     m = _resolve_m(afgrode_kode, this_params, prev_afgrode_kode)
     wc = this_params.get("WC") or 1
     mp = _resolve_mp(afgrode_kode, prev_params, prev_afgrode_kode)
-    wp = _resolve_wp(prev_params, this_params, prev_udlaeg_kode)
+    wp = _resolve_wp(prev_afgrode_kode, prev_params, this_params, prev_udlaeg_kode)
     w = _resolve_w(afgrode_kode, this_params, next_params, udlaeg_kode, prev_afgrode_kode)
 
     # §24(7-9): N-fixing efterafgrøde (kvælstoffikserende renbestand/udlæg)

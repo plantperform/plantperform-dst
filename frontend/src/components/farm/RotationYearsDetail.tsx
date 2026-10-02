@@ -14,6 +14,7 @@ import {
   MP_P,
   NTHETA_COEFFICIENTS,
   W_P,
+  WP_FALLBACK,
   WP_LABELS,
   WP_P,
 } from '@/lib/nles5-detail-labels'
@@ -464,7 +465,7 @@ const LeachingDetailSection = ({
   const mCoef = M_P[m] ?? 0
   const wCoef = W_P[wUsed] ?? 0
   const mpCoef = MP_P[mp] ?? 0
-  const wpCoef = WP_P[wp] ?? 0
+  const wpCoef = WP_P[wp] ?? WP_FALLBACK
   const cTotal = mCoef + wCoef + mpCoef + wpCoef
 
   const { bt, bCS, bCA, budb, bm1M, bf0, bf1, bg0, bg1, theta2 } =
@@ -552,7 +553,7 @@ const LeachingDetailSection = ({
             },
             {
               label: `WP=${wp}`,
-              detail: `Forfrugtens vinterdække: ${WP_LABELS[wp] ?? '-'}`,
+              detail: `Forfrugtens vinterdække: ${WP_LABELS[wp] ?? 'ukendt kategori, fast værdi'}`,
               value: fmtSigned(wpCoef),
             },
             {

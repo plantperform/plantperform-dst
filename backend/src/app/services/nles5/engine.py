@@ -9,6 +9,10 @@ def S_func(cu, p_ler=0.001849):
     """Soil factor S based on clay content (Ligning 7: S = exp(-p_ler * lerprocent))."""
     return math.exp(-p_ler * cu)
 
+# ηwp for a WP outside WP1-10: the "WP" constant in Parametre og konstanter
+# (§ 23(4)'s fixed 2027 value). See C_func.
+WP_FALLBACK = 7.2595
+
 HUMUS_BY_JB = {
     1: 3.0,
     2: 3.0,
@@ -93,8 +97,11 @@ def C_func(M, W, MP, WP):
 
     The bekendtgørelse's fixed 2027 parameter value under § 23(4) (7.2595 for
     vinterplantedække for the forfrugt, regardless of the actual forfrugt) is
-    intentionally not implemented. The rule is unresolved and expected to
+    not applied across the board. The rule is unresolved and expected to
     change, so WP uses the category lookup as in every other year (see WP_p).
+    It is only used as the fallback for a WP outside WP1-10, such as the WP11
+    placeholder the afgrøde table still carries for codes without a source
+    value; treating those as 0 would silently count them as WP1 Vintersæd.
     """
     M_p = {
         1: 0,
@@ -144,7 +151,7 @@ def C_func(M, W, MP, WP):
         M_p.get(M, 0)
         + W_p.get(W, 0)
         + MP_p.get(MP, 0)
-        + WP_p.get(WP, 0)
+        + WP_p.get(WP, WP_FALLBACK)
     )
 
 
