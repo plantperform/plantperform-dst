@@ -120,6 +120,7 @@ field" column is the name on the wire.
 | kilde | `source` | | Where a standard price comes from |
 | fælles pris | shared price, `priceUsage` | | A price used by several crops, e.g. Pløjning med pakning |
 | tilpasset | `EconomicsOverrides`, `isPriceCustomised`, `isQuantityCustomised`, `isLineCustomised`, `isCropCustomised` | | The user's own value on top of the SEGES standard |
+| alle afgrøder | `CropsOverview` | | The first tab under Økonomi, with income, subsidy and costs per hectare for every crop |
 | sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine` | | The calculation under a field, where a changed economics line is marked (tilpasset) |
 
 ## Soil and calculation

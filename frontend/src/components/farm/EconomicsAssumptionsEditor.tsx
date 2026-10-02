@@ -52,6 +52,12 @@ import { cn } from '@/lib/utils'
 const ROW_GRID_CLASS =
   'grid grid-cols-[minmax(0,1fr)_9.5rem_0.75rem_9.5rem_5rem] items-start gap-x-3 px-5'
 
+const OVERVIEW_GRID_CLASS =
+  'grid grid-cols-[minmax(0,1fr)_6rem_6rem_6rem] items-center gap-x-3 px-5'
+
+const TABLE_HEAD_CLASS =
+  'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
+
 type NumberInputProps = {
   value: number
   unit: string
@@ -243,22 +249,170 @@ const LineSection = ({ title, total, children }: LineSectionProps) => (
   </section>
 )
 
+type CropTableProps = {
+  crop: CropEconomics
+  editing: boolean
+  registerRow: (lineId: string, element: HTMLDivElement | null) => void
+}
+
+const CropTable = ({ crop, editing, registerRow }: CropTableProps) => {
+  const { assumptions, overrides, setOverrides } = useEconomics()
+  const [restoreCount, setRestoreCount] = useState(0)
+  const usage = useMemo(() => priceUsage(assumptions), [assumptions])
+  const totals = cropTotals(assumptions, overrides, crop)
+
+  const restore = (line: EconomicsLine) => {
+    setOverrides((current) =>
+      withPriceOverride(
+        assumptions,
+        withQuantityOverride(current, crop, line.id, null),
+        line.priceId,
+        null,
+      ),
+    )
+    setRestoreCount((count) => count + 1)
+  }
+
+  const renderLines = (lines: EconomicsLine[], quantityEditable = true) =>
+    lines.map((line) => (
+      <LineRow
+        key={`${crop.cropCode}:${line.id}:${restoreCount}`}
+        assumptions={assumptions}
+        overrides={overrides}
+        crop={crop}
+        line={line}
+        usage={usage.get(line.priceId) ?? 0}
+        editing={editing}
+        quantityEditable={quantityEditable}
+        onOverridesChange={setOverrides}
+        onRestore={restore}
+        registerRow={registerRow}
+      />
+    ))
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-176">
+        <div className={cn(ROW_GRID_CLASS, TABLE_HEAD_CLASS)}>
+          <span>Post</span>
+          <ValueHeading>Mængde</ValueHeading>
+          <span aria-hidden="true" />
+          <ValueHeading>Stykpris</ValueHeading>
+          <span className="text-right">kr/ha</span>
+        </div>
+
+        <LineSection
+          title="Indtægt"
+          total={formatWholeNumber(totals.revenueDkkHa)}
+        >
+          {renderLines(crop.revenue)}
+        </LineSection>
+
+        <LineSection
+          title="Tilskud"
+          total={`+${formatWholeNumber(totals.subsidyDkkHa)}`}
+        >
+          {renderLines(crop.subsidies, false)}
+        </LineSection>
+
+        {COST_CATEGORIES.filter(
+          (category) => crop.costs[category.id].length > 0,
+        ).map((category) => (
+          <LineSection
+            key={category.id}
+            title={category.label}
+            total={`−${formatWholeNumber(totals.costsDkkHa[category.id])}`}
+          >
+            {renderLines(crop.costs[category.id])}
+          </LineSection>
+        ))}
+
+        <div className="flex items-start justify-between gap-3 bg-muted/30 px-5 py-2.5 text-[13px]">
+          <div className="min-w-0">
+            <p className="font-semibold">Omkostninger i alt</p>
+            <p className="text-xs text-muted-foreground">
+              Gødning er ikke med her, for den regnes ud fra kvælstofnormen i
+              hver simulering.
+            </p>
+          </div>
+          <span className="shrink-0 font-semibold tabular-nums">
+            −{formatWholeNumber(totals.totalCostsDkkHa)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type CropsOverviewProps = {
+  onOpenCrop: (cropCode: number) => void
+}
+
+const CropsOverview = ({ onOpenCrop }: CropsOverviewProps) => {
+  const { assumptions, overrides } = useEconomics()
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-128">
+        <div className={cn(OVERVIEW_GRID_CLASS, TABLE_HEAD_CLASS)}>
+          <span>Afgrøde</span>
+          <span className="text-right">Indtægt</span>
+          <span className="text-right">Tilskud</span>
+          <span className="text-right">Omkostninger</span>
+        </div>
+        {assumptions.crops.map((crop) => {
+          const totals = cropTotals(assumptions, overrides, crop)
+          return (
+            <button
+              key={crop.cropCode}
+              type="button"
+              onClick={() => onOpenCrop(crop.cropCode)}
+              className={cn(
+                OVERVIEW_GRID_CLASS,
+                'w-full border-b py-2 text-left text-[13px] transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <CropGroupTile
+                  group={cropGroupFor(crop.cropCode, crop.cropName)}
+                />
+                <span className="min-w-0">
+                  {crop.cropName}
+                  {isCropCustomised(overrides, crop) ? (
+                    <span className="text-muted-foreground"> (tilpasset)</span>
+                  ) : null}
+                </span>
+              </span>
+              <span className="text-right tabular-nums">
+                {formatWholeNumber(totals.revenueDkkHa)}
+              </span>
+              <span className="text-right tabular-nums">
+                +{formatWholeNumber(totals.subsidyDkkHa)}
+              </span>
+              <span className="text-right tabular-nums">
+                −{formatWholeNumber(totals.totalCostsDkkHa)}
+              </span>
+            </button>
+          )
+        })}
+        <p className="bg-muted/30 px-5 py-2.5 text-xs text-muted-foreground">
+          Gødning er ikke med i omkostningerne, for den regnes ud fra
+          kvælstofnormen i hver simulering.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export const EconomicsAssumptionsEditor = () => {
   const id = useId()
-  const {
-    assumptions,
-    overrides,
-    setOverrides,
-    focusRequest,
-    clearFocusRequest,
-  } = useEconomics()
+  const { assumptions, overrides, focusRequest, clearFocusRequest } =
+    useEconomics()
   const [expanded, setExpanded] = useState(true)
   const [editing, setEditing] = useState(false)
   const [activeCode, setActiveCode] = useState<number | null>(null)
-  const [restoreCount, setRestoreCount] = useState(0)
   const [shownFocus, setShownFocus] = useState<number | null>(null)
   const rowElements = useRef(new Map<string, HTMLDivElement>())
-  const usage = useMemo(() => priceUsage(assumptions), [assumptions])
 
   if (focusRequest && focusRequest.nonce !== shownFocus) {
     setShownFocus(focusRequest.nonce)
@@ -279,41 +433,7 @@ export const EconomicsAssumptionsEditor = () => {
     else rowElements.current.delete(lineId)
   }
 
-  const active =
-    assumptions.crops.find((crop) => crop.cropCode === activeCode) ??
-    assumptions.crops[0]
-  if (!active) return null
-
-  const totals = cropTotals(assumptions, overrides, active)
-
-  const restore = (line: EconomicsLine) => {
-    setOverrides((current) =>
-      withPriceOverride(
-        assumptions,
-        withQuantityOverride(current, active, line.id, null),
-        line.priceId,
-        null,
-      ),
-    )
-    setRestoreCount((count) => count + 1)
-  }
-
-  const renderLines = (lines: EconomicsLine[], quantityEditable = true) =>
-    lines.map((line) => (
-      <LineRow
-        key={`${active.cropCode}:${line.id}:${restoreCount}`}
-        assumptions={assumptions}
-        overrides={overrides}
-        crop={active}
-        line={line}
-        usage={usage.get(line.priceId) ?? 0}
-        editing={editing}
-        quantityEditable={quantityEditable}
-        onOverridesChange={setOverrides}
-        onRestore={restore}
-        registerRow={registerRow}
-      />
-    ))
+  const active = assumptions.crops.find((crop) => crop.cropCode === activeCode)
 
   return (
     <section
@@ -365,8 +485,20 @@ export const EconomicsAssumptionsEditor = () => {
               aria-label="Afgrøder"
               className="flex flex-wrap gap-1.5"
             >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!active}
+                onClick={() => setActiveCode(null)}
+                className={cn(
+                  CHOICE_TAB_CLASS,
+                  active ? CHOICE_TAB_IDLE_CLASS : CHOICE_TAB_ACTIVE_CLASS,
+                )}
+              >
+                Alle afgrøder
+              </button>
               {assumptions.crops.map((crop) => {
-                const isActive = crop.cropCode === active.cropCode
+                const isActive = crop === active
                 return (
                   <button
                     key={crop.cropCode}
@@ -395,69 +527,29 @@ export const EconomicsAssumptionsEditor = () => {
               })}
             </div>
             <p className="text-[13px] text-muted-foreground">
-              {active.cropName} har en forfrugtsværdi på{' '}
-              <b className="font-semibold text-foreground">
-                {formatNumber(active.precedingCropValueKgNHa)} kg N/ha
-              </b>
-              , som trækkes fra næste afgrødes kvælstofnorm.
+              {active ? (
+                <>
+                  {active.cropName} har en forfrugtsværdi på{' '}
+                  <b className="font-semibold text-foreground">
+                    {formatNumber(active.precedingCropValueKgNHa)} kg N/ha
+                  </b>
+                  , som trækkes fra næste afgrødes kvælstofnorm.
+                </>
+              ) : (
+                'Tallene er i kr/ha. Klik på en afgrøde for at se og rette dens priser og mængder.'
+              )}
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-176">
-              <div
-                className={cn(
-                  ROW_GRID_CLASS,
-                  'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground',
-                )}
-              >
-                <span>Post</span>
-                <ValueHeading>Mængde</ValueHeading>
-                <span aria-hidden="true" />
-                <ValueHeading>Stykpris</ValueHeading>
-                <span className="text-right">kr/ha</span>
-              </div>
-
-              <LineSection
-                title="Indtægt"
-                total={formatWholeNumber(totals.revenueDkkHa)}
-              >
-                {renderLines(active.revenue)}
-              </LineSection>
-
-              <LineSection
-                title="Tilskud"
-                total={`+${formatWholeNumber(totals.subsidyDkkHa)}`}
-              >
-                {renderLines(active.subsidies, false)}
-              </LineSection>
-
-              {COST_CATEGORIES.filter(
-                (category) => active.costs[category.id].length > 0,
-              ).map((category) => (
-                <LineSection
-                  key={category.id}
-                  title={category.label}
-                  total={`−${formatWholeNumber(totals.costsDkkHa[category.id])}`}
-                >
-                  {renderLines(active.costs[category.id])}
-                </LineSection>
-              ))}
-
-              <div className="flex items-start justify-between gap-3 bg-muted/30 px-5 py-2.5 text-[13px]">
-                <div className="min-w-0">
-                  <p className="font-semibold">Omkostninger i alt</p>
-                  <p className="text-xs text-muted-foreground">
-                    Gødning er ikke med her, for den regnes ud fra
-                    kvælstofnormen i hver simulering.
-                  </p>
-                </div>
-                <span className="shrink-0 font-semibold tabular-nums">
-                  −{formatWholeNumber(totals.totalCostsDkkHa)}
-                </span>
-              </div>
-            </div>
-          </div>
+          {active ? (
+            <CropTable
+              crop={active}
+              editing={editing}
+              registerRow={registerRow}
+            />
+          ) : (
+            <CropsOverview onOpenCrop={setActiveCode} />
+          )}
         </div>
       ) : null}
     </section>
