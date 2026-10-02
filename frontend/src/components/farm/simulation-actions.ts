@@ -41,6 +41,8 @@ type SimulationActionsOptions = {
   selection: FarmViewSelection
   onSelectionChange: (selection: FarmViewSelection) => void
   onError: (message: string | null) => void
+  onSimulationCopied: (source: Simulation, copy: Simulation) => void
+  onSimulationRemoved: (simulationId: string) => void
 }
 
 export const useSimulationActions = ({
@@ -48,6 +50,8 @@ export const useSimulationActions = ({
   selection,
   onSelectionChange,
   onError,
+  onSimulationCopied,
+  onSimulationRemoved,
 }: SimulationActionsOptions) => {
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
@@ -63,6 +67,7 @@ export const useSimulationActions = ({
     setDeletingSimulationId(simulationId)
     try {
       await deleteSimulation(farmId, simulationId)
+      onSimulationRemoved(simulationId)
       await mutate(simulationsKey(farmId))
       await mutate(simulationFieldsKey(farmId, simulationId), undefined, {
         revalidate: false,
@@ -96,6 +101,7 @@ export const useSimulationActions = ({
       setCopyingSimulationId(null)
       return
     }
+    onSimulationCopied(simulation, created)
     let copyError: string | null = null
     try {
       await updateSimulationConstraints(

@@ -4,6 +4,7 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
 import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
 import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
+import { SimulationEconomicsCard } from '@/components/farm/SimulationEconomicsCard'
 
 type SimulationRulesPanelProps = {
   farmId: string
@@ -48,6 +49,7 @@ export const SimulationRulesPanel = ({
         simulation={simulation}
         fields={fields}
       />
+      <SimulationEconomicsCard simulation={simulation} />
       <SimulationBasisCard
         simulation={simulation}
         onEditBasis={() => onEditBasis(simulation)}

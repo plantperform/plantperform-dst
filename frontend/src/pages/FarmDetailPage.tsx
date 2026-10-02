@@ -258,6 +258,12 @@ const FarmDetail = () => {
     selection: activeSelection,
     onSelectionChange: changeSelection,
     onError: showErrorToast,
+    onSimulationCopied: (source, copy) =>
+      economicsProfiles.assignProfile(
+        copy.id,
+        economicsProfiles.profileForSimulation(source.id).id,
+      ),
+    onSimulationRemoved: economicsProfiles.forgetSimulation,
   })
 
   const leavePage = () => {

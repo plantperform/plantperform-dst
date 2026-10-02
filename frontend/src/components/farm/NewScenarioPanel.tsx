@@ -21,6 +21,7 @@ import type {
   Simulation,
 } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
 import { SimulationSummary } from '@/components/farm/SimulationSummary'
@@ -30,6 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
@@ -86,6 +88,7 @@ export const NewScenarioPanel = ({
   const categoriesQuery = useRotationCategories(farmId)
   const nNormQuery = useRotationNNormPercentages(farmId)
   const presetsQuery = useFertiliserPresets(farmId)
+  const economicsProfiles = useEconomicsProfiles()
   const categories = categoriesQuery.data ?? []
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
@@ -122,6 +125,8 @@ export const NewScenarioPanel = ({
     reValidateMode: 'onChange',
   })
   const values = useWatch({ control }) as SimulationFormValues
+  const economicsProfile =
+    economicsProfiles.findProfile(values.economicsProfileId) ?? STANDARD_PROFILE
 
   const [stepIndex, setStepIndex] = useState(0)
   const [furthestStepIndex, setFurthestStepIndex] = useState(0)
@@ -146,7 +151,12 @@ export const NewScenarioPanel = ({
     setPrefilled({
       key: prefillKey,
       values: source
-        ? simulationToFormValues(source, fertiliserPresets, nNormOptions)
+        ? {
+            ...simulationToFormValues(source, fertiliserPresets, nNormOptions),
+            economicsProfileId: economicsProfiles.profileForSimulation(
+              source.id,
+            ).id,
+          }
         : DEFAULT_SIMULATION_FORM_VALUES,
     })
     setStepIndex(0)
@@ -252,6 +262,10 @@ export const NewScenarioPanel = ({
       setIsCreating(false)
       return
     }
+    economicsProfiles.assignProfile(
+      simulation.id,
+      getValues().economicsProfileId,
+    )
     let runError: string | null = null
     if (source) {
       try {
@@ -421,6 +435,28 @@ export const NewScenarioPanel = ({
               <option value="Konventionel">Konventionel</option>
               <option value="Økologisk">Økologisk</option>
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="scenario-economics-profile">Økonomiprofil</Label>
+            <select
+              id="scenario-economics-profile"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              {...register('economicsProfileId')}
+            >
+              {economicsProfiles.profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Priser og mængder bag dækningsbidraget. Du kan skifte profil
+              senere under Regler.
+            </p>
+            <p className="text-xs text-amber-800">
+              Profilen indgår ikke i beregningen endnu.
+            </p>
           </div>
         </div>
       ) : null}
@@ -821,6 +857,7 @@ export const NewScenarioPanel = ({
             categories={categories}
             fertiliserPresets={fertiliserPresets}
             fieldCount={fields.length}
+            economicsProfile={economicsProfile}
             onEditStep={(index) => void goToStep(index)}
           />
           <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">

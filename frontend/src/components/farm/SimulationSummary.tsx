@@ -6,6 +6,10 @@ import type {
   FertiliserPresetOption,
   RotationCategoryOption,
 } from '@/api/types'
+import {
+  STANDARD_PROFILE_ID,
+  type EconomicsProfile,
+} from '@/lib/economics-profiles'
 import { formatFieldCount, formatNumber } from '@/lib/field-domain'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
@@ -30,6 +34,7 @@ type SimulationSummaryProps = {
   categories: RotationCategoryOption[]
   fertiliserPresets: FertiliserPresetOption[]
   fieldCount: number
+  economicsProfile: EconomicsProfile
   // Indexes of the steps each section links back to.
   onEditStep: (stepIndex: number) => void
 }
@@ -71,6 +76,7 @@ export const SimulationSummary = ({
   categories,
   fertiliserPresets,
   fieldCount,
+  economicsProfile,
   onEditStep,
 }: SimulationSummaryProps) => {
   // Summarise what will be sent, not the raw draft, so the two cannot differ.
@@ -105,6 +111,15 @@ export const SimulationSummary = ({
           <p className="text-foreground">{input.name}</p>
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
+          </p>
+          <p>
+            Økonomiprofil: {economicsProfile.name}
+            {economicsProfile.id === STANDARD_PROFILE_ID ? null : (
+              <span className="text-amber-800">
+                {' '}
+                · indgår ikke i beregningen endnu
+              </span>
+            )}
           </p>
         </Section>
 
