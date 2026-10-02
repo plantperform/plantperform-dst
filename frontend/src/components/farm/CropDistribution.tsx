@@ -3,6 +3,7 @@ import { Fragment, useState, type CSSProperties } from 'react'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import {
+  EXCLUDED_FROM_CALCULATION,
   formatNumber,
   formatShare,
   formatWholeNumber,
@@ -181,14 +182,20 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
                 {formatArea(entry.areaHa)}
                 <span className="sr-only"> hektar, udledning</span>
               </span>
-              <AppTooltip
-                content={`${formatWholeNumber(entry.nLoadKgHa * entry.areaHa)} kg N i alt`}
-              >
-                <span className="text-right tabular-nums">
-                  {formatNumber(entry.nLoadKgHa)}
-                  <span className="sr-only"> kg N pr. hektar</span>
-                </span>
-              </AppTooltip>
+              {entry.nLoadKgHa === null ? (
+                <AppTooltip content={EXCLUDED_FROM_CALCULATION}>
+                  <span className="text-right text-muted-foreground">-</span>
+                </AppTooltip>
+              ) : (
+                <AppTooltip
+                  content={`${formatWholeNumber(entry.nLoadKg)} kg N i alt`}
+                >
+                  <span className="text-right tabular-nums">
+                    {formatNumber(entry.nLoadKgHa)}
+                    <span className="sr-only"> kg N pr. hektar</span>
+                  </span>
+                </AppTooltip>
+              )}
             </li>
           </Fragment>
         ))}

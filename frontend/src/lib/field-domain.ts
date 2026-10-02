@@ -398,6 +398,8 @@ export type QuotaStatus = {
   quotaKgn: number
 }
 
+export const EXCLUDED_FROM_CALCULATION = 'Indgår ikke i beregningen'
+
 export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
@@ -914,13 +916,15 @@ export type CropShare = {
   group: CropGroupDefinition
   areaHa: number
   share: number
-  nLoadKgHa: number
+  nLoadKg: number
+  nLoadKgHa: number | null
 }
 
 type CropShareTotals = {
   label: string
   group: CropGroupDefinition
   areaHa: number
+  nLoadAreaHa: number
   nLoadKg: number
 }
 
@@ -950,6 +954,7 @@ export const summarizeCropDistribution = (
         label,
         group,
         areaHa: 0,
+        nLoadAreaHa: 0,
         nLoadKg: 0,
       }
       totals.areaHa += areaPerYear
@@ -957,7 +962,11 @@ export const summarizeCropDistribution = (
       // aggregate (see buildFieldTotals, byYear/byCatchment above) - keep
       // this breakdown consistent rather than quietly counting it back in.
       if (field.quotaEligible) {
-        const yearNLoad = yearNLoadKgHa(yearResult.leachingKgNHa, field.retention)
+        const yearNLoad = yearNLoadKgHa(
+          yearResult.leachingKgNHa,
+          field.retention,
+        )
+        totals.nLoadAreaHa += areaPerYear
         totals.nLoadKg += yearNLoad * areaPerYear
       }
       totalsById.set(id, totals)
@@ -971,7 +980,8 @@ export const summarizeCropDistribution = (
       group: totals.group,
       areaHa: totals.areaHa,
       share: totals.areaHa / totalHa,
-      nLoadKgHa: totals.nLoadKg / totals.areaHa,
+      nLoadKg: totals.nLoadKg,
+      nLoadKgHa: perHa(totals.nLoadKg, totals.nLoadAreaHa),
     }))
     .sort((left, right) => right.areaHa - left.areaHa)
 }

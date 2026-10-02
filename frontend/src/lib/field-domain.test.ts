@@ -126,7 +126,12 @@ describe('summarizeCropDistribution', () => {
     cropCode = 1,
     cropName = 'Vårbyg',
   ): RotationCandidateYearResult => ({
-    year: { cropCode, cropName, undersownCropCode: null, undersownCropName: null },
+    year: {
+      cropCode,
+      cropName,
+      undersownCropCode: null,
+      undersownCropName: null,
+    },
     leachingKgNHa,
     leachingDetail: {},
     dbDkkHa: 0,
@@ -159,10 +164,28 @@ describe('summarizeCropDistribution', () => {
       'crop',
     )
     expect(result).toHaveLength(1)
-    // Both marks' area counts, but only the quota-eligible mark's leaching does -
-    // without the exclusion this would be 50 (10 kg N/ha x 2 ha + 10 kg N/ha x 3 ha).
+    // Both marks count towards the crop's area, but only the quota-eligible
+    // mark counts towards its udledning, in total and per hectare.
     expect(result[0].areaHa).toBe(5)
-    expect(result[0].nLoadKgHa * result[0].areaHa).toBe(20)
+    expect(result[0].nLoadKg).toBe(20)
+    expect(result[0].nLoadKgHa).toBe(10)
+  })
+
+  it('has no udledning per hectare for a crop only on non-kvotegivende marker', () => {
+    const excludedField = field({
+      id: 'b',
+      areaHa: 3,
+      retention: 0,
+      quotaEligible: false,
+    })
+    const [share] = summarizeCropDistribution(
+      [excludedField],
+      { b: [yearResult(10)] },
+      null,
+      'crop',
+    )
+    expect(share.nLoadKg).toBe(0)
+    expect(share.nLoadKgHa).toBeNull()
   })
 })
 
