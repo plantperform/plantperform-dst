@@ -224,6 +224,52 @@ describe('summarizeCropDistribution', () => {
     expect(share.nLoadKg).toBe(0)
     expect(share.nLoadKgHa).toBeNull()
   })
+
+  it('keeps crops that share a short name apart, under their full names', () => {
+    const shares = summarizeCropDistribution(
+      [field({ id: 'a', areaHa: 2 }), field({ id: 'b', areaHa: 3 })],
+      {
+        a: [yearResult(10, 151, 'Kartofler, stivelses-')],
+        b: [yearResult(10, 153, 'Kartofler, andre')],
+      },
+      null,
+      'crop',
+    )
+    expect(shares.map(({ id, label, areaHa }) => ({ id, label, areaHa }))).toEqual([
+      { id: '153', label: 'Kartofler, andre', areaHa: 3 },
+      { id: '151', label: 'Kartofler, stivelses-', areaHa: 2 },
+    ])
+  })
+
+  it('keeps the short name when no other crop shares it', () => {
+    const shares = summarizeCropDistribution(
+      [field({ id: 'a', areaHa: 2 }), field({ id: 'b', areaHa: 3 })],
+      {
+        a: [yearResult(10, 151, 'Kartofler, stivelses-')],
+        b: [yearResult(10, 1, 'Vårbyg')],
+      },
+      null,
+      'crop',
+    )
+    expect(shares.map(({ label }) => label).sort()).toEqual([
+      'Kartofler',
+      'Vårbyg',
+    ])
+  })
+
+  it('adds the same crop code across marks into one share', () => {
+    const shares = summarizeCropDistribution(
+      [field({ id: 'a', areaHa: 2 }), field({ id: 'b', areaHa: 3 })],
+      {
+        a: [yearResult(10, 151, 'Kartofler, stivelses-')],
+        b: [yearResult(10, 151, 'Kartofler, stivelses-')],
+      },
+      null,
+      'crop',
+    )
+    expect(shares).toHaveLength(1)
+    expect(shares[0].areaHa).toBe(5)
+  })
 })
 
 describe('formatSigned', () => {

@@ -964,7 +964,7 @@ export type CropShare = {
 }
 
 type CropShareTotals = {
-  label: string
+  fullName: string
   group: CropGroupDefinition
   areaHa: number
   nLoadAreaHa: number
@@ -991,10 +991,9 @@ export const summarizeCropDistribution = (
     for (const yearResult of counted) {
       const { cropCode, cropName } = yearResult.year
       const group = cropGroupFor(cropCode, cropName)
-      const label = level === 'group' ? group.label : shortCropName(cropName)
-      const id = level === 'group' ? group.id : `${group.id}:${label}`
+      const id = level === 'group' ? group.id : String(cropCode)
       const totals = totalsById.get(id) ?? {
-        label,
+        fullName: level === 'group' ? group.label : cropName,
         group,
         areaHa: 0,
         nLoadAreaHa: 0,
@@ -1016,6 +1015,21 @@ export const summarizeCropDistribution = (
     }
   }
   if (totalHa === 0) return []
+  // Crops are told apart by code. The short name is only ambiguous when
+  // several codes share it (Kartofler, stivelses- / Kartofler, andre), and
+  // then the full name is shown so they can be told apart.
+  const codesByShortName = new Map<string, number>()
+  if (level === 'crop') {
+    for (const { fullName } of totalsById.values()) {
+      const shortName = shortCropName(fullName)
+      codesByShortName.set(shortName, (codesByShortName.get(shortName) ?? 0) + 1)
+    }
+  }
+  const labelFor = ({ fullName }: CropShareTotals) => {
+    if (level === 'group') return fullName
+    const shortName = shortCropName(fullName)
+    return (codesByShortName.get(shortName) ?? 0) > 1 ? fullName : shortName
+  }
   const shadeIndexByGroup = new Map<string, number>()
   return [...totalsById.entries()]
     .sort(([, left], [, right]) => right.areaHa - left.areaHa)
@@ -1024,7 +1038,7 @@ export const summarizeCropDistribution = (
       shadeIndexByGroup.set(totals.group.id, shadeIndex + 1)
       return {
         id,
-        label: totals.label,
+        label: labelFor(totals),
         group: totals.group,
         color: cropShadeColor(totals.group.color, shadeIndex),
         areaHa: totals.areaHa,
