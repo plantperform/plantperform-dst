@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import {
+  EXCLUDED_FROM_CALCULATION,
   fieldFigure,
   formatNumber,
   formatQuotaAmount,
@@ -89,14 +90,17 @@ const buildRows = (
       key: 'nLoad',
       label: 'Udledning',
       level: status.level,
-      value: calculated ? (
-        <>
-          {formatQuotaAmount(status.nLoad, status.quotaKgn)}
-          {note(nLoadNote)}
-        </>
-      ) : (
-        'ikke beregnet'
-      ),
+      value:
+        status.level === 'excluded' ? (
+          EXCLUDED_FROM_CALCULATION
+        ) : calculated ? (
+          <>
+            {formatQuotaAmount(status.nLoad, status.quotaKgn)}
+            {note(nLoadNote)}
+          </>
+        ) : (
+          'ikke beregnet'
+        ),
     })
     rows.push({
       key: 'db2',
@@ -261,13 +265,15 @@ export const FieldTooltip = ({
             {hovered.yearCrop ?? 'ingen afgrøde for året'}
           </div>
           <div className="text-muted-foreground">
-            {hovered.yearNLoadKgHa !== null
-              ? `Udledning ${formatNumber(hovered.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hovered.yearQuotaStatus)}`
-              : yearValuesLoading
-                ? 'Henter udledning for året...'
-                : hovered.hasRotation
-                  ? 'Uden for markens rotationscyklus'
-                  : 'Ingen udledning beregnet for året'}
+            {field && !field.quotaEligible
+              ? `Udledning: ${EXCLUDED_FROM_CALCULATION.toLowerCase()}`
+              : hovered.yearNLoadKgHa !== null
+                ? `Udledning ${formatNumber(hovered.yearNLoadKgHa)} kg N/ha${describeYearQuotaStatus(hovered.yearQuotaStatus)}`
+                : yearValuesLoading
+                  ? 'Henter udledning for året...'
+                  : hovered.hasRotation
+                    ? 'Uden for markens rotationscyklus'
+                    : 'Ingen udledning beregnet for året'}
           </div>
         </div>
       ) : null}

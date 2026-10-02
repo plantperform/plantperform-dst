@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import {
   describeSeparateQuotas,
   describeUncalculatedCount,
+  EXCLUDED_FROM_CALCULATION,
   fieldFigure,
   formatLockTooltip,
   formatNumber,
@@ -81,7 +82,7 @@ const uniqueCropNamesLabel = (
 const QUOTA_PLACEHOLDER_LABELS: Partial<Record<QuotaStatusLevel, string>> = {
   uncalculated: 'Ikke beregnet',
   noData: 'Ingen data',
-  excluded: 'Indgår ikke i beregningen',
+  excluded: EXCLUDED_FROM_CALCULATION,
 }
 
 const renderQuotaPlaceholder = (level: QuotaStatusLevel) => {
@@ -164,7 +165,7 @@ const renderMetricFigure = ({ value, total }: PerHaFigure): ReactNode => (
 )
 
 const notInUdledningCell = () => (
-  <span className="text-muted-foreground">Ikke i udledningsberegningen</span>
+  <span className="text-muted-foreground">{EXCLUDED_FROM_CALCULATION}</span>
 )
 
 const numericMetricColumn = (

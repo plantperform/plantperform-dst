@@ -70,9 +70,14 @@ const comparePrimary = (
         sort.direction,
         catchmentLabel,
       )
-    case 'db2':
     case 'nLoad':
     case 'leaching':
+      return compareNullableNumber(
+        left.quotaEligible ? perHa(left[sort.key], left.areaHa) : null,
+        right.quotaEligible ? perHa(right[sort.key], right.areaHa) : null,
+        sort.direction,
+      )
+    case 'db2':
     case 'feedUnits':
       return compareNullableNumber(
         perHa(left[sort.key], left.areaHa),

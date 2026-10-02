@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
+  EXCLUDED_FROM_CALCULATION,
   fieldFigure,
   fieldTitle,
   formatNumber,
@@ -27,6 +28,7 @@ import {
   QUOTA_STATUS_STYLES,
   REAL_HISTORY_START_CALENDAR_YEAR,
   ROTATION_START_CALENDAR_YEAR,
+  type PerHaFigure,
   type QuotaStatus,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -41,7 +43,7 @@ const buildStatusMessage = (
       : 'Ingen beregnet udledning for markens historik'
   }
   if (status.level === 'noData') return 'Ingen kvote sat for denne mark'
-  if (status.level === 'excluded') return 'Indgår ikke i beregningen'
+  if (status.level === 'excluded') return EXCLUDED_FROM_CALCULATION
 
   const amount = formatQuotaAmount(status.nLoad, status.quotaKgn)
   const pct =
@@ -170,6 +172,12 @@ export const FieldPanel = ({
   const nLoadFigure = fieldFigure(field, 'nLoad')
   const leachingFigure = fieldFigure(field, 'leaching')
   const feedUnitsFigure = fieldFigure(field, 'feedUnits')
+  const quotaMetric = (figure: PerHaFigure) =>
+    !field.quotaEligible
+      ? { value: EXCLUDED_FROM_CALCULATION, muted: true }
+      : calculated
+        ? { value: figure.value, detail: figure.total }
+        : { value: 'Ikke beregnet', muted: true }
   const rotationStartYear = isSimulationView
     ? ROTATION_START_CALENDAR_YEAR
     : REAL_HISTORY_START_CALENDAR_YEAR
@@ -241,32 +249,9 @@ export const FieldPanel = ({
           <MetricCard
             label="Udledning"
             term="nLoad"
-            value={
-              !field.quotaEligible
-                ? 'Ikke i udledningsberegningen'
-                : calculated
-                  ? nLoadFigure.value
-                  : 'Ikke beregnet'
-            }
-            detail={
-              field.quotaEligible && calculated ? nLoadFigure.total : undefined
-            }
-            muted={!field.quotaEligible || !calculated}
+            {...quotaMetric(nLoadFigure)}
           />
-          <MetricCard
-            label="Udvaskning"
-            value={
-              !field.quotaEligible
-                ? 'Ikke i udledningsberegningen'
-                : calculated
-                  ? leachingFigure.value
-                  : 'Ikke beregnet'
-            }
-            detail={
-              field.quotaEligible && calculated ? leachingFigure.total : undefined
-            }
-            muted={!field.quotaEligible || !calculated}
-          />
+          <MetricCard label="Udvaskning" {...quotaMetric(leachingFigure)} />
           <MetricCard
             label="Foderenheder"
             term="feedUnits"

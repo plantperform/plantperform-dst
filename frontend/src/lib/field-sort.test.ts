@@ -37,4 +37,19 @@ describe('compareFields', () => {
     )
     expect(sorted.map(({ id }) => id)).toEqual(['small', 'large'])
   })
+
+  it('puts non-kvotegivende marker last when sorting by udledning', () => {
+    const counted = { ...field('counted', 1, 0), nLoad: 5 }
+    const excluded = {
+      ...field('excluded', 1, 0),
+      nLoad: 50,
+      quotaEligible: false,
+    }
+    for (const direction of ['asc', 'desc'] as const) {
+      const sorted = [excluded, counted].sort((left, right) =>
+        compareFields(left, right, { key: 'nLoad', direction }),
+      )
+      expect(sorted.map(({ id }) => id)).toEqual(['counted', 'excluded'])
+    }
+  })
 })

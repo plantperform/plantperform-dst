@@ -89,7 +89,13 @@ export const FieldYearStrip = ({
   selectedIndex,
   onSelect,
 }: FieldYearStripProps) => {
-  const [metric, setMetric] = useState<YearMetric>('nLoad')
+  const metricOptions = field.quotaEligible
+    ? METRIC_OPTIONS
+    : METRIC_OPTIONS.filter((option) => option.value === 'db2')
+  const [chosenMetric, setMetric] = useState<YearMetric>('nLoad')
+  const metric = metricOptions.some((option) => option.value === chosenMetric)
+    ? chosenMetric
+    : 'db2'
   const hasValues = yearValues !== undefined && yearValues.length > 0
   const values = field.cropRotation.map((_, index) => {
     const yearValue = yearValues?.[index]
@@ -116,9 +122,7 @@ export const FieldYearStrip = ({
     selectedIndex !== null ? field.cropRotation[selectedIndex] : undefined
   const selectedValue =
     selectedIndex !== null ? yearValues?.[selectedIndex] : undefined
-  const otherMetrics = METRIC_OPTIONS.filter(
-    (option) => option.value !== metric,
-  )
+  const otherMetrics = metricOptions.filter((option) => option.value !== metric)
 
   return (
     <div>
@@ -126,7 +130,7 @@ export const FieldYearStrip = ({
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 pt-2.5">
           <SegmentedControl
             value={metric}
-            options={METRIC_OPTIONS}
+            options={metricOptions}
             onValueChange={setMetric}
             aria-label="Vis"
             labelClassName="inline"

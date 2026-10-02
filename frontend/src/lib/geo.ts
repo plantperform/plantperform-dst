@@ -221,7 +221,9 @@ export const fieldsToFeatureCollection = (
         yearProperties !== undefined
           ? (field.cropRotation[yearProperties.yearIndex] ?? null)
           : null
-      const yearNLoadKgHa = yearProperties?.nLoadKgHaByFieldId[field.id] ?? null
+      const yearNLoadKgHa = field.quotaEligible
+        ? (yearProperties?.nLoadKgHaByFieldId[field.id] ?? null)
+        : null
       const yearQuotaLevel =
         yearNLoadKgHa === null
           ? null
@@ -249,8 +251,8 @@ export const fieldsToFeatureCollection = (
           soilTypeNumber: field.soilTypeNumber,
           nLoadLimitKgNHa: field.nLoadLimitKgNHa,
           nLoadQuotaKgN: field.nLoadQuotaKgN,
-          leaching: perHa(field.leaching),
-          nLoad: perHa(field.nLoad),
+          leaching: field.quotaEligible ? perHa(field.leaching) : null,
+          nLoad: field.quotaEligible ? perHa(field.nLoad) : null,
           db2: perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
