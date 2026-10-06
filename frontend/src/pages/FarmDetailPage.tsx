@@ -22,6 +22,7 @@ import { useAuth } from '@/auth/context'
 import { DeleteEconomicsProfileDialog } from '@/components/farm/DeleteEconomicsProfileDialog'
 import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
 import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
+import type { ReturnTarget } from '@/components/farm/economics-navigation'
 import {
   EconomicsProfilesContext,
   useEconomicsProfiles,
@@ -282,6 +283,22 @@ const FarmDetail = () => {
     navigate(farmPath)
   }
 
+  const returnFromProfile = (target: ReturnTarget) => {
+    if (target.kind === 'overview') {
+      navigate(`${farmPath}/simulations`)
+    } else if (target.kind === 'compare') {
+      navigate({
+        pathname: `${farmPath}/simulations/compare`,
+        search: target.search,
+      })
+    } else {
+      changeSelection({ kind: 'simulation', id: target.simulationId })
+      setMode('values')
+      if (target.kind === 'field') setSelectedFieldId(target.fieldId)
+      navigate(farmPath)
+    }
+  }
+
   const openNewSimulationWithProfile = (profileId: string) => {
     setNewSimulationSource(null)
     setNewSimulationProfileId(profileId)
@@ -415,6 +432,7 @@ const FarmDetail = () => {
                           )
                         : undefined
                     }
+                    simulations={simulations}
                     fieldsLoading={simulationFieldsLoading}
                     fieldsError={
                       Boolean(simulationFieldsError) &&
@@ -486,6 +504,7 @@ const FarmDetail = () => {
                       )
                     }
                     onDeleteProfile={setProfileToDelete}
+                    onReturn={returnFromProfile}
                   />
                 }
               />

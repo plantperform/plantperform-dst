@@ -27,11 +27,23 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { profileChanges } from '@/lib/economics'
 import {
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { cn } from '@/lib/utils'
+
+const ProfileChangeCount = ({ profile }: { profile: EconomicsProfile }) => {
+  const { assumptions } = useEconomicsProfiles()
+  const count = profileChanges(assumptions, profile.overrides).length
+
+  return count === 0 ? null : (
+    <span className="shrink-0 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums group-data-[collapsible=icon]:hidden">
+      {count} ændr.
+    </span>
+  )
+}
 
 type EconomicsProfilesMenuProps = {
   onDeleteProfile: (profile: EconomicsProfile) => void
@@ -60,14 +72,14 @@ export const EconomicsProfilesMenu = ({
           className="rounded-md px-3 font-medium"
           onClick={() => setOpen((current) => !current)}
         >
-          <Coins />
-          <span>Økonomiprofiler</span>
           <ChevronRight
             className={cn(
-              'ml-auto motion-safe:transition-transform',
+              'motion-safe:transition-transform',
               open && 'rotate-90',
             )}
           />
+          <Coins />
+          <span>Økonomi</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
       <li id={listId}>
@@ -82,8 +94,11 @@ export const EconomicsProfilesMenu = ({
                     tooltip={profile.name}
                   >
                     <NavLink to={profilePath(profile.id)}>
-                      <Coins />
-                      <span>{profile.name}</span>
+                      <Coins className="hidden group-data-[collapsible=icon]:block" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {profile.name}
+                      </span>
+                      <ProfileChangeCount profile={profile} />
                     </NavLink>
                   </SidebarMenuButton>
                   {profile.id === STANDARD_PROFILE_ID ? null : (

@@ -631,10 +631,13 @@ export const sameOverrides = (
   sameRecord(left.quantities, right.quantities) &&
   sameRecord(left.yieldPct, right.yieldPct)
 
-export const profileChangesTitle = (count: number): string => {
-  if (count === 0) return 'Ingen ændringer i forhold til Standard'
-  return `${count} ${count === 1 ? 'ændring' : 'ændringer'} i forhold til Standard`
+export const formatChangeCount = (count: number): string => {
+  if (count === 0) return 'Ingen ændringer'
+  return `${count} ${count === 1 ? 'ændring' : 'ændringer'}`
 }
+
+export const profileChangesTitle = (count: number): string =>
+  `${formatChangeCount(count)} i forhold til Standard`
 
 export const withoutProfileChange = (
   assumptions: EconomicsAssumptions,

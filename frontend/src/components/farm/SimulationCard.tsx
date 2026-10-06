@@ -6,6 +6,8 @@ import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { EconomicsChip } from '@/components/farm/EconomicsChip'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
@@ -14,6 +16,7 @@ import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   formatCompactDkk,
@@ -102,9 +105,10 @@ type KeyFigureProps = {
   label: string
   figure: PerHaFigure
   note?: ReactNode
+  children?: ReactNode
 }
 
-const KeyFigure = ({ label, figure, note }: KeyFigureProps) => (
+const KeyFigure = ({ label, figure, note, children }: KeyFigureProps) => (
   <div className="min-w-0">
     <p className="text-xs text-muted-foreground">{label}</p>
     <p className="mt-1 font-display text-2xl leading-none tabular-nums">
@@ -116,6 +120,7 @@ const KeyFigure = ({ label, figure, note }: KeyFigureProps) => (
       </p>
     ) : null}
     {note ? <p className="mt-1.5 text-xs tabular-nums">{note}</p> : null}
+    {children ? <div className="mt-2">{children}</div> : null}
   </div>
 )
 
@@ -247,7 +252,12 @@ export const HistoryCard = ({
             'db2',
             formatCompactDkk(quota.totals.db2),
           )}
-        />
+        >
+          <EconomicsChip
+            profile={STANDARD_PROFILE}
+            returnTo={{ kind: 'overview' }}
+          />
+        </KeyFigure>
         <KeyFigure
           label="Udledning pr. år"
           figure={perHaFigure(
@@ -294,6 +304,7 @@ const SimulationFigures = ({
   const historyDb2PerHa = totalsPerHa(history.totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
+  const profile = useEconomicsProfiles().profileForSimulation(simulationId)
 
   return (
     <>
@@ -306,7 +317,9 @@ const SimulationFigures = ({
               <DeltaNote delta={describeDb2Delta(db2PerHa, historyDb2PerHa)} />
             ) : undefined
           }
-        />
+        >
+          <EconomicsChip profile={profile} returnTo={{ kind: 'overview' }} />
+        </KeyFigure>
         <KeyFigure
           label="Udledning pr. år"
           figure={perHaFigure(

@@ -6,6 +6,7 @@ import {
   cropTotals,
   cropYieldPct,
   customisedBreakdownLine,
+  formatChangeCount,
   formatDbDkk,
   formatEconomicsNumber,
   formatNameList,
@@ -487,6 +488,9 @@ describe('profileChanges', () => {
     )
     expect(profileChangesTitle(1)).toBe('1 ændring i forhold til Standard')
     expect(profileChangesTitle(3)).toBe('3 ændringer i forhold til Standard')
+    expect(formatChangeCount(0)).toBe('Ingen ændringer')
+    expect(formatChangeCount(1)).toBe('1 ændring')
+    expect(formatChangeCount(3)).toBe('3 ændringer')
   })
 
   it('restores one change and keeps the others', () => {

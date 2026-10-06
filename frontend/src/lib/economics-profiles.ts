@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
-import { NO_OVERRIDES, type EconomicsOverrides } from '@/lib/economics'
+import {
+  formatChangeCount,
+  formatNameList,
+  NO_OVERRIDES,
+  type EconomicsOverrides,
+} from '@/lib/economics'
 
 export type EconomicsProfile = {
   id: string
@@ -77,6 +82,47 @@ export const deleteProfileMessage = (simulationCount: number): string => {
   return simulationCount === 1
     ? '1 simulering bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til den først.'
     : `${simulationCount} simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.`
+}
+
+export const describeEconomicsEntry = (
+  ownProfiles: { name: string; simulationNames: string[] }[],
+): { title: string; text: string } => {
+  if (ownProfiles.length === 0) {
+    return {
+      title: `Simuleringerne regner med ${STANDARD_PROFILE.name}`,
+      text: 'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.',
+    }
+  }
+  const uses = ownProfiles.map(
+    (profile) =>
+      `${profile.name} bruges af ${
+        profile.simulationNames.length > 0
+          ? formatNameList(profile.simulationNames)
+          : 'ingen simuleringer endnu'
+      }.`,
+  )
+  return {
+    title: `${
+      ownProfiles.length === 1
+        ? 'Bedriftens økonomiprofil'
+        : 'Bedriftens økonomiprofiler'
+    }: ${formatNameList(ownProfiles.map((profile) => profile.name))}`,
+    text: `${uses.join(' ')} Indtil profilerne indgår i beregningen, er tallene regnet med Standard.`,
+  }
+}
+
+export const describeProfileOption = (
+  profileId: string,
+  changeCount: number,
+  simulationNames: string[],
+): string => {
+  if (profileId === STANDARD_PROFILE_ID) {
+    return 'SEGES Budgetkalkuler 2026 · kan ikke rettes'
+  }
+  const changes = formatChangeCount(changeCount)
+  return simulationNames.length > 0
+    ? `${changes} · bruges af ${simulationNames.join(', ')}`
+    : changes
 }
 
 export const sharedProfileNote = (simulationCount: number): string | null => {

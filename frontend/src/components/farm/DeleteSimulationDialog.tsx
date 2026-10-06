@@ -26,8 +26,8 @@ export const DeleteSimulationDialog = ({
       <DialogHeader>
         <DialogTitle>Slet {simulation?.name}?</DialogTitle>
         <DialogDescription>
-          Simuleringen og dens kopierede marker slettes. Bedriftens egne marker
-          berøres ikke. Handlingen kan ikke fortrydes.
+          Simuleringen og dens ændringer på markerne slettes. Afgrødehistorikken
+          og økonomiprofilerne berøres ikke.
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>

@@ -1,10 +1,22 @@
-import { Copy, Pencil, TextCursorInput, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Copy,
+  Pencil,
+  TextCursorInput,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { Fragment, useId, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import type { Simulation } from '@/api/types'
-import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
+import {
+  returnTargetLabel,
+  returnTargetSchema,
+  useEconomicsNavigation,
+  type ReturnTarget,
+} from '@/components/farm/economics-navigation'
 import {
   profilePageRequestSchema,
   useEconomicsProfiles,
@@ -29,6 +41,8 @@ import {
 import { cn } from '@/lib/utils'
 
 const focusSchema = z.object({ cropCode: z.number(), lineId: z.string() })
+
+const returnStateSchema = z.object({ returnTo: returnTargetSchema })
 
 const simulationList = new Intl.ListFormat('da-DK', {
   style: 'long',
@@ -91,6 +105,7 @@ type ProfileViewProps = {
   simulations: Simulation[]
   onOpenSimulation: (simulationId: string) => void
   onDeleteProfile: (profile: EconomicsProfile) => void
+  onReturn: (target: ReturnTarget) => void
 }
 
 const ProfileView = ({
@@ -98,6 +113,7 @@ const ProfileView = ({
   simulations,
   onOpenSimulation,
   onDeleteProfile,
+  onReturn,
 }: ProfileViewProps) => {
   const location = useLocation()
   const economics = useEconomicsProfiles()
@@ -108,6 +124,12 @@ const ProfileView = ({
   const [editingName, setEditingName] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
   const [shownRequest, setShownRequest] = useState<string | null>(null)
+  const [dismissedReturn, setDismissedReturn] = useState<string | null>(null)
+  const returnState = returnStateSchema.safeParse(location.state)
+  const returnTo =
+    returnState.success && dismissedReturn !== location.key
+      ? returnState.data.returnTo
+      : null
 
   if (nameRequestKey !== null && nameRequestKey !== shownRequest) {
     setShownRequest(nameRequestKey)
@@ -127,6 +149,26 @@ const ProfileView = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
+      {returnTo ? (
+        <div className="sticky top-0 z-10 flex items-center gap-2.5 bg-foreground px-6 py-2 text-[13px] text-background sm:px-10">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-background focus-visible:outline-none"
+            onClick={() => onReturn(returnTo)}
+          >
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            {returnTargetLabel(returnTo)}
+          </button>
+          <button
+            type="button"
+            aria-label="Skjul linjen"
+            className="ml-auto rounded-sm text-background/70 transition-colors hover:text-background focus-visible:ring-2 focus-visible:ring-background focus-visible:outline-none"
+            onClick={() => setDismissedReturn(location.key)}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 pt-10 pb-16 sm:px-10">
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0 flex-1">
@@ -184,7 +226,7 @@ const ProfileView = ({
         <div className="space-y-1.5 text-sm">
           <p className="text-muted-foreground">
             {users.length === 0 ? (
-              'Ingen simuleringer bruger profilen endnu. Den vælges i Ny simulering eller under Regler i en simulering.'
+              'Ingen simuleringer bruger profilen endnu. Den vælges øverst i en simulering eller i Ny simulering.'
             ) : (
               <>
                 Bruges af{' '}

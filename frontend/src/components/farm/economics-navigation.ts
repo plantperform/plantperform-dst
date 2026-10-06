@@ -33,3 +33,27 @@ export const guideOriginSchema = z.object({
 })
 
 export type GuideOrigin = z.infer<typeof guideOriginSchema>['guide']
+
+export const returnTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('overview') }),
+  z.object({ kind: z.literal('compare'), search: z.string() }),
+  z.object({
+    kind: z.literal('simulation'),
+    simulationId: z.string(),
+    label: z.string(),
+  }),
+  z.object({
+    kind: z.literal('field'),
+    simulationId: z.string(),
+    fieldId: z.string(),
+    label: z.string(),
+  }),
+])
+
+export type ReturnTarget = z.infer<typeof returnTargetSchema>
+
+export const returnTargetLabel = (target: ReturnTarget): string => {
+  if (target.kind === 'overview') return 'Tilbage til Oversigt'
+  if (target.kind === 'compare') return 'Tilbage til Sammenlign'
+  return target.label
+}

@@ -7,6 +7,8 @@ import {
   STANDARD_PROFILE_ID,
   allProfiles,
   deleteProfileMessage,
+  describeEconomicsEntry,
+  describeProfileOption,
   parseStoredProfiles,
   profileForSimulation,
   profileNameError,
@@ -149,6 +151,43 @@ describe('economics profiles', () => {
     expect(deleteProfileMessage(2)).toBe(
       '2 simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.',
     )
+  })
+
+  it('introduces the economics above the simulations', () => {
+    expect(describeEconomicsEntry([])).toEqual({
+      title: 'Simuleringerne regner med Standard (SEGES 2026)',
+      text: 'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.',
+    })
+    expect(
+      describeEconomicsEntry([
+        { name: 'Bakkegården 2027', simulationNames: ['Reduceret kvælstof'] },
+      ]),
+    ).toEqual({
+      title: 'Bedriftens økonomiprofil: Bakkegården 2027',
+      text: 'Bakkegården 2027 bruges af Reduceret kvælstof. Indtil profilerne indgår i beregningen, er tallene regnet med Standard.',
+    })
+    expect(
+      describeEconomicsEntry([
+        {
+          name: 'Bakkegården 2027',
+          simulationNames: ['Reduceret kvælstof', 'Mere vintersæd'],
+        },
+        { name: 'Forsigtig 2027', simulationNames: [] },
+      ]),
+    ).toEqual({
+      title: 'Bedriftens økonomiprofiler: Bakkegården 2027 og Forsigtig 2027',
+      text: 'Bakkegården 2027 bruges af Reduceret kvælstof og Mere vintersæd. Forsigtig 2027 bruges af ingen simuleringer endnu. Indtil profilerne indgår i beregningen, er tallene regnet med Standard.',
+    })
+  })
+
+  it('describes a profile where a simulation chooses it', () => {
+    expect(
+      describeProfileOption(STANDARD_PROFILE_ID, 0, ['Mere vintersæd']),
+    ).toBe('SEGES Budgetkalkuler 2026 · kan ikke rettes')
+    expect(describeProfileOption('careful', 3, [])).toBe('3 ændringer')
+    expect(
+      describeProfileOption('careful', 1, ['Reduceret kvælstof', 'Kopi']),
+    ).toBe('1 ændring · bruges af Reduceret kvælstof, Kopi')
   })
 
   it('says that a change reaches every simulation that shares the profile', () => {

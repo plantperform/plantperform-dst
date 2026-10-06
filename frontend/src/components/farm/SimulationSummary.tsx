@@ -6,10 +6,7 @@ import type {
   FertiliserPresetOption,
   RotationCategoryOption,
 } from '@/api/types'
-import {
-  STANDARD_PROFILE_ID,
-  type EconomicsProfile,
-} from '@/lib/economics-profiles'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import { formatFieldCount, formatNumber } from '@/lib/field-domain'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
@@ -112,15 +109,7 @@ export const SimulationSummary = ({
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
-          <p>
-            Økonomiprofil: {economicsProfile.name}
-            {economicsProfile.id === STANDARD_PROFILE_ID ? null : (
-              <span className="text-amber-800">
-                {' '}
-                · indgår ikke i beregningen endnu
-              </span>
-            )}
-          </p>
+          <p>Økonomi: {economicsProfile.name}</p>
         </Section>
 
         <Section

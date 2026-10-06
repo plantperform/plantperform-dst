@@ -4,7 +4,6 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
 import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
 import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
-import { SimulationEconomicsCard } from '@/components/farm/SimulationEconomicsCard'
 
 type SimulationRulesPanelProps = {
   farmId: string
@@ -39,7 +38,7 @@ export const SimulationRulesPanel = ({
       </div>
       <p className="mt-1.5 max-w-190 text-[13px] text-muted-foreground">
         Her bestemmer du, hvad optimeringen må gøre: grænser for hele bedriften
-        og marker, den ikke må ændre.
+        og marker, den ikke må ændre. Økonomien vælges øverst i simuleringen.
       </p>
     </div>
     <div className="flex flex-col gap-3.5 px-6 pt-5 pb-6">
@@ -49,7 +48,6 @@ export const SimulationRulesPanel = ({
         simulation={simulation}
         fields={fields}
       />
-      <SimulationEconomicsCard simulation={simulation} />
       <SimulationBasisCard
         simulation={simulation}
         onEditBasis={() => onEditBasis(simulation)}

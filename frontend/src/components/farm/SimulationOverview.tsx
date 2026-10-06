@@ -1,8 +1,10 @@
-import { Plus } from 'lucide-react'
+import { ArrowRight, Coins, Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { FieldRecord, Simulation } from '@/api/types'
+import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { HistoryCard, SimulationCard } from '@/components/farm/SimulationCard'
 import type {
   FarmInspectorMode,
@@ -10,6 +12,10 @@ import type {
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  describeEconomicsEntry,
+  STANDARD_PROFILE_ID,
+} from '@/lib/economics-profiles'
 import { resolveFarmQuota } from '@/lib/field-domain'
 
 type SimulationOverviewProps = {
@@ -38,10 +44,23 @@ export const SimulationOverview = ({
   onNewSimulation,
 }: SimulationOverviewProps) => {
   const historyQuota = useMemo(() => resolveFarmQuota(fields, false), [fields])
+  const economics = useEconomicsProfiles()
+  const { startGuide } = useEconomicsNavigation()
+  const ownProfiles = economics.profiles.filter(
+    (profile) => profile.id !== STANDARD_PROFILE_ID,
+  )
+  const economicsEntry = describeEconomicsEntry(
+    ownProfiles.map((profile) => ({
+      name: profile.name,
+      simulationNames: economics
+        .simulationsUsingProfile(simulations, profile.id)
+        .map((simulation) => simulation.name),
+    })),
+  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-8 px-6 pt-10 pb-16 sm:px-10">
+      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-5 px-6 pt-10 pb-16 sm:px-10">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="font-display text-4xl tracking-tight">
@@ -67,6 +86,41 @@ export const SimulationOverview = ({
             </Button>
           </div>
         </header>
+        <section
+          aria-label="Økonomi"
+          className="flex flex-wrap items-center gap-3.5 rounded-lg border bg-card px-3.5 py-3 shadow-sm"
+        >
+          <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-primary/10 text-primary">
+            <Coins className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1 basis-80">
+            <p className="text-sm font-semibold">{economicsEntry.title}</p>
+            <p className="text-[13px] text-muted-foreground">
+              {economicsEntry.text}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {ownProfiles.length > 0 ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  to={economics.profilePath(ownProfiles[0].id)}
+                  state={{ returnTo: { kind: 'overview' } }}
+                >
+                  Se profilerne
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              onClick={() => startGuide({ fromProfileId: STANDARD_PROFILE_ID })}
+            >
+              {ownProfiles.length > 0
+                ? 'Tilpas igen'
+                : 'Tilpas økonomien til bedriften'}
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
+        </section>
         <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
           <HistoryCard
             farmId={farmId}
