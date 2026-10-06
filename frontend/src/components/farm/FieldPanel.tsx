@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { Coins } from 'lucide-react'
+import { useContext, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
 import type {
@@ -8,6 +10,8 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
+import { useCalculationReturn } from '@/components/farm/economics-navigation'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
@@ -17,6 +21,7 @@ import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
@@ -154,7 +159,9 @@ export const FieldPanel = ({
   onCalcOpenChange,
   onError,
 }: FieldPanelProps) => {
-  const [calcOpen, setCalcOpen] = useState(false)
+  const economics = useContext(BreakdownEconomicsContext)
+  const openAtYearIndex = useCalculationReturn(field.id)
+  const [calcOpen, setCalcOpen] = useState(openAtYearIndex !== undefined)
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
 
   useEffect(() => {
@@ -274,6 +281,30 @@ export const FieldPanel = ({
           />
         </div>
 
+        {calculated && economics ? (
+          <p className="-mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            <Coins
+              className="size-3.5 shrink-0 text-primary"
+              aria-hidden="true"
+            />
+            <span>
+              Regnet med{' '}
+              <Link
+                to={economics.profilePath}
+                state={{ returnTo: economics.returnTo }}
+                className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {economics.profile.name}
+              </Link>
+            </span>
+            {economics.profile.id === STANDARD_PROFILE_ID ? null : (
+              <span className="text-amber-800">
+                · indgår ikke i beregningen endnu
+              </span>
+            )}
+          </p>
+        ) : null}
+
         <div className="@container rounded-lg border bg-card p-3.5 @2xl:p-4">
           <div className="border-b pb-2">
             <h3 className="flex items-center gap-1 text-sm font-semibold">
@@ -360,6 +391,7 @@ export const FieldPanel = ({
                     areaHa={field.areaHa}
                     retention={field.retention}
                     selectedYearIndex={highlightIndex ?? undefined}
+                    openAtYearIndex={openAtYearIndex}
                     onSelectedYearIndexChange={
                       selectedCalendarYear !== null && onSelectedYearIndexChange
                         ? onSelectedYearIndexChange

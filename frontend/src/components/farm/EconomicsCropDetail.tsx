@@ -87,9 +87,13 @@ export const CustomisedDot = () => (
   </span>
 )
 
-const CustomisedChip = () => (
+export const CustomisedChip = ({
+  children = 'tilpasset',
+}: {
+  children?: ReactNode
+}) => (
   <span className="rounded bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800">
-    tilpasset
+    {children}
   </span>
 )
 

@@ -1,4 +1,5 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 export type GuideStart = {
@@ -44,16 +45,53 @@ export const returnTargetSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('field'),
-    simulationId: z.string(),
+    simulationId: z.string().nullable(),
     fieldId: z.string(),
     label: z.string(),
+    calculationYearIndex: z.number().nullable(),
   }),
 ])
 
 export type ReturnTarget = z.infer<typeof returnTargetSchema>
 
+export type FieldReturnTarget = Extract<ReturnTarget, { kind: 'field' }>
+
 export const returnTargetLabel = (target: ReturnTarget): string => {
   if (target.kind === 'overview') return 'Tilbage til Oversigt'
   if (target.kind === 'compare') return 'Tilbage til Sammenlign'
   return target.label
+}
+
+const calculationReturnSchema = z.object({
+  calculation: z.object({ fieldId: z.string(), yearIndex: z.number() }),
+})
+
+export const calculationReturnState = (
+  target: ReturnTarget,
+): z.infer<typeof calculationReturnSchema> | null =>
+  target.kind === 'field' && target.calculationYearIndex !== null
+    ? {
+        calculation: {
+          fieldId: target.fieldId,
+          yearIndex: target.calculationYearIndex,
+        },
+      }
+    : null
+
+export const useCalculationReturn = (fieldId: string): number | undefined => {
+  const { pathname, search, state } = useLocation()
+  const navigate = useNavigate()
+  const returned = calculationReturnSchema.safeParse(state)
+  const [yearIndex] = useState(() =>
+    returned.success && returned.data.calculation.fieldId === fieldId
+      ? returned.data.calculation.yearIndex
+      : undefined,
+  )
+  const pending = returned.success
+
+  useEffect(() => {
+    if (pending) navigate({ pathname, search }, { replace: true })
+  }, [navigate, pathname, pending, search])
+
+  return yearIndex
 }

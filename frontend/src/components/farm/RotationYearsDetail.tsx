@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
+import { CustomisedChip } from '@/components/farm/EconomicsCropDetail'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
@@ -931,7 +932,7 @@ const useCustomisedLine = (cropCode: number) => {
     economics
       ? customisedBreakdownLine(
           economics.assumptions,
-          economics.overrides,
+          economics.profile.overrides,
           cropCode,
           row,
         )
@@ -947,25 +948,21 @@ const CustomisedLabel = ({
   cropCode: number
   line: BreakdownTarget | null
 }) => {
-  const profilePath = useContext(BreakdownEconomicsContext)?.profilePath
-  if (!line) return label
+  const economics = useContext(BreakdownEconomicsContext)
+  if (!line || !economics) return label
   return (
     <>
-      {label} (tilpasset)
+      {label}{' '}
+      <CustomisedChip>tilpasset i {economics.profile.name}</CustomisedChip>
       <span className="block text-[11px] text-muted-foreground">
-        Beregnet med standarden
-        {profilePath ? (
-          <>
-            {' · '}
-            <Link
-              to={profilePath}
-              state={{ cropCode, lineId: line.id }}
-              className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Se i økonomiprofilen
-            </Link>
-          </>
-        ) : null}
+        Beregnet med standarden{' · '}
+        <Link
+          to={economics.profilePath}
+          state={{ cropCode, lineId: line.id, returnTo: economics.returnTo }}
+          className="rounded-sm font-medium whitespace-nowrap text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Se posten i profilen
+        </Link>
       </span>
     </>
   )
@@ -984,19 +981,20 @@ const CategoryBreakdownRow = ({
   lines: CostLine[]
   cropCode: number
 }) => {
-  const [open, setOpen] = useState(false)
   const hasBreakdown = lines.length > 0
   const customisedLine = useCustomisedLine(cropCode)
   const customisedLines = lines.map((l) =>
     customisedLine({ kind: 'cost', category: label, treatment: l.treatment }),
   )
   const anyCustomised = customisedLines.some((line) => line !== null)
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? anyCustomised
 
   return (
     <div className="border-t py-1.5">
       <button
         type="button"
-        onClick={() => hasBreakdown && setOpen((current) => !current)}
+        onClick={() => hasBreakdown && setToggled(!open)}
         className={`flex w-full items-center justify-between gap-2 text-left text-xs ${
           hasBreakdown ? 'cursor-pointer' : 'cursor-default'
         }`}
@@ -1170,6 +1168,7 @@ type RotationYearsDetailProps = {
   hideYearSelector?: boolean
   hideNNormLevel?: boolean
   startCalendarYear?: number
+  openAtYearIndex?: number
 }
 
 export const RotationYearsDetail = ({
@@ -1181,13 +1180,26 @@ export const RotationYearsDetail = ({
   hideYearSelector = false,
   hideNNormLevel = false,
   startCalendarYear = ROTATION_START_CALENDAR_YEAR,
+  openAtYearIndex,
 }: RotationYearsDetailProps) => {
-  const [internalSelectedYear, setInternalSelectedYear] = useState(0)
-  const [showFullDetail, setShowFullDetail] = useState(false)
+  const economics = useContext(BreakdownEconomicsContext)
+  const [internalSelectedYear, setInternalSelectedYear] = useState(
+    openAtYearIndex ?? 0,
+  )
+  const [showFullDetail, setShowFullDetail] = useState(
+    openAtYearIndex !== undefined,
+  )
   const [showFormulas, setShowFormulas] = useState(false)
 
   const selectedYear = selectedYearIndex ?? internalSelectedYear
   const tabRowRef = useRef<HTMLDivElement>(null)
+  const economicsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (openAtYearIndex !== undefined) {
+      economicsRef.current?.scrollIntoView({ block: 'start' })
+    }
+  }, [openAtYearIndex])
 
   useEffect(() => {
     const row = tabRowRef.current
@@ -1275,11 +1287,25 @@ export const RotationYearsDetail = ({
             areaHa={areaHa}
             retention={retention}
           />
-          <EconomicDetailSection
-            detail={year.dbDetail}
-            areaHa={areaHa}
-            cropCode={year.year.cropCode}
-          />
+          <div ref={economicsRef}>
+            <BreakdownEconomicsContext.Provider
+              value={
+                economics && {
+                  ...economics,
+                  returnTo: {
+                    ...economics.returnTo,
+                    calculationYearIndex: yearIndex,
+                  },
+                }
+              }
+            >
+              <EconomicDetailSection
+                detail={year.dbDetail}
+                areaHa={areaHa}
+                cropCode={year.year.cropCode}
+              />
+            </BreakdownEconomicsContext.Provider>
+          </div>
 
           <div className="border-t pt-3">
             <button

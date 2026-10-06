@@ -132,7 +132,8 @@ field" column is the name on the wire.
 | indgår ikke i beregningen endnu | `NotInCalculationDot` | | The yellow dot at an own profile while the backend still calculates with Standard |
 | økonomi i simuleringerne | `ComparisonEconomics`, `compareProfileChanges`, `ProfileChangeComparison`, `describeEconomicsVerdict` | | The section of the comparison with each simulation's profile and the lines where the profiles differ from Standard |
 | samme marker | `haveSameFieldPlans` | | Two simulations with the same rotation on every field, so only their economics can set their dækningsbidrag apart |
-| sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine`, `BreakdownEconomicsContext` | | The calculation under a field, where a changed economics line is marked (tilpasset) |
+| sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine`, `BreakdownEconomicsContext`, `CustomisedChip` | | The calculation under a field, where a line the profile changes is marked tilpasset i {profil} and links to the line in the profile |
+| regnet med {profil} | `useFieldEconomics`, `FieldReturnTarget`, `useCalculationReturn`, `calculationReturnState` | | The line under a field's key figures that names the profile behind them. A profile opened from the field leads back to the field, and from a line in the calculation back to that year's calculation |
 
 ## Soil and calculation
 

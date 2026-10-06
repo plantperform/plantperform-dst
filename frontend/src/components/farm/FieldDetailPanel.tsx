@@ -6,6 +6,10 @@ import type {
   RotationCandidateYearResult,
   Simulation,
 } from '@/api/types'
+import {
+  BreakdownEconomicsContext,
+  useFieldEconomics,
+} from '@/components/farm/economics-breakdown-context'
 import { FieldPanel } from '@/components/farm/FieldPanel'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
@@ -53,6 +57,7 @@ export const FieldDetailPanel = ({
   onCalcOpenChange,
   onError,
 }: FieldDetailPanelProps) => {
+  const fieldEconomics = useFieldEconomics(field, simulation)
   const position = sortedFields.findIndex(
     (candidate) => candidate.id === field.id,
   )
@@ -162,22 +167,24 @@ export const FieldDetailPanel = ({
         </div>
       </div>
 
-      <FieldPanel
-        key={field.id}
-        farmId={farmId}
-        field={field}
-        isSimulationView={isSimulationView}
-        simulationId={simulationId}
-        simulation={simulation}
-        selectedYearIndex={selectedYearIndex}
-        onSelectedYearIndexChange={onSelectedYearIndexChange}
-        yearValues={yearValues}
-        yearValuesLoading={yearValuesLoading}
-        isDetaching={isDetaching}
-        onRequestDetach={onRequestDetach}
-        onCalcOpenChange={onCalcOpenChange}
-        onError={onError}
-      />
+      <BreakdownEconomicsContext.Provider value={fieldEconomics}>
+        <FieldPanel
+          key={field.id}
+          farmId={farmId}
+          field={field}
+          isSimulationView={isSimulationView}
+          simulationId={simulationId}
+          simulation={simulation}
+          selectedYearIndex={selectedYearIndex}
+          onSelectedYearIndexChange={onSelectedYearIndexChange}
+          yearValues={yearValues}
+          yearValuesLoading={yearValuesLoading}
+          isDetaching={isDetaching}
+          onRequestDetach={onRequestDetach}
+          onCalcOpenChange={onCalcOpenChange}
+          onError={onError}
+        />
+      </BreakdownEconomicsContext.Provider>
     </div>
   )
 }

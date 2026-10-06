@@ -21,8 +21,10 @@ import type { Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import { DeleteEconomicsProfileDialog } from '@/components/farm/DeleteEconomicsProfileDialog'
 import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
-import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
-import type { ReturnTarget } from '@/components/farm/economics-navigation'
+import {
+  calculationReturnState,
+  type ReturnTarget,
+} from '@/components/farm/economics-navigation'
 import {
   EconomicsProfilesContext,
   useEconomicsProfiles,
@@ -292,10 +294,14 @@ const FarmDetail = () => {
         search: target.search,
       })
     } else {
-      changeSelection({ kind: 'simulation', id: target.simulationId })
+      changeSelection(
+        target.simulationId === null
+          ? { kind: 'current' }
+          : { kind: 'simulation', id: target.simulationId },
+      )
       setMode('values')
       if (target.kind === 'field') setSelectedFieldId(target.fieldId)
-      navigate(farmPath)
+      navigate(farmPath, { state: calculationReturnState(target) })
     }
   }
 
@@ -344,18 +350,6 @@ const FarmDetail = () => {
   }
 
   const loadedFarm = isReady ? farm : undefined
-  const selectedProfile =
-    selectedSimulationId === undefined
-      ? null
-      : economicsProfiles.profileForSimulation(selectedSimulationId)
-  const breakdownEconomics =
-    selectedProfile === null
-      ? null
-      : {
-          assumptions: economicsProfiles.assumptions,
-          overrides: selectedProfile.overrides,
-          profilePath: economicsProfiles.profilePath(selectedProfile.id),
-        }
 
   return (
     <SidebarProvider
@@ -415,118 +409,107 @@ const FarmDetail = () => {
           </div>
         ) : null}
         {loadedFarm ? (
-          <BreakdownEconomicsContext.Provider value={breakdownEconomics}>
-            <Routes>
-              <Route
-                index
-                element={
-                  <FarmInspector
-                    farm={loadedFarm}
-                    fields={activeFields}
-                    selection={activeSelection}
-                    selectedSimulation={
-                      activeSelection.kind === 'simulation'
-                        ? simulations.find(
-                            (simulation) =>
-                              simulation.id === activeSelection.id,
-                          )
-                        : undefined
-                    }
-                    simulations={simulations}
-                    fieldsLoading={simulationFieldsLoading}
-                    fieldsError={
-                      Boolean(simulationFieldsError) &&
-                      simulationFieldsData === undefined
-                    }
-                    fieldsRetrying={simulationFieldsValidating}
-                    onRetryFields={() => void retrySimulationFields()}
-                    mode={mode}
-                    onModeChange={changeMode}
-                    view={snappedView}
-                    effectiveView={effectiveView}
-                    onViewChange={selectView}
-                    onSplitAvailableChange={setSplitAvailable}
-                    onAddModeChange={setAddModeSnap}
-                    listSlack={listSlack}
-                    onListSlackChange={changeListSlack}
-                    selectedFieldId={selectedFieldId}
-                    onSelectedFieldChange={setSelectedFieldId}
-                    onSelectField={selectFieldFromSearch}
-                    selectedYearIndex={selectedYearIndex}
-                    onSelectedYearIndexChange={setSelectedYearIndex}
-                    optimizeDialogOpen={optimizeDialogOpen}
-                    onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-                    onEditBasis={openNewSimulation}
-                    onError={showErrorToast}
-                  />
-                }
-              />
-              <Route
-                path="simulations"
-                element={
-                  <SimulationOverview
-                    farmId={loadedFarm.id}
-                    fields={fields}
-                    simulations={simulations}
-                    selection={activeSelection}
-                    copyingSimulationId={simulationActions.copyingSimulationId}
-                    deletingSimulationId={
-                      simulationActions.deletingSimulationId
-                    }
-                    onOpen={openView}
-                    onCopySimulation={(simulation) =>
-                      void simulationActions.copySimulation(simulation)
-                    }
-                    onDeleteSimulation={setSimulationToDelete}
-                    onNewSimulation={() => openNewSimulation(null)}
-                  />
-                }
-              />
-              <Route
-                path="simulations/compare"
-                element={
-                  <SimulationComparison
-                    farmId={loadedFarm.id}
-                    fields={fields}
-                    simulations={simulations}
-                  />
-                }
-              />
-              <Route
-                path="economics/:profileId"
-                element={
-                  <EconomicsProfilePage
-                    simulations={simulations}
-                    onOpenSimulation={(simulationId) =>
-                      openView(
-                        { kind: 'simulation', id: simulationId },
-                        'values',
-                      )
-                    }
-                    onDeleteProfile={setProfileToDelete}
-                    onReturn={returnFromProfile}
-                  />
-                }
-              />
-              <Route
-                path="economics/:profileId/guide"
-                element={
-                  <EconomicsGuidePage
-                    farmName={loadedFarm.name}
-                    simulations={simulations}
-                    onOpenSimulation={(simulationId) =>
-                      openView(
-                        { kind: 'simulation', id: simulationId },
-                        'values',
-                      )
-                    }
-                    onNewSimulation={openNewSimulationWithProfile}
-                  />
-                }
-              />
-              <Route path="*" element={<Navigate to={farmPath} replace />} />
-            </Routes>
-          </BreakdownEconomicsContext.Provider>
+          <Routes>
+            <Route
+              index
+              element={
+                <FarmInspector
+                  farm={loadedFarm}
+                  fields={activeFields}
+                  selection={activeSelection}
+                  selectedSimulation={
+                    activeSelection.kind === 'simulation'
+                      ? simulations.find(
+                          (simulation) => simulation.id === activeSelection.id,
+                        )
+                      : undefined
+                  }
+                  simulations={simulations}
+                  fieldsLoading={simulationFieldsLoading}
+                  fieldsError={
+                    Boolean(simulationFieldsError) &&
+                    simulationFieldsData === undefined
+                  }
+                  fieldsRetrying={simulationFieldsValidating}
+                  onRetryFields={() => void retrySimulationFields()}
+                  mode={mode}
+                  onModeChange={changeMode}
+                  view={snappedView}
+                  effectiveView={effectiveView}
+                  onViewChange={selectView}
+                  onSplitAvailableChange={setSplitAvailable}
+                  onAddModeChange={setAddModeSnap}
+                  listSlack={listSlack}
+                  onListSlackChange={changeListSlack}
+                  selectedFieldId={selectedFieldId}
+                  onSelectedFieldChange={setSelectedFieldId}
+                  onSelectField={selectFieldFromSearch}
+                  selectedYearIndex={selectedYearIndex}
+                  onSelectedYearIndexChange={setSelectedYearIndex}
+                  optimizeDialogOpen={optimizeDialogOpen}
+                  onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                  onEditBasis={openNewSimulation}
+                  onError={showErrorToast}
+                />
+              }
+            />
+            <Route
+              path="simulations"
+              element={
+                <SimulationOverview
+                  farmId={loadedFarm.id}
+                  fields={fields}
+                  simulations={simulations}
+                  selection={activeSelection}
+                  copyingSimulationId={simulationActions.copyingSimulationId}
+                  deletingSimulationId={simulationActions.deletingSimulationId}
+                  onOpen={openView}
+                  onCopySimulation={(simulation) =>
+                    void simulationActions.copySimulation(simulation)
+                  }
+                  onDeleteSimulation={setSimulationToDelete}
+                  onNewSimulation={() => openNewSimulation(null)}
+                />
+              }
+            />
+            <Route
+              path="simulations/compare"
+              element={
+                <SimulationComparison
+                  farmId={loadedFarm.id}
+                  fields={fields}
+                  simulations={simulations}
+                />
+              }
+            />
+            <Route
+              path="economics/:profileId"
+              element={
+                <EconomicsProfilePage
+                  simulations={simulations}
+                  onOpenSimulation={(simulationId) =>
+                    openView({ kind: 'simulation', id: simulationId }, 'values')
+                  }
+                  onDeleteProfile={setProfileToDelete}
+                  onReturn={returnFromProfile}
+                />
+              }
+            />
+            <Route
+              path="economics/:profileId/guide"
+              element={
+                <EconomicsGuidePage
+                  farmName={loadedFarm.name}
+                  simulations={simulations}
+                  onOpenSimulation={(simulationId) =>
+                    openView({ kind: 'simulation', id: simulationId }, 'values')
+                  }
+                  onNewSimulation={openNewSimulationWithProfile}
+                />
+              }
+            />
+            <Route path="*" element={<Navigate to={farmPath} replace />} />
+          </Routes>
         ) : (
           <>
             <p role="status" className="sr-only">
