@@ -38,7 +38,7 @@ const glossary = {
   nNormLevel: {
     title: 'N-norm%',
     description:
-      'Hvor meget kvælstof afgrøden har til rådighed, i procent af N-normen. Forfrugtsværdien tæller med, så der gødes kun med resten. Under 100 % falder udbyttet efter en responskurve. Det gælder kun konventionel vinterhvede, vinterbyg, vårbyg, vårhavre, hybridrug, vinterraps, majshelsæd, stivelseskartofler, sukkerroer, rajgræsfrø og græs/kløvergræs i omdrift; øvrige afgrøder og økologiske marker gødes altid til 100 %. 100 % er altid med som sammenligning, og du kan vælge op til to lavere niveauer.',
+      'Hvor stor en del af afgrødens N-norm der højst kan gødes op til. Forfrugtsværdien tæller med, så der gødes kun med det, forfrugten ikke dækker. Under 100 % falder udbyttet. Det gælder på nuværende tidspunkt kun konventionelle hovedafgrøder som korn, raps, majs, kartofler, roer og græs. Andre afgrøder og økologiske marker gødes altid fuldt. Proteinandelen påvirker endnu ikke salgsprisen.',
   },
   catchCrop: {
     title: 'Efterafgrøde',
