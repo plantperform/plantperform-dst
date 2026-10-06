@@ -426,9 +426,16 @@ def calculate_db(
             "udgift_kr_ha": gylle_udb,
         })
 
-    linjer = list(
-        _lookup_omkostningslinjer(afgrodekode, driftsform, jbnr, irrigated, kvalitet)
-    )
+    # Drying is priced per kg of the normudbytte, so it follows the yield
+    # response. Copies, since the static cost rows are cached.
+    linjer = [
+        {**line, "udgift_kr_ha": line["udgift_kr_ha"] * faktor}
+        if line["kategori"] == "Tørring/lagring"
+        else line
+        for line in _lookup_omkostningslinjer(
+            afgrodekode, driftsform, jbnr, irrigated, kvalitet,
+        )
+    ]
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode, afgrodekode)
     if udlaeg_udsaed:
         linjer.append({

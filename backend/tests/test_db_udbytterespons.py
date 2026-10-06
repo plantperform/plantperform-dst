@@ -49,6 +49,19 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         self.assertAlmostEqual(result["udbytte"], 53.85, places=2)
         self.assertEqual(result["tilgaengelig_n"], 140.0)
 
+    def test_drying_follows_the_yield(self) -> None:
+        lines = [
+            {"kategori": "Tørring/lagring", "behandling": "Tørring, korn", "udgift_kr_ha": 1000.0},
+            {"kategori": "Markarbejde", "behandling": "Høst", "udgift_kr_ha": 500.0},
+        ]
+        with patch.object(db_calculator, "_lookup_omkostningslinjer", lambda *a, **k: lines):
+            result = db_calculator.calculate_db(
+                VINTERHVEDE, "Konventionel", 1, mncs=122.0, forfrugtsvaerdi=18.0,
+            )
+        self.assertAlmostEqual(result["toerring"], round(1000.0 * result["udbytte_faktor"]))
+        self.assertEqual(result["markarbejde"], 500.0)
+        self.assertEqual(lines[0]["udgift_kr_ha"], 1000.0)
+
     def test_crop_without_curve_keeps_the_udbyttenorm(self) -> None:
         result = db_calculator.calculate_db(VAARHVEDE, "Konventionel", 1, mncs=100.0)
         self.assertEqual(result["udbytte"], 57.0)
