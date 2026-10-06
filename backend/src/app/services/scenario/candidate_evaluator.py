@@ -24,6 +24,7 @@ from app.domain.rotation_candidate import (
 from app.domain.simulation import GodningSettings
 from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
+from app.services.economics.udbytterespons import KONVENTIONEL, har_udbytterespons
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
@@ -69,15 +70,23 @@ def compute_n_inputs(
     mineralsk_andel_pct: float,
     only_organic: bool,
     irrigated: bool = False,
+    driftsform: str = KONVENTIONEL,
 ) -> dict:
     """Calculate {mncs, mnca, g0, net_n, org_mineral_n_applied} for one position.
+
+    N-norm%: the scenarie's n_norm_pct is the total available N, forfrugtsværdi
+    included. kvote_n = n_norm × N-norm%, and only the part the forfrugt does
+    not cover is fertilized: net_scaled = max(0, kvote_n − fv_forfrugt). The cut
+    applies only to crops with a yield-response curve on konventionel marker
+    (see economics.udbytterespons); every other crop is fertilized at 100 %,
+    because there is no basis for the yield loss a cut would cause.
 
     org_mineral_n/mineralsk_andel_pct/only_organic are the scenarie's gødning
     choices (Phase 13's GodningSettings), independent of the sædskifte being
     evaluated:
-      - org_mineral_n=0 (pure mineral gødning): MNCS = full N norm scaled by
-        N-norm%, G0=0. Organisk gødning versus handelsgødning is irrelevant to
-        NLES5 when there is no organisk source.
+      - org_mineral_n=0 (pure mineral gødning): MNCS = net_scaled, G0=0.
+        Organisk gødning versus handelsgødning is irrelevant to NLES5 when
+        there is no organisk source.
       - only_organic=False (konventionel + gylle): eff_org is capped at
         net_scaled, MNCS remains net_scaled because handelsgødning tops up to
         the full norm, and G0 reflects the unutilized part corresponding to the
@@ -107,7 +116,8 @@ def compute_n_inputs(
         }
 
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
-    net_scaled = net_n * (float(n_norm_pct) / 100.0)
+    pct = float(n_norm_pct) if har_udbytterespons(afgrode_kode, driftsform) else 100.0
+    net_scaled = max(0.0, norm["n_norm"] * pct / 100.0 - fv_forfrugt)
 
     if org_mineral_n <= 0:
         return {
@@ -220,6 +230,7 @@ def evaluate_sequence_for_mark(
             mineralsk_andel_pct,
             only_organic,
             irrigated,
+            driftsform,
         )
         for i in range(8)
     ]
