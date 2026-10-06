@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { shortCropName } from '@/lib/crop-groups'
-import { ROTATION_START_CALENDAR_YEAR, yearNLoadKgHa } from '@/lib/field-domain'
+import {
+  nNormTargetKgNHa,
+  ROTATION_START_CALENDAR_YEAR,
+  yearNLoadKgHa,
+  yieldResponse,
+} from '@/lib/field-domain'
 import {
   L_FORMULA_CONSTANTS,
   M_LABELS,
@@ -25,6 +31,7 @@ import {
   yearCoversFromDetail,
   type WinterCoverDefinition,
 } from '@/lib/winter-cover'
+import { cn } from '@/lib/utils'
 
 const num = (value: unknown): number =>
   typeof value === 'number' ? value : Number(value ?? 0)
@@ -157,6 +164,7 @@ const DefinitionRow = ({
   muted,
   strong,
   term,
+  note,
 }: {
   label: string
   value: string
@@ -164,6 +172,8 @@ const DefinitionRow = ({
   term?: GlossaryTerm
   muted?: boolean
   strong?: boolean
+  // Shown in muted text before the value, e.g. a breakdown or share.
+  note?: string
 }) => (
   <div className="flex items-baseline justify-between gap-3 border-t py-1.5 text-xs first:border-t-0">
     <span
@@ -174,19 +184,26 @@ const DefinitionRow = ({
       {label}
       {term ? <GlossaryInfo term={term} /> : null}
     </span>
-    <AppTooltip content={title}>
-      <span
-        className={`shrink-0 tabular-nums ${
-          muted
-            ? 'text-muted-foreground'
-            : strong
-              ? 'font-semibold'
-              : 'font-medium'
-        }`}
-      >
-        {value}
-      </span>
-    </AppTooltip>
+    <span className="flex min-w-0 items-baseline gap-2">
+      {note ? (
+        <span className="truncate font-normal text-muted-foreground">
+          {note}
+        </span>
+      ) : null}
+      <AppTooltip content={title}>
+        <span
+          className={`shrink-0 tabular-nums ${
+            muted
+              ? 'text-muted-foreground'
+              : strong
+                ? 'font-semibold'
+                : 'font-medium'
+          }`}
+        >
+          {value}
+        </span>
+      </AppTooltip>
+    </span>
   </div>
 )
 
@@ -208,6 +225,8 @@ const KeyMetricsSection = ({
   retention: number | null
   footer?: React.ReactNode
 }) => {
+  const [showMineralSplit, setShowMineralSplit] = useState(false)
+  const mineralSplitId = useId()
   const yieldAmount = num(year.dbDetail.yieldAmount)
   const yieldUnit = String(year.dbDetail.yieldUnit ?? '')
   const isFodderCrop = yieldUnit === 'FE/ha'
@@ -221,9 +240,9 @@ const KeyMetricsSection = ({
   const appliedFertiliser = manureUtilised + mineralFertiliser
   const availableN = precedingCropValue + appliedFertiliser
 
+  const response = yieldResponse(yieldAmount, year.dbDetail.yieldFactor)
+  const hasYieldResponse = year.dbDetail.hasYieldResponse === true
   const cropNorm = year.cropNormKgNHa
-  const reducedNorm =
-    cropNorm !== null ? cropNorm * (year.nNormPct / 100) : null
 
   const leaching = year.leachingKgNHa
   const { nLoadPerHa: nLoad } = calculateNLoad(leaching, retention, areaHa)
@@ -251,9 +270,11 @@ const KeyMetricsSection = ({
           term="db2"
           value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
           caption={
-            yieldAmount
-              ? `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
-              : 'Normudbytte -'
+            !yieldAmount
+              ? 'Normudbytte -'
+              : response
+                ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 0)} % af normudbytte ${fmt(response.normYield, 0)}`
+                : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
           }
         />
       </div>
@@ -270,32 +291,78 @@ const KeyMetricsSection = ({
             label="Afgrøde-norm"
             term="nNorm"
             value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
-            title={
-              reducedNorm !== null
-                ? `${fmt(year.nNormPct, 0)}% gødet til norm = ${fmt(reducedNorm, 0)} kg N/ha`
-                : undefined
-            }
           />
-          <DefinitionRow
-            label="Tilgængeligt N"
-            value={`${fmt(availableN, 0)} kg N/ha`}
-            title={`Forfrugt ${fmt(precedingCropValue, 0)} + husdyrgødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
-          />
+          {cropNorm !== null ? (
+            <DefinitionRow
+              label="N-norm%"
+              term="nNormLevel"
+              value={
+                hasYieldResponse
+                  ? `${fmt(year.nNormPct, 0)} % = ${fmt(nNormTargetKgNHa(cropNorm, year.nNormPct, true), 0)} kg N/ha`
+                  : '100 % (fuld norm)'
+              }
+            />
+          ) : null}
           <DefinitionRow
             label="Forfrugtsværdi"
             value={`${fmt(precedingCropValue, 0)} kg N/ha`}
           />
+          <button
+            type="button"
+            aria-expanded={showMineralSplit}
+            aria-controls={mineralSplitId}
+            onClick={() => setShowMineralSplit((open) => !open)}
+            className="flex w-full items-baseline justify-between gap-3 border-t py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex items-center gap-1 font-medium text-foreground">
+              <ChevronRight
+                className={cn(
+                  'size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform',
+                  showMineralSplit && 'rotate-90',
+                )}
+                aria-hidden="true"
+              />
+              Tildelt mineralsk N
+            </span>
+            <span className="shrink-0 font-semibold tabular-nums">
+              {`${fmt(appliedFertiliser, 0)} kg N/ha`}
+            </span>
+          </button>
+          {showMineralSplit ? (
+            <div id={mineralSplitId} className="pl-5">
+              <DefinitionRow
+                label="Handelsgødning"
+                value={`${fmt(mineralFertiliser, 0)} kg N/ha`}
+                muted
+              />
+              <DefinitionRow
+                label="Mineralsk andel af organisk gødning"
+                value={`${fmt(manureUtilised, 0)} kg N/ha`}
+                muted
+              />
+              <DefinitionRow
+                label="Organisk andel af organisk gødning"
+                value={`${fmt(organicBound, 0)} kg N/ha`}
+                muted
+                title="Organisk bundet N. Tæller ikke med i tildelt mineralsk N eller normen, men indgår i udvaskningen"
+              />
+            </div>
+          ) : null}
           <DefinitionRow
-            label="Tildelt gødning"
-            value={`${fmt(appliedFertiliser, 0)} kg N/ha`}
-            strong
-            title={
-              `Husdyrgødning (udnyttet) ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}` +
-              (organicBound > 0
-                ? ` - plus ${fmt(organicBound, 0)} kg N/ha organisk bundet N`
-                : '')
+            label="Tilgængeligt N"
+            value={`${fmt(availableN, 0)} kg N/ha`}
+            note={
+              cropNorm ? `${fmt((availableN / cropNorm) * 100, 0)} % af normen` : undefined
             }
+            title={`Forfrugt ${fmt(precedingCropValue, 0)} + mineralsk andel af organisk gødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
+          {response ? (
+            <DefinitionRow
+              label="Udbytte"
+              value={`${fmt(response.factor * 100, 1)} % af normudbytte`}
+              title={`${fmt(yieldAmount, 1)} af ${fmt(response.normYield, 1)} ${yieldUnit}`}
+            />
+          ) : null}
           {showFeedUnits ? (
             <DefinitionRow
               label="Foderenheder"
@@ -912,6 +979,7 @@ const EconomicDetailSection = ({
 }) => {
   const yieldAmount = num(detail.yieldAmount)
   const unit = String(detail.yieldUnit ?? '')
+  const response = yieldResponse(yieldAmount, detail.yieldFactor)
   const salePrice = num(detail.salePrice)
   const revenue = num(detail.revenue)
   const subsidy = num(detail.subsidy)
@@ -943,7 +1011,13 @@ const EconomicDetailSection = ({
       ) : null}
       <DetailTable
         rows={[
-          { label: 'Udbytte', value: `${fmt(yieldAmount, 1)} ${unit}` },
+          {
+            label: 'Udbytte',
+            detail: response
+              ? `normudbytte ${fmt(response.normYield, 1)} × ${fmt(response.factor * 100, 1)} % (N under normen)`
+              : undefined,
+            value: `${fmt(yieldAmount, 1)} ${unit}`,
+          },
           {
             label: 'Salgspris',
             value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}`,

@@ -7,6 +7,8 @@ import {
   emptyMeasures,
   fieldFigure,
   fieldNNormPct,
+  nNormTargetKgNHa,
+  yieldResponse,
   formatPerHa,
   formatSigned,
   summarizeCropDistribution,
@@ -198,6 +200,24 @@ describe('formatSigned', () => {
     expect(formatSigned(-45.2, kronerPerHa)).toBe('−45 kr/ha')
     expect(formatSigned(0.3, kronerPerHa)).toBe('±0 kr/ha')
     expect(formatSigned(-0.3, kronerPerHa)).toBe('±0 kr/ha')
+  })
+})
+
+describe('yield response in the walkthrough', () => {
+  it('derives the normudbytte from the reduced yield', () => {
+    const response = yieldResponse(85.5, 0.95)
+    expect(response?.factor).toBe(0.95)
+    expect(response?.normYield).toBeCloseTo(90)
+  })
+
+  it('has no response at full yield or without a factor', () => {
+    expect(yieldResponse(90, 1)).toBeNull()
+    expect(yieldResponse(90, undefined)).toBeNull()
+  })
+
+  it('caps only crops with a response curve below the norm', () => {
+    expect(nNormTargetKgNHa(206, 80, true)).toBeCloseTo(164.8)
+    expect(nNormTargetKgNHa(159, 80, false)).toBe(159)
   })
 })
 

@@ -389,7 +389,8 @@ def calculate_db(
 
     tilgaengelig_n = mncs + mnca + forfrugtsvaerdi
     faktor = 1.0
-    if norm is not None and har_udbytterespons(afgrodekode, driftsform):
+    respons = norm is not None and har_udbytterespons(afgrodekode, driftsform)
+    if respons:
         faktor = udbytte_faktor(afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"])
         udbytte *= faktor
 
@@ -485,6 +486,7 @@ def calculate_db(
         "udbytte": udbytte,
         "udbytteenhed": udbytteenhed,
         "udbyttenorm_mangler": norm_mangler,
+        "udbytterespons": respons,
         "udbytte_faktor": faktor,
         "tilgaengelig_n": tilgaengelig_n,
         "salgspris": salgspris,

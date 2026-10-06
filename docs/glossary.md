@@ -99,6 +99,8 @@ field" column is the name on the wire.
 | udbytte | `yieldAmount` | `udbytte` | |
 | udbytteenhed | `yieldUnit` | `udbytteenhed` | |
 | manglende udbyttenorm | `yieldNormMissing` | `udbyttenorm_mangler` | |
+| udbytterespons | `hasYieldResponse` | `udbytterespons` | Whether the crop has a yield-response curve for N below the norm |
+| udbyttefaktor | `yieldFactor` | `udbytte_faktor` | Share of the normudbytte reached with the available N |
 | foderenheder (FEN) | `feedUnits`, `minFeedUnits`, `maxFeedUnits`, `totalFeedUnits`, `avgFeedUnits`, `isFodderCrop` | `fen`, `minFen`, `maxFen`, `totalFen`, `avgFen` | |
 | salgspris | `salePrice` | `salgspris` | |
 | indtægt | `revenue` | `indtaegt` | |

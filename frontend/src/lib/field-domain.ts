@@ -375,6 +375,27 @@ export const averageNNormPct = (fields: FieldRecord[]): number | null => {
   return area > 0 ? weighted / area : null
 }
 
+export type YieldResponse = { normYield: number; factor: number }
+
+// The normudbytte and the share of it reached, when available N below the
+// N-norm lowered the yield. Null when the yield is the full normudbytte.
+export const yieldResponse = (
+  yieldAmount: number,
+  yieldFactor: unknown,
+): YieldResponse | null => {
+  const factor = typeof yieldFactor === 'number' ? yieldFactor : 1
+  if (factor >= 1 || factor <= 0) return null
+  return { normYield: yieldAmount / factor, factor }
+}
+
+// The N a crop may have in total, forfrugt included. Crops without a
+// yield-response curve are always fertilized to the full norm.
+export const nNormTargetKgNHa = (
+  cropNorm: number,
+  nNormPct: number,
+  hasYieldResponse: boolean,
+): number => (hasYieldResponse ? cropNorm * (nNormPct / 100) : cropNorm)
+
 export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
 
 export type QuotaStatusLevel =
