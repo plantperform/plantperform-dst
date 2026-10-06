@@ -27,6 +27,8 @@ import {
   useEconomicsProfiles,
   useEconomicsProfilesStore,
 } from '@/components/farm/economics-profiles-state'
+import { EconomicsGuidePage } from '@/components/farm/EconomicsGuidePage'
+import { EconomicsNavigationProvider } from '@/components/farm/EconomicsNavigationProvider'
 import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
@@ -139,8 +141,12 @@ const FarmDetail = () => {
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
   const [newSimulationSource, setNewSimulationSource] =
     useState<Simulation | null>(null)
+  const [newSimulationProfileId, setNewSimulationProfileId] = useState<
+    string | null
+  >(null)
   const openNewSimulation = (source: Simulation | null) => {
     setNewSimulationSource(source)
+    setNewSimulationProfileId(null)
     setNewSimulationOpen(true)
   }
   const [simulationToDelete, setSimulationToDelete] =
@@ -274,6 +280,13 @@ const FarmDetail = () => {
     changeSelection(next)
     changeMode(nextMode)
     navigate(farmPath)
+  }
+
+  const openNewSimulationWithProfile = (profileId: string) => {
+    setNewSimulationSource(null)
+    setNewSimulationProfileId(profileId)
+    setNewSimulationOpen(true)
+    navigate(economicsProfiles.profilePath(profileId))
   }
 
   if (notFound || loadFailed) {
@@ -476,6 +489,22 @@ const FarmDetail = () => {
                   />
                 }
               />
+              <Route
+                path="economics/:profileId/guide"
+                element={
+                  <EconomicsGuidePage
+                    farmName={loadedFarm.name}
+                    simulations={simulations}
+                    onOpenSimulation={(simulationId) =>
+                      openView(
+                        { kind: 'simulation', id: simulationId },
+                        'values',
+                      )
+                    }
+                    onNewSimulation={openNewSimulationWithProfile}
+                  />
+                }
+              />
               <Route path="*" element={<Navigate to={farmPath} replace />} />
             </Routes>
           </BreakdownEconomicsContext.Provider>
@@ -494,11 +523,17 @@ const FarmDetail = () => {
             farmId={loadedFarm.id}
             fields={fields}
             source={newSimulationSource}
+            economicsProfileId={newSimulationProfileId}
             open={newSimulationOpen}
-            onOpenChange={setNewSimulationOpen}
-            onSimulationCreated={(simulation) =>
-              changeSelection({ kind: 'simulation', id: simulation.id })
-            }
+            onOpenChange={(open) => {
+              setNewSimulationOpen(open)
+              if (!open) setNewSimulationProfileId(null)
+            }}
+            onSimulationCreated={(simulation) => {
+              const created = { kind: 'simulation', id: simulation.id } as const
+              if (newSimulationProfileId === null) changeSelection(created)
+              else openView(created, 'values')
+            }}
             onError={showErrorToast}
           />
           <DeleteSimulationDialog
@@ -536,7 +571,9 @@ export const FarmDetailPage = () => {
 
   return (
     <EconomicsProfilesContext.Provider value={economicsProfiles}>
-      <FarmDetail />
+      <EconomicsNavigationProvider farmId={farmId}>
+        <FarmDetail />
+      </EconomicsNavigationProvider>
     </EconomicsProfilesContext.Provider>
   )
 }

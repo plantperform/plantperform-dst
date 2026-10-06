@@ -70,6 +70,8 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       profiles: allProfiles(state),
       profilePath: (profileId: string) =>
         `/farms/${stored.farmId}/economics/${profileId}`,
+      guidePath: (profileId: string) =>
+        `/farms/${stored.farmId}/economics/${profileId}/guide`,
       findProfile: (profileId: string) => findProfile(state, profileId),
       profileForSimulation: (simulationId: string) =>
         profileForSimulation(state, simulationId),
@@ -134,22 +136,15 @@ export const useEconomicsProfiles = () => {
 }
 
 export const profilePageRequestSchema = z.object({
-  request: z.enum(['new', 'rename']),
+  request: z.literal('rename'),
 })
 
-type ProfilePageRequest = z.infer<typeof profilePageRequestSchema>['request']
-
-const NEW_PROFILE_NAME = 'Ny økonomiprofil'
-
 export const useProfilePageNavigation = () => {
-  const { profilePath, createProfile, copyProfile } = useEconomicsProfiles()
+  const { profilePath } = useEconomicsProfiles()
   const navigate = useNavigate()
-  const open = (profileId: string, request: ProfilePageRequest) =>
-    navigate(profilePath(profileId), { state: { request } })
 
   return {
-    openNewProfile: () => open(createProfile(NEW_PROFILE_NAME), 'new'),
-    openProfileCopy: (sourceId: string) => open(copyProfile(sourceId), 'new'),
-    openProfileRename: (profileId: string) => open(profileId, 'rename'),
+    openProfileRename: (profileId: string) =>
+      navigate(profilePath(profileId), { state: { request: 'rename' } }),
   }
 }

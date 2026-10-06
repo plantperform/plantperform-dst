@@ -62,6 +62,7 @@ type NewScenarioPanelProps = {
   farmId: string
   fields: FieldRecord[]
   source: Simulation | null
+  economicsProfileId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSimulationCreated: (simulation: Simulation) => void
@@ -80,6 +81,7 @@ export const NewScenarioPanel = ({
   farmId,
   fields,
   source,
+  economicsProfileId,
   open,
   onOpenChange,
   onSimulationCreated,
@@ -166,6 +168,11 @@ export const NewScenarioPanel = ({
   useEffect(() => {
     if (prefilled.values) reset(prefilled.values)
   }, [prefilled, reset])
+  useEffect(() => {
+    if (open && economicsProfileId !== null) {
+      setValue('economicsProfileId', economicsProfileId, { shouldDirty: true })
+    }
+  }, [open, economicsProfileId, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.

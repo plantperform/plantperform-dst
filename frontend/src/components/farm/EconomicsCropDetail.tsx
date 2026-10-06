@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
   COST_CATEGORIES,
+  cropDbChange,
   cropSources,
   cropTotals,
   cropYieldPct,
@@ -38,7 +39,6 @@ import {
   lineAmountDkkHa,
   lineGroupId,
   lineQuantity,
-  NO_OVERRIDES,
   priceUsage,
   priceValue,
   quantityUnitLabel,
@@ -407,9 +407,7 @@ export const EconomicsCropDetail = ({
   const sharedPrice = useSharedPriceConfirm(assumptions, change)
   const usage = useMemo(() => priceUsage(assumptions), [assumptions])
   const totals = cropTotals(assumptions, overrides, crop)
-  const dbChange = Math.round(
-    totals.dbDkkHa - cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa,
-  )
+  const dbChange = cropDbChange(assumptions, overrides, crop)
   const [openGroups, setOpenGroups] = useState<ReadonlySet<EconomicsGroupId>>(
     () => new Set(['revenue']),
   )

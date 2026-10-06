@@ -164,6 +164,16 @@ export const cropTotals = (
   }
 }
 
+export const cropDbChange = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): number =>
+  Math.round(
+    cropTotals(assumptions, overrides, crop).dbDkkHa -
+      cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa,
+  )
+
 export const incomeSplit = (totals: CropTotals): IncomeShare[] => {
   const parts = [
     ...COST_CATEGORIES.map((category) => ({
@@ -594,6 +604,32 @@ export const profileChanges = (
   )
   return [...yields, ...lines]
 }
+
+export const guideStepOfChange = (change: ProfileChange): 1 | 2 | 3 | null => {
+  if (change.kind === 'yield') return 2
+  if (change.kind !== 'price') return null
+  if (change.group === 'revenue') return 1
+  return change.group === 'fieldWork' ? 3 : null
+}
+
+const sameRecord = (
+  left: Readonly<Record<string, number>>,
+  right: Readonly<Record<string, number>>,
+) => {
+  const keys = Object.keys(left)
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => left[key] === right[key])
+  )
+}
+
+export const sameOverrides = (
+  left: EconomicsOverrides,
+  right: EconomicsOverrides,
+): boolean =>
+  sameRecord(left.prices, right.prices) &&
+  sameRecord(left.quantities, right.quantities) &&
+  sameRecord(left.yieldPct, right.yieldPct)
 
 export const profileChangesTitle = (count: number): string => {
   if (count === 0) return 'Ingen ændringer i forhold til Standard'

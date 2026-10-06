@@ -9,6 +9,7 @@ import {
 import { useId, useState } from 'react'
 import { NavLink, useMatch } from 'react-router-dom'
 
+import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
 import {
   useEconomicsProfiles,
   useProfilePageNavigation,
@@ -40,13 +41,14 @@ export const EconomicsProfilesMenu = ({
   onDeleteProfile,
 }: EconomicsProfilesMenuProps) => {
   const { profiles, profilePath } = useEconomicsProfiles()
-  const { openNewProfile, openProfileRename } = useProfilePageNavigation()
+  const { openProfileRename } = useProfilePageNavigation()
+  const { startGuide } = useEconomicsNavigation()
   const { state, isMobile } = useSidebar()
   const iconRail = state === 'collapsed' && !isMobile
   const [open, setOpen] = useState(true)
   const listId = useId()
   const activeProfileId =
-    useMatch('/farms/:farmId/economics/:profileId')?.params.profileId ?? null
+    useMatch('/farms/:farmId/economics/:profileId/*')?.params.profileId ?? null
   const showProfiles = open || iconRail
 
   return (
@@ -123,7 +125,9 @@ export const EconomicsProfilesMenu = ({
               <SidebarMenuButton
                 className="rounded-md px-3 font-medium text-primary hover:text-primary"
                 tooltip="Ny økonomiprofil"
-                onClick={openNewProfile}
+                onClick={() =>
+                  startGuide({ fromProfileId: STANDARD_PROFILE_ID })
+                }
               >
                 <Plus />
                 <span>Ny økonomiprofil</span>

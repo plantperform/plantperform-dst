@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cropSources,
+  cropDbChange,
   cropTotals,
   cropYieldPct,
   customisedBreakdownLine,
@@ -10,6 +11,7 @@ import {
   formatNameList,
   formatSignedDkk,
   formatYieldPct,
+  guideStepOfChange,
   incomeSplit,
   isCropCustomised,
   isPriceCustomised,
@@ -25,6 +27,7 @@ import {
   profileChanges,
   profileChangesTitle,
   quantityUnitLabel,
+  sameOverrides,
   searchCrops,
   sharedPriceEffect,
   stepYieldPct,
@@ -155,6 +158,20 @@ describe('cropTotals', () => {
     expect(cropTotals(ASSUMPTIONS, overrides, PEAS).costsDkkHa.fieldWork).toBe(
       1145,
     )
+  })
+})
+
+describe('cropDbChange', () => {
+  it('gives the whole kroner a profile moves the dækningsbidrag of a crop', () => {
+    const cheaper = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'spraying',
+      150,
+    )
+    expect(cropDbChange(ASSUMPTIONS, cheaper, RAPESEED)).toBe(70)
+    expect(cropDbChange(ASSUMPTIONS, cheaper, PEAS)).toBe(20)
+    expect(cropDbChange(ASSUMPTIONS, NO_OVERRIDES, RAPESEED)).toBe(0)
   })
 })
 
@@ -429,6 +446,39 @@ describe('profileChanges', () => {
       },
     ])
     expect(profileChanges(ASSUMPTIONS, NO_OVERRIDES)).toEqual([])
+  })
+
+  it('places each change in the guide step where it is made', () => {
+    expect(
+      profileChanges(ASSUMPTIONS, overrides).map(guideStepOfChange),
+    ).toEqual([2, 1, 3, null])
+  })
+
+  it('compares two sets of changes whatever order they were made in', () => {
+    const sameAgain = withPriceOverride(
+      ASSUMPTIONS,
+      withPriceOverride(
+        ASSUMPTIONS,
+        withQuantityOverride(
+          withYieldPct(NO_OVERRIDES, RAPESEED, 10),
+          PEAS,
+          'spraying',
+          3,
+        ),
+        'rapeseedPrice',
+        350,
+      ),
+      'ploughing',
+      700,
+    )
+    expect(sameOverrides(overrides, sameAgain)).toBe(true)
+    expect(sameOverrides(overrides, NO_OVERRIDES)).toBe(false)
+    expect(
+      sameOverrides(
+        overrides,
+        withPriceOverride(ASSUMPTIONS, overrides, 'ploughing', 750),
+      ),
+    ).toBe(false)
   })
 
   it('counts the changes in a heading', () => {

@@ -10,11 +10,11 @@ import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
 import { Input } from '@/components/ui/input'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
+  cropDbChange,
   cropTotals,
   formatDbDkk,
   formatSignedDkk,
   isCropCustomised,
-  NO_OVERRIDES,
   searchCrops,
   type EconomicsAssumptions,
   type EconomicsOverrides,
@@ -78,10 +78,7 @@ const CropsOverview = ({
           </div>
           {assumptions.crops.map((crop) => {
             const totals = cropTotals(assumptions, overrides, crop)
-            const dbChange = Math.round(
-              totals.dbDkkHa -
-                cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa,
-            )
+            const dbChange = cropDbChange(assumptions, overrides, crop)
             return (
               <button
                 key={crop.cropCode}

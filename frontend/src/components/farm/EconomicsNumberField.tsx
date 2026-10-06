@@ -18,6 +18,7 @@ type EconomicsNumberFieldProps = {
   value: number
   label: string
   customised: boolean
+  emptyValue?: number
   format?: (value: number) => string
   parse?: (text: string) => EconomicsInput
   onCommit: (value: number) => void
@@ -27,6 +28,7 @@ export const EconomicsNumberField = ({
   value,
   label,
   customised,
+  emptyValue,
   format = formatEconomicsNumber,
   parse = parseEconomicsInput,
   onCommit,
@@ -45,7 +47,10 @@ export const EconomicsNumberField = ({
 
   const commit = () => {
     if (draft === null) return
-    const parsed = parse(draft)
+    const parsed =
+      emptyValue !== undefined && draft.trim() === ''
+        ? { value: emptyValue }
+        : parse(draft)
     if ('error' in parsed) {
       setError(parsed.error)
       return
