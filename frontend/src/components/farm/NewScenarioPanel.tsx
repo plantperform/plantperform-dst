@@ -17,6 +17,7 @@ import type {
   FertiliserSettings,
   Simulation,
 } from '@/api/types'
+import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
 import { SimulationSummary } from '@/components/farm/SimulationSummary'
@@ -39,12 +40,14 @@ import {
   SIMULATION_FORM_STEPS,
   catchCropSowingDateOf,
   fertiliserFieldsForChoice,
+  isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  nNormPercentagesFor,
   simulationFormSchema,
   stepFields,
   toCreateSimulationInput,
-  toggleValue,
+  toggleNNormPercentage,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 import { cn } from '@/lib/utils'
@@ -359,6 +362,10 @@ export const NewScenarioPanel = ({
                   const value = event.target
                     .value as FertiliserSettings['farmingSystem']
                   setValue('onlyOrganic', value === 'Økologisk')
+                  setValue(
+                    'nNormPercentages',
+                    nNormPercentagesFor(getValues('nNormPercentages'), value),
+                  )
                 },
               })}
             >
@@ -580,35 +587,58 @@ export const NewScenarioPanel = ({
           </div>
 
           <div className="space-y-2">
-            <Label>N-norm%</Label>
+            <div className="flex items-center gap-1">
+              <Label>N-norm%</Label>
+              <GlossaryInfo term="nNormLevel" />
+            </div>
             <p className="text-xs text-muted-foreground">
-              Hvor stor en andel af den fulde N-norm der skal indgå - vælg et
-              eller flere niveauer.
+              {values.farmingSystem === 'Økologisk'
+                ? 'Økologiske simuleringer beregnes indtil videre kun ved 100 %.'
+                : '100 % er altid med. Vælg op til to lavere niveauer.'}
             </p>
             <div className="flex flex-wrap gap-2">
-              {nNormOptions.map((value) => (
-                <label
-                  key={value}
-                  className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-colors ${
-                    values.nNormPercentages.includes(value)
-                      ? 'border-primary bg-primary/10 font-medium'
-                      : 'bg-background hover:bg-muted/50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={values.nNormPercentages.includes(value)}
-                    onChange={() =>
-                      updateValue(
-                        'nNormPercentages',
-                        toggleValue(getValues('nNormPercentages'), value),
-                      )
-                    }
-                  />
-                  {value}%
-                </label>
-              ))}
+              {nNormOptions.map((value) => {
+                const checked = values.nNormPercentages.includes(value)
+                const locked = isNNormOptionLocked(
+                  values.nNormPercentages,
+                  value,
+                  values.farmingSystem,
+                )
+                return (
+                  <label
+                    key={value}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs transition-colors',
+                      checked
+                        ? 'border-primary bg-primary/10 font-medium'
+                        : 'bg-background',
+                      locked
+                        ? checked
+                          ? 'cursor-default'
+                          : 'cursor-not-allowed opacity-50'
+                        : 'cursor-pointer hover:bg-muted/50',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={checked}
+                      disabled={locked}
+                      onChange={() =>
+                        updateValue(
+                          'nNormPercentages',
+                          toggleNNormPercentage(
+                            getValues('nNormPercentages'),
+                            value,
+                            values.farmingSystem,
+                          ),
+                        )
+                      }
+                    />
+                    {value}%
+                  </label>
+                )
+              })}
             </div>
             <FieldError
               id="scenario-n-norm-error"

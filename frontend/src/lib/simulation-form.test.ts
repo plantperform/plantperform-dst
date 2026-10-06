@@ -10,7 +10,9 @@ import {
   DEFAULT_SIMULATION_FORM_VALUES,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  isNNormOptionLocked,
   isStepValid,
+  nNormPercentagesFor,
   NO_FERTILISER,
   selectedCountsByCategory,
   selectedInCategory,
@@ -18,6 +20,7 @@ import {
   simulationFormSchema,
   SIMULATION_FORM_STEPS,
   toCreateSimulationInput,
+  toggleNNormPercentage,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 
@@ -117,16 +120,32 @@ describe('step schemas', () => {
     )
   })
 
-  it('requires at least one rotation and one N-norm level', () => {
+  it('requires at least one rotation', () => {
     expect(
       messageFor({ ...filledValues, rotationVariants: [] }, 'rotationVariants'),
     ).toBe('Vælg mindst ét sædskifte')
+  })
+
+  it('requires 100 % and at most two lower N-norm levels', () => {
+    expect(
+      messageFor({ ...filledValues, nNormPercentages: ['80'] }, 'nNormPercentages'),
+    ).toBe('100 % skal altid være med')
     expect(
       messageFor(
-        { ...filledValues, nNormPercentages: [] },
+        { ...filledValues, nNormPercentages: ['100', '90', '80', '70'] },
         'nNormPercentages',
       ),
-    ).toBe('Vælg mindst ét N-norm-niveau')
+    ).toBe('Vælg højst to niveauer under 100 %')
+    expect(
+      messageFor(
+        { ...filledValues, nNormPercentages: ['100', '90', '80'] },
+        'nNormPercentages',
+      ),
+    ).toBeUndefined()
+  })
+
+  it('starts with 100 % selected', () => {
+    expect(DEFAULT_SIMULATION_FORM_VALUES.nNormPercentages).toEqual(['100'])
   })
 
   it('keeps the steps independent of each other', () => {
@@ -296,6 +315,49 @@ describe('candidate count', () => {
         0,
       ),
     ).toBe(0)
+  })
+})
+
+describe('N-norm levels', () => {
+  it('never lets 100 % be removed', () => {
+    expect(toggleNNormPercentage(['100', '80'], '100', 'Konventionel')).toEqual([
+      '100',
+      '80',
+    ])
+    expect(isNNormOptionLocked(['100'], '100', 'Konventionel')).toBe(true)
+  })
+
+  it('allows at most two levels below 100 %', () => {
+    const two = toggleNNormPercentage(
+      toggleNNormPercentage(['100'], '90', 'Konventionel'),
+      '70',
+      'Konventionel',
+    )
+    expect(two).toEqual(['100', '90', '70'])
+    expect(toggleNNormPercentage(two, '50', 'Konventionel')).toEqual(two)
+    expect(isNNormOptionLocked(two, '50', 'Konventionel')).toBe(true)
+    expect(isNNormOptionLocked(two, '90', 'Konventionel')).toBe(false)
+    expect(toggleNNormPercentage(two, '90', 'Konventionel')).toEqual(['100', '70'])
+  })
+
+  it('locks an økologisk simulation to 100 %', () => {
+    expect(isNNormOptionLocked(['100'], '80', 'Økologisk')).toBe(true)
+    expect(toggleNNormPercentage(['100'], '80', 'Økologisk')).toEqual(['100'])
+    expect(nNormPercentagesFor(['100', '80'], 'Økologisk')).toEqual(['100'])
+  })
+
+  it('keeps 100 % first when the driftsform changes', () => {
+    expect(nNormPercentagesFor(['80'], 'Konventionel')).toEqual(['100', '80'])
+  })
+
+  it('sends only 100 % for an økologisk simulation', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        farmingSystem: 'Økologisk',
+        nNormPercentages: ['100', '80'],
+      }).allowedNNormPercentages,
+    ).toEqual(['100'])
   })
 })
 

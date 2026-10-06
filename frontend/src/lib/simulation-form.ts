@@ -13,6 +13,45 @@ import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 export const NO_FERTILISER = 'none'
 export const CUSTOM_FERTILISER = 'custom'
 
+// 100 % is always calculated, as the reference for the lower N-norm levels.
+// Only crops with a yield-response curve on konventionel marker are cut, so an
+// økologisk simulation is calculated at 100 % only for now.
+export const FULL_N_NORM = '100'
+export const MAX_REDUCED_N_NORM_LEVELS = 2
+
+const reducedNNormCount = (selected: string[]): number =>
+  selected.filter((value) => value !== FULL_N_NORM).length
+
+export const isNNormOptionLocked = (
+  selected: string[],
+  value: string,
+  farmingSystem: FarmingSystem,
+): boolean =>
+  value === FULL_N_NORM ||
+  farmingSystem === 'Økologisk' ||
+  (!selected.includes(value) &&
+    reducedNNormCount(selected) >= MAX_REDUCED_N_NORM_LEVELS)
+
+export const toggleNNormPercentage = (
+  selected: string[],
+  value: string,
+  farmingSystem: FarmingSystem,
+): string[] => {
+  if (isNNormOptionLocked(selected, value, farmingSystem)) return selected
+  return selected.includes(value)
+    ? selected.filter((current) => current !== value)
+    : [...selected, value]
+}
+
+// The levels a simulation keeps for its driftsform.
+export const nNormPercentagesFor = (
+  selected: string[],
+  farmingSystem: FarmingSystem,
+): string[] =>
+  farmingSystem === 'Økologisk'
+    ? [FULL_N_NORM]
+    : [FULL_N_NORM, ...selected.filter((value) => value !== FULL_N_NORM)]
+
 // Number inputs are kept as the strings the user typed, so an empty or
 // half-typed field is not silently turned into a number.
 export type SimulationFormValues = {
@@ -40,7 +79,7 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   name: '',
   farmingSystem: 'Konventionel',
   rotationVariants: [],
-  nNormPercentages: [],
+  nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
   orgMineralN: '0',
   mineralSharePct: '100',
@@ -88,7 +127,13 @@ const nitrogenSchema = z
     nContentKgPerTon: z.string(),
     nNormPercentages: z
       .array(z.string())
-      .min(1, 'Vælg mindst ét N-norm-niveau'),
+      .refine((selected) => selected.includes(FULL_N_NORM), {
+        message: '100 % skal altid være med',
+      })
+      .refine(
+        (selected) => reducedNNormCount(selected) <= MAX_REDUCED_N_NORM_LEVELS,
+        { message: 'Vælg højst to niveauer under 100 %' },
+      ),
   })
   .superRefine((values, ctx) => {
     // Without organic fertiliser the numbers are fixed and hidden.
@@ -383,7 +428,10 @@ export const toCreateSimulationInput = (
   return {
     name: values.name.trim(),
     allowedRotationVariants: values.rotationVariants,
-    allowedNNormPercentages: values.nNormPercentages,
+    allowedNNormPercentages: nNormPercentagesFor(
+      values.nNormPercentages,
+      values.farmingSystem,
+    ),
     fertiliser: {
       farmingSystem: values.farmingSystem,
       orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),

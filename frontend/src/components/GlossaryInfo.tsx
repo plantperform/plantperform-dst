@@ -35,6 +35,11 @@ const glossary = {
     description:
       'Normen for, hvor meget kvælstof der må tildeles en afgrøde. Procenten angiver niveauet i forhold til normen.',
   },
+  nNormLevel: {
+    title: 'N-norm%',
+    description:
+      'Hvor meget kvælstof afgrøden har til rådighed, i procent af N-normen. Forfrugtsværdien tæller med, så der gødes kun med resten. Under 100 % falder udbyttet efter en responskurve. Det gælder kun konventionel vinterhvede, vinterbyg, vårbyg, vårhavre, hybridrug, vinterraps, majshelsæd, stivelseskartofler, sukkerroer, rajgræsfrø og græs/kløvergræs i omdrift; øvrige afgrøder og økologiske marker gødes altid til 100 %. 100 % er altid med som sammenligning, og du kan vælge op til to lavere niveauer.',
+  },
   catchCrop: {
     title: 'Efterafgrøde',
     description:
