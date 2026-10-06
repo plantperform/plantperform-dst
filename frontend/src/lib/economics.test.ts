@@ -7,6 +7,8 @@ import {
   customisedBreakdownLine,
   formatDbDkk,
   formatEconomicsNumber,
+  formatNameList,
+  formatSignedDkk,
   formatYieldPct,
   incomeSplit,
   isCropCustomised,
@@ -18,15 +20,21 @@ import {
   NO_OVERRIDES,
   parseEconomicsInput,
   parseYieldPctInput,
+  priceCrops,
   priceUsage,
+  profileChanges,
+  profileChangesTitle,
   quantityUnitLabel,
   searchCrops,
+  sharedPriceEffect,
   stepYieldPct,
   withoutCropChanges,
+  withoutProfileChange,
   withPriceOverride,
   withQuantityOverride,
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
+  yieldHint,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
@@ -321,6 +329,7 @@ describe('yield percentage', () => {
     expect(parseYieldPctInput('12,5')).toEqual({ value: 12.5 })
     expect(parseYieldPctInput('-15')).toEqual({ value: -15 })
     expect(parseYieldPctInput('−15')).toEqual({ value: -15 })
+    expect(parseYieldPctInput('+10')).toEqual({ value: 10 })
     expect(parseYieldPctInput('-100')).toEqual({
       error: 'Skriv et tal over -100.',
     })
@@ -328,6 +337,152 @@ describe('yield percentage', () => {
     expect(formatYieldPct(10)).toBe('+10')
     expect(formatYieldPct(-12.5)).toBe('−12,5')
     expect(formatYieldPct(0)).toBe('0')
+  })
+})
+
+describe('yieldHint', () => {
+  const barley = EXAMPLE_ECONOMICS.crops.find((entry) => entry.cropCode === 1)
+  if (!barley) throw new Error('Vårbyg is missing')
+
+  it('tells what the percentage does to grain and straw', () => {
+    expect(yieldHint(NO_OVERRIDES, barley)).toBe(
+      'Normen er 66 hkg kerne og 3.500 kg halm pr. ha. Procenten ændrer begge, men ikke omkostningerne.',
+    )
+    expect(yieldHint(withYieldPct(NO_OVERRIDES, barley, 10), barley)).toBe(
+      '+10 % giver 72,6 hkg kerne og 3.850 kg halm pr. ha. Omkostningerne ændrer sig ikke.',
+    )
+  })
+
+  it('leaves the straw out for a crop without it', () => {
+    expect(yieldHint(NO_OVERRIDES, RAPESEED)).toBe(
+      'Normen er 44 hkg pr. ha. Procenten ændrer mængden, men ikke omkostningerne.',
+    )
+    expect(yieldHint(withYieldPct(NO_OVERRIDES, RAPESEED, -25), RAPESEED)).toBe(
+      '−25 % giver 33 hkg pr. ha. Omkostningerne ændrer sig ikke.',
+    )
+    expect(yieldHint(NO_OVERRIDES, PEAS)).toBe('')
+  })
+})
+
+describe('profileChanges', () => {
+  const overrides = withYieldPct(
+    withQuantityOverride(
+      withPriceOverride(
+        ASSUMPTIONS,
+        withPriceOverride(ASSUMPTIONS, NO_OVERRIDES, 'ploughing', 700),
+        'rapeseedPrice',
+        350,
+      ),
+      PEAS,
+      'spraying',
+      3,
+    ),
+    RAPESEED,
+    10,
+  )
+
+  it('lists the yield, each changed price once and each changed quantity', () => {
+    expect(profileChanges(ASSUMPTIONS, overrides)).toEqual([
+      {
+        key: 'yield:22',
+        kind: 'yield',
+        label: 'Udbytte i forhold til normen',
+        cropNames: ['Vinterraps'],
+        from: '0 %',
+        to: '+10 %',
+        group: 'revenue',
+        shared: false,
+        target: { cropCode: 22, lineId: YIELD_ADJUSTMENT_ID },
+      },
+      {
+        key: 'price:rapeseedPrice',
+        kind: 'price',
+        label: 'grain',
+        cropNames: ['Vinterraps'],
+        from: '335 kr/hkg',
+        to: '350 kr/hkg',
+        group: 'revenue',
+        shared: false,
+        target: { cropCode: 22, lineId: 'grain' },
+      },
+      {
+        key: 'price:ploughing',
+        kind: 'price',
+        label: 'ploughing',
+        cropNames: ['Vinterraps', 'Ærter'],
+        from: '825 kr/gang',
+        to: '700 kr/gang',
+        group: 'fieldWork',
+        shared: true,
+        target: { cropCode: 22, lineId: 'ploughing' },
+      },
+      {
+        key: 'quantity:30/spraying',
+        kind: 'quantity',
+        label: 'spraying, mængde',
+        cropNames: ['Ærter'],
+        from: '2 gange',
+        to: '3 gange',
+        group: 'fieldWork',
+        shared: false,
+        target: { cropCode: 30, lineId: 'spraying' },
+      },
+    ])
+    expect(profileChanges(ASSUMPTIONS, NO_OVERRIDES)).toEqual([])
+  })
+
+  it('counts the changes in a heading', () => {
+    expect(profileChangesTitle(0)).toBe(
+      'Ingen ændringer i forhold til Standard',
+    )
+    expect(profileChangesTitle(1)).toBe('1 ændring i forhold til Standard')
+    expect(profileChangesTitle(3)).toBe('3 ændringer i forhold til Standard')
+  })
+
+  it('restores one change and keeps the others', () => {
+    const keysWithout = (key: string) => {
+      const change = profileChanges(ASSUMPTIONS, overrides).find(
+        (entry) => entry.key === key,
+      )
+      if (!change) throw new Error(`${key} is missing`)
+      return profileChanges(
+        ASSUMPTIONS,
+        withoutProfileChange(ASSUMPTIONS, overrides, change),
+      ).map((entry) => entry.key)
+    }
+    expect(keysWithout('yield:22')).toEqual([
+      'price:rapeseedPrice',
+      'price:ploughing',
+      'quantity:30/spraying',
+    ])
+    expect(keysWithout('price:ploughing')).toEqual([
+      'yield:22',
+      'price:rapeseedPrice',
+      'quantity:30/spraying',
+    ])
+    expect(keysWithout('quantity:30/spraying')).toEqual([
+      'yield:22',
+      'price:rapeseedPrice',
+      'price:ploughing',
+    ])
+  })
+})
+
+describe('shared prices', () => {
+  it('names the crops that use a price', () => {
+    expect(
+      priceCrops(ASSUMPTIONS, 'ploughing').map((entry) => entry.cropName),
+    ).toEqual(['Vinterraps', 'Ærter'])
+    expect(priceCrops(ASSUMPTIONS, 'rapeseedPrice')).toEqual([RAPESEED])
+  })
+
+  it('tells what a new price does to the dækningsbidrag of each crop', () => {
+    expect(
+      sharedPriceEffect(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
+    ).toEqual([
+      { cropName: 'Vinterraps', deltaDkkHa: 70 },
+      { cropName: 'Ærter', deltaDkkHa: 20 },
+    ])
   })
 })
 
@@ -362,6 +517,13 @@ describe('parseEconomicsInput', () => {
     expect(parseEconomicsInput(' 825 ')).toEqual({ value: 825 })
   })
 
+  it('reads a full stop as thousands, except before one or two digits', () => {
+    expect(parseEconomicsInput('1.575')).toEqual({ value: 1575 })
+    expect(parseEconomicsInput('1.575,5')).toEqual({ value: 1575.5 })
+    expect(parseEconomicsInput('0.6')).toEqual({ value: 0.6 })
+    expect(parseEconomicsInput('1,2,3')).toEqual({ error: 'Skriv et tal.' })
+  })
+
   it('asks for a number that is not negative', () => {
     expect(parseEconomicsInput('')).toEqual({ error: 'Skriv et tal.' })
     expect(parseEconomicsInput('abc')).toEqual({ error: 'Skriv et tal.' })
@@ -376,6 +538,24 @@ describe('quantityUnitLabel', () => {
     expect(quantityUnitLabel('gange', 1)).toBe('gang')
     expect(quantityUnitLabel('gange', 3)).toBe('gange')
     expect(quantityUnitLabel('kg/ha', 1)).toBe('kg/ha')
+  })
+})
+
+describe('formatSignedDkk', () => {
+  it('shows the sign of a difference in whole kroner', () => {
+    expect(formatSignedDkk(1985.4)).toBe('+1.985')
+    expect(formatSignedDkk(-125)).toBe('−125')
+    expect(formatSignedDkk(0)).toBe('0')
+  })
+})
+
+describe('formatNameList', () => {
+  it('joins names the Danish way', () => {
+    expect(formatNameList(['Vårbyg'])).toBe('Vårbyg')
+    expect(formatNameList(['Vårbyg', 'Ærter'])).toBe('Vårbyg og Ærter')
+    expect(formatNameList(['Vårbyg', 'Ærter', 'Kartofler'])).toBe(
+      'Vårbyg, Ærter og Kartofler',
+    )
   })
 })
 

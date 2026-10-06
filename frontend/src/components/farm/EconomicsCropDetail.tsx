@@ -1,11 +1,4 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  Link2,
-  Minus,
-  Plus,
-  Undo2,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, Link2, Undo2 } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -16,20 +9,25 @@ import {
 } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import {
+  EconomicsNumberField,
+  YieldPctField,
+} from '@/components/farm/EconomicsNumberField'
+import { useSharedPriceConfirm } from '@/components/farm/shared-price-confirm'
+import { SharedPriceConfirm } from '@/components/farm/SharedPriceConfirm'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
-import { FieldError } from '@/components/ui/field-error'
-import { Input } from '@/components/ui/input'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
   COST_CATEGORIES,
   cropSources,
   cropTotals,
   cropYieldPct,
-  economicsInputText,
   findPrice,
   formatDbDkk,
   formatEconomicsNumber,
+  formatNameList,
+  formatSignedDkk,
   formatYieldPct,
   incomeSplit,
   isCropCustomised,
@@ -40,32 +38,26 @@ import {
   lineAmountDkkHa,
   lineGroupId,
   lineQuantity,
-  parseEconomicsInput,
-  parseYieldPctInput,
+  NO_OVERRIDES,
   priceUsage,
   priceValue,
   quantityUnitLabel,
-  stepYieldPct,
   withoutCropChanges,
   withPriceOverride,
   withQuantityOverride,
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
-  YIELD_PCT_STEP,
+  yieldHint,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsGroupId,
-  type EconomicsInput,
   type EconomicsLine,
   type EconomicsOverrides,
   type IncomeShare,
+  type OverridesChange,
 } from '@/lib/economics'
 import { formatNumber, formatWholeNumber } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
-
-export type OverridesChange = (
-  current: EconomicsOverrides,
-) => EconomicsOverrides
 
 type QuantityMode = 'editable' | 'fixed' | 'hidden'
 
@@ -74,8 +66,7 @@ type RegisterRow = (rowId: string, element: HTMLDivElement | null) => void
 const ROW_CLASS =
   'grid grid-cols-[minmax(0,1fr)_auto_4.5rem] items-center gap-x-4 border-t py-2 pr-5 pl-11 text-[13px] focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset'
 
-const FIELD_CLASS =
-  'h-7 rounded-md border px-2 py-0 text-right text-[13px] tabular-nums'
+const HIGHLIGHT_CLASS = 'bg-primary/10'
 
 const SHARE_CLASS: Record<IncomeShare['id'], string> = {
   seed: 'bg-stone-300',
@@ -89,11 +80,6 @@ const shareLabel = (id: IncomeShare['id']) =>
   id === 'db'
     ? 'Dækningsbidrag'
     : (COST_CATEGORIES.find((category) => category.id === id)?.label ?? id)
-
-const sourceList = new Intl.ListFormat('da-DK', {
-  style: 'long',
-  type: 'conjunction',
-})
 
 export const CustomisedDot = () => (
   <span className="size-1.5 shrink-0 rounded-full bg-amber-500">
@@ -139,107 +125,9 @@ const SharedPriceIcon = ({ count }: { count: number }) => (
   </AppTooltip>
 )
 
-type EditableValueProps = {
-  value: number
-  label: string
-  unit: string
-  editable: boolean
-  customised: boolean
-  format?: (value: number) => string
-  parse?: (text: string) => EconomicsInput
-  onChange: (value: number) => void
-}
-
-const EditableValue = ({
-  value,
-  label,
-  unit,
-  editable,
-  customised,
-  format = formatEconomicsNumber,
-  parse = parseEconomicsInput,
-  onChange,
-}: EditableValueProps) => {
-  const errorId = useId()
-  const [draft, setDraft] = useState<string | null>(null)
-  const closing = useRef(false)
-
-  if (!editable) {
-    if (draft !== null) setDraft(null)
-    return (
-      <span
-        className={cn(
-          'tabular-nums',
-          customised
-            ? 'self-center rounded bg-amber-100 px-1 leading-5 text-amber-900'
-            : 'text-foreground',
-        )}
-      >
-        {format(value)}
-      </span>
-    )
-  }
-
-  if (draft === null) {
-    return (
-      <button
-        type="button"
-        aria-label={`Ret ${label}, ${format(value)} ${unit}`}
-        className={cn(
-          FIELD_CLASS,
-          'min-w-16 cursor-text transition-colors hover:border-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-          customised
-            ? 'border-amber-300 bg-amber-100 text-amber-900'
-            : 'bg-background text-foreground',
-        )}
-        onClick={() => {
-          closing.current = false
-          setDraft(economicsInputText(value))
-        }}
-      >
-        {format(value)}
-      </button>
-    )
-  }
-
-  const parsed = parse(draft)
-  const error = 'error' in parsed ? parsed.error : null
-  const commit = () => {
-    if ('error' in parsed) return
-    closing.current = true
-    onChange(parsed.value)
-    setDraft(null)
-  }
-
-  return (
-    <span className="inline-flex flex-col items-end gap-0.5">
-      <Input
-        autoFocus
-        inputMode="decimal"
-        aria-label={`${label} i ${unit}`}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        className={cn(
-          FIELD_CLASS,
-          'w-16 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive',
-        )}
-        value={draft}
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          if (!closing.current) commit()
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') commit()
-          if (event.key !== 'Escape') return
-          closing.current = true
-          setDraft(null)
-        }}
-      />
-      <FieldError id={errorId} message={error} />
-    </span>
-  )
-}
+const StaticValue = ({ children }: { children: ReactNode }) => (
+  <span className="text-foreground tabular-nums">{children}</span>
+)
 
 type LineRowProps = {
   assumptions: EconomicsAssumptions
@@ -249,7 +137,9 @@ type LineRowProps = {
   usage: number
   quantityMode: QuantityMode
   editable: boolean
+  highlighted: boolean
   onChange: (change: OverridesChange) => void
+  onPriceCommit: (priceId: string, value: number) => void
   registerRow: RegisterRow
 }
 
@@ -261,12 +151,15 @@ const LineRow = ({
   usage,
   quantityMode,
   editable,
+  highlighted,
   onChange,
+  onPriceCommit,
   registerRow,
 }: LineRowProps) => {
   const price = findPrice(assumptions, line.priceId)
   const quantity = lineQuantity(overrides, crop, line)
   const quantityUnit = quantityUnitLabel(line.quantityUnit, quantity)
+  const unitPrice = priceValue(assumptions, overrides, line.priceId)
   const restore = () =>
     onChange((current) =>
       withPriceOverride(
@@ -281,7 +174,7 @@ const LineRow = ({
     <div
       ref={(element) => registerRow(line.id, element)}
       tabIndex={-1}
-      className={ROW_CLASS}
+      className={cn(ROW_CLASS, highlighted && HIGHLIGHT_CLASS)}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <span>{line.label}</span>
@@ -293,39 +186,39 @@ const LineRow = ({
           />
         ) : null}
       </div>
-      <div className="flex items-start justify-end gap-1 leading-7 whitespace-nowrap text-muted-foreground">
+      <div className="flex items-start justify-end gap-1.5 leading-7 whitespace-nowrap text-muted-foreground">
         {quantityMode === 'hidden' ? null : (
           <>
-            <EditableValue
-              editable={editable && quantityMode === 'editable'}
-              customised={isQuantityCustomised(overrides, crop, line.id)}
-              value={quantity}
-              label={`mængden for ${line.label}`}
-              unit={quantityUnit}
-              onChange={(value) =>
-                onChange((current) =>
-                  withQuantityOverride(current, crop, line.id, value),
-                )
-              }
-            />
+            {editable && quantityMode === 'editable' ? (
+              <EconomicsNumberField
+                value={quantity}
+                label={`Mængden for ${line.label} i ${quantityUnit}`}
+                customised={isQuantityCustomised(overrides, crop, line.id)}
+                onCommit={(value) =>
+                  onChange((current) =>
+                    withQuantityOverride(current, crop, line.id, value),
+                  )
+                }
+              />
+            ) : (
+              <StaticValue>{formatEconomicsNumber(quantity)}</StaticValue>
+            )}
             <span>{quantityUnit}</span>
-            <span className="px-1" aria-hidden="true">
+            <span className="px-0.5" aria-hidden="true">
               ×
             </span>
           </>
         )}
-        <EditableValue
-          editable={editable}
-          customised={isPriceCustomised(overrides, line.priceId)}
-          value={priceValue(assumptions, overrides, line.priceId)}
-          label={`stykprisen for ${line.label}`}
-          unit={price?.unit ?? ''}
-          onChange={(value) =>
-            onChange((current) =>
-              withPriceOverride(assumptions, current, line.priceId, value),
-            )
-          }
-        />
+        {editable ? (
+          <EconomicsNumberField
+            value={unitPrice}
+            label={`Stykprisen for ${line.label} i ${price?.unit ?? ''}`}
+            customised={isPriceCustomised(overrides, line.priceId)}
+            onCommit={(value) => onPriceCommit(line.priceId, value)}
+          />
+        ) : (
+          <StaticValue>{formatEconomicsNumber(unitPrice)}</StaticValue>
+        )}
         <span>{price?.unit}</span>
       </div>
       <span className="text-right tabular-nums">
@@ -339,6 +232,7 @@ type YieldAdjustmentRowProps = {
   overrides: EconomicsOverrides
   crop: CropEconomics
   editable: boolean
+  highlighted: boolean
   onChange: (change: OverridesChange) => void
   registerRow: RegisterRow
 }
@@ -347,6 +241,7 @@ const YieldAdjustmentRow = ({
   overrides,
   crop,
   editable,
+  highlighted,
   onChange,
   registerRow,
 }: YieldAdjustmentRowProps) => {
@@ -358,7 +253,7 @@ const YieldAdjustmentRow = ({
     <div
       ref={(element) => registerRow(YIELD_ADJUSTMENT_ID, element)}
       tabIndex={-1}
-      className={cn(ROW_CLASS, 'bg-muted/40')}
+      className={cn(ROW_CLASS, highlighted ? HIGHLIGHT_CLASS : 'bg-muted/40')}
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -374,44 +269,20 @@ const YieldAdjustmentRow = ({
           Lægges oven på hver marks eget udbytte, som afhænger af jordtype og
           vanding.
         </p>
+        <p className="text-xs text-primary">{yieldHint(overrides, crop)}</p>
       </div>
-      <div className="flex items-start justify-end gap-1.5 leading-7">
-        {editable ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-7"
-            aria-label={`Sænk udbyttet ${YIELD_PCT_STEP} %`}
-            onClick={() => changePct(stepYieldPct(pct, -1))}
-          >
-            <Minus className="size-3.5" aria-hidden="true" />
-          </Button>
-        ) : null}
-        <EditableValue
-          editable={editable}
-          customised={isYieldCustomised(overrides, crop)}
-          value={pct}
-          label="udbyttet i forhold til normen"
-          unit="%"
-          format={formatYieldPct}
-          parse={parseYieldPctInput}
-          onChange={changePct}
+      {editable ? (
+        <YieldPctField
+          pct={pct}
+          cropName={crop.cropName}
+          onCommit={changePct}
         />
-        <span className="text-muted-foreground">%</span>
-        {editable ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-7"
-            aria-label={`Hæv udbyttet ${YIELD_PCT_STEP} %`}
-            onClick={() => changePct(stepYieldPct(pct, 1))}
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
+      ) : (
+        <span className="justify-self-end leading-7">
+          <StaticValue>{formatYieldPct(pct)}</StaticValue>{' '}
+          <span className="text-muted-foreground">%</span>
+        </span>
+      )}
       <span aria-hidden="true" />
     </div>
   )
@@ -464,10 +335,11 @@ const Group = ({
 type KeyFigureProps = {
   label: string
   value: string
+  note?: string | null
   tone?: 'positive' | 'negative'
 }
 
-const KeyFigure = ({ label, value, tone }: KeyFigureProps) => (
+const KeyFigure = ({ label, value, note, tone }: KeyFigureProps) => (
   <div
     className={cn(
       'rounded-md px-3 py-2',
@@ -480,6 +352,7 @@ const KeyFigure = ({ label, value, tone }: KeyFigureProps) => (
       {label}
     </dt>
     <dd className="mt-0.5 text-lg font-semibold tabular-nums">{value}</dd>
+    {note ? <dd className="text-[11px] tabular-nums">{note}</dd> : null}
   </div>
 )
 
@@ -531,8 +404,12 @@ export const EconomicsCropDetail = ({
 }: EconomicsCropDetailProps) => {
   const editable = onOverridesChange !== undefined
   const change = (update: OverridesChange) => onOverridesChange?.(update)
+  const sharedPrice = useSharedPriceConfirm(assumptions, change)
   const usage = useMemo(() => priceUsage(assumptions), [assumptions])
   const totals = cropTotals(assumptions, overrides, crop)
+  const dbChange = Math.round(
+    totals.dbDkkHa - cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa,
+  )
   const [openGroups, setOpenGroups] = useState<ReadonlySet<EconomicsGroupId>>(
     () => new Set(['revenue']),
   )
@@ -611,7 +488,6 @@ export const EconomicsCropDetail = ({
           <p className="mt-1 text-xs text-muted-foreground">
             Forfrugtsværdi {formatNumber(crop.precedingCropValueKgNHa)} kg N/ha
             · tal i kr/ha for JB 5-6
-            {editable ? ' · tallene i felterne kan rettes' : null}
           </p>
         </div>
         {editable && isCropCustomised(overrides, crop) ? (
@@ -647,6 +523,11 @@ export const EconomicsCropDetail = ({
         <KeyFigure
           label="Dækningsbidrag"
           value={formatDbDkk(totals.dbDkkHa)}
+          note={
+            dbChange === 0
+              ? null
+              : `${formatSignedDkk(dbChange)} i forhold til Standard`
+          }
           tone={totals.dbDkkHa < 0 ? 'negative' : 'positive'}
         />
       </dl>
@@ -673,31 +554,47 @@ export const EconomicsCropDetail = ({
                 overrides={overrides}
                 crop={crop}
                 editable={editable}
+                highlighted={focusLineId === YIELD_ADJUSTMENT_ID}
                 onChange={change}
                 registerRow={registerRow}
               />
             ) : null}
             {group.lines.map((line) => (
-              <LineRow
-                key={line.id}
-                assumptions={assumptions}
-                overrides={overrides}
-                crop={crop}
-                line={line}
-                usage={usage.get(line.priceId) ?? 0}
-                quantityMode={group.quantityMode}
-                editable={editable}
-                onChange={change}
-                registerRow={registerRow}
-              />
+              <div key={line.id}>
+                <LineRow
+                  assumptions={assumptions}
+                  overrides={overrides}
+                  crop={crop}
+                  line={line}
+                  usage={usage.get(line.priceId) ?? 0}
+                  quantityMode={group.quantityMode}
+                  editable={editable}
+                  highlighted={focusLineId === line.id}
+                  onChange={change}
+                  onPriceCommit={sharedPrice.commitPrice}
+                  registerRow={registerRow}
+                />
+                {sharedPrice.pending?.priceId === line.priceId ? (
+                  <div className="pr-5 pb-3 pl-11">
+                    <SharedPriceConfirm
+                      assumptions={assumptions}
+                      overrides={overrides}
+                      pending={sharedPrice.pending}
+                      title={`Fælles pris for ${usage.get(line.priceId) ?? 0} afgrøder`}
+                      onCancel={sharedPrice.cancel}
+                      onConfirm={sharedPrice.confirm}
+                    />
+                  </div>
+                ) : null}
+              </div>
             ))}
           </Group>
         ))}
       </div>
 
       <p className="border-t px-5 py-2.5 text-[11px] text-muted-foreground">
-        Kilde: {sourceList.format(cropSources(assumptions, crop))}. Gødning er
-        ikke med i omkostningerne, for den regnes ud fra kvælstofnormen i hver
+        Kilde: {formatNameList(cropSources(assumptions, crop))}. Gødning er ikke
+        med i omkostningerne, for den regnes ud fra kvælstofnormen i hver
         simulering.
       </p>
     </div>

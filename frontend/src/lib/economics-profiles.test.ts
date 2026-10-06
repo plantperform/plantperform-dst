@@ -10,8 +10,10 @@ import {
   parseStoredProfiles,
   profileForSimulation,
   profileNameError,
+  sharedProfileNote,
   simulationsUsingProfile,
   withNewProfile,
+  withProfileCopy,
   withProfileName,
   withProfileOverrides,
   withSimulationProfile,
@@ -66,17 +68,31 @@ describe('economics profiles', () => {
   })
 
   it('starts a new profile from Standard with the first free name', () => {
-    const first = withNewProfile(farm, 'first')
+    const first = withNewProfile(farm, 'first', 'Bakkegården 2027')
     expect(first.profiles.at(-1)).toEqual({
       id: 'first',
-      name: 'Ny økonomiprofil',
+      name: 'Bakkegården 2027',
       overrides: NO_OVERRIDES,
     })
-    const second = withNewProfile(first, 'second')
-    expect(second.profiles.at(-1)?.name).toBe('Ny økonomiprofil 2')
-    expect(withNewProfile(second, 'third').profiles.at(-1)?.name).toBe(
-      'Ny økonomiprofil 3',
-    )
+    const second = withNewProfile(first, 'second', 'Bakkegården 2027')
+    expect(second.profiles.at(-1)?.name).toBe('Bakkegården 2027 2')
+    expect(
+      withNewProfile(second, 'third', 'bakkegården 2027').profiles.at(-1)?.name,
+    ).toBe('bakkegården 2027 3')
+  })
+
+  it('copies a profile with its changes and remembers where it came from', () => {
+    const copied = withProfileCopy(farm, 'careful', 'copy')
+    expect(copied.profiles.at(-1)).toEqual({
+      id: 'copy',
+      name: 'Forsigtig 2027 (kopi)',
+      overrides: barleyPrice(125),
+      copiedFromId: 'careful',
+    })
+    expect(
+      withProfileCopy(copied, 'careful', 'again').profiles.at(-1)?.name,
+    ).toBe('Forsigtig 2027 (kopi) 2')
+    expect(withProfileCopy(farm, 'deleted', 'copy')).toEqual(farm)
   })
 
   it('wants a name that no other profile on the farm has', () => {
@@ -128,10 +144,21 @@ describe('economics profiles', () => {
   it('says how many simulations go back to Standard when a profile is deleted', () => {
     expect(deleteProfileMessage(0)).toBe('Ingen simuleringer bruger profilen.')
     expect(deleteProfileMessage(1)).toBe(
-      '1 simulering bruger profilen og går tilbage til Standard.',
+      '1 simulering bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til den først.',
     )
     expect(deleteProfileMessage(2)).toBe(
-      '2 simuleringer bruger profilen og går tilbage til Standard.',
+      '2 simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.',
+    )
+  })
+
+  it('says that a change reaches every simulation that shares the profile', () => {
+    expect(sharedProfileNote(0)).toBeNull()
+    expect(sharedProfileNote(1)).toBeNull()
+    expect(sharedProfileNote(2)).toBe(
+      'En rettelse gælder for begge simuleringer.',
+    )
+    expect(sharedProfileNote(3)).toBe(
+      'En rettelse gælder for alle 3 simuleringer.',
     )
   })
 
@@ -153,6 +180,8 @@ describe('economics profiles', () => {
 
   it('reads what was stored and leaves out what it cannot use', () => {
     expect(parseStoredProfiles(JSON.stringify(farm))).toEqual(farm)
+    const withCopy = withProfileCopy(farm, 'careful', 'copy')
+    expect(parseStoredProfiles(JSON.stringify(withCopy))).toEqual(withCopy)
     expect(parseStoredProfiles(null)).toEqual(NO_PROFILES)
     expect(parseStoredProfiles('{not json')).toEqual(NO_PROFILES)
     expect(parseStoredProfiles(JSON.stringify({ profiles: 'none' }))).toEqual(

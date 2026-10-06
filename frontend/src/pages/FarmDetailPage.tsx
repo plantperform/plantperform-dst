@@ -512,13 +512,12 @@ const FarmDetail = () => {
           />
           <DeleteEconomicsProfileDialog
             profile={profileToDelete}
-            simulationCount={
+            simulationNames={
               profileToDelete
-                ? economicsProfiles.simulationsUsingProfile(
-                    simulations,
-                    profileToDelete.id,
-                  ).length
-                : 0
+                ? economicsProfiles
+                    .simulationsUsingProfile(simulations, profileToDelete.id)
+                    .map((simulation) => simulation.name)
+                : []
             }
             onOpenChange={(open) => {
               if (!open) setProfileToDelete(null)

@@ -14,6 +14,7 @@ import {
   profileNameError,
   simulationsUsingProfile,
   withNewProfile,
+  withProfileCopy,
   withProfileName,
   withProfileOverrides,
   withSimulationProfile,
@@ -78,9 +79,14 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       ) => simulationsUsingProfile(state, simulations, profileId),
       nameError: (name: string, profileId?: string) =>
         profileNameError(state, name, profileId),
-      createProfile: () => {
+      createProfile: (baseName: string) => {
         const id = crypto.randomUUID()
-        update((current) => withNewProfile(current, id))
+        update((current) => withNewProfile(current, id, baseName))
+        return id
+      },
+      copyProfile: (sourceId: string) => {
+        const id = crypto.randomUUID()
+        update((current) => withProfileCopy(current, sourceId, id))
         return id
       },
       renameProfile: (profileId: string, name: string) =>
@@ -133,14 +139,17 @@ export const profilePageRequestSchema = z.object({
 
 type ProfilePageRequest = z.infer<typeof profilePageRequestSchema>['request']
 
+const NEW_PROFILE_NAME = 'Ny økonomiprofil'
+
 export const useProfilePageNavigation = () => {
-  const { profilePath, createProfile } = useEconomicsProfiles()
+  const { profilePath, createProfile, copyProfile } = useEconomicsProfiles()
   const navigate = useNavigate()
   const open = (profileId: string, request: ProfilePageRequest) =>
     navigate(profilePath(profileId), { state: { request } })
 
   return {
-    openNewProfile: () => open(createProfile(), 'new'),
+    openNewProfile: () => open(createProfile(NEW_PROFILE_NAME), 'new'),
+    openProfileCopy: (sourceId: string) => open(copyProfile(sourceId), 'new'),
     openProfileRename: (profileId: string) => open(profileId, 'rename'),
   }
 }

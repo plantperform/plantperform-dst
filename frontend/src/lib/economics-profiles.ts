@@ -6,6 +6,7 @@ export type EconomicsProfile = {
   id: string
   name: string
   overrides: EconomicsOverrides
+  copiedFromId?: string
 }
 
 export type EconomicsProfiles = {
@@ -73,21 +74,27 @@ export const profileNameError = (
 
 export const deleteProfileMessage = (simulationCount: number): string => {
   if (simulationCount === 0) return 'Ingen simuleringer bruger profilen.'
-  const simulations = simulationCount === 1 ? 'simulering' : 'simuleringer'
-  return `${simulationCount} ${simulations} bruger profilen og går tilbage til Standard.`
+  return simulationCount === 1
+    ? '1 simulering bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til den først.'
+    : `${simulationCount} simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.`
 }
 
-const NEW_PROFILE_NAME = 'Ny økonomiprofil'
+export const sharedProfileNote = (simulationCount: number): string | null => {
+  if (simulationCount < 2) return null
+  return simulationCount === 2
+    ? 'En rettelse gælder for begge simuleringer.'
+    : `En rettelse gælder for alle ${simulationCount} simuleringer.`
+}
 
-const freeProfileName = (state: EconomicsProfiles) => {
+const freeProfileName = (state: EconomicsProfiles, baseName: string) => {
   const taken = new Set(
     allProfiles(state).map((profile) => comparableName(profile.name)),
   )
   let number = 1
-  let name = NEW_PROFILE_NAME
+  let name = baseName
   while (taken.has(comparableName(name))) {
     number += 1
-    name = `${NEW_PROFILE_NAME} ${number}`
+    name = `${baseName} ${number}`
   }
   return name
 }
@@ -95,13 +102,39 @@ const freeProfileName = (state: EconomicsProfiles) => {
 export const withNewProfile = (
   state: EconomicsProfiles,
   profileId: string,
+  baseName: string,
 ): EconomicsProfiles => ({
   ...state,
   profiles: [
     ...state.profiles,
-    { id: profileId, name: freeProfileName(state), overrides: NO_OVERRIDES },
+    {
+      id: profileId,
+      name: freeProfileName(state, baseName),
+      overrides: NO_OVERRIDES,
+    },
   ],
 })
+
+export const withProfileCopy = (
+  state: EconomicsProfiles,
+  sourceId: string,
+  profileId: string,
+): EconomicsProfiles => {
+  const source = state.profiles.find((profile) => profile.id === sourceId)
+  if (!source) return state
+  return {
+    ...state,
+    profiles: [
+      ...state.profiles,
+      {
+        id: profileId,
+        name: freeProfileName(state, `${source.name} (kopi)`),
+        overrides: source.overrides,
+        copiedFromId: source.id,
+      },
+    ],
+  }
+}
 
 const withProfile = (
   state: EconomicsProfiles,
@@ -182,6 +215,7 @@ const storedProfilesSchema = z.object({
         quantities: z.record(z.string(), z.number()),
         yieldPct: z.record(z.string(), z.number()).default({}),
       }),
+      copiedFromId: z.string().optional(),
     }),
   ),
   simulationProfileIds: z.record(z.string(), z.string()),
