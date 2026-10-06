@@ -11,10 +11,12 @@ import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  averageNNormPct,
   describeSeparateQuotas,
   describeUncalculatedCount,
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
+  fieldNNormPct,
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
@@ -635,6 +637,37 @@ export const buildFarmFieldsColumns = ({
       ),
     },
   })
+
+  if (isSimulationView) {
+    list.push({
+      id: 'nNormPct',
+      accessorFn: (field) => fieldNNormPct(field),
+      header: ({ column }) => (
+        <SortableColumnHeaderContent label="N-norm" column={column} />
+      ),
+      cell: ({ row }) => {
+        const pct = fieldNNormPct(row.original)
+        return pct === null ? (
+          <span className="text-muted-foreground">-</span>
+        ) : (
+          `${formatNumber(pct)} %`
+        )
+      },
+      footer: () => {
+        const average = averageNNormPct(fields)
+        return average === null ? null : (
+          <AppTooltip content="Gennemsnit vægtet efter areal">
+            <span>{`${formatNumber(average)} %`}</span>
+          </AppTooltip>
+        )
+      },
+      meta: {
+        headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
+        cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),
+        toggleLabel: 'N-norm',
+      },
+    })
+  }
 
   list.push(
     numericMetricColumn(

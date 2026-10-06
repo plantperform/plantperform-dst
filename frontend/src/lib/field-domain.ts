@@ -354,6 +354,27 @@ export const isFieldCalculated = (
   )
 }
 
+// The N-norm level the optimizer chose for a mark, the last part of its
+// candidate ID ("315:4:80" -> 80). Null until the mark is optimized.
+export const fieldNNormPct = (field: FieldRecord): number | null => {
+  if (field.rotationId === null) return null
+  const value = Number(field.rotationId.slice(field.rotationId.lastIndexOf(':') + 1))
+  return Number.isFinite(value) ? value : null
+}
+
+// Area-weighted N-norm level over the optimized marker.
+export const averageNNormPct = (fields: FieldRecord[]): number | null => {
+  let area = 0
+  let weighted = 0
+  for (const field of fields) {
+    const pct = fieldNNormPct(field)
+    if (pct === null) continue
+    area += field.areaHa
+    weighted += pct * field.areaHa
+  }
+  return area > 0 ? weighted / area : null
+}
+
 export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
 
 export type QuotaStatusLevel =

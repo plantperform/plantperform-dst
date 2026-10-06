@@ -4,6 +4,7 @@ export type FieldsSortKey =
   | 'name'
   | 'areaHa'
   | 'catchment'
+  | 'nNormPct'
   | 'db2'
   | 'nLoad'
   | 'leaching'
@@ -35,6 +36,7 @@ export const resolveEffectiveFieldsSort = (
 
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
+  'nNormPct',
   'db2',
   'quotaStatus',
   'catchment',
@@ -50,6 +52,7 @@ export const OPTIONAL_COLUMN_IDS = [
 
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
+  'nNormPct',
   'db2',
   'quotaStatus',
 ])
