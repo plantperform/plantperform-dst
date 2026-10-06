@@ -303,6 +303,7 @@ def evaluate_sequence_for_mark(
             org_mineral_n_applied=n_inputs[i]["org_mineral_n_applied"],
             udlaeg_kode=udl_code, only_organic=only_organic,
             praecisionsjordbrug=praecisionsjordbrug,
+            forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied is the utilized/mineral part of husdyrgødning,

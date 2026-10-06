@@ -136,6 +136,7 @@ def evaluate_real_history_for_field(
                 mncs=n_input["mncs"], mnca=n_input["mnca"], irrigated=irrigated,
                 org_mineral_n_applied=0.0,
                 udlaeg_kode=None, only_organic=oeko,
+                forfrugtsvaerdi=fv_forfrugt,
             )
             if this_code is not None
             else {"db": 0.0, "udbytte": 0.0, "udbytteenhed": ""}
@@ -265,6 +266,7 @@ def generate_permanent_crop_candidate(
             mncs=n_input["mncs"], mnca=n_input["mnca"], irrigated=irrigated,
             org_mineral_n_applied=0.0,
             udlaeg_kode=None, only_organic=oeko,
+            forfrugtsvaerdi=fv_forfrugt,
         )
         crop_params = afgroede_normer.lookup_crop_params(afgrode_kode)
 

@@ -21,6 +21,7 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
+from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
 from app.services.virkemidler import KORN_OG_RAPS_KODER
 
 KONVENTIONEL = "Konventionel"
@@ -326,6 +327,7 @@ def calculate_db(
     only_organic: bool = False,
     kvalitet: str = "",
     praecisionsjordbrug: bool = False,
+    forfrugtsvaerdi: float = 0.0,
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -351,6 +353,11 @@ def calculate_db(
     bridge_v2.evaluate_leaching_position. It determines whether an additional
     seed/establishment cost is added for efterafgrøde, mellemafgrøde, or another
     udlæg (see _udlaeg_omkostning).
+
+    forfrugtsvaerdi: The forfrugt's N contribution (kg N/ha). Together with
+    mncs and mnca it is the available N that the udbyttenorm is scaled by for
+    crops with a yield-response curve (see economics.udbytterespons). Below
+    the N-norm their yield drops; every other crop keeps its full udbyttenorm.
     """
     norm, er_reel_oeko_norm = _lookup_udbyttenorm(
         afgrodekode, jbnr, irrigated, driftsform,
@@ -377,10 +384,16 @@ def calculate_db(
     if driftsform == OEKOLOGISK and not er_reel_oeko_norm:
         udbytte *= 1 - _OEKO_UDBYTTE_REDUKTION
 
-    indtaegt = udbytte * salgspris + halm_indtaegt
-
     if mncs is None:
         mncs = (norm["n_norm"] if norm else None) or 0.0
+
+    tilgaengelig_n = mncs + mnca + forfrugtsvaerdi
+    faktor = 1.0
+    if norm is not None and har_udbytterespons(afgrodekode, driftsform):
+        faktor = udbytte_faktor(afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"])
+        udbytte *= faktor
+
+    indtaegt = udbytte * salgspris + halm_indtaegt
 
     # Itemized rows behind each category total for the UI calculation
     # walkthrough, showing which entries actually total categories such as
@@ -465,6 +478,8 @@ def calculate_db(
         "udbytte": udbytte,
         "udbytteenhed": udbytteenhed,
         "udbyttenorm_mangler": norm_mangler,
+        "udbytte_faktor": faktor,
+        "tilgaengelig_n": tilgaengelig_n,
         "salgspris": salgspris,
         "halm_indtaegt": round(halm_indtaegt, 0),
         "indtaegt": round(indtaegt, 0),
