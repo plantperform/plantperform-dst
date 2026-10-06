@@ -20,11 +20,13 @@ import {
   describeComparisonAvailability,
   describeComparisonVerdict,
   describeCurveLegend,
+  describeEconomicsVerdict,
   describeFeedUnitRequirement,
   formatFeedUnits,
   formatKgN,
   formatYearsDelta,
   hasMissingYearValues,
+  haveSameFieldPlans,
   listComparedCatchments,
   overlayCurveTone,
   parseComparisonIds,
@@ -673,5 +675,133 @@ describe('catchmentQuotas', () => {
       { ...field('5', null), catchmentId: 9, nLoadQuotaKgN: 0 },
     ]
     expect(catchmentQuotas(fields)).toEqual(new Map([[3, 150]]))
+  })
+})
+
+const plannedField = (
+  imkId: number,
+  rotationId: string | null,
+): FieldRecord => ({
+  ...field(`field-${imkId}`, rotationId),
+  imkId,
+})
+
+describe('haveSameFieldPlans', () => {
+  const plan = [plannedField(1, '11:1:100'), plannedField(2, '4:2:90')]
+
+  it('recognises a copy with the same rotation on every field', () => {
+    expect(
+      haveSameFieldPlans(plan, [
+        plannedField(2, '4:2:90'),
+        plannedField(1, '11:1:100'),
+      ]),
+    ).toBe(true)
+  })
+
+  it('tells simulations apart when a rotation or a field differs', () => {
+    expect(
+      haveSameFieldPlans(plan, [
+        plannedField(1, '11:1:100'),
+        plannedField(2, '4:2:100'),
+      ]),
+    ).toBe(false)
+    expect(haveSameFieldPlans(plan, [plannedField(1, '11:1:100')])).toBe(false)
+    expect(
+      haveSameFieldPlans(plan, [
+        plannedField(1, '11:1:100'),
+        plannedField(2, null),
+      ]),
+    ).toBe(false)
+    expect(haveSameFieldPlans([], [])).toBe(false)
+  })
+})
+
+describe('describeEconomicsVerdict', () => {
+  const plan = [plannedField(1, '11:1:100')]
+  const otherPlan = [plannedField(1, '4:2:90')]
+
+  it('points out two simulations with the same fields and different profiles', () => {
+    expect(
+      describeEconomicsVerdict([
+        {
+          title: 'Afgrødehistorik',
+          profileId: 'standard',
+          ownProfileName: null,
+          fields: otherPlan,
+        },
+        {
+          title: 'Reduceret kvælstof',
+          profileId: 'farm',
+          ownProfileName: 'Bakkegården 2027',
+          fields: plan,
+        },
+        {
+          title: 'Kopi',
+          profileId: 'careful',
+          ownProfileName: 'Forsigtig 2027',
+          fields: plan,
+        },
+      ]),
+    ).toBe(
+      'Reduceret kvælstof og Kopi har samme marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.',
+    )
+  })
+
+  it('names the simulations that use an own profile', () => {
+    expect(
+      describeEconomicsVerdict([
+        {
+          title: 'Afgrødehistorik',
+          profileId: 'standard',
+          ownProfileName: null,
+          fields: otherPlan,
+        },
+        {
+          title: 'Reduceret kvælstof',
+          profileId: 'farm',
+          ownProfileName: 'Bakkegården 2027',
+          fields: plan,
+        },
+      ]),
+    ).toBe(
+      'Reduceret kvælstof regner med Bakkegården 2027, som ikke indgår i beregningen endnu.',
+    )
+    expect(
+      describeEconomicsVerdict([
+        {
+          title: 'Reduceret kvælstof',
+          profileId: 'farm',
+          ownProfileName: 'Bakkegården 2027',
+          fields: plan,
+        },
+        {
+          title: 'Mere vintersæd',
+          profileId: 'farm',
+          ownProfileName: 'Bakkegården 2027',
+          fields: otherPlan,
+        },
+      ]),
+    ).toBe(
+      'Reduceret kvælstof og Mere vintersæd regner med bedriftens egne økonomiprofiler, som ikke indgår i beregningen endnu.',
+    )
+  })
+
+  it('says nothing when every simulation uses Standard', () => {
+    expect(
+      describeEconomicsVerdict([
+        {
+          title: 'Afgrødehistorik',
+          profileId: 'standard',
+          ownProfileName: null,
+          fields: plan,
+        },
+        {
+          title: 'Mere vintersæd',
+          profileId: 'standard',
+          ownProfileName: null,
+          fields: plan,
+        },
+      ]),
+    ).toBeNull()
   })
 })

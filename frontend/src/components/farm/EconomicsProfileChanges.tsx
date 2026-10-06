@@ -1,5 +1,5 @@
 import { Undo2 } from 'lucide-react'
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,12 @@ import {
   type ProfileChange,
 } from '@/lib/economics'
 import { cn } from '@/lib/utils'
+
+export const ChangedValue = ({ children }: { children: ReactNode }) => (
+  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 font-semibold">
+    {children}
+  </span>
+)
 
 type EconomicsProfileChangesProps = {
   changes: ProfileChange[]
@@ -73,9 +79,7 @@ export const EconomicsProfileChanges = ({
             )}
             <span className="text-right tabular-nums">
               <span className="text-muted-foreground">{change.from} → </span>
-              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 font-semibold">
-                {change.to}
-              </span>
+              <ChangedValue>{change.to}</ChangedValue>
             </span>
             <AppTooltip content="Gendan standard">
               <button

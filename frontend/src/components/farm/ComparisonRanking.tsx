@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import {
   BEST_TEXT_CLASS,
@@ -9,6 +10,8 @@ import {
   type ComparedColumn,
   type OnHighlight,
 } from '@/components/farm/comparison-column'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { EconomicsChip } from '@/components/farm/EconomicsChip'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
 import {
@@ -19,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import {
   formatCompactDkk,
   formatPerHa,
@@ -222,6 +226,8 @@ export const ComparisonRanking = ({
   highlightedKey,
   onHighlight,
 }: ComparisonRankingProps) => {
+  const economics = useEconomicsProfiles()
+  const { search } = useLocation()
   const [history, ...simulations] = columns
   const sortable = simulations.length > 1
   const bestIndexes = METRICS.map((metric) =>
@@ -335,6 +341,15 @@ export const ComparisonRanking = ({
                   Bedste balance
                 </span>
               ) : null}
+              <EconomicsChip
+                className="mt-2"
+                profile={
+                  column.history
+                    ? STANDARD_PROFILE
+                    : economics.profileForSimulation(column.key)
+                }
+                returnTo={{ kind: 'compare', search }}
+              />
             </TableHead>
             {METRICS.map((metric, metricIndex) => (
               <TableCell

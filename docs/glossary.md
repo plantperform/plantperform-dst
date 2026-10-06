@@ -125,11 +125,13 @@ field" column is the name on the wire.
 | alle afgrøder | `CropsOverview` | | The first tab under Økonomi, with income, subsidy and costs per hectare for every crop |
 | økonomiprofil | `EconomicsProfile`, `EconomicsProfiles`, `EconomicsProfilePage`, `EconomicsProfilesMenu`, `useEconomicsProfiles`, `profileForSimulation`, `economicsProfileId`, `SimulationHeading`, `EconomicsChip`, `describeEconomicsEntry`, `describeProfileOption` | | A farm's named set of economics changes. Each simulation uses one, and they are kept in the browser until the backend can store them |
 | Standard (SEGES 2026) | `STANDARD_PROFILE` | | The economics profile without changes. It cannot be edited, renamed or deleted |
-| ændring i forhold til Standard | `ProfileChange`, `profileChanges`, `withoutProfileChange`, `profileChangesTitle` | | One changed yield, price or quantity in a profile, listed with the value before and after |
+| ændring i forhold til Standard | `ProfileChange`, `profileChanges`, `withoutProfileChange`, `profileChangesTitle`, `ChangedValue` | | One changed yield, price or quantity in a profile, listed with the value before and after |
 | ny udgave | `withProfileCopy`, `copiedFromId`, `copyProfile` | | A copy of one of the farm's own profiles, which starts with the same changes |
 | Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage`, `GuidePricesStep`, `GuideYieldStep`, `GuideMachinesStep`, `GuideReviewStep`, `startGuide`, `guideStepOfChange` | | Four steps that fit a profile to the farm: Salgspriser, Udbytte, Maskinstation and Gennemgang, with the effect on each crop's dækningsbidrag beside them |
 | tilbage-linje | `ReturnTarget`, `returnTargetLabel` | | The dark line on a profile page that leads back to the overview, the comparison, the simulation or the field the user came from |
 | indgår ikke i beregningen endnu | `NotInCalculationDot` | | The yellow dot at an own profile while the backend still calculates with Standard |
+| økonomi i simuleringerne | `ComparisonEconomics`, `compareProfileChanges`, `ProfileChangeComparison`, `describeEconomicsVerdict` | | The section of the comparison with each simulation's profile and the lines where the profiles differ from Standard |
+| samme marker | `haveSameFieldPlans` | | Two simulations with the same rotation on every field, so only their economics can set their dækningsbidrag apart |
 | sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine`, `BreakdownEconomicsContext` | | The calculation under a field, where a changed economics line is marked (tilpasset) |
 
 ## Soil and calculation

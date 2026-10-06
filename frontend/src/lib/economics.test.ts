@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  compareProfileChanges,
   cropSources,
   cropDbChange,
   cropTotals,
@@ -480,6 +481,37 @@ describe('profileChanges', () => {
         withPriceOverride(ASSUMPTIONS, overrides, 'ploughing', 750),
       ),
     ).toBe(false)
+  })
+
+  it('lines the changes of several profiles up against Standard', () => {
+    const cheaperPloughing = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'ploughing',
+      650,
+    )
+    expect(
+      compareProfileChanges([
+        [],
+        profileChanges(ASSUMPTIONS, overrides),
+        profileChanges(ASSUMPTIONS, cheaperPloughing),
+      ]).map((row) => [row.label, ...row.cells.map((cell) => cell.value)]),
+    ).toEqual([
+      ['Udbytte i forhold til normen', '0 %', '+10 %', '0 %'],
+      ['grain', '335 kr/hkg', '350 kr/hkg', '335 kr/hkg'],
+      ['ploughing', '825 kr/gang', '700 kr/gang', '650 kr/gang'],
+      ['spraying, mængde', '2 gange', '3 gange', '2 gange'],
+    ])
+    expect(
+      compareProfileChanges([
+        [],
+        profileChanges(ASSUMPTIONS, cheaperPloughing),
+      ])[0].cells,
+    ).toEqual([
+      { value: '825 kr/gang', changed: false },
+      { value: '650 kr/gang', changed: true },
+    ])
+    expect(compareProfileChanges([[], []])).toEqual([])
   })
 
   it('counts the changes in a heading', () => {

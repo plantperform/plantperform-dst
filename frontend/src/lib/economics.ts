@@ -631,6 +631,31 @@ export const sameOverrides = (
   sameRecord(left.quantities, right.quantities) &&
   sameRecord(left.yieldPct, right.yieldPct)
 
+export type ProfileChangeComparison = {
+  key: string
+  label: string
+  cropNames: string[]
+  cells: { value: string; changed: boolean }[]
+}
+
+export const compareProfileChanges = (
+  columns: ProfileChange[][],
+): ProfileChangeComparison[] => {
+  const rows = new Map<string, ProfileChange>()
+  for (const change of columns.flat()) {
+    if (!rows.has(change.key)) rows.set(change.key, change)
+  }
+  return [...rows.values()].map((row) => ({
+    key: row.key,
+    label: row.label,
+    cropNames: row.cropNames,
+    cells: columns.map((changes) => {
+      const own = changes.find((change) => change.key === row.key)
+      return { value: own?.to ?? row.from, changed: own !== undefined }
+    }),
+  }))
+}
+
 export const formatChangeCount = (count: number): string => {
   if (count === 0) return 'Ingen ændringer'
   return `${count} ${count === 1 ? 'ændring' : 'ændringer'}`
