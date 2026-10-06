@@ -169,7 +169,8 @@ def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
 # value set that the file previously contained, now fixed independently of the
 # data file because N allocation is handled as pure percentage scaling in
 # candidate_evaluator.compute_n_inputs, not as part of the rotation data.
-_N_NORM_PROCENTER = ["30", "50", "60", "70", "75", "80", "85", "90", "95", "100"]
+# 50 % is the floor: the yield-response curves (economics.udbytterespons) end there.
+_N_NORM_PROCENTER = ["50", "60", "70", "75", "80", "85", "90", "95", "100"]
 
 
 @router.get("/n-norm-procenter", response_model=list[str])
