@@ -1,10 +1,10 @@
-import { ChevronRight } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
+import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { shortCropName } from '@/lib/crop-groups'
 import {
   nNormTargetKgNHa,
@@ -31,7 +31,6 @@ import {
   yearCoversFromDetail,
   type WinterCoverDefinition,
 } from '@/lib/winter-cover'
-import { cn } from '@/lib/utils'
 
 const num = (value: unknown): number =>
   typeof value === 'number' ? value : Number(value ?? 0)
@@ -309,29 +308,20 @@ const KeyMetricsSection = ({
             label="Forfrugtsværdi"
             value={`${fmt(precedingCropValue, 0)} kg N/ha`}
           />
-          <button
-            type="button"
-            aria-expanded={showMineralSplit}
+          <DisclosureButton
+            open={showMineralSplit}
+            onToggle={() => setShowMineralSplit((open) => !open)}
+            label="Tildelt mineralsk N"
             aria-controls={mineralSplitId}
-            onClick={() => setShowMineralSplit((open) => !open)}
-            className="flex w-full items-baseline justify-between gap-3 border-t py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="flex items-center gap-1 font-medium text-foreground">
-              <ChevronRight
-                className={cn(
-                  'size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform',
-                  showMineralSplit && 'rotate-90',
-                )}
-                aria-hidden="true"
-              />
-              Tildelt mineralsk N
-            </span>
-            <span className="shrink-0 font-semibold tabular-nums">
-              {`${fmt(appliedFertiliser, 0)} kg N/ha`}
-            </span>
-          </button>
+            trailing={
+              <span className="font-semibold tabular-nums">
+                {`${fmt(appliedFertiliser, 0)} kg N/ha`}
+              </span>
+            }
+            className="w-full rounded-none border-t py-1.5 text-xs"
+          />
           {showMineralSplit ? (
-            <div id={mineralSplitId} className="pl-5">
+            <div id={mineralSplitId} className="pl-6">
               <DefinitionRow
                 label="Handelsgødning"
                 value={`${fmt(mineralFertiliser, 0)} kg N/ha`}

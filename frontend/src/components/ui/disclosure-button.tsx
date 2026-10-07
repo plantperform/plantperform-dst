@@ -10,6 +10,7 @@ type DisclosureButtonProps = {
   'aria-controls'?: string
   hint?: ReactNode
   hintAlign?: 'start' | 'end'
+  trailing?: ReactNode
   className?: string
 }
 
@@ -20,6 +21,7 @@ export const DisclosureButton = ({
   'aria-controls': ariaControls,
   hint,
   hintAlign = 'start',
+  trailing,
   className,
 }: DisclosureButtonProps) => (
   <button
@@ -28,7 +30,7 @@ export const DisclosureButton = ({
     aria-controls={ariaControls}
     onClick={onToggle}
     className={cn(
-      'flex items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      'flex items-center gap-2 rounded-md text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       className,
     )}
   >
@@ -39,16 +41,19 @@ export const DisclosureButton = ({
       )}
       aria-hidden="true"
     />
-    <span className="text-sm font-medium">{label}</span>
+    <span>{label}</span>
     {!open && hint ? (
       <span
         className={cn(
-          'text-xs text-muted-foreground',
+          'text-xs font-normal text-muted-foreground',
           hintAlign === 'end' && 'ml-auto',
         )}
       >
         {hint}
       </span>
+    ) : null}
+    {trailing !== undefined ? (
+      <span className="ml-auto shrink-0">{trailing}</span>
     ) : null}
   </button>
 )
