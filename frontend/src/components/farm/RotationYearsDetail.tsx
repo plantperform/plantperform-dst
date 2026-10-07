@@ -183,11 +183,9 @@ const DefinitionRow = ({
       {label}
       {term ? <GlossaryInfo term={term} /> : null}
     </span>
-    <span className="flex min-w-0 items-baseline gap-2">
+    <span className="flex shrink-0 items-baseline gap-2">
       {note ? (
-        <span className="truncate font-normal text-muted-foreground">
-          {note}
-        </span>
+        <span className="font-normal text-muted-foreground">{note}</span>
       ) : null}
       <AppTooltip content={title}>
         <span
@@ -335,6 +333,7 @@ const KeyMetricsSection = ({
               <DefinitionRow
                 label="Organisk andel af organisk gødning"
                 value={`${fmt(organicBound, 0)} kg N/ha`}
+                note="tæller ikke med"
                 muted
                 title="Organisk bundet N. Tæller ikke med i tildelt mineralsk N eller normen, men indgår i udvaskningen"
               />
@@ -344,7 +343,9 @@ const KeyMetricsSection = ({
             label="Tilgængeligt N"
             value={`${fmt(availableN, 0)} kg N/ha`}
             note={
-              cropNorm ? `${fmt((availableN / cropNorm) * 100, 0)} % af normen` : undefined
+              cropNorm
+                ? `${fmt((availableN / cropNorm) * 100, 0)} % af normen`
+                : undefined
             }
             title={`Forfrugt ${fmt(precedingCropValue, 0)} + mineralsk andel af organisk gødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
