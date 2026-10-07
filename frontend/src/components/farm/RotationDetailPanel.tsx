@@ -25,7 +25,6 @@ type RotationDetailPanelProps = {
   retention: number | null
   selectedYearIndex?: number
   onSelectedYearIndexChange?: (index: number) => void
-  openAtYearIndex?: number
 }
 
 export const RotationDetailPanel = ({
@@ -37,7 +36,6 @@ export const RotationDetailPanel = ({
   retention,
   selectedYearIndex,
   onSelectedYearIndexChange,
-  openAtYearIndex,
 }: RotationDetailPanelProps) => {
   const {
     data: detail,
@@ -90,7 +88,6 @@ export const RotationDetailPanel = ({
         retention={retention}
         selectedYearIndex={highlightIndex}
         onSelectedYearIndexChange={onSelectedYearIndexChange}
-        openAtYearIndex={openAtYearIndex}
       />
     </div>
   )

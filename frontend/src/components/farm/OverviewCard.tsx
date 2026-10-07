@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -37,9 +38,12 @@ export const OverviewCard = ({
           </span>
         ) : null}
       </h2>
-      <div className="mt-0.5 truncate text-sm text-muted-foreground">
+      <TruncatedTooltip
+        content={subtitle}
+        className="mt-0.5 block truncate text-sm text-muted-foreground"
+      >
         {subtitle}
-      </div>
+      </TruncatedTooltip>
     </div>
     <div className="flex flex-1 flex-col gap-4">{children}</div>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t pt-4">

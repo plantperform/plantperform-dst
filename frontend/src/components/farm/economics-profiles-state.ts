@@ -1,18 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
-import { NO_OVERRIDES, type EconomicsOverrides } from '@/lib/economics'
+import { NO_OVERRIDES, type OverridesChange } from '@/lib/economics'
 import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
 import {
   NO_PROFILES,
-  STANDARD_PROFILE_ID,
   allProfiles,
   findProfile,
+  freeProfileName,
   parseStoredProfiles,
   profileForSimulation,
   profileNameError,
   simulationsUsingProfile,
   withNewProfile,
-  withProfileCopy,
   withProfileName,
   withProfileOverrides,
   withSimulationProfile,
@@ -48,24 +47,31 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
   const [stored, setStored] = useState(() => ({
     farmId,
     state: readStoredProfiles(farmId),
+    changed: false,
   }))
   if (stored.farmId !== farmId) {
-    setStored({ farmId, state: readStoredProfiles(farmId) })
+    setStored({ farmId, state: readStoredProfiles(farmId), changed: false })
   }
 
   useEffect(() => {
-    writeStoredProfiles(stored.farmId, stored.state)
+    if (stored.changed) writeStoredProfiles(stored.farmId, stored.state)
   }, [stored])
 
   return useMemo(() => {
     const { state } = stored
     const update = (
       change: (current: EconomicsProfiles) => EconomicsProfiles,
-    ) => setStored((current) => ({ ...current, state: change(current.state) }))
+    ) =>
+      setStored((current) => ({
+        ...current,
+        state: change(current.state),
+        changed: true,
+      }))
 
     return {
       assumptions: EXAMPLE_ECONOMICS,
       profiles: allProfiles(state),
+      ownProfiles: state.profiles,
       overviewPath: `/farms/${stored.farmId}/economics`,
       profilePath: (profileId: string) =>
         `/farms/${stored.farmId}/economics/${profileId}`,
@@ -80,24 +86,14 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       ) => simulationsUsingProfile(state, simulations, profileId),
       nameError: (name: string, profileId?: string) =>
         profileNameError(state, name, profileId),
-      createProfile: (baseName: string) => {
-        const id = crypto.randomUUID()
-        update((current) => withNewProfile(current, id, baseName))
-        return id
-      },
-      copyProfile: (sourceId: string) => {
-        const id = crypto.randomUUID()
-        update((current) => withProfileCopy(current, sourceId, id))
-        return id
-      },
+      newProfileName: (baseName: string) => freeProfileName(state, baseName),
+      ensureProfile: (profileId: string, name: string) =>
+        update((current) => withNewProfile(current, profileId, name)),
       renameProfile: (profileId: string, name: string) =>
         update((current) => withProfileName(current, profileId, name)),
       deleteProfile: (profileId: string) =>
         update((current) => withoutProfile(current, profileId)),
-      changeOverrides: (
-        profileId: string,
-        change: (current: EconomicsOverrides) => EconomicsOverrides,
-      ) =>
+      changeOverrides: (profileId: string, change: OverridesChange) =>
         update((current) =>
           withProfileOverrides(
             current,
@@ -108,10 +104,6 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       assignProfile: (simulationId: string, profileId: string) =>
         update((current) =>
           withSimulationProfile(current, simulationId, profileId),
-        ),
-      forgetSimulation: (simulationId: string) =>
-        update((current) =>
-          withSimulationProfile(current, simulationId, STANDARD_PROFILE_ID),
         ),
     }
   }, [stored])

@@ -21,7 +21,6 @@ import type {
   Simulation,
 } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
-import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
@@ -32,7 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
-import { STANDARD_PROFILE, STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
@@ -92,7 +91,6 @@ export const NewScenarioPanel = ({
   const nNormQuery = useRotationNNormPercentages(farmId)
   const presetsQuery = useFertiliserPresets(farmId)
   const economicsProfiles = useEconomicsProfiles()
-  const { startGuide } = useEconomicsNavigation()
   const categories = categoriesQuery.data ?? []
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
@@ -447,32 +445,20 @@ export const NewScenarioPanel = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="scenario-economics-profile">Økonomi</Label>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <select
-                id="scenario-economics-profile"
-                className="min-w-0 flex-1 basis-64 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                {...register('economicsProfileId')}
-              >
-                {economicsProfiles.profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded-sm text-sm font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => {
-                  onOpenChange(false)
-                  startGuide({ fromProfileId: STANDARD_PROFILE_ID })
-                }}
-              >
-                Tilpas økonomien til bedriften
-              </button>
-            </div>
+            <Label htmlFor="scenario-economics-profile">Økonomiprofil</Label>
+            <select
+              id="scenario-economics-profile"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              {...register('economicsProfileId')}
+            >
+              {economicsProfiles.profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-muted-foreground">
-              Priser og mængder bag dækningsbidraget. Du kan skifte økonomi
+              Priser og mængder bag dækningsbidraget. Profilen kan skiftes
               senere øverst i simuleringen.
             </p>
           </div>
@@ -760,9 +746,7 @@ export const NewScenarioPanel = ({
               <span>
                 <span className="font-medium">Regn forfrugtsværdien med</span>
                 <span className="block text-xs text-muted-foreground">
-                  Forfrugtsværdien trækkes fra næste afgrødes kvælstofnorm. Lav
-                  en kopi uden den med Ret grundlag, og sammenlign de to
-                  simuleringer.
+                  Forfrugtsværdien trækkes fra næste afgrødes kvælstofnorm.
                 </span>
                 <span className="block text-xs text-amber-800">
                   Valget indgår ikke i beregningen endnu.

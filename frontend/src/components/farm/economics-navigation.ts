@@ -1,33 +1,12 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
-export type GuideStart = {
-  fromProfileId: string
-  simulationId?: string
-  copy?: boolean
-}
-
-export type EconomicsNavigation = {
-  startGuide: (start: GuideStart) => void
-}
-
-export const EconomicsNavigationContext =
-  createContext<EconomicsNavigation | null>(null)
-
-export const useEconomicsNavigation = () => {
-  const context = useContext(EconomicsNavigationContext)
-  if (!context) {
-    throw new Error(
-      'Economics navigation must be used inside EconomicsNavigationContext',
-    )
-  }
-  return context
-}
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 
 export const guideOriginSchema = z.object({
   guide: z.object({
-    created: z.boolean(),
     simulationId: z.string().nullable(),
     returnTo: z.string(),
   }),
@@ -35,19 +14,47 @@ export const guideOriginSchema = z.object({
 
 export type GuideOrigin = z.infer<typeof guideOriginSchema>['guide']
 
+type GuideStart = {
+  fromProfileId: string
+  simulationId?: string
+}
+
+export const useStartGuide = () => {
+  const navigate = useNavigate()
+  const { pathname, search } = useLocation()
+  const { guidePath } = useEconomicsProfiles()
+
+  return ({ fromProfileId, simulationId }: GuideStart) =>
+    navigate(
+      guidePath(
+        fromProfileId === STANDARD_PROFILE_ID
+          ? crypto.randomUUID()
+          : fromProfileId,
+      ),
+      {
+        state: {
+          guide: {
+            simulationId: simulationId ?? null,
+            returnTo: `${pathname}${search}`,
+          },
+        },
+      },
+    )
+}
+
 export const returnTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('overview') }),
   z.object({ kind: z.literal('compare'), search: z.string() }),
   z.object({
     kind: z.literal('simulation'),
     simulationId: z.string(),
-    label: z.string(),
+    name: z.string(),
   }),
   z.object({
     kind: z.literal('field'),
     simulationId: z.string().nullable(),
     fieldId: z.string(),
-    label: z.string(),
+    name: z.string(),
     calculationYearIndex: z.number().nullable(),
   }),
 ])
@@ -59,7 +66,7 @@ export type FieldReturnTarget = Extract<ReturnTarget, { kind: 'field' }>
 export const returnTargetLabel = (target: ReturnTarget): string => {
   if (target.kind === 'overview') return 'Tilbage til Oversigt'
   if (target.kind === 'compare') return 'Tilbage til Sammenlign'
-  return target.label
+  return `Tilbage til ${target.name}`
 }
 
 const calculationReturnSchema = z.object({
@@ -78,11 +85,11 @@ export const calculationReturnState = (
       }
     : null
 
-export const useCalculationReturn = (fieldId: string): number | undefined => {
+export const useCalculationReturn = (fieldId: string) => {
   const { pathname, search, state } = useLocation()
   const navigate = useNavigate()
   const returned = calculationReturnSchema.safeParse(state)
-  const [yearIndex] = useState(() =>
+  const [yearIndex, setYearIndex] = useState(() =>
     returned.success && returned.data.calculation.fieldId === fieldId
       ? returned.data.calculation.yearIndex
       : undefined,
@@ -93,5 +100,5 @@ export const useCalculationReturn = (fieldId: string): number | undefined => {
     if (pending) navigate({ pathname, search }, { replace: true })
   }, [navigate, pathname, pending, search])
 
-  return yearIndex
+  return [yearIndex, () => setYearIndex(undefined)] as const
 }

@@ -56,7 +56,7 @@ field" column is the name on the wire.
 | stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
-| regn forfrugtsværdien med | `includePrecedingCropValue`, `precedingCropValueLabel` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
+| regn forfrugtsværdien med | `includePrecedingCropValue` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
@@ -95,7 +95,7 @@ field" column is the name on the wire.
 
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
-| dækningsbidrag | `db2`, `dbDkkHa`, `avgDbDkkHa`, `formatDbDkk` | `db2`, `dbKrHa`, `avgDbKrHa` | DB2 kept as an acronym |
+| dækningsbidrag | `db2`, `dbDkkHa`, `avgDbDkkHa` | `db2`, `dbKrHa`, `avgDbKrHa` | DB2 kept as an acronym |
 | kr | `Dkk` suffix, `formatCompactDkk` | | |
 | udbytte | `yieldAmount` | `udbytte` | |
 | udbytteenhed | `yieldUnit` | `udbytteenhed` | |
@@ -113,28 +113,19 @@ field" column is the name on the wire.
 | tørring | `drying` | `toerring` | |
 | omkostninger i alt | `totalCosts` | `omkostninger_total` | |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
-| økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine`, `EXAMPLE_ECONOMICS`, `EconomicsCropDetail` | | The SEGES prices and quantities behind DB2, per crop |
-| omkostningsgruppe | `CostCategory`, `COST_CATEGORIES`, `EconomicsGroupId`, `lineGroupId` | | Udsæd, planteværn, markarbejde and tørring/lagring |
-| stykpris | `UnitPrice`, `priceId`, `priceValue` | | Price per unit, e.g. kr/gang or kr/kg |
-| mængde | `quantity`, `quantityUnit`, `lineQuantity` | | Per hectare, e.g. 3 sprøjtninger or 140 kg udsæd |
-| kilde | `source`, `cropSources` | | Where a standard price comes from |
-| fælles pris | shared price, `priceUsage`, `priceCrops`, `sharedPriceEffect`, `SharedPriceConfirm` | | A price used by several crops, e.g. Pløjning med pakning. A change is confirmed with the crops it reaches before it is saved |
-| tilpasset | `EconomicsOverrides`, `isPriceCustomised`, `isQuantityCustomised`, `isLineCustomised`, `isCropCustomised`, `withoutCropChanges` | | The user's own value on top of the SEGES standard |
-| udbytte i forhold til normen | `yieldPct`, `cropYieldPct`, `withYieldPct`, `isYieldCustomised`, `YieldAdjustmentRow`, `YieldPctField`, `yieldHint` | | Percent added to or taken from each field's own yield for a crop in an economics profile. Grain and straw follow it, the costs do not |
-| fordeling af indtægten | `incomeSplit`, `IncomeShare` | | Costs per group and dækningsbidrag as shares of income and subsidy, shown as a bar for each crop |
-| alle afgrøder | `CropsOverview` | | The first tab under Økonomi, with income, subsidy and costs per hectare for every crop |
-| økonomiprofil | `EconomicsProfile`, `EconomicsProfiles`, `EconomicsProfilePage`, `useEconomicsProfiles`, `profileForSimulation`, `economicsProfileId`, `SimulationHeading`, `EconomicsChip`, `describeEconomicsEntry`, `describeProfileOption` | | A farm's named set of economics changes. Each simulation uses one, and they are kept in the browser until the backend can store them |
-| økonomioversigt | `EconomicsOverview`, `overviewPath`, `EconomicsBanner`, `describeStandardEntry`, `describeProfileChanges`, `describeProfileUsers`, `profileDbEffect`, `CropDbEffect`, `leadingDbEffects`, `dbDeltaScale`, `dbDeltaBar`, `ECONOMICS_INVITATION` | | The page behind Økonomi in the user menu at the foot of the sidebar (`economicsPath` in `UserMenuContent`). Standard stands as a line at the top, and each of the farm's own profiles has a card like the cards for the simulations: who uses it, its changes summed up by kind, and the dækningsbidrag of every crop with a bar from a zero line for the difference from Standard |
-| Standard (SEGES 2026) | `STANDARD_PROFILE` | | The economics profile without changes. It cannot be edited, renamed or deleted |
-| ændring i forhold til Standard | `ProfileChange`, `profileChanges`, `withoutProfileChange`, `profileChangesTitle`, `ChangedValue` | | One changed yield, price or quantity in a profile, listed with the value before and after |
-| ny udgave | `withProfileCopy`, `copiedFromId`, `copyProfile` | | A copy of one of the farm's own profiles, which starts with the same changes |
-| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage`, `GuidePricesStep`, `GuideYieldStep`, `GuideMachinesStep`, `GuideReviewStep`, `startGuide`, `guideStepOfChange` | | Four steps that fit a profile to the farm: Salgspriser, Udbytte, Maskinstation and Gennemgang, with the effect on each crop's dækningsbidrag beside them |
-| tilbage-linje | `ReturnTarget`, `returnTargetLabel` | | The dark line on a profile page that leads back to the overview, the comparison, the simulation or the field the user came from |
-| indgår ikke i beregningen endnu | `NotInCalculationDot` | | The yellow dot at an own profile while the backend still calculates with Standard |
-| økonomi i simuleringerne | `ComparisonEconomics`, `compareProfileChanges`, `ProfileChangeComparison`, `describeEconomicsVerdict` | | The section of the comparison with each simulation's profile and the lines where the profiles differ from Standard |
-| samme marker | `haveSameFieldPlans` | | Two simulations with the same rotation on every field, so only their economics can set their dækningsbidrag apart |
-| sådan er tallene beregnet | breakdown, `BreakdownRow`, `customisedBreakdownLine`, `BreakdownEconomicsContext`, `CustomisedChip` | | The calculation under a field, where a line the profile changes is marked tilpasset i {profil} and links to the line in the profile |
-| regnet med {profil} | `useFieldEconomics`, `FieldReturnTarget`, `useCalculationReturn`, `calculationReturnState` | | The line under a field's key figures that names the profile behind them. A profile opened from the field leads back to the field, and from a line in the calculation back to that year's calculation |
+| økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
+| udsæd, planteværn, markarbejde, tørring/lagring | `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | | The cost groups of a crop |
+| stykpris | `UnitPrice`, `priceId` | | Price per unit, e.g. kr/gang or kr/kg |
+| mængde | `quantity`, `quantityUnit` | | Per hectare, e.g. 3 sprøjtninger |
+| salgspris | `saleLine` | | The first revenue line of a crop |
+| fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
+| økonomiprofil | `EconomicsProfile`, `economicsProfileId` | | A farm's named set of changes on top of Standard, kept in the browser until the backend can store it |
+| Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
+| tilpasset | customised, `EconomicsOverrides` | | The farm's own value instead of the standard |
+| udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
+| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
+| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | |
+| sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation
 

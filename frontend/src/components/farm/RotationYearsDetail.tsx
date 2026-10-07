@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
-import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
-import { CustomisedChip } from '@/components/farm/EconomicsCropDetail'
+import { CustomisedChip, TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import { FieldEconomicsContext } from '@/components/farm/field-economics'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
@@ -927,12 +927,12 @@ const LeachingDetailSection = ({
 type CostLine = { category: string; treatment: string; costDkkHa: number }
 
 const useCustomisedLine = (cropCode: number) => {
-  const economics = useContext(BreakdownEconomicsContext)
+  const fieldEconomics = useContext(FieldEconomicsContext)
   return (row: BreakdownRow) =>
-    economics
+    fieldEconomics
       ? customisedBreakdownLine(
-          economics.assumptions,
-          economics.profile.overrides,
+          fieldEconomics.assumptions,
+          fieldEconomics.profile.overrides,
           cropCode,
           row,
         )
@@ -948,22 +948,22 @@ const CustomisedLabel = ({
   cropCode: number
   line: BreakdownTarget | null
 }) => {
-  const economics = useContext(BreakdownEconomicsContext)
-  if (!line || !economics) return label
+  const fieldEconomics = useContext(FieldEconomicsContext)
+  if (!line || !fieldEconomics) return label
   return (
     <>
-      {label}{' '}
-      <CustomisedChip>tilpasset i {economics.profile.name}</CustomisedChip>
-      <span className="block text-[11px] text-muted-foreground">
-        Beregnet med standarden{' · '}
-        <Link
-          to={economics.profilePath}
-          state={{ cropCode, lineId: line.id, returnTo: economics.returnTo }}
-          className="rounded-sm font-medium whitespace-nowrap text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Se posten i profilen
-        </Link>
-      </span>
+      {label} <CustomisedChip />
+      <Link
+        to={fieldEconomics.profilePath}
+        state={{
+          cropCode,
+          lineId: line.id,
+          returnTo: fieldEconomics.returnTo,
+        }}
+        className={`${TEXT_LINK_CLASS} block w-fit text-[11px]`}
+      >
+        Se posten i profilen
+      </Link>
     </>
   )
 }
@@ -1002,7 +1002,6 @@ const CategoryBreakdownRow = ({
         <span className="text-muted-foreground">
           {hasBreakdown ? (open ? '▾ ' : '▸ ') : ''}
           {label}
-          {anyCustomised ? ' (tilpasset)' : null}
         </span>
         <span className="tabular-nums">−{fmt(total, 0)} kr/ha</span>
       </button>
@@ -1168,7 +1167,6 @@ type RotationYearsDetailProps = {
   hideYearSelector?: boolean
   hideNNormLevel?: boolean
   startCalendarYear?: number
-  openAtYearIndex?: number
 }
 
 export const RotationYearsDetail = ({
@@ -1180,9 +1178,10 @@ export const RotationYearsDetail = ({
   hideYearSelector = false,
   hideNNormLevel = false,
   startCalendarYear = ROTATION_START_CALENDAR_YEAR,
-  openAtYearIndex,
 }: RotationYearsDetailProps) => {
-  const economics = useContext(BreakdownEconomicsContext)
+  const fieldEconomics = useContext(FieldEconomicsContext)
+  const openAtYearIndex = fieldEconomics?.openAtYearIndex
+  const onOpenedAtYear = fieldEconomics?.onOpenedAtYear
   const [internalSelectedYear, setInternalSelectedYear] = useState(
     openAtYearIndex ?? 0,
   )
@@ -1196,10 +1195,10 @@ export const RotationYearsDetail = ({
   const economicsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (openAtYearIndex !== undefined) {
-      economicsRef.current?.scrollIntoView({ block: 'start' })
-    }
-  }, [openAtYearIndex])
+    if (openAtYearIndex === undefined) return
+    economicsRef.current?.scrollIntoView({ block: 'start' })
+    onOpenedAtYear?.()
+  }, [openAtYearIndex, onOpenedAtYear])
 
   useEffect(() => {
     const row = tabRowRef.current
@@ -1288,12 +1287,12 @@ export const RotationYearsDetail = ({
             retention={retention}
           />
           <div ref={economicsRef}>
-            <BreakdownEconomicsContext.Provider
+            <FieldEconomicsContext.Provider
               value={
-                economics && {
-                  ...economics,
+                fieldEconomics && {
+                  ...fieldEconomics,
                   returnTo: {
-                    ...economics.returnTo,
+                    ...fieldEconomics.returnTo,
                     calculationYearIndex: yearIndex,
                   },
                 }
@@ -1304,7 +1303,7 @@ export const RotationYearsDetail = ({
                 areaHa={areaHa}
                 cropCode={year.year.cropCode}
               />
-            </BreakdownEconomicsContext.Provider>
+            </FieldEconomicsContext.Provider>
           </div>
 
           <div className="border-t pt-3">

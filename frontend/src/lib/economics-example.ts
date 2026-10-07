@@ -20,7 +20,7 @@ type CropRow = Omit<CropEconomics, 'revenue' | 'subsidies' | 'costs'> & {
   costs: Record<CostCategory, LineRow[]>
 }
 
-const SEGES = 'SEGES Budgetkalkuler 2026'
+export const STANDARD_SOURCE = 'SEGES Budgetkalkuler 2026'
 const PRICE_LIST = 'Prisliste 2026'
 
 const SEGES_PRICES: PriceRow[] = [
@@ -374,7 +374,7 @@ const toPrice =
 
 export const EXAMPLE_ECONOMICS: EconomicsAssumptions = {
   prices: [
-    ...SEGES_PRICES.map(toPrice(SEGES)),
+    ...SEGES_PRICES.map(toPrice(STANDARD_SOURCE)),
     ...SUBSIDY_PRICES.map(toPrice(PRICE_LIST)),
   ],
   crops: CROPS.map((crop) => ({

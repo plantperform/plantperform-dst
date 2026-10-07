@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
-type ComparedColumnsProps = {
+export type ComparedColumnsProps = {
   columns: ComparedColumn[]
   highlightedKey: string | null
   onHighlight: OnHighlight

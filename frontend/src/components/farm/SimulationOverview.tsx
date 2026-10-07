@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { FieldRecord, Simulation } from '@/api/types'
-import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
+import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { SimulationCard } from '@/components/farm/SimulationCard'
@@ -46,17 +46,10 @@ export const SimulationOverview = ({
 }: SimulationOverviewProps) => {
   const historyQuota = useMemo(() => resolveFarmQuota(fields, false), [fields])
   const economics = useEconomicsProfiles()
-  const { startGuide } = useEconomicsNavigation()
-  const ownProfiles = economics.profiles.filter(
-    (profile) => profile.id !== STANDARD_PROFILE_ID,
-  )
+  const startGuide = useStartGuide()
+  const { ownProfiles } = economics
   const economicsEntry = describeEconomicsEntry(
-    ownProfiles.map((profile) => ({
-      name: profile.name,
-      simulationNames: economics
-        .simulationsUsingProfile(simulations, profile.id)
-        .map((simulation) => simulation.name),
-    })),
+    ownProfiles.map((profile) => profile.name),
   )
 
   return (
@@ -102,7 +95,7 @@ export const SimulationOverview = ({
             onClick={() => startGuide({ fromProfileId: STANDARD_PROFILE_ID })}
           >
             {ownProfiles.length > 0
-              ? 'Tilpas igen'
+              ? 'Ny økonomiprofil'
               : 'Tilpas økonomien til bedriften'}
             <ArrowRight aria-hidden="true" />
           </Button>

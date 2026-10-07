@@ -534,9 +534,8 @@ export const haveSameFieldPlans = (
   )
 }
 
-export type EconomicsVerdictColumn = {
+type EconomicsVerdictColumn = {
   title: string
-  profileId: string
   ownProfileName: string | null
   fields: FieldRecord[]
 }
@@ -549,16 +548,16 @@ export const describeEconomicsVerdict = (
       .slice(index + 1)
       .find(
         (right) =>
-          right.profileId !== left.profileId &&
+          right.ownProfileName !== left.ownProfileName &&
           haveSameFieldPlans(left.fields, right.fields),
       )
     if (twin) {
-      return `${left.title} og ${twin.title} har samme marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.`
+      return `${left.title} og ${twin.title} har samme sædskifter på alle marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.`
     }
   }
   const own = columns.filter((column) => column.ownProfileName !== null)
   if (own.length === 0) return null
   return own.length === 1
     ? `${own[0].title} regner med ${own[0].ownProfileName}, som ikke indgår i beregningen endnu.`
-    : `${formatNameList(own.map((column) => column.title))} regner med bedriftens egne økonomiprofiler, som ikke indgår i beregningen endnu.`
+    : `${formatNameList(own.map((column) => column.title))} regner med økonomiprofiler, som ikke indgår i beregningen endnu.`
 }

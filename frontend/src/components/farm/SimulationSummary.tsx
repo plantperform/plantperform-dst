@@ -6,6 +6,7 @@ import type {
   FertiliserPresetOption,
   RotationCategoryOption,
 } from '@/api/types'
+import { NotInCalculationNote } from '@/components/farm/economics-ui'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 import { formatFieldCount, formatNumber } from '@/lib/field-domain'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
@@ -109,7 +110,7 @@ export const SimulationSummary = ({
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
-          <p>Økonomi: {economicsProfile.name}</p>
+          <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
 
         <Section
@@ -173,12 +174,7 @@ export const SimulationSummary = ({
           </p>
           <p>
             Forfrugtsværdi: {precedingCropValueLabel(includePrecedingCropValue)}
-            {includePrecedingCropValue ? null : (
-              <span className="text-amber-800">
-                {' '}
-                · indgår ikke i beregningen endnu
-              </span>
-            )}
+            {includePrecedingCropValue ? null : <NotInCalculationNote />}
           </p>
         </Section>
 

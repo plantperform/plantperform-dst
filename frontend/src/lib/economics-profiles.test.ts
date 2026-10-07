@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { NO_OVERRIDES, type EconomicsOverrides } from '@/lib/economics'
 import {
+  ECONOMICS_INVITATION,
   NO_PROFILES,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
@@ -10,14 +11,13 @@ import {
   describeEconomicsEntry,
   describeProfileOption,
   describeProfileUsers,
-  describeStandardEntry,
+  describeStandard,
   parseStoredProfiles,
   profileForSimulation,
   profileNameError,
   sharedProfileNote,
   simulationsUsingProfile,
   withNewProfile,
-  withProfileCopy,
   withProfileName,
   withProfileOverrides,
   withSimulationProfile,
@@ -83,20 +83,7 @@ describe('economics profiles', () => {
     expect(
       withNewProfile(second, 'third', 'bakkegården 2027').profiles.at(-1)?.name,
     ).toBe('bakkegården 2027 3')
-  })
-
-  it('copies a profile with its changes and remembers where it came from', () => {
-    const copied = withProfileCopy(farm, 'careful', 'copy')
-    expect(copied.profiles.at(-1)).toEqual({
-      id: 'copy',
-      name: 'Forsigtig 2027 (kopi)',
-      overrides: barleyPrice(125),
-      copiedFromId: 'careful',
-    })
-    expect(
-      withProfileCopy(copied, 'careful', 'again').profiles.at(-1)?.name,
-    ).toBe('Forsigtig 2027 (kopi) 2')
-    expect(withProfileCopy(farm, 'deleted', 'copy')).toEqual(farm)
+    expect(withNewProfile(second, 'first', 'Et andet navn')).toBe(second)
   })
 
   it('wants a name that no other profile on the farm has', () => {
@@ -145,40 +132,29 @@ describe('economics profiles', () => {
     ).toEqual({ 'sim-a': 'careful' })
   })
 
-  it('says how many simulations go back to Standard when a profile is deleted', () => {
-    expect(deleteProfileMessage(0)).toBe('Ingen simuleringer bruger profilen.')
-    expect(deleteProfileMessage(1)).toBe(
-      '1 simulering bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til den først.',
+  it('says which simulations go back to Standard when a profile is deleted', () => {
+    expect(deleteProfileMessage([])).toBe(
+      'Bruges ikke af nogen simulering endnu.',
     )
-    expect(deleteProfileMessage(2)).toBe(
-      '2 simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.',
+    expect(deleteProfileMessage(['Reduceret kvælstof', 'Mere vintersæd'])).toBe(
+      'Bruges af Reduceret kvælstof og Mere vintersæd, som går tilbage til Standard (SEGES 2026).',
     )
   })
 
   it('introduces the economics above the simulations', () => {
     expect(describeEconomicsEntry([])).toEqual({
       title: 'Simuleringerne regner med Standard (SEGES 2026)',
-      text: 'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.',
+      text: ECONOMICS_INVITATION,
     })
-    expect(
-      describeEconomicsEntry([
-        { name: 'Bakkegården 2027', simulationNames: ['Reduceret kvælstof'] },
-      ]),
-    ).toEqual({
+    expect(describeEconomicsEntry(['Bakkegården 2027'])).toEqual({
       title: 'Bedriftens økonomiprofil: Bakkegården 2027',
-      text: 'Bakkegården 2027 bruges af Reduceret kvælstof. Indtil profilerne indgår i beregningen, er tallene regnet med Standard.',
+      text: 'Indtil profilen indgår i beregningen, er tallene regnet med Standard (SEGES 2026).',
     })
     expect(
-      describeEconomicsEntry([
-        {
-          name: 'Bakkegården 2027',
-          simulationNames: ['Reduceret kvælstof', 'Mere vintersæd'],
-        },
-        { name: 'Forsigtig 2027', simulationNames: [] },
-      ]),
+      describeEconomicsEntry(['Bakkegården 2027', 'Forsigtig 2027']),
     ).toEqual({
       title: 'Bedriftens økonomiprofiler: Bakkegården 2027 og Forsigtig 2027',
-      text: 'Bakkegården 2027 bruges af Reduceret kvælstof og Mere vintersæd. Forsigtig 2027 bruges af ingen simuleringer endnu. Indtil profilerne indgår i beregningen, er tallene regnet med Standard.',
+      text: 'Indtil profilerne indgår i beregningen, er tallene regnet med Standard (SEGES 2026).',
     })
   })
 
@@ -189,29 +165,22 @@ describe('economics profiles', () => {
     expect(describeProfileOption('careful', 3, [])).toBe('3 ændringer')
     expect(
       describeProfileOption('careful', 1, ['Reduceret kvælstof', 'Kopi']),
-    ).toBe('1 ændring · bruges af Reduceret kvælstof, Kopi')
+    ).toBe('1 ændring · bruges af Reduceret kvælstof og Kopi')
   })
 
-  it('names the users of a profile in the overview', () => {
-    expect(describeProfileUsers(STANDARD_PROFILE_ID, [])).toBe(
-      'Bruges af afgrødehistorikken',
-    )
-    expect(describeProfileUsers(STANDARD_PROFILE_ID, ['Mere vintersæd'])).toBe(
-      'Bruges af afgrødehistorikken og Mere vintersæd',
-    )
-    expect(describeProfileUsers('careful', [])).toBe(
+  it('names the simulations that use a profile', () => {
+    expect(describeProfileUsers([])).toBe(
       'Bruges ikke af nogen simulering endnu',
     )
-    expect(
-      describeProfileUsers('careful', ['Reduceret kvælstof', 'Kopi']),
-    ).toBe('Bruges af Reduceret kvælstof og Kopi')
+    expect(describeProfileUsers(['Reduceret kvælstof', 'Kopi'])).toBe(
+      'Bruges af Reduceret kvælstof og Kopi',
+    )
   })
 
   it('introduces Standard above the profile cards', () => {
-    expect(describeStandardEntry(6, ['Mere vintersæd'])).toEqual({
-      title: 'Standard (SEGES 2026)',
-      text: 'Priser og mængder fra SEGES Budgetkalkuler 2026 for 6 afgrøder. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. Bruges af afgrødehistorikken og Mere vintersæd.',
-    })
+    expect(describeStandard(6, ['Mere vintersæd'])).toBe(
+      'Priser og mængder fra SEGES Budgetkalkuler 2026 for 6 afgrøder. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. Bruges af afgrødehistorikken og Mere vintersæd.',
+    )
   })
 
   it('says that a change reaches every simulation that shares the profile', () => {
@@ -225,26 +194,8 @@ describe('economics profiles', () => {
     )
   })
 
-  it('reads profiles stored before the yield percentage existed', () => {
-    const stored = {
-      profiles: [
-        {
-          id: 'careful',
-          name: 'Forsigtig 2027',
-          overrides: { prices: { 'sale:1': 125 }, quantities: {} },
-        },
-      ],
-      simulationProfileIds: {},
-    }
-    expect(
-      parseStoredProfiles(JSON.stringify(stored)).profiles[0].overrides,
-    ).toEqual(barleyPrice(125))
-  })
-
   it('reads what was stored and leaves out what it cannot use', () => {
     expect(parseStoredProfiles(JSON.stringify(farm))).toEqual(farm)
-    const withCopy = withProfileCopy(farm, 'careful', 'copy')
-    expect(parseStoredProfiles(JSON.stringify(withCopy))).toEqual(withCopy)
     expect(parseStoredProfiles(null)).toEqual(NO_PROFILES)
     expect(parseStoredProfiles('{not json')).toEqual(NO_PROFILES)
     expect(parseStoredProfiles(JSON.stringify({ profiles: 'none' }))).toEqual(
@@ -256,8 +207,13 @@ describe('economics profiles', () => {
           profiles: [
             ...farm.profiles,
             { id: STANDARD_PROFILE_ID, name: 'Kopi', overrides: NO_OVERRIDES },
+            { id: 'broken', name: 'Uden tal' },
           ],
-          simulationProfileIds: { 'sim-a': 'careful', 'sim-b': 'deleted' },
+          simulationProfileIds: {
+            'sim-a': 'careful',
+            'sim-b': 'deleted',
+            'sim-c': 'broken',
+          },
         }),
       ),
     ).toEqual(farm)

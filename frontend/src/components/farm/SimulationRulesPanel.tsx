@@ -38,7 +38,7 @@ export const SimulationRulesPanel = ({
       </div>
       <p className="mt-1.5 max-w-190 text-[13px] text-muted-foreground">
         Her bestemmer du, hvad optimeringen må gøre: grænser for hele bedriften
-        og marker, den ikke må ændre. Økonomien vælges øverst i simuleringen.
+        og marker, den ikke må ændre.
       </p>
     </div>
     <div className="flex flex-col gap-3.5 px-6 pt-5 pb-6">

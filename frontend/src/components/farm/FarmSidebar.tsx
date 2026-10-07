@@ -27,6 +27,7 @@ import {
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { CustomisedDot } from '@/components/farm/economics-ui'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -205,8 +206,8 @@ export const FarmSidebar = ({
   const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
-  const profilePageActive = useMatch('/farms/:farmId/economics/*') !== null
-  const pageActive = overviewActive || profilePageActive
+  const economicsPageActive = useMatch('/farms/:farmId/economics/*') !== null
+  const pageActive = overviewActive || economicsPageActive
   const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
     !pageActive && selection.kind === 'simulation' ? selection.id : null
@@ -275,13 +276,14 @@ export const FarmSidebar = ({
                   className="rounded-md px-3 font-medium"
                   onClick={() => setSimulationsOpen((open) => !open)}
                 >
+                  <FlaskConical />
+                  <span>Simuleringer</span>
                   <ChevronRight
                     className={cn(
-                      'motion-safe:transition-transform',
+                      'ml-auto motion-safe:transition-transform',
                       simulationsOpen && 'rotate-90',
                     )}
                   />
-                  <span>Simuleringer</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <li id={simulationListId}>
@@ -552,12 +554,7 @@ const SimulationDetailLine = ({
       <span className="truncate">
         {[changes, ownProfileName].filter(Boolean).join(' · ')}
       </span>
-      {ownProfileName === null ? null : (
-        <span
-          className="size-1.5 shrink-0 rounded-full bg-amber-500"
-          aria-hidden="true"
-        />
-      )}
+      {ownProfileName === null ? null : <CustomisedDot />}
     </span>
   )
 }

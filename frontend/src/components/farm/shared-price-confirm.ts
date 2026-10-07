@@ -7,7 +7,7 @@ import {
   type OverridesChange,
 } from '@/lib/economics'
 
-export type PendingPrice = { priceId: string; value: number }
+type PendingPrice = { priceId: string; value: number }
 
 export const useSharedPriceConfirm = (
   assumptions: EconomicsAssumptions,
@@ -21,6 +21,8 @@ export const useSharedPriceConfirm = (
 
   return {
     pending,
+    shownPrice: (priceId: string, value: number) =>
+      pending?.priceId === priceId ? pending.value : value,
     commitPrice: (priceId: string, value: number) => {
       if (priceCrops(assumptions, priceId).length > 1) {
         setPending({ priceId, value })
@@ -35,3 +37,5 @@ export const useSharedPriceConfirm = (
     cancel: () => setPending(null),
   }
 }
+
+export type SharedPrice = ReturnType<typeof useSharedPriceConfirm>

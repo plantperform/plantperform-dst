@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   formatCompactDkk,
@@ -157,7 +158,9 @@ const SimulationFigures = ({
             ) : undefined
           }
         >
-          <EconomicsChip profile={profile} returnTo={{ kind: 'overview' }} />
+          {profile.id === STANDARD_PROFILE_ID ? null : (
+            <EconomicsChip profile={profile} returnTo={{ kind: 'overview' }} />
+          )}
         </KeyFigure>
         <KeyFigure
           label="Udledning pr. år"

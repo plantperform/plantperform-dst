@@ -3,9 +3,17 @@ import { useId, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import type { Simulation } from '@/api/types'
-import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import { guideOriginSchema } from '@/components/farm/economics-navigation'
+import {
+  CHOICE_TAB_ACTIVE_CLASS,
+  CHOICE_TAB_CLASS,
+  CHOICE_TAB_IDLE_CLASS,
+} from '@/components/farm/choice-styles'
+import {
+  guideOriginSchema,
+  type GuideOrigin,
+} from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { CustomisedDot, DbDelta } from '@/components/farm/economics-ui'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
   GuideMachinesStep,
@@ -15,8 +23,8 @@ import {
   type GuideUseOption,
 } from '@/components/farm/EconomicsGuideSteps'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
+import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
-import { Eyebrow } from '@/components/ui/eyebrow'
 import {
   Sheet,
   SheetClose,
@@ -24,56 +32,48 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { cropGroupFor } from '@/lib/crop-groups'
 import {
-  cropDbChange,
-  cropTotals,
   formatDbDkk,
-  formatSignedDkk,
-  guideStepOfChange,
   NO_OVERRIDES,
   profileChanges,
-  sameOverrides,
+  profileDbEffect,
   withoutProfileChange,
   type EconomicsAssumptions,
   type EconomicsOverrides,
   type OverridesChange,
 } from '@/lib/economics'
+import { STANDARD_SOURCE } from '@/lib/economics-example'
 import {
   sharedProfileNote,
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
+import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 const STEPS = [
   {
     id: 1,
     label: 'Salgspriser',
-    title: 'Har I en salgsaftale eller en anden pris end standarden?',
     intro:
-      'Skriv bedriftens salgspris pr. afgrøde. Dækningsbidraget er det, marken tjener pr. ha: udbytte gange salgspris plus tilskud, minus udsæd, planteværn, markarbejde og tørring.',
+      'Skriv bedriftens salgspris pr. afgrøde, hvis den afviger fra standarden.',
   },
   {
     id: 2,
     label: 'Udbytte',
-    title: 'Høster I typisk mere eller mindre end normen?',
     intro:
-      'Sæt procenten pr. afgrøde. Den ændrer mængden af kerne og halm, men ikke omkostningerne.',
+      'Sæt procenten pr. afgrøde, hvis bedriften høster mere eller mindre end normen.',
   },
   {
     id: 3,
-    label: 'Maskinstation',
-    title: 'Hvad betaler I for markarbejdet?',
-    intro:
-      'Priserne fra maskinstationen eller egne maskiner. En fælles pris gælder for alle de afgrøder, der står ved den, i hele profilen.',
+    label: 'Markarbejde',
+    intro: 'Skriv priserne fra maskinstationen eller egne maskiner.',
   },
   {
     id: 4,
     label: 'Gennemgang',
-    title: 'Det har I ændret i forhold til Standard',
     intro:
-      'Gå listen igennem, giv profilen et navn og vælg, hvor den skal bruges. Resten af posterne kan rettes bagefter på profilens side.',
+      'Giv profilen et navn, gå ændringerne igennem og vælg, hvor den skal bruges.',
   },
 ] as const
 
@@ -83,6 +83,9 @@ const USE_NEW_SIMULATION = 'new'
 
 const USE_PROFILE_ONLY = 'none'
 
+const EFFECT_GRID_CLASS =
+  'grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_3.5rem] items-center gap-x-2 px-4'
+
 type GuideEffectProps = {
   assumptions: EconomicsAssumptions
   overrides: EconomicsOverrides
@@ -90,48 +93,48 @@ type GuideEffectProps = {
 
 const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => (
   <section className={cn(RULES_CARD_CLASS, 'overflow-hidden')}>
-    <div className="px-4 pt-3.5 pb-2.5">
-      <Eyebrow>Sådan påvirker det dækningsbidraget</Eyebrow>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        kr/ha · Standard mod jeres tal
-      </p>
+    <h2 className="px-4 pt-3.5 text-[13px] font-semibold">
+      Sådan påvirker det dækningsbidraget
+    </h2>
+    <div
+      className={cn(
+        EFFECT_GRID_CLASS,
+        'pt-1 pb-2 text-xs text-muted-foreground',
+      )}
+    >
+      <span>kr/ha</span>
+      <span className="text-right">Standard</span>
+      <span className="text-right">Profil</span>
+      <span className="text-right">Forskel</span>
     </div>
     <ul>
-      {assumptions.crops.map((crop) => {
-        const change = cropDbChange(assumptions, overrides, crop)
-        return (
-          <li
-            key={crop.cropCode}
-            className="grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_3.25rem] items-center gap-x-2 border-t px-4 py-2 text-[13px] tabular-nums"
+      {profileDbEffect(assumptions, overrides).map((effect) => (
+        <li
+          key={effect.cropCode}
+          className={cn(
+            EFFECT_GRID_CLASS,
+            'border-t py-2 text-[13px] tabular-nums',
+          )}
+        >
+          <TruncatedTooltip content={effect.cropName} className="truncate">
+            {effect.cropName}
+          </TruncatedTooltip>
+          <span className="text-right text-muted-foreground">
+            {formatDbDkk(effect.dbDkkHa - effect.deltaDkkHa)}
+          </span>
+          <span
+            className={cn(
+              'text-right',
+              effect.deltaDkkHa !== 0 && 'font-semibold',
+            )}
           >
-            <span className="flex min-w-0 items-center gap-2">
-              <span
-                className="size-2 shrink-0 rounded-sm"
-                style={{
-                  backgroundColor: cropGroupFor(crop.cropCode, crop.cropName)
-                    .color,
-                }}
-                aria-hidden="true"
-              />
-              <span className="truncate">{crop.cropName}</span>
-            </span>
-            <span className="text-right text-muted-foreground">
-              {formatDbDkk(cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa)}
-            </span>
-            <span className={cn('text-right', change !== 0 && 'font-semibold')}>
-              {formatDbDkk(cropTotals(assumptions, overrides, crop).dbDkkHa)}
-            </span>
-            <span
-              className={cn(
-                'text-right',
-                change > 0 ? 'text-primary' : 'text-destructive',
-              )}
-            >
-              {change === 0 ? null : formatSignedDkk(change)}
-            </span>
-          </li>
-        )
-      })}
+            {formatDbDkk(effect.dbDkkHa)}
+          </span>
+          <span className="text-right">
+            <DbDelta change={effect.deltaDkkHa} />
+          </span>
+        </li>
+      ))}
     </ul>
   </section>
 )
@@ -143,41 +146,47 @@ type EconomicsGuidePageProps = {
   onNewSimulation: (profileId: string) => void
 }
 
-type GuideProps = EconomicsGuidePageProps & { profile: EconomicsProfile }
+type GuideProps = EconomicsGuidePageProps & {
+  profile: EconomicsProfile
+  origin: GuideOrigin | null
+}
 
 const Guide = ({
   profile,
+  origin,
   farmName,
   simulations,
   onOpenSimulation,
   onNewSimulation,
 }: GuideProps) => {
   const titleId = useId()
-  const location = useLocation()
   const navigate = useNavigate()
   const economics = useEconomicsProfiles()
   const { assumptions } = economics
-  const origin = guideOriginSchema.safeParse(location.state)
-  const startedFrom = origin.success ? origin.data.guide : null
   const originSimulation = simulations.find(
-    (simulation) => simulation.id === startedFrom?.simulationId,
+    (simulation) => simulation.id === origin?.simulationId,
   )
   const [step, setStep] = useState(1)
-  const [openCropCode, setOpenCropCode] = useState<number | null>(null)
+  const [sheet, setSheet] = useState({ cropCode: 0, open: false })
   const [name, setName] = useState(profile.name)
-  const [nameError, setNameError] = useState<string | null>(null)
   const [chosenUse, setChosenUse] = useState(
     originSimulation?.id ?? USE_PROFILE_ONLY,
   )
 
   const changes = profileChanges(assumptions, profile.overrides)
-  const changedSteps = new Set<number | null>(changes.map(guideStepOfChange))
-  const users = economics.simulationsUsingProfile(simulations, profile.id)
-  const sharedNote = sharedProfileNote(users.length)
-  const change = (update: OverridesChange) =>
+  const changedSteps = new Set<number | null>(
+    changes.map((entry) => entry.guideStep),
+  )
+  const sharedNote = sharedProfileNote(
+    economics.simulationsUsingProfile(simulations, profile.id).length,
+  )
+  const nameError = economics.nameError(name, profile.id)
+  const change = (update: OverridesChange) => {
+    economics.ensureProfile(profile.id, profile.name)
     economics.changeOverrides(profile.id, update)
-  const openCrop = assumptions.crops.find(
-    (crop) => crop.cropCode === openCropCode,
+  }
+  const sheetCrop = assumptions.crops.find(
+    (crop) => crop.cropCode === sheet.cropCode,
   )
   const current = STEPS[step - 1]
   const useOptions: GuideUseOption[] = [
@@ -202,24 +211,13 @@ const Guide = ({
     : USE_PROFILE_ONLY
 
   const close = () => {
-    const source = profile.copiedFromId
-      ? economics.findProfile(profile.copiedFromId)
-      : undefined
-    const untouched =
-      startedFrom?.created === true &&
-      users.length === 0 &&
-      sameOverrides(profile.overrides, source?.overrides ?? NO_OVERRIDES)
-    if (untouched) economics.deleteProfile(profile.id)
     if (originSimulation) onOpenSimulation(originSimulation.id)
-    else navigate(startedFrom?.returnTo ?? economics.profilePath(profile.id))
+    else navigate(origin?.returnTo ?? economics.profilePath(profile.id))
   }
 
   const finish = () => {
-    const error = economics.nameError(name, profile.id)
-    if (error) {
-      setNameError(error)
-      return
-    }
+    if (nameError) return
+    economics.ensureProfile(profile.id, name)
     economics.renameProfile(profile.id, name)
     if (useChoice === USE_NEW_SIMULATION) {
       onNewSimulation(profile.id)
@@ -233,17 +231,16 @@ const Guide = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-6xl flex-col gap-5 px-6 pt-10 pb-16 sm:px-10">
+      <div className="@container mx-auto flex max-w-6xl flex-col gap-5 px-6 pt-10 pb-16 sm:px-10">
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-4xl tracking-tight break-words">
               Tilpas økonomien til {farmName}
             </h1>
             <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
-              Standarden er SEGES Budgetkalkuler 2026. Her retter du de få tal,
-              der plejer at betyde mest for dækningsbidraget. Alt andet kan
-              rettes bagefter på profilens side. Ændringerne gemmes med det
-              samme i{' '}
+              Standarden er {STANDARD_SOURCE}. Her retter du de få tal, der
+              plejer at betyde mest for dækningsbidraget. Alt andet kan rettes
+              bagefter på profilens side. Ændringerne gemmes med det samme i{' '}
               <b className="font-semibold text-foreground">{profile.name}</b>.
               {sharedNote ? ` ${sharedNote}` : null}
             </p>
@@ -260,40 +257,29 @@ const Guide = ({
                 type="button"
                 aria-current={entry.id === step ? 'step' : undefined}
                 className={cn(
-                  'inline-flex h-10 items-center gap-2 rounded-full border py-0 pr-4 pl-2.5 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  CHOICE_TAB_CLASS,
+                  'px-3 py-1.5 text-sm',
                   entry.id === step
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'bg-card hover:bg-muted',
+                    ? CHOICE_TAB_ACTIVE_CLASS
+                    : CHOICE_TAB_IDLE_CLASS,
                 )}
                 onClick={() => setStep(entry.id)}
               >
-                <span
-                  className={cn(
-                    'flex size-5 items-center justify-center rounded-full text-xs',
-                    entry.id === step ? 'bg-background/20' : 'bg-muted',
-                  )}
-                >
-                  {entry.id}
-                </span>
-                {entry.label}
-                {changedSteps.has(entry.id) ? (
-                  <span className="size-1.5 rounded-full bg-amber-500">
-                    <span className="sr-only">(har ændringer)</span>
-                  </span>
-                ) : null}
+                {entry.id}. {entry.label}
+                {changedSteps.has(entry.id) ? <CustomisedDot /> : null}
               </button>
             </li>
           ))}
         </ol>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="grid gap-4 @5xl:grid-cols-[minmax(0,1fr)_20rem] @5xl:items-start">
           <section
             aria-labelledby={titleId}
             className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
           >
             <div className="px-5 pt-4 pb-3.5">
               <h2 id={titleId} className="text-[17px] font-semibold">
-                {current.title}
+                {current.label}
               </h2>
               <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
                 {current.intro}
@@ -304,7 +290,7 @@ const Guide = ({
                 assumptions={assumptions}
                 overrides={profile.overrides}
                 onChange={change}
-                onOpenCrop={setOpenCropCode}
+                onOpenCrop={(cropCode) => setSheet({ cropCode, open: true })}
               />
             ) : null}
             {step === 2 ? (
@@ -328,44 +314,38 @@ const Guide = ({
                 changes={changes}
                 useOptions={useOptions}
                 useChoice={useChoice}
-                onNameChange={(next) => {
-                  setName(next)
-                  setNameError(null)
-                }}
+                onNameChange={setName}
                 onRestore={(entry) =>
-                  change((overrides) =>
-                    withoutProfileChange(assumptions, overrides, entry),
-                  )
+                  change((overrides) => withoutProfileChange(overrides, entry))
                 }
                 onRestoreAll={() => change(() => NO_OVERRIDES)}
                 onUseChoiceChange={setChosenUse}
               />
             ) : null}
-            <div className="grid grid-cols-3 items-center gap-3 border-t px-5 py-4">
-              <div>
-                {step > 1 ? (
-                  <Button variant="outline" onClick={() => setStep(step - 1)}>
-                    <ArrowLeft aria-hidden="true" />
-                    Tilbage
-                  </Button>
-                ) : null}
-              </div>
-              <p className="text-center text-[13px] text-muted-foreground">
-                Trin {step} af {LAST_STEP}
-              </p>
-              <div className="flex justify-end">
-                {step < LAST_STEP ? (
-                  <Button onClick={() => setStep(step + 1)}>
-                    Næste
-                    <ArrowRight aria-hidden="true" />
-                  </Button>
-                ) : (
-                  <Button onClick={finish}>
-                    <Check aria-hidden="true" />
-                    Færdig
-                  </Button>
-                )}
-              </div>
+            <div className="flex items-center justify-between gap-3 border-t px-5 py-4">
+              {step > 1 ? (
+                <Button variant="outline" onClick={() => setStep(step - 1)}>
+                  <ArrowLeft aria-hidden="true" />
+                  Tilbage
+                </Button>
+              ) : (
+                <span />
+              )}
+              {step < LAST_STEP ? (
+                <Button onClick={() => setStep(step + 1)}>
+                  Næste
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={(event) => {
+                    if (event.detail < 2) finish()
+                  }}
+                >
+                  <Check aria-hidden="true" />
+                  Færdig
+                </Button>
+              )}
             </div>
           </section>
 
@@ -379,10 +359,9 @@ const Guide = ({
                 Hvad er dækningsbidraget?
               </h2>
               <p className="mt-1.5 text-[13px] text-muted-foreground">
-                Det, marken tjener pr. ha: udbytte gange salgspris plus
-                grundbetaling, minus udsæd, planteværn, markarbejde og tørring.
-                Gødning regnes ud fra kvælstofnormen i hver simulering og er
-                ikke med her.
+                Det, marken tjener pr. ha: udbytte gange salgspris plus tilskud,
+                minus udsæd, planteværn, markarbejde og tørring. Gødning regnes
+                ud fra kvælstofnormen i hver simulering og er ikke med her.
               </p>
             </section>
           </aside>
@@ -390,28 +369,23 @@ const Guide = ({
       </div>
 
       <Sheet
-        open={openCrop !== undefined}
-        onOpenChange={(open) => {
-          if (!open) setOpenCropCode(null)
-        }}
+        open={sheet.open}
+        onOpenChange={(open) => setSheet({ ...sheet, open })}
       >
         <SheetContent
           showCloseButton={false}
           className="w-full gap-0 sm:max-w-3xl"
+          onEscapeKeyDown={(event) => {
+            if (event.target instanceof HTMLInputElement) event.preventDefault()
+          }}
         >
-          <div className="flex items-center gap-3.5 border-b bg-card px-6 py-4">
-            {openCrop ? (
-              <CropGroupTile
-                group={cropGroupFor(openCrop.cropCode, openCrop.cropName)}
-              />
-            ) : null}
+          <div className="flex items-start gap-3.5 border-b bg-card px-6 py-4">
             <div className="min-w-0 flex-1">
               <SheetTitle className="font-display text-[22px] font-normal">
-                {openCrop?.cropName}
+                Alle poster
               </SheetTitle>
               <SheetDescription className="text-[13px]">
-                Sådan er dækningsbidraget bygget i {profile.name}. Tallene i
-                felterne kan rettes.
+                Tallene i felterne kan rettes og gemmes i {profile.name}.
               </SheetDescription>
             </div>
             <SheetClose asChild>
@@ -426,13 +400,13 @@ const Guide = ({
             </SheetClose>
           </div>
           <div className="flex-1 overflow-y-auto p-6">
-            {openCrop ? (
+            {sheetCrop ? (
               <div className={cn(RULES_CARD_CLASS, 'overflow-hidden')}>
                 <EconomicsCropDetail
-                  key={openCrop.cropCode}
+                  key={sheetCrop.cropCode}
                   assumptions={assumptions}
                   overrides={profile.overrides}
-                  crop={openCrop}
+                  crop={sheetCrop}
                   onOverridesChange={change}
                 />
               </div>
@@ -446,12 +420,31 @@ const Guide = ({
 
 export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
   const { profileId } = useParams()
+  const { state } = useLocation()
   const economics = useEconomicsProfiles()
-  const profile = profileId ? economics.findProfile(profileId) : undefined
+  const origin = guideOriginSchema.safeParse(state)
+  const profile =
+    (profileId ? economics.findProfile(profileId) : undefined) ??
+    (profileId && origin.success
+      ? {
+          id: profileId,
+          name: economics.newProfileName(
+            `${props.farmName} ${ROTATION_START_CALENDAR_YEAR}`,
+          ),
+          overrides: NO_OVERRIDES,
+        }
+      : undefined)
 
   if (!profile || profile.id === STANDARD_PROFILE_ID) {
-    return <Navigate to={economics.profilePath(STANDARD_PROFILE_ID)} replace />
+    return <Navigate to={economics.overviewPath} replace />
   }
 
-  return <Guide key={profile.id} profile={profile} {...props} />
+  return (
+    <Guide
+      key={profile.id}
+      profile={profile}
+      origin={origin.success ? origin.data.guide : null}
+      {...props}
+    />
+  )
 }

@@ -3,22 +3,12 @@ import { Link } from 'react-router-dom'
 
 import type { ReturnTarget } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { AppTooltip } from '@/components/ui/app-tooltip'
+import { NotInCalculationDot } from '@/components/farm/economics-ui'
 import {
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { cn } from '@/lib/utils'
-
-const NOT_IN_CALCULATION = 'Indgår ikke i beregningen endnu'
-
-export const NotInCalculationDot = () => (
-  <AppTooltip content={NOT_IN_CALCULATION}>
-    <span className="inline-block size-1.5 shrink-0 rounded-full bg-amber-500">
-      <span className="sr-only">{NOT_IN_CALCULATION}</span>
-    </span>
-  </AppTooltip>
-)
 
 type EconomicsChipProps = {
   profile: EconomicsProfile
@@ -38,7 +28,7 @@ export const EconomicsChip = ({
       to={profilePath(profile.id)}
       state={{ returnTo }}
       className={cn(
-        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border bg-card pr-2.5 pl-2 text-[11.5px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border bg-card pr-2.5 pl-2 text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         className,
       )}
     >

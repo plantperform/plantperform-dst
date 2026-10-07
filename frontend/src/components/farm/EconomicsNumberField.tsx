@@ -3,12 +3,14 @@ import { useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
+import { Input } from '@/components/ui/input'
 import {
   formatEconomicsNumber,
   formatYieldPct,
   parseEconomicsInput,
   parseYieldPctInput,
   stepYieldPct,
+  YIELD_ADJUSTMENT_LABEL,
   YIELD_PCT_STEP,
   type EconomicsInput,
 } from '@/lib/economics'
@@ -16,9 +18,8 @@ import { cn } from '@/lib/utils'
 
 type EconomicsNumberFieldProps = {
   value: number
+  standard: number
   label: string
-  customised: boolean
-  emptyValue?: number
   format?: (value: number) => string
   parse?: (text: string) => EconomicsInput
   onCommit: (value: number) => void
@@ -26,9 +27,8 @@ type EconomicsNumberFieldProps = {
 
 export const EconomicsNumberField = ({
   value,
+  standard,
   label,
-  customised,
-  emptyValue,
   format = formatEconomicsNumber,
   parse = parseEconomicsInput,
   onCommit,
@@ -47,10 +47,7 @@ export const EconomicsNumberField = ({
 
   const commit = () => {
     if (draft === null) return
-    const parsed =
-      emptyValue !== undefined && draft.trim() === ''
-        ? { value: emptyValue }
-        : parse(draft)
+    const parsed = draft.trim() === '' ? { value: standard } : parse(draft)
     if ('error' in parsed) {
       setError(parsed.error)
       return
@@ -61,15 +58,15 @@ export const EconomicsNumberField = ({
 
   return (
     <span className="inline-flex flex-col items-end gap-0.5">
-      <input
+      <Input
         inputMode="decimal"
         autoComplete="off"
         aria-label={label}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className={cn(
-          'h-7 w-[4.5rem] rounded-full border px-2.5 text-right text-[13px] text-foreground tabular-nums outline-none transition-colors hover:border-primary focus:border-primary focus:ring-[3px] focus:ring-primary/15 aria-invalid:border-destructive',
-          customised ? 'border-amber-300 bg-amber-100' : 'bg-card',
+          'h-7 w-[4.5rem] px-2.5 py-0 text-right text-[13px] tabular-nums aria-invalid:border-destructive',
+          value !== standard && 'border-amber-300 bg-amber-100',
         )}
         value={draft ?? format(value)}
         onFocus={(event) => event.currentTarget.select()}
@@ -111,7 +108,7 @@ export const YieldPctField = ({
       type="button"
       variant="outline"
       size="icon"
-      className="size-7 rounded-full"
+      className="size-7"
       aria-label={`Sænk udbyttet for ${cropName} ${YIELD_PCT_STEP} %`}
       onClick={() => onCommit(stepYieldPct(pct, -1))}
     >
@@ -119,8 +116,8 @@ export const YieldPctField = ({
     </Button>
     <EconomicsNumberField
       value={pct}
-      label={`Udbytte i forhold til normen for ${cropName} i %`}
-      customised={pct !== 0}
+      standard={0}
+      label={`${YIELD_ADJUSTMENT_LABEL} for ${cropName} i %`}
       format={formatYieldPct}
       parse={parseYieldPctInput}
       onCommit={onCommit}
@@ -130,7 +127,7 @@ export const YieldPctField = ({
       type="button"
       variant="outline"
       size="icon"
-      className="size-7 rounded-full"
+      className="size-7"
       aria-label={`Hæv udbyttet for ${cropName} ${YIELD_PCT_STEP} %`}
       onClick={() => onCommit(stepYieldPct(pct, 1))}
     >

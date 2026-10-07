@@ -14,7 +14,9 @@ import {
 } from '@/api/mutations'
 import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type { CreateSimulationInput, Simulation } from '@/api/types'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import type { FarmViewSelection } from '@/components/farm/types'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   copiedNNormPercentages,
   copiedSimulationName,
@@ -41,8 +43,6 @@ type SimulationActionsOptions = {
   selection: FarmViewSelection
   onSelectionChange: (selection: FarmViewSelection) => void
   onError: (message: string | null) => void
-  onSimulationCopied: (source: Simulation, copy: Simulation) => void
-  onSimulationRemoved: (simulationId: string) => void
 }
 
 export const useSimulationActions = ({
@@ -50,9 +50,8 @@ export const useSimulationActions = ({
   selection,
   onSelectionChange,
   onError,
-  onSimulationCopied,
-  onSimulationRemoved,
 }: SimulationActionsOptions) => {
+  const economics = useEconomicsProfiles()
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
@@ -67,7 +66,7 @@ export const useSimulationActions = ({
     setDeletingSimulationId(simulationId)
     try {
       await deleteSimulation(farmId, simulationId)
-      onSimulationRemoved(simulationId)
+      economics.assignProfile(simulationId, STANDARD_PROFILE_ID)
       await mutate(simulationsKey(farmId))
       await mutate(simulationFieldsKey(farmId, simulationId), undefined, {
         revalidate: false,
@@ -101,7 +100,10 @@ export const useSimulationActions = ({
       setCopyingSimulationId(null)
       return
     }
-    onSimulationCopied(simulation, created)
+    economics.assignProfile(
+      created.id,
+      economics.profileForSimulation(simulation.id).id,
+    )
     let copyError: string | null = null
     try {
       await updateSimulationConstraints(

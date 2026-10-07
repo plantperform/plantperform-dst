@@ -1,4 +1,3 @@
-import { Undo2 } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 
 import {
@@ -9,31 +8,33 @@ import {
 } from '@/components/farm/choice-styles'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import {
+  GRID_HEAD_CLASS,
+  RestoreButton,
+  TEXT_LINK_CLASS,
+} from '@/components/farm/economics-ui'
+import {
   EconomicsNumberField,
   YieldPctField,
 } from '@/components/farm/EconomicsNumberField'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
 import { useSharedPriceConfirm } from '@/components/farm/shared-price-confirm'
 import { SharedPriceConfirm } from '@/components/farm/SharedPriceConfirm'
-import { AppTooltip } from '@/components/ui/app-tooltip'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
-  cropDbChange,
-  cropTotals,
   cropYieldPct,
+  describePriceCrops,
   findPrice,
   formatDbDkk,
   formatEconomicsNumber,
-  formatSignedDkk,
   isPriceCustomised,
   lineAmountDkkHa,
   lineQuantity,
-  priceCrops,
   priceValue,
   quantityUnitLabel,
+  saleLine,
   withPriceOverride,
   withYieldPct,
   yieldHint,
@@ -43,20 +44,9 @@ import {
   type OverridesChange,
   type ProfileChange,
 } from '@/lib/economics'
-import { formatWholeNumber } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
-const HEAD_CLASS =
-  'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
-
-const ROW_CLASS = 'border-b py-2.5 text-[13px]'
-
 const FOOT_CLASS = 'bg-muted/30 px-5 py-2.5 text-xs text-muted-foreground'
-
-const SMALL_LINK_CLASS =
-  'rounded-sm text-left text-xs font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
-const CONFIRM_TITLE = 'Fælles pris, før den gælder'
 
 type StepProps = {
   assumptions: EconomicsAssumptions
@@ -79,32 +69,8 @@ const CropName = ({ crop, children }: CropNameProps) => (
   </span>
 )
 
-type DbCellProps = Omit<StepProps, 'onChange'> & { crop: CropEconomics }
-
-const DbCell = ({ assumptions, overrides, crop }: DbCellProps) => {
-  const change = cropDbChange(assumptions, overrides, crop)
-
-  return (
-    <span className="text-right tabular-nums">
-      <span className="block font-semibold">
-        {formatDbDkk(cropTotals(assumptions, overrides, crop).dbDkkHa)}
-      </span>
-      {change === 0 ? null : (
-        <span
-          className={cn(
-            'block text-xs',
-            change > 0 ? 'text-primary' : 'text-destructive',
-          )}
-        >
-          {formatSignedDkk(change)}
-        </span>
-      )}
-    </span>
-  )
-}
-
 const PRICES_GRID_CLASS =
-  'grid grid-cols-[minmax(0,1fr)_8rem_11rem_8rem] items-center gap-x-4 px-5'
+  'grid grid-cols-[minmax(9rem,1fr)_8rem_11rem] items-center gap-x-4 px-5'
 
 type GuidePricesStepProps = StepProps & {
   onOpenCrop: (cropCode: number) => void
@@ -119,165 +85,119 @@ export const GuidePricesStep = ({
   const sharedPrice = useSharedPriceConfirm(assumptions, onChange)
 
   return (
-    <div>
-      <div className={cn(PRICES_GRID_CLASS, HEAD_CLASS)}>
-        <span>Afgrøde</span>
-        <span className="text-right">Standardens pris</span>
-        <span className="text-right">Bedriftens pris</span>
-        <span className="text-right">Dækningsbidrag kr/ha</span>
-      </div>
-      {assumptions.crops.map((crop) => {
-        const [sale] = crop.revenue
-        if (!sale) return null
-        const price = findPrice(assumptions, sale.priceId)
-        const standard = price?.valueDkk ?? 0
-        return (
-          <div key={crop.cropCode} className="border-b">
-            <div className={cn(PRICES_GRID_CLASS, 'py-2.5 text-[13px]')}>
-              <CropName crop={crop}>
-                <button
-                  type="button"
-                  className={SMALL_LINK_CLASS}
-                  onClick={() => onOpenCrop(crop.cropCode)}
-                >
-                  Hvad tallet er bygget af
-                </button>
-              </CropName>
-              <span className="text-right text-muted-foreground tabular-nums">
-                {formatEconomicsNumber(standard)} {price?.unit}
-              </span>
-              <span className="flex items-start justify-end gap-1.5 leading-7 text-muted-foreground">
-                <EconomicsNumberField
-                  value={priceValue(assumptions, overrides, sale.priceId)}
-                  label={`Bedriftens salgspris for ${crop.cropName} i ${price?.unit ?? ''}`}
-                  customised={isPriceCustomised(overrides, sale.priceId)}
-                  emptyValue={standard}
-                  onCommit={(value) =>
-                    sharedPrice.commitPrice(sale.priceId, value)
-                  }
-                />
-                <span>{price?.unit}</span>
-              </span>
-              <DbCell
+    <div className="overflow-x-auto">
+      <div className="min-w-130">
+        <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
+          <span>Afgrøde</span>
+          <span className="text-right">Standardens pris</span>
+          <span className="text-right">Bedriftens pris</span>
+        </div>
+        {assumptions.crops.map((crop) => {
+          const sale = saleLine(crop)
+          const price = sale && findPrice(assumptions, sale.priceId)
+          if (!price) return null
+          return (
+            <div key={crop.cropCode} className="border-b">
+              <div className={cn(PRICES_GRID_CLASS, 'py-2.5 text-[13px]')}>
+                <CropName crop={crop}>
+                  <button
+                    type="button"
+                    aria-label={`Se alle poster for ${crop.cropName}`}
+                    className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
+                    onClick={() => onOpenCrop(crop.cropCode)}
+                  >
+                    Se alle poster
+                  </button>
+                </CropName>
+                <span className="text-right text-muted-foreground tabular-nums">
+                  {formatEconomicsNumber(price.valueDkk)} {price.unit}
+                </span>
+                <span className="flex items-start justify-end gap-1.5 leading-7 text-muted-foreground">
+                  <EconomicsNumberField
+                    value={sharedPrice.shownPrice(
+                      price.id,
+                      priceValue(assumptions, overrides, price.id),
+                    )}
+                    standard={price.valueDkk}
+                    label={`Bedriftens salgspris for ${crop.cropName} i ${price.unit}`}
+                    onCommit={(value) =>
+                      sharedPrice.commitPrice(price.id, value)
+                    }
+                  />
+                  <span>{price.unit}</span>
+                </span>
+              </div>
+              <SharedPriceConfirm
                 assumptions={assumptions}
                 overrides={overrides}
-                crop={crop}
+                sharedPrice={sharedPrice}
+                priceId={price.id}
+                className="px-5 pb-3"
               />
             </div>
-            {sharedPrice.pending?.priceId === sale.priceId ? (
-              <div className="px-5 pb-3">
-                <SharedPriceConfirm
-                  assumptions={assumptions}
-                  overrides={overrides}
-                  pending={sharedPrice.pending}
-                  title={CONFIRM_TITLE}
-                  onCancel={sharedPrice.cancel}
-                  onConfirm={sharedPrice.confirm}
-                />
-              </div>
-            ) : null}
-          </div>
-        )
-      })}
-      <p className={FOOT_CLASS}>
-        Tomme felter bruger standardens pris. Halm, udsæd og planteværn kan
-        rettes bagefter på profilens side.
-      </p>
+          )
+        })}
+        <p className={FOOT_CLASS}>Et tomt felt bruger standardens pris.</p>
+      </div>
     </div>
   )
 }
 
 const YIELD_GRID_CLASS =
-  'grid grid-cols-[minmax(0,1fr)_11rem_11rem_8rem] items-center gap-x-4 px-5'
+  'grid grid-cols-[minmax(9rem,1fr)_11rem_11rem] items-center gap-x-4 px-5'
 
 export const GuideYieldStep = ({
   assumptions,
   overrides,
   onChange,
 }: StepProps) => (
-  <div>
-    <div className={cn(YIELD_GRID_CLASS, HEAD_CLASS)}>
-      <span>Afgrøde</span>
-      <span className="text-right">Normen</span>
-      <span className="text-right">I forhold til normen</span>
-      <span className="text-right">Dækningsbidrag kr/ha</span>
+  <div className="overflow-x-auto">
+    <div className="min-w-142">
+      <div className={cn(YIELD_GRID_CLASS, GRID_HEAD_CLASS)}>
+        <span>Afgrøde</span>
+        <span className="text-right">Normen</span>
+        <span className="text-right">I forhold til normen</span>
+      </div>
+      {assumptions.crops.map((crop) => {
+        const grain = saleLine(crop)
+        if (!grain) return null
+        const pct = cropYieldPct(overrides, crop)
+        return (
+          <div
+            key={crop.cropCode}
+            className={cn(YIELD_GRID_CLASS, 'border-b py-2.5 text-[13px]')}
+          >
+            <CropName crop={crop} />
+            <span className="text-right text-muted-foreground tabular-nums">
+              {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på JB
+              5-6
+            </span>
+            <YieldPctField
+              pct={pct}
+              cropName={crop.cropName}
+              onCommit={(value) =>
+                onChange((current) => withYieldPct(current, crop, value))
+              }
+            />
+            {pct === 0 ? null : (
+              <p className="col-span-full pt-1 pl-[26px] text-xs text-muted-foreground">
+                {yieldHint(overrides, crop)}
+              </p>
+            )}
+          </div>
+        )
+      })}
+      <p className={FOOT_CLASS}>
+        Procenten lægges oven på hver marks eget udbytte, som afhænger af
+        jordtype og vanding. Den ændrer mængden af kerne og halm, ikke
+        omkostningerne.
+      </p>
     </div>
-    {assumptions.crops.map((crop) => {
-      const [grain] = crop.revenue
-      if (!grain) return null
-      const pct = cropYieldPct(overrides, crop)
-      return (
-        <div key={crop.cropCode} className={cn(YIELD_GRID_CLASS, ROW_CLASS)}>
-          <CropName crop={crop} />
-          <span className="text-right text-muted-foreground tabular-nums">
-            {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på JB
-            5-6
-          </span>
-          <YieldPctField
-            pct={pct}
-            cropName={crop.cropName}
-            onCommit={(value) =>
-              onChange((current) => withYieldPct(current, crop, value))
-            }
-          />
-          <DbCell assumptions={assumptions} overrides={overrides} crop={crop} />
-          {pct === 0 ? null : (
-            <p className="col-span-full pt-1 pl-[26px] text-xs text-primary">
-              {yieldHint(overrides, crop)}
-            </p>
-          )}
-        </div>
-      )
-    })}
-    <p className={FOOT_CLASS}>
-      Procenten lægges oven på hver marks eget udbytte, som afhænger af jordtype
-      og vanding. Den ændrer mængden af kerne og halm, ikke omkostningerne.
-    </p>
   </div>
 )
 
 const MACHINES_GRID_CLASS =
-  'grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto_4rem] items-center gap-x-4 px-5'
-
-const CROP_CHIP_CLASS =
-  'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] whitespace-nowrap'
-
-type PriceCropsProps = {
-  assumptions: EconomicsAssumptions
-  priceId: string
-}
-
-const PriceCrops = ({ assumptions, priceId }: PriceCropsProps) => {
-  const crops = priceCrops(assumptions, priceId)
-
-  return (
-    <span className="flex flex-wrap gap-1">
-      {crops.length === assumptions.crops.length ? (
-        <span className={CROP_CHIP_CLASS}>
-          <span
-            className="size-1.5 rounded-sm bg-muted-foreground"
-            aria-hidden="true"
-          />
-          Alle {crops.length} afgrøder
-        </span>
-      ) : (
-        crops.map((crop) => (
-          <span key={crop.cropCode} className={CROP_CHIP_CLASS}>
-            <span
-              className="size-1.5 rounded-sm"
-              style={{
-                backgroundColor: cropGroupFor(crop.cropCode, crop.cropName)
-                  .color,
-              }}
-              aria-hidden="true"
-            />
-            {crop.cropName}
-          </span>
-        ))
-      )}
-    </span>
-  )
-}
+  'grid grid-cols-[minmax(0,11rem)_minmax(6rem,1fr)_auto_4rem] items-center gap-x-4 px-5'
 
 export const GuideMachinesStep = ({
   assumptions,
@@ -314,85 +234,85 @@ export const GuideMachinesStep = ({
           </button>
         ))}
       </div>
-      <div className={cn(MACHINES_GRID_CLASS, HEAD_CLASS)}>
-        <span>Markarbejde</span>
-        <span>Gælder for</span>
-        <span className="text-right">Mængde × pris</span>
-        <span className="text-right">kr/ha</span>
-      </div>
-      {crop.costs.fieldWork.map((line) => {
-        const price = findPrice(assumptions, line.priceId)
-        const quantity = lineQuantity(overrides, crop, line)
-        const customised = isPriceCustomised(overrides, line.priceId)
-        return (
-          <div key={line.id} className="border-b">
-            <div className={cn(MACHINES_GRID_CLASS, 'py-2.5 text-[13px]')}>
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="min-w-0">{line.label}</span>
-                {customised ? (
-                  <AppTooltip content="Gendan standard">
-                    <button
-                      type="button"
-                      aria-label={`Gendan standard for ${line.label}`}
-                      className="rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      onClick={() =>
-                        onChange((current) =>
-                          withPriceOverride(
-                            assumptions,
-                            current,
-                            line.priceId,
-                            null,
-                          ),
-                        )
+      <div className="overflow-x-auto">
+        <div className="min-w-166">
+          <div className={cn(MACHINES_GRID_CLASS, GRID_HEAD_CLASS)}>
+            <span>Markarbejde</span>
+            <span>Gælder for</span>
+            <span className="text-right">Mængde × pris</span>
+            <span className="text-right">kr/ha</span>
+          </div>
+          {crop.costs.fieldWork.map((line) => {
+            const price = findPrice(assumptions, line.priceId)
+            if (!price) return null
+            const quantity = lineQuantity(overrides, crop, line)
+            return (
+              <div key={line.id} className="border-b">
+                <div className={cn(MACHINES_GRID_CLASS, 'py-2.5 text-[13px]')}>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="min-w-0">{line.label}</span>
+                    {isPriceCustomised(overrides, price.id) ? (
+                      <RestoreButton
+                        label={line.label}
+                        onRestore={() =>
+                          onChange((current) =>
+                            withPriceOverride(
+                              assumptions,
+                              current,
+                              price.id,
+                              null,
+                            ),
+                          )
+                        }
+                      />
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {describePriceCrops(assumptions, price.id)}
+                  </span>
+                  <span className="flex items-start justify-end gap-1.5 leading-7 whitespace-nowrap text-muted-foreground">
+                    <span className="text-foreground tabular-nums">
+                      {formatEconomicsNumber(quantity)}
+                    </span>
+                    <span>
+                      {quantityUnitLabel(line.quantityUnit, quantity)}
+                    </span>
+                    <span aria-hidden="true">×</span>
+                    <EconomicsNumberField
+                      value={sharedPrice.shownPrice(
+                        price.id,
+                        priceValue(assumptions, overrides, price.id),
+                      )}
+                      standard={price.valueDkk}
+                      label={`Prisen for ${line.label} i ${price.unit}`}
+                      onCommit={(value) =>
+                        sharedPrice.commitPrice(price.id, value)
                       }
-                    >
-                      <Undo2 className="size-3.5" aria-hidden="true" />
-                    </button>
-                  </AppTooltip>
-                ) : null}
-              </span>
-              <PriceCrops assumptions={assumptions} priceId={line.priceId} />
-              <span className="flex items-start justify-end gap-1.5 leading-7 whitespace-nowrap text-muted-foreground">
-                <span className="text-foreground tabular-nums">
-                  {formatEconomicsNumber(quantity)}
-                </span>
-                <span>{quantityUnitLabel(line.quantityUnit, quantity)}</span>
-                <span aria-hidden="true">×</span>
-                <EconomicsNumberField
-                  value={priceValue(assumptions, overrides, line.priceId)}
-                  label={`Prisen for ${line.label} i ${price?.unit ?? ''}`}
-                  customised={customised}
-                  onCommit={(value) =>
-                    sharedPrice.commitPrice(line.priceId, value)
-                  }
-                />
-                <span>{price?.unit}</span>
-              </span>
-              <span className="text-right tabular-nums">
-                {formatWholeNumber(
-                  lineAmountDkkHa(assumptions, overrides, crop, line),
-                )}
-              </span>
-            </div>
-            {sharedPrice.pending?.priceId === line.priceId ? (
-              <div className="px-5 pb-3">
+                    />
+                    <span>{price.unit}</span>
+                  </span>
+                  <span className="text-right tabular-nums">
+                    {formatDbDkk(
+                      lineAmountDkkHa(assumptions, overrides, crop, line),
+                    )}
+                  </span>
+                </div>
                 <SharedPriceConfirm
                   assumptions={assumptions}
                   overrides={overrides}
-                  pending={sharedPrice.pending}
-                  title={CONFIRM_TITLE}
-                  onCancel={sharedPrice.cancel}
-                  onConfirm={sharedPrice.confirm}
+                  sharedPrice={sharedPrice}
+                  priceId={price.id}
+                  className="px-5 pb-3"
                 />
               </div>
-            ) : null}
-          </div>
-        )
-      })}
-      <p className={FOOT_CLASS}>
-        Tallene er for {crop.cropName}. En fælles pris gælder for alle de
-        afgrøder, der står ved den. Mængderne rettes på profilens side.
-      </p>
+            )
+          })}
+          <p className={FOOT_CLASS}>
+            Tallene er for {crop.cropName}. En fælles pris gælder for alle de
+            afgrøder, der står ved den. Mængderne rettes på profilens side.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
@@ -444,7 +364,6 @@ export const GuideReviewStep = ({
         <FieldError id={`${id}-name-error`} message={nameError} />
       </div>
       <EconomicsProfileChanges
-        stacked
         className="border-t"
         changes={changes}
         onRestore={onRestore}

@@ -1,5 +1,4 @@
-import { Coins } from 'lucide-react'
-import { useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
@@ -10,8 +9,14 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import { BreakdownEconomicsContext } from '@/components/farm/economics-breakdown-context'
-import { useCalculationReturn } from '@/components/farm/economics-navigation'
+import {
+  NotInCalculationNote,
+  TEXT_LINK_CLASS,
+} from '@/components/farm/economics-ui'
+import {
+  FieldEconomicsContext,
+  useFieldEconomics,
+} from '@/components/farm/field-economics'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
@@ -159,9 +164,10 @@ export const FieldPanel = ({
   onCalcOpenChange,
   onError,
 }: FieldPanelProps) => {
-  const economics = useContext(BreakdownEconomicsContext)
-  const openAtYearIndex = useCalculationReturn(field.id)
-  const [calcOpen, setCalcOpen] = useState(openAtYearIndex !== undefined)
+  const fieldEconomics = useFieldEconomics(field, simulation)
+  const [calcOpen, setCalcOpen] = useState(
+    fieldEconomics.openAtYearIndex !== undefined,
+  )
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
 
   useEffect(() => {
@@ -281,26 +287,18 @@ export const FieldPanel = ({
           />
         </div>
 
-        {calculated && economics ? (
-          <p className="-mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            <Coins
-              className="size-3.5 shrink-0 text-primary"
-              aria-hidden="true"
-            />
-            <span>
-              Regnet med{' '}
-              <Link
-                to={economics.profilePath}
-                state={{ returnTo: economics.returnTo }}
-                className="rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                {economics.profile.name}
-              </Link>
-            </span>
-            {economics.profile.id === STANDARD_PROFILE_ID ? null : (
-              <span className="text-amber-800">
-                · indgår ikke i beregningen endnu
-              </span>
+        {calculated ? (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Økonomiprofil:{' '}
+            <Link
+              to={fieldEconomics.profilePath}
+              state={{ returnTo: fieldEconomics.returnTo }}
+              className={TEXT_LINK_CLASS}
+            >
+              {fieldEconomics.profile.name}
+            </Link>
+            {fieldEconomics.profile.id === STANDARD_PROFILE_ID ? null : (
+              <NotInCalculationNote />
             )}
           </p>
         ) : null}
@@ -382,30 +380,32 @@ export const FieldPanel = ({
             </div>
             {calcOpen ? (
               <div className="motion-safe:animate-rise-in">
-                {isSimulationView ? (
-                  <RotationDetailPanel
-                    farmId={farmId}
-                    simulationId={simulationId as string}
-                    fieldId={field.id}
-                    rotationId={field.rotationId}
-                    areaHa={field.areaHa}
-                    retention={field.retention}
-                    selectedYearIndex={highlightIndex ?? undefined}
-                    openAtYearIndex={openAtYearIndex}
-                    onSelectedYearIndexChange={
-                      selectedCalendarYear !== null && onSelectedYearIndexChange
-                        ? onSelectedYearIndexChange
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <HistoricalDetailPanel
-                    farmId={farmId}
-                    fieldId={field.id}
-                    areaHa={field.areaHa}
-                    retention={field.retention}
-                  />
-                )}
+                <FieldEconomicsContext.Provider value={fieldEconomics}>
+                  {isSimulationView ? (
+                    <RotationDetailPanel
+                      farmId={farmId}
+                      simulationId={simulationId as string}
+                      fieldId={field.id}
+                      rotationId={field.rotationId}
+                      areaHa={field.areaHa}
+                      retention={field.retention}
+                      selectedYearIndex={highlightIndex ?? undefined}
+                      onSelectedYearIndexChange={
+                        selectedCalendarYear !== null &&
+                        onSelectedYearIndexChange
+                          ? onSelectedYearIndexChange
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <HistoricalDetailPanel
+                      farmId={farmId}
+                      fieldId={field.id}
+                      areaHa={field.areaHa}
+                      retention={field.retention}
+                    />
+                  )}
+                </FieldEconomicsContext.Provider>
               </div>
             ) : null}
           </div>

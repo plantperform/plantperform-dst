@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom'
 
 import type { Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
+import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { DbDelta } from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
+import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cropGroupFor } from '@/lib/crop-groups'
@@ -14,10 +16,7 @@ import {
   dbDeltaBar,
   dbDeltaScale,
   describeProfileChanges,
-  formatCropCount,
   formatDbDkk,
-  formatSignedDkk,
-  leadingDbEffects,
   profileChanges,
   profileDbEffect,
   type CropDbEffect,
@@ -25,105 +24,88 @@ import {
 } from '@/lib/economics'
 import {
   describeProfileUsers,
-  describeStandardEntry,
+  describeStandard,
   ECONOMICS_INVITATION,
+  PROFILES_NOT_IN_CALCULATION,
+  STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { cn } from '@/lib/utils'
-
-const SHOWN_CROPS = 6
 
 type DbEffectListProps = {
   effects: CropDbEffect[]
   scale: DbDeltaScale
 }
 
-const DbEffectList = ({ effects, scale }: DbEffectListProps) => {
-  const shown = leadingDbEffects(effects, SHOWN_CROPS)
-  const hiddenCrops = effects.length - shown.length
-
-  return (
-    <div>
-      <p className="flex justify-between gap-3 text-xs text-muted-foreground">
-        <span>Dækningsbidrag, kr/ha</span>
-        <span>I forhold til Standard</span>
-      </p>
-      <ul
-        aria-label="Dækningsbidrag pr. ha for hver afgrøde"
-        className="mt-1.5 grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto_3.5rem] gap-x-3 text-[13px] tabular-nums"
-      >
-        {shown.map((effect) => {
-          const moved = effect.deltaDkkHa !== 0
-          const rises = effect.deltaDkkHa > 0
-          const bar = dbDeltaBar(effect.deltaDkkHa, scale)
-          return (
-            <li
-              key={effect.cropCode}
-              className={cn(
-                'col-span-4 grid h-7 grid-cols-subgrid items-center',
-                !moved && 'text-muted-foreground',
-              )}
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <CropGroupTile
-                  group={cropGroupFor(effect.cropCode, effect.cropName)}
-                  className={moved ? undefined : 'opacity-50'}
-                />
-                <span className="truncate" title={effect.cropName}>
-                  {effect.cropName}
-                </span>
-              </span>
-              <span aria-hidden="true" className="relative h-full">
-                {moved ? (
-                  <span
-                    className={cn(
-                      'absolute top-2.5 h-2 min-w-0.5',
-                      rises
-                        ? 'rounded-r-[2px] bg-primary/75'
-                        : 'rounded-l-[2px] bg-destructive/75',
-                    )}
-                    style={{
-                      width: `${bar.width * 100}%`,
-                      ...(rises
-                        ? { left: `${bar.axis * 100}%` }
-                        : { right: `${(1 - bar.axis) * 100}%` }),
-                    }}
-                  />
-                ) : null}
+const DbEffectList = ({ effects, scale }: DbEffectListProps) => (
+  <div>
+    <p className="flex justify-between gap-3 text-xs text-muted-foreground">
+      <span>Dækningsbidrag, kr/ha</span>
+      <span>I forhold til Standard</span>
+    </p>
+    <ul
+      aria-label="Dækningsbidrag pr. ha for hver afgrøde"
+      className="mt-1.5 grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto_3.5rem] gap-x-3 text-[13px] tabular-nums"
+    >
+      {effects.map((effect) => {
+        const moved = effect.deltaDkkHa !== 0
+        const rises = effect.deltaDkkHa > 0
+        const bar = dbDeltaBar(effect.deltaDkkHa, scale)
+        return (
+          <li
+            key={effect.cropCode}
+            className={cn(
+              'col-span-4 grid h-7 grid-cols-subgrid items-center',
+              !moved && 'text-muted-foreground',
+            )}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <CropGroupTile
+                group={cropGroupFor(effect.cropCode, effect.cropName)}
+                className={moved ? undefined : 'opacity-50'}
+              />
+              <TruncatedTooltip content={effect.cropName} className="truncate">
+                {effect.cropName}
+              </TruncatedTooltip>
+            </span>
+            <span aria-hidden="true" className="relative h-full">
+              {moved ? (
                 <span
-                  className="absolute inset-y-0 w-px bg-foreground/20"
-                  style={{ left: `${bar.axis * 100}%` }}
+                  className={cn(
+                    'absolute top-2.5 h-2 min-w-0.5',
+                    rises
+                      ? 'rounded-r-[2px] bg-primary/75'
+                      : 'rounded-l-[2px] bg-destructive/75',
+                  )}
+                  style={{
+                    width: `${bar.width * 100}%`,
+                    ...(rises
+                      ? { left: `${bar.axis * 100}%` }
+                      : { right: `${(1 - bar.axis) * 100}%` }),
+                  }}
                 />
-              </span>
-              <span className={cn('text-right', moved && 'font-semibold')}>
-                {formatDbDkk(effect.dbDkkHa)}
-              </span>
+              ) : null}
               <span
-                className={cn(
-                  'text-right',
-                  rises ? 'text-primary' : 'text-destructive',
-                )}
-              >
-                {moved ? (
-                  <>
-                    {formatSignedDkk(effect.deltaDkkHa)}
-                    <span className="sr-only"> i forhold til Standard</span>
-                  </>
-                ) : null}
-              </span>
-            </li>
-          )
-        })}
-        {hiddenCrops > 0 ? (
-          <li className="col-span-4 flex h-7 items-center text-muted-foreground">
-            og {formatCropCount(hiddenCrops)} mere
+                className="absolute inset-y-0 w-px bg-foreground/20"
+                style={{ left: `${bar.axis * 100}%` }}
+              />
+            </span>
+            <span className={cn('text-right', moved && 'font-semibold')}>
+              {formatDbDkk(effect.dbDkkHa)}
+            </span>
+            <span className="text-right">
+              <DbDelta change={effect.deltaDkkHa} />
+              {moved ? (
+                <span className="sr-only"> i forhold til Standard</span>
+              ) : null}
+            </span>
           </li>
-        ) : null}
-      </ul>
-    </div>
-  )
-}
+        )
+      })}
+    </ul>
+  </div>
+)
 
 type ProfileCardProps = {
   profile: EconomicsProfile
@@ -141,7 +123,7 @@ const ProfileCard = ({
   onDelete,
 }: ProfileCardProps) => {
   const economics = useEconomicsProfiles()
-  const { startGuide } = useEconomicsNavigation()
+  const startGuide = useStartGuide()
   const changes = profileChanges(economics.assumptions, profile.overrides)
   const movedCrops = effects.filter((effect) => effect.deltaDkkHa !== 0).length
 
@@ -149,7 +131,6 @@ const ProfileCard = ({
     <OverviewCard
       title={profile.name}
       subtitle={describeProfileUsers(
-        profile.id,
         economics
           .simulationsUsingProfile(simulations, profile.id)
           .map((simulation) => simulation.name),
@@ -216,20 +197,12 @@ export const EconomicsOverview = ({
   onDeleteProfile,
 }: EconomicsOverviewProps) => {
   const economics = useEconomicsProfiles()
-  const { startGuide } = useEconomicsNavigation()
-  const cards = economics.profiles
-    .filter((profile) => profile.id !== STANDARD_PROFILE_ID)
-    .map((profile) => ({
-      profile,
-      effects: profileDbEffect(economics.assumptions, profile.overrides),
-    }))
+  const startGuide = useStartGuide()
+  const cards = economics.ownProfiles.map((profile) => ({
+    profile,
+    effects: profileDbEffect(economics.assumptions, profile.overrides),
+  }))
   const scale = dbDeltaScale(cards.flatMap((card) => card.effects))
-  const standard = describeStandardEntry(
-    economics.assumptions.crops.length,
-    economics
-      .simulationsUsingProfile(simulations, STANDARD_PROFILE_ID)
-      .map((simulation) => simulation.name),
-  )
   const startFromStandard = () =>
     startGuide({ fromProfileId: STANDARD_PROFILE_ID })
 
@@ -242,12 +215,9 @@ export const EconomicsOverview = ({
             <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
               En økonomiprofil er bedriftens egne priser, mængder og udbytter
               oven på Standard, og hver simulering regner med en af profilerne.
-              Kortene viser dækningsbidraget pr. ha for hver afgrøde, og bjælken
-              viser forskellen til Standard.
             </p>
             <p className="mt-1 text-sm text-amber-800">
-              Profilerne gemmes kun i denne browser og indgår ikke i beregningen
-              endnu.
+              {PROFILES_NOT_IN_CALCULATION}
             </p>
           </div>
           <Button onClick={startFromStandard}>
@@ -257,8 +227,13 @@ export const EconomicsOverview = ({
         </header>
         <EconomicsBanner
           label="Standard"
-          title={standard.title}
-          text={standard.text}
+          title={STANDARD_PROFILE.name}
+          text={describeStandard(
+            economics.assumptions.crops.length,
+            economics
+              .simulationsUsingProfile(simulations, STANDARD_PROFILE_ID)
+              .map((simulation) => simulation.name),
+          )}
         >
           <Button variant="outline" size="sm" asChild>
             <Link to={economics.profilePath(STANDARD_PROFILE_ID)}>

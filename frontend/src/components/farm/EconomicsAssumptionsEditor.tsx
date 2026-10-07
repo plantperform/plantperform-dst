@@ -1,38 +1,29 @@
-import { LayoutList, Search } from 'lucide-react'
+import { LayoutList } from 'lucide-react'
 import { useState } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import {
   CustomisedDot,
-  EconomicsCropDetail,
-} from '@/components/farm/EconomicsCropDetail'
+  DbDelta,
+  GRID_HEAD_CLASS,
+} from '@/components/farm/economics-ui'
+import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
-import { Input } from '@/components/ui/input'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
   cropDbChange,
   cropTotals,
+  FERTILISER_NOTE,
   formatDbDkk,
   formatSignedDkk,
   isCropCustomised,
-  searchCrops,
   type EconomicsAssumptions,
   type EconomicsOverrides,
   type OverridesChange,
 } from '@/lib/economics'
-import { formatWholeNumber } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 const OVERVIEW_GRID_CLASS = 'grid items-center gap-x-3 px-5'
-
-const OVERVIEW_COLUMNS_CLASS =
-  'grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_6.5rem_7.5rem]'
-
-const OVERVIEW_COMPARED_COLUMNS_CLASS =
-  'grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_6.5rem_7.5rem_8.5rem]'
-
-const TABLE_HEAD_CLASS =
-  'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
 
 const LIST_ITEM_CLASS =
   'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-muted aria-[current=true]:font-semibold'
@@ -52,7 +43,9 @@ const CropsOverview = ({
 }: CropsOverviewProps) => {
   const gridClass = cn(
     OVERVIEW_GRID_CLASS,
-    editable ? OVERVIEW_COMPARED_COLUMNS_CLASS : OVERVIEW_COLUMNS_CLASS,
+    editable
+      ? 'min-w-164 grid-cols-[minmax(9rem,1fr)_4.5rem_4.5rem_5.5rem_6.5rem_4.5rem]'
+      : 'min-w-144 grid-cols-[minmax(9rem,1fr)_4.5rem_4.5rem_5.5rem_6.5rem]',
   )
 
   return (
@@ -65,63 +58,59 @@ const CropsOverview = ({
         </p>
       </div>
       <div className="overflow-x-auto">
-        <div className={editable ? 'min-w-176' : 'min-w-136'}>
-          <div className={cn(gridClass, TABLE_HEAD_CLASS)}>
-            <span>Afgrøde</span>
-            <span className="text-right">Indtægt</span>
-            <span className="text-right">Tilskud</span>
-            <span className="text-right">Omkostninger</span>
-            <span className="text-right">Dækningsbidrag</span>
-            {editable ? (
-              <span className="text-right">I forhold til Standard</span>
-            ) : null}
-          </div>
-          {assumptions.crops.map((crop) => {
-            const totals = cropTotals(assumptions, overrides, crop)
-            const dbChange = cropDbChange(assumptions, overrides, crop)
-            return (
-              <button
-                key={crop.cropCode}
-                type="button"
-                onClick={() => onOpenCrop(crop.cropCode)}
-                className={cn(
-                  gridClass,
-                  'w-full border-b py-2 text-left text-[13px] transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <CropGroupTile
-                    group={cropGroupFor(crop.cropCode, crop.cropName)}
-                  />
-                  <span className="min-w-0 truncate">{crop.cropName}</span>
-                  {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
-                </span>
-                <span className="text-right tabular-nums">
-                  {formatWholeNumber(totals.revenueDkkHa)}
-                </span>
-                <span className="text-right tabular-nums">
-                  +{formatWholeNumber(totals.subsidyDkkHa)}
-                </span>
-                <span className="text-right tabular-nums">
-                  −{formatWholeNumber(totals.totalCostsDkkHa)}
-                </span>
-                <span className="text-right font-semibold tabular-nums">
-                  {formatDbDkk(totals.dbDkkHa)}
-                </span>
-                {editable ? (
-                  <span className="text-right text-muted-foreground tabular-nums">
-                    {dbChange === 0 ? null : formatSignedDkk(dbChange)}
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
-          <p className="bg-muted/30 px-5 py-2.5 text-[11px] text-muted-foreground">
-            Gødning er ikke med i omkostningerne, for den regnes ud fra
-            kvælstofnormen i hver simulering.
-          </p>
+        <div className={cn(gridClass, GRID_HEAD_CLASS)}>
+          <span>Afgrøde</span>
+          <span className="text-right">Indtægt</span>
+          <span className="text-right">Tilskud</span>
+          <span className="text-right">Omkostninger</span>
+          <span className="text-right">Dækningsbidrag</span>
+          {editable ? <span className="text-right">Ændring</span> : null}
         </div>
+        {assumptions.crops.map((crop) => {
+          const totals = cropTotals(assumptions, overrides, crop)
+          return (
+            <button
+              key={crop.cropCode}
+              type="button"
+              onClick={() => onOpenCrop(crop.cropCode)}
+              className={cn(
+                gridClass,
+                'w-full border-b py-2 text-left text-[13px] tabular-nums transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <CropGroupTile
+                  group={cropGroupFor(crop.cropCode, crop.cropName)}
+                />
+                <span className="min-w-0 truncate">{crop.cropName}</span>
+                {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
+              </span>
+              <span className="text-right">
+                {formatDbDkk(totals.revenueDkkHa)}
+              </span>
+              <span className="text-right">
+                {formatSignedDkk(totals.subsidyDkkHa)}
+              </span>
+              <span className="text-right">
+                {formatDbDkk(-totals.totalCostsDkkHa)}
+              </span>
+              <span className="text-right font-semibold">
+                {formatDbDkk(totals.dbDkkHa)}
+              </span>
+              {editable ? (
+                <span className="text-right">
+                  <DbDelta
+                    change={cropDbChange(assumptions, overrides, crop)}
+                  />
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
       </div>
+      <p className="bg-muted/30 px-5 py-2.5 text-[11px] text-muted-foreground">
+        {FERTILISER_NOTE}
+      </p>
     </div>
   )
 }
@@ -130,7 +119,7 @@ type EconomicsAssumptionsEditorProps = {
   assumptions: EconomicsAssumptions
   overrides: EconomicsOverrides
   onOverridesChange?: (change: OverridesChange) => void
-  focus?: { cropCode: number; lineId: string; key: string }
+  focus?: { cropCode: number; lineId: string }
 }
 
 export const EconomicsAssumptionsEditor = ({
@@ -139,45 +128,25 @@ export const EconomicsAssumptionsEditor = ({
   onOverridesChange,
   focus,
 }: EconomicsAssumptionsEditorProps) => {
-  const [activeCode, setActiveCode] = useState<number | null>(null)
-  const [search, setSearch] = useState('')
-  const [shownFocus, setShownFocus] = useState<string | null>(null)
-
-  if (focus && focus.key !== shownFocus) {
-    setShownFocus(focus.key)
-    setActiveCode(focus.cropCode)
-  }
-
-  const active = assumptions.crops.find((crop) => crop.cropCode === activeCode)
-  const crops = searchCrops(assumptions.crops, search)
+  const [opened, setOpened] = useState<{
+    cropCode: number | null
+    lineId?: string
+  }>({ cropCode: focus?.cropCode ?? null, lineId: focus?.lineId })
+  const active = assumptions.crops.find(
+    (crop) => crop.cropCode === opened.cropCode,
+  )
+  const openCrop = (cropCode: number | null) => setOpened({ cropCode })
 
   return (
-    <div className="grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)] md:items-start">
-      <nav
-        aria-label="Afgrøder"
-        className={cn(RULES_CARD_CLASS, 'p-2 md:sticky md:top-4')}
-      >
-        <div className="relative mb-1.5">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Søg afgrøde"
-            placeholder="Søg afgrøde"
-            className="h-8 pl-8 text-[13px]"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
+    <div className="grid gap-4 @3xl:grid-cols-[12rem_minmax(0,1fr)] @3xl:items-start">
+      <nav aria-label="Afgrøder" className={cn(RULES_CARD_CLASS, 'p-2')}>
         <ul className="space-y-0.5">
           <li>
             <button
               type="button"
               aria-current={active ? undefined : 'true'}
               className={LIST_ITEM_CLASS}
-              onClick={() => setActiveCode(null)}
+              onClick={() => openCrop(null)}
             >
               <LayoutList
                 className="size-4 shrink-0 text-muted-foreground"
@@ -186,36 +155,23 @@ export const EconomicsAssumptionsEditor = ({
               Alle afgrøder
             </button>
           </li>
-          {crops.map((crop) => (
+          {assumptions.crops.map((crop) => (
             <li key={crop.cropCode}>
               <button
                 type="button"
                 aria-current={crop === active ? 'true' : undefined}
                 className={LIST_ITEM_CLASS}
-                onClick={() => setActiveCode(crop.cropCode)}
+                onClick={() => openCrop(crop.cropCode)}
               >
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
                 <span className="min-w-0 flex-1 truncate">{crop.cropName}</span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
-                <span className="font-normal text-muted-foreground tabular-nums">
-                  {formatDbDkk(
-                    cropTotals(assumptions, overrides, crop).dbDkkHa,
-                  )}
-                </span>
               </button>
             </li>
           ))}
         </ul>
-        {crops.length === 0 ? (
-          <p className="px-2 py-1.5 text-[13px] text-muted-foreground">
-            Ingen afgrøder passer til søgningen.
-          </p>
-        ) : null}
-        <p className="px-2 pt-2 pb-1 text-[11px] text-muted-foreground">
-          Tallene er dækningsbidrag i kr/ha.
-        </p>
       </nav>
 
       <section
@@ -231,18 +187,14 @@ export const EconomicsAssumptionsEditor = ({
             overrides={overrides}
             crop={active}
             onOverridesChange={onOverridesChange}
-            focus={
-              focus?.cropCode === active.cropCode
-                ? { lineId: focus.lineId, key: focus.key }
-                : undefined
-            }
+            focusLineId={opened.lineId}
           />
         ) : (
           <CropsOverview
             assumptions={assumptions}
             overrides={overrides}
             editable={onOverridesChange !== undefined}
-            onOpenCrop={setActiveCode}
+            onOpenCrop={openCrop}
           />
         )}
       </section>

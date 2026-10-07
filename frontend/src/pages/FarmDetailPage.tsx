@@ -19,8 +19,7 @@ import {
 } from '@/api/hooks'
 import type { Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
-import { DeleteEconomicsProfileDialog } from '@/components/farm/DeleteEconomicsProfileDialog'
-import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
+import { ConfirmDeleteDialog } from '@/components/farm/ConfirmDeleteDialog'
 import {
   calculationReturnState,
   type ReturnTarget,
@@ -31,7 +30,6 @@ import {
   useEconomicsProfilesStore,
 } from '@/components/farm/economics-profiles-state'
 import { EconomicsGuidePage } from '@/components/farm/EconomicsGuidePage'
-import { EconomicsNavigationProvider } from '@/components/farm/EconomicsNavigationProvider'
 import { EconomicsOverview } from '@/components/farm/EconomicsOverview'
 import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
@@ -68,7 +66,10 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
-import type { EconomicsProfile } from '@/lib/economics-profiles'
+import {
+  deleteProfileMessage,
+  type EconomicsProfile,
+} from '@/lib/economics-profiles'
 import { HOME_OVERVIEW_STATE, markFarmOpened } from '@/lib/onboarding'
 
 const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
@@ -80,11 +81,11 @@ const FarmDetail = () => {
   const { farmId } = useParams()
   const navigate = useNavigate()
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
-  const onProfilePage = useMatch('/farms/:farmId/economics/*') !== null
+  const onEconomicsPage = useMatch('/farms/:farmId/economics/*') !== null
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const email = user?.email ?? ''
-  const economicsProfiles = useEconomicsProfiles()
+  const economics = useEconomicsProfiles()
   const {
     data: farm,
     error: farmError,
@@ -268,16 +269,10 @@ const FarmDetail = () => {
     selection: activeSelection,
     onSelectionChange: changeSelection,
     onError: showErrorToast,
-    onSimulationCopied: (source, copy) =>
-      economicsProfiles.assignProfile(
-        copy.id,
-        economicsProfiles.profileForSimulation(source.id).id,
-      ),
-    onSimulationRemoved: economicsProfiles.forgetSimulation,
   })
 
   const leavePage = () => {
-    if (onOverview || onProfilePage) navigate(farmPath)
+    if (onOverview || onEconomicsPage) navigate(farmPath)
   }
 
   const openView = (next: FarmViewSelection, nextMode: FarmInspectorMode) => {
@@ -310,7 +305,7 @@ const FarmDetail = () => {
     setNewSimulationSource(null)
     setNewSimulationProfileId(profileId)
     setNewSimulationOpen(true)
-    navigate(economicsProfiles.profilePath(profileId))
+    navigate(economics.profilePath(profileId))
   }
 
   if (notFound || loadFailed) {
@@ -547,28 +542,35 @@ const FarmDetail = () => {
             }}
             onError={showErrorToast}
           />
-          <DeleteSimulationDialog
-            simulation={simulationToDelete}
+          <ConfirmDeleteDialog
+            name={simulationToDelete?.name ?? null}
+            description="Simuleringen og dens ændringer på markerne slettes. Afgrødehistorikken og økonomiprofilerne berøres ikke."
+            confirmLabel="Slet simulering"
             onOpenChange={(open) => {
               if (!open) setSimulationToDelete(null)
             }}
-            onConfirm={(simulationId) =>
-              void simulationActions.removeSimulation(simulationId)
-            }
+            onConfirm={() => {
+              if (simulationToDelete) {
+                void simulationActions.removeSimulation(simulationToDelete.id)
+              }
+            }}
           />
-          <DeleteEconomicsProfileDialog
-            profile={profileToDelete}
-            simulationNames={
+          <ConfirmDeleteDialog
+            name={profileToDelete?.name ?? null}
+            description={deleteProfileMessage(
               profileToDelete
-                ? economicsProfiles
+                ? economics
                     .simulationsUsingProfile(simulations, profileToDelete.id)
                     .map((simulation) => simulation.name)
-                : []
-            }
+                : [],
+            )}
+            confirmLabel="Slet profil"
             onOpenChange={(open) => {
               if (!open) setProfileToDelete(null)
             }}
-            onConfirm={economicsProfiles.deleteProfile}
+            onConfirm={() => {
+              if (profileToDelete) economics.deleteProfile(profileToDelete.id)
+            }}
           />
         </>
       ) : null}
@@ -578,13 +580,11 @@ const FarmDetail = () => {
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
-  const economicsProfiles = useEconomicsProfilesStore(farmId)
+  const economics = useEconomicsProfilesStore(farmId)
 
   return (
-    <EconomicsProfilesContext.Provider value={economicsProfiles}>
-      <EconomicsNavigationProvider farmId={farmId}>
-        <FarmDetail />
-      </EconomicsNavigationProvider>
+    <EconomicsProfilesContext.Provider value={economics}>
+      <FarmDetail />
     </EconomicsProfilesContext.Provider>
   )
 }

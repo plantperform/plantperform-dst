@@ -720,87 +720,48 @@ describe('describeEconomicsVerdict', () => {
   const plan = [plannedField(1, '11:1:100')]
   const otherPlan = [plannedField(1, '4:2:90')]
 
-  it('points out two simulations with the same fields and different profiles', () => {
+  const column = (
+    title: string,
+    ownProfileName: string | null,
+    fields = plan,
+  ) => ({ title, ownProfileName, fields })
+
+  it('points out two simulations with the same rotations and different profiles', () => {
     expect(
       describeEconomicsVerdict([
-        {
-          title: 'Afgrødehistorik',
-          profileId: 'standard',
-          ownProfileName: null,
-          fields: otherPlan,
-        },
-        {
-          title: 'Reduceret kvælstof',
-          profileId: 'farm',
-          ownProfileName: 'Bakkegården 2027',
-          fields: plan,
-        },
-        {
-          title: 'Kopi',
-          profileId: 'careful',
-          ownProfileName: 'Forsigtig 2027',
-          fields: plan,
-        },
+        column('Afgrødehistorik', null, otherPlan),
+        column('Reduceret kvælstof', 'Bakkegården 2027'),
+        column('Kopi', 'Forsigtig 2027'),
       ]),
     ).toBe(
-      'Reduceret kvælstof og Kopi har samme marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.',
+      'Reduceret kvælstof og Kopi har samme sædskifter på alle marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.',
     )
   })
 
   it('names the simulations that use an own profile', () => {
     expect(
       describeEconomicsVerdict([
-        {
-          title: 'Afgrødehistorik',
-          profileId: 'standard',
-          ownProfileName: null,
-          fields: otherPlan,
-        },
-        {
-          title: 'Reduceret kvælstof',
-          profileId: 'farm',
-          ownProfileName: 'Bakkegården 2027',
-          fields: plan,
-        },
+        column('Afgrødehistorik', null, otherPlan),
+        column('Reduceret kvælstof', 'Bakkegården 2027'),
       ]),
     ).toBe(
       'Reduceret kvælstof regner med Bakkegården 2027, som ikke indgår i beregningen endnu.',
     )
     expect(
       describeEconomicsVerdict([
-        {
-          title: 'Reduceret kvælstof',
-          profileId: 'farm',
-          ownProfileName: 'Bakkegården 2027',
-          fields: plan,
-        },
-        {
-          title: 'Mere vintersæd',
-          profileId: 'farm',
-          ownProfileName: 'Bakkegården 2027',
-          fields: otherPlan,
-        },
+        column('Reduceret kvælstof', 'Bakkegården 2027'),
+        column('Mere vintersæd', 'Bakkegården 2027', otherPlan),
       ]),
     ).toBe(
-      'Reduceret kvælstof og Mere vintersæd regner med bedriftens egne økonomiprofiler, som ikke indgår i beregningen endnu.',
+      'Reduceret kvælstof og Mere vintersæd regner med økonomiprofiler, som ikke indgår i beregningen endnu.',
     )
   })
 
   it('says nothing when every simulation uses Standard', () => {
     expect(
       describeEconomicsVerdict([
-        {
-          title: 'Afgrødehistorik',
-          profileId: 'standard',
-          ownProfileName: null,
-          fields: plan,
-        },
-        {
-          title: 'Mere vintersæd',
-          profileId: 'standard',
-          ownProfileName: null,
-          fields: plan,
-        },
+        column('Afgrødehistorik', null),
+        column('Mere vintersæd', null),
       ]),
     ).toBeNull()
   })

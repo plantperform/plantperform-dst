@@ -7,12 +7,12 @@ import {
   NO_OVERRIDES,
   type EconomicsOverrides,
 } from '@/lib/economics'
+import { STANDARD_SOURCE } from '@/lib/economics-example'
 
 export type EconomicsProfile = {
   id: string
   name: string
   overrides: EconomicsOverrides
-  copiedFromId?: string
 }
 
 export type EconomicsProfiles = {
@@ -78,40 +78,37 @@ export const profileNameError = (
   return taken ? 'Der findes allerede en profil med det navn.' : null
 }
 
-export const deleteProfileMessage = (simulationCount: number): string => {
-  if (simulationCount === 0) return 'Ingen simuleringer bruger profilen.'
-  return simulationCount === 1
-    ? '1 simulering bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til den først.'
-    : `${simulationCount} simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.`
-}
+export const describeProfileUsers = (simulationNames: string[]): string =>
+  simulationNames.length > 0
+    ? `Bruges af ${formatNameList(simulationNames)}`
+    : 'Bruges ikke af nogen simulering endnu'
+
+export const deleteProfileMessage = (simulationNames: string[]): string =>
+  simulationNames.length > 0
+    ? `${describeProfileUsers(simulationNames)}, som går tilbage til ${STANDARD_PROFILE.name}.`
+    : `${describeProfileUsers(simulationNames)}.`
 
 export const ECONOMICS_INVITATION =
-  'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.'
+  'Har bedriften en anden salgspris, et andet udbytte eller andre priser for markarbejdet, kan tallene rettes i en økonomiprofil.'
+
+export const PROFILES_NOT_IN_CALCULATION =
+  'Profilerne gemmes kun i denne browser og indgår ikke i beregningen endnu.'
 
 export const describeEconomicsEntry = (
-  ownProfiles: { name: string; simulationNames: string[] }[],
+  ownProfileNames: string[],
 ): { title: string; text: string } => {
-  if (ownProfiles.length === 0) {
+  if (ownProfileNames.length === 0) {
     return {
       title: `Simuleringerne regner med ${STANDARD_PROFILE.name}`,
       text: ECONOMICS_INVITATION,
     }
   }
-  const uses = ownProfiles.map(
-    (profile) =>
-      `${profile.name} bruges af ${
-        profile.simulationNames.length > 0
-          ? formatNameList(profile.simulationNames)
-          : 'ingen simuleringer endnu'
-      }.`,
-  )
+  const single = ownProfileNames.length === 1
   return {
     title: `${
-      ownProfiles.length === 1
-        ? 'Bedriftens økonomiprofil'
-        : 'Bedriftens økonomiprofiler'
-    }: ${formatNameList(ownProfiles.map((profile) => profile.name))}`,
-    text: `${uses.join(' ')} Indtil profilerne indgår i beregningen, er tallene regnet med Standard.`,
+      single ? 'Bedriftens økonomiprofil' : 'Bedriftens økonomiprofiler'
+    }: ${formatNameList(ownProfileNames)}`,
+    text: `Indtil ${single ? 'profilen' : 'profilerne'} indgår i beregningen, er tallene regnet med ${STANDARD_PROFILE.name}.`,
   }
 }
 
@@ -121,34 +118,19 @@ export const describeProfileOption = (
   simulationNames: string[],
 ): string => {
   if (profileId === STANDARD_PROFILE_ID) {
-    return 'SEGES Budgetkalkuler 2026 · kan ikke rettes'
+    return `${STANDARD_SOURCE} · kan ikke rettes`
   }
   const changes = formatChangeCount(changeCount)
   return simulationNames.length > 0
-    ? `${changes} · bruges af ${simulationNames.join(', ')}`
+    ? `${changes} · bruges af ${formatNameList(simulationNames)}`
     : changes
 }
 
-export const describeProfileUsers = (
-  profileId: string,
-  simulationNames: string[],
-): string => {
-  const users =
-    profileId === STANDARD_PROFILE_ID
-      ? ['afgrødehistorikken', ...simulationNames]
-      : simulationNames
-  return users.length > 0
-    ? `Bruges af ${formatNameList(users)}`
-    : 'Bruges ikke af nogen simulering endnu'
-}
-
-export const describeStandardEntry = (
+export const describeStandard = (
   cropCount: number,
   simulationNames: string[],
-): { title: string; text: string } => ({
-  title: STANDARD_PROFILE.name,
-  text: `Priser og mængder fra SEGES Budgetkalkuler 2026 for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. ${describeProfileUsers(STANDARD_PROFILE_ID, simulationNames)}.`,
-})
+): string =>
+  `Priser og mængder fra ${STANDARD_SOURCE} for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. ${describeProfileUsers(['afgrødehistorikken', ...simulationNames])}.`
 
 export const sharedProfileNote = (simulationCount: number): string | null => {
   if (simulationCount < 2) return null
@@ -157,7 +139,10 @@ export const sharedProfileNote = (simulationCount: number): string | null => {
     : `En rettelse gælder for alle ${simulationCount} simuleringer.`
 }
 
-const freeProfileName = (state: EconomicsProfiles, baseName: string) => {
+export const freeProfileName = (
+  state: EconomicsProfiles,
+  baseName: string,
+): string => {
   const taken = new Set(
     allProfiles(state).map((profile) => comparableName(profile.name)),
   )
@@ -174,38 +159,20 @@ export const withNewProfile = (
   state: EconomicsProfiles,
   profileId: string,
   baseName: string,
-): EconomicsProfiles => ({
-  ...state,
-  profiles: [
-    ...state.profiles,
-    {
-      id: profileId,
-      name: freeProfileName(state, baseName),
-      overrides: NO_OVERRIDES,
-    },
-  ],
-})
-
-export const withProfileCopy = (
-  state: EconomicsProfiles,
-  sourceId: string,
-  profileId: string,
-): EconomicsProfiles => {
-  const source = state.profiles.find((profile) => profile.id === sourceId)
-  if (!source) return state
-  return {
-    ...state,
-    profiles: [
-      ...state.profiles,
-      {
-        id: profileId,
-        name: freeProfileName(state, `${source.name} (kopi)`),
-        overrides: source.overrides,
-        copiedFromId: source.id,
-      },
-    ],
-  }
-}
+): EconomicsProfiles =>
+  state.profiles.some((profile) => profile.id === profileId)
+    ? state
+    : {
+        ...state,
+        profiles: [
+          ...state.profiles,
+          {
+            id: profileId,
+            name: freeProfileName(state, baseName),
+            overrides: NO_OVERRIDES,
+          },
+        ],
+      }
 
 const withProfile = (
   state: EconomicsProfiles,
@@ -276,19 +243,18 @@ export const withSimulationProfile = (
   }
 }
 
+const storedProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1),
+  overrides: z.object({
+    prices: z.record(z.string(), z.number()),
+    quantities: z.record(z.string(), z.number()),
+    yieldPct: z.record(z.string(), z.number()),
+  }),
+})
+
 const storedProfilesSchema = z.object({
-  profiles: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().trim().min(1),
-      overrides: z.object({
-        prices: z.record(z.string(), z.number()),
-        quantities: z.record(z.string(), z.number()),
-        yieldPct: z.record(z.string(), z.number()).default({}),
-      }),
-      copiedFromId: z.string().optional(),
-    }),
-  ),
+  profiles: z.array(z.unknown()),
   simulationProfileIds: z.record(z.string(), z.string()),
 })
 
@@ -305,9 +271,12 @@ export const parseStoredProfiles = (text: string | null): EconomicsProfiles => {
     text === null ? null : parseJson(text),
   )
   if (!stored.success) return NO_PROFILES
-  const profiles = stored.data.profiles.filter(
-    (profile) => profile.id !== STANDARD_PROFILE_ID,
-  )
+  const profiles = stored.data.profiles.flatMap((entry) => {
+    const profile = storedProfileSchema.safeParse(entry)
+    return profile.success && profile.data.id !== STANDARD_PROFILE_ID
+      ? [profile.data]
+      : []
+  })
   const profileIds = new Set(profiles.map((profile) => profile.id))
   return {
     profiles,

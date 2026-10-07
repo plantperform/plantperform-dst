@@ -419,19 +419,18 @@ export const FarmInspector = ({
           )}
         >
           {isSimulationView && selectedSimulation ? (
-            <SimulationHeading
-              simulation={selectedSimulation}
-              simulations={simulations}
-              fields={fieldsLoading || fieldsError ? undefined : fields}
-            />
-          ) : null}
-          {isSimulationView && selectedSimulation ? (
-            <OptimizationBanner
-              farmId={farm.id}
-              simulationId={selectedSimulation.id}
-              run={optimizationRun}
-              fields={fieldsLoading || fieldsError ? undefined : fields}
-            />
+            <>
+              <SimulationHeading
+                simulation={selectedSimulation}
+                simulations={simulations}
+              />
+              <OptimizationBanner
+                farmId={farm.id}
+                simulationId={selectedSimulation.id}
+                run={optimizationRun}
+                fields={fieldsLoading || fieldsError ? undefined : fields}
+              />
+            </>
           ) : null}
           {showYearWalkthrough ? (
             <>
