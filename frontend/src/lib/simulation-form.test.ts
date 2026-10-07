@@ -6,6 +6,7 @@ import type {
 } from '@/api/types'
 import {
   combinationCount,
+  copiedNNormPercentages,
   CUSTOM_FERTILISER,
   DEFAULT_SIMULATION_FORM_VALUES,
   farmingSystemMismatchCount,
@@ -348,6 +349,16 @@ describe('N-norm levels', () => {
 
   it('keeps 100 % first when the driftsform changes', () => {
     expect(nNormPercentagesFor(['80'], 'Konventionel')).toEqual(['100', '80'])
+  })
+
+  it('gives a copy 100 % and the two highest levels still offered', () => {
+    const offered = ['50', '60', '70', '80', '90', '100']
+    expect(
+      copiedNNormPercentages(['30', '60', '80', '90'], 'Konventionel', offered),
+    ).toEqual(['100', '90', '80'])
+    expect(
+      copiedNNormPercentages(['100', '80'], 'Økologisk', offered),
+    ).toEqual(['100'])
   })
 
   it('sends only 100 % for an økologisk simulation', () => {

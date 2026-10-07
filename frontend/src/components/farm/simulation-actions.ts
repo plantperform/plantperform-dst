@@ -5,6 +5,7 @@ import {
   fetchSimulationFields,
   simulationFieldsKey,
   simulationsKey,
+  useRotationNNormPercentages,
 } from '@/api/hooks'
 import {
   createSimulation,
@@ -14,11 +15,19 @@ import {
 import { useStartDefaultOptimization } from '@/api/optimization-runs'
 import type { CreateSimulationInput, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
+import { copiedNNormPercentages } from '@/lib/simulation-form'
 
-const buildCopyInput = (simulation: Simulation): CreateSimulationInput => ({
+const buildCopyInput = (
+  simulation: Simulation,
+  offeredNNormPercentages: string[],
+): CreateSimulationInput => ({
   name: `${simulation.name} (kopi)`,
   allowedRotationVariants: simulation.rotationVariants,
-  allowedNNormPercentages: simulation.nNormPercentages,
+  allowedNNormPercentages: copiedNNormPercentages(
+    simulation.nNormPercentages,
+    simulation.fertiliser.farmingSystem,
+    offeredNNormPercentages,
+  ),
   fertiliser: simulation.fertiliser,
   catchCropSowingDate: simulation.catchCropSowingDate,
   catchCropDailyBasis: simulation.catchCropDailyBasis,
@@ -44,6 +53,7 @@ export const useSimulationActions = ({
     null,
   )
   const startDefaultRun = useStartDefaultOptimization()
+  const { data: offeredNNormPercentages } = useRotationNNormPercentages(farmId)
 
   const removeSimulation = async (simulationId: string) => {
     if (!farmId) return
@@ -70,7 +80,13 @@ export const useSimulationActions = ({
     setCopyingSimulationId(simulation.id)
     let created: Simulation
     try {
-      created = await createSimulation(farmId, buildCopyInput(simulation))
+      created = await createSimulation(
+        farmId,
+        buildCopyInput(
+          simulation,
+          offeredNNormPercentages ?? simulation.nNormPercentages,
+        ),
+      )
       await mutate(simulationsKey(farmId))
     } catch {
       onError('Kunne ikke kopiere simuleringen.')

@@ -52,6 +52,19 @@ export const nNormPercentagesFor = (
     ? [FULL_N_NORM]
     : [FULL_N_NORM, ...selected.filter((value) => value !== FULL_N_NORM)]
 
+export const copiedNNormPercentages = (
+  selected: string[],
+  farmingSystem: FarmingSystem,
+  offered: string[],
+): string[] =>
+  nNormPercentagesFor(
+    selected
+      .filter((value) => value !== FULL_N_NORM && offered.includes(value))
+      .sort((left, right) => Number(right) - Number(left))
+      .slice(0, MAX_REDUCED_N_NORM_LEVELS),
+    farmingSystem,
+  )
+
 // Number inputs are kept as the strings the user typed, so an empty or
 // half-typed field is not silently turned into a number.
 export type SimulationFormValues = {
