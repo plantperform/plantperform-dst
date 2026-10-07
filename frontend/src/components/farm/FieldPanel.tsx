@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
 import type {
@@ -8,6 +9,14 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import {
+  NotInCalculationNote,
+  TEXT_LINK_CLASS,
+} from '@/components/farm/economics-ui'
+import {
+  FieldEconomicsContext,
+  useFieldEconomics,
+} from '@/components/farm/field-economics'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
 import { FieldNameEditor } from '@/components/farm/FieldNameEditor'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
@@ -18,6 +27,7 @@ import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
@@ -154,7 +164,10 @@ export const FieldPanel = ({
   onCalcOpenChange,
   onError,
 }: FieldPanelProps) => {
-  const [calcOpen, setCalcOpen] = useState(false)
+  const fieldEconomics = useFieldEconomics(field, simulation)
+  const [calcOpen, setCalcOpen] = useState(
+    fieldEconomics.openAtYearIndex !== undefined,
+  )
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
 
   useEffect(() => {
@@ -276,6 +289,22 @@ export const FieldPanel = ({
           />
         </div>
 
+        {calculated ? (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Økonomiprofil:{' '}
+            <Link
+              to={fieldEconomics.profilePath}
+              state={{ returnTo: fieldEconomics.returnTo }}
+              className={TEXT_LINK_CLASS}
+            >
+              {fieldEconomics.profile.name}
+            </Link>
+            {fieldEconomics.profile.id === STANDARD_PROFILE_ID ? null : (
+              <NotInCalculationNote />
+            )}
+          </p>
+        ) : null}
+
         <div className="@container rounded-lg border bg-card p-3.5 @2xl:p-4">
           <div className="border-b pb-2">
             <h3 className="flex items-center gap-1 text-sm font-semibold">
@@ -353,29 +382,32 @@ export const FieldPanel = ({
             </div>
             {calcOpen ? (
               <div className="motion-safe:animate-rise-in">
-                {isSimulationView ? (
-                  <RotationDetailPanel
-                    farmId={farmId}
-                    simulationId={simulationId as string}
-                    fieldId={field.id}
-                    rotationId={field.rotationId}
-                    areaHa={field.areaHa}
-                    retention={field.retention}
-                    selectedYearIndex={highlightIndex ?? undefined}
-                    onSelectedYearIndexChange={
-                      selectedCalendarYear !== null && onSelectedYearIndexChange
-                        ? onSelectedYearIndexChange
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <HistoricalDetailPanel
-                    farmId={farmId}
-                    fieldId={field.id}
-                    areaHa={field.areaHa}
-                    retention={field.retention}
-                  />
-                )}
+                <FieldEconomicsContext.Provider value={fieldEconomics}>
+                  {isSimulationView ? (
+                    <RotationDetailPanel
+                      farmId={farmId}
+                      simulationId={simulationId as string}
+                      fieldId={field.id}
+                      rotationId={field.rotationId}
+                      areaHa={field.areaHa}
+                      retention={field.retention}
+                      selectedYearIndex={highlightIndex ?? undefined}
+                      onSelectedYearIndexChange={
+                        selectedCalendarYear !== null &&
+                        onSelectedYearIndexChange
+                          ? onSelectedYearIndexChange
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <HistoricalDetailPanel
+                      farmId={farmId}
+                      fieldId={field.id}
+                      areaHa={field.areaHa}
+                      retention={field.retention}
+                    />
+                  )}
+                </FieldEconomicsContext.Provider>
               </div>
             ) : null}
           </div>
