@@ -1,11 +1,19 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
+import { CustomisedChip, TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import { FieldEconomicsContext } from '@/components/farm/field-economics'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { shortCropName } from '@/lib/crop-groups'
+import {
+  customisedBreakdownLine,
+  type BreakdownRow,
+  type BreakdownTarget,
+} from '@/lib/economics'
 import {
   nNormTargetKgNHa,
   ROTATION_START_CALENDAR_YEAR,
@@ -88,7 +96,7 @@ const calculateNLoad = (
 }
 
 type Row = {
-  label: string
+  label: React.ReactNode
   detail?: React.ReactNode
   value: string
   strong?: boolean
@@ -918,25 +926,75 @@ const LeachingDetailSection = ({
 
 type CostLine = { category: string; treatment: string; costDkkHa: number }
 
+const useCustomisedLine = (cropCode: number) => {
+  const fieldEconomics = useContext(FieldEconomicsContext)
+  return (row: BreakdownRow) =>
+    fieldEconomics
+      ? customisedBreakdownLine(
+          fieldEconomics.assumptions,
+          fieldEconomics.profile.overrides,
+          cropCode,
+          row,
+        )
+      : null
+}
+
+const CustomisedLabel = ({
+  label,
+  cropCode,
+  line,
+}: {
+  label: string
+  cropCode: number
+  line: BreakdownTarget | null
+}) => {
+  const fieldEconomics = useContext(FieldEconomicsContext)
+  if (!line || !fieldEconomics) return label
+  return (
+    <>
+      {label} <CustomisedChip />
+      <Link
+        to={fieldEconomics.profilePath}
+        state={{
+          cropCode,
+          lineId: line.id,
+          returnTo: fieldEconomics.returnTo,
+        }}
+        className={`${TEXT_LINK_CLASS} block w-fit text-[11px]`}
+      >
+        Se posten i profilen
+      </Link>
+    </>
+  )
+}
+
 // One category total (for example, "Gødning") with the line items that add up
 // to it, expanded on click instead of showing only the aggregated sum.
 const CategoryBreakdownRow = ({
   label,
   total,
   lines,
+  cropCode,
 }: {
   label: string
   total: number
   lines: CostLine[]
+  cropCode: number
 }) => {
-  const [open, setOpen] = useState(false)
   const hasBreakdown = lines.length > 0
+  const customisedLine = useCustomisedLine(cropCode)
+  const customisedLines = lines.map((l) =>
+    customisedLine({ kind: 'cost', category: label, treatment: l.treatment }),
+  )
+  const anyCustomised = customisedLines.some((line) => line !== null)
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? anyCustomised
 
   return (
     <div className="border-t py-1.5">
       <button
         type="button"
-        onClick={() => hasBreakdown && setOpen((current) => !current)}
+        onClick={() => hasBreakdown && setToggled(!open)}
         className={`flex w-full items-center justify-between gap-2 text-left text-xs ${
           hasBreakdown ? 'cursor-pointer' : 'cursor-default'
         }`}
@@ -954,7 +1012,13 @@ const CategoryBreakdownRow = ({
               key={index}
               className="flex justify-between gap-2 text-xs text-muted-foreground"
             >
-              <span>{l.treatment}</span>
+              <span>
+                <CustomisedLabel
+                  label={l.treatment}
+                  cropCode={cropCode}
+                  line={customisedLines[index]}
+                />
+              </span>
               <span className="tabular-nums">−{fmt(l.costDkkHa, 0)} kr/ha</span>
             </div>
           ))}
@@ -967,10 +1031,20 @@ const CategoryBreakdownRow = ({
 const EconomicDetailSection = ({
   detail,
   areaHa,
+  cropCode,
 }: {
   detail: Record<string, unknown>
   areaHa: number
+  cropCode: number
 }) => {
+  const customisedLine = useCustomisedLine(cropCode)
+  const customisedLabel = (label: string, row: BreakdownRow) => (
+    <CustomisedLabel
+      label={label}
+      cropCode={cropCode}
+      line={customisedLine(row)}
+    />
+  )
   const yieldAmount = num(detail.yieldAmount)
   const unit = String(detail.yieldUnit ?? '')
   const response = yieldResponse(yieldAmount, detail.yieldFactor)
@@ -1006,23 +1080,26 @@ const EconomicDetailSection = ({
       <DetailTable
         rows={[
           {
-            label: 'Udbytte',
+            label: customisedLabel('Udbytte', { kind: 'yield' }),
             detail: response
               ? `normudbytte ${fmt(response.normYield, 1)} × ${fmt(response.factor * 100, 1)} % (N under normen)`
               : undefined,
             value: `${fmt(yieldAmount, 1)} ${unit}`,
           },
           {
-            label: 'Salgspris',
+            label: customisedLabel('Salgspris', { kind: 'salePrice' }),
             value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}`,
           },
           {
-            label: 'Indtægt',
+            label: customisedLabel('Indtægt', { kind: 'revenue' }),
             detail: 'udbytte × salgspris',
             value: `${fmt(revenue, 0)} kr/ha`,
             strong: true,
           },
-          { label: 'Tilskud', value: `+${fmt(subsidy, 0)} kr/ha` },
+          {
+            label: customisedLabel('Tilskud', { kind: 'subsidy' }),
+            value: `+${fmt(subsidy, 0)} kr/ha`,
+          },
         ]}
       />
       <div>
@@ -1030,26 +1107,31 @@ const EconomicDetailSection = ({
           label="Gødning"
           total={fertiliserCost}
           lines={linesFor('Gødning')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Udsæd"
           total={seed}
           lines={linesFor('Udsæd')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Planteværn"
           total={cropProtection}
           lines={linesFor('Planteværn')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Markarbejde"
           total={fieldWork}
           lines={linesFor('Markarbejde')}
+          cropCode={cropCode}
         />
         <CategoryBreakdownRow
           label="Tørring/lagring"
           total={drying}
           lines={linesFor('Tørring/lagring')}
+          cropCode={cropCode}
         />
       </div>
       <DetailTable
@@ -1097,12 +1179,26 @@ export const RotationYearsDetail = ({
   hideNNormLevel = false,
   startCalendarYear = ROTATION_START_CALENDAR_YEAR,
 }: RotationYearsDetailProps) => {
-  const [internalSelectedYear, setInternalSelectedYear] = useState(0)
-  const [showFullDetail, setShowFullDetail] = useState(false)
+  const fieldEconomics = useContext(FieldEconomicsContext)
+  const openAtYearIndex = fieldEconomics?.openAtYearIndex
+  const onOpenedAtYear = fieldEconomics?.onOpenedAtYear
+  const [internalSelectedYear, setInternalSelectedYear] = useState(
+    openAtYearIndex ?? 0,
+  )
+  const [showFullDetail, setShowFullDetail] = useState(
+    openAtYearIndex !== undefined,
+  )
   const [showFormulas, setShowFormulas] = useState(false)
 
   const selectedYear = selectedYearIndex ?? internalSelectedYear
   const tabRowRef = useRef<HTMLDivElement>(null)
+  const economicsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (openAtYearIndex === undefined) return
+    economicsRef.current?.scrollIntoView({ block: 'start' })
+    onOpenedAtYear?.()
+  }, [openAtYearIndex, onOpenedAtYear])
 
   useEffect(() => {
     const row = tabRowRef.current
@@ -1190,7 +1286,25 @@ export const RotationYearsDetail = ({
             areaHa={areaHa}
             retention={retention}
           />
-          <EconomicDetailSection detail={year.dbDetail} areaHa={areaHa} />
+          <div ref={economicsRef}>
+            <FieldEconomicsContext.Provider
+              value={
+                fieldEconomics && {
+                  ...fieldEconomics,
+                  returnTo: {
+                    ...fieldEconomics.returnTo,
+                    calculationYearIndex: yearIndex,
+                  },
+                }
+              }
+            >
+              <EconomicDetailSection
+                detail={year.dbDetail}
+                areaHa={areaHa}
+                cropCode={year.year.cropCode}
+              />
+            </FieldEconomicsContext.Provider>
+          </div>
 
           <div className="border-t pt-3">
             <button
