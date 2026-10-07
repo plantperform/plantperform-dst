@@ -120,6 +120,8 @@ field" column is the name on the wire.
 | mængde | `quantity`, `quantityUnit` | | Per hectare, e.g. 3 sprøjtninger |
 | salgspris | `saleLine` | | The first revenue line of a crop |
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
+| økonomiprofil | `EconomicsProfile`, `economicsProfileId` | | A farm's named set of changes on top of Standard, kept in the browser until the backend can store it |
+| Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
 | tilpasset | customised, `EconomicsOverrides` | | The farm's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
 | ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
