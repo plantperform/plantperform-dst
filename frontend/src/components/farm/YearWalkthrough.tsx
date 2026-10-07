@@ -47,7 +47,7 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-import { readableTextColor } from '@/lib/crop-groups'
+import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
@@ -399,8 +399,9 @@ const CollapsedCropBar = ({ shares }: { shares: CropShare[] }) => {
               className="@container flex h-full min-w-0 basis-0 items-center justify-center motion-safe:transition-[flex-grow] motion-safe:duration-300"
               style={{
                 flexGrow: entry.share,
-                backgroundColor: entry.group.color,
-                color: readableTextColor(entry.group.color),
+                backgroundColor: entry.color,
+                color: readableTextColor(entry.color),
+                boxShadow: `inset 0 0 0 1px ${cropEdgeColor(entry.color)}`,
               }}
             >
               <span className="hidden min-w-0 items-center gap-1 px-1 text-[11px] leading-none font-medium whitespace-nowrap tabular-nums @min-[1.25rem]:flex">

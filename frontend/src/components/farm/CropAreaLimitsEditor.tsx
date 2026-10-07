@@ -33,6 +33,7 @@ import {
   type CropAreaViolation,
 } from '@/lib/crop-area-limits'
 import {
+  cropEdgeColor,
   cropGroupColor,
   cropGroupFor,
   readableTextColor,
@@ -276,6 +277,7 @@ export const CropAreaLimitsEditor = ({
                     style={{
                       backgroundColor: group.color,
                       color: readableTextColor(group.color),
+                      boxShadow: `inset 0 0 0 1px ${cropEdgeColor(group.color)}`,
                     }}
                   >
                     <CropGroupIcon group={group} className="size-6" />
