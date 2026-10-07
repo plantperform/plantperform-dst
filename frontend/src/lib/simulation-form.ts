@@ -9,6 +9,7 @@ import type {
   RotationOption,
   Simulation,
 } from '@/api/types'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
 // 'none' and 'custom' are fixed choices; any other value is a preset name.
@@ -72,6 +73,7 @@ export const copiedNNormPercentages = (
 export type SimulationFormValues = {
   name: string
   farmingSystem: FarmingSystem
+  economicsProfileId: string
   // Unique across categories: a variant such as brak ("1") belongs to several
   // categories but is selected once.
   rotationVariants: string[]
@@ -93,6 +95,7 @@ export type SimulationFormValues = {
 export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   name: '',
   farmingSystem: 'Konventionel',
+  economicsProfileId: STANDARD_PROFILE_ID,
   rotationVariants: [],
   nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
@@ -183,6 +186,7 @@ export const SIMULATION_FORM_STEPS = [
     schema: z.object({
       name: z.string().trim().min(1, 'Giv simuleringen et navn'),
       farmingSystem: z.enum(['Konventionel', 'Økologisk']),
+      economicsProfileId: z.string(),
     }),
   },
   {

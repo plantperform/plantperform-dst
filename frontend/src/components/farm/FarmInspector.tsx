@@ -34,6 +34,7 @@ import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { OptimizeDialog } from '@/components/farm/OptimizeDialog'
+import { SimulationHeading } from '@/components/farm/SimulationHeading'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import { RULES_PANEL_WIDTH } from '@/components/farm/split-layout'
 import type {
@@ -413,12 +414,15 @@ export const FarmInspector = ({
           )}
         >
           {isSimulationView && selectedSimulation ? (
-            <OptimizationBanner
-              farmId={farm.id}
-              simulationId={selectedSimulation.id}
-              run={optimizationRun}
-              fields={fieldsLoading || fieldsError ? undefined : fields}
-            />
+            <>
+              <SimulationHeading simulation={selectedSimulation} />
+              <OptimizationBanner
+                farmId={farm.id}
+                simulationId={selectedSimulation.id}
+                run={optimizationRun}
+                fields={fieldsLoading || fieldsError ? undefined : fields}
+              />
+            </>
           ) : null}
           {showYearWalkthrough ? (
             <>

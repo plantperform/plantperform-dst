@@ -6,6 +6,8 @@ import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { EconomicsChip } from '@/components/farm/EconomicsChip'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
@@ -14,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   formatCompactDkk,
@@ -141,6 +144,7 @@ const SimulationFigures = ({
   const historyDb2PerHa = totalsPerHa(history.totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
+  const profile = useEconomicsProfiles().profileForSimulation(simulationId)
 
   return (
     <>
@@ -153,7 +157,11 @@ const SimulationFigures = ({
               <DeltaNote delta={describeDb2Delta(db2PerHa, historyDb2PerHa)} />
             ) : undefined
           }
-        />
+        >
+          {profile.id === STANDARD_PROFILE_ID ? null : (
+            <EconomicsChip profile={profile} returnTo={{ kind: 'overview' }} />
+          )}
+        </KeyFigure>
         <KeyFigure
           label="Udledning pr. år"
           figure={perHaFigure(

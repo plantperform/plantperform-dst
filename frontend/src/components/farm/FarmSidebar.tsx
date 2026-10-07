@@ -27,6 +27,7 @@ import {
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { CustomisedDot } from '@/components/farm/economics-ui'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -68,6 +69,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserMenuContent } from '@/components/UserMenu'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   describeSeparateQuotas,
@@ -138,6 +140,8 @@ export const GROUP_CLASS = 'px-3 py-1 group-data-[collapsible=icon]:px-2'
 
 export const GROUP_LABEL_CLASS =
   'h-7 text-[11px] font-semibold tracking-[0.06em] uppercase'
+const RAIL_ICON_CLASS = 'hidden group-data-[collapsible=icon]:block'
+
 const VIEW_BUTTON_CLASS =
   'h-auto min-h-12 rounded-md px-3 py-2 data-[active=true]:[&>svg]:text-primary'
 
@@ -296,7 +300,7 @@ export const FarmSidebar = ({
                             tooltip={tooltip}
                           >
                             <NavLink to={to} end>
-                              <Icon />
+                              <Icon className={RAIL_ICON_CLASS} />
                               <span>{label}</span>
                             </NavLink>
                           </SidebarMenuButton>
@@ -527,21 +531,30 @@ const describeSimulationChanges = (
 type SimulationDetailLineProps = {
   changedCount: number
   lockedCount: number
+  ownProfileName: string | null
 }
 
 const SimulationDetailLine = ({
   changedCount,
   lockedCount,
+  ownProfileName,
 }: SimulationDetailLineProps) => {
-  if (changedCount === 0 && lockedCount === 0) return null
+  const changes =
+    changedCount === 0 && lockedCount === 0
+      ? null
+      : describeFieldChanges({
+          changed: changedCount,
+          locked: lockedCount,
+          uncalculated: 0,
+        })
+  if (changes === null && ownProfileName === null) return null
 
   return (
-    <span className="truncate pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums">
-      {describeFieldChanges({
-        changed: changedCount,
-        locked: lockedCount,
-        uncalculated: 0,
-      })}
+    <span className="flex min-w-0 items-center gap-1.5 pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums">
+      <span className="truncate">
+        {[changes, ownProfileName].filter(Boolean).join(' · ')}
+      </span>
+      {ownProfileName === null ? null : <CustomisedDot />}
     </span>
   )
 }
@@ -580,6 +593,9 @@ const SimulationMenuItem = ({
   onDelete,
 }: SimulationMenuItemProps) => {
   const iconRail = useSidebar().state === 'collapsed'
+  const profile = useEconomicsProfiles().profileForSimulation(simulation.id)
+  const ownProfileName =
+    profile.id === STANDARD_PROFILE_ID ? null : profile.name
   const createdLabel = formatCreatedAt(simulation.createdAt)
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
@@ -632,7 +648,11 @@ const SimulationMenuItem = ({
               )}
               onClick={onSelect}
             >
-              {loading || running ? <Spinner /> : <FlaskConical />}
+              {loading || running ? (
+                <Spinner />
+              ) : (
+                <FlaskConical className={RAIL_ICON_CLASS} />
+              )}
               {failedRun ? (
                 <span
                   className="absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
@@ -654,6 +674,7 @@ const SimulationMenuItem = ({
                   <SimulationDetailLine
                     changedCount={changedCount}
                     lockedCount={lockedCount}
+                    ownProfileName={ownProfileName}
                   />
                 ) : null}
               </ViewMenuLabel>
@@ -681,6 +702,12 @@ const SimulationMenuItem = ({
                 <span>{createdLabel}</span>
                 {figures ? <span>{figures.title}</span> : null}
                 {changesTitle ? <span>{changesTitle}</span> : null}
+                {ownProfileName ? (
+                  <span>
+                    Regner med {ownProfileName}, som ikke indgår i beregningen
+                    endnu
+                  </span>
+                ) : null}
               </div>
             )}
           </TooltipContent>
