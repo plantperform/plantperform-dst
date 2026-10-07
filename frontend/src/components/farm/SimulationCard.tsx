@@ -1,5 +1,5 @@
 import { Copy, Trash2 } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
@@ -7,10 +7,10 @@ import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
+import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
@@ -25,7 +25,6 @@ import {
   totalsPerHa,
   type FarmQuota,
   type FieldTotals,
-  type PerHaFigure,
 } from '@/lib/field-domain'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
@@ -37,82 +36,12 @@ import {
   summarizeCatchmentYearStatuses,
   type KeyFigureDelta,
 } from '@/lib/simulation-overview'
-import { cn } from '@/lib/utils'
 
 const DELTA_TONE_CLASS: Record<KeyFigureDelta['tone'], string> = {
   better: 'text-success-strong',
   worse: 'text-destructive',
   same: 'text-muted-foreground',
 }
-
-type CardShellProps = {
-  title: string
-  subtitle: ReactNode
-  active: boolean
-  meta?: string
-  actions: ReactNode
-  children: ReactNode
-}
-
-const CardShell = ({
-  title,
-  subtitle,
-  active,
-  meta,
-  actions,
-  children,
-}: CardShellProps) => (
-  <Card
-    className={cn(
-      'flex flex-col gap-4 p-5',
-      active && 'border-primary ring-1 ring-primary',
-    )}
-  >
-    <div className="min-w-0">
-      <h2 className="flex items-center gap-2.5">
-        <span className="truncate font-display text-[19px] leading-6">
-          {title}
-        </span>
-        {active ? (
-          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            Senest åbnet
-          </span>
-        ) : null}
-      </h2>
-      <div className="mt-0.5 truncate text-sm text-muted-foreground">
-        {subtitle}
-      </div>
-    </div>
-    <div className="flex flex-1 flex-col gap-4">{children}</div>
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t pt-4">
-      {meta ? (
-        <p className="text-xs text-muted-foreground tabular-nums">{meta}</p>
-      ) : null}
-      <div className="ml-auto flex flex-wrap gap-2">{actions}</div>
-    </div>
-  </Card>
-)
-
-type KeyFigureProps = {
-  label: string
-  figure: PerHaFigure
-  note?: ReactNode
-}
-
-const KeyFigure = ({ label, figure, note }: KeyFigureProps) => (
-  <div className="min-w-0">
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-1 font-display text-2xl leading-none tabular-nums">
-      {figure.value}
-    </p>
-    {figure.total ? (
-      <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-        {figure.total}
-      </p>
-    ) : null}
-    {note ? <p className="mt-1.5 text-xs tabular-nums">{note}</p> : null}
-  </div>
-)
 
 type DeltaNoteProps = {
   delta: KeyFigureDelta
@@ -329,7 +258,7 @@ export const SimulationCard = ({
     fields !== undefined && comparisonAvailability(fields).kind === 'ready'
 
   return (
-    <CardShell
+    <OverviewCard
       title={simulation.name}
       subtitle={
         runningRun ? (
@@ -413,6 +342,6 @@ export const SimulationCard = ({
           <Skeleton className="h-5 w-4/5" />
         </div>
       )}
-    </CardShell>
+    </OverviewCard>
   )
 }
