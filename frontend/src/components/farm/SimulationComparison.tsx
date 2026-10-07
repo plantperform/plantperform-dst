@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
@@ -13,11 +13,15 @@ import type { FieldRecord, FieldYearValues, Simulation } from '@/api/types'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { ComparisonCharts } from '@/components/farm/ComparisonCharts'
+import { ComparisonEconomics } from '@/components/farm/ComparisonEconomics'
 import { ComparisonLoading } from '@/components/farm/ComparisonLoading'
 import { ComparisonRanking } from '@/components/farm/ComparisonRanking'
 import type { ComparedColumn } from '@/components/farm/comparison-column'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { LoadError } from '@/components/ui/load-error'
+import { STANDARD_PROFILE, STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   computeFieldTotals,
@@ -34,6 +38,7 @@ import {
   comparisonAvailability,
   defaultComparisonIds,
   describeComparisonVerdict,
+  describeEconomicsVerdict,
   describeFeedUnitRequirement,
   hasMissingYearValues,
   listComparedCatchments,
@@ -147,6 +152,8 @@ export const SimulationComparison = ({
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null)
+  const economics = useEconomicsProfiles()
+  const economicsRef = useRef<HTMLElement>(null)
   const simulationsFields = useSimulationResults(farmId, simulations)
   const fieldsBySimulationId = useMemo(
     () =>
@@ -308,6 +315,23 @@ export const SimulationComparison = ({
     history,
     ...sortComparison(candidates, sort).map(({ column }) => column),
   ]
+  const profiles = ordered.map((column) =>
+    column.history
+      ? STANDARD_PROFILE
+      : economics.profileForSimulation(column.key),
+  )
+  const economicsVerdict = describeEconomicsVerdict(
+    ordered
+      .map((column, index) => ({
+        title: column.title,
+        ownProfileName:
+          profiles[index].id === STANDARD_PROFILE_ID
+            ? null
+            : profiles[index].name,
+        fields: column.fields,
+      }))
+      .slice(1),
+  )
   const requirements = placeFeedUnitRequirements(
     ordered.map((column) => column.requirement),
   )
@@ -366,10 +390,24 @@ export const SimulationComparison = ({
                 simulering, så kan den sammenlignes her.
               </p>
             ) : null}
-            {verdict ? (
-              <p className="max-w-[860px] text-[15px] leading-[1.45] text-pretty">
-                {verdict}
-              </p>
+            {verdict || economicsVerdict ? (
+              <div className="flex max-w-[860px] flex-col gap-1.5 text-[15px] leading-[1.45] text-pretty">
+                {verdict ? <p>{verdict}</p> : null}
+                {economicsVerdict ? (
+                  <p>
+                    {economicsVerdict}{' '}
+                    <button
+                      type="button"
+                      className={TEXT_LINK_CLASS}
+                      onClick={() =>
+                        economicsRef.current?.scrollIntoView({ block: 'start' })
+                      }
+                    >
+                      Se økonomien
+                    </button>
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             <ComparisonRanking
               columns={ordered}
@@ -401,6 +439,19 @@ export const SimulationComparison = ({
                 bestBalanceKey={bestBalance?.key ?? null}
               />
             </section>
+            {economicsVerdict ? (
+              <section ref={economicsRef} className="scroll-mt-4 space-y-2.5">
+                <h2 className="pt-1 font-display text-[22px] leading-tight">
+                  Økonomi i simuleringerne
+                </h2>
+                <ComparisonEconomics
+                  columns={ordered}
+                  profiles={profiles}
+                  highlightedKey={highlightedKey}
+                  onHighlight={setHighlightedKey}
+                />
+              </section>
+            ) : null}
           </>
         )}
       </div>
