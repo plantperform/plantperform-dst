@@ -352,7 +352,7 @@ export const CropAreaLimitsEditor = ({
                       {warning ? (
                         <div
                           id={warningId}
-                          className="space-y-0.5 text-xs font-medium text-amber-700"
+                          className="space-y-0.5 text-xs font-medium text-warning-strong"
                         >
                           {warnings.map((text) => (
                             <p key={text}>{text}</p>

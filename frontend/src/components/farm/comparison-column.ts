@@ -38,7 +38,7 @@ export const HISTORY_HEAD_CLASS = 'bg-[#F1EDE3]'
 export const TABLE_HEAD_CLASS = 'bg-muted/30'
 export const DETAIL_CLASS =
   'bg-[color:color-mix(in_oklab,var(--color-muted)_30%,var(--color-card))]'
-export const BEST_TEXT_CLASS = 'text-green-700'
+export const BEST_TEXT_CLASS = 'text-success-strong'
 export const HIGHLIGHT_CELL_CLASS = 'bg-[#F3F3EF]'
 export const HIGHLIGHT_HEAD_CLASS = 'bg-[#EFEFEA]'
 

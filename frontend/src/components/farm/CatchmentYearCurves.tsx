@@ -41,8 +41,8 @@ const marked = (level: CatchmentYearQuota['level']): level is 'over' | 'near' =>
   level === 'over' || level === 'near'
 
 const STATUS_DOT_CLASSES: Record<'over' | 'near', string> = {
-  over: 'border-red-600 bg-red-600',
-  near: 'border-amber-600 bg-amber-500',
+  over: 'border-destructive bg-destructive',
+  near: 'border-warning bg-warning',
 }
 
 const STROKE_CLASSES: Record<CurveTone, string> = {
@@ -91,7 +91,7 @@ const describeCount = (status: CatchmentYearStatus | null) => {
     text: describeCatchmentYearsOver(status),
     className:
       status.level === 'ok' || status.level === 'near'
-        ? 'text-green-700'
+        ? 'text-success-strong'
         : 'text-muted-foreground',
   }
 }
@@ -119,7 +119,7 @@ const YearGuide = ({ index }: { index: number | null }) =>
 
 const QuotaLine = ({ ceilingPct }: { ceilingPct: number }) => (
   <div
-    className="absolute inset-x-0 border-t border-dashed border-red-600/55"
+    className="absolute inset-x-0 border-t border-dashed border-destructive/55"
     style={{ top: `${curveTopPct(100, ceilingPct)}%` }}
   />
 )

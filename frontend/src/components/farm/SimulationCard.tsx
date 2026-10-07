@@ -45,8 +45,8 @@ import { cn } from '@/lib/utils'
 const HISTORY_PERIOD = `${REAL_HISTORY_START_CALENDAR_YEAR}-${REAL_HISTORY_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
 
 const DELTA_TONE_CLASS: Record<KeyFigureDelta['tone'], string> = {
-  better: 'text-green-700',
-  worse: 'text-red-700',
+  better: 'text-success-strong',
+  worse: 'text-destructive',
   same: 'text-muted-foreground',
 }
 

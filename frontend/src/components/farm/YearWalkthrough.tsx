@@ -356,7 +356,7 @@ const CollapsedQuotaMeter = ({
           <span
             className={cn(
               'block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300',
-              ratio > 1 ? 'bg-red-600' : colorClass,
+              ratio > 1 ? 'bg-destructive' : colorClass,
             )}
             style={{ width: `${Math.min(1, ratio) * 100}%` }}
           />
