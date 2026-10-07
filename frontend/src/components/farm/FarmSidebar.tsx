@@ -344,20 +344,20 @@ export const FarmSidebar = ({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarGroup className={cn(GROUP_CLASS, 'mt-auto')}>
-          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-            Vis som
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <ViewModeSwitch
-              view={view}
-              splitAvailable={splitAvailable}
-              onViewChange={onViewChange}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
+
+      <SidebarGroup className={GROUP_CLASS}>
+        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+          Vis som
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <ViewModeSwitch
+            view={view}
+            splitAvailable={splitAvailable}
+            onViewChange={onViewChange}
+          />
+        </SidebarGroupContent>
+      </SidebarGroup>
 
       <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
         <CollapseMenuButton />
