@@ -53,6 +53,7 @@ export const HistoricalDetailPanel = ({
         years={years}
         areaHa={areaHa}
         retention={retention}
+        hideNNormLevel
         startCalendarYear={REAL_HISTORY_START_CALENDAR_YEAR}
       />
     </div>
