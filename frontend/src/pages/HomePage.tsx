@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { mutate } from 'swr'
 
 import {
-  CircleAlert,
   Plus,
   Search,
   Tractor,
@@ -11,8 +9,7 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '@/auth/context'
-import { farmsKey, useFarms, useFarmsFields } from '@/api/hooks'
-import { createFarm } from '@/api/mutations'
+import { useFarms, useFarmsFields } from '@/api/hooks'
 import { AppTopBar } from '@/components/AppTopBar'
 import { SproutMark } from '@/components/BrandMark'
 import {
@@ -25,13 +22,6 @@ import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import {
   latestOpenedFarm,
@@ -47,10 +37,8 @@ import {
   getStoredRole,
   hasVisitedHomeThisSession,
   markHomeVisitedThisSession,
-  setPendingFarm,
   setStoredRole,
   type OnboardingRole,
-  type PendingFarm,
 } from '@/lib/onboarding'
 
 export const HomePage = () => {
@@ -69,16 +57,11 @@ export const HomePage = () => {
   const showOverview = Boolean(
     (location.state as { showOverview?: boolean } | null)?.showOverview,
   )
-  const [pendingState, setPendingState] = useState<
-    'idle' | 'creating' | 'failed'
-  >('idle')
-  const [pendingClaim, setPendingClaim] = useState<PendingFarm | null>(null)
   const [pendingBannerHidden, setPendingBannerHidden] = useState(false)
   const [selectedRole, setSelectedRole] = useState<OnboardingRole | null>(() =>
     email ? getStoredRole(email) : null,
   )
   const [searchText, setSearchText] = useState('')
-  const hasStartedCreate = useRef(false)
 
   const farmList = useMemo(() => farms ?? [], [farms])
   const lastOpenedMap = useMemo(
@@ -121,7 +104,7 @@ export const HomePage = () => {
   )
   const isReady = Boolean(email) && !isLoading && !error && farms !== undefined
   const pending = email ? getPendingFarm(email) : null
-  const shouldCreatePendingFarm =
+  const shouldOpenCreateFarm =
     isReady && farmList.length === 0 && pending !== null
   const singleFarmId = isReady && farmList.length === 1 ? farmList[0].id : null
   const autoOpenSingleFarm = email ? getAutoOpenSingleFarm(email) : true
@@ -135,27 +118,9 @@ export const HomePage = () => {
   useEffect(() => {
     if (!isReady) return
     markHomeVisitedThisSession(email)
-    if (shouldCreatePendingFarm && pending) {
-      if (hasStartedCreate.current) return
-      hasStartedCreate.current = true
+    if (shouldOpenCreateFarm && pending) {
       clearPendingFarm(email)
-      setPendingClaim(pending)
-      setPendingState('creating')
-      const run = async () => {
-        try {
-          const farm = await createFarm({
-            name: pending.name,
-            ownerName: pending.ownerName,
-            cvr: pending.cvr,
-          })
-          await mutate(farmsKey)
-          navigate(`/farms/${farm.id}`, { replace: true })
-        } catch {
-          setPendingFarm(email, pending)
-          setPendingState('failed')
-        }
-      }
-      void run()
+      navigate('/farms/new', { replace: true, state: { prefill: pending } })
       return
     }
     if (shouldOpenSingleFarm && singleFarmId) {
@@ -163,7 +128,7 @@ export const HomePage = () => {
     }
   }, [
     isReady,
-    shouldCreatePendingFarm,
+    shouldOpenCreateFarm,
     shouldOpenSingleFarm,
     singleFarmId,
     pending,
@@ -171,47 +136,12 @@ export const HomePage = () => {
     navigate,
   ])
 
-  if (pendingState === 'failed') {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10 sm:px-10">
-        <div className="w-full max-w-md">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CircleAlert
-                  className="h-5 w-5 text-destructive"
-                  aria-hidden="true"
-                />
-                Bedriften kunne ikke oprettes
-              </CardTitle>
-              <CardDescription>
-                Vi kunne ikke oprette bedriften fra din registrering. Du kan
-                oprette den manuelt i stedet.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link
-                  to="/farms/new"
-                  state={{ prefill: pendingClaim }}
-                  onClick={() => clearPendingFarm(email)}
-                >
-                  Opret bedrift
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    )
-  }
-
-  if (pendingState === 'creating' || shouldCreatePendingFarm) {
+  if (shouldOpenCreateFarm) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-background p-10">
         <p className="flex items-center gap-2.5 text-lg text-muted-foreground">
           <Spinner className="size-5" />
-          Opretter din bedrift...
+          Åbner Opret bedrift...
         </p>
       </main>
     )
