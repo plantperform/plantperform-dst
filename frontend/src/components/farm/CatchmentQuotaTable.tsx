@@ -1,29 +1,24 @@
 import { ChevronRight } from 'lucide-react'
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState } from 'react'
 
 import { CatchmentYearCurves } from '@/components/farm/CatchmentYearCurves'
 import {
+  ComparisonColumnsTable,
+  ComparisonFigureRow,
+} from '@/components/farm/ComparisonColumnsTable'
+import {
   BEST_TEXT_CLASS,
-  columnCellClass,
   columnFigure,
   completeFigure,
-  HIGHLIGHT_HEAD_CLASS,
+  figureCellClass,
   highlightHandlers,
-  HISTORY_HEAD_CLASS,
-  TABLE_HEAD_CLASS,
+  LABEL_CELL_CLASS,
   type ComparedColumn,
   type OnHighlight,
 } from '@/components/farm/comparison-column'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { LoadError } from '@/components/ui/load-error'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import {
   formatSigned,
   formatWholeNumber,
@@ -41,15 +36,6 @@ import {
 } from '@/lib/simulation-comparison'
 import type { CatchmentYearStatus } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
-
-const LABEL_CELL_CLASS =
-  'h-auto px-4.5 align-top font-normal whitespace-normal text-foreground'
-
-const cellClass = (column: ComparedColumn, highlightedKey: string | null) =>
-  cn(
-    'border-l border-border/60 px-4 align-top whitespace-normal transition-colors duration-120',
-    columnCellClass(column, highlightedKey),
-  )
 
 const statusClass = (status: CatchmentYearStatus) =>
   status.level === 'over'
@@ -138,7 +124,7 @@ const CatchmentRow = ({
           return (
             <TableCell
               key={column.key}
-              className={cn(cellClass(column, highlightedKey), 'py-3')}
+              className={cn(figureCellClass(column, highlightedKey), 'py-3')}
               {...highlightHandlers(column.key, onHighlight)}
             >
               {comparison === undefined ? (
@@ -200,44 +186,6 @@ const CatchmentRow = ({
   )
 }
 
-type FigureRowProps = {
-  label: ReactNode
-  note?: string | null
-  columns: ComparedColumn[]
-  highlightedKey: string | null
-  onHighlight: OnHighlight
-  children: (column: ComparedColumn, index: number) => ReactNode
-}
-
-const FigureRow = ({
-  label,
-  note,
-  columns,
-  highlightedKey,
-  onHighlight,
-  children,
-}: FigureRowProps) => (
-  <TableRow className="border-border/60 hover:bg-transparent">
-    <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-3 text-[13px]')}>
-      {label}
-      {note ? (
-        <span className="mt-0.5 block text-xs text-muted-foreground">
-          {note}
-        </span>
-      ) : null}
-    </TableHead>
-    {columns.map((column, index) => (
-      <TableCell
-        key={column.key}
-        className={cn(cellClass(column, highlightedKey), 'py-2.5')}
-        {...highlightHandlers(column.key, onHighlight)}
-      >
-        {children(column, index)}
-      </TableCell>
-    ))}
-  </TableRow>
-)
-
 const toggled = (ids: ReadonlySet<number>, id: number): ReadonlySet<number> => {
   const next = new Set(ids)
   if (!next.delete(id)) next.add(id)
@@ -282,163 +230,123 @@ export const CatchmentQuotaTable = ({
   )
   const historyFeedUnits = feedUnits[0]
   return (
-    <Table
-      containerClassName="rounded-lg border bg-card"
-      className="table-fixed"
+    <ComparisonColumnsTable
+      label={
+        <span className="inline-flex items-center gap-1">
+          Opland
+          <GlossaryInfo term="catchment" />
+        </span>
+      }
+      columns={columns}
+      highlightedKey={highlightedKey}
+      onHighlight={onHighlight}
     >
-      <colgroup>
-        <col className="w-56" />
-        {columns.map((column) => (
-          <col key={column.key} />
-        ))}
-      </colgroup>
-      <TableHeader>
+      {catchments.length === 0 ? (
         <TableRow className="hover:bg-transparent">
-          <TableHead
-            className={cn(
-              'h-auto px-4.5 py-2.5 align-bottom text-xs font-normal text-muted-foreground',
-              TABLE_HEAD_CLASS,
-            )}
+          <TableCell
+            colSpan={columns.length + 1}
+            className="px-4.5 py-4 text-sm text-muted-foreground"
           >
-            <span className="inline-flex items-center gap-1">
-              Opland
-              <GlossaryInfo term="catchment" />
-            </span>
-          </TableHead>
-          {columns.map((column) => (
-            <TableHead
-              key={column.key}
-              scope="col"
-              className={cn(
-                'h-auto border-l border-border/60 px-4 py-2.5 align-top font-normal whitespace-normal transition-colors duration-120',
-                column.history
-                  ? HISTORY_HEAD_CLASS
-                  : column.key === highlightedKey
-                    ? HIGHLIGHT_HEAD_CLASS
-                    : TABLE_HEAD_CLASS,
-              )}
-              {...highlightHandlers(column.key, onHighlight)}
-            >
-              <span className="block font-display text-[17px] leading-tight">
-                {column.title}
-              </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                {column.history ? 'Udgangspunkt' : column.subtitle}
-              </span>
-            </TableHead>
-          ))}
+            Ingen af markerne ligger i et opland med kvote.
+          </TableCell>
         </TableRow>
-      </TableHeader>
-      <TableBody>
-        {catchments.length === 0 ? (
-          <TableRow className="hover:bg-transparent">
-            <TableCell
-              colSpan={columns.length + 1}
-              className="px-4.5 py-4 text-sm text-muted-foreground"
-            >
-              Ingen af markerne ligger i et opland med kvote.
-            </TableCell>
-          </TableRow>
-        ) : null}
-        {catchments.map((catchment) => (
-          <CatchmentRow
-            key={catchment.catchmentId}
-            catchment={catchment}
-            columns={columns}
-            quotaKgN={quotaByCatchment.get(catchment.catchmentId)}
-            open={openIds.has(catchment.catchmentId)}
-            onToggle={() =>
-              setOpenIds((ids) => toggled(ids, catchment.catchmentId))
-            }
-            highlightedKey={highlightedKey}
-            onHighlight={onHighlight}
-            hoveredYear={hoveredYear}
-            onHoverYear={setHoveredYear}
-            bestKey={bestBalanceKey}
-            overlay={overlayIds.has(catchment.catchmentId)}
-            onToggleOverlay={() =>
-              setOverlayIds((ids) => toggled(ids, catchment.catchmentId))
-            }
-          />
-        ))}
-        {showFeedUnits ? (
-          <FigureRow
-            label={
-              <span className="inline-flex items-center gap-1">
-                Foderenheder pr. år
-                <GlossaryInfo term="feedUnits" />
-              </span>
-            }
-            note={feedUnitRequirements.label}
-            columns={columns}
-            highlightedKey={highlightedKey}
-            onHighlight={onHighlight}
-          >
-            {(column, index) => {
-              const value = feedUnits[index]
-              const best = index === bestFeedUnits
-              const note = feedUnitRequirements.cells[index]
-              return value === null ? (
-                <span className="text-sm text-muted-foreground">Ingen tal</span>
-              ) : (
-                <>
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span
-                      className={cn(
-                        'font-display text-xl leading-tight tabular-nums',
-                        best && BEST_TEXT_CLASS,
-                      )}
-                    >
-                      {formatFeedUnits(value)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {column.history || historyFeedUnits === null
-                        ? null
-                        : `${formatSigned(Math.round(value - historyFeedUnits), formatWholeNumber)} FE`}
-                      {best ? (
-                        <>
-                          {column.history || historyFeedUnits === null
-                            ? null
-                            : ' · '}
-                          <span
-                            className={cn('font-semibold', BEST_TEXT_CLASS)}
-                          >
-                            højest
-                          </span>
-                        </>
-                      ) : null}
-                    </span>
-                  </span>
-                  {note ? (
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {note}
-                    </span>
-                  ) : null}
-                </>
-              )
-            }}
-          </FigureRow>
-        ) : null}
-        <FigureRow
-          label="Marker ændret"
-          note="i forhold til afgrødehistorikken"
+      ) : null}
+      {catchments.map((catchment) => (
+        <CatchmentRow
+          key={catchment.catchmentId}
+          catchment={catchment}
+          columns={columns}
+          quotaKgN={quotaByCatchment.get(catchment.catchmentId)}
+          open={openIds.has(catchment.catchmentId)}
+          onToggle={() =>
+            setOpenIds((ids) => toggled(ids, catchment.catchmentId))
+          }
+          highlightedKey={highlightedKey}
+          onHighlight={onHighlight}
+          hoveredYear={hoveredYear}
+          onHoverYear={setHoveredYear}
+          bestKey={bestBalanceKey}
+          overlay={overlayIds.has(catchment.catchmentId)}
+          onToggleOverlay={() =>
+            setOverlayIds((ids) => toggled(ids, catchment.catchmentId))
+          }
+        />
+      ))}
+      {showFeedUnits ? (
+        <ComparisonFigureRow
+          label={
+            <span className="inline-flex items-center gap-1">
+              Foderenheder pr. år
+              <GlossaryInfo term="feedUnits" />
+            </span>
+          }
+          note={feedUnitRequirements.label}
           columns={columns}
           highlightedKey={highlightedKey}
           onHighlight={onHighlight}
         >
-          {(column) =>
-            column.changedCount === null ? (
-              <span className="font-display text-xl text-muted-foreground">
-                -
-              </span>
+          {(column, index) => {
+            const value = feedUnits[index]
+            const best = index === bestFeedUnits
+            const note = feedUnitRequirements.cells[index]
+            return value === null ? (
+              <span className="text-sm text-muted-foreground">Ingen tal</span>
             ) : (
-              <span className="font-display text-xl leading-tight tabular-nums">
-                {column.changedCount} af {column.fields.length}
-              </span>
+              <>
+                <span className="flex flex-wrap items-baseline gap-x-2">
+                  <span
+                    className={cn(
+                      'font-display text-xl leading-tight tabular-nums',
+                      best && BEST_TEXT_CLASS,
+                    )}
+                  >
+                    {formatFeedUnits(value)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {column.history || historyFeedUnits === null
+                      ? null
+                      : `${formatSigned(Math.round(value - historyFeedUnits), formatWholeNumber)} FE`}
+                    {best ? (
+                      <>
+                        {column.history || historyFeedUnits === null
+                          ? null
+                          : ' · '}
+                        <span className={cn('font-semibold', BEST_TEXT_CLASS)}>
+                          højest
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                </span>
+                {note ? (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {note}
+                  </span>
+                ) : null}
+              </>
             )
-          }
-        </FigureRow>
-      </TableBody>
-    </Table>
+          }}
+        </ComparisonFigureRow>
+      ) : null}
+      <ComparisonFigureRow
+        label="Marker ændret"
+        note="i forhold til afgrødehistorikken"
+        columns={columns}
+        highlightedKey={highlightedKey}
+        onHighlight={onHighlight}
+      >
+        {(column) =>
+          column.changedCount === null ? (
+            <span className="font-display text-xl text-muted-foreground">
+              -
+            </span>
+          ) : (
+            <span className="font-display text-xl leading-tight tabular-nums">
+              {column.changedCount} af {column.fields.length}
+            </span>
+          )
+        }
+      </ComparisonFigureRow>
+    </ComparisonColumnsTable>
   )
 }

@@ -4,6 +4,7 @@ import type {
   CropShare,
   FieldTotals,
 } from '@/lib/field-domain'
+import { cn } from '@/lib/utils'
 
 export type ComparedColumn = {
   key: string
@@ -51,6 +52,18 @@ export const columnCellClass = (
   if (column.history) return HISTORY_CELL_CLASS
   return column.key === highlightedKey ? HIGHLIGHT_CELL_CLASS : undefined
 }
+
+export const LABEL_CELL_CLASS =
+  'h-auto px-4.5 align-top font-normal whitespace-normal text-foreground'
+
+export const figureCellClass = (
+  column: Pick<ComparedColumn, 'key' | 'history'>,
+  highlightedKey: string | null,
+): string =>
+  cn(
+    'border-l border-border/60 px-4 align-top whitespace-normal transition-colors duration-120',
+    columnCellClass(column, highlightedKey),
+  )
 
 export const highlightHandlers = (key: string, onHighlight: OnHighlight) => ({
   onMouseEnter: () => onHighlight(key),
