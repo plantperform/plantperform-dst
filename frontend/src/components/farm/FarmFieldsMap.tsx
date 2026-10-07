@@ -1,9 +1,6 @@
-import 'maplibre-gl/dist/maplibre-gl.css'
-
 import type { FeatureCollection } from 'geojson'
 import { Layers, Lock, Maximize, X } from 'lucide-react'
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import {
   useCallback,
   useEffect,
@@ -41,6 +38,7 @@ import {
 import { refreshFarmFields } from '@/components/farm/detach-fields'
 import { FieldRowList, type FieldRow } from '@/components/farm/FieldRowList'
 import { FieldTooltip, type HoveredField } from '@/components/farm/FieldTooltip'
+import { loadMaplibre, MAP_STYLE_URL } from '@/components/farm/maplibre'
 import { MapRuleCard } from '@/components/farm/MapRuleCard'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
@@ -95,12 +93,6 @@ import {
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
-
-const loadMaplibre = () =>
-  import('maplibre-gl').then((maplibre) => {
-    maplibre.setWorkerUrl(maplibreWorkerUrl)
-    return maplibre
-  })
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 2 }).format(value)
@@ -1330,7 +1322,7 @@ export const FarmFieldsMap = ({
           ref={mapRef}
           mapLib={mapLib}
           initialViewState={initialViewState}
-          mapStyle="https://tiles.openfreemap.org/styles/liberty"
+          mapStyle={MAP_STYLE_URL}
           transformRequest={(url) => {
             const token = getAccessToken()
             if (!token || !url.includes('/api/v0/')) return { url }
