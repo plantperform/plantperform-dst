@@ -133,6 +133,12 @@ export const formatNumber = (value: number) =>
 export const formatWholeNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
 
+export const formatHectares = (areaHa: number) =>
+  new Intl.NumberFormat('da-DK', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(areaHa)
+
 export const formatShare = (share: number) => {
   const percent = share * 100
   if (percent > 0 && percent < 0.05) return '< 0,1 %'
