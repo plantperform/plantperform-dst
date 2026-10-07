@@ -8,6 +8,12 @@ evaluate_sequence_for_mark (bridge_v2.evaluate_leaching_position and
 calculate_db), with these differences:
   - MNCS/G0 comes from historisk_goedning.lookup_historisk_n_input (afgrøde x
     region x JB-nr x driftsform), not the norm formula in compute_n_inputs.
+    An afgrøde without an N norm (no norm row, or n_norm 0) on the mark's
+    JB-nr gets MNCS/G0 = 0 instead: Bilag 3 averages what was reported, which
+    includes gødning on brak, skov, bælgsæd and similar codes that may not be
+    fertilized. This applies to the evaluated year and its two lookback
+    years, but only here - simuleringer (real_history_lookback and
+    generate_permanent_crop_candidate) keep the Bilag 3 allocation.
   - f1/f2/g1/g2/m1/m2 (the previous two years' contributions) comes from the
     mark's own previous two actual years, not a cyclic wrap of a hypothetical
     rotation.
@@ -50,6 +56,24 @@ def _n_input(code: int | None, jbnr: int | None, goedningsregion: str | None, oe
     return {**lookup_historisk_n_input(code, jbnr, goedningsregion, oeko), "mnca": 0.0}
 
 
+def _history_n_input(
+    code: int | None,
+    jbnr: int | None,
+    goedningsregion: str | None,
+    oeko: bool,
+    irrigated: bool,
+) -> dict:
+    """Return the historical N input, or zero for an afgrøde without an N norm."""
+    norm = (
+        afgroede_normer.lookup_norm(code, jbnr, irrigated, oeko)
+        if code is not None
+        else None
+    )
+    if not norm or not norm["n_norm"]:
+        return {"mncs": 0.0, "mnca": 0.0, "g0": 0.0}
+    return _n_input(code, jbnr, goedningsregion, oeko)
+
+
 def evaluate_real_history_for_field(
     crop_history: dict[str, int | None],
     jbnr: int | None,
@@ -76,9 +100,9 @@ def evaluate_real_history_for_field(
         prev_code = code_for(prev_year)
         prev2_code = code_for(prev2_year)
 
-        n_input = _n_input(this_code, jbnr, goedningsregion, oeko)
-        n1 = _n_input(prev_code, jbnr, goedningsregion, oeko)
-        n2 = _n_input(prev2_code, jbnr, goedningsregion, oeko)
+        n_input = _history_n_input(this_code, jbnr, goedningsregion, oeko, irrigated)
+        n1 = _history_n_input(prev_code, jbnr, goedningsregion, oeko, irrigated)
+        n2 = _history_n_input(prev2_code, jbnr, goedningsregion, oeko, irrigated)
 
         f0 = (
             afgroede_normer.lookup_nfix(this_code, jbnr, irrigated)
