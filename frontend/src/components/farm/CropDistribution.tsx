@@ -5,6 +5,7 @@ import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { cropEdgeColor } from '@/lib/crop-groups'
 import {
   EXCLUDED_FROM_CALCULATION,
+  formatHectares,
   formatNumber,
   formatShare,
   formatWholeNumber,
@@ -44,13 +45,8 @@ const ColumnHeadings = ({ className }: ColumnHeadingsProps) => (
   </li>
 )
 
-const areaFormat = new Intl.NumberFormat('da-DK', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-})
-
 const formatArea = (areaHa: number) =>
-  areaHa > 0 && areaHa < 0.1 ? '< 0,1' : areaFormat.format(areaHa)
+  areaHa > 0 && areaHa < 0.1 ? '< 0,1' : formatHectares(areaHa)
 
 type CropDistributionProps = {
   shares: CropShare[]
