@@ -32,6 +32,7 @@ import {
 } from '@/components/farm/economics-profiles-state'
 import { EconomicsGuidePage } from '@/components/farm/EconomicsGuidePage'
 import { EconomicsNavigationProvider } from '@/components/farm/EconomicsNavigationProvider'
+import { EconomicsOverview } from '@/components/farm/EconomicsOverview'
 import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
@@ -391,7 +392,6 @@ const FarmDetail = () => {
           }
           onDeleteSimulation={setSimulationToDelete}
           onNewSimulation={() => openNewSimulation(null)}
-          onDeleteProfile={setProfileToDelete}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />
@@ -479,6 +479,15 @@ const FarmDetail = () => {
                   farmId={loadedFarm.id}
                   fields={fields}
                   simulations={simulations}
+                />
+              }
+            />
+            <Route
+              path="economics"
+              element={
+                <EconomicsOverview
+                  simulations={simulations}
+                  onDeleteProfile={setProfileToDelete}
                 />
               }
             />

@@ -9,6 +9,8 @@ import {
   deleteProfileMessage,
   describeEconomicsEntry,
   describeProfileOption,
+  describeProfileUsers,
+  describeStandardEntry,
   parseStoredProfiles,
   profileForSimulation,
   profileNameError,
@@ -188,6 +190,28 @@ describe('economics profiles', () => {
     expect(
       describeProfileOption('careful', 1, ['Reduceret kvælstof', 'Kopi']),
     ).toBe('1 ændring · bruges af Reduceret kvælstof, Kopi')
+  })
+
+  it('names the users of a profile in the overview', () => {
+    expect(describeProfileUsers(STANDARD_PROFILE_ID, [])).toBe(
+      'Bruges af afgrødehistorikken',
+    )
+    expect(describeProfileUsers(STANDARD_PROFILE_ID, ['Mere vintersæd'])).toBe(
+      'Bruges af afgrødehistorikken og Mere vintersæd',
+    )
+    expect(describeProfileUsers('careful', [])).toBe(
+      'Bruges ikke af nogen simulering endnu',
+    )
+    expect(
+      describeProfileUsers('careful', ['Reduceret kvælstof', 'Kopi']),
+    ).toBe('Bruges af Reduceret kvælstof og Kopi')
+  })
+
+  it('introduces Standard above the profile cards', () => {
+    expect(describeStandardEntry(6, ['Mere vintersæd'])).toEqual({
+      title: 'Standard (SEGES 2026)',
+      text: 'Priser og mængder fra SEGES Budgetkalkuler 2026 for 6 afgrøder. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. Bruges af afgrødehistorikken og Mere vintersæd.',
+    })
   })
 
   it('says that a change reaches every simulation that shares the profile', () => {

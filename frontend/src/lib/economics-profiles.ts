@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import {
   formatChangeCount,
+  formatCropCount,
   formatNameList,
   NO_OVERRIDES,
   type EconomicsOverrides,
@@ -84,13 +85,16 @@ export const deleteProfileMessage = (simulationCount: number): string => {
     : `${simulationCount} simuleringer bruger profilen og går tilbage til Standard. Vælg eventuelt en anden profil til dem først.`
 }
 
+export const ECONOMICS_INVITATION =
+  'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.'
+
 export const describeEconomicsEntry = (
   ownProfiles: { name: string; simulationNames: string[] }[],
 ): { title: string; text: string } => {
   if (ownProfiles.length === 0) {
     return {
       title: `Simuleringerne regner med ${STANDARD_PROFILE.name}`,
-      text: 'Har bedriften en bedre salgsaftale, højere udbytte eller en anden pris hos maskinstationen? Ret de få tal, der betyder mest for dækningsbidraget, og se virkningen her.',
+      text: ECONOMICS_INVITATION,
     }
   }
   const uses = ownProfiles.map(
@@ -124,6 +128,27 @@ export const describeProfileOption = (
     ? `${changes} · bruges af ${simulationNames.join(', ')}`
     : changes
 }
+
+export const describeProfileUsers = (
+  profileId: string,
+  simulationNames: string[],
+): string => {
+  const users =
+    profileId === STANDARD_PROFILE_ID
+      ? ['afgrødehistorikken', ...simulationNames]
+      : simulationNames
+  return users.length > 0
+    ? `Bruges af ${formatNameList(users)}`
+    : 'Bruges ikke af nogen simulering endnu'
+}
+
+export const describeStandardEntry = (
+  cropCount: number,
+  simulationNames: string[],
+): { title: string; text: string } => ({
+  title: STANDARD_PROFILE.name,
+  text: `Priser og mængder fra SEGES Budgetkalkuler 2026 for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. ${describeProfileUsers(STANDARD_PROFILE_ID, simulationNames)}.`,
+})
 
 export const sharedProfileNote = (simulationCount: number): string | null => {
   if (simulationCount < 2) return null

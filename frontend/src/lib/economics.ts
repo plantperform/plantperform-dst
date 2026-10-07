@@ -174,6 +174,57 @@ export const cropDbChange = (
       cropTotals(assumptions, NO_OVERRIDES, crop).dbDkkHa,
   )
 
+export type CropDbEffect = {
+  cropCode: number
+  cropName: string
+  dbDkkHa: number
+  deltaDkkHa: number
+}
+
+export const profileDbEffect = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+): CropDbEffect[] =>
+  assumptions.crops.map((crop) => ({
+    cropCode: crop.cropCode,
+    cropName: crop.cropName,
+    dbDkkHa: cropTotals(assumptions, overrides, crop).dbDkkHa,
+    deltaDkkHa: cropDbChange(assumptions, overrides, crop),
+  }))
+
+export const leadingDbEffects = (
+  effects: CropDbEffect[],
+  limit: number,
+): CropDbEffect[] =>
+  effects.length <= limit
+    ? effects
+    : [...effects]
+        .sort(
+          (left, right) =>
+            Math.abs(right.deltaDkkHa) - Math.abs(left.deltaDkkHa),
+        )
+        .slice(0, limit)
+
+export type DbDeltaScale = {
+  down: number
+  up: number
+}
+
+export const dbDeltaScale = (effects: CropDbEffect[]): DbDeltaScale => ({
+  down: Math.max(0, ...effects.map((effect) => -effect.deltaDkkHa)),
+  up: Math.max(0, ...effects.map((effect) => effect.deltaDkkHa)),
+})
+
+export const dbDeltaBar = (
+  deltaDkkHa: number,
+  scale: DbDeltaScale,
+): { axis: number; width: number } => {
+  const span = scale.down + scale.up
+  return span === 0
+    ? { axis: 0, width: 0 }
+    : { axis: scale.down / span, width: Math.abs(deltaDkkHa) / span }
+}
+
 export const incomeSplit = (totals: CropTotals): IncomeShare[] => {
   const parts = [
     ...COST_CATEGORIES.map((category) => ({
@@ -663,6 +714,27 @@ export const formatChangeCount = (count: number): string => {
 
 export const profileChangesTitle = (count: number): string =>
   `${formatChangeCount(count)} i forhold til Standard`
+
+const formatCount = (count: number, one: string, several: string): string =>
+  `${count} ${count === 1 ? one : several}`
+
+export const formatCropCount = (count: number): string =>
+  formatCount(count, 'afgrøde', 'afgrøder')
+
+export const describeProfileChanges = (changes: ProfileChange[]): string => {
+  const ofKind = (kind: ProfileChange['kind']) =>
+    changes.filter((change) => change.kind === kind)
+  const yields = ofKind('yield')
+  const prices = ofKind('price').length
+  const quantities = ofKind('quantity').length
+  const parts = [
+    yields.length === 1 ? `Udbytte for ${yields[0].cropNames[0]}` : null,
+    yields.length > 1 ? `Udbytte for ${formatCropCount(yields.length)}` : null,
+    prices > 0 ? formatCount(prices, 'pris', 'priser') : null,
+    quantities > 0 ? formatCount(quantities, 'mængde', 'mængder') : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length > 0 ? formatNameList(parts) : 'Samme tal som Standard'
+}
 
 export const withoutProfileChange = (
   assumptions: EconomicsAssumptions,

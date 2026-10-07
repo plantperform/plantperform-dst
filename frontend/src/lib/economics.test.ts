@@ -7,7 +7,11 @@ import {
   cropTotals,
   cropYieldPct,
   customisedBreakdownLine,
+  dbDeltaBar,
+  dbDeltaScale,
+  describeProfileChanges,
   formatChangeCount,
+  formatCropCount,
   formatDbDkk,
   formatEconomicsNumber,
   formatNameList,
@@ -19,6 +23,7 @@ import {
   isPriceCustomised,
   isQuantityCustomised,
   isYieldCustomised,
+  leadingDbEffects,
   lineGroupId,
   lineQuantity,
   NO_OVERRIDES,
@@ -28,6 +33,7 @@ import {
   priceUsage,
   profileChanges,
   profileChangesTitle,
+  profileDbEffect,
   quantityUnitLabel,
   sameOverrides,
   searchCrops,
@@ -40,9 +46,11 @@ import {
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
+  type CropDbEffect,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
+  type ProfileChange,
 } from '@/lib/economics'
 import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
 
@@ -174,6 +182,52 @@ describe('cropDbChange', () => {
     expect(cropDbChange(ASSUMPTIONS, cheaper, RAPESEED)).toBe(70)
     expect(cropDbChange(ASSUMPTIONS, cheaper, PEAS)).toBe(20)
     expect(cropDbChange(ASSUMPTIONS, NO_OVERRIDES, RAPESEED)).toBe(0)
+  })
+
+  it('gives the dækningsbidrag of every crop in a profile and what it moves', () => {
+    expect(profileDbEffect(ASSUMPTIONS, NO_OVERRIDES)).toEqual([
+      { cropCode: 22, cropName: 'Vinterraps', dbDkkHa: 14370, deltaDkkHa: 0 },
+      { cropCode: 30, cropName: 'Ærter', dbDkkHa: -1145, deltaDkkHa: 0 },
+    ])
+    const moreWork = withQuantityOverride(
+      withPriceOverride(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
+      PEAS,
+      'ploughing',
+      2,
+    )
+    expect(profileDbEffect(ASSUMPTIONS, moreWork)).toEqual([
+      { cropCode: 22, cropName: 'Vinterraps', dbDkkHa: 14440, deltaDkkHa: 70 },
+      { cropCode: 30, cropName: 'Ærter', dbDkkHa: -1950, deltaDkkHa: -805 },
+    ])
+  })
+
+  const effect = (cropCode: number, deltaDkkHa: number): CropDbEffect => ({
+    cropCode,
+    cropName: `Afgrøde ${cropCode}`,
+    dbDkkHa: 1000,
+    deltaDkkHa,
+  })
+
+  it('keeps the crops in order when they fit and leads with the largest moves when they do not', () => {
+    const effects = [effect(1, 0), effect(2, 70), effect(3, -805), effect(4, 0)]
+    expect(leadingDbEffects(effects, 4)).toEqual(effects)
+    expect(leadingDbEffects(effects, 3).map((entry) => entry.cropCode)).toEqual(
+      [3, 2, 1],
+    )
+  })
+
+  it('places each move on a scale from the largest fall to the largest rise', () => {
+    const scale = dbDeltaScale([effect(1, 300), effect(2, -100), effect(3, 0)])
+    expect(scale).toEqual({ down: 100, up: 300 })
+    expect(dbDeltaBar(300, scale)).toEqual({ axis: 0.25, width: 0.75 })
+    expect(dbDeltaBar(-100, scale)).toEqual({ axis: 0.25, width: 0.25 })
+    expect(dbDeltaBar(0, scale)).toEqual({ axis: 0.25, width: 0 })
+  })
+
+  it('draws no bar when no crop moves', () => {
+    const scale = dbDeltaScale([effect(1, 0)])
+    expect(scale).toEqual({ down: 0, up: 0 })
+    expect(dbDeltaBar(0, scale)).toEqual({ axis: 0, width: 0 })
   })
 })
 
@@ -523,6 +577,51 @@ describe('profileChanges', () => {
     expect(formatChangeCount(0)).toBe('Ingen ændringer')
     expect(formatChangeCount(1)).toBe('1 ændring')
     expect(formatChangeCount(3)).toBe('3 ændringer')
+  })
+
+  it('counts crops', () => {
+    expect(formatCropCount(1)).toBe('1 afgrøde')
+    expect(formatCropCount(6)).toBe('6 afgrøder')
+  })
+
+  it('sums up the changes of a profile by kind', () => {
+    const change = (
+      kind: ProfileChange['kind'],
+      cropName: string,
+    ): ProfileChange => ({
+      key: `${kind}:${cropName}`,
+      kind,
+      label: '',
+      cropNames: [cropName],
+      from: '',
+      to: '',
+      group: 'revenue',
+      shared: false,
+      target: { cropCode: 1, lineId: '' },
+    })
+    expect(describeProfileChanges([])).toBe('Samme tal som Standard')
+    expect(describeProfileChanges([change('yield', 'Vårbyg')])).toBe(
+      'Udbytte for Vårbyg',
+    )
+    expect(
+      describeProfileChanges([
+        change('yield', 'Vårbyg'),
+        change('yield', 'Vinterbyg'),
+        change('yield', 'Vinterraps'),
+        change('yield', 'Ærter'),
+        change('price', 'Vinterraps'),
+        change('quantity', 'Vinterbyg'),
+      ]),
+    ).toBe('Udbytte for 4 afgrøder, 1 pris og 1 mængde')
+    expect(
+      describeProfileChanges([
+        change('price', 'Vårbyg'),
+        change('price', 'Ærter'),
+        change('quantity', 'Vårbyg'),
+        change('quantity', 'Ærter'),
+        change('quantity', 'Vinterraps'),
+      ]),
+    ).toBe('2 priser og 3 mængder')
   })
 
   it('restores one change and keeps the others', () => {

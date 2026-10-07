@@ -27,7 +27,6 @@ import {
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { EconomicsProfilesMenu } from '@/components/farm/EconomicsProfilesMenu'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -69,10 +68,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserMenuContent } from '@/components/UserMenu'
-import {
-  STANDARD_PROFILE_ID,
-  type EconomicsProfile,
-} from '@/lib/economics-profiles'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   describeSeparateQuotas,
@@ -168,7 +164,6 @@ type FarmSidebarProps = {
   onCopySimulation: (simulation: Simulation) => void
   onDeleteSimulation: (simulation: Simulation) => void
   onNewSimulation: () => void
-  onDeleteProfile: (profile: EconomicsProfile) => void
   width: number
   onWidthChange: (width: number) => void
 }
@@ -199,7 +194,6 @@ export const FarmSidebar = ({
   onCopySimulation,
   onDeleteSimulation,
   onNewSimulation,
-  onDeleteProfile,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
@@ -352,7 +346,6 @@ export const FarmSidebar = ({
                   ) : null}
                 </SidebarMenu>
               </li>
-              <EconomicsProfilesMenu onDeleteProfile={onDeleteProfile} />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -416,6 +409,7 @@ const CollapseMenuButton = () => {
 
 const SidebarUserMenu = () => {
   const { user } = useAuth()
+  const { overviewPath } = useEconomicsProfiles()
   const iconRail = useSidebar().state === 'collapsed'
   const email = user?.email ?? ''
   const initial = email.charAt(0).toUpperCase()
@@ -454,7 +448,7 @@ const SidebarUserMenu = () => {
             align="start"
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
           >
-            <UserMenuContent />
+            <UserMenuContent economicsPath={overviewPath} />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

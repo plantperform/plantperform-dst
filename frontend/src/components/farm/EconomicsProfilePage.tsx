@@ -7,7 +7,7 @@ import {
   X,
 } from 'lucide-react'
 import { Fragment, useId, useRef, useState } from 'react'
-import { Navigate, useLocation, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import type { Simulation } from '@/api/types'
@@ -17,10 +17,7 @@ import {
   useEconomicsNavigation,
   type ReturnTarget,
 } from '@/components/farm/economics-navigation'
-import {
-  profilePageRequestSchema,
-  useEconomicsProfiles,
-} from '@/components/farm/economics-profiles-state'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
@@ -119,22 +116,14 @@ const ProfileView = ({
   const economics = useEconomicsProfiles()
   const { startGuide } = useEconomicsNavigation()
   const isStandard = profile.id === STANDARD_PROFILE_ID
-  const request = profilePageRequestSchema.safeParse(location.state)
-  const nameRequestKey = request.success && !isStandard ? location.key : null
   const [editingName, setEditingName] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
-  const [shownRequest, setShownRequest] = useState<string | null>(null)
   const [dismissedReturn, setDismissedReturn] = useState<string | null>(null)
   const returnState = returnStateSchema.safeParse(location.state)
   const returnTo =
     returnState.success && dismissedReturn !== location.key
       ? returnState.data.returnTo
       : null
-
-  if (nameRequestKey !== null && nameRequestKey !== shownRequest) {
-    setShownRequest(nameRequestKey)
-    setEditingName(true)
-  }
 
   const users = economics.simulationsUsingProfile(simulations, profile.id)
   const userNames = new Map(
@@ -169,7 +158,14 @@ const ProfileView = ({
           </button>
         </div>
       ) : null}
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 pt-10 pb-16 sm:px-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
+        <Link
+          to={economics.overviewPath}
+          className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Økonomi
+        </Link>
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0 flex-1">
             {editingName ? (

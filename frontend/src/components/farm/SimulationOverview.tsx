@@ -94,12 +94,7 @@ export const SimulationOverview = ({
         >
           {ownProfiles.length > 0 ? (
             <Button variant="outline" size="sm" asChild>
-              <Link
-                to={economics.profilePath(ownProfiles[0].id)}
-                state={{ returnTo: { kind: 'overview' } }}
-              >
-                Se profilerne
-              </Link>
+              <Link to={economics.overviewPath}>Se profilerne</Link>
             </Button>
           ) : null}
           <Button

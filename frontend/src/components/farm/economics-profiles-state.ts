@@ -1,6 +1,4 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { z } from 'zod'
 
 import { NO_OVERRIDES, type EconomicsOverrides } from '@/lib/economics'
 import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
@@ -68,6 +66,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
     return {
       assumptions: EXAMPLE_ECONOMICS,
       profiles: allProfiles(state),
+      overviewPath: `/farms/${stored.farmId}/economics`,
       profilePath: (profileId: string) =>
         `/farms/${stored.farmId}/economics/${profileId}`,
       guidePath: (profileId: string) =>
@@ -133,18 +132,4 @@ export const useEconomicsProfiles = () => {
     )
   }
   return context
-}
-
-export const profilePageRequestSchema = z.object({
-  request: z.literal('rename'),
-})
-
-export const useProfilePageNavigation = () => {
-  const { profilePath } = useEconomicsProfiles()
-  const navigate = useNavigate()
-
-  return {
-    openProfileRename: (profileId: string) =>
-      navigate(profilePath(profileId), { state: { request: 'rename' } }),
-  }
 }
