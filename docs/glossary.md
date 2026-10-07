@@ -112,6 +112,18 @@ field" column is the name on the wire.
 | tørring | `drying` | `toerring` | |
 | omkostninger i alt | `totalCosts` | `omkostninger_total` | |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
+| økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
+| gødning, udsæd, planteværn, markarbejde, tørring/lagring | `fertiliser`, `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | | The cost groups of a crop |
+| handelsgødning, husdyrgødning, udbringning | `mineralN`, `manureN`, `mineralSpreading`, `manureSpreading` (`FERTILISER_PRICE_IDS`) | | The four gødning prices: per kg N and for spreading |
+| gødningsvalg | `FertiliserPlan`, `withFertiliserPlan` | | How much of a crop's kvælstofnorm a simulation covers with husdyrgødning; it sets the quantities of the gødning lines |
+| stykpris | `UnitPrice`, `priceId` | | Price per unit, e.g. kr/gang or kr/kg |
+| mængde | `quantity`, `quantityUnit` | | Per hectare, e.g. 3 sprøjtninger |
+| salgspris | `saleLine` | | The first revenue line of a crop |
+| fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
+| tilpasset | customised, `EconomicsOverrides` | | The farm's own value instead of the standard |
+| udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
+| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
+| sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation
 
