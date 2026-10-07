@@ -6,7 +6,7 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { useEconomicsNavigation } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
-import { HistoryCard, SimulationCard } from '@/components/farm/SimulationCard'
+import { SimulationCard } from '@/components/farm/SimulationCard'
 import type {
   FarmInspectorMode,
   FarmViewSelection,
@@ -108,14 +108,6 @@ export const SimulationOverview = ({
           </Button>
         </EconomicsBanner>
         <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
-          <HistoryCard
-            farmId={farmId}
-            fields={fields}
-            quota={historyQuota}
-            active={selection.kind === 'current'}
-            onOpen={() => onOpen({ kind: 'current' }, 'values')}
-            onCopy={onNewSimulation}
-          />
           {simulations.map((simulation) => (
             <SimulationCard
               key={simulation.id}
