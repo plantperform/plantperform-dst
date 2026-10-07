@@ -240,7 +240,7 @@ const ProfileView = ({
               ) : null}
             </p>
           )}
-          <p className="text-amber-800">{PROFILES_NOT_IN_CALCULATION}</p>
+          <p className="text-warning-strong">{PROFILES_NOT_IN_CALCULATION}</p>
         </div>
 
         {changesOpen && changes.length > 0 ? (

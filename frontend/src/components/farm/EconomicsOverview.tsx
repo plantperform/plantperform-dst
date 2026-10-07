@@ -75,7 +75,7 @@ const DbEffectList = ({ effects, scale }: DbEffectListProps) => (
                   className={cn(
                     'absolute top-2.5 h-2 min-w-0.5',
                     rises
-                      ? 'rounded-r-[2px] bg-primary/75'
+                      ? 'rounded-r-[2px] bg-success/75'
                       : 'rounded-l-[2px] bg-destructive/75',
                   )}
                   style={{
@@ -216,7 +216,7 @@ export const EconomicsOverview = ({
               En økonomiprofil er bedriftens egne priser, mængder og udbytter
               oven på Standard, og hver simulering regner med en af profilerne.
             </p>
-            <p className="mt-1 text-sm text-amber-800">
+            <p className="mt-1 text-sm text-warning-strong">
               {PROFILES_NOT_IN_CALCULATION}
             </p>
           </div>

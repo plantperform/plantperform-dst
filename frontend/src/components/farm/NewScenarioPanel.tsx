@@ -748,7 +748,7 @@ export const NewScenarioPanel = ({
                 <span className="block text-xs text-muted-foreground">
                   Forfrugtsværdien trækkes fra næste afgrødes kvælstofnorm.
                 </span>
-                <span className="block text-xs text-amber-800">
+                <span className="block text-xs text-warning-strong">
                   Valget indgår ikke i beregningen endnu.
                 </span>
               </span>

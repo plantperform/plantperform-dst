@@ -64,7 +64,7 @@ export const ComparisonEconomics = ({
       <TableRow className="hover:bg-transparent">
         <TableCell
           colSpan={profiles.length + 1}
-          className="bg-muted/30 px-4.5 py-2.5 text-xs whitespace-normal text-amber-800"
+          className="bg-muted/30 px-4.5 py-2.5 text-xs whitespace-normal text-warning-strong"
         >
           Profilerne indgår ikke i beregningen endnu, så alle dækningsbidrag er
           regnet med {STANDARD_PROFILE.name}.

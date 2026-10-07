@@ -12,7 +12,7 @@ export const GRID_HEAD_CLASS =
 
 const NOT_IN_CALCULATION = 'Indgår ikke i beregningen endnu'
 
-const DOT_CLASS = 'inline-block size-1.5 shrink-0 rounded-full bg-amber-500'
+const DOT_CLASS = 'inline-block size-1.5 shrink-0 rounded-full bg-warning'
 
 export const CustomisedDot = () => (
   <span className={DOT_CLASS}>
@@ -29,17 +29,20 @@ export const NotInCalculationDot = () => (
 )
 
 export const NotInCalculationNote = () => (
-  <span className="text-amber-800"> · indgår ikke i beregningen endnu</span>
+  <span className="text-warning-strong">
+    {' '}
+    · indgår ikke i beregningen endnu
+  </span>
 )
 
 export const CustomisedChip = () => (
-  <span className="rounded bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800">
+  <span className="rounded bg-changed/40 px-1.5 text-[11px] font-medium text-foreground">
     tilpasset
   </span>
 )
 
 export const ChangedValue = ({ children }: { children: ReactNode }) => (
-  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 font-semibold">
+  <span className="rounded-md bg-changed/40 px-1.5 py-0.5 font-semibold">
     {children}
     <span className="sr-only"> (tilpasset)</span>
   </span>
@@ -47,7 +50,7 @@ export const ChangedValue = ({ children }: { children: ReactNode }) => (
 
 export const DbDelta = ({ change }: { change: number }) =>
   change === 0 ? null : (
-    <span className={change > 0 ? 'text-primary' : 'text-destructive'}>
+    <span className={change > 0 ? 'text-success-strong' : 'text-destructive'}>
       {formatSignedDkk(change)}
     </span>
   )

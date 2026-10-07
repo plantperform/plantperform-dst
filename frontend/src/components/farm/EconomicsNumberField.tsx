@@ -66,7 +66,7 @@ export const EconomicsNumberField = ({
         aria-describedby={error ? errorId : undefined}
         className={cn(
           'h-7 w-[4.5rem] px-2.5 py-0 text-right text-[13px] tabular-nums aria-invalid:border-destructive',
-          value !== standard && 'border-amber-300 bg-amber-100',
+          value !== standard && 'border-changed bg-changed/40',
         )}
         value={draft ?? format(value)}
         onFocus={(event) => event.currentTarget.select()}

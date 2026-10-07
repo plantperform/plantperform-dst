@@ -39,7 +39,7 @@ export const SharedPriceConfirm = ({
     <div className={className}>
       <div
         role="status"
-        className="rounded-md border border-amber-300 bg-amber-50 px-3.5 py-3 text-[13px]"
+        className="rounded-md border border-warning/40 bg-warning/10 px-3.5 py-3 text-[13px]"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
