@@ -104,9 +104,11 @@ class CompactExecutionTests(DatabaseTests):
                         simulation = compact[0].model_copy(
                             update={
                                 "constraints": (
+                                    # The yearly run bounds every year's FEN: 125 FE/ha on
+                                    # two 2 ha fields is 500 FE a year, the average 8.
                                     OptimizationConstraints(
                                         min_fen=1,
-                                        max_fen=100,
+                                        max_fen=1000,
                                         crop_area_limits=[{"afgrode_kode": 2, "max_area_ha": 4}],
                                     )
                                     if constrained

@@ -57,7 +57,7 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     kvotegivende_n_load_terms_by_kystvand_year: dict[int | None, list[list]] = defaultdict(
         lambda: [[] for _ in range(NUM_YEARS)]
     )
-    fen_terms = []
+    fen_terms_by_year: list[list] = [[] for _ in range(NUM_YEARS)]
     for field in input.fields:
         year_terms = n_load_terms_by_kystvand_year[field.kystvand_id]
         kvotegivende_year_terms = (
@@ -73,13 +73,13 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
                 year_terms[y].append(n_load_term)
                 if kvotegivende_year_terms is not None:
                     kvotegivende_year_terms[y].append(n_load_term)
-            fen_terms.append(_scale(option.fen) * variable)
+                fen_terms_by_year[y].append(_scale(option.fen_by_year[y]) * variable)
 
     # Locked marks are not decision variables - there is nothing to choose -
     # but their already-decided per-year contribution still counts toward
-    # the per-year kystvandopland cap, the db2_swing_pct stability check, and
-    # the FEN/DB2 totals, so it is added as a plain constant per year
-    # alongside the CP-SAT terms above.
+    # the per-year kystvandopland cap, the db2_swing_pct stability check, the
+    # per-year FEN bounds and the DB2 total, so it is added as a plain
+    # constant per year alongside the CP-SAT terms above.
     for fixed in input.fixed_fields:
         year_terms = n_load_terms_by_kystvand_year[fixed.kystvand_id]
         kvotegivende_year_terms = (
@@ -93,9 +93,10 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             year_terms[y].append(n_load_term)
             if kvotegivende_year_terms is not None:
                 kvotegivende_year_terms[y].append(n_load_term)
-        fen_terms.append(_scale(fixed.fen))
+            fen_terms_by_year[y].append(_scale(fixed.fen_by_year[y]))
 
     total_db2_by_year = [sum(terms) for terms in db2_terms_by_year]
+    total_fen_by_year = [sum(terms) for terms in fen_terms_by_year]
     total_n_load_by_kystvand_year = {
         kystvand_id: [sum(terms) for terms in year_terms]
         for kystvand_id, year_terms in n_load_terms_by_kystvand_year.items()
@@ -112,7 +113,6 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
         for y in range(NUM_YEARS)
     ]
     total_db2 = sum(total_db2_by_year)
-    total_fen = sum(fen_terms)
 
     constraints = input.constraints
 
@@ -152,11 +152,14 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             model.Add(total_db2_by_year[y] * NUM_YEARS * 100 <= total_db2 * upper)
             model.Add(total_db2_by_year[y] * NUM_YEARS * 100 >= total_db2 * lower)
 
-    if constraints.min_fen is not None:
-        model.Add(total_fen >= _scale(constraints.min_fen))
-
-    if constraints.max_fen is not None:
-        model.Add(total_fen <= _scale(constraints.max_fen))
+    # Unlike the scenarie-average bound in engine.py's solve(), min_fen/max_fen
+    # hold in every calendar year: a herd needs its foderenheder each year, so a
+    # surplus in one year cannot make up for a shortfall in another.
+    for y in range(NUM_YEARS):
+        if constraints.min_fen is not None:
+            model.Add(total_fen_by_year[y] >= _scale(constraints.min_fen))
+        if constraints.max_fen is not None:
+            model.Add(total_fen_by_year[y] <= _scale(constraints.max_fen))
 
     model.Maximize(total_db2)
 
