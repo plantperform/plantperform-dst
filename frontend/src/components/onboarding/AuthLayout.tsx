@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { IcoelLogo, IcoelMark } from '@/components/BrandMark'
+import { BrandIcon, SproutMark } from '@/components/BrandMark'
 import { cn } from '@/lib/utils'
 
 type AuthIconProps = {
@@ -47,13 +47,15 @@ export const AuthLayout = ({
 }: AuthLayoutProps) => (
   <main className="flex min-h-screen flex-col bg-background lg:flex-row">
     <aside className="relative flex flex-col overflow-hidden bg-brand text-brand-foreground lg:w-[40%] lg:max-w-xl">
-      <IcoelMark className="pointer-events-none absolute -bottom-24 -left-20 hidden size-[560px] text-brand-foreground opacity-15 lg:block" />
+      <SproutMark className="pointer-events-none absolute -bottom-24 -left-20 hidden size-[560px] text-brand-foreground opacity-15 lg:block" />
       <div className="relative px-6 py-6 lg:flex-1 lg:px-12 lg:pt-12">
-        <IcoelLogo />
-        <p className="mt-6 text-2xl font-semibold tracking-tight lg:mt-16 lg:text-3xl">
-          PlantPerform
-        </p>
-        <p className="mt-2 text-xs font-medium uppercase tracking-[0.24em] text-brand-foreground/85 lg:text-sm">
+        <div className="flex items-center gap-3">
+          <BrandIcon onDark className="size-12" />
+          <p className="text-2xl font-semibold tracking-tight lg:text-3xl">
+            PlantPerform
+          </p>
+        </div>
+        <p className="mt-4 text-xs font-medium uppercase tracking-[0.24em] text-brand-foreground/85 lg:text-sm">
           Beslutningsstøtte til sædskifte
         </p>
         <p className="mt-6 hidden max-w-sm text-base leading-relaxed text-brand-foreground/85 lg:block">

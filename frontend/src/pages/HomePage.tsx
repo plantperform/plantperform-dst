@@ -14,7 +14,7 @@ import { useAuth } from '@/auth/context'
 import { farmsKey, useFarms, useFarmsFields } from '@/api/hooks'
 import { createFarm } from '@/api/mutations'
 import { AppTopBar } from '@/components/AppTopBar'
-import { IcoelMark } from '@/components/BrandMark'
+import { SproutMark } from '@/components/BrandMark'
 import {
   FARM_LIST_CLASS,
   FarmRow,
@@ -292,7 +292,7 @@ export const HomePage = () => {
 
         {!isLoading && !error && farmList.length === 0 ? (
           <div className="relative isolate overflow-hidden rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
-            <IcoelMark className="pointer-events-none absolute -right-16 -bottom-20 -z-10 size-72 text-brand opacity-[0.07]" />
+            <SproutMark className="pointer-events-none absolute -right-16 -bottom-20 -z-10 size-72 text-brand opacity-[0.07]" />
             <p id="get-started-heading" className="text-lg font-semibold">
               Kom i gang
             </p>

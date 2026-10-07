@@ -25,7 +25,7 @@ import {
   useOptimizationRun,
   type OptimizationRun,
 } from '@/api/optimization-runs'
-import { IcoelMark } from '@/components/BrandMark'
+import { BrandIcon } from '@/components/BrandMark'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -373,7 +373,7 @@ export const FarmSidebar = ({
 // sidebar reads like the ICOEL guide's pages: red top, sand column below.
 export const SidebarBrand = () => (
   <div className="-mx-3 -mt-3 mb-1 flex items-center gap-2 self-stretch bg-brand px-3 py-3 text-brand-foreground group-data-[collapsible=icon]:-mx-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-    <IcoelMark className="size-8 shrink-0" />
+    <BrandIcon onDark className="size-8" />
     <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
       <span className="truncate text-sm font-semibold">PlantPerform</span>
       <span className="truncate text-xs text-brand-foreground/85">

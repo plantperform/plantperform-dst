@@ -1,28 +1,44 @@
-import icoelLogoWhite from '@/assets/icoel-logo-white.svg'
 import { cn } from '@/lib/utils'
 
-// The ICOEL bomærke (circle and sprout) from the logo package. Filled with
-// currentColor, so it takes the text colour: white on the brand red, brand red
-// on light grounds.
-export const IcoelMark = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 108 118.4"
-    fill="currentColor"
-    aria-hidden="true"
-    className={className}
-  >
-    <path d="M54.3,5C29.3,5,8.9,25.3,8.9,50.4c0,11.1,4,21.7,11.3,30c0.9,1,2.4,1.1,3.4,0.2c1-0.9,1.1-2.4,0.2-3.4c-6.5-7.4-10.1-16.9-10.1-26.8C13.7,28,31.9,9.8,54.3,9.8c22.4,0,40.6,18.2,40.6,40.6c0,9.9-3.6,19.4-10.1,26.8c-0.9,1-0.8,2.5,0.2,3.4c0.5,0.4,1,0.6,1.6,0.6c0.7,0,1.3-0.3,1.8-0.8c7.3-8.3,11.3-18.9,11.3-30C99.6,25.4,79.3,5,54.3,5z" />
-    <path d="M73.4,107.7c1.2,0,2.2-1,2.2-2.2s-1-2.2-2.2-2.2c-6.9,0-13.1,3.6-17,9.1v-6.6c0-10.4,7.6-18.8,17-18.8c1.2,0,2.2-1,2.2-2.2c0-1.2-1-2.2-2.2-2.2c-6.9,0-13.1,3.6-17,9.1v-8.3c0.1-10.4,7.7-18.8,17-18.8c1.2,0,2.2-1,2.2-2.2c0-1.2-1-2.2-2.2-2.2c-8.4,0-15.7,5.3-19.2,13c-3.5-7.7-10.8-13-19.2-13c-1.2,0-2.2,1-2.2,2.2c0,1.2,1,2.2,2.2,2.2c9.4,0,17,8.4,17,18.8v8.3c-3.9-5.5-10.1-9.1-17-9.1c-1.2,0-2.2,1-2.2,2.2s1,2.2,2.2,2.2c9.4,0,17,8.4,17,18.8v6.6c-3.9-5.5-10.1-9.1-17-9.1c-1.2,0-2.2,1-2.2,2.2s1,2.2,2.2,2.2c6.8,0,12.7,4.4,15.4,10.8H58C60.7,112.2,66.6,107.7,73.4,107.7z" />
-  </svg>
+type BrandIconProps = {
+  onDark?: boolean
+  className?: string
+}
+
+export const BrandIcon = ({ onDark = false, className }: BrandIconProps) => (
+  <img
+    src="/brand-mark.svg"
+    alt=""
+    className={cn(
+      'shrink-0 rounded-md',
+      onDark && 'ring-1 ring-brand-foreground/25',
+      className,
+    )}
+  />
 )
 
-// The ICOEL primary logo (Danish) in white, for use on the brand red.
-export const IcoelLogo = ({ className }: { className?: string }) => (
-  <img
-    src={icoelLogoWhite}
-    alt="Innovationscenter for Økologisk Landbrug"
-    className={cn('h-12 w-auto', className)}
-  />
+export const SproutMark = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" className={className}>
+    <g
+      transform="translate(32 32) scale(1.38) translate(-32.4 -31.5)"
+      stroke="currentColor"
+      strokeWidth="4"
+      strokeLinecap="round"
+    >
+      <path d="M31.8 47.2V29.8" />
+      <path d="M22.5 47.2h19" />
+      <path
+        d="M31.9 31.3c-8.9.1-13.8-4.7-13.6-12.9 8.3-.2 13.6 4.1 13.6 12.9Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M32.4 29.8c.1-9.6 5.1-14.6 14.2-14.1.1 8.6-5 13.8-14.2 14.1Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </g>
+  </svg>
 )
 
 type BrandMarkProps = {
@@ -41,17 +57,10 @@ export const BrandMark = ({
     role={compact ? 'img' : undefined}
     aria-label={compact ? 'PlantPerform' : undefined}
   >
-    <span
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-md',
-        compact ? 'size-8' : 'size-9',
-        variant === 'onDark'
-          ? 'text-brand-foreground'
-          : 'bg-brand text-brand-foreground',
-      )}
-    >
-      <IcoelMark className={compact ? 'size-6' : 'size-7'} />
-    </span>
+    <BrandIcon
+      onDark={variant === 'onDark'}
+      className={compact ? 'size-8' : 'size-9'}
+    />
     {compact ? null : (
       <span className="truncate text-lg font-semibold tracking-tight">
         PlantPerform
