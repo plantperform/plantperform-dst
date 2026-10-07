@@ -77,6 +77,7 @@ def _run(
                         n_load_by_year=(0.0,) * NUM_YEARS,
                         leaching_by_year=(0.0,) * NUM_YEARS,
                         fen=0,
+                        fen_by_year=(0.0,) * NUM_YEARS,
                     )
                     for key, codes, db2 in options
                 ),
@@ -90,6 +91,7 @@ def _run(
                 n_load_by_year=(0.0,) * NUM_YEARS,
                 leaching_by_year=(0.0,) * NUM_YEARS,
                 fen=0,
+                fen_by_year=(0.0,) * NUM_YEARS,
                 kvotegivende=quota_eligible,
                 area_ha=area,
                 crop_codes_by_year=(codes * NUM_YEARS)[:NUM_YEARS],
