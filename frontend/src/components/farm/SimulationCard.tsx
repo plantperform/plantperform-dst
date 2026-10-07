@@ -17,12 +17,9 @@ import { Spinner } from '@/components/ui/spinner'
 import {
   changedFieldIds,
   formatCompactDkk,
-  formatFieldCount,
   formatWholeNumber,
   isFieldLocked,
-  NUM_ROTATION_YEARS,
   perHaFigure,
-  REAL_HISTORY_START_CALENDAR_YEAR,
   resolveFarmQuota,
   summarizeCatchmentYearTotals,
   totalsPerHa,
@@ -41,8 +38,6 @@ import {
   type KeyFigureDelta,
 } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
-
-const HISTORY_PERIOD = `${REAL_HISTORY_START_CALENDAR_YEAR}-${REAL_HISTORY_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
 
 const DELTA_TONE_CLASS: Record<KeyFigureDelta['tone'], string> = {
   better: 'text-success-strong',
@@ -129,7 +124,7 @@ const DeltaNote = ({ delta }: DeltaNoteProps) => (
 
 type CatchmentStatusListProps = {
   farmId: string
-  simulationId?: string
+  simulationId: string
   fields: FieldRecord[]
 }
 
@@ -138,19 +133,16 @@ const CatchmentStatusList = ({
   simulationId,
   fields,
 }: CatchmentStatusListProps) => {
-  const history = simulationId === undefined
-  const hasValues = history
-    ? fields.length > 0
-    : fields.some((field) => field.rotationId !== null)
+  const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const statuses = useMemo(
     () =>
       yearValues.data
         ? summarizeCatchmentYearStatuses(
-            summarizeCatchmentYearTotals(fields, yearValues.data, history),
-            history,
-            partialCatchmentQuotas(fields, !history),
+            summarizeCatchmentYearTotals(fields, yearValues.data, false),
+            false,
+            partialCatchmentQuotas(fields, true),
           )
             .map((status) => ({
               status,
@@ -160,7 +152,7 @@ const CatchmentStatusList = ({
               left.label.localeCompare(right.label, 'da-DK'),
             )
         : null,
-    [catchmentLabel, fields, history, yearValues.data],
+    [catchmentLabel, fields, yearValues.data],
   )
 
   if (!hasValues) return null
@@ -198,80 +190,6 @@ const CatchmentStatusList = ({
     </ul>
   )
 }
-
-type HistoryCardProps = {
-  farmId: string
-  fields: FieldRecord[]
-  quota: FarmQuota
-  active: boolean
-  onOpen: () => void
-  onCopy: () => void
-}
-
-export const HistoryCard = ({
-  farmId,
-  fields,
-  quota,
-  active,
-  onOpen,
-  onCopy,
-}: HistoryCardProps) => (
-  <CardShell
-    title="Afgrødehistorik"
-    subtitle={`Gennemsnit ${HISTORY_PERIOD}`}
-    active={active}
-    meta={formatFieldCount(quota.totals.fieldCount)}
-    actions={
-      <>
-        <Button size="xs" aria-label="Åbn afgrødehistorikken" onClick={onOpen}>
-          Åbn
-        </Button>
-        <Button
-          size="xs"
-          variant="outline"
-          aria-label="Kopier afgrødehistorikken til en ny simulering"
-          onClick={onCopy}
-        >
-          <Copy aria-hidden="true" />
-          Kopier
-        </Button>
-      </>
-    }
-  >
-    {quota.totals.calculatedCount > 0 ? (
-      <div className="grid grid-cols-2 gap-4">
-        <KeyFigure
-          label="Dækningsbidrag pr. år"
-          figure={perHaFigure(
-            totalsPerHa(quota.totals, 'db2'),
-            'db2',
-            formatCompactDkk(quota.totals.db2),
-          )}
-        />
-        <KeyFigure
-          label="Udledning pr. år"
-          figure={perHaFigure(
-            totalsPerHa(quota.totals, 'nLoad'),
-            'nLoad',
-            `${formatWholeNumber(quota.totals.nLoad)} kg N`,
-          )}
-          note={
-            quota.quotaKgN !== null && quota.quotaKgN > 0 ? (
-              <span className="text-muted-foreground">
-                Kvote {formatWholeNumber(quota.quotaKgN)} kg N
-              </span>
-            ) : undefined
-          }
-        />
-      </div>
-    ) : (
-      <p className="text-sm text-muted-foreground">
-        Ingen marker er beregnet endnu.
-      </p>
-    )}
-    <CatchmentStatusList farmId={farmId} fields={fields} />
-  </CardShell>
-)
 
 type SimulationFiguresProps = {
   farmId: string
