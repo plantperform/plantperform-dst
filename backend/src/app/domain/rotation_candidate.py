@@ -10,7 +10,7 @@ unchanged (see the Phase 5 cutover plan).
 """
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from app.domain.base import CamelModel
 
@@ -95,6 +95,8 @@ class RotationPositionOverride(CamelModel):
 
 
 class RotationCandidateEvaluation(CamelModel):
+    # Internal provenance for hydrating a winning compact cache entry. Never serialized.
+    _cache_position: int | None = PrivateAttr(default=None)
     ref: RotationCandidateRef
     active_len: int
     years: list[RotationCandidateYearResult]

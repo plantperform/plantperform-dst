@@ -2,6 +2,7 @@ import { useEffect, useId, useSyncExternalStore } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
+import { useOptimizationRunsContext } from '@/api/optimization-runs'
 import {
   createRequestProgress,
   type RequestProgress,
@@ -23,6 +24,7 @@ import type {
   RotationCandidateYearResult,
   RotationCategoryOption,
   Simulation,
+  SimulationResult,
   YearlyOptimizationCategoryOption,
   YearlySummaryEntry,
 } from '@/api/types'
@@ -104,8 +106,14 @@ export const simulationFieldsKey = (farmId?: string, simulationId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/fields`
 }
 
-export const useSimulations = (farmId?: string) =>
-  useSWR<Simulation[]>(simulationsKey(farmId), fetcher)
+export const useSimulations = (farmId?: string) => {
+  const response = useSWR<Simulation[]>(simulationsKey(farmId), fetcher)
+  const { syncSimulations } = useOptimizationRunsContext()
+  useEffect(() => {
+    if (response.data) syncSimulations(response.data)
+  }, [response.data, syncSimulations])
+  return response
+}
 
 export const useSimulationFields = (farmId?: string, simulationId?: string) =>
   useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
@@ -182,6 +190,44 @@ export const useSimulationsFields = (
       fetchSimulationsFields(cache, keyFarmId, joinedIds.split(',')),
   )
 }
+
+// Comparisons use the latest saved output, including its original field inputs.
+export const isSimulationResultsKey = (key: unknown, farmId: string) =>
+  Array.isArray(key) && key[0] === 'simulation-results' && key[1] === farmId
+
+export const useSimulationResults = (
+  farmId: string,
+  simulations: Simulation[],
+) =>
+  useSWR<Record<string, SimulationResult>>(
+    simulations.length
+      ? [
+          'simulation-results',
+          farmId,
+          simulations
+            .map(
+              (s) =>
+                `${s.id}:${s.result.runId}:${s.result.status}:${s.result.resultRevision}`,
+            )
+            .sort()
+            .join(','),
+        ]
+      : null,
+    async () =>
+      Object.fromEntries(
+        await Promise.all(
+          simulations.map(
+            async (simulation) =>
+              [
+                simulation.id,
+                await fetcher<SimulationResult>(
+                  `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulation.id)}/result`,
+                ),
+              ] as const,
+          ),
+        ),
+      ),
+  )
 
 export const scenarioCropCodesKey = (
   farmId?: string,

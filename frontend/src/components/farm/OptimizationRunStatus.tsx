@@ -45,7 +45,7 @@ export const OptimizationBanner = ({
 }: OptimizationBannerProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
   const startDefaultRun = useStartDefaultOptimization()
-  const stale = useOptimizationStale(simulationId)
+  const stale = useOptimizationStale(simulationId) || run?.status === 'outdated'
   const uncalculatedCount =
     fields?.filter((field) => !isFieldCalculated(field, true)).length ?? 0
 
@@ -65,7 +65,7 @@ export const OptimizationBanner = ({
           </span>
           <span className="text-muted-foreground">
             {' '}
-            {fields && uncalculatedCount === fields.length
+            {run.phase !== 'in_progress' ? 'venter i kø. Tallene er fra før kørslen.' : fields && uncalculatedCount === fields.length
               ? 'kører. Tallene kommer, når kørslen er færdig.'
               : 'kører. Tallene er fra før kørslen.'}
           </span>
@@ -98,7 +98,7 @@ export const OptimizationBanner = ({
       <p className="min-w-0 flex-1">
         {uncalculatedCount > 0
           ? `${formatFieldCount(uncalculatedCount)} er ikke beregnet.`
-          : 'Reglerne er ændret siden sidste kørsel.'}
+          : 'Scenariet er ændret siden sidste kørsel. Resultatet er forældet.'}
       </p>
       <Button
         size="xs"

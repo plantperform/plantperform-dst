@@ -11,6 +11,8 @@ postgresql = "16.*"
 
 
 [pypi-dependencies]
+dst2-backend = { path = ".", editable = true }
+plantperform-optimizer = { path = "../optimizer", editable = true }
 fastapi = ">=0.115.0"
 boto3 = ">=1.35.0"
 argon2-cffi = ">=23.1.0"
@@ -37,6 +39,8 @@ dev = "uvicorn app.main:app --reload --port 8000 --app-dir src"
 serve = "uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src"
 lint = "ruff check src"
 test = "PYTHONPATH=src python -m unittest discover -s tests"
+test-optimizer = "python -m unittest discover -s ../optimizer/tests"
+lint-optimizer = "ruff check --config pyproject.toml ../optimizer/src ../optimizer/tests"
 format = "ruff format src"
 db-up = "docker compose -f database/docker-compose.yml up -d postgres"
 db-down = "docker compose -f database/docker-compose.yml down"

@@ -309,42 +309,61 @@ simulation_table = Table(
     Column("data", JSONB, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("revision", Integer, nullable=False, server_default="0"),
+    Column("fields", JSONB, nullable=False, server_default="{}"),
+    Column("field_order", JSONB, nullable=False, server_default="[]"),
     Index("ix_simulation_farm_id", "farm_id"),
-)
-
-simulation_field_table = Table(
-    "simulation_field",
-    metadata,
-    Column("id", Text, primary_key=True),
-    Column(
-        "simulation_id",
-        Text,
-        ForeignKey("simulation.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column("data", JSONB, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    Index("ix_simulation_field_simulation_id", "simulation_id"),
 )
 
 simulation_field_candidates_table = Table(
     "simulation_field_candidates",
     metadata,
     Column("id", Text, primary_key=True),
-    Column(
-        "simulation_id",
-        Text,
-        ForeignKey("simulation.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
+    Column("simulation_id", Text, ForeignKey("simulation.id", ondelete="CASCADE"), nullable=False),
     Column("field_id", Text, nullable=False),
     Column("data", JSONB, nullable=False),
+    Column("optimizer_input", JSONB, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Index("ix_simulation_field_candidates_simulation_id", "simulation_id"),
     Index("ix_simulation_field_candidates_field_id", "field_id"),
+    Index(
+        "ix_simulation_field_candidates_simulation_field",
+        "simulation_id",
+        "field_id",
+        unique=True,
+    ),
 )
+
+simulation_result_table = Table(
+    "simulation_result",
+    metadata,
+    Column(
+        "simulation_id", Text, ForeignKey("simulation.id", ondelete="CASCADE"), primary_key=True
+    ),
+    Column("status", Text, nullable=False, server_default="not_started"),
+    Column("run_id", Text),
+    Column("kind", Text),
+    Column("requested_by", Text),
+    Column("parameters", JSONB, nullable=False, server_default="{}"),
+    Column("input_revision", Integer),
+    Column("result_revision", Integer),
+    Column("queued_at", DateTime(timezone=True)),
+    Column("published_at", DateTime(timezone=True)),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("lease_token", Text),
+    Column("lease_expires_at", DateTime(timezone=True)),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("error", JSONB),
+    Column("output", JSONB),
+    CheckConstraint(
+        "status IN ('not_started','queued','in_progress','completed','failed','outdated')",
+        name="ck_simulation_result_status",
+    ),
+    Index("ix_simulation_result_active", "status", "lease_expires_at"),
+)
+
 
 app_user_table = Table(
     "app_user",
@@ -405,7 +424,12 @@ refresh_session_table = Table(
     Index("ix_auth_refresh_session_family_id", "family_id"),
 )
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

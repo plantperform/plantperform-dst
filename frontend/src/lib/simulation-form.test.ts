@@ -489,6 +489,8 @@ describe('simulationToFormValues', () => {
     farmId: 'farm-1',
     name: 'Test2',
     createdAt: '2026-09-30T10:00:00Z',
+    revision: 0,
+    result: {} as Simulation['result'],
     constraints: {} as Simulation['constraints'],
     rotationVariants: ['10', '20'],
     nNormPercentages: ['95', '85'],

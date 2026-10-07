@@ -4,12 +4,14 @@ It operates on per-calendar-year udledning/DB2 instead of scenarie totals. See
 YearlyRotationOption and related types in optimization/models.py for why this is
 a peer system rather than a rewrite of solve().
 """
+
+import os
 from collections import defaultdict
 
 from ortools.sat.python import cp_model
 
-from app.services.optimization.models import (
-    NUM_YEARS,
+from app.domain.optimization import NUM_YEARS
+from plantperform_optimizer.models import (
     AssignedRotation,
     YearlyOptimizationInput,
     YearlyOptimizationOutput,
@@ -158,6 +160,7 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     model.Maximize(total_db2)
 
     solver = cp_model.CpSolver()
+    solver.parameters.num_search_workers = int(os.getenv("OPTIMIZER_SOLVER_THREADS", "2"))
     solver.parameters.max_time_in_seconds = input.time_limit_seconds
     status = solver.Solve(model)
 
@@ -174,9 +177,7 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     # Same averaging convention as the solved fields below: db2_by_year/
     # n_load_by_year/leaching_by_year hold one real calendar-year value each.
     total_db2_value = sum(sum(fixed.db2_by_year) / NUM_YEARS for fixed in input.fixed_fields)
-    total_n_load_value = sum(
-        sum(fixed.n_load_by_year) / NUM_YEARS for fixed in input.fixed_fields
-    )
+    total_n_load_value = sum(sum(fixed.n_load_by_year) / NUM_YEARS for fixed in input.fixed_fields)
     total_leaching_value = sum(
         sum(fixed.leaching_by_year) / NUM_YEARS for fixed in input.fixed_fields
     )

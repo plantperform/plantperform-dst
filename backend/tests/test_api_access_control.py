@@ -8,7 +8,7 @@ os.environ.setdefault(
     "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
 )
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v0 import farm_fields, registry, rotation_candidates, simulations
 from app.auth import AuthenticatedUser, current_user
@@ -50,19 +50,23 @@ class SimulationAccessControlTests(unittest.TestCase):
             self.assertIn(current_user, dependency_calls(route), suffix)
 
     def test_yearly_optimization_forwards_member_email(self) -> None:
+        from uuid import uuid4
+
+        from app.domain.optimization import YearlyOptimizeSimulationRequest
+
+        request = YearlyOptimizeSimulationRequest(expected_revision=0, run_id=uuid4())
         with patch.object(
-            simulations,
-            "run_yearly_optimization",
-            side_effect=simulations.OptimizationNotFoundError,
-        ) as run_optimization:
+            simulations, "submit", side_effect=simulations.SimulationNotFoundError
+        ) as submit:
             self.assert_not_found(
                 simulations.post_farm_simulation_yearly_optimization,
                 "farm-1",
                 "simulation-1",
                 MEMBER,
+                request,
+                BackgroundTasks(),
             )
-
-        self.assertEqual(run_optimization.call_args.args[-1], MEMBER.email)
+        self.assertEqual(submit.call_args.args[2], MEMBER.email)
 
     def test_yearly_candidates_forwards_member_email(self) -> None:
         with patch.object(

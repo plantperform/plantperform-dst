@@ -204,6 +204,8 @@ export type FertiliserPresetOption = {
 }
 
 export type Simulation = {
+  revision: number
+  result: SimulationResultSummary
   id: string
   farmId: string
   name: string
@@ -234,6 +236,8 @@ export type CreateSimulationInput = {
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
 
 export type OptimizeSimulationInput = {
+  expectedRevision?: number
+  runId?: string
   timeLimitSeconds?: number
   excludedCropCodes?: number[]
 }
@@ -259,6 +263,8 @@ export type CatchmentYearlyNLoadCaps = {
 }
 
 export type YearlyOptimizeSimulationInput = {
+  expectedRevision?: number
+  runId?: string
   timeLimitSeconds?: number
   maxNLoadByCatchment?: CatchmentYearlyNLoadCaps[]
   db2SwingPct?: number | null
@@ -393,4 +399,29 @@ export type RotationCategoryOption = {
   croppingSystem: FarmingSystem
   rotationCount: number
   rotations: RotationOption[]
+}
+
+export type SimulationResultSummary = {
+  status:
+    | 'not_started'
+    | 'queued'
+    | 'in_progress'
+    | 'completed'
+    | 'failed'
+    | 'outdated'
+  runId: string | null
+  kind: 'optimize' | 'yearly' | null
+  inputRevision: number | null
+  resultRevision: number | null
+  queuedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  error: { code: string; message: string; detail?: unknown } | null
+}
+
+export type SimulationResult = SimulationResultSummary & {
+  parameters: OptimizeSimulationInput | YearlyOptimizeSimulationInput
+  response: OptimizeSimulationResponse | null
+  fieldsBefore: FieldRecord[]
+  selectedCandidates: Record<string, RotationCandidateEvaluation>
 }

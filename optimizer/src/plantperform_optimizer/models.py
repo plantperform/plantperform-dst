@@ -5,7 +5,6 @@ from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationY
 from app.domain.simulation import CropAreaLimit
 
 OptimizationStatus = Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN"]
-NUM_YEARS = 8
 
 
 @dataclass(frozen=True)
@@ -94,6 +93,7 @@ class OptimizationOutput:
 # limit, and automatic rotation offset (start_year) as an additional decision
 # variable. This is an additive peer system to RotationOption,
 # ConstraintsInput, and solve() above; it does not alter the existing system.
+
 
 @dataclass(frozen=True)
 class YearlyRotationOption:

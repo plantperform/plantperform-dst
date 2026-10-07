@@ -5,11 +5,11 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   useFieldYearValues,
   useFieldYearValuesProgress,
-  useSimulationsFields,
+  useSimulationResults,
   type FieldsBySimulationId,
 } from '@/api/hooks'
 import { combineProgress, type RequestProgress } from '@/api/request-progress'
-import type { FieldRecord, Simulation } from '@/api/types'
+import type { FieldRecord, FieldYearValues, Simulation } from '@/api/types'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { ComparisonCharts } from '@/components/farm/ComparisonCharts'
@@ -64,6 +64,7 @@ type ComparisonColumn = {
   totals: FieldTotals
   requirement: string | null
   changedCount: number | null
+  yearValues?: FieldYearValues
 }
 
 type ColumnYearFigures = Pick<
@@ -81,38 +82,42 @@ const useColumnYearFigures = (
   const simulationId = column?.simulationId
   const history = simulationId === undefined
   const fields = column?.fields ?? NO_FIELDS
-  const enabled = fields.length > 0
+  const enabled = fields.length > 0 && column?.yearValues === undefined
   const yearValues = useFieldYearValues(farmId, simulationId, fields, enabled)
-  const yearValuesProgress = useFieldYearValuesProgress(
+  const fetchedProgress = useFieldYearValuesProgress(
     farmId,
     simulationId,
     fields,
     enabled,
   )
+  const values = column?.yearValues ?? yearValues.data
+  const yearValuesProgress =
+    column?.yearValues === undefined
+      ? fetchedProgress
+      : { done: fields.length, total: fields.length }
   const incomplete =
-    yearValues.data !== undefined &&
-    hasMissingYearValues(fields, yearValues.data, history)
+    values !== undefined && hasMissingYearValues(fields, values, history)
   const catchments = useMemo(() => {
     if (fields.length === 0) return EMPTY_CATCHMENTS
-    if (yearValues.data === undefined || incomplete) return undefined
+    if (values === undefined || incomplete) return undefined
     return alignCatchmentYears(
-      summarizeCatchmentYearTotals(fields, yearValues.data, history),
+      summarizeCatchmentYearTotals(fields, values, history),
       history,
     )
-  }, [fields, history, incomplete, yearValues.data])
+  }, [fields, history, incomplete, values])
   const partialQuotas = useMemo(
     () => partialCatchmentQuotas(fields, !history),
     [fields, history],
   )
   const cropShares = useMemo(
     () =>
-      yearValues.data === undefined || incomplete
+      values === undefined || incomplete
         ? undefined
-        : summarizeCropDistribution(fields, yearValues.data, null, 'group'),
-    [fields, incomplete, yearValues.data],
+        : summarizeCropDistribution(fields, values, null, 'group'),
+    [fields, incomplete, values],
   )
   const failed =
-    incomplete || (Boolean(yearValues.error) && yearValues.data === undefined)
+    incomplete || (Boolean(yearValues.error) && values === undefined)
   return {
     catchments,
     partialQuotas,
@@ -142,9 +147,21 @@ export const SimulationComparison = ({
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null)
-  const simulationsFields = useSimulationsFields(farmId, simulations)
-  const fieldsBySimulationId =
-    simulations.length === 0 ? NO_SIMULATION_FIELDS : simulationsFields.data
+  const simulationsFields = useSimulationResults(farmId, simulations)
+  const fieldsBySimulationId = useMemo(
+    () =>
+      simulations.length === 0
+        ? NO_SIMULATION_FIELDS
+        : simulationsFields.data === undefined
+          ? undefined
+          : Object.fromEntries(
+              Object.entries(simulationsFields.data).map(([id, result]) => [
+                id,
+                result.response?.fields ?? [],
+              ]),
+            ),
+    [simulations, simulationsFields.data],
+  )
   const availability = useMemo(
     () =>
       fieldsBySimulationId === undefined
@@ -188,9 +205,14 @@ export const SimulationComparison = ({
         {
           key: id,
           title: simulation.name,
-          subtitle: formatCreatedAt(simulation.createdAt),
+          subtitle: `${formatCreatedAt(simulation.createdAt)}${simulation.result.status === 'completed' ? '' : simulation.result.status === 'outdated' ? ' · Forældet resultat' : ' · Seneste gemte resultat'}`,
           simulationId: id,
           fields: simulationFields,
+          yearValues: Object.fromEntries(
+            Object.entries(
+              simulationsFields.data?.[id]?.selectedCandidates ?? {},
+            ).map(([fieldId, candidate]) => [fieldId, candidate.years]),
+          ),
           totals: computeFieldTotals(simulationFields, true),
           requirement: describeFeedUnitRequirement(simulation.constraints),
           changedCount: changedFieldIds(simulationFields, fields).size,
@@ -198,7 +220,7 @@ export const SimulationComparison = ({
       ]
     })
     return [history, ...chosen]
-  }, [fields, fieldsBySimulationId, ids, simulations])
+  }, [fields, fieldsBySimulationId, ids, simulations, simulationsFields.data])
 
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const quotaByCatchment = useMemo(() => catchmentQuotas(fields), [fields])

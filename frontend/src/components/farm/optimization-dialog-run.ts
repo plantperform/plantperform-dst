@@ -17,7 +17,7 @@ export const useOptimizationDialogRun = (
 ) => {
   const run = useOptimizationRun(simulationId)
   const { startRun } = useOptimizationRunActions()
-  const [watchedRunId, setWatchedRunId] = useState<number | null>(null)
+  const [watchedRunId, setWatchedRunId] = useState<string | null>(null)
   if (!open && watchedRunId !== null) setWatchedRunId(null)
   if (open && watchedRunId === null && run?.status === 'running') {
     setWatchedRunId(run.id)

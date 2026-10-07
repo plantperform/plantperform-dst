@@ -2,9 +2,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from app.domain.field import FieldRecord
+from app.domain.optimization import NUM_YEARS
 from app.domain.rotation_candidate import RotationCandidateEvaluation
-from app.services.optimization.models import NUM_YEARS
-from app.services.optimization.orchestrator import _selected_locked_candidate
+from app.services.scenario.rotations import selected_locked_candidate
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ def crop_area_ranges(
         candidates = candidates_by_field_id.get(field.id, [])
         locked = bool(field.allowed_rotation_ids)
         if locked:
-            selected = _selected_locked_candidate(field, candidates)
+            selected = selected_locked_candidate(field, candidates)
             sequences = [_codes_by_year(selected)] if selected is not None else []
             shifted = sequences
         else:

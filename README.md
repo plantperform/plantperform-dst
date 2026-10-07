@@ -4,7 +4,9 @@ PlantPerform is decision-support software for nitrogen-aware crop rotation
 planning. This repository contains the application implementation:
 
 - `frontend/`: React, Vite, and TypeScript web application.
-- `backend/`: FastAPI service and optimization model.
+- `backend/`: FastAPI service, shared domain models, calculations, and persistence.
+- `optimizer/`: solvers and job execution for local runs and Lambda
+  ([setup and checks](optimizer/README.md)).
 - `backend/database/`: local PostGIS setup, migrations, and registry loader.
 
 Deployment infrastructure and environment-specific configuration are
@@ -46,6 +48,16 @@ pixi run db-up
 pixi run db-migrate
 pixi run dev
 ```
+
+Pixi installs the backend and sibling optimizer packages in editable mode.
+Keep both directories together; changes to either package are available in the
+same development environment.
+
+With `APP_ENV=development` (the default), optimization runs in the backend's
+background thread pool without AWS credentials, SQS, or a separate worker.
+
+Set `APP_ENV=production` to use SQS and the separate Lambda worker; see
+[optimizer setup](optimizer/README.md).
 
 The API listens on `http://localhost:8000`; its health endpoint is
 `http://localhost:8000/api/v0/healthz`.
@@ -103,7 +115,7 @@ individual troubleshooting commands.
 ## Development checks
 
 ```bash
-cd backend && pixi run test && pixi run lint
+cd backend && pixi run test && pixi run test-optimizer && pixi run lint && pixi run lint-optimizer
 cd frontend && npm run lint && npm run build
 ```
 

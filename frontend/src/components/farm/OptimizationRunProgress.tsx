@@ -1,7 +1,4 @@
-import {
-  OPTIMIZATION_TIME_LIMIT_SECONDS,
-  type OptimizationRun,
-} from '@/api/optimization-runs'
+import { type OptimizationRun } from '@/api/optimization-runs'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
@@ -47,23 +44,28 @@ const SuccessCheck = () => (
   </svg>
 )
 
-const RunningDetails = ({ run }: OptimizationRunProgressProps) => {
+const RunningDetails = ({
+  run,
+}: {
+  run: Extract<OptimizationRun, { status: 'running' }>
+}) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
-  const overLimit = elapsed >= OPTIMIZATION_TIME_LIMIT_SECONDS * 1000
 
   return (
     <>
       <p className="text-base font-semibold">
-        {overLimit
-          ? 'Gemmer resultatet...'
-          : `Kører ${optimizationRunName(run.kind).toLowerCase()}...`}
+        {run.phase === 'submitting'
+          ? 'Starter optimeringen...'
+          : run.phase === 'queued'
+            ? 'Venter i kø...'
+            : `Kører ${optimizationRunName(run.kind).toLowerCase()}...`}
       </p>
       <p className="text-sm tabular-nums text-muted-foreground">
         {formatElapsed(elapsed)}
       </p>
       <ProgressBar className="mx-auto w-48" />
       <p className="pt-1 text-xs text-muted-foreground">
-        Du kan lukke vinduet. Optimeringen kører videre.
+        Du kan lukke vinduet. Du får besked her, når optimeringen er færdig.
       </p>
     </>
   )
@@ -170,7 +172,9 @@ const SucceededDetails = ({
 
 // The circle stays mounted from running to succeeded, so the spinner can turn
 // into the checkmark instead of the view jumping.
-export const OptimizationRunProgress = ({ run }: OptimizationRunProgressProps) => {
+export const OptimizationRunProgress = ({
+  run,
+}: OptimizationRunProgressProps) => {
   const succeeded = run.status === 'succeeded'
 
   return (
@@ -199,8 +203,12 @@ export const OptimizationRunProgress = ({ run }: OptimizationRunProgressProps) =
       >
         {run.status === 'succeeded' ? (
           <SucceededDetails run={run} />
-        ) : (
+        ) : run.status === 'running' ? (
           <RunningDetails run={run} />
+        ) : (
+          <p>
+            Optimeringen er {run.status === 'outdated' ? 'forældet' : 'fejlet'}.
+          </p>
         )}
       </div>
     </div>

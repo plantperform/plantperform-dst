@@ -14,15 +14,56 @@ from app.data.db import (
     field_table,
     registry_field_table,
     simulation_field_candidates_table,
-    simulation_field_table,
+    simulation_result_table,
     simulation_table,
+)
+from app.data.optimizer_inputs import optimizer_input
+from app.data.simulation_store import (
+    _get_simulation as _get_simulation,
+)
+from app.data.simulation_store import (
+    delete_simulation as delete_simulation,
+)
+from app.data.simulation_store import (
+    get_simulation as get_simulation,
+)
+from app.data.simulation_store import (
+    get_simulation_field as get_simulation_field,
+)
+from app.data.simulation_store import (
+    get_simulation_field_candidate_detail as get_simulation_field_candidate_detail,
+)
+from app.data.simulation_store import (
+    get_simulation_field_candidates as get_simulation_field_candidates,
+)
+from app.data.simulation_store import (
+    list_simulation_field_candidates as list_simulation_field_candidates,
+)
+from app.data.simulation_store import (
+    list_simulation_fields as list_simulation_fields,
+)
+from app.data.simulation_store import (
+    list_simulations as list_simulations,
+)
+from app.data.simulation_store import (
+    save_manual_rotation as save_manual_rotation,
+)
+from app.data.simulation_store import (
+    selected_evaluations as selected_evaluations,
+)
+from app.data.simulation_store import (
+    split_field as split_field,
+)
+from app.data.simulation_store import (
+    update_simulation_constraints as update_simulation_constraints,
+)
+from app.data.simulation_store import (
+    update_simulation_field as update_simulation_field,
 )
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.field import (
     CreateFieldRequest,
     FieldRecord,
-    UpdateFieldRequest,
-    validate_measures_for_rotation,
 )
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
@@ -32,7 +73,6 @@ from app.domain.rotation_candidate import (
 from app.domain.rotation_library import ROTATION_LIBRARY
 from app.domain.simulation import (
     CreateSimulationRequest,
-    OptimizationConstraints,
     Simulation,
 )
 from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
@@ -145,7 +185,10 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
         raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
     percolation_by_kategori, org_n_topsoil, s_soil = soil_data
     years = evaluate_real_history_for_field(
-        row.crop_history or {}, jbnr, row.goedningsregion, bool(row.oeko),
+        row.crop_history or {},
+        jbnr,
+        row.goedningsregion,
+        bool(row.oeko),
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
@@ -174,7 +217,8 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
 
 
 def get_farm_udledning_per_kystvandopland(
-    farm_id: str, email: str,
+    farm_id: str,
+    email: str,
 ) -> list[KystvandoplandUdledning] | None:
     """Group udledningskvote and calculated udledning by kystvandopland.
 
@@ -250,24 +294,6 @@ def _get_farm(session: Session, farm_id: str, email: str) -> Farm | None:
     return None if data is None else _load(Farm, data)
 
 
-def _get_simulation(
-    session: Session,
-    farm_id: str,
-    simulation_id: str,
-    email: str,
-) -> Simulation | None:
-    data = session.execute(
-        select(simulation_table.c.data)
-        .join(farm_member_table, farm_member_table.c.farm_id == simulation_table.c.farm_id)
-        .where(
-            simulation_table.c.id == simulation_id,
-            simulation_table.c.farm_id == farm_id,
-            farm_member_table.c.email == email,
-        )
-    ).scalar_one_or_none()
-    return None if data is None else _load(Simulation, data)
-
-
 def _default_allowed_rotation_ids_for_farm(farm: Farm) -> list[str]:
     return ["current", *(rotation.id for rotation in farm.rotation_library)]
 
@@ -312,8 +338,7 @@ def get_farm(farm_id: str, email: str) -> Farm | None:
 def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
         result = session.execute(
-            delete(farm_table)
-            .where(
+            delete(farm_table).where(
                 farm_table.c.id == farm_id,
                 farm_table.c.id.in_(
                     select(farm_member_table.c.farm_id).where(farm_member_table.c.email == email)
@@ -358,7 +383,9 @@ def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
 
 
 def get_field_historical_years(
-    farm_id: str, field_id: str, email: str,
+    farm_id: str,
+    field_id: str,
+    email: str,
 ) -> list[RotationCandidateYearResult] | None:
     with SessionLocal() as session:
         if not _farm_exists(session, farm_id, email):
@@ -384,11 +411,15 @@ def get_farm_historical_yearly_summary(farm_id: str, email: str) -> list[dict] |
         if not _farm_exists(session, farm_id, email):
             return None
 
-        field_rows = session.execute(
-            select(field_table.c.data)
-            .where(field_table.c.farm_id == farm_id)
-            .order_by(field_table.c.created_at)
-        ).scalars().all()
+        field_rows = (
+            session.execute(
+                select(field_table.c.data)
+                .where(field_table.c.farm_id == farm_id)
+                .order_by(field_table.c.created_at)
+            )
+            .scalars()
+            .all()
+        )
         fields = [_load(FieldRecord, data) for data in field_rows]
         contexts = _registry_contexts_for_imk_ids(
             session,
@@ -410,9 +441,7 @@ def get_farm_historical_yearly_summary(farm_id: str, email: str) -> list[dict] |
             # comparison at all - it does not draw down a quota, so its real
             # leaching figure must not be summed into it either.
             if context is not None and context.kvotegivende:
-                bucket["n_load"] += (
-                    year_result.leaching_kg_n_ha * field.area_ha * retention_factor
-                )
+                bucket["n_load"] += year_result.leaching_kg_n_ha * field.area_ha * retention_factor
             bucket["db2"] += year_result.db_kr_ha * field.area_ha
             if year_result.db_detail.get("udbytteenhed") == "FE/ha":
                 bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha
@@ -453,7 +482,9 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> Field
 
         registry_row = _registry_context_for_imk_id(session, request.imk_id)
         aktuel = _aktuel_field_state(
-            registry_row, field_data["area_ha"], field_data.get("retention"),
+            registry_row,
+            field_data["area_ha"],
+            field_data.get("retention"),
         )
         field_data["crop_rotation"] = aktuel["crop_rotation"]
         field = FieldRecord(
@@ -500,19 +531,6 @@ def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
         return result.rowcount > 0
 
 
-def list_simulations(farm_id: str, email: str) -> list[Simulation] | None:
-    with SessionLocal() as session:
-        if not _farm_exists(session, farm_id, email):
-            return None
-
-        rows = session.execute(
-            select(simulation_table.c.data)
-            .where(simulation_table.c.farm_id == farm_id)
-            .order_by(simulation_table.c.created_at),
-        ).scalars()
-        return [_load(Simulation, data) for data in rows]
-
-
 def create_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
@@ -522,6 +540,8 @@ def create_simulation(
         if not _farm_exists(session, farm_id, email):
             return None
 
+        setup_fields = {}
+        field_order = []
         simulation = Simulation(
             id=str(uuid4()),
             farm_id=farm_id,
@@ -545,11 +565,15 @@ def create_simulation(
             ),
         )
 
-        field_rows = session.execute(
-            select(field_table.c.data)
-            .where(field_table.c.farm_id == farm_id)
-            .order_by(field_table.c.created_at),
-        ).scalars().all()
+        field_rows = (
+            session.execute(
+                select(field_table.c.data)
+                .where(field_table.c.farm_id == farm_id)
+                .order_by(field_table.c.created_at),
+            )
+            .scalars()
+            .all()
+        )
         current_fields = [_load(FieldRecord, data) for data in field_rows]
         registry_contexts = _registry_contexts_for_imk_ids(
             session,
@@ -625,31 +649,33 @@ def create_simulation(
                         },
                     )
 
-            session.execute(
-                insert(simulation_field_table).values(
-                    id=copied_field.id,
-                    simulation_id=simulation.id,
-                    data=_dump(copied_field),
-                ),
-            )
+            setup_fields[copied_field.id] = split_field(_dump(copied_field))
+            field_order.append(copied_field.id)
 
             if request.saedskiftevarianter and request.n_norm_procenter:
-                candidates.extend(generate_candidates_for_field(
-                    request.saedskiftevarianter, request.n_norm_procenter, jbnr,
-                    request.godning,
-                    fdato=request.eea_fdato, precision_dagsbasis=request.eea_precision_dagsbasis,
-                    praecisionsjordbrug=request.praecisionsjordbrug,
-                    tidlig_saaning=request.tidlig_saaning,
-                    mellemafgrode=request.mellemafgrode,
-                    real_history=real_history,
-                    percolation_by_kategori=percolation,
-                    org_n_topsoil=org_n_topsoil,
-                    s_soil=s_soil,
-                ))
+                candidates.extend(
+                    generate_candidates_for_field(
+                        request.saedskiftevarianter,
+                        request.n_norm_procenter,
+                        jbnr,
+                        request.godning,
+                        fdato=request.eea_fdato,
+                        precision_dagsbasis=request.eea_precision_dagsbasis,
+                        praecisionsjordbrug=request.praecisionsjordbrug,
+                        tidlig_saaning=request.tidlig_saaning,
+                        mellemafgrode=request.mellemafgrode,
+                        real_history=real_history,
+                        percolation_by_kategori=percolation,
+                        org_n_topsoil=org_n_topsoil,
+                        s_soil=s_soil,
+                    )
+                )
 
             if candidates:
                 field_candidates = SimulationFieldCandidates(
-                    field_id=copied_field.id, jbnr=jbnr, candidates=candidates,
+                    field_id=copied_field.id,
+                    jbnr=jbnr,
+                    candidates=candidates,
                     real_history=real_history,
                 )
                 session.execute(
@@ -658,33 +684,29 @@ def create_simulation(
                         simulation_id=simulation.id,
                         field_id=copied_field.id,
                         data=_dump(field_candidates),
-                    ),
+                        optimizer_input=optimizer_input(field_candidates),
+                    )
                 )
+                if copied_field.allowed_rotation_ids:
+                    selected = next(
+                        (c for c in candidates if c.ref.to_id() == copied_field.rotation_id), None
+                    )
+                    if selected:
+                        setup_fields[copied_field.id]["fixed_candidate"] = _dump(selected)
 
+        session.execute(
+            update(simulation_table)
+            .where(simulation_table.c.id == simulation.id)
+            .values(fields=setup_fields, field_order=field_order)
+        )
+        session.execute(insert(simulation_result_table).values(simulation_id=simulation.id))
         return simulation
 
 
-def get_simulation(farm_id: str, simulation_id: str, email: str) -> Simulation | None:
-    with SessionLocal() as session:
-        return _get_simulation(session, farm_id, simulation_id, email)
-
-
-def list_simulation_field_candidates(
-    farm_id: str, simulation_id: str, email: str,
-) -> list[SimulationFieldCandidates] | None:
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-
-        rows = session.execute(
-            select(simulation_field_candidates_table.c.data)
-            .where(simulation_field_candidates_table.c.simulation_id == simulation_id),
-        ).scalars()
-        return [_load(SimulationFieldCandidates, data) for data in rows]
-
-
 def list_scenario_afgrodekoder(
-    farm_id: str, simulation_id: str, email: str,
+    farm_id: str,
+    simulation_id: str,
+    email: str,
 ) -> set[int] | None:
     """Return every distinct afgrode_kode the simulering's chosen sædskifter can use.
 
@@ -731,271 +753,8 @@ def list_scenario_afgrodekoder(
     return codes
 
 
-def get_simulation_field_candidates(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    email: str,
-) -> SimulationFieldCandidates | None:
-    """Return one mark's stored candidate set, filtered directly in SQL.
-
-    Unlike list_simulation_field_candidates, this does not fetch every mark's
-    complete candidate set, including each candidate's year-by-year
-    udvaskning/DB details. Use it when only one mark is relevant, such as the
-    "Rediger manuelt" preview/apply operations that read only
-    candidates_row.jbnr. This avoids needlessly fetching and deserializing the
-    simulering's other marker.
-    """
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-
-        data = session.execute(
-            select(simulation_field_candidates_table.c.data).where(
-                simulation_field_candidates_table.c.simulation_id == simulation_id,
-                simulation_field_candidates_table.c.field_id == field_id,
-            ),
-        ).scalar_one_or_none()
-        return _load(SimulationFieldCandidates, data) if data is not None else None
-
-
-def append_manual_field_candidate(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    candidate: RotationCandidateEvaluation,
-    email: str,
-) -> bool:
-    """Add a manually recalculated Phase 10 candidate to the mark's stored set.
-
-    Replaces any previous candidate with the same reference ID rather than
-    accumulating history. Only the latest manual correction for this mark is
-    meaningful to retain.
-    """
-    with SessionLocal.begin() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return False
-
-        row = session.execute(
-            select(simulation_field_candidates_table.c.id, simulation_field_candidates_table.c.data)
-            .where(
-                simulation_field_candidates_table.c.simulation_id == simulation_id,
-                simulation_field_candidates_table.c.field_id == field_id,
-            ),
-        ).one_or_none()
-        if row is None:
-            return False
-
-        row_id, data = row
-        field_candidates = _load(SimulationFieldCandidates, data)
-        ref_id = candidate.ref.to_id()
-        kept = [c for c in field_candidates.candidates if c.ref.to_id() != ref_id]
-        updated = field_candidates.model_copy(update={"candidates": [*kept, candidate]})
-        session.execute(
-            update(simulation_field_candidates_table)
-            .where(simulation_field_candidates_table.c.id == row_id)
-            .values(data=_dump(updated)),
-        )
-        return True
-
-
 class FieldNotOptimizedError(Exception):
     """The mark has no winning sædskifte (rotation_id); run Optimér first."""
-
-
-def get_simulation_field_candidate_detail(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    email: str,
-) -> RotationCandidateEvaluation | None:
-    """Return full annual calculation details for the candidate Optimér chose.
-
-    Returns None if the mark or simulering does not exist. Raises
-    FieldNotOptimizedError if the mark has not yet been optimized and therefore
-    has no rotation_id.
-    """
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-
-        field_data = session.execute(
-            select(simulation_field_table.c.data).where(
-                simulation_field_table.c.id == field_id,
-                simulation_field_table.c.simulation_id == simulation_id,
-            ),
-        ).scalar_one_or_none()
-        if field_data is None:
-            return None
-
-        field = _load(FieldRecord, field_data)
-        if field.rotation_id is None:
-            raise FieldNotOptimizedError
-
-        candidates_data = session.execute(
-            select(simulation_field_candidates_table.c.data).where(
-                simulation_field_candidates_table.c.simulation_id == simulation_id,
-                simulation_field_candidates_table.c.field_id == field_id,
-            ),
-        ).scalar_one_or_none()
-        if candidates_data is None:
-            return None
-
-        field_candidates = _load(SimulationFieldCandidates, candidates_data)
-        return next(
-            (
-                candidate
-                for candidate in field_candidates.candidates
-                if candidate.ref.to_id() == field.rotation_id
-            ),
-            None,
-        )
-
-
-def delete_simulation(farm_id: str, simulation_id: str, email: str) -> bool | None:
-    with SessionLocal.begin() as session:
-        if not _farm_exists(session, farm_id, email):
-            return None
-
-        result = session.execute(
-            delete(simulation_table).where(
-                simulation_table.c.id == simulation_id,
-                simulation_table.c.farm_id == farm_id,
-            ),
-        )
-        return result.rowcount > 0
-
-
-def update_simulation_constraints(
-    farm_id: str,
-    simulation_id: str,
-    constraints: OptimizationConstraints,
-    email: str,
-) -> Simulation | None:
-    with SessionLocal.begin() as session:
-        simulation = _get_simulation(session, farm_id, simulation_id, email)
-        if simulation is None:
-            return None
-
-        # PATCH preserves omitted settings, including rules unknown to an older client.
-        supplied_fields = constraints.model_fields_set
-        constraints = OptimizationConstraints.model_validate({
-            **_dump(simulation.constraints),
-            **constraints.model_dump(mode="json", exclude_unset=True),
-        })
-        max_fields = constraints.max_fields_with_new_rotation
-        field_count = session.execute(
-            select(func.count()).where(
-                simulation_field_table.c.simulation_id == simulation_id,
-            ),
-        ).scalar_one()
-        if (
-            "max_fields_with_new_rotation" in supplied_fields
-            and max_fields is not None
-            and max_fields > field_count
-        ):
-            raise ValueError(
-                "Maximum fields with new rotations cannot exceed the simulation field count"
-            )
-
-        if (
-            "globally_allowed_rotation_ids" in supplied_fields
-            and constraints.globally_allowed_rotation_ids is not None
-        ):
-            farm = _get_farm(session, farm_id, email)
-            if farm is None:
-                return None
-            library_ids = {rotation.id for rotation in farm.rotation_library}
-            unknown = [
-                rotation_id
-                for rotation_id in constraints.globally_allowed_rotation_ids
-                if rotation_id not in library_ids
-            ]
-            if unknown:
-                raise ValueError(f"Unknown globally allowed rotation id: {unknown[0]}")
-
-        updated_simulation = simulation.model_copy(
-            update={"constraints": constraints},
-            deep=True,
-        )
-        session.execute(
-            update(simulation_table)
-            .where(
-                simulation_table.c.id == simulation_id,
-                simulation_table.c.farm_id == farm_id,
-            )
-            .values(data=_dump(updated_simulation), updated_at=func.now()),
-        )
-        return updated_simulation
-
-
-def list_simulation_fields(
-    farm_id: str,
-    simulation_id: str,
-    email: str,
-) -> list[FieldRecord] | None:
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-
-        rows = session.execute(
-            select(simulation_field_table.c.data)
-            .where(simulation_field_table.c.simulation_id == simulation_id)
-            .order_by(simulation_field_table.c.created_at),
-        ).scalars()
-        return [_load(FieldRecord, data) for data in rows]
-
-
-def get_simulation_field(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    email: str,
-) -> FieldRecord | None:
-    with SessionLocal() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-        data = session.execute(
-            select(simulation_field_table.c.data).where(
-                simulation_field_table.c.id == field_id,
-                simulation_field_table.c.simulation_id == simulation_id,
-            )
-        ).scalar_one_or_none()
-        return _load(FieldRecord, data) if data is not None else None
-
-
-def update_simulation_field(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    request: UpdateFieldRequest,
-    email: str,
-) -> FieldRecord | None:
-    with SessionLocal.begin() as session:
-        if _get_simulation(session, farm_id, simulation_id, email) is None:
-            return None
-
-        data = session.execute(
-            select(simulation_field_table.c.data).where(
-                simulation_field_table.c.id == field_id,
-                simulation_field_table.c.simulation_id == simulation_id,
-            ),
-        ).scalar_one_or_none()
-        if data is None:
-            return None
-
-        existing = _load(FieldRecord, data)
-        field = existing.model_copy(update=_partial_update(request), deep=True)
-        validate_measures_for_rotation(field.measures, field.crop_rotation)
-        session.execute(
-            update(simulation_field_table)
-            .where(
-                simulation_field_table.c.id == field_id,
-                simulation_field_table.c.simulation_id == simulation_id,
-            )
-            .values(data=_dump(field), updated_at=func.now()),
-        )
-        return field
 
 
 def list_farm_members(farm_id: str, email: str) -> list[str] | None:
@@ -1024,9 +783,7 @@ def add_farm_member(farm_id: str, email: str, member_email: str) -> str:
             return "user_not_found"
         if _member_exists(session, farm_id, member_email):
             return "already_member"
-        session.execute(
-            insert(farm_member_table).values(farm_id=farm_id, email=member_email)
-        )
+        session.execute(insert(farm_member_table).values(farm_id=farm_id, email=member_email))
         return "added"
 
 
@@ -1034,11 +791,15 @@ def remove_farm_member(farm_id: str, email: str, member_email: str) -> str:
     with SessionLocal.begin() as session:
         if not _member_exists(session, farm_id, email):
             return "farm_not_found"
-        members = session.execute(
-            select(farm_member_table.c.email)
-            .where(farm_member_table.c.farm_id == farm_id)
-            .with_for_update()
-        ).scalars().all()
+        members = (
+            session.execute(
+                select(farm_member_table.c.email)
+                .where(farm_member_table.c.farm_id == farm_id)
+                .with_for_update()
+            )
+            .scalars()
+            .all()
+        )
         count = len(members)
         if count <= 1:
             return "last_member"

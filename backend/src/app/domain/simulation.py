@@ -4,6 +4,7 @@ from pydantic import Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
 from app.domain.field import Crop
+from app.domain.optimization import SimulationResultSummary
 
 
 class GodningSettings(CamelModel):
@@ -128,6 +129,8 @@ class OptimizationConstraints(CamelModel):
 
 
 class Simulation(CamelModel):
+    revision: int = 0
+    result: SimulationResultSummary = Field(default_factory=SimulationResultSummary)
     id: str
     farm_id: str
     name: str

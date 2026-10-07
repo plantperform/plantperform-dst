@@ -1,9 +1,10 @@
+import os
 from collections import defaultdict
 
 from ortools.sat.python import cp_model
 
-from app.services.optimization.models import (
-    NUM_YEARS,
+from app.domain.optimization import NUM_YEARS
+from plantperform_optimizer.models import (
     AssignedRotation,
     OptimizationInput,
     OptimizationOutput,
@@ -19,9 +20,7 @@ def _scale(value: float) -> int:
 def _years_with_crop(crop_codes: tuple[int, ...], afgrode_kode: int) -> int:
     if not crop_codes:
         return 0
-    return sum(
-        crop_codes[year % len(crop_codes)] == afgrode_kode for year in range(NUM_YEARS)
-    )
+    return sum(crop_codes[year % len(crop_codes)] == afgrode_kode for year in range(NUM_YEARS))
 
 
 def solve(input: OptimizationInput) -> OptimizationOutput:
@@ -76,15 +75,15 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         chosen_area = sum(
             _scale(field.area_ha)
             * _years_with_crop(
-                tuple(year.afgrode_kode for year in option.years), limit.afgrode_kode,
+                tuple(year.afgrode_kode for year in option.years),
+                limit.afgrode_kode,
             )
             * choice_vars[(field.id, option.key)]
             for field in input.fields
             for option in field.options
         )
         fixed_area = sum(
-            _scale(fixed.area_ha)
-            * _years_with_crop(fixed.crop_codes_by_year, limit.afgrode_kode)
+            _scale(fixed.area_ha) * _years_with_crop(fixed.crop_codes_by_year, limit.afgrode_kode)
             for fixed in input.fixed_fields
         )
         area_over_years = chosen_area + fixed_area
@@ -107,6 +106,7 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
     model.Maximize(total_db2)
 
     solver = cp_model.CpSolver()
+    solver.parameters.num_search_workers = int(os.getenv("OPTIMIZER_SOLVER_THREADS", "2"))
     solver.parameters.max_time_in_seconds = input.time_limit_seconds
     status = solver.Solve(model)
 

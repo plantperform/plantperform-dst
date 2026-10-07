@@ -4,6 +4,7 @@ import type {
   FieldRecord,
   OptimizeSimulationInput,
   OptimizeSimulationResponse,
+  Simulation,
   YearlyOptimizeSimulationInput,
 } from '@/api/types'
 import type { CropAreaViolation } from '@/lib/crop-area-limits'
@@ -14,7 +15,7 @@ export type OptimizationRunRequest =
   | { kind: 'yearly'; input: YearlyOptimizeSimulationInput }
 
 type OptimizationRunBase = OptimizationRunRequest & {
-  id: number
+  id: string
   farmId: string
   simulationId: string
   startedAt: number
@@ -22,7 +23,8 @@ type OptimizationRunBase = OptimizationRunRequest & {
 
 export type OptimizationRun = OptimizationRunBase &
   (
-    | { status: 'running' }
+    | { status: 'running'; phase: 'submitting' | 'queued' | 'in_progress' }
+    | { status: 'outdated' }
     | {
         status: 'failed'
         error: string
@@ -44,7 +46,7 @@ export type StartOptimizationRun = (
     // The simulation's fields before the run, to describe what changed.
     fieldsBefore: FieldRecord[]
   },
-) => number | null
+) => string | null
 
 export type OptimizationRunsContextValue = {
   runs: ReadonlyMap<string, OptimizationRun>
@@ -53,12 +55,13 @@ export type OptimizationRunsContextValue = {
   startRun: StartOptimizationRun
   dismissRun: (simulationId: string) => void
   markStale: (simulationId: string) => void
+  syncSimulations: (simulations: Simulation[]) => void
 }
 
 export const OptimizationRunsContext =
   createContext<OptimizationRunsContextValue | null>(null)
 
-const useOptimizationRunsContext = () => {
+export const useOptimizationRunsContext = () => {
   const context = useContext(OptimizationRunsContext)
   if (!context) {
     throw new Error(

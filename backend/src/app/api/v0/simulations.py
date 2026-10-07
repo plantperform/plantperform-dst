@@ -1,6 +1,6 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -22,8 +22,14 @@ from app.data.repository import (
     update_simulation_constraints,
     update_simulation_field,
 )
+from app.data.simulation_store import SetupRevisionConflictError, get_result
 from app.domain.base import CamelModel
 from app.domain.field import FieldRecord, UpdateFieldRequest
+from app.domain.optimization import (
+    OptimizeSimulationRequest,
+    SimulationResult,
+    YearlyOptimizeSimulationRequest,
+)
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
@@ -35,46 +41,26 @@ from app.domain.simulation import (
     Simulation,
 )
 from app.services.optimization.crop_area_ranges import crop_area_ranges
-from app.services.optimization.orchestrator import (
-    ManualRotationNotFoundError,
-    OptimizationInfeasibleError,
-    OptimizationNotFoundError,
-    OptimizationUnknownError,
-    apply_manual_rotation,
-    compute_yearly_summary,
-    run_optimization,
-    run_yearly_optimization,
+from app.services.optimization.jobs import (
+    QueueUnavailableError,
+    SimulationNotFoundError,
+    SubmissionConflictError,
+    submit,
 )
 from app.services.rotations import afgroede_normer, saedskifte_kategorier
 from app.services.scenario.candidate_evaluator import (
-    START_CALENDAR_YEAR,
     evaluate_with_overrides,
+)
+from app.services.scenario.rotations import (
+    ManualRotationNotFoundError,
+    apply_manual_rotation,
+    compute_yearly_summary,
 )
 
 NUM_ROTATION_YEARS = 8
 
 router = APIRouter(prefix="/farms/{farm_id}/simulations", tags=["simulations"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
-
-
-class OptimizeSimulationRequest(CamelModel):
-    time_limit_seconds: float = Field(default=15, gt=0, le=600)
-    excluded_afgrodekoder: list[int] = Field(default_factory=list)
-
-
-class RotationAssignmentResponse(CamelModel):
-    field_id: str
-    rotation_id: str
-
-
-class OptimizeSimulationResponse(CamelModel):
-    status: Literal["OPTIMAL", "FEASIBLE"]
-    objective_db2: float
-    total_n_load_kg: float
-    total_leaching_kg: float
-    total_fen: float
-    fields: list[FieldRecord]
-    assignments: list[RotationAssignmentResponse]
 
 
 class YearlySummaryEntryResponse(CamelModel):
@@ -202,7 +188,8 @@ def get_farm_simulation_crop_area_ranges(
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
     ranges = crop_area_ranges(
-        fields, {row.field_id: row.candidates for row in field_candidates},
+        fields,
+        {row.field_id: row.candidates for row in field_candidates},
     )
     return [
         CropAreaRangeResponse(
@@ -217,137 +204,49 @@ def get_farm_simulation_crop_area_ranges(
     ]
 
 
-@router.post("/{simulation_id}/optimize", response_model=OptimizeSimulationResponse)
+def _submit_optimization(farm_id, simulation_id, user, kind, request, background_tasks):
+    try:
+        return submit(
+            farm_id, simulation_id, user.email, kind, request, background_tasks=background_tasks
+        )
+    except SimulationNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
+    except SubmissionConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@router.post("/{simulation_id}/optimize", response_model=SimulationResult, status_code=202)
 def post_farm_simulation_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
-    request: OptimizeSimulationRequest | None = None,
-) -> OptimizeSimulationResponse:
-    optimization_request = request or OptimizeSimulationRequest()
-
-    try:
-        result = run_optimization(
-            farm_id,
-            simulation_id,
-            optimization_request.time_limit_seconds,
-            frozenset(optimization_request.excluded_afgrodekoder),
-            user.email,
-        )
-    except OptimizationNotFoundError as error:
-        raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
-    except OptimizationInfeasibleError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    except OptimizationUnknownError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-
-    return OptimizeSimulationResponse(
-        status=result.output.status,
-        objective_db2=result.output.total_db2,
-        total_n_load_kg=result.output.total_n_load_kg,
-        total_leaching_kg=result.output.total_leaching_kg,
-        total_fen=result.output.total_fen,
-        fields=list(result.fields),
-        assignments=[
-            RotationAssignmentResponse(
-                field_id=assignment.field_id,
-                rotation_id=assignment.rotation_id,
-            )
-            for assignment in result.output.assignments
-        ],
-    )
+    request: OptimizeSimulationRequest,
+    background_tasks: BackgroundTasks,
+) -> SimulationResult:
+    return _submit_optimization(farm_id, simulation_id, user, "optimize", request, background_tasks)
 
 
-class KystvandoplandYearlyNLoadCaps(CamelModel):
-    """Per-calendar-year udledning caps for one kystvandopland.
-
-    Each kystvandopland containing the scenarie's marker can be configured
-    independently, with its own "same for all years"/"per year" UI state. See
-    KystvandoplandNLoadCap for why oplande must not be combined.
-    """
-
-    kystvand_id: int | None = None
-    max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
-
-
-class YearlyOptimizeSimulationRequest(CamelModel):
-    time_limit_seconds: float = Field(default=20, gt=0, le=600)
-    max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
-    db2_swing_pct: float | None = Field(default=None, ge=0)
-    excluded_afgrodekoder: list[int] = Field(default_factory=list)
-
-
-class YearlyOptimizeSimulationResponse(CamelModel):
-    status: Literal["OPTIMAL", "FEASIBLE"]
-    objective_db2: float
-    total_n_load_kg: float
-    total_leaching_kg: float
-    total_fen: float
-    total_db2_by_year: dict[int, float]
-    total_n_load_by_year: dict[int, float]
-    fields: list[FieldRecord]
-    assignments: list[RotationAssignmentResponse]
-
-
-@router.post("/{simulation_id}/optimize-yearly", response_model=YearlyOptimizeSimulationResponse)
+@router.post("/{simulation_id}/optimize-yearly", response_model=SimulationResult, status_code=202)
 def post_farm_simulation_yearly_optimization(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
-    request: YearlyOptimizeSimulationRequest | None = None,
-) -> YearlyOptimizeSimulationResponse:
-    """"Års-optimering" (Phase 11) works like /optimize but uses per-calendar-
-    year udledning caps and a DB fluctuation limit instead of scenarie totals.
-    The solver chooses how far to offset each mark's sædskifte.
-    """
-    optimization_request = request or YearlyOptimizeSimulationRequest()
-    max_n_load_by_kystvandopland = {
-        cap.kystvand_id: tuple(
-            cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
-            for i in range(NUM_ROTATION_YEARS)
-        )
-        for cap in optimization_request.max_n_load_by_kystvandopland
-    }
-    try:
-        result = run_yearly_optimization(
-            farm_id,
-            simulation_id,
-            optimization_request.time_limit_seconds,
-            max_n_load_by_kystvandopland,
-            optimization_request.db2_swing_pct,
-            frozenset(optimization_request.excluded_afgrodekoder),
-            user.email,
-        )
-    except OptimizationNotFoundError as error:
-        raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
-    except OptimizationInfeasibleError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    except OptimizationUnknownError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+    request: YearlyOptimizeSimulationRequest,
+    background_tasks: BackgroundTasks,
+) -> SimulationResult:
+    return _submit_optimization(farm_id, simulation_id, user, "yearly", request, background_tasks)
 
-    return YearlyOptimizeSimulationResponse(
-        status=result.output.status,
-        objective_db2=result.output.total_db2,
-        total_n_load_kg=result.output.total_n_load_kg,
-        total_leaching_kg=result.output.total_leaching_kg,
-        total_fen=result.output.total_fen,
-        total_db2_by_year={
-            START_CALENDAR_YEAR + i: value
-            for i, value in enumerate(result.output.total_db2_by_year)
-        },
-        total_n_load_by_year={
-            START_CALENDAR_YEAR + i: value
-            for i, value in enumerate(result.output.total_n_load_by_year)
-        },
-        fields=list(result.fields),
-        assignments=[
-            RotationAssignmentResponse(
-                field_id=assignment.field_id,
-                rotation_id=assignment.rotation_id,
-            )
-            for assignment in result.output.assignments
-        ],
-    )
+
+@router.get("/{simulation_id}/result", response_model=SimulationResult)
+def get_farm_simulation_result(
+    farm_id: str, simulation_id: str, user: CurrentUser, include_output: bool = True
+):
+    result = get_result(farm_id, simulation_id, user.email, include_output=include_output)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    return result
 
 
 class YearlyOptimizationSaedskifteOption(CamelModel):
@@ -406,9 +305,7 @@ def get_farm_simulation_yearly_optimization_candidates(
 
     by_kategori: dict[str, list[YearlyOptimizationSaedskifteOption]] = {}
     for (saedskiftevariant, variant), candidate in by_pair.items():
-        crop_sequence = [
-            y.year.afgrode_navn for y in candidate.years[: candidate.active_len]
-        ]
+        crop_sequence = [y.year.afgrode_navn for y in candidate.years[: candidate.active_len]]
         option = YearlyOptimizationSaedskifteOption(
             saedskiftevariant=saedskiftevariant,
             variant=variant,
@@ -484,7 +381,8 @@ def get_farm_simulation_field_candidate_detail(
         detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
     except FieldNotOptimizedError as error:
         raise HTTPException(
-            status_code=422, detail="Marken er ikke optimeret endnu",
+            status_code=422,
+            detail="Marken er ikke optimeret endnu",
         ) from error
 
     if detail is None:
@@ -532,9 +430,7 @@ def post_farm_simulation_field_preview_rotation(
     if field is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
     soil_data = get_registry_soil_data(field.imk_id)
-    percolation, org_n_topsoil, s_soil = (
-        soil_data if soil_data is not None else (None, None, None)
-    )
+    percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
 
     godning = simulation.godning
     candidate = evaluate_with_overrides(
@@ -582,9 +478,16 @@ def post_farm_simulation_field_apply_rotation(
     """
     try:
         field = apply_manual_rotation(
-            farm_id, simulation_id, field_id,
-            request.base_ref, request.overrides, user.email, request.start_year,
+            farm_id,
+            simulation_id,
+            field_id,
+            request.base_ref,
+            request.overrides,
+            user.email,
+            request.start_year,
         )
+    except SetupRevisionConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ManualRotationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering eller mark ikke fundet") from error
 

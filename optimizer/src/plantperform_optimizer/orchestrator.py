@@ -1,16 +1,18 @@
+"""Prepare solver inputs and assemble results without changing simulation setup."""
+
 from dataclasses import dataclass
 
 from app.data import repository
-from app.domain.field import FieldRecord, UpdateFieldRequest
-from app.domain.rotation_candidate import (
-    RotationCandidateEvaluation,
-    RotationCandidateRef,
-    RotationPositionOverride,
-)
+from app.domain.field import FieldRecord
+from app.domain.optimization import NUM_YEARS
+from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
-from app.services.optimization.engine import solve
-from app.services.optimization.models import (
+from app.services.scenario import candidate_evaluator
+from app.services.scenario.rotations import selected_locked_candidate
+from plantperform_optimizer.deadline import check_deadline, solver_time_limit
+from plantperform_optimizer.engine import solve
+from plantperform_optimizer.models import (
     ConstraintsInput,
     FieldInput,
     FixedFieldContribution,
@@ -24,8 +26,7 @@ from app.services.optimization.models import (
     YearlyOptimizationOutput,
     YearlyRotationOption,
 )
-from app.services.optimization.yearly_engine import NUM_YEARS, solve_yearly
-from app.services.scenario import candidate_evaluator
+from plantperform_optimizer.yearly_engine import solve_yearly
 
 
 class OptimizationNotFoundError(Exception):
@@ -44,21 +45,14 @@ class OptimizationUnknownError(Exception):
 class OptimizationRunResult:
     output: OptimizationOutput
     fields: tuple[FieldRecord, ...]
+    selected_candidates: dict[str, RotationCandidateEvaluation]
 
 
 @dataclass(frozen=True)
 class YearlyOptimizationRunResult:
     output: YearlyOptimizationOutput
     fields: tuple[FieldRecord, ...]
-
-
-@dataclass(frozen=True)
-class YearlySummaryEntry:
-    year: int
-    total_n_load_kg: float
-    total_db2: float
-    total_fen: float
-    field_count: int
+    selected_candidates: dict[str, RotationCandidateEvaluation]
 
 
 def _exclude_afgrodekoder(
@@ -122,6 +116,7 @@ def _kvote_by_kystvandopland(fields: list[FieldRecord]) -> dict[int, float]:
     """
     quota_by_kystvand: dict[int, float] = {}
     for field in fields:
+        check_deadline()
         if field.kystvand_id is None or not field.kvotegivende:
             continue
         quota_by_kystvand[field.kystvand_id] = (
@@ -132,16 +127,6 @@ def _kvote_by_kystvandopland(fields: list[FieldRecord]) -> dict[int, float]:
         for kystvand_id, quota in quota_by_kystvand.items()
         if quota > 0
     }
-
-
-def _selected_locked_candidate(
-    field: FieldRecord,
-    candidates: list[RotationCandidateEvaluation],
-) -> RotationCandidateEvaluation | None:
-    allowed = set(field.allowed_rotation_ids)
-    if field.rotation_id in allowed:
-        return next((c for c in candidates if c.ref.to_id() == field.rotation_id), None)
-    return next((c for c in candidates if c.ref.to_id() in allowed), None)
 
 
 def _locked_field_contribution(
@@ -159,7 +144,8 @@ def _locked_field_contribution(
         area_ha=field.area_ha if candidate is not None else 0.0,
         crop_codes_by_year=(
             tuple(y.year.afgrode_kode for y in candidate.years[: candidate.active_len])
-            if candidate is not None else ()
+            if candidate is not None
+            else ()
         ),
     )
 
@@ -200,10 +186,16 @@ def run_optimization(
     time_limit_seconds: float,
     excluded_afgrodekoder: frozenset[int],
     email: str,
+    snapshot=None,
 ) -> OptimizationRunResult:
-    simulation = repository.get_simulation(farm_id, simulation_id, email)
-    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
+    if snapshot is None:
+        simulation = repository.get_simulation(farm_id, simulation_id, email)
+        fields = repository.list_simulation_fields(farm_id, simulation_id, email)
+        field_candidates = repository.list_simulation_field_candidates(
+            farm_id, simulation_id, email
+        )
+    else:
+        simulation, fields, field_candidates = snapshot
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -216,11 +208,13 @@ def run_optimization(
     field_inputs = []
     fixed_fields = []
     for field in fields:
+        check_deadline()
         if field.allowed_rotation_ids:
             candidate = None
             if simulation.constraints.crop_area_limits:
-                candidate = _selected_locked_candidate(
-                    field, candidates_by_field_id.get(field.id, []),
+                candidate = selected_locked_candidate(
+                    field,
+                    candidates_by_field_id.get(field.id, []),
                 )
                 if candidate is None:
                     raise OptimizationInfeasibleError(
@@ -231,7 +225,9 @@ def run_optimization(
             continue
 
         options = _build_options(
-            field, candidates_by_field_id.get(field.id, []), excluded_afgrodekoder,
+            field,
+            candidates_by_field_id.get(field.id, []),
+            excluded_afgrodekoder,
         )
         if not options:
             raise OptimizationInfeasibleError(
@@ -256,13 +252,14 @@ def run_optimization(
             fixed_fields=tuple(fixed_fields),
             constraints=ConstraintsInput(
                 max_n_load_by_kystvandopland=_max_n_load_by_kystvandopland(
-                    fields, simulation.constraints.max_n_load_by_kystvandopland,
+                    fields,
+                    simulation.constraints.max_n_load_by_kystvandopland,
                 ),
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
             ),
-            time_limit_seconds=time_limit_seconds,
+            time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
     )
 
@@ -274,123 +271,36 @@ def run_optimization(
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — "
-            "prøv en længere tidsgrænse."
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv en længere tidsgrænse."
         )
 
-    updated_by_id: dict[str, FieldRecord] = {}
-    for assignment in output.assignments:
-        updated_field = repository.update_simulation_field(
-            farm_id,
-            simulation_id,
-            assignment.field_id,
-            UpdateFieldRequest(
-                crop_rotation=list(assignment.years),
-                rotation_id=assignment.rotation_id,
-                db2=assignment.db2,
-                n_load=assignment.n_load,
-                leaching=assignment.leaching,
-                fen=assignment.fen,
-            ),
-            email,
+    updated_by_id = {
+        assignment.field_id: _assigned_field(
+            next(field for field in fields if field.id == assignment.field_id),
+            assignment,
         )
-        if updated_field is None:
-            raise OptimizationNotFoundError
-        updated_by_id[assignment.field_id] = updated_field
-
-    # Locked marks never receive an assignment (see _locked_field_contribution),
-    # so the caller's full field list - not just the freshly solved ones - is
-    # rebuilt here in the original order, with locked marks passed through
-    # unchanged.
+        for assignment in output.assignments
+    }
     result_fields = tuple(updated_by_id.get(field.id, field) for field in fields)
-    return OptimizationRunResult(output=output, fields=result_fields)
+    selected = {
+        field.id: candidate
+        for field in result_fields
+        for candidate in candidates_by_field_id.get(field.id, [])
+        if candidate.ref.to_id() == field.rotation_id
+    }
+    return OptimizationRunResult(output=output, fields=result_fields, selected_candidates=selected)
 
 
-class ManualRotationNotFoundError(Exception):
-    """The simulering, mark, or its stored candidate set (jbnr source) is missing."""
-
-
-def apply_manual_rotation(
-    farm_id: str,
-    simulation_id: str,
-    field_id: str,
-    base_ref: RotationCandidateRef,
-    overrides: list[RotationPositionOverride],
-    email: str,
-    start_year: int = 1,
-) -> FieldRecord | None:
-    """Apply a Phase 10 "Rediger manuelt" adjustment to a mark's rotation.
-
-    Recalculate from base_ref plus any single-position overrides, store the
-    result as an additional replaceable candidate on the mark, and write it
-    back exactly as "Optimér" would, with the same area/retention scaling as
-    _build_options. Lock the mark to this choice through allowed_rotation_ids
-    so a later "Optimér" run cannot overwrite the manual adjustment until the
-    user unlocks it.
-    """
-    simulation = repository.get_simulation(farm_id, simulation_id, email)
-    field = repository.get_simulation_field(farm_id, simulation_id, field_id, email)
-    if simulation is None or field is None:
-        raise ManualRotationNotFoundError
-
-    candidates_row = repository.get_simulation_field_candidates(
-        farm_id,
-        simulation_id,
-        field_id,
-        email,
-    )
-    if candidates_row is None:
-        raise ManualRotationNotFoundError
-
-    godning = simulation.godning
-    soil_data = repository.get_registry_soil_data(field.imk_id)
-    percolation, org_n_topsoil, s_soil = (
-        soil_data if soil_data is not None else (None, None, None)
-    )
-    candidate = candidate_evaluator.evaluate_with_overrides(
-        base_ref, overrides, jbnr=candidates_row.jbnr,
-        driftsform=godning.driftsform,
-        org_mineral_n=godning.org_mineral_n,
-        mineralsk_andel_pct=godning.mineralsk_andel_pct,
-        only_organic=godning.only_organic,
-        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
-        fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
-        praecisionsjordbrug=simulation.praecisionsjordbrug,
-        tidlig_saaning=simulation.tidlig_saaning,
-        mellemafgrode=simulation.mellemafgrode,
-        start_year=start_year,
-        real_history=candidates_row.real_history,
-        percolation_by_kategori=percolation,
-        org_n_topsoil=org_n_topsoil,
-        s_soil=s_soil,
-    )
-    if candidate is None:
-        return None
-
-    if not repository.append_manual_field_candidate(
-        farm_id,
-        simulation_id,
-        field_id,
-        candidate,
-        email,
-    ):
-        raise ManualRotationNotFoundError
-
-    retention_factor = 1 - (field.retention or 0) / 100
-    leaching_total = candidate.avg_leaching_kg_n_ha * field.area_ha
-    rotation_id = candidate.ref.to_id()
-    return repository.update_simulation_field(
-        farm_id, simulation_id, field_id,
-        UpdateFieldRequest(
-            crop_rotation=[y.year for y in candidate.years[: candidate.active_len]],
-            rotation_id=rotation_id,
-            db2=candidate.avg_db_kr_ha * field.area_ha,
-            n_load=leaching_total * retention_factor,
-            leaching=leaching_total,
-            fen=candidate.avg_fen * field.area_ha,
-            allowed_rotation_ids=[rotation_id],
-        ),
-        email,
+def _assigned_field(field, assignment):
+    return field.model_copy(
+        update={
+            "crop_rotation": list(assignment.years),
+            "rotation_id": assignment.rotation_id,
+            "db2": assignment.db2,
+            "n_load": assignment.n_load,
+            "leaching": assignment.leaching,
+            "fen": assignment.fen,
+        }
     )
 
 
@@ -439,9 +349,7 @@ def _expand_yearly_options(
     candidates = [
         c
         for c in candidates
-        if c.overrides
-        or c.base_ref is None
-        or c.base_ref.to_id() not in present_ids
+        if c.overrides or c.base_ref is None or c.base_ref.to_id() not in present_ids
     ]
 
     options: list[YearlyRotationOption] = []
@@ -451,17 +359,21 @@ def _expand_yearly_options(
 
         source_ref = candidate.base_ref or candidate.ref
         for shift in range(1, candidate.active_len + 1):
+            check_deadline()
             variant = (
                 candidate
                 if shift == 1 and candidate.base_ref is None
                 else candidate_evaluator.evaluate_with_overrides(
-                    source_ref, candidate.overrides, jbnr=jbnr,
+                    source_ref,
+                    candidate.overrides,
+                    jbnr=jbnr,
                     driftsform=godning.driftsform,
                     org_mineral_n=godning.org_mineral_n,
                     mineralsk_andel_pct=godning.mineralsk_andel_pct,
                     only_organic=godning.only_organic,
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
-                    fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+                    fdato=fdato,
+                    precision_dagsbasis=precision_dagsbasis,
                     praecisionsjordbrug=praecisionsjordbrug,
                     tidlig_saaning=tidlig_saaning,
                     mellemafgrode=mellemafgrode,
@@ -476,12 +388,8 @@ def _expand_yearly_options(
                 continue
 
             db2_by_year = tuple(y.db_kr_ha * field.area_ha for y in variant.years)
-            leaching_by_year = tuple(
-                y.leaching_kg_n_ha * field.area_ha for y in variant.years
-            )
-            n_load_by_year = tuple(
-                leaching * retention_factor for leaching in leaching_by_year
-            )
+            leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in variant.years)
+            n_load_by_year = tuple(leaching * retention_factor for leaching in leaching_by_year)
             ref_id = variant.ref.to_id()
             options.append(
                 YearlyRotationOption(
@@ -530,7 +438,7 @@ def _locked_yearly_field_contribution(
     caller can fail with a clear error instead of silently dropping the
     mark's quota use from the model.
     """
-    candidate = _selected_locked_candidate(field, candidates)
+    candidate = selected_locked_candidate(field, candidates)
     if candidate is None:
         return None
     retention_factor = 1 - (field.retention or 0) / 100
@@ -555,6 +463,7 @@ def run_yearly_optimization(
     db2_swing_pct: float | None,
     excluded_afgrodekoder: frozenset[int],
     email: str,
+    snapshot=None,
 ) -> YearlyOptimizationRunResult:
     """Run Phase 11 "Års-optimering" with annual rotation shifting.
 
@@ -567,9 +476,14 @@ def run_yearly_optimization(
 
     Every remaining candidate can be shifted; see _expand_yearly_options.
     """
-    simulation = repository.get_simulation(farm_id, simulation_id, email)
-    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
+    if snapshot is None:
+        simulation = repository.get_simulation(farm_id, simulation_id, email)
+        fields = repository.list_simulation_fields(farm_id, simulation_id, email)
+        field_candidates = repository.list_simulation_field_candidates(
+            farm_id, simulation_id, email
+        )
+    else:
+        simulation, fields, field_candidates = snapshot
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -586,6 +500,7 @@ def run_yearly_optimization(
     fixed_fields = []
     options_by_field_id: dict[str, tuple[YearlyRotationOption, ...]] = {}
     for field in fields:
+        check_deadline()
         field_candidates_row = candidates_by_field_id.get(field.id)
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
 
@@ -606,8 +521,12 @@ def run_yearly_optimization(
             soil_data if soil_data is not None else (None, None, None)
         )
         options = _expand_yearly_options(
-            field, base_candidates, jbnr=jbnr, godning=simulation.godning,
-            fdato=simulation.eea_fdato, precision_dagsbasis=simulation.eea_precision_dagsbasis,
+            field,
+            base_candidates,
+            jbnr=jbnr,
+            godning=simulation.godning,
+            fdato=simulation.eea_fdato,
+            precision_dagsbasis=simulation.eea_precision_dagsbasis,
             praecisionsjordbrug=simulation.praecisionsjordbrug,
             tidlig_saaning=simulation.tidlig_saaning,
             mellemafgrode=simulation.mellemafgrode,
@@ -640,14 +559,15 @@ def run_yearly_optimization(
             fixed_fields=tuple(fixed_fields),
             constraints=YearlyConstraintsInput(
                 max_n_load_by_kystvandopland_and_year=_max_n_load_by_kystvandopland_and_year(
-                    fields, max_n_load_by_kystvandopland,
+                    fields,
+                    max_n_load_by_kystvandopland,
                 ),
                 db2_swing_pct=db2_swing_pct,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
             ),
-            time_limit_seconds=time_limit_seconds,
+            time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
     )
 
@@ -659,101 +579,30 @@ def run_yearly_optimization(
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — "
-            "prøv en længere tidsgrænse."
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv en længere tidsgrænse."
         )
 
-    updated_by_id: dict[str, FieldRecord] = {}
+    updated_by_id = {}
+    selected = {}
     for assignment in output.assignments:
         winning_option = next(
             option
             for option in options_by_field_id[assignment.field_id]
             if option.id == assignment.rotation_id
         )
-        if not repository.append_manual_field_candidate(
-            farm_id,
-            simulation_id,
-            assignment.field_id,
-            winning_option.candidate,
-            email,
-        ):
-            raise OptimizationNotFoundError
-        updated_field = repository.update_simulation_field(
-            farm_id,
-            simulation_id,
-            assignment.field_id,
-            UpdateFieldRequest(
-                crop_rotation=list(assignment.years),
-                rotation_id=assignment.rotation_id,
-                db2=assignment.db2,
-                n_load=assignment.n_load,
-                leaching=assignment.leaching,
-                fen=assignment.fen,
-            ),
-            email,
-        )
-        if updated_field is None:
-            raise OptimizationNotFoundError
-        updated_by_id[assignment.field_id] = updated_field
-
-    # Locked marks never receive an assignment (see
-    # _locked_yearly_field_contribution), so the caller's full field list -
-    # not just the freshly solved ones - is rebuilt here in the original
-    # order, with locked marks passed through unchanged.
+        selected[assignment.field_id] = winning_option.candidate
+        field = next(field for field in fields if field.id == assignment.field_id)
+        updated_by_id[field.id] = _assigned_field(field, assignment)
     result_fields = tuple(updated_by_id.get(field.id, field) for field in fields)
-    return YearlyOptimizationRunResult(output=output, fields=result_fields)
-
-
-def compute_yearly_summary(
-    farm_id: str,
-    simulation_id: str,
-    email: str,
-) -> tuple[YearlySummaryEntry, ...] | None:
-    """Summarize annual udledning, DB2, and foderenheder for optimized marks.
-
-    udledning is retention-corrected. Each year is a position in the individual
-    mark's own rotation cycle. The result feeds the "Årsoversigt" strip at the
-    top of the Liste-visning. Marker without a winning candidate, which have not yet
-    been optimized, do not contribute. Rotations shorter than those of other
-    marker contribute only to the years they actually cover; field_count shows
-    how many marker have data for each year.
-    """
-    fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-    field_candidates = repository.list_simulation_field_candidates(farm_id, simulation_id, email)
-    if fields is None or field_candidates is None:
-        return None
-
-    candidates_by_field_id = {fc.field_id: fc.candidates for fc in field_candidates}
-
-    totals: dict[int, dict[str, float]] = {}
-    for field in fields:
-        if field.rotation_id is None:
-            continue
-        candidates = candidates_by_field_id.get(field.id, [])
-        candidate = next(
-            (c for c in candidates if c.ref.to_id() == field.rotation_id), None,
-        )
-        if candidate is None:
-            continue
-
-        retention_factor = 1 - (field.retention or 0) / 100
-        for index, year_result in enumerate(candidate.years[: candidate.active_len]):
-            bucket = totals.setdefault(
-                index + 1, {"n_load": 0.0, "db2": 0.0, "fen": 0.0, "count": 0},
-            )
-            bucket["n_load"] += year_result.leaching_kg_n_ha * field.area_ha * retention_factor
-            bucket["db2"] += year_result.db_kr_ha * field.area_ha
-            if year_result.db_detail.get("udbytteenhed") == "FE/ha":
-                bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha
-            bucket["count"] += 1
-
-    return tuple(
-        YearlySummaryEntry(
-            year=year,
-            total_n_load_kg=data["n_load"],
-            total_db2=data["db2"],
-            total_fen=data["fen"],
-            field_count=int(data["count"]),
-        )
-        for year, data in sorted(totals.items())
+    for field in result_fields:
+        if field.id not in selected and field.rotation_id:
+            row = candidates_by_field_id.get(field.id)
+            if row:
+                candidate = next(
+                    (c for c in row.candidates if c.ref.to_id() == field.rotation_id), None
+                )
+                if candidate:
+                    selected[field.id] = candidate
+    return YearlyOptimizationRunResult(
+        output=output, fields=result_fields, selected_candidates=selected
     )

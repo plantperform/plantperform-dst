@@ -10,7 +10,7 @@ import type {
   FieldRecord,
   FieldRotationCandidates,
   OptimizeSimulationInput,
-  OptimizeSimulationResponse,
+  SimulationResult,
   RegistryField,
   OptimizationConstraints,
   RecomputeFieldRotationInput,
@@ -18,7 +18,6 @@ import type {
   Simulation,
   UpdateFieldInput,
   YearlyOptimizeSimulationInput,
-  YearlyOptimizeSimulationResponse,
 } from '@/api/types'
 
 export const createFarm = (input: CreateFarmInput) =>
@@ -73,7 +72,13 @@ export const createSimulation = (
   )
 
 export const deleteSimulation = (farmId: string, simulationId: string) =>
-  deleteJson(`/farms/${farmId}/simulations/${simulationId}`)
+  deleteJson(`/farms/${farmId}/simulations/${simulationId}`).then(() => {
+    window.dispatchEvent(
+      new CustomEvent('simulation:deleted', {
+        detail: { farmId, simulationId },
+      }),
+    )
+  })
 
 export const updateSimulationConstraints = (
   farmId: string,
@@ -83,7 +88,14 @@ export const updateSimulationConstraints = (
   patchJson<Simulation, OptimizationConstraints>(
     `/farms/${farmId}/simulations/${simulationId}/constraints`,
     input,
-  )
+  ).then((value) => {
+    window.dispatchEvent(
+      new CustomEvent('simulation:changed', {
+        detail: { farmId, simulationId },
+      }),
+    )
+    return value
+  })
 
 export const updateSimulationField = (
   farmId: string,
@@ -94,14 +106,21 @@ export const updateSimulationField = (
   patchJson<FieldRecord, UpdateFieldInput>(
     `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}`,
     input,
-  )
+  ).then((value) => {
+    window.dispatchEvent(
+      new CustomEvent('simulation:changed', {
+        detail: { farmId, simulationId },
+      }),
+    )
+    return value
+  })
 
 export const runSimulationOptimization = (
   farmId: string,
   simulationId: string,
   input: OptimizeSimulationInput = {},
 ) =>
-  postJson<OptimizeSimulationResponse, OptimizeSimulationInput>(
+  postJson<SimulationResult, OptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize`,
     input,
   )
@@ -111,7 +130,7 @@ export const runYearlySimulationOptimization = (
   simulationId: string,
   input: YearlyOptimizeSimulationInput = {},
 ) =>
-  postJson<YearlyOptimizeSimulationResponse, YearlyOptimizeSimulationInput>(
+  postJson<SimulationResult, YearlyOptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize-yearly`,
     input,
   )
@@ -145,4 +164,11 @@ export const applyFieldRotation = (
   postJson<FieldRecord, RecomputeFieldRotationInput>(
     `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}/apply-rotation`,
     input,
-  )
+  ).then((value) => {
+    window.dispatchEvent(
+      new CustomEvent('simulation:changed', {
+        detail: { farmId, simulationId },
+      }),
+    )
+    return value
+  })
