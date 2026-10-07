@@ -6,6 +6,7 @@ import type {
   RotationCategoryOption,
   Simulation,
 } from '@/api/types'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   catchCropSowingLabel,
   combinationCount,
@@ -391,6 +392,18 @@ describe('summary labels', () => {
 })
 
 describe('toCreateSimulationInput', () => {
+  it('starts on Standard and keeps the economics profile out of the request', () => {
+    expect(DEFAULT_SIMULATION_FORM_VALUES.economicsProfileId).toBe(
+      STANDARD_PROFILE_ID,
+    )
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        economicsProfileId: 'careful',
+      }),
+    ).toEqual(toCreateSimulationInput(filledValues))
+  })
+
   it('sends the typed numbers and the trimmed name', () => {
     const values: SimulationFormValues = {
       ...filledValues,

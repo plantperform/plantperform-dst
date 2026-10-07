@@ -15,6 +15,7 @@ import {
   effectiveMaxNLoadByCatchment,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import {
   formatFieldCount,
   formatNumber,
@@ -46,6 +47,7 @@ type SimulationSummaryProps = {
   fertiliserPresets: FertiliserPresetOption[]
   settings: OptimizationSettings
   constraints: OptimizationConstraints
+  economicsProfile: EconomicsProfile
   // Indexes of the steps each section links back to.
   onEditStep: (stepIndex: number) => void
 }
@@ -90,6 +92,7 @@ export const SimulationSummary = ({
   fertiliserPresets,
   settings,
   constraints,
+  economicsProfile,
   onEditStep,
 }: SimulationSummaryProps) => {
   const fieldCount = fields.length
@@ -139,6 +142,7 @@ export const SimulationSummary = ({
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
           <p>Udledningskvote: {OPTIMIZATION_KIND_LABELS[settings.kind]}</p>
+          <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
 
         <Section
