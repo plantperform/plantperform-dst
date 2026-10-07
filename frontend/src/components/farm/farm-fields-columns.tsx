@@ -643,7 +643,7 @@ export const buildFarmFieldsColumns = ({
       id: 'nNormPct',
       accessorFn: (field) => fieldNNormPct(field),
       header: ({ column }) => (
-        <SortableColumnHeaderContent label="N-norm" column={column} />
+        <SortableColumnHeaderContent label="N-norm%" column={column} />
       ),
       cell: ({ row }) => {
         const pct = fieldNNormPct(row.original)
@@ -664,7 +664,7 @@ export const buildFarmFieldsColumns = ({
       meta: {
         headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
         cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),
-        toggleLabel: 'N-norm',
+        toggleLabel: 'N-norm%',
       },
     })
   }

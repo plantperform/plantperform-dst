@@ -53,7 +53,7 @@ describe('compareFields', () => {
     }
   })
 
-  it('sorts by tildelingsprocent with unoptimized marker last', () => {
+  it('sorts by N-norm level with unoptimized marker last', () => {
     const full = { ...field('full', 1, 0), rotationId: '1:1:100' }
     const reduced = { ...field('reduced', 1, 0), rotationId: '1:1:80' }
     const none = { ...field('none', 1, 0), rotationId: null }

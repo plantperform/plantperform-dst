@@ -272,7 +272,7 @@ const KeyMetricsSection = ({
             !yieldAmount
               ? 'Normudbytte -'
               : response
-                ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 0)} % af normudbytte ${fmt(response.normYield, 0)}`
+                ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
                 : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
           }
         />
