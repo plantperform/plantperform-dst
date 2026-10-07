@@ -215,9 +215,8 @@ describe('yield response in the walkthrough', () => {
     expect(yieldResponse(90, undefined)).toBeNull()
   })
 
-  it('caps only crops with a response curve below the norm', () => {
-    expect(nNormTargetKgNHa(206, 80, true)).toBeCloseTo(164.8)
-    expect(nNormTargetKgNHa(159, 80, false)).toBe(159)
+  it('caps the N at the N-norm level', () => {
+    expect(nNormTargetKgNHa(206, 80)).toBeCloseTo(164.8)
   })
 })
 

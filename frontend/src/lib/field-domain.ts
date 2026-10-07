@@ -388,13 +388,9 @@ export const yieldResponse = (
   return { normYield: yieldAmount / factor, factor }
 }
 
-// The N a crop may have in total, forfrugt included. Crops without a
-// yield-response curve are always fertilized to the full norm.
-export const nNormTargetKgNHa = (
-  cropNorm: number,
-  nNormPct: number,
-  hasYieldResponse: boolean,
-): number => (hasYieldResponse ? cropNorm * (nNormPct / 100) : cropNorm)
+// The N a crop may have in total at an N-norm level, forfrugt included.
+export const nNormTargetKgNHa = (cropNorm: number, nNormPct: number): number =>
+  cropNorm * (nNormPct / 100)
 
 export const QUOTA_STATUS_NEAR_THRESHOLD = 0.9
 

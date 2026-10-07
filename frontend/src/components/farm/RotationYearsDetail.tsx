@@ -297,7 +297,7 @@ const KeyMetricsSection = ({
               term="nNormLevel"
               value={
                 hasYieldResponse
-                  ? `${fmt(year.nNormPct, 0)} % = ${fmt(nNormTargetKgNHa(cropNorm, year.nNormPct, true), 0)} kg N/ha`
+                  ? `${fmt(year.nNormPct, 0)} % = ${fmt(nNormTargetKgNHa(cropNorm, year.nNormPct), 0)} kg N/ha`
                   : '100 % (fuld norm)'
               }
             />
