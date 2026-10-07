@@ -27,6 +27,22 @@ vi.mock('@/api/hooks', () => ({
   simulationsKey: (farmId: string) => `/farms/${farmId}/simulations`,
   simulationViewKey: vi.fn(),
 }))
+vi.mock(
+  '@/components/farm/economics-profiles-state',
+  async (importOriginal) => {
+    const { STANDARD_PROFILE } = await import('@/lib/economics-profiles')
+    const economics = {
+      profiles: [STANDARD_PROFILE],
+      findProfile: () => STANDARD_PROFILE,
+      profileForSimulation: () => STANDARD_PROFILE,
+      assignProfile: vi.fn(),
+    }
+    return {
+      ...(await importOriginal<object>()),
+      useEconomicsProfiles: () => economics,
+    }
+  },
+)
 vi.mock('@/api/mutations', () => ({
   createSimulation: mocks.create,
   deleteSimulation: vi.fn(),

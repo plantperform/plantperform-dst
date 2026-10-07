@@ -76,6 +76,22 @@ vi.mock('@/api/mutations', () => ({
   createSimulation: (...args: unknown[]) => queries.create(...args),
   updateSimulation: (...args: unknown[]) => queries.update(...args),
 }))
+vi.mock(
+  '@/components/farm/economics-profiles-state',
+  async (importOriginal) => {
+    const { STANDARD_PROFILE } = await import('@/lib/economics-profiles')
+    const economics = {
+      profiles: [STANDARD_PROFILE],
+      findProfile: () => STANDARD_PROFILE,
+      profileForSimulation: () => STANDARD_PROFILE,
+      assignProfile: vi.fn(),
+    }
+    return {
+      ...(await importOriginal<object>()),
+      useEconomicsProfiles: () => economics,
+    }
+  },
+)
 vi.mock('swr', () => ({ mutate: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/components/ui/step-dialog', () => ({
   StepDialog: ({
