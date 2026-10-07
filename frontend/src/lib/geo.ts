@@ -39,7 +39,9 @@ const walkGeometry = (
   geometry.coordinates.forEach((polygon) => polygon.forEach((ring) => ring.forEach(visit)))
 }
 
-export const getFieldsBounds = (fields: FieldRecord[]): Bounds | null => {
+export const getFieldsBounds = (
+  fields: Pick<FieldRecord, 'geometry'>[],
+): Bounds | null => {
   let bounds: Bounds | null = null
 
   fields.forEach((field) => {

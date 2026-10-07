@@ -488,6 +488,11 @@ export const registryFieldsBulkKey = (imkIds: number[]) => {
   return `/registry/fields/bulk?imkIds=${imkIds.map(encodeURIComponent).join(',')}`
 }
 
+export const useRegistryFieldsBulk = (imkIds: number[]) =>
+  useSWR<RegistryField[]>(registryFieldsBulkKey(imkIds), fetcher, {
+    revalidateOnFocus: false,
+  })
+
 export const rotationCandidatesKey = (farmId?: string) => {
   if (!farmId) return null
 

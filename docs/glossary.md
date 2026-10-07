@@ -36,6 +36,7 @@ field" column is the name on the wire.
 | udledningsgrænse | `nLoadLimitKgNHa` | `udledningsgraenseKgnHa` | |
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
+| opslag i markregistret | registry lookup, `summarizeLookup` | | The marker found for a CVR before the farm is created, summed per kystvandopland |
 | retention | `retention` | `retention` | Share held back, 0 to 1 |
 | udvaskning | `leaching` | | Nitrate leaving the root zone |
 

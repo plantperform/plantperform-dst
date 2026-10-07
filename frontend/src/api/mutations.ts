@@ -49,14 +49,18 @@ const registryFieldToInput = (field: RegistryField): CreateFieldInput => ({
   geometry: field.geometry,
 })
 
+export const createFieldsFromRegistry = (
+  farmId: string,
+  registryFields: RegistryField[],
+) => createFields(farmId, registryFields.map(registryFieldToInput))
+
 export const importRegistryFields = async (
   farmId: string,
   imkIds: number[],
 ): Promise<FieldRecord[]> => {
   const key = registryFieldsBulkKey(imkIds)
   if (!key) return []
-  const registryFields = await fetcher<RegistryField[]>(key)
-  return createFields(farmId, registryFields.map(registryFieldToInput))
+  return createFieldsFromRegistry(farmId, await fetcher<RegistryField[]>(key))
 }
 
 export const detachField = (farmId: string, fieldId: string) =>
