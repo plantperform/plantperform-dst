@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import {
-  Plus,
   Search,
   Tractor,
   Users,
@@ -14,18 +13,19 @@ import { AppTopBar } from '@/components/AppTopBar'
 import { SproutMark } from '@/components/BrandMark'
 import {
   FARM_LIST_CLASS,
+  FarmListHeader,
   FarmRow,
   FarmRowSkeleton,
 } from '@/components/farm/FarmList'
-import { FarmOverviewHeader } from '@/components/farm/FarmOverviewHeader'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import {
-  latestOpenedFarm,
-  sortFarms,
+  farmMatchesSearch,
+  formatFarmCount,
+  sortFarmsByQuotaPressure,
   summarizeFarmFields,
   type FarmOverview,
 } from '@/lib/farm-overview'
@@ -79,28 +79,11 @@ export const HomePage = () => {
     [farmList, fieldsByFarm],
   )
   const sortedFarms = useMemo(
-    () => sortFarms(farmList, lastOpenedMap),
-    [farmList, lastOpenedMap],
+    () => sortFarmsByQuotaPressure(farmList, overviews),
+    [farmList, overviews],
   )
-  const latestFarm = latestOpenedFarm(farmList, lastOpenedMap)
-  const normalizedSearch = searchText.trim().toLowerCase()
-  const visibleFarms = normalizedSearch
-    ? sortedFarms.filter((farm) =>
-        [farm.name, farm.ownerName, farm.cvr ?? ''].some((value) =>
-          value.toLowerCase().includes(normalizedSearch),
-        ),
-      )
-    : sortedFarms
-  const totals = farmList.reduce(
-    (sum, farm) => {
-      const overview = overviews[farm.id]
-      return {
-        fieldCount: sum.fieldCount + (overview.totals?.fieldCount ?? 0),
-        areaHa: sum.areaHa + (overview.totals?.areaHa ?? 0),
-        overQuota: sum.overQuota + (overview.level === 'over' ? 1 : 0),
-      }
-    },
-    { fieldCount: 0, areaHa: 0, overQuota: 0 },
+  const visibleFarms = sortedFarms.filter((farm) =>
+    farmMatchesSearch(farm, searchText),
   )
   const isReady = Boolean(email) && !isLoading && !error && farms !== undefined
   const pending = email ? getPendingFarm(email) : null
@@ -162,14 +145,45 @@ export const HomePage = () => {
     <main className="min-h-screen bg-background">
       <AppTopBar />
 
-      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 pt-12 pb-16 sm:px-10">
-        <FarmOverviewHeader
-          farmCount={farmList.length}
-          fieldCount={totals.fieldCount}
-          areaHa={totals.areaHa}
-          overQuota={totals.overQuota}
-          loading={isLoading || fieldsLoading}
-        />
+      <div className="mx-auto flex max-w-6xl flex-col gap-5.5 px-6 pt-10 pb-16 sm:px-10">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div>
+            <h1 className="font-display text-3xl tracking-tight">
+              Dine bedrifter
+            </h1>
+            {farmList.length > 0 ? (
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
+                {formatFarmCount(farmList.length)}, sorteret efter hvor kvoten
+                er under pres. Tal for gennemsnittet af afgrødehistorikken.
+              </p>
+            ) : null}
+          </div>
+          {farmList.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="relative w-65 max-w-full">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Søg bedrift, ejer eller CVR"
+                  aria-label="Søg i bedrifter"
+                  className="h-9 w-full rounded-md border bg-card pr-3 pl-8.5 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
+                />
+              </div>
+              <Button
+                asChild
+                size="sm"
+                className="rounded-full px-3.5 text-[13px]"
+              >
+                <Link to="/farms/new">Opret bedrift</Link>
+              </Button>
+            </div>
+          ) : null}
+        </div>
 
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
           <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-foreground sm:flex-row sm:items-center sm:justify-between">
@@ -201,11 +215,12 @@ export const HomePage = () => {
           </div>
         ) : null}
 
-        {isLoading ? (
+        {isLoading || fieldsLoading ? (
           <div role="status">
             <p className="sr-only">Indlæser bedrifter...</p>
             <div className={FARM_LIST_CLASS} aria-hidden="true">
-              {[0, 1, 2].map((index) => (
+              <FarmListHeader />
+              {Array.from({ length: farmList.length || 3 }, (_, index) => (
                 <FarmRowSkeleton key={index} />
               ))}
             </div>
@@ -282,53 +297,26 @@ export const HomePage = () => {
           </div>
         ) : null}
 
-        {farmList.length > 0 ? (
-          <section className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <Button
-                asChild
-                variant="outline"
-                className="h-[38px] rounded-full"
-              >
-                <Link to="/farms/new">
-                  <Plus className="size-4" aria-hidden="true" />
-                  Opret bedrift
-                </Link>
-              </Button>
-              <div className="relative w-72 max-w-full">
-                <Search
-                  className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Søg navn, ejer eller CVR"
-                  aria-label="Søg i bedrifter"
-                  className="h-[38px] w-full rounded-full border bg-card pr-3.5 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
-                />
-              </div>
-            </div>
-            {visibleFarms.length > 0 ? (
-              <ul
-                className={cn(FARM_LIST_CLASS, 'motion-safe:animate-rise-in')}
-              >
+        {farmList.length > 0 && !fieldsLoading ? (
+          visibleFarms.length > 0 ? (
+            <div className={cn(FARM_LIST_CLASS, 'motion-safe:animate-rise-in')}>
+              <FarmListHeader />
+              <ul className="divide-y">
                 {visibleFarms.map((farm) => (
                   <FarmRow
                     key={farm.id}
                     farm={farm}
                     overview={overviews[farm.id]}
-                    latest={farm.id === latestFarm?.id}
+                    openedAt={lastOpenedMap[farm.id]}
                   />
                 ))}
               </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Ingen bedrifter matcher "{searchText.trim()}".
-              </p>
-            )}
-          </section>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Ingen bedrifter matcher "{searchText.trim()}".
+            </p>
+          )
         ) : null}
       </div>
     </main>

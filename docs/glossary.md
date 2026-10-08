@@ -33,6 +33,7 @@ field" column is the name on the wire.
 | udledningskvote, opland | `totalNLoadQuotaKgN` | `udledningskvoteKgN` | |
 | beregnet udledning | `calculatedNLoadKgN` | `beregnetUdledningKgN` | |
 | overholder | `withinQuota` | `overholder` | |
+| kvoten under pres | quota pressure | | How close a farm's catchments are to their quota; orders the farm list |
 | udledningsgrænse | `nLoadLimitKgNHa` | `udledningsgraenseKgnHa` | |
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
