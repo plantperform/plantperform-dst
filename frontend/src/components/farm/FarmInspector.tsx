@@ -515,6 +515,7 @@ export const FarmInspector = ({
                       effectiveView === 'list' ? undefined : requestZoomToField
                     }
                     selectedYearIndex={effectiveSelectedYearIndex}
+                    yearValues={yearValues}
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
                     detachingFieldIds={detachingFieldIds}

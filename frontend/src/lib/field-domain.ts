@@ -834,7 +834,7 @@ export const catchmentRuns = (
   return runs
 }
 
-const yearResultHasValues = (
+export const yearResultHasValues = (
   yearResult: RotationCandidateYearResult,
 ): boolean =>
   yearResult.dbDkkHa !== 0 ||
