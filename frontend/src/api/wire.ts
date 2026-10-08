@@ -20,6 +20,7 @@ const SHARED_NAMES: Record<string, string> = {
   afgrodeNormKgnHa: 'cropNormKgNHa',
   mellemafgrode: 'intermediateCrop',
   forfrugtsvaerdiKgnHa: 'precedingCropValueKgNHa',
+  medregnForfrugtsvaerdi: 'includePrecedingCropValue',
   rotationSaedskiftevarianter: 'rotationVariants',
   saedskiftevarianter: 'allowedRotationVariants',
   saedskiftevariant: 'rotationVariant',

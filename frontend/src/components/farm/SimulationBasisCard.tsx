@@ -8,6 +8,7 @@ import { formatNumber } from '@/lib/field-domain'
 import {
   catchCropSowingLabel,
   nNormPercentagesLabel,
+  precedingCropValueLabel,
   yesNo,
 } from '@/lib/simulation-form'
 
@@ -44,6 +45,16 @@ const basisValues = (simulation: Simulation): BasisValue[] => {
       value: `${formatNumber(fertiliser.nContentKgPerTon)} kg N/ton`,
     },
     { label: 'Kun organisk gødning', value: yesNo(fertiliser.onlyOrganic) },
+    ...(simulation.includePrecedingCropValue === undefined
+      ? []
+      : [
+          {
+            label: 'Forfrugtsværdi',
+            value: precedingCropValueLabel(
+              simulation.includePrecedingCropValue,
+            ),
+          },
+        ]),
     {
       label: 'Efterafgrøde',
       term: 'catchCrop',
