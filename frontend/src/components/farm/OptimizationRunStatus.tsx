@@ -20,6 +20,12 @@ type RunProps = {
   run: OptimizationRun
 }
 
+const RUN_PHASE_LABELS = {
+  submitting: 'starter',
+  queued: 'venter i kø',
+  in_progress: 'kører',
+} as const
+
 // "Optimering (loft hvert år) · 0:12", ticking while the run is going.
 export const OptimizationRunElapsed = ({ run }: RunProps) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
@@ -65,9 +71,10 @@ export const OptimizationBanner = ({
           </span>
           <span className="text-muted-foreground">
             {' '}
-            {run.phase !== 'in_progress' ? 'venter i kø. Tallene er fra før kørslen.' : fields && uncalculatedCount === fields.length
-              ? 'kører. Tallene kommer, når kørslen er færdig.'
-              : 'kører. Tallene er fra før kørslen.'}
+            {RUN_PHASE_LABELS[run.phase]}.{' '}
+            {fields && uncalculatedCount === fields.length
+              ? 'Tallene kommer, når kørslen er færdig.'
+              : 'Tallene er fra før kørslen.'}
           </span>
         </p>
       </div>
@@ -98,7 +105,7 @@ export const OptimizationBanner = ({
       <p className="min-w-0 flex-1">
         {uncalculatedCount > 0
           ? `${formatFieldCount(uncalculatedCount)} er ikke beregnet.`
-          : 'Scenariet er ændret siden sidste kørsel. Resultatet er forældet.'}
+          : 'Simuleringen er ændret siden sidste kørsel. Resultatet er forældet.'}
       </p>
       <Button
         size="xs"
