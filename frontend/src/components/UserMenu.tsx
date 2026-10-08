@@ -1,4 +1,4 @@
-import { ChevronDown, Home, LogOut, Plus, User } from 'lucide-react'
+import { ChevronDown, Coins, Home, LogOut, Plus, User } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { useAuth } from '@/auth/context'
@@ -22,7 +22,11 @@ type UserMenuProps = {
   className?: string
 }
 
-export const UserMenuContent = () => {
+type UserMenuContentProps = {
+  economicsPath?: string
+}
+
+export const UserMenuContent = ({ economicsPath }: UserMenuContentProps) => {
   const { user, signOut } = useAuth()
   const email = user?.email ?? ''
   const role = email ? getStoredRole(email) : null
@@ -44,6 +48,14 @@ export const UserMenuContent = () => {
           Profil
         </Link>
       </DropdownMenuItem>
+      {economicsPath ? (
+        <DropdownMenuItem asChild>
+          <Link to={economicsPath}>
+            <Coins className="mr-2 h-4 w-4" aria-hidden="true" />
+            Økonomi
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem asChild>
         <Link to="/" state={HOME_OVERVIEW_STATE}>
           <Home className="mr-2 h-4 w-4" aria-hidden="true" />
