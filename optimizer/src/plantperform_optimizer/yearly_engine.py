@@ -12,6 +12,7 @@ from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS
 from plantperform_optimizer.models import (
+    RELATIVE_GAP_LIMIT,
     AssignedRotation,
     YearlyOptimizationInput,
     YearlyOptimizationOutput,
@@ -162,6 +163,9 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = int(os.getenv("OPTIMIZER_SOLVER_THREADS", "2"))
     solver.parameters.max_time_in_seconds = input.time_limit_seconds
+    # See engine.py's solve() for why presolve is off and the gap limit is set.
+    solver.parameters.cp_model_presolve = False
+    solver.parameters.relative_gap_limit = RELATIVE_GAP_LIMIT
     status = solver.Solve(model)
 
     if status == cp_model.OPTIMAL:

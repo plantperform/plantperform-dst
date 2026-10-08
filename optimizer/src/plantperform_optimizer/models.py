@@ -6,6 +6,12 @@ from app.domain.simulation import CropAreaLimit
 
 OptimizationStatus = Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN"]
 
+# CP-SAT stops once its solution is proven to be within this fraction of the
+# best possible DB2, and then reports OPTIMAL - so OPTIMAL means "within
+# 0.3 %", not "proven best". Closing the last fraction of a percent was most of
+# a run's time on larger farms.
+RELATIVE_GAP_LIMIT = 0.003
+
 
 @dataclass(frozen=True)
 class RotationOption:
