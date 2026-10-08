@@ -233,19 +233,19 @@ export type DbDeltaScale = {
   up: number
 }
 
-export const dbDeltaScale = (effects: CropDbEffect[]): DbDeltaScale => ({
-  down: Math.max(0, ...effects.map((effect) => -effect.deltaDkkHa)),
-  up: Math.max(0, ...effects.map((effect) => effect.deltaDkkHa)),
+export const dbDeltaScale = (deltas: number[]): DbDeltaScale => ({
+  down: Math.max(0, ...deltas.map((delta) => -delta)),
+  up: Math.max(0, ...deltas),
 })
 
 export const dbDeltaBar = (
-  deltaDkkHa: number,
+  delta: number,
   scale: DbDeltaScale,
 ): { axis: number; width: number } => {
   const span = scale.down + scale.up
   return span === 0
     ? { axis: 0, width: 0 }
-    : { axis: scale.down / span, width: Math.abs(deltaDkkHa) / span }
+    : { axis: scale.down / span, width: Math.abs(delta) / span }
 }
 
 export const lineGroupId = (

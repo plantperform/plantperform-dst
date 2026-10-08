@@ -2,7 +2,8 @@ import { Undo2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { AppTooltip } from '@/components/ui/app-tooltip'
-import { formatSignedDkk } from '@/lib/economics'
+import { dbDeltaBar, formatSignedDkk, type DbDeltaScale } from '@/lib/economics'
+import { cn } from '@/lib/utils'
 
 export const TEXT_LINK_CLASS =
   'rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
@@ -54,6 +55,40 @@ export const DbDelta = ({ change }: { change: number }) =>
       {formatSignedDkk(change)}
     </span>
   )
+
+type DbDeltaBarProps = {
+  delta: number
+  scale: DbDeltaScale
+}
+
+export const DbDeltaBar = ({ delta, scale }: DbDeltaBarProps) => {
+  const bar = dbDeltaBar(delta, scale)
+  const rises = delta > 0
+  return (
+    <span aria-hidden="true" className="relative h-full">
+      {delta === 0 ? null : (
+        <span
+          className={cn(
+            'absolute top-2.5 h-2 min-w-0.5',
+            rises
+              ? 'rounded-r-[2px] bg-success/75'
+              : 'rounded-l-[2px] bg-destructive/75',
+          )}
+          style={{
+            width: `${bar.width * 100}%`,
+            ...(rises
+              ? { left: `${bar.axis * 100}%` }
+              : { right: `${(1 - bar.axis) * 100}%` }),
+          }}
+        />
+      )}
+      <span
+        className="absolute inset-y-0 w-px bg-foreground/20"
+        style={{ left: `${bar.axis * 100}%` }}
+      />
+    </span>
+  )
+}
 
 type RestoreButtonProps = {
   label: string

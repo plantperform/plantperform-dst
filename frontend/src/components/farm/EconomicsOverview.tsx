@@ -5,7 +5,7 @@ import type { Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { DbDelta } from '@/components/farm/economics-ui'
+import { DbDelta, DbDeltaBar } from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
-  dbDeltaBar,
   dbDeltaScale,
   describeProfileChanges,
   formatDbDkk,
@@ -50,8 +49,6 @@ const DbEffectList = ({ effects, scale }: DbEffectListProps) => (
     >
       {effects.map((effect) => {
         const moved = effect.deltaDkkHa !== 0
-        const rises = effect.deltaDkkHa > 0
-        const bar = dbDeltaBar(effect.deltaDkkHa, scale)
         return (
           <li
             key={effect.cropCode}
@@ -69,28 +66,7 @@ const DbEffectList = ({ effects, scale }: DbEffectListProps) => (
                 {effect.cropName}
               </TruncatedTooltip>
             </span>
-            <span aria-hidden="true" className="relative h-full">
-              {moved ? (
-                <span
-                  className={cn(
-                    'absolute top-2.5 h-2 min-w-0.5',
-                    rises
-                      ? 'rounded-r-[2px] bg-success/75'
-                      : 'rounded-l-[2px] bg-destructive/75',
-                  )}
-                  style={{
-                    width: `${bar.width * 100}%`,
-                    ...(rises
-                      ? { left: `${bar.axis * 100}%` }
-                      : { right: `${(1 - bar.axis) * 100}%` }),
-                  }}
-                />
-              ) : null}
-              <span
-                className="absolute inset-y-0 w-px bg-foreground/20"
-                style={{ left: `${bar.axis * 100}%` }}
-              />
-            </span>
+            <DbDeltaBar delta={effect.deltaDkkHa} scale={scale} />
             <span className={cn('text-right', moved && 'font-semibold')}>
               {formatDbDkk(effect.dbDkkHa)}
             </span>
@@ -202,7 +178,9 @@ export const EconomicsOverview = ({
     profile,
     effects: profileDbEffect(economics.assumptions, profile.overrides),
   }))
-  const scale = dbDeltaScale(cards.flatMap((card) => card.effects))
+  const scale = dbDeltaScale(
+    cards.flatMap((card) => card.effects.map((effect) => effect.deltaDkkHa)),
+  )
   const startFromStandard = () =>
     startGuide({ fromProfileId: STANDARD_PROFILE_ID })
 
