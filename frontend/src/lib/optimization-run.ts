@@ -19,8 +19,11 @@ export const OPTIMIZATION_KIND_LABELS: Record<OptimizationKind, string> = {
 export const optimizationRunName = (kind: OptimizationKind) =>
   `Optimering (${OPTIMIZATION_KIND_LABELS[kind].toLowerCase()})`
 
+// The solver stops once it has proven its solution within 0.3 % of the best
+// possible DB2 and reports OPTIMAL (RELATIVE_GAP_LIMIT in the optimizer), so
+// OPTIMAL is not "proven best". Keep the percentage in step with it.
 export const RUN_STATUS_LABELS: Record<OptimizationStatus, string> = {
-  OPTIMAL: 'optimal løsning',
+  OPTIMAL: 'løsning inden for 0,3 % af det bedst mulige',
   FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
 }
 
