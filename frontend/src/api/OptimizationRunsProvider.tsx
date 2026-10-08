@@ -58,7 +58,7 @@ export const OptimizationRunsProvider = ({
     () => new Map(),
   )
   const runsRef = useRef(runs)
-  const dismissed = useRef(new Set<string>())
+  const acknowledged = useRef(new Set<string>())
   const requests = useRef(new ResultRequests())
   const simulationsRef = useRef(new Map<string, Simulation>())
 
@@ -88,7 +88,7 @@ export const OptimizationRunsProvider = ({
       if (
         !result.runId ||
         !result.kind ||
-        dismissed.current.has(`${result.runId}:${result.status}`)
+        acknowledged.current.has(`${result.runId}:${result.status}`)
       )
         return
       const base = {
@@ -298,13 +298,19 @@ export const OptimizationRunsProvider = ({
   const syncSimulations = useCallback(
     (simulations: Simulation[]) => {
       for (const simulation of simulations) {
-        simulationsRef.current.set(simulation.id, simulation)
         const summary = simulation.result
-        if (summary.status === 'outdated') markStale(simulation.id)
         const current = runsRef.current.get(simulation.id)
         if (
+          summary.status === 'completed' &&
+          !current &&
+          !simulationsRef.current.has(simulation.id)
+        )
+          acknowledged.current.add(`${summary.runId}:completed`)
+        simulationsRef.current.set(simulation.id, simulation)
+        if (summary.status === 'outdated') markStale(simulation.id)
+        if (
           !summary.runId ||
-          dismissed.current.has(`${summary.runId}:${summary.status}`) ||
+          acknowledged.current.has(`${summary.runId}:${summary.status}`) ||
           (current?.status === 'running' && current.phase === 'submitting')
         )
           continue
@@ -335,12 +341,6 @@ export const OptimizationRunsProvider = ({
             run.simulationId,
             all ? undefined : run.id,
           )
-      }
-      if (all) {
-        for (const simulation of simulationsRef.current.values()) {
-          if (!runsRef.current.has(simulation.id))
-            void refreshResult(simulation.farmId, simulation.id)
-        }
       }
     }
     const changed = (event: Event) => {
@@ -390,7 +390,7 @@ export const OptimizationRunsProvider = ({
     const current = runsRef.current.get(simulationId)
     if (current?.status === 'running') return
     if (current)
-      dismissed.current.add(
+      acknowledged.current.add(
         `${current.id}:${current.status === 'succeeded' ? 'completed' : current.status}`,
       )
     requests.current.invalidate(simulationId)
