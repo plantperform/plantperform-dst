@@ -8,6 +8,7 @@ from app.domain.optimization import NUM_YEARS
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
+from app.services.rotations import saedskifte_library
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
 from plantperform_optimizer.deadline import check_deadline, solver_time_limit
@@ -304,6 +305,26 @@ def _assigned_field(field, assignment):
     )
 
 
+def _shift_count(candidate: RotationCandidateEvaluation) -> int:
+    """Return how many distinct start years a candidate's sædskifte has.
+
+    candidate.active_len is always 8, because generate_rotation cycles a
+    shorter library rotation out to eight positions before it is measured. A
+    3-year rotation shifted by 4 is the same sequence as shifted by 1, so
+    shifting through all eight positions only adds duplicate options to the
+    CP-SAT model. The rotation's own length comes from the library instead. A
+    candidate with "Rediger manuelt" overrides is an eight-year plan in its own
+    right and keeps all eight start years.
+    """
+    if candidate.overrides:
+        return candidate.active_len
+    source_ref = candidate.base_ref or candidate.ref
+    cycle_len = saedskifte_library.rotation_active_len(
+        saedskifte_library.get_raw_rotation(source_ref.saedskiftevariant, source_ref.variant)
+    )
+    return min(cycle_len, candidate.active_len) or candidate.active_len
+
+
 def _expand_yearly_options(
     field: FieldRecord,
     candidates: list[RotationCandidateEvaluation],
@@ -320,9 +341,9 @@ def _expand_yearly_options(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
 ) -> tuple[YearlyRotationOption, ...]:
-    """Expand each stored candidate to at most active_len shifted variants.
+    """Expand each stored candidate to one variant per distinct start year.
 
-    start_year ranges from 1 through active_len, as in Phase 10's
+    start_year ranges from 1 through _shift_count(candidate), as in Phase 10's
     evaluate_with_overrides. Phase 11's additional "Års-optimering" decision
     variable uses these variants to shift a mark's sædskifte forward or
     backward to better satisfy annual udledning caps and the DB fluctuation
@@ -358,7 +379,7 @@ def _expand_yearly_options(
             continue
 
         source_ref = candidate.base_ref or candidate.ref
-        for shift in range(1, candidate.active_len + 1):
+        for shift in range(1, _shift_count(candidate) + 1):
             check_deadline()
             variant = (
                 candidate
