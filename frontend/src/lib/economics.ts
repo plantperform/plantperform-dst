@@ -74,6 +74,25 @@ export const NO_OVERRIDES: EconomicsOverrides = {
   yieldPct: {},
 }
 
+const sameValues = (
+  left: Readonly<Record<string, number>>,
+  right: Readonly<Record<string, number>>,
+) => {
+  const keys = Object.keys(left)
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => left[key] === right[key])
+  )
+}
+
+export const sameOverrides = (
+  left: EconomicsOverrides,
+  right: EconomicsOverrides,
+): boolean =>
+  sameValues(left.prices, right.prices) &&
+  sameValues(left.quantities, right.quantities) &&
+  sameValues(left.yieldPct, right.yieldPct)
+
 export const YIELD_ADJUSTMENT_ID = 'yieldPct'
 
 const quantityKey = (crop: CropEconomics, lineId: string) =>

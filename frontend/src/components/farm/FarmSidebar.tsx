@@ -26,6 +26,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -201,9 +202,11 @@ export const FarmSidebar = ({
   const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
-  const historyActive = !overviewActive && selection.kind === 'current'
+  const economicsPageActive = useMatch('/farms/:farmId/economics/*') !== null
+  const pageActive = overviewActive || economicsPageActive
+  const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
-    !overviewActive && selection.kind === 'simulation' ? selection.id : null
+    !pageActive && selection.kind === 'simulation' ? selection.id : null
   const compareActive = useMatch('/farms/:farmId/simulations/compare') !== null
   const simulationPages = [
     {
@@ -344,20 +347,20 @@ export const FarmSidebar = ({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarGroup className={cn(GROUP_CLASS, 'mt-auto')}>
-          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-            Vis som
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <ViewModeSwitch
-              view={view}
-              splitAvailable={splitAvailable}
-              onViewChange={onViewChange}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
+
+      <SidebarGroup className={GROUP_CLASS}>
+        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+          Vis som
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <ViewModeSwitch
+            view={view}
+            splitAvailable={splitAvailable}
+            onViewChange={onViewChange}
+          />
+        </SidebarGroupContent>
+      </SidebarGroup>
 
       <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
         <CollapseMenuButton />
@@ -404,6 +407,7 @@ const CollapseMenuButton = () => {
 
 const SidebarUserMenu = () => {
   const { user } = useAuth()
+  const { overviewPath } = useEconomicsProfiles()
   const iconRail = useSidebar().state === 'collapsed'
   const email = user?.email ?? ''
   const initial = email.charAt(0).toUpperCase()
@@ -442,7 +446,7 @@ const SidebarUserMenu = () => {
             align="start"
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
           >
-            <UserMenuContent />
+            <UserMenuContent economicsPath={overviewPath} />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

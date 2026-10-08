@@ -2,6 +2,11 @@ import { AlertTriangle, X } from 'lucide-react'
 import { useState } from 'react'
 
 import type { FarmingSystem, RotationCategoryOption } from '@/api/types'
+import {
+  CHOICE_TAB_ACTIVE_CLASS,
+  CHOICE_TAB_CLASS,
+  CHOICE_TAB_IDLE_CLASS,
+} from '@/components/farm/choice-styles'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import {
@@ -117,10 +122,8 @@ export const RotationPicker = ({
                 aria-selected={isActive}
                 onClick={() => setActiveName(category.category)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  isActive
-                    ? 'border-primary bg-primary/10 font-medium text-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-muted/50',
+                  CHOICE_TAB_CLASS,
+                  isActive ? CHOICE_TAB_ACTIVE_CLASS : CHOICE_TAB_IDLE_CLASS,
                 )}
               >
                 {category.category}

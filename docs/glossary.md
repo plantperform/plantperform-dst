@@ -125,6 +125,7 @@ field" column is the name on the wire.
 | tilpasset | customised, `EconomicsOverrides` | | The farm's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
 | ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
+| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | |
 | sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation

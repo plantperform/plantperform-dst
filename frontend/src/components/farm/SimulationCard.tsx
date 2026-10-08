@@ -1,5 +1,5 @@
 import { Copy, Trash2 } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
@@ -7,28 +7,24 @@ import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
+import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import {
   changedFieldIds,
   formatCompactDkk,
-  formatFieldCount,
   formatWholeNumber,
   isFieldLocked,
-  NUM_ROTATION_YEARS,
   perHaFigure,
-  REAL_HISTORY_START_CALENDAR_YEAR,
   resolveFarmQuota,
   summarizeCatchmentYearTotals,
   totalsPerHa,
   type FarmQuota,
   type FieldTotals,
-  type PerHaFigure,
 } from '@/lib/field-domain'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
@@ -40,84 +36,12 @@ import {
   summarizeCatchmentYearStatuses,
   type KeyFigureDelta,
 } from '@/lib/simulation-overview'
-import { cn } from '@/lib/utils'
-
-const HISTORY_PERIOD = `${REAL_HISTORY_START_CALENDAR_YEAR}-${REAL_HISTORY_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
 
 const DELTA_TONE_CLASS: Record<KeyFigureDelta['tone'], string> = {
   better: 'text-success-strong',
   worse: 'text-destructive',
   same: 'text-muted-foreground',
 }
-
-type CardShellProps = {
-  title: string
-  subtitle: ReactNode
-  active: boolean
-  meta?: string
-  actions: ReactNode
-  children: ReactNode
-}
-
-const CardShell = ({
-  title,
-  subtitle,
-  active,
-  meta,
-  actions,
-  children,
-}: CardShellProps) => (
-  <Card
-    className={cn(
-      'flex flex-col gap-4 p-5',
-      active && 'border-primary ring-1 ring-primary',
-    )}
-  >
-    <div className="min-w-0">
-      <h2 className="flex items-center gap-2.5">
-        <span className="truncate font-display text-[19px] leading-6">
-          {title}
-        </span>
-        {active ? (
-          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            Senest åbnet
-          </span>
-        ) : null}
-      </h2>
-      <div className="mt-0.5 truncate text-sm text-muted-foreground">
-        {subtitle}
-      </div>
-    </div>
-    <div className="flex flex-1 flex-col gap-4">{children}</div>
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t pt-4">
-      {meta ? (
-        <p className="text-xs text-muted-foreground tabular-nums">{meta}</p>
-      ) : null}
-      <div className="ml-auto flex flex-wrap gap-2">{actions}</div>
-    </div>
-  </Card>
-)
-
-type KeyFigureProps = {
-  label: string
-  figure: PerHaFigure
-  note?: ReactNode
-}
-
-const KeyFigure = ({ label, figure, note }: KeyFigureProps) => (
-  <div className="min-w-0">
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-1 font-display text-2xl leading-none tabular-nums">
-      {figure.value}
-    </p>
-    {figure.total ? (
-      <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-        {figure.total}
-      </p>
-    ) : null}
-    {note ? <p className="mt-1.5 text-xs tabular-nums">{note}</p> : null}
-  </div>
-)
 
 type DeltaNoteProps = {
   delta: KeyFigureDelta
@@ -129,7 +53,7 @@ const DeltaNote = ({ delta }: DeltaNoteProps) => (
 
 type CatchmentStatusListProps = {
   farmId: string
-  simulationId?: string
+  simulationId: string
   fields: FieldRecord[]
 }
 
@@ -138,19 +62,16 @@ const CatchmentStatusList = ({
   simulationId,
   fields,
 }: CatchmentStatusListProps) => {
-  const history = simulationId === undefined
-  const hasValues = history
-    ? fields.length > 0
-    : fields.some((field) => field.rotationId !== null)
+  const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const statuses = useMemo(
     () =>
       yearValues.data
         ? summarizeCatchmentYearStatuses(
-            summarizeCatchmentYearTotals(fields, yearValues.data, history),
-            history,
-            partialCatchmentQuotas(fields, !history),
+            summarizeCatchmentYearTotals(fields, yearValues.data, false),
+            false,
+            partialCatchmentQuotas(fields, true),
           )
             .map((status) => ({
               status,
@@ -160,7 +81,7 @@ const CatchmentStatusList = ({
               left.label.localeCompare(right.label, 'da-DK'),
             )
         : null,
-    [catchmentLabel, fields, history, yearValues.data],
+    [catchmentLabel, fields, yearValues.data],
   )
 
   if (!hasValues) return null
@@ -198,80 +119,6 @@ const CatchmentStatusList = ({
     </ul>
   )
 }
-
-type HistoryCardProps = {
-  farmId: string
-  fields: FieldRecord[]
-  quota: FarmQuota
-  active: boolean
-  onOpen: () => void
-  onCopy: () => void
-}
-
-export const HistoryCard = ({
-  farmId,
-  fields,
-  quota,
-  active,
-  onOpen,
-  onCopy,
-}: HistoryCardProps) => (
-  <CardShell
-    title="Afgrødehistorik"
-    subtitle={`Gennemsnit ${HISTORY_PERIOD}`}
-    active={active}
-    meta={formatFieldCount(quota.totals.fieldCount)}
-    actions={
-      <>
-        <Button size="xs" aria-label="Åbn afgrødehistorikken" onClick={onOpen}>
-          Åbn
-        </Button>
-        <Button
-          size="xs"
-          variant="outline"
-          aria-label="Kopier afgrødehistorikken til en ny simulering"
-          onClick={onCopy}
-        >
-          <Copy aria-hidden="true" />
-          Kopier
-        </Button>
-      </>
-    }
-  >
-    {quota.totals.calculatedCount > 0 ? (
-      <div className="grid grid-cols-2 gap-4">
-        <KeyFigure
-          label="Dækningsbidrag pr. år"
-          figure={perHaFigure(
-            totalsPerHa(quota.totals, 'db2'),
-            'db2',
-            formatCompactDkk(quota.totals.db2),
-          )}
-        />
-        <KeyFigure
-          label="Udledning pr. år"
-          figure={perHaFigure(
-            totalsPerHa(quota.totals, 'nLoad'),
-            'nLoad',
-            `${formatWholeNumber(quota.totals.nLoad)} kg N`,
-          )}
-          note={
-            quota.quotaKgN !== null && quota.quotaKgN > 0 ? (
-              <span className="text-muted-foreground">
-                Kvote {formatWholeNumber(quota.quotaKgN)} kg N
-              </span>
-            ) : undefined
-          }
-        />
-      </div>
-    ) : (
-      <p className="text-sm text-muted-foreground">
-        Ingen marker er beregnet endnu.
-      </p>
-    )}
-    <CatchmentStatusList farmId={farmId} fields={fields} />
-  </CardShell>
-)
 
 type SimulationFiguresProps = {
   farmId: string
@@ -411,7 +258,7 @@ export const SimulationCard = ({
     fields !== undefined && comparisonAvailability(fields).kind === 'ready'
 
   return (
-    <CardShell
+    <OverviewCard
       title={simulation.name}
       subtitle={
         runningRun ? (
@@ -495,6 +342,6 @@ export const SimulationCard = ({
           <Skeleton className="h-5 w-4/5" />
         </div>
       )}
-    </CardShell>
+    </OverviewCard>
   )
 }
