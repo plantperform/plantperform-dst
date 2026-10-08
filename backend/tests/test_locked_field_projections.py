@@ -15,6 +15,7 @@ from app.domain.rotation_candidate import (
     RotationYear,
 )
 from app.domain.simulation import CreateSimulationRequest
+from app.services.scenario.rotations import compute_yearly_summary
 
 PERMANENT_GRASS = 252
 
@@ -99,6 +100,31 @@ class PermanentFieldLockTests(unittest.TestCase):
         self.assertEqual(field.leaching, 10 * 4)
         self.assertEqual(field.n_load, 10 * 4 * 0.75)
         self.assertEqual(field.fen, 3200 * 4)
+
+
+class YearlySummaryTests(unittest.TestCase):
+    def test_udledning_counts_only_kvotegivende_marker(self) -> None:
+        candidate = _permanent_candidate()
+        fields = [
+            SimpleNamespace(
+                id=field_id,
+                rotation_id=candidate.ref.to_id(),
+                area_ha=area,
+                retention=None,
+                kvotegivende=kvotegivende,
+            )
+            for field_id, area, kvotegivende in (("quota", 2, True), ("no-quota", 3, False))
+        ]
+        selected = (fields, {field.id: candidate for field in fields})
+        with patch.object(repository, "selected_evaluations", return_value=selected):
+            summary = compute_yearly_summary("farm", "simulation", "member@example.com")
+
+        self.assertEqual(len(summary), NUM_YEARS)
+        for entry in summary:
+            self.assertEqual(entry.total_n_load_kg, 10 * 2)
+            self.assertEqual(entry.total_db2, 2000 * (2 + 3))
+            self.assertEqual(entry.total_fen, 3200 * (2 + 3))
+            self.assertEqual(entry.field_count, 2)
 
 
 if __name__ == "__main__":
