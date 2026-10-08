@@ -34,6 +34,7 @@ import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { OptimizeDialog } from '@/components/farm/OptimizeDialog'
+import { SimulationHeading } from '@/components/farm/SimulationHeading'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import { RULES_PANEL_WIDTH } from '@/components/farm/split-layout'
 import type {
@@ -62,6 +63,7 @@ type FarmInspectorProps = {
   fields: FieldRecord[]
   selection: FarmViewSelection
   selectedSimulation?: Simulation
+  simulations: Simulation[]
   fieldsLoading?: boolean
   fieldsError?: boolean
   fieldsRetrying?: boolean
@@ -91,6 +93,7 @@ export const FarmInspector = ({
   fields,
   selection,
   selectedSimulation,
+  simulations,
   fieldsLoading = false,
   fieldsError = false,
   fieldsRetrying = false,
@@ -359,6 +362,7 @@ export const FarmInspector = ({
           key={selectedSimulation.id}
           farmId={farm.id}
           simulation={selectedSimulation}
+          simulations={simulations}
           fields={fields}
           lockingFieldId={lockingFieldId}
           hoveredFieldId={hoveredFieldId}
@@ -413,12 +417,15 @@ export const FarmInspector = ({
           )}
         >
           {isSimulationView && selectedSimulation ? (
-            <OptimizationBanner
-              farmId={farm.id}
-              simulationId={selectedSimulation.id}
-              run={optimizationRun}
-              fields={fieldsLoading || fieldsError ? undefined : fields}
-            />
+            <>
+              <SimulationHeading simulation={selectedSimulation} />
+              <OptimizationBanner
+                farmId={farm.id}
+                simulationId={selectedSimulation.id}
+                run={optimizationRun}
+                fields={fieldsLoading || fieldsError ? undefined : fields}
+              />
+            </>
           ) : null}
           {showYearWalkthrough ? (
             <>

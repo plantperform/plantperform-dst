@@ -6,6 +6,8 @@ import type {
   FertiliserPresetOption,
   RotationCategoryOption,
 } from '@/api/types'
+import { NotInCalculationNote } from '@/components/farm/economics-ui'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import { formatFieldCount, formatNumber } from '@/lib/field-domain'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
@@ -17,6 +19,7 @@ import {
   farmingSystemMismatchMessage,
   isPresetModified,
   nNormPercentagesLabel,
+  precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
   toCreateSimulationInput,
@@ -29,6 +32,7 @@ type SimulationSummaryProps = {
   categories: RotationCategoryOption[]
   fertiliserPresets: FertiliserPresetOption[]
   fieldCount: number
+  economicsProfile: EconomicsProfile
   // Indexes of the steps each section links back to.
   onEditStep: (stepIndex: number) => void
 }
@@ -70,6 +74,7 @@ export const SimulationSummary = ({
   categories,
   fertiliserPresets,
   fieldCount,
+  economicsProfile,
   onEditStep,
 }: SimulationSummaryProps) => {
   // Summarise what will be sent, not the raw draft, so the two cannot differ.
@@ -77,6 +82,7 @@ export const SimulationSummary = ({
   const fertiliser = input.fertiliser!
   const rotationVariants = input.allowedRotationVariants ?? []
   const nNormPercentages = input.allowedNNormPercentages ?? []
+  const includePrecedingCropValue = input.includePrecedingCropValue !== false
 
   const mismatchCount = farmingSystemMismatchCount(
     categories,
@@ -104,6 +110,7 @@ export const SimulationSummary = ({
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
+          <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
 
         <Section
@@ -164,6 +171,10 @@ export const SimulationSummary = ({
           <p>
             N-norm <GlossaryInfo term="nNorm" />:{' '}
             {nNormPercentagesLabel(nNormPercentages)}
+          </p>
+          <p>
+            Forfrugtsværdi: {precedingCropValueLabel(includePrecedingCropValue)}
+            {includePrecedingCropValue ? null : <NotInCalculationNote />}
           </p>
         </Section>
 

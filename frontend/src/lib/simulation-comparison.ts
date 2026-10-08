@@ -4,6 +4,7 @@ import type {
   OptimizationConstraints,
   Simulation,
 } from '@/api/types'
+import { formatNameList } from '@/lib/economics'
 import {
   formatFieldCount,
   formatPerHa,
@@ -515,4 +516,48 @@ export const describeCurveLegend = (
   return quotaPct === null
     ? { text: `${year} · ingen tal`, level: null }
     : { text: `${year} · ${formatWholeNumber(quotaPct)} %`, level }
+}
+
+export const haveSameFieldPlans = (
+  left: FieldRecord[],
+  right: FieldRecord[],
+): boolean => {
+  if (left.length === 0 || left.length !== right.length) return false
+  const rotationByImkId = new Map(
+    right.map((field) => [field.imkId, field.rotationId]),
+  )
+  return left.every(
+    (field) =>
+      field.imkId !== null &&
+      field.rotationId !== null &&
+      rotationByImkId.get(field.imkId) === field.rotationId,
+  )
+}
+
+type EconomicsVerdictColumn = {
+  title: string
+  ownProfileName: string | null
+  fields: FieldRecord[]
+}
+
+export const describeEconomicsVerdict = (
+  columns: EconomicsVerdictColumn[],
+): string | null => {
+  for (const [index, left] of columns.entries()) {
+    const twin = columns
+      .slice(index + 1)
+      .find(
+        (right) =>
+          right.ownProfileName !== left.ownProfileName &&
+          haveSameFieldPlans(left.fields, right.fields),
+      )
+    if (twin) {
+      return `${left.title} og ${twin.title} har samme sædskifter på alle marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.`
+    }
+  }
+  const own = columns.filter((column) => column.ownProfileName !== null)
+  if (own.length === 0) return null
+  return own.length === 1
+    ? `${own[0].title} regner med ${own[0].ownProfileName}, som ikke indgår i beregningen endnu.`
+    : `${formatNameList(own.map((column) => column.title))} regner med økonomiprofiler, som ikke indgår i beregningen endnu.`
 }

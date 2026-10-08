@@ -408,6 +408,7 @@ const FarmDetail = () => {
                         )
                       : undefined
                   }
+                  simulations={simulations}
                   fieldsLoading={simulationFieldsLoading}
                   fieldsError={
                     Boolean(simulationFieldsError) &&
