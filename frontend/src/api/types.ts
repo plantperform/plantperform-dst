@@ -229,6 +229,7 @@ export type Simulation = {
   intermediateCrop: boolean
   comparisonAvailability?: { kind: 'ready' | 'uncalculated' } |
     { kind: 'partial'; missingCount: number } | null
+  includePrecedingCropValue?: boolean
 }
 
 export type CreateSimulationInput = {
@@ -245,6 +246,7 @@ export type CreateSimulationInput = {
   precisionFarming?: boolean
   earlySowing?: boolean
   intermediateCrop?: boolean
+  includePrecedingCropValue?: boolean
 }
 
 export type OptimizationSettings = {

@@ -83,6 +83,7 @@ export type SimulationFormValues = {
   mineralSharePct: string
   onlyOrganic: boolean
   nContentKgPerTon: string
+  includePrecedingCropValue: boolean
   catchCropDailyBasis: boolean
   catchCropSowingInterval: string
   catchCropSowingDate: string
@@ -102,6 +103,7 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   mineralSharePct: '100',
   onlyOrganic: false,
   nContentKgPerTon: '6',
+  includePrecedingCropValue: true,
   catchCropDailyBasis: false,
   catchCropSowingInterval: SOWING_DATE_INTERVALS[0].date,
   catchCropSowingDate: '20/8',
@@ -150,6 +152,7 @@ const nitrogenSchema = z
         (selected) => reducedNNormCount(selected) <= MAX_REDUCED_N_NORM_LEVELS,
         { message: 'Vælg højst to niveauer under 100 %' },
       ),
+    includePrecedingCropValue: z.boolean(),
   })
   .superRefine((values, ctx) => {
     // Without organic fertiliser the numbers are fixed and hidden.
@@ -444,6 +447,9 @@ export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
 
 export const yesNo = (value: boolean) => (value ? 'Ja' : 'Nej')
 
+export const precedingCropValueLabel = (included: boolean) =>
+  included ? 'Regnes med' : 'Regnes ikke med'
+
 export const nNormPercentagesLabel = (percentages: string[]) =>
   [...percentages]
     .sort((a, b) => Number(a) - Number(b))
@@ -484,6 +490,7 @@ export const toCreateSimulationInput = (
     precisionFarming: values.precisionFarming,
     earlySowing: values.earlySowing,
     intermediateCrop: values.intermediateCrop,
+    includePrecedingCropValue: values.includePrecedingCropValue,
   }
 }
 
@@ -539,5 +546,8 @@ export const simulationToFormValues = (
     precisionFarming: simulation.precisionFarming,
     earlySowing: simulation.earlySowing,
     intermediateCrop: simulation.intermediateCrop,
+    includePrecedingCropValue:
+      simulation.includePrecedingCropValue ??
+      DEFAULT_SIMULATION_FORM_VALUES.includePrecedingCropValue,
   }
 }

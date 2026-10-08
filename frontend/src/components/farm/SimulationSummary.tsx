@@ -15,6 +15,7 @@ import {
   effectiveMaxNLoadByCatchment,
   useCatchmentOptions,
 } from '@/components/farm/catchment-options'
+import { NotInCalculationNote } from '@/components/farm/economics-ui'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 import {
   formatFieldCount,
@@ -32,6 +33,7 @@ import {
   farmingSystemMismatchMessage,
   isPresetModified,
   nNormPercentagesLabel,
+  precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
   toCreateSimulationInput,
@@ -114,6 +116,7 @@ export const SimulationSummary = ({
   const fertiliser = input.fertiliser!
   const rotationVariants = input.allowedRotationVariants ?? []
   const nNormPercentages = input.allowedNNormPercentages ?? []
+  const includePrecedingCropValue = input.includePrecedingCropValue !== false
 
   const mismatchCount = farmingSystemMismatchCount(
     categories,
@@ -203,6 +206,10 @@ export const SimulationSummary = ({
           <p>
             N-norm <GlossaryInfo term="nNorm" />:{' '}
             {nNormPercentagesLabel(nNormPercentages)}
+          </p>
+          <p>
+            Forfrugtsværdi: {precedingCropValueLabel(includePrecedingCropValue)}
+            {includePrecedingCropValue ? null : <NotInCalculationNote />}
           </p>
         </Section>
 
