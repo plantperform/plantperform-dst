@@ -63,6 +63,7 @@ type FarmInspectorProps = {
   fields: FieldRecord[]
   selection: FarmViewSelection
   selectedSimulation?: Simulation
+  simulations: Simulation[]
   fieldsLoading?: boolean
   fieldsError?: boolean
   fieldsRetrying?: boolean
@@ -92,6 +93,7 @@ export const FarmInspector = ({
   fields,
   selection,
   selectedSimulation,
+  simulations,
   fieldsLoading = false,
   fieldsError = false,
   fieldsRetrying = false,
@@ -360,6 +362,7 @@ export const FarmInspector = ({
           key={selectedSimulation.id}
           farmId={farm.id}
           simulation={selectedSimulation}
+          simulations={simulations}
           fields={fields}
           lockingFieldId={lockingFieldId}
           hoveredFieldId={hoveredFieldId}

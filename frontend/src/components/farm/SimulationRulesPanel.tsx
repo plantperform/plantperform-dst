@@ -8,11 +8,13 @@ import {
 } from 'react'
 
 import type { FieldRecord, Simulation } from '@/api/types'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { FieldRulesCard } from '@/components/farm/FieldRulesCard'
 import { useRulesLimits } from '@/components/farm/rules-limits-state'
 import { UnsavedDot } from '@/components/farm/rules-ui'
 import { RulesLimitsCard } from '@/components/farm/RulesLimitsCard'
 import { SimulationBasisCard } from '@/components/farm/SimulationBasisCard'
+import { SimulationEconomicsCard } from '@/components/farm/SimulationEconomicsCard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,14 +27,15 @@ import {
 import { isFieldLocked } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
-type RulesTab = 'limits' | 'basis' | 'fields'
+type RulesTab = 'limits' | 'basis' | 'fields' | 'economics'
 
-const RULES_TABS: RulesTab[] = ['limits', 'basis', 'fields']
+const RULES_TABS: RulesTab[] = ['limits', 'basis', 'fields', 'economics']
 
 const TAB_LABELS: Record<RulesTab, string> = {
   limits: 'Grænser',
   basis: 'Grundlag',
   fields: 'Marker',
+  economics: 'Økonomi',
 }
 
 type LeaveRequest = {
@@ -89,6 +92,7 @@ const UnsavedLimitsDialog = ({
 type SimulationRulesPanelProps = {
   farmId: string
   simulation: Simulation
+  simulations: Simulation[]
   fields: FieldRecord[]
   lockingFieldId: string | null
   hoveredFieldId: string | null
@@ -102,6 +106,7 @@ type SimulationRulesPanelProps = {
 export const SimulationRulesPanel = ({
   farmId,
   simulation,
+  simulations,
   fields,
   lockingFieldId,
   hoveredFieldId,
@@ -113,6 +118,7 @@ export const SimulationRulesPanel = ({
 }: SimulationRulesPanelProps) => {
   const id = useId()
   const limits = useRulesLimits(farmId, simulation, fields)
+  const economics = useEconomicsProfiles()
   const [tab, setTab] = useState<RulesTab>('limits')
   const [leaveRequest, setLeaveRequest] = useState<LeaveRequest | null>(null)
   const [seenFocusNonce, setSeenFocusNonce] = useState(
@@ -172,6 +178,7 @@ export const SimulationRulesPanel = ({
     ),
     basis: 'Låst ved oprettelse',
     fields: `${lockedCount} af ${fields.length} låst`,
+    economics: economics.profileForSimulation(simulation.id).name,
   }
 
   const panelProps = (panel: RulesTab) => ({
@@ -193,7 +200,8 @@ export const SimulationRulesPanel = ({
         </div>
         <p className="mt-1.5 max-w-190 text-[13px] text-muted-foreground">
           Her bestemmer du, hvad optimeringen må gøre: grænser for hele
-          bedriften og marker, den ikke må ændre.
+          bedriften og marker, den ikke må ændre. Under Økonomi vælger du de
+          priser, dækningsbidraget regnes med.
         </p>
         <div role="tablist" aria-label="Regler" className="mt-4 -mb-px flex">
           {RULES_TABS.map((entry) => {
@@ -257,6 +265,13 @@ export const SimulationRulesPanel = ({
             onHoveredFieldChange={onHoveredFieldChange}
             onToggleLock={onToggleLock}
             onBindRotation={onBindRotation}
+          />
+        </div>
+        <div {...panelProps('economics')}>
+          <SimulationEconomicsCard
+            simulation={simulation}
+            simulations={simulations}
+            fields={fields}
           />
         </div>
       </div>

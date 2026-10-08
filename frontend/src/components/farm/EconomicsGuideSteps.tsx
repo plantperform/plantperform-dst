@@ -440,7 +440,7 @@ export const GuideReviewStep = ({
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {useOptions.length > 0
-            ? 'Vælg de simuleringer, der skal regne med profilen. Vælger du ingen, kan profilen vælges i en simulering senere.'
+            ? 'Vælg de simuleringer, der skal regne med profilen. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
             : 'Bedriften har ingen simuleringer endnu. Profilen kan vælges, når den første er oprettet.'}
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">

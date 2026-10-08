@@ -488,7 +488,8 @@ export const NewScenarioPanel = ({
               ))}
             </select>
             <p className="text-xs text-muted-foreground">
-              Priser og mængder bag dækningsbidraget.
+              Priser og mængder bag dækningsbidraget. Profilen kan skiftes
+              senere under Regler.
             </p>
           </div>
         </div>
