@@ -1,46 +1,89 @@
-import { ArrowRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { useFarmEmissions } from '@/api/hooks'
 import type { Farm } from '@/api/types'
-import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
+import { describeCatchment } from '@/components/farm/catchment-options'
+import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
-import { describeFarmQuota, type FarmOverview } from '@/lib/farm-overview'
+import { formatCvr } from '@/lib/farm-form'
 import {
-  formatNumber,
-  QUOTA_STATUS_LABELS,
+  describeFarmQuotaStatus,
+  describeLastOpened,
+  farmStatusCatchmentId,
+  type FarmOverview,
+} from '@/lib/farm-overview'
+import {
+  formatFieldCount,
+  formatHectares,
   QUOTA_STATUS_STYLES,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 export const FARM_LIST_CLASS =
-  'divide-y overflow-hidden rounded-2xl border bg-card shadow-xs'
+  'divide-y overflow-hidden rounded-lg border bg-card'
 
 const ROW_GRID_CLASS =
-  'grid items-center gap-x-6 gap-y-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_8.5rem_13rem_7.5rem_auto]'
+  'grid grid-cols-[14px_minmax(0,1fr)_20px] items-center gap-x-4 gap-y-1.5 px-5 lg:grid-cols-[14px_minmax(0,1fr)_170px_360px_120px_20px]'
+
+const STACKED_CELL_CLASS = 'col-start-2 lg:col-start-auto'
+
+const STATUS_SKELETON_CLASS = 'h-6.5 w-52 rounded-full'
+
+export const FarmListHeader = () => (
+  <div
+    aria-hidden="true"
+    className={cn(
+      ROW_GRID_CLASS,
+      'hidden py-2.5 text-xs text-muted-foreground lg:grid',
+    )}
+  >
+    <span />
+    <span>Bedrift</span>
+    <span>Marker og areal</span>
+    <span>Udledning mod kvote</span>
+    <span>Sidst åbnet</span>
+    <span />
+  </div>
+)
 
 export const FarmRowSkeleton = () => (
-  <div className={ROW_GRID_CLASS}>
+  <div className={cn(ROW_GRID_CLASS, 'py-4')}>
+    <Skeleton className="size-2.5 rounded-full" />
     <div className="space-y-2">
       <Skeleton className="h-5 w-40" />
-      <Skeleton className="h-3.5 w-24" />
+      <Skeleton className="h-3.5 w-48" />
     </div>
-    <Skeleton className="h-3.5 w-20" />
-    <Skeleton className="h-1.5 w-full rounded-full" />
-    <Skeleton className="h-3 w-16" />
-    <Skeleton className="h-3.5 w-8" />
+    <div className={cn(STACKED_CELL_CLASS, 'space-y-1.5')}>
+      <Skeleton className="h-3.5 w-16" />
+      <Skeleton className="h-3 w-12" />
+    </div>
+    <Skeleton className={cn(STACKED_CELL_CLASS, STATUS_SKELETON_CLASS)} />
+    <Skeleton className="hidden h-3.5 w-14 lg:block" />
   </div>
 )
 
 type FarmRowProps = {
   farm: Farm
   overview: FarmOverview
-  latest: boolean
+  openedAt: number | undefined
 }
 
-export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
-  const { totals, level, quotaPct, quota } = overview
-  const style = level ? QUOTA_STATUS_STYLES[level] : null
-  const quotaLine = describeFarmQuota(overview)
+export const FarmRow = ({ farm, overview, openedAt }: FarmRowProps) => {
+  const { totals, level } = overview
+  const namedCatchmentId = farmStatusCatchmentId(overview)
+  const emissions = useFarmEmissions(
+    namedCatchmentId === null ? undefined : farm.id,
+  )
+  const style = QUOTA_STATUS_STYLES[level ?? 'uncalculated']
+  const status = describeFarmQuotaStatus(overview, (catchmentId) =>
+    describeCatchment(
+      catchmentId,
+      emissions.data?.find((entry) => entry.catchmentId === catchmentId)
+        ?.catchmentName,
+    ),
+  )
+  const owner = `${farm.ownerName} · ${farm.cvr ? `CVR ${formatCvr(farm.cvr)}` : 'Intet CVR'}`
 
   return (
     <li>
@@ -48,112 +91,63 @@ export const FarmRow = ({ farm, overview, latest }: FarmRowProps) => {
         to={`/farms/${farm.id}`}
         className={cn(
           ROW_GRID_CLASS,
-          'group transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
+          'py-4 transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
         )}
       >
+        <span
+          aria-hidden="true"
+          className={cn('size-2.5 rounded-full', style.dot)}
+        />
         <div className="min-w-0">
-          <p className="flex items-center gap-2.5">
-            <TruncatedTooltip
-              content={farm.name}
-              className="truncate font-display text-[19px] leading-6"
-            >
-              {farm.name}
-            </TruncatedTooltip>
-            {latest ? (
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                Senest åbnet
-              </span>
-            ) : null}
-          </p>
           <TruncatedTooltip
-            content={farm.ownerName}
-            className="mt-0.5 block truncate text-sm text-muted-foreground"
+            content={farm.name}
+            className="block truncate font-display text-[19px] leading-6"
           >
-            {farm.ownerName}
+            {farm.name}
+          </TruncatedTooltip>
+          <TruncatedTooltip
+            content={owner}
+            className="mt-0.5 block truncate text-[12.5px] text-muted-foreground"
+          >
+            {owner}
           </TruncatedTooltip>
         </div>
-        {!totals ? (
-          <>
-            <Skeleton className="h-3.5 w-20" />
-            <Skeleton className="h-1.5 w-full rounded-full" />
-          </>
-        ) : totals.fieldCount === 0 ? (
-          <p className="text-[13px] text-muted-foreground md:col-span-2">
-            Ingen marker endnu ·{' '}
-            <span className="font-semibold text-primary">
-              Importer marker fra CVR
-            </span>
-          </p>
-        ) : (
-          <>
-            <p className="text-[13px] whitespace-nowrap text-muted-foreground">
-              <strong className="font-semibold text-foreground">
-                {totals.fieldCount}
-              </strong>{' '}
-              {totals.fieldCount === 1 ? 'mark' : 'marker'} ·{' '}
-              <strong className="font-semibold text-foreground">
-                {formatNumber(totals.areaHa)}
-              </strong>{' '}
-              ha
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {style && level ? (
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1.5 text-[13px] font-medium',
-                    style.text,
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn('size-[7px] rounded-full', style.dot)}
-                  />
-                  {QUOTA_STATUS_LABELS[level]}
-                </span>
-              ) : null}
-              {quota && quota.quotaKgN === null ? (
-                <AppTooltip content={quotaLine}>
-                  <div className="flex h-1.5 gap-0.5">
-                    {quota.catchments.map((catchment) => (
-                      <div
-                        key={catchment.catchmentId}
-                        className={cn(
-                          'h-full flex-1 rounded-full',
-                          QUOTA_STATUS_STYLES[catchment.level].dot,
-                        )}
-                      />
-                    ))}
-                  </div>
-                </AppTooltip>
-              ) : (
-                <AppTooltip content={quotaLine}>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={cn(
-                        'h-full rounded-full',
-                        style?.dot ?? 'bg-muted-foreground/60',
-                      )}
-                      style={{ width: `${quotaPct ?? 100}%` }}
-                    />
-                  </div>
-                </AppTooltip>
-              )}
-              <p className="text-xs whitespace-nowrap text-muted-foreground">
-                {quotaLine}
+        <div className={STACKED_CELL_CLASS}>
+          {totals ? (
+            <>
+              <p className="text-[13.5px]">
+                {formatFieldCount(totals.fieldCount)}
               </p>
-            </div>
-          </>
-        )}
-        <span className="text-xs whitespace-nowrap text-muted-foreground">
-          {farm.cvr ? `CVR ${farm.cvr}` : 'Intet CVR'}
+              <p className="text-[12.5px] text-muted-foreground">
+                {formatHectares(totals.areaHa)} ha
+              </p>
+            </>
+          ) : null}
+        </div>
+        <div className={cn(STACKED_CELL_CLASS, 'min-w-0')}>
+          {namedCatchmentId !== null && emissions.isLoading ? (
+            <Skeleton className={STATUS_SKELETON_CLASS} />
+          ) : (
+            <span
+              className={cn(
+                'inline-flex max-w-full rounded-full px-2.5 py-1 text-[12.5px] font-medium',
+                style.surface,
+              )}
+            >
+              <TruncatedTooltip content={status} className="truncate">
+                {status}
+              </TruncatedTooltip>
+            </span>
+          )}
+        </div>
+        <span className="hidden text-[13px] text-muted-foreground lg:block">
+          <span className="sr-only">Sidst åbnet: </span>
+          {describeLastOpened(openedAt)}
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary">
-          Åbn
-          <ArrowRight
-            className="size-3.5 transition-transform group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        </span>
+        <ChevronRight
+          className="col-start-3 row-start-1 size-4 text-muted-foreground lg:col-start-auto lg:row-start-auto"
+          aria-hidden="true"
+        />
       </Link>
     </li>
   )
