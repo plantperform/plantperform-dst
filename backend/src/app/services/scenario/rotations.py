@@ -122,12 +122,14 @@ def compute_yearly_summary(
 ) -> tuple[YearlySummaryEntry, ...] | None:
     """Summarize annual udledning, DB2, and foderenheder for optimized marks.
 
-    udledning is retention-corrected. Each year is a position in the individual
-    mark's own rotation cycle. The result feeds the "Årsoversigt" strip at the
-    top of the Liste-visning. Marker without a winning candidate, which have not yet
-    been optimized, do not contribute. Rotations shorter than those of other
-    marker contribute only to the years they actually cover; field_count shows
-    how many marker have data for each year.
+    udledning is retention-corrected and counts only kvotegivende marker, the
+    same marker the udledning caps apply to; DB2 and foderenheder count every
+    mark. Each year is a position in the individual mark's own rotation cycle.
+    The result feeds the "Årsoversigt" strip at the top of the Liste-visning.
+    Marker without a winning candidate, which have not yet been optimized, do
+    not contribute. Rotations shorter than those of other marker contribute
+    only to the years they actually cover; field_count shows how many marker
+    have data for each year.
     """
     selected = repository.selected_evaluations(farm_id, simulation_id, email)
     if selected is None:
@@ -148,7 +150,10 @@ def compute_yearly_summary(
                 index + 1,
                 {"n_load": 0.0, "db2": 0.0, "fen": 0.0, "count": 0},
             )
-            bucket["n_load"] += year_result.leaching_kg_n_ha * field.area_ha * retention_factor
+            # A non-kvotegivende mark draws on no udledningskvote, so its
+            # leaching must not be summed into the udledning shown against it.
+            if field.kvotegivende:
+                bucket["n_load"] += year_result.leaching_kg_n_ha * field.area_ha * retention_factor
             bucket["db2"] += year_result.db_kr_ha * field.area_ha
             if year_result.db_detail.get("udbytteenhed") == "FE/ha":
                 bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha

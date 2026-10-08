@@ -531,6 +531,25 @@ def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
         return result.rowcount > 0
 
 
+def _locked_candidate_figures(
+    field: FieldRecord,
+    candidate: RotationCandidateEvaluation,
+) -> dict[str, float]:
+    """A mark's db2/n_load/leaching/fen for the candidate it is locked to.
+
+    Same area/retention scaling as Optimér's _build_options and
+    apply_manual_rotation: one cycle-average year for the whole mark.
+    """
+    retention_factor = 1 - (field.retention or 0) / 100
+    leaching_total = candidate.avg_leaching_kg_n_ha * field.area_ha
+    return {
+        "db2": candidate.avg_db_kr_ha * field.area_ha,
+        "n_load": leaching_total * retention_factor,
+        "leaching": leaching_total,
+        "fen": candidate.avg_fen * field.area_ha,
+    }
+
+
 def create_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
@@ -646,6 +665,11 @@ def create_simulation(
                             # only coincidentally match when the history happens to
                             # already be a flat repeat of the 2026 afgrøde.
                             "crop_rotation": [y.year for y in permanent_candidate.years],
+                            # The same goes for the figures: the "Aktuel" history
+                            # must not stand in for the 2027-2034 projection, or
+                            # "Optimér" and the totals count this mark differently
+                            # from "Års-optimering", which reads the candidate.
+                            **_locked_candidate_figures(copied_field, permanent_candidate),
                         },
                     )
 

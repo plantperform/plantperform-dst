@@ -227,6 +227,8 @@ class CompactExecutionTests(DatabaseTests):
             fields = session.execute(select(setups.c.fields)).scalar_one()
             for setup in fields.values():
                 setup["baseline"]["rotation_id"] = "1:2:100"
+            # Only kvotegivende marker count toward udledning; DB2 and FEN count both.
+            fields["field-b"]["kvotegivende"] = True
             session.execute(update(setups).values(fields=fields))
         queries = []
 
@@ -241,7 +243,7 @@ class CompactExecutionTests(DatabaseTests):
             event.remove(self.engine, "before_cursor_execute", record)
         self.assertEqual(len(summary), 1)
         self.assertEqual((summary[0].total_db2, summary[0].total_fen), (800, 500))
-        self.assertEqual(summary[0].total_n_load_kg, 20)
+        self.assertEqual(summary[0].total_n_load_kg, 10)
         self.assertEqual(summary[0].field_count, 2)
         self.assertFalse(
             any("SELECT simulation_field_candidates.data \n" in sql for sql in queries)
