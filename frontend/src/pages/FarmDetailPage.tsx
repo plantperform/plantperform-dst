@@ -470,6 +470,7 @@ const FarmDetail = () => {
                         )
                       : undefined
                   }
+                  simulations={simulations}
                   fieldsLoading={simulationFieldsLoading}
                   summaryMissing={simulationSummaryMissing}
                   fieldsError={
