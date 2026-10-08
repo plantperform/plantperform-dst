@@ -219,6 +219,7 @@ export type Simulation = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
+  includePrecedingCropValue?: boolean
 }
 
 export type CreateSimulationInput = {
@@ -231,6 +232,7 @@ export type CreateSimulationInput = {
   precisionFarming?: boolean
   earlySowing?: boolean
   intermediateCrop?: boolean
+  includePrecedingCropValue?: boolean
 }
 
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'

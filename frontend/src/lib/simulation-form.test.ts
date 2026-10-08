@@ -20,6 +20,7 @@ import {
   nNormPercentagesFor,
   NO_FERTILISER,
   nNormPercentagesLabel,
+  precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
   selectedRotations,
@@ -389,6 +390,11 @@ describe('summary labels', () => {
     )
     expect(catchCropSowingLabel('22/8', true)).toBe('22/8 · dagsbasis §38')
   })
+
+  it('says whether the forfrugtsværdi counts', () => {
+    expect(precedingCropValueLabel(true)).toBe('Regnes med')
+    expect(precedingCropValueLabel(false)).toBe('Regnes ikke med')
+  })
 })
 
 describe('toCreateSimulationInput', () => {
@@ -430,6 +436,7 @@ describe('toCreateSimulationInput', () => {
       precisionFarming: false,
       earlySowing: true,
       intermediateCrop: true,
+      includePrecedingCropValue: true,
     })
   })
 
@@ -484,6 +491,18 @@ describe('toCreateSimulationInput', () => {
       }).catchCropSowingDate,
     ).toBe('3/9')
   })
+
+  it('sends whether the forfrugtsværdi counts', () => {
+    expect(
+      toCreateSimulationInput(filledValues).includePrecedingCropValue,
+    ).toBe(true)
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        includePrecedingCropValue: false,
+      }).includePrecedingCropValue,
+    ).toBe(false)
+  })
 })
 
 describe('simulationToFormValues', () => {
@@ -529,6 +548,7 @@ describe('simulationToFormValues', () => {
       precisionFarming: true,
       earlySowing: false,
       intermediateCrop: true,
+      includePrecedingCropValue: true,
     })
   })
 
@@ -564,6 +584,20 @@ describe('simulationToFormValues', () => {
     )
     expect(values.catchCropSowingDate).toBe('3/9')
     expect(toCreateSimulationInput(values).catchCropSowingDate).toBe('3/9')
+  })
+
+  it('keeps the forfrugtsværdi choice and counts it when none is saved', () => {
+    expect(
+      simulationToFormValues(simulation, [kvaeggylle], offered)
+        .includePrecedingCropValue,
+    ).toBe(true)
+    expect(
+      simulationToFormValues(
+        { ...simulation, includePrecedingCropValue: false },
+        [kvaeggylle],
+        offered,
+      ).includePrecedingCropValue,
+    ).toBe(false)
   })
 })
 

@@ -56,6 +56,7 @@ field" column is the name on the wire.
 | stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
+| regn forfrugtsværdien med | `includePrecedingCropValue` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
