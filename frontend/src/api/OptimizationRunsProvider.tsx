@@ -97,9 +97,12 @@ export const OptimizationRunsProvider = ({
         id: result.runId,
         kind: result.kind,
         input: result.parameters,
-        startedAt: Date.parse(
-          result.startedAt ?? result.queuedAt ?? new Date().toISOString(),
-        ),
+        startedAt:
+          current?.id === result.runId
+            ? current.startedAt
+            : Date.parse(
+                result.queuedAt ?? result.startedAt ?? new Date().toISOString(),
+              ),
       }
       if (result.status === 'queued' || result.status === 'in_progress') {
         putRun({ ...base, status: 'running', phase: result.status })
