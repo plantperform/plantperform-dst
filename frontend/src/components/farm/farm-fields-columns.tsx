@@ -62,6 +62,14 @@ const NUMERIC_HEADER_CLASS = `${HEADER_CELL_CLASS} text-right`
 const NUMERIC_CELL_CLASS = `${BODY_CELL_CLASS} text-right tabular-nums`
 const SECONDARY_LINE_CLASS =
   'hidden text-xs font-normal text-muted-foreground full:block'
+// The totals row keeps its second line when the list is compact: the
+// bedrift's totals are the figures to read there.
+const FOOTER_SECONDARY_LINE_CLASS = 'text-xs font-normal text-muted-foreground'
+
+type Placement = 'cell' | 'footer'
+
+const secondaryLineClass = (placement: Placement) =>
+  placement === 'footer' ? FOOTER_SECONDARY_LINE_CLASS : SECONDARY_LINE_CLASS
 
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
@@ -163,14 +171,19 @@ type NumericMetricColumnConfig = {
   key: PerHaMetric
   label: string
   heading: string
-  emptyCell: (placement: 'cell' | 'footer') => ReactNode
-  quotaGatedCell?: (placement: 'cell' | 'footer') => ReactNode
+  emptyCell: (placement: Placement) => ReactNode
+  quotaGatedCell?: (placement: Placement) => ReactNode
 }
 
-const renderMetricFigure = ({ value, total }: PerHaFigure): ReactNode => (
+const renderMetricFigure = (
+  { value, total }: PerHaFigure,
+  placement: Placement,
+): ReactNode => (
   <>
     <div className="font-medium">{value}</div>
-    {total ? <div className={SECONDARY_LINE_CLASS}>{total}</div> : null}
+    {total ? (
+      <div className={secondaryLineClass(placement)}>{total}</div>
+    ) : null}
   </>
 )
 
@@ -202,12 +215,12 @@ const numericMetricColumn = (
       if (!isFieldCalculated(field, isSimulationView)) {
         return emptyCell('cell')
       }
-      return renderMetricFigure(fieldFigure(field, key))
+      return renderMetricFigure(fieldFigure(field, key), 'cell')
     },
     footer: () =>
       totals.calculatedCount === 0
         ? emptyCell('footer')
-        : renderMetricFigure(totalsFigure(totals, key)),
+        : renderMetricFigure(totalsFigure(totals, key), 'footer'),
     meta: {
       headerClassName: NUMERIC_HEADER_CLASS,
       cellClassName: NUMERIC_CELL_CLASS,
@@ -450,22 +463,28 @@ const fertiliserColumn = (
       if (figures === undefined || value === null) {
         return <span className="text-muted-foreground">-</span>
       }
-      return renderMetricFigure({
-        value: `${format(value)} ${unit}`,
-        total:
-          (secondary
-            ? secondary(figures)
-            : describeTotal(value * field.areaHa)) ?? undefined,
-      })
+      return renderMetricFigure(
+        {
+          value: `${format(value)} ${unit}`,
+          total:
+            (secondary
+              ? secondary(figures)
+              : describeTotal(value * field.areaHa)) ?? undefined,
+        },
+        'cell',
+      )
     },
     footer: () => {
       if (noFarmTotal) return null
       const total = totalFertiliser(fields, fertiliser, pick)
       if (total === null) return null
-      return renderMetricFigure({
-        value: `${format(total.amount / total.areaHa)} ${unit}`,
-        total: describeTotal(total.amount),
-      })
+      return renderMetricFigure(
+        {
+          value: `${format(total.amount / total.areaHa)} ${unit}`,
+          total: describeTotal(total.amount),
+        },
+        'footer',
+      )
     },
     enableSorting: false,
     meta: {
