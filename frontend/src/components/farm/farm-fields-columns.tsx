@@ -16,7 +16,6 @@ import {
   type FertiliserFigures,
 } from '@/lib/fertiliser-overview'
 import {
-  averageNNormPct,
   describeSeparateQuotas,
   describeUncalculatedCount,
   EXCLUDED_FROM_CALCULATION,
@@ -631,14 +630,8 @@ export const buildFarmFieldsColumns = ({
           `${formatNumber(pct)} %`
         )
       },
-      footer: () => {
-        const average = averageNNormPct(fields)
-        return average === null ? null : (
-          <AppTooltip content="Gennemsnit vægtet efter areal">
-            <span>{`${formatNumber(average)} %`}</span>
-          </AppTooltip>
-        )
-      },
+      // A level per mark, not something to total.
+      footer: () => null,
       meta: {
         headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
         cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),

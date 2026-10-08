@@ -363,19 +363,6 @@ export const fieldNNormPct = (field: FieldRecord): number | null => {
   return Number.isFinite(value) ? value : null
 }
 
-// Area-weighted N-norm level over the optimized marker.
-export const averageNNormPct = (fields: FieldRecord[]): number | null => {
-  let area = 0
-  let weighted = 0
-  for (const field of fields) {
-    const pct = fieldNNormPct(field)
-    if (pct === null) continue
-    area += field.areaHa
-    weighted += pct * field.areaHa
-  }
-  return area > 0 ? weighted / area : null
-}
-
 export type YieldResponse = { normYield: number; factor: number }
 
 // The normudbytte and the share of it reached, when available N below the
