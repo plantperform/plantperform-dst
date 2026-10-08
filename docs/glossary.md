@@ -85,8 +85,10 @@ field" column is the name on the wire.
 | brugerdefineret | `'custom'` fertiliser choice | | |
 | mineralsk andel | `mineralSharePct` | `mineralskAndelPct` | |
 | N-indhold pr. ton | `nContentKgPerTon` | `nIndholdKgPerTon` | |
-| tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | |
-| tildelt handelsgødning | `appliedMineralFertiliserKgNHa` | `tildeltHandelsgodningKgnHa` | |
+| tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa`, `manureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | Shown as "Org. gødning" in the Gødning columns |
+| tildelt handelsgødning | `appliedMineralFertiliserKgNHa`, `mineralFertiliserKgNHa` | `tildeltHandelsgodningKgnHa` | |
+| tilgængeligt N | `availableNKgNHa`, `availableNShareOfNorm` | | Forfrugtsværdi plus the tildelt N that counts toward the norm |
+| gødningsoverblik | `FertiliserFigures`, `fieldFertiliser`, `fertiliserByFieldId` | | The Gødning column group in the mark list, per year or the average per year |
 | organisk bundet | `manureOrganicBoundKgNHa` | `husdyrgodningOrganiskBundetKgnHa` | |
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
 
