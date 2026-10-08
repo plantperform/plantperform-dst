@@ -42,7 +42,6 @@ import {
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
-  type CropDbEffect,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
@@ -213,15 +212,8 @@ describe('profileDbEffect', () => {
     ])
   })
 
-  const effect = (cropCode: number, deltaDkkHa: number): CropDbEffect => ({
-    cropCode,
-    cropName: `Afgrøde ${cropCode}`,
-    dbDkkHa: 1000,
-    deltaDkkHa,
-  })
-
   it('places each move on a scale from the largest fall to the largest rise', () => {
-    const scale = dbDeltaScale([effect(1, 300), effect(2, -100), effect(3, 0)])
+    const scale = dbDeltaScale([300, -100, 0])
     expect(scale).toEqual({ down: 100, up: 300 })
     expect(dbDeltaBar(300, scale)).toEqual({ axis: 0.25, width: 0.75 })
     expect(dbDeltaBar(-100, scale)).toEqual({ axis: 0.25, width: 0.25 })
@@ -229,7 +221,7 @@ describe('profileDbEffect', () => {
   })
 
   it('draws no bar when no crop moves', () => {
-    const scale = dbDeltaScale([effect(1, 0)])
+    const scale = dbDeltaScale([0])
     expect(scale).toEqual({ down: 0, up: 0 })
     expect(dbDeltaBar(0, scale)).toEqual({ axis: 0, width: 0 })
   })
