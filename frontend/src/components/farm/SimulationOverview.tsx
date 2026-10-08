@@ -1,8 +1,11 @@
-import { Plus } from 'lucide-react'
+import { ArrowRight, Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { FieldRecord, Simulation } from '@/api/types'
+import { useStartGuide } from '@/components/farm/economics-navigation'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { SimulationCard } from '@/components/farm/SimulationCard'
 import type {
   FarmInspectorMode,
@@ -10,6 +13,10 @@ import type {
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  describeEconomicsEntry,
+  STANDARD_PROFILE_ID,
+} from '@/lib/economics-profiles'
 import { resolveFarmQuota } from '@/lib/field-domain'
 
 type SimulationOverviewProps = {
@@ -38,10 +45,16 @@ export const SimulationOverview = ({
   onNewSimulation,
 }: SimulationOverviewProps) => {
   const historyQuota = useMemo(() => resolveFarmQuota(fields, false), [fields])
+  const economics = useEconomicsProfiles()
+  const startGuide = useStartGuide()
+  const { ownProfiles } = economics
+  const economicsEntry = describeEconomicsEntry(
+    ownProfiles.map((profile) => profile.name),
+  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-8 px-6 pt-10 pb-16 sm:px-10">
+      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-5 px-6 pt-10 pb-16 sm:px-10">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="font-display text-4xl tracking-tight">
@@ -67,6 +80,26 @@ export const SimulationOverview = ({
             </Button>
           </div>
         </header>
+        <EconomicsBanner
+          label="Økonomi"
+          title={economicsEntry.title}
+          text={economicsEntry.text}
+        >
+          {ownProfiles.length > 0 ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={economics.overviewPath}>Se profilerne</Link>
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            onClick={() => startGuide({ fromProfileId: STANDARD_PROFILE_ID })}
+          >
+            {ownProfiles.length > 0
+              ? 'Ny økonomiprofil'
+              : 'Tilpas økonomien til bedriften'}
+            <ArrowRight aria-hidden="true" />
+          </Button>
+        </EconomicsBanner>
         <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
           {simulations.map((simulation) => (
             <SimulationCard

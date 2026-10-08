@@ -26,6 +26,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { BrandIcon } from '@/components/BrandMark'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -201,9 +202,11 @@ export const FarmSidebar = ({
   const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
-  const historyActive = !overviewActive && selection.kind === 'current'
+  const economicsPageActive = useMatch('/farms/:farmId/economics/*') !== null
+  const pageActive = overviewActive || economicsPageActive
+  const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
-    !overviewActive && selection.kind === 'simulation' ? selection.id : null
+    !pageActive && selection.kind === 'simulation' ? selection.id : null
   const compareActive = useMatch('/farms/:farmId/simulations/compare') !== null
   const simulationPages = [
     {
@@ -404,6 +407,7 @@ const CollapseMenuButton = () => {
 
 const SidebarUserMenu = () => {
   const { user } = useAuth()
+  const { overviewPath } = useEconomicsProfiles()
   const iconRail = useSidebar().state === 'collapsed'
   const email = user?.email ?? ''
   const initial = email.charAt(0).toUpperCase()
@@ -442,7 +446,7 @@ const SidebarUserMenu = () => {
             align="start"
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
           >
-            <UserMenuContent />
+            <UserMenuContent economicsPath={overviewPath} />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
