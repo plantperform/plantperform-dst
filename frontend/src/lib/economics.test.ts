@@ -31,6 +31,7 @@ import {
   profileChangesTitle,
   profileDbEffect,
   quantityUnitLabel,
+  sameOverrides,
   sharedPriceEffect,
   stepYieldPct,
   withFertiliserPlan,
@@ -231,6 +232,32 @@ describe('profileDbEffect', () => {
     const scale = dbDeltaScale([effect(1, 0)])
     expect(scale).toEqual({ down: 0, up: 0 })
     expect(dbDeltaBar(0, scale)).toEqual({ axis: 0, width: 0 })
+  })
+})
+
+describe('sameOverrides', () => {
+  it('compares the changes whatever order they were made in', () => {
+    const left = {
+      prices: { spraying: 150, ploughing: 700 },
+      quantities: {},
+      yieldPct: { '22': 10 },
+    }
+    const right = {
+      prices: { ploughing: 700, spraying: 150 },
+      quantities: {},
+      yieldPct: { '22': 10 },
+    }
+    expect(sameOverrides(left, right)).toBe(true)
+    expect(sameOverrides(NO_OVERRIDES, NO_OVERRIDES)).toBe(true)
+  })
+
+  it('tells a changed, an added and a removed value apart', () => {
+    const base = { prices: { spraying: 150 }, quantities: {}, yieldPct: {} }
+    expect(sameOverrides(base, { ...base, prices: { spraying: 160 } })).toBe(
+      false,
+    )
+    expect(sameOverrides(base, { ...base, yieldPct: { '22': 5 } })).toBe(false)
+    expect(sameOverrides(base, NO_OVERRIDES)).toBe(false)
   })
 })
 
