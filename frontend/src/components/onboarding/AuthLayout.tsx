@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { BrandIcon, SproutMark } from '@/components/BrandMark'
+import { BrandIcon } from '@/components/BrandMark'
+import { OrganisationLogos } from '@/components/onboarding/OrganisationLogos'
 import { cn } from '@/lib/utils'
 
 type AuthIconProps = {
@@ -46,21 +47,23 @@ export const AuthLayout = ({
   children,
 }: AuthLayoutProps) => (
   <main className="flex min-h-screen flex-col bg-background lg:flex-row">
-    <aside className="relative flex flex-col overflow-hidden bg-brand text-brand-foreground lg:w-[40%] lg:max-w-xl">
-      <SproutMark className="pointer-events-none absolute -bottom-24 -left-20 hidden size-[560px] text-brand-foreground opacity-15 lg:block" />
-      <div className="relative px-6 py-6 lg:flex-1 lg:px-12 lg:pt-12">
-        <div className="flex items-center gap-3">
-          <BrandIcon onDark className="size-12" />
-          <p className="text-2xl font-semibold tracking-tight lg:text-3xl">
-            PlantPerform
+    <aside className="bg-brand text-brand-foreground lg:w-[40%] lg:max-w-xl">
+      <div className="flex flex-col lg:sticky lg:top-0 lg:min-h-screen">
+        <div className="px-6 py-6 lg:flex-1 lg:px-12 lg:pt-12">
+          <div className="flex items-center gap-3">
+            <BrandIcon onDark className="size-12" />
+            <p className="text-2xl font-semibold tracking-tight lg:text-3xl">
+              PlantPerform
+            </p>
+          </div>
+          <p className="mt-4 text-xs font-medium uppercase tracking-[0.24em] text-brand-foreground/85 lg:text-sm">
+            Beslutningsstøtte til sædskifte
+          </p>
+          <p className="mt-6 hidden max-w-sm text-base leading-relaxed text-brand-foreground/85 lg:block">
+            Planlæg sædskiftet, og se udledningen mod kvoten for hver mark.
           </p>
         </div>
-        <p className="mt-4 text-xs font-medium uppercase tracking-[0.24em] text-brand-foreground/85 lg:text-sm">
-          Beslutningsstøtte til sædskifte
-        </p>
-        <p className="mt-6 hidden max-w-sm text-base leading-relaxed text-brand-foreground/85 lg:block">
-          Planlæg sædskiftet, og se udledningen mod kvoten for hver mark.
-        </p>
+        <OrganisationLogos className="mx-12 mb-12 hidden lg:flex" />
       </div>
     </aside>
     <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10 lg:py-16">
