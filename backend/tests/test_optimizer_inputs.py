@@ -1,6 +1,7 @@
 """Compact cache parity, selective detail reads, and derived-column migration."""
 
 import importlib.util
+import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -40,6 +41,36 @@ def rich_candidate(value=200, variant="2"):
     return result
 
 
+def mixed_fodder_candidate():
+    # Grass (FE/ha) in even years, a cash crop (hkg/ha) and an unpriced year in odd ones.
+    result = rich_candidate()
+    for index, year in enumerate(result.years):
+        if index % 4 == 1:
+            year.db_detail = {"udbytteenhed": "hkg/ha", "udbytte": 70}
+        elif index % 4 == 3:
+            year.db_detail = {"udbytteenhed": "", "udbytte": None}
+    return result
+
+
+MIXED_FEN_FE_HA = [125, 0, 125, 0] * 2
+
+
+class CompactFodderTests(unittest.TestCase):
+    def test_compact_years_keep_the_yearly_foderenheder_of_the_full_years(self):
+        full = SimulationFieldCandidates(
+            field_id="field-b", jbnr=5, candidates=[mixed_fodder_candidate()]
+        )
+        compact = optimizer_input(full)
+        years = compact["candidates"][0]["years"]
+        self.assertEqual([year["fen_fe_ha"] for year in years], MIXED_FEN_FE_HA)
+        self.assertTrue(all("db_detail" not in year for year in years))
+        parsed = parse_optimizer_input(compact).candidates[0]
+        self.assertEqual(
+            [year.fen_fe_ha for year in parsed.years],
+            [year.fen_fe_ha for year in full.candidates[0].years],
+        )
+
+
 class CompactExecutionTests(DatabaseTests):
     def prepare(self):
         low, high = rich_candidate(100, "1"), rich_candidate()
@@ -73,9 +104,11 @@ class CompactExecutionTests(DatabaseTests):
                         simulation = compact[0].model_copy(
                             update={
                                 "constraints": (
+                                    # The yearly run bounds every year's FEN: 125 FE/ha on
+                                    # two 2 ha fields is 500 FE a year, the average 8.
                                     OptimizationConstraints(
                                         min_fen=1,
-                                        max_fen=100,
+                                        max_fen=1000,
                                         crop_area_limits=[{"afgrode_kode": 2, "max_area_ha": 4}],
                                     )
                                     if constrained
@@ -290,19 +323,45 @@ class CompactExecutionTests(DatabaseTests):
 
 
 class CompactMigrationTests(DatabaseTests):
+    # The compact column as optimizer_input() writes it today: added by
+    # 20261007_0001, with yearly foderenheder added by 20261008_0001.
+    MIGRATIONS = ("20261007_0001_optimizer_inputs.py", "20261008_0001_optimizer_input_fen.py")
+
     def setUp(self):
         super().setUp()
-        path = (
-            Path(__file__).parents[1]
-            / "database/migrations/versions/20261007_0001_optimizer_inputs.py"
-        )
-        spec = importlib.util.spec_from_file_location("compact_migration", path)
-        self.migration = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.migration)
+        versions = Path(__file__).parents[1] / "database/migrations/versions"
+        self.migrations = []
+        for name in self.MIGRATIONS:
+            spec = importlib.util.spec_from_file_location(name.removesuffix(".py"), versions / name)
+            migration = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(migration)
+            self.migrations.append(migration)
 
     def migrate(self, connection, direction="upgrade"):
+        ordered = self.migrations if direction == "upgrade" else reversed(self.migrations)
         with Operations.context(MigrationContext.configure(connection)):
-            getattr(self.migration, direction)()
+            for migration in ordered:
+                getattr(migration, direction)()
+
+    def test_fen_backfill_matches_the_full_years(self):
+        full = SimulationFieldCandidates(
+            field_id="field-b", jbnr=5, candidates=[mixed_fodder_candidate(), candidate()]
+        )
+        with self.engine.begin() as connection:
+            replace_cached_candidates(connection, {"field-b": full.model_dump(mode="json")})
+            # Drop only the yearly FEN, as a cache written before 20261008_0001.
+            with Operations.context(MigrationContext.configure(connection)):
+                self.migrations[1].downgrade()
+            stale = connection.execute(select(caches.c.optimizer_input)).scalar_one()
+            self.assertNotIn("fen_fe_ha", stale["candidates"][0]["years"][0])
+            with Operations.context(MigrationContext.configure(connection)):
+                self.migrations[1].upgrade()
+            backfilled = connection.execute(select(caches.c.optimizer_input)).scalar_one()
+        self.assertEqual(backfilled, optimizer_input(full))
+        self.assertEqual(
+            [year["fen_fe_ha"] for year in backfilled["candidates"][0]["years"]],
+            MIXED_FEN_FE_HA,
+        )
 
     def test_backfill_uses_one_update_for_many_candidate_caches(self):
         data = {

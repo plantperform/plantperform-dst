@@ -12,6 +12,7 @@ class OptimizerYear(CamelModel):
     year: RotationYear
     leaching_kg_n_ha: float
     db_kr_ha: float
+    fen_fe_ha: float
 
 
 class OptimizerCandidate(RotationCandidateEvaluation):
@@ -23,7 +24,7 @@ class OptimizerFieldCandidates(SimulationFieldCandidates):
 
 
 def optimizer_input(data: SimulationFieldCandidates) -> dict:
-    return data.model_dump(
+    compact = data.model_dump(
         mode="json",
         include={
             "field_id": True,
@@ -46,6 +47,11 @@ def optimizer_input(data: SimulationFieldCandidates) -> dict:
             },
         },
     )
+    # Yearly foderenheder come from db_detail, which the compact input omits.
+    for candidate, compact_candidate in zip(data.candidates, compact["candidates"], strict=True):
+        for year, compact_year in zip(candidate.years, compact_candidate["years"], strict=True):
+            compact_year["fen_fe_ha"] = year.fen_fe_ha
+    return compact
 
 
 def parse_optimizer_input(data: dict) -> SimulationFieldCandidates:

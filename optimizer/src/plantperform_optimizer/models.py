@@ -111,6 +111,7 @@ class YearlyRotationOption:
     n_load_by_year: tuple[float, ...]
     leaching_by_year: tuple[float, ...]
     fen: float
+    fen_by_year: tuple[float, ...]
 
 
 @dataclass(frozen=True)
@@ -127,8 +128,9 @@ class FixedYearlyFieldContribution:
     """A locked mark's already-decided per-calendar-year contribution.
 
     Same role as FixedFieldContribution, but per year - db2_by_year,
-    n_load_by_year and leaching_by_year each hold NUM_YEARS entries, taken
-    as-is from the mark's locked candidate (no re-evaluation, no shifting).
+    n_load_by_year, leaching_by_year and fen_by_year each hold NUM_YEARS
+    entries, taken as-is from the mark's locked candidate (no re-evaluation,
+    no shifting).
     """
 
     kystvand_id: int | None
@@ -136,6 +138,7 @@ class FixedYearlyFieldContribution:
     n_load_by_year: tuple[float, ...]
     leaching_by_year: tuple[float, ...]
     fen: float
+    fen_by_year: tuple[float, ...]
     kvotegivende: bool = True
     area_ha: float = 0.0
     crop_codes_by_year: tuple[int, ...] = ()

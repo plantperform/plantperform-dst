@@ -422,9 +422,22 @@ def _expand_yearly_options(
                     n_load_by_year=n_load_by_year,
                     leaching_by_year=leaching_by_year,
                     fen=variant.avg_fen * field.area_ha,
+                    fen_by_year=_fen_by_year(variant, field.area_ha),
                 )
             )
     return tuple(options)
+
+
+def _fen_by_year(
+    candidate: RotationCandidateEvaluation,
+    area_ha: float,
+) -> tuple[float, ...]:
+    """Foderenheder per calendar year for a mark, one entry per candidate year.
+
+    fen_fe_ha follows avg_fen's FE/ha rule and is present both on compact
+    cached years, which omit db_detail, and on freshly evaluated ones.
+    """
+    return tuple(y.fen_fe_ha * area_ha for y in candidate.years)
 
 
 def _max_n_load_by_kystvandopland_and_year(
@@ -470,6 +483,7 @@ def _locked_yearly_field_contribution(
         n_load_by_year=tuple(leaching * retention_factor for leaching in leaching_by_year),
         leaching_by_year=leaching_by_year,
         fen=candidate.avg_fen * field.area_ha,
+        fen_by_year=_fen_by_year(candidate, field.area_ha),
         kvotegivende=field.kvotegivende,
         area_ha=field.area_ha,
         crop_codes_by_year=tuple(y.year.afgrode_kode for y in candidate.years),

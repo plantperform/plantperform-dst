@@ -71,6 +71,17 @@ class RotationCandidateYearResult(CamelModel):
     afgrode_norm_kgn_ha: float | None = None
     n_norm_pct: float = 100.0
 
+    @property
+    def fen_fe_ha(self) -> float:
+        """Foderenheder per ha in this year, the same rule as the candidate's avg_fen.
+
+        Only afgrøder whose udbytte is measured in FE/ha produce foderenheder.
+        The compact optimizer input stores this value, since it omits db_detail.
+        """
+        if self.db_detail.get("udbytteenhed") != "FE/ha":
+            return 0.0
+        return self.db_detail.get("udbytte") or 0.0
+
 
 class RotationPositionOverride(CamelModel):
     """Manual hovedafgrøde/udlæg override in one position (0-7) of an
