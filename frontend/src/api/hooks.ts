@@ -1,7 +1,8 @@
-import { useEffect, useId, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef, useSyncExternalStore } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
+import { isSimulationCreating, isSimulationReady } from '@/lib/simulation-creation'
 import { useOptimizationRunsContext } from '@/api/optimization-runs'
 import {
   createRequestProgress,
@@ -107,16 +108,33 @@ export const simulationFieldsKey = (farmId?: string, simulationId?: string) => {
 }
 
 export const useSimulations = (farmId?: string) => {
-  const response = useSWR<Simulation[]>(simulationsKey(farmId), fetcher)
+  const previous = useRef(new Map<string, boolean>())
+  const response = useSWR<Simulation[]>(simulationsKey(farmId), fetcher, {
+    refreshInterval: (data) => (data?.some(isSimulationCreating) ? 5000 : 0),
+  })
   const { syncSimulations } = useOptimizationRunsContext()
   useEffect(() => {
-    if (response.data) syncSimulations(response.data)
-  }, [response.data, syncSimulations])
+    if (!response.data) return
+    syncSimulations(response.data)
+    for (const simulation of response.data) {
+      const ready = isSimulationReady(simulation)
+      if (ready && previous.current.get(simulation.id) === false) {
+        void mutate(simulationFieldsKey(farmId, simulation.id))
+      }
+      previous.current.set(simulation.id, ready)
+    }
+  }, [farmId, response.data, syncSimulations])
   return response
 }
 
-export const useSimulationFields = (farmId?: string, simulationId?: string) =>
-  useSWR<FieldRecord[]>(simulationFieldsKey(farmId, simulationId), fetcher)
+export const useSimulationFields = (
+  farmId?: string,
+  simulationId?: string,
+  enabled = true,
+) =>
+  useSWR<FieldRecord[]>(
+    enabled ? simulationFieldsKey(farmId, simulationId) : null, fetcher,
+  )
 
 export const fetchSimulationFields = async (
   farmId: string,
@@ -173,7 +191,10 @@ export const useSimulationsFields = (
 ) => {
   const { cache } = useSWRConfig()
   const visitId = useId()
-  const simulationIds = simulations.map((simulation) => simulation.id).sort()
+  const simulationIds = simulations
+    .filter(isSimulationReady)
+    .map((simulation) => simulation.id)
+    .sort()
   useEffect(() => {
     if (!farmId) return
     void mutate(

@@ -54,6 +54,7 @@ from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSim
 from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints, Simulation
 from app.services.optimization import jobs
+from app.services.rotations import saedskifte_library
 from plantperform_optimizer import handler as lambda_handler
 from plantperform_optimizer import worker
 from plantperform_optimizer.deadline import remaining_time
@@ -146,6 +147,11 @@ class DatabaseTests(unittest.TestCase):
         self.enterContext(patch.object(repository, "SessionLocal", self.sessions))
         self.enterContext(patch.object(jobs, "SessionLocal", self.sessions))
         self.enterContext(patch.object(optimization_store, "SessionLocal", self.sessions))
+        # Synthetic candidates have eight library positions. Yearly solves must
+        # not load the application's reference tables outside this test schema.
+        self.enterContext(patch.object(
+            saedskifte_library, "get_raw_rotation", return_value=((1, None, None),) * 8,
+        ))
         self.enterContext(patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": "test-queue"}))
         self.enterContext(patch.dict(os.environ, {"APP_ENV": "production"}))
         self.queue = self.enterContext(
@@ -354,7 +360,10 @@ class LifecycleTests(DatabaseTests):
             "Records": [
                 {
                     "messageId": "job",
-                    "body": json.dumps({"simulationId": "sim", "runId": run_id}),
+                    "body": json.dumps({
+                        "jobType": "optimization", "farmId": "farm",
+                        "simulationId": "sim", "runId": run_id,
+                    }),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -569,7 +578,10 @@ class LifecycleTests(DatabaseTests):
         accepted = self.submit(request)
         self.assertEqual((accepted.status, accepted.run_id), ("queued", str(request.run_id)))
         envelope = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
-        self.assertEqual(envelope, {"simulationId": "sim", "runId": accepted.run_id})
+        self.assertEqual(envelope, {
+            "jobType": "optimization", "farmId": "farm",
+            "simulationId": "sim", "runId": accepted.run_id,
+        })
         self.assertEqual(self.queue.send_message.call_args.kwargs["DelaySeconds"], 0)
         self.assertEqual(accepted.parameters["timeLimitSeconds"], 1)
 
@@ -878,7 +890,10 @@ class LifecycleTests(DatabaseTests):
             locked = session.execute(select(setups.c.fields)).scalar_one()["field-b"]
         self.assertEqual(locked["fixed_candidate"]["avg_db_kr_ha"], 50)
         run = self.submit(self.request(1, yearly=True), "yearly")
-        worker.execute("sim", run.run_id, CONTEXT)
+        envelope = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
+        self.assertEqual(envelope, {"jobType": "optimization", "farmId": "farm",
+                                   "simulationId": "sim", "runId": run.run_id})
+        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
         result = self.result()
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.response.fields[0].db2, 100)
@@ -1369,6 +1384,11 @@ class MigrationTests(DatabaseTests):
             if index.name != "ix_simulation_field_candidates_simulation_field"
         }
         tables.create_all(self.engine)
+        # Current read APIs include creation summaries, even for legacy simulations.
+        with self.engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE simulation ADD COLUMN creation_status TEXT NOT NULL DEFAULT 'done'"
+            ))
         path = (
             Path(__file__).parents[1]
             / "database/migrations/versions/20261005_0001_simulation_aggregates.py"

@@ -12,6 +12,7 @@ for details.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 
 from app.domain.rotation_candidate import (
@@ -513,6 +514,42 @@ def evaluate_with_overrides(
     )
 
 
+@dataclass(frozen=True)
+class PreparedCandidate:
+    ref: RotationCandidateRef
+    rotation: tuple[tuple[int | None, int | None, str | None], ...]
+    active_len: int
+
+
+def prepare_candidates(
+    saedskiftevarianter, n_norm_procenter, tidlig_saaning=True, mellemafgrode=True
+) -> tuple[PreparedCandidate, ...]:
+    """Resolve and deduplicate field-independent candidate inputs once per job."""
+    prepared = []
+    seen_ref_ids = set()
+    seen_rotation_by_n_norm = {}
+    for saedskiftevariant in saedskiftevarianter:
+        for variant in saedskifte_library.list_variants(saedskiftevariant):
+            raw = saedskifte_library.generate_rotation(saedskiftevariant, variant)
+            rotation = tuple(_strip_disabled_virkemidler(raw, tidlig_saaning, mellemafgrode))
+            active_len = saedskifte_library.rotation_active_len(rotation)
+            for n_norm_pct in n_norm_procenter:
+                ref = RotationCandidateRef(
+                    saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct
+                )
+                ref_id = ref.to_id()
+                if ref_id in seen_ref_ids:
+                    continue
+                seen_ref_ids.add(ref_id)
+                seen = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
+                if rotation in seen:
+                    continue
+                seen.add(rotation)
+                if active_len:
+                    prepared.append(PreparedCandidate(ref, rotation, active_len))
+    return tuple(prepared)
+
+
 def generate_candidates_for_field(
     saedskiftevarianter: list[str],
     n_norm_procenter: list[str],
@@ -527,60 +564,33 @@ def generate_candidates_for_field(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    prepared: tuple[PreparedCandidate, ...] | None = None,
 ) -> list[RotationCandidateEvaluation]:
-    """Generate and evaluate every explicitly selected candidate combination.
-
-    Cross the selected saedskiftevariant IDs with selected N-norm% values and
-    every variant, then evaluate each result under the scenarie's gødning
-    choice. Phase 13 uses the same gødning for every selected sædskifte,
-    independently of which sædskifter were selected.
-
-    "Opret scenarie" uses this for its hidden background calculation (plan
-    decisions 14/19, Phase 9). N-norm% is now only a percentage scaling in
-    candidate_evaluator.compute_n_inputs, not part of the rotation lookup; see
-    the saedskifte_library.py module docstring. There are consequently no
-    invalid combinations to skip: every selected N-norm% applies to every
-    selected sædskifte/variant.
-    """
-    results: list[RotationCandidateEvaluation] = []
-    seen_ref_ids: set[str] = set()
-    seen_rotation_by_n_norm: dict[str, set[tuple]] = {}
-
-    for saedskiftevariant in saedskiftevarianter:
-        for variant in saedskifte_library.list_variants(saedskiftevariant):
-            raw_rotation = saedskifte_library.generate_rotation(saedskiftevariant, variant)
-            rotation_signature = tuple(
-                _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
-            )
-            for n_norm_pct in n_norm_procenter:
-                ref = RotationCandidateRef(
-                    saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct,
-                )
-                ref_id = ref.to_id()
-                if ref_id in seen_ref_ids:
-                    continue
-                seen_ref_ids.add(ref_id)
-                seen_for_norm = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
-                if rotation_signature in seen_for_norm:
-                    continue
-                seen_for_norm.add(rotation_signature)
-                result = evaluate_candidate_for_mark(
-                    ref, jbnr=jbnr,
-                    driftsform=godning.driftsform,
-                    org_mineral_n=godning.org_mineral_n,
-                    mineralsk_andel_pct=godning.mineralsk_andel_pct,
-                    only_organic=godning.only_organic,
-                    n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
-                    fdato=fdato, precision_dagsbasis=precision_dagsbasis,
-                    praecisionsjordbrug=praecisionsjordbrug,
-                    tidlig_saaning=tidlig_saaning,
-                    mellemafgrode=mellemafgrode,
-                    real_history=real_history,
-                    percolation_by_kategori=percolation_by_kategori,
-                    org_n_topsoil=org_n_topsoil,
-                    s_soil=s_soil,
-                )
-                if result is not None:
-                    results.append(result)
-
-    return results
+    """Evaluate prepared rotations using this field's soil and history."""
+    if prepared is None:
+        prepared = prepare_candidates(
+            saedskiftevarianter, n_norm_procenter, tidlig_saaning, mellemafgrode
+        )
+    return [
+        evaluate_sequence_for_mark(
+            item.ref,
+            [year[0] for year in item.rotation],
+            [year[1] for year in item.rotation],
+            [year[2] for year in item.rotation],
+            item.active_len,
+            jbnr,
+            godning.driftsform,
+            godning.org_mineral_n,
+            godning.mineralsk_andel_pct,
+            godning.only_organic,
+            n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+            fdato=fdato,
+            precision_dagsbasis=precision_dagsbasis,
+            praecisionsjordbrug=praecisionsjordbrug,
+            real_history=real_history,
+            percolation_by_kategori=percolation_by_kategori,
+            org_n_topsoil=org_n_topsoil,
+            s_soil=s_soil,
+        )
+        for item in prepared
+    ]

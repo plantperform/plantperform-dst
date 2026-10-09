@@ -204,6 +204,7 @@ export type FertiliserPresetOption = {
 }
 
 export type Simulation = {
+  creationStatus?: CreationStatus
   revision: number
   result: SimulationResultSummary
   id: string
@@ -222,6 +223,9 @@ export type Simulation = {
 }
 
 export type CreateSimulationInput = {
+  requestId?: string
+  optimizeOnCreate?: boolean
+  constraints?: OptimizationConstraints
   name: string
   allowedRotationVariants?: string[]
   allowedNNormPercentages?: string[]
@@ -232,6 +236,8 @@ export type CreateSimulationInput = {
   earlySowing?: boolean
   intermediateCrop?: boolean
 }
+
+export type CreationStatus = 'queued' | 'running' | 'done' | 'failed'
 
 export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
 

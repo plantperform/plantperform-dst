@@ -1,27 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
 
 import {
-  fetchCropAreaRanges,
-  fetchSimulationFields,
   simulationsKey,
   useFertiliserPresets,
   useRotationCategories,
   useRotationNNormPercentages,
-  useScenarioCropCodes,
 } from '@/api/hooks'
-import {
-  createSimulation,
-  updateSimulationConstraints,
-} from '@/api/mutations'
-import { useStartDefaultOptimization } from '@/api/optimization-runs'
-import type {
-  FieldRecord,
-  FertiliserSettings,
-  Simulation,
-} from '@/api/types'
+import { createSimulation } from '@/api/mutations'
+import type { FieldRecord, FertiliserSettings, Simulation } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
@@ -32,7 +21,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
-import { unmetCropAreaLimits } from '@/lib/crop-area-limits'
 import { formatNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
@@ -57,6 +45,10 @@ import {
   toggleNNormPercentage,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
+import {
+  creationRequestIdentity,
+  type CreationRequestIdentity,
+} from '@/lib/simulation-creation'
 import { cn } from '@/lib/utils'
 
 type NewScenarioPanelProps = {
@@ -70,16 +62,6 @@ type NewScenarioPanelProps = {
 }
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
-
-const cropNameList = new Intl.ListFormat('da-DK', {
-  style: 'long',
-  type: 'conjunction',
-})
-
-const unmetCropLimitsMessage = (cropNames: string[]) => {
-  const single = cropNames.length === 1
-  return `Simuleringen blev oprettet, men ${single ? 'kravet' : 'kravene'} til ${cropNameList.format(cropNames)} kan ikke opfyldes med simuleringens sædskifter. Ret ${single ? 'det' : 'dem'} under Regler, før du kører Optimér.`
-}
 
 const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'orgMineralN',
@@ -103,10 +85,6 @@ export const NewScenarioPanel = ({
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
   const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
-  const { data: sourceCropCodes = [] } = useScenarioCropCodes(
-    farmId,
-    source?.id,
-  )
   const referenceLoading = referenceQueries.some((query) => query.isLoading)
   const referenceError = referenceQueries.some((query) => query.error)
   const referenceRetrying = referenceQueries.some(
@@ -144,7 +122,7 @@ export const NewScenarioPanel = ({
   const [furthestStepIndex, setFurthestStepIndex] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const startDefaultRun = useStartDefaultOptimization()
+  const creationRequest = useRef<CreationRequestIdentity | null>(null)
 
   const hasFields = fields.length > 0
 
@@ -215,6 +193,7 @@ export const NewScenarioPanel = ({
   }
 
   const startOver = () => {
+    creationRequest.current = null
     reset(DEFAULT_SIMULATION_FORM_VALUES)
     setStepIndex(0)
     setFurthestStepIndex(0)
@@ -255,67 +234,35 @@ export const NewScenarioPanel = ({
     setCreateError(null)
     let simulation: Simulation
     try {
-      simulation = await createSimulation(
-        farmId,
-        toCreateSimulationInput(getValues()),
+      const input = {
+        ...toCreateSimulationInput(getValues()),
+        ...(source ? { constraints: source.constraints } : {}),
+      }
+      creationRequest.current = creationRequestIdentity(
+        input, creationRequest.current,
       )
+      simulation = await createSimulation(farmId, {
+        ...input,
+        requestId: creationRequest.current.requestId,
+      })
       await mutate(
         simulationsKey(farmId),
-        (current: Simulation[] = []) => [...current, simulation],
+        (current: Simulation[] = []) => [
+          ...current.filter((item) => item.id !== simulation.id),
+          simulation,
+        ],
         { revalidate: false },
       )
     } catch {
-      setCreateError('Kunne ikke oprette simuleringen. Prøv igen.')
+      void mutate(simulationsKey(farmId))
+      setCreateError('Kunne ikke starte oprettelsen. Prøv igen.')
       setIsCreating(false)
       return
     }
-    let runError: string | null = null
-    if (source) {
-      try {
-        simulation = await updateSimulationConstraints(
-          farmId,
-          simulation.id,
-          source.constraints,
-        )
-      } catch {
-        runError =
-          'Simuleringen blev oprettet, men grænserne kunne ikke kopieres.'
-      }
-    }
-    if (runError === null && simulation.constraints.cropAreaLimits.length > 0) {
-      try {
-        const unmet = unmetCropAreaLimits(
-          simulation.constraints.cropAreaLimits,
-          await fetchCropAreaRanges(farmId, simulation.id),
-        )
-        if (unmet.length > 0) {
-          runError = unmetCropLimitsMessage(
-            unmet.map(
-              (limit) =>
-                sourceCropCodes.find((crop) => crop.code === limit.cropCode)
-                  ?.name ?? `afgrødekode ${limit.cropCode}`,
-            ),
-          )
-        }
-      } catch {
-        runError =
-          'Simuleringen blev oprettet, men afgrødekravene kunne ikke tjekkes. Se dem under Regler, før du kører Optimér.'
-      }
-    }
+    creationRequest.current = null
     void mutate(simulationsKey(farmId))
-    if (runError === null && getValues().optimizeOnCreate) {
-      try {
-        startDefaultRun(
-          farmId,
-          simulation.id,
-          await fetchSimulationFields(farmId, simulation.id),
-        )
-      } catch {
-        runError = 'Simuleringen blev oprettet, men Optimér kunne ikke startes.'
-      }
-    }
     onSimulationCreated(simulation)
-    onError(runError)
+    onError(null)
     onOpenChange(false)
     startOver()
     setIsCreating(false)
@@ -345,7 +292,7 @@ export const NewScenarioPanel = ({
     </p>
   ) : isCreating ? (
     <p className="text-muted-foreground">
-      Beregner sædskifte-kandidater for alle marker - kan tage et øjeblik.
+      Starter oprettelsen…
     </p>
   ) : null
 

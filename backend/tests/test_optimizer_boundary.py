@@ -23,8 +23,10 @@ class ProductionBoundaryTests(unittest.TestCase):
             sys.meta_path.insert(0, BlockSolverImports())
             from fastapi.testclient import TestClient
             from app import main
+            from app.api.v0 import simulations
             from app.auth import AuthenticatedUser, current_user
             from app.domain.optimization import OptimizeSimulationRequest, SimulationResult
+            from app.domain.simulation import Simulation
             from app.services.optimization import jobs
 
             request = OptimizeSimulationRequest(expected_revision=0, run_id=uuid4())
@@ -36,6 +38,9 @@ class ProductionBoundaryTests(unittest.TestCase):
             with (
                 patch.object(main, 'validate_aws_region') as validate,
                 patch.object(main, 'recover_local_runs') as recover,
+                patch.object(simulations, 'get_simulation', return_value=Simulation(
+                    id='sim', farm_id='farm', name='test', created_at='2026-10-09'
+                )),
                 patch.object(jobs, 'SessionLocal') as sessions,
                 patch.object(jobs, '_row', return_value=SimpleNamespace(revision=0)),
                 patch.object(jobs, 'get_result', return_value=queued),
@@ -57,6 +62,7 @@ class ProductionBoundaryTests(unittest.TestCase):
                 queue.send_message.assert_called_once()
                 assert queue.send_message.call_args.kwargs['DelaySeconds'] == 0
                 assert json.loads(queue.send_message.call_args.kwargs['MessageBody']) == {
+                    'jobType': 'optimization', 'farmId': 'farm',
                     'simulationId': 'sim', 'runId': str(request.run_id),
                 }
             assert not any(

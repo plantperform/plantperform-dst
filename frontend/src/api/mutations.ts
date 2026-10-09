@@ -80,6 +80,16 @@ export const deleteSimulation = (farmId: string, simulationId: string) =>
     )
   })
 
+export const retrySimulationCreation = (
+  farmId: string,
+  simulationId: string,
+  optimizeOnCreate = false,
+) =>
+  postJson<Simulation, { optimizeOnCreate: boolean }>(
+    `/farms/${farmId}/simulations/${simulationId}/creation/retry`,
+    { optimizeOnCreate },
+  )
+
 export const updateSimulationConstraints = (
   farmId: string,
   simulationId: string,

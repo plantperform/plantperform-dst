@@ -93,8 +93,10 @@ def read_result(row) -> SimulationResult:
     )
 
 
-def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=True):
-    columns = [setups.c.data, setups.c.revision] if include_data else [setups.c.revision]
+def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=True, ready=False):
+    columns = [setups.c.revision, setups.c.creation_status]
+    if include_data:
+        columns.append(setups.c.data)
     query = select(*columns).where(
         setups.c.id == simulation_id,
         setups.c.farm_id == farm_id,
@@ -103,7 +105,12 @@ def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=Tru
         return None
     if lock:
         query = query.with_for_update()
-    return session.execute(query).first()
+    row = session.execute(query).first()
+    if row is not None and (lock or ready):
+        from app.data.creation_store import require_ready
+
+        require_ready(session, simulation_id)
+    return row
 
 
 def _model(session, simulation_id, row):
@@ -114,7 +121,12 @@ def _model(session, simulation_id, row):
     ).first()
     summary = SimulationResultSummary.model_validate(dict(result._mapping)) if result else None
     return Simulation.model_validate(
-        {**row.data, "revision": row.revision, "result": summary or {}}
+        {
+            **row.data,
+            "revision": row.revision,
+            "result": summary or {},
+            "creation_status": row.creation_status,
+        }
     )
 
 
@@ -151,7 +163,7 @@ def list_simulations(farm_id, email):
         if not _common()._farm_exists(session, farm_id, email):
             return None
         rows = session.execute(
-            select(setups.c.id, setups.c.data, setups.c.revision)
+            select(setups.c.id, setups.c.data, setups.c.revision, setups.c.creation_status)
             .where(setups.c.farm_id == farm_id)
             .order_by(setups.c.created_at)
         ).all()
@@ -168,7 +180,12 @@ def list_simulations(farm_id, email):
         }
         return [
             Simulation.model_validate(
-                {**row.data, "revision": row.revision, "result": summaries.get(row.id, {})}
+                {
+                    **row.data,
+                    "revision": row.revision,
+                    "result": summaries.get(row.id, {}),
+                    "creation_status": row.creation_status,
+                }
             )
             for row in rows
         ]
@@ -205,7 +222,7 @@ def _fields(session, simulation_id):
 
 def list_simulation_fields(farm_id, simulation_id, email):
     with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email) is None:
+        if _row(session, farm_id, simulation_id, email, ready=True) is None:
             return None
         return _fields(session, simulation_id)
 
@@ -276,7 +293,7 @@ def _candidates(session, simulation_id, *, compact=False, timings=None):
 def selected_evaluations(farm_id, simulation_id, email):
     """Read only the chosen evaluations, with the same overlay precedence as _candidates."""
     with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email, include_data=False) is None:
+        if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
         fields = _fields(session, simulation_id)
         chosen_fields = [field for field in fields if field.rotation_id is not None]
@@ -357,14 +374,14 @@ def _candidate_row(session, simulation_id, field_id):
 
 def list_simulation_field_candidates(farm_id, simulation_id, email):
     with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email) is None:
+        if _row(session, farm_id, simulation_id, email, ready=True) is None:
             return None
         return _candidates(session, simulation_id)
 
 
 def get_simulation_field_candidates(farm_id, simulation_id, field_id, email):
     with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email) is None:
+        if _row(session, farm_id, simulation_id, email, ready=True) is None:
             return None
         row = _candidate_row(session, simulation_id, field_id)
         return merge_setup_candidates(row[0], row[1], row[2] or {}) if row else None

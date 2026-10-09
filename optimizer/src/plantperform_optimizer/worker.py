@@ -57,11 +57,13 @@ class _LocalExecutionContext:
         return max(0, int((self.deadline - time.monotonic()) * 1000))
 
 
-def execute(simulation_id, run_id, context, *, sqs_delivery=False):
+def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None):
     started = time.monotonic()
     received_at = datetime.now(UTC)
     with _timed_phase("claim", simulation_id, run_id):
-        claimed = optimization_store.claim(simulation_id, run_id, sqs_delivery=sqs_delivery)
+        claimed = optimization_store.claim(
+            simulation_id, run_id, sqs_delivery=sqs_delivery, farm_id=farm_id
+        )
     if claimed is None:
         logger.info("optimizer_skipped simulation_id=%s run_id=%s", simulation_id, run_id)
         return

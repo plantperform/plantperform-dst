@@ -9,6 +9,8 @@ import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
+import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
+import { isSimulationReady } from '@/lib/simulation-creation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
@@ -390,7 +392,7 @@ export const SimulationCard = ({
     error,
     isValidating,
     mutate: retry,
-  } = useSimulationFields(farmId, simulation.id)
+  } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
   const summary = useMemo(() => {
@@ -449,7 +451,7 @@ export const SimulationCard = ({
             variant="outline"
             aria-label={`Kopier ${simulation.name}`}
             loading={copying}
-            disabled={deleting}
+            disabled={deleting || !isSimulationReady(simulation)}
             onClick={onCopy}
           >
             {copying ? null : <Copy aria-hidden="true" />}
@@ -470,7 +472,9 @@ export const SimulationCard = ({
         </>
       }
     >
-      {summary ? (
+      {!isSimulationReady(simulation) ? (
+        <SimulationCreationStatus farmId={farmId} simulation={simulation} />
+      ) : summary ? (
         calculated ? (
           <SimulationFigures
             farmId={farmId}

@@ -1,4 +1,9 @@
 import {
+  creationStatusLabel,
+  isSimulationCreating,
+  isSimulationReady,
+} from '@/lib/simulation-creation'
+import {
   ChevronRight,
   ChevronsUpDown,
   Copy,
@@ -579,13 +584,13 @@ const SimulationMenuItem = ({
   const createdLabel = formatCreatedAt(simulation.createdAt)
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
-  const running = Boolean(runningRun)
+  const running = Boolean(runningRun) || isSimulationCreating(simulation)
   const failedRun = run?.status === 'failed' ? run : undefined
   const {
     data: simulationFields,
     error: fieldsError,
     isLoading: fieldsLoading,
-  } = useSimulationFields(farmId, simulation.id)
+  } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const quota = useMemo(
     () => (simulationFields ? resolveFarmQuota(simulationFields, true) : null),
     [simulationFields],
@@ -610,7 +615,10 @@ const SimulationMenuItem = ({
         )
       : null
 
-  if (folded && !selected && !runningRun && !failedRun) return null
+  if (
+    folded && !selected && !running && !failedRun &&
+    simulation.creationStatus !== 'failed'
+  ) return null
 
   return (
     <SidebarMenuItem>
@@ -636,12 +644,18 @@ const SimulationMenuItem = ({
                 />
               ) : null}
               <ViewMenuLabel name={simulation.name}>
-                <KeyFiguresLine
-                  figures={figures}
-                  loading={fieldsLoading}
-                  error={Boolean(fieldsError)}
-                  showTooltip={false}
-                />
+                {!isSimulationReady(simulation) ? (
+                  <span className="truncate text-xs">
+                    {creationStatusLabel(simulation)}
+                  </span>
+                ) : (
+                  <KeyFiguresLine
+                    figures={figures}
+                    loading={fieldsLoading}
+                    error={Boolean(fieldsError)}
+                    showTooltip={false}
+                  />
+                )}
                 {runningRun ? (
                   <span className="truncate pl-3 text-[11px] font-normal text-primary tabular-nums">
                     <OptimizationRunElapsed run={runningRun} />
@@ -694,7 +708,7 @@ const SimulationMenuItem = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
             <AppTooltip content="Opretter en ny simulering med samme indstillinger og regler. Kører Optimér på kopien med det samme. Markernes låse følger ikke med.">
-              <DropdownMenuItem disabled={copying} onSelect={onCopy}>
+              <DropdownMenuItem disabled={copying || !isSimulationReady(simulation)} onSelect={onCopy}>
                 <Copy className="mr-2 size-4" aria-hidden="true" />
                 Kopier som ny
               </DropdownMenuItem>
@@ -713,7 +727,7 @@ const SimulationMenuItem = ({
       {failedRun ? (
         <SimulationRunFailure run={failedRun} fields={simulationFields} />
       ) : null}
-      {selected ? (
+      {selected && isSimulationReady(simulation) ? (
         <SimulationSubMenu
           mode={mode}
           disabled={loading}

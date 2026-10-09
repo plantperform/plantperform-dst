@@ -35,7 +35,8 @@ request returns its persisted state; changed parameters require a new token.
 Both `/optimize` and `/optimize-yearly` return HTTP 202 after confirmed SQS
 publication or local background-task registration, 409 on conflicts, or 503 if
 dispatch fails. SQS messages contain
-only `simulationId` and `runId`.
+`jobType: "optimization"`, `farmId`, `simulationId` and `runId`.
+Both average and yearly jobs use this type; the persisted run’s `kind` selects the solver.
 
 `GET /farms/{farm_id}/simulations/{simulation_id}/result` returns execution state,
 parameters, the latest successful response, its selected candidate evaluations
@@ -85,6 +86,133 @@ SQS publication may leave a queued run with no message or DLQ alarm. Preserve
 the previous successful output and verify the current run token before repair.
 There is no dispatch outbox or job-history table. Deployment order and manual
 handling are described in the infrastructure repository's optimizer runbook.
+
+## Simulation creation
+
+`POST /farms/{farm_id}/simulations` authorizes access, saves the submitted
+simulation settings and an empty simulation, publishes creation, and returns
+HTTP 202. It performs no field or registry reads and generates no candidates.
+Supply a UUID `requestId` to recover a lost response: the simulation ID is a
+UUIDv5 derived from the farm ID and request ID. Repeated IDs return the existing
+simulation without comparing settings or publishing another job. A missing
+request ID produces a new simulation each time. `optimizeOnCreate` defaults to
+false and travels with the creation message.
+
+The sole persisted creation state is non-null `simulation.creation_status` TEXT,
+constrained to `queued`, `running`, `done`, or `failed`. Existing simulations
+receive `done`. API summaries expose this as the string `creationStatus`.
+Creation progress, errors, leases, requester information and dispatch metadata
+are not stored on the simulation. Ordinary settings stay in `simulation.data`;
+creation status comes only from its dedicated column. Failure details go to logs.
+
+Every message requires an explicit type. Creation messages contain the validated
+POST parameters (excluding `requestId`), requester and expected simulation
+revision, in addition to their identifiers. For example:
+
+```json
+{
+  "jobType": "create_simulation",
+  "farmId": "...",
+  "simulationId": "...",
+  "jobId": "...",
+  "requestedBy": "member@example.com",
+  "expectedRevision": 0,
+  "parameters": {
+    "name": "Example",
+    "optimizeOnCreate": false,
+    "saedskiftevarianter": ["1"],
+    "nNormProcenter": ["100"]
+  }
+}
+```
+
+The publisher includes all validated defaults as well. Fields, geometries,
+registry inputs and candidates never appear in the message, so farm field count
+does not change its size. Local background execution receives the same inputs.
+Creation job IDs are UUIDv5 values derived from simulation ID and revision.
+Optimization envelopes remain
+`{"jobType":"optimization","farmId":"...","simulationId":"...","runId":"..."}`.
+Missing or invalid creation parameters fail the batch item before configuration
+or executor initialization. Creation bootstraps independently of solver imports.
+
+The worker acquires a nonblocking PostgreSQL session advisory lock keyed by
+simulation ID, retains its physical connection through the attempt, and binds
+its short transactions to that connection. It commits `running` before loading
+current ordered farm fields and registry inputs once. Each attempt clears
+previous partial candidates and replaces simulation fields. Inputs remain fixed
+for that attempt; subsequent retries observe farm and registry edits. Rotation
+combinations are prepared once, and fields are generated individually. Each
+field's full and compact candidate payloads and permanent-crop selection commit
+atomically; empty candidate sets also allow creation to finish.
+
+Every write checks simulation existence and expected revision. The session lock
+survives transaction commits and rollbacks, and is released before returning its
+connection to the pool. Connection loss aborts the attempt without reconnecting
+or saving through an unlocked replacement connection. Duplicate deliveries while
+the lock is held are deferred for 60 seconds; deleted and superseded jobs are
+acknowledged. Failed jobs are acknowledged unless the delivery count is exhausted,
+in which case they remain unacknowledged for dead-lettering. A `running` job whose
+former connection has ended can be reclaimed on redelivery. Completed creation
+skips candidate generation.
+
+Creation uses SQS `ApproximateReceiveCount` for the existing three-receive limit.
+Transient failures and approaching deadlines return status to `queued` and leave
+the message unacknowledged. The final handled transient failure sets `failed`
+and stays unacknowledged for the existing DLQ policy. Invalid inputs set `failed`
+and are acknowledged. Local execution retries up to three times with the same
+60-second delay. Local restart marks interrupted creation failed, while skipping
+workers that still hold their advisory lock.
+
+Status reads and deletion remain available throughout creation. Field reads,
+edits, and optimization return 409 until `done`. The frontend polls every five
+seconds, restores status on reload, and excludes unfinished simulations from
+comparisons. It shows “Opretter simulering…” without field counts, or a generic
+failure with Retry and Delete. The retry panel offers an unchecked
+“Optimér, når simuleringen er klar” checkbox.
+
+`POST /farms/{farm_id}/simulations/{simulation_id}/creation/retry` accepts
+`{"optimizeOnCreate": false}`; an empty or omitted body defaults to false. It
+requires membership and failed creation, increments the existing simulation
+revision, reconstructs the parameters from saved settings, and publishes a new
+creation message. Old messages cannot write after that revision change.
+Non-failed creation returns 409. The original optimization checkbox choice is
+not persisted; the user makes a new choice on Retry.
+
+When automatic optimization is requested, creation completion atomically sets
+`done` and reserves an optimization result with a run ID derived from simulation
+ID and revision. The matching result's queued, unpublished state identifies an
+unfinished handoff. Redelivery can publish it without regenerating fields or
+starting another optimization run. The handoff selects SQS explicitly because
+Lambda configuration does not establish `APP_ENV`; local execution releases the
+creation connection before running local optimizer tasks. Impossible copied
+crop-area rules or ordinary optimization publication failures leave creation
+ready and expose the failure through the optimization result.
+
+Creation publication failure returns 503 with `detail.simulationId` and marks a
+still-queued simulation failed. If an ambiguous publication already reached the
+worker, its running or done status is preserved. Use the explicit Retry endpoint
+to republish; repeating the original POST only returns the existing simulation.
+An API interruption between commit and publication can leave a queued simulation
+without a message, and a final hard worker termination can leave status running.
+No outbox, scheduler, or automatic DLQ consumer is added. Confirm that a job is
+stranded using queue and worker logs and its advisory-lock state before marking
+its matching revision failed and using Retry.
+
+The unapplied migration `20261009_0001` (after `20261007_0001`) adds the status
+column and constraint directly. Pause submissions and drain old queued/in-flight
+jobs and active workers before coordinated deployment: the creation message and
+response formats changed. Old creation messages require the complete parameters
+before redrive. Deploy migration → worker → backend → frontend, then resume
+submissions. Terraform application and destruction remain manual.
+
+Logs retain submission, publication, loading, generation, serialization,
+persistence, completion and handoff timings. Isolated PostgreSQL tests cover
+constant-size messages, a 250-field POST with no field reads or generation,
+request-ID reuse, authorization, full/compact parity, rollback, current-input
+retries, advisory locks, connection loss, stale revisions, deletion, local
+restart, and optimization handoff recovery. Local tests do not establish deployed
+performance; measure representative jobs against the existing memory and
+execution limits before promotion.
 
 ## Local checks
 

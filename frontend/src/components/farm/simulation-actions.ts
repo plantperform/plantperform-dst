@@ -1,30 +1,34 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
-  fetchSimulationFields,
   simulationFieldsKey,
   simulationsKey,
   useRotationNNormPercentages,
 } from '@/api/hooks'
-import {
-  createSimulation,
-  deleteSimulation,
-  updateSimulationConstraints,
-} from '@/api/mutations'
-import { useStartDefaultOptimization } from '@/api/optimization-runs'
+import { createSimulation, deleteSimulation } from '@/api/mutations'
 import type { CreateSimulationInput, Simulation } from '@/api/types'
 import type { FarmViewSelection } from '@/components/farm/types'
 import {
   copiedNNormPercentages,
   copiedSimulationName,
 } from '@/lib/simulation-form'
+import {
+  creationRequestIdentity,
+  isSimulationReady,
+  type CreationRequestIdentity,
+} from '@/lib/simulation-creation'
 
 const buildCopyInput = (
   simulation: Simulation,
   offeredNNormPercentages: string[],
 ): CreateSimulationInput => ({
   name: copiedSimulationName(simulation.name),
+  constraints: simulation.constraints,
+  optimizeOnCreate: true,
+  precisionFarming: simulation.precisionFarming,
+  earlySowing: simulation.earlySowing,
+  intermediateCrop: simulation.intermediateCrop,
   allowedRotationVariants: simulation.rotationVariants,
   allowedNNormPercentages: copiedNNormPercentages(
     simulation.nNormPercentages,
@@ -55,7 +59,7 @@ export const useSimulationActions = ({
   const [copyingSimulationId, setCopyingSimulationId] = useState<string | null>(
     null,
   )
-  const startDefaultRun = useStartDefaultOptimization()
+  const copyRequests = useRef(new Map<string, CreationRequestIdentity>())
   const { data: offeredNNormPercentages } = useRotationNNormPercentages(farmId)
 
   const removeSimulation = async (simulationId: string) => {
@@ -79,50 +83,40 @@ export const useSimulationActions = ({
   }
 
   const copySimulation = async (simulation: Simulation) => {
-    if (!farmId) return
+    if (!farmId || !isSimulationReady(simulation)) return
     setCopyingSimulationId(simulation.id)
-    let created: Simulation
     try {
-      created = await createSimulation(
-        farmId,
-        buildCopyInput(
-          simulation,
-          offeredNNormPercentages ?? simulation.nNormPercentages,
-        ),
+      const input = buildCopyInput(
+        simulation,
+        offeredNNormPercentages ?? simulation.nNormPercentages,
       )
-      await mutate(simulationsKey(farmId))
+      const identity = creationRequestIdentity(
+        input,
+        copyRequests.current.get(simulation.id) ?? null,
+      )
+      copyRequests.current.set(simulation.id, identity)
+      const created = await createSimulation(farmId, {
+        ...input,
+        requestId: identity.requestId,
+      })
+      copyRequests.current.delete(simulation.id)
+      await mutate(
+        simulationsKey(farmId),
+        (current: Simulation[] = []) => [
+          ...current.filter((item) => item.id !== created.id),
+          created,
+        ],
+        { revalidate: false },
+      )
+      void mutate(simulationsKey(farmId))
+      onError(null)
+      onSelectionChange({ kind: 'simulation', id: created.id })
     } catch {
-      onError('Kunne ikke kopiere simuleringen.')
+      void mutate(simulationsKey(farmId))
+      onError('Kunne ikke starte kopieringen af simuleringen. Prøv igen.')
+    } finally {
       setCopyingSimulationId(null)
-      return
     }
-    let copyError: string | null = null
-    try {
-      await updateSimulationConstraints(
-        farmId,
-        created.id,
-        simulation.constraints,
-      )
-      await mutate(simulationsKey(farmId))
-    } catch {
-      copyError =
-        'Simuleringen blev kopieret, men reglerne kunne ikke kopieres.'
-    }
-    if (!copyError) {
-      try {
-        startDefaultRun(
-          farmId,
-          created.id,
-          await fetchSimulationFields(farmId, created.id),
-        )
-      } catch {
-        copyError =
-          'Simuleringen blev kopieret, men Optimér kunne ikke startes.'
-      }
-    }
-    onError(copyError)
-    onSelectionChange({ kind: 'simulation', id: created.id })
-    setCopyingSimulationId(null)
   }
 
   return {

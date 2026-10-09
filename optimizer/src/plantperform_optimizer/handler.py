@@ -11,6 +11,8 @@ import boto3
 from botocore.config import Config
 from dotenv import dotenv_values
 
+from app.domain.creation import CreationActiveError
+from app.domain.creation_job import CreationJob
 from app.domain.optimization import RETRY_DELAY_SECONDS, OptimizationLeaseActiveError
 from app.services.optimization.queue import sqs_client
 
@@ -18,8 +20,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger().setLevel(logging.INFO)
 
 
-@lru_cache(maxsize=1)
-def initialize():
+def initialize_configuration():
     if not os.getenv("DATABASE_URL"):
         response = boto3.client(
             "s3",
@@ -32,7 +33,19 @@ def initialize():
         os.environ["DATABASE_URL"] = config["DATABASE_URL"]
     os.environ.setdefault("DB_POOL_SIZE", "2")
     os.environ.setdefault("DB_MAX_OVERFLOW", "0")
+
+
+@lru_cache(maxsize=1)
+def initialize():
+    initialize_configuration()
     from plantperform_optimizer import worker
+
+    return worker
+
+
+def initialize_creation():
+    initialize_configuration()
+    from app.services.creation import worker
 
     return worker
 
@@ -48,11 +61,28 @@ def _retry_message(record, visibility_timeout):
         logger.exception("optimizer_retry_visibility_failed")
 
 
+def parse_envelope(body):
+    """Reject malformed messages before configuration or executor initialization."""
+    envelope = json.loads(body)
+    if not isinstance(envelope, dict):
+        raise ValueError("Job envelope must be an object")
+    job_type = envelope.get("jobType")
+    if job_type not in ("create_simulation", "optimization"):
+        raise ValueError(f"Missing or unknown job type: {job_type}")
+    identifier_key = "jobId" if job_type == "create_simulation" else "runId"
+    for key in ("farmId", "simulationId", identifier_key):
+        if not isinstance(envelope.get(key), str) or not envelope[key].strip():
+            raise ValueError(f"Missing or invalid {key}")
+    if job_type == "create_simulation":
+        CreationJob.model_validate(envelope)
+    return envelope, identifier_key
+
+
 def handler(event, context):
     failures = []
     for record in event.get("Records", []):
         try:
-            envelope = json.loads(record["body"])
+            envelope, identifier_key = parse_envelope(record["body"])
             received = time.time()
             try:
                 sent = int(record.get("attributes", {}).get("SentTimestamp", "")) / 1000
@@ -63,23 +93,47 @@ def handler(event, context):
                 "optimizer_received simulation_id=%s run_id=%s message_id=%s delivery_seconds=%s "
                 "receive_count=%s",
                 envelope["simulationId"],
-                envelope["runId"],
+                envelope[identifier_key],
                 record["messageId"],
                 delivery_seconds,
                 record.get("attributes", {}).get("ApproximateReceiveCount"),
             )
             initializing = time.monotonic()
             try:
-                executor = initialize()
+                initialize_configuration()
+                job_type = envelope["jobType"]
+                if job_type == "create_simulation":
+                    executor = initialize_creation()
+                elif job_type == "optimization":
+                    executor = initialize()
+                else:
+                    raise ValueError(f"Unknown job type: {job_type}")
             finally:
                 logger.info(
                     "optimizer_initialized run_id=%s duration_seconds=%.3f",
-                    envelope["runId"],
+                    envelope[identifier_key],
                     time.monotonic() - initializing,
                 )
-            executor.execute(
-                envelope["simulationId"], envelope["runId"], context, sqs_delivery=True
-            )
+            if job_type == "create_simulation":
+                executor.execute(
+                    CreationJob.model_validate(envelope),
+                    context,
+                    sqs_delivery=True,
+                    receive_count=int(
+                        record.get("attributes", {}).get("ApproximateReceiveCount", "1")
+                    ),
+                )
+            else:
+                executor.execute(
+                    envelope["simulationId"],
+                    envelope[identifier_key],
+                    context,
+                    sqs_delivery=True,
+                    farm_id=envelope["farmId"],
+                )
+        except CreationActiveError:
+            failures.append({"itemIdentifier": record["messageId"]})
+            _retry_message(record, RETRY_DELAY_SECONDS)
         except OptimizationLeaseActiveError as error:
             failures.append({"itemIdentifier": record["messageId"]})
             visibility_timeout = max(

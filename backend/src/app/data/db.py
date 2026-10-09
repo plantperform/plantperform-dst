@@ -312,6 +312,11 @@ simulation_table = Table(
     Column("revision", Integer, nullable=False, server_default="0"),
     Column("fields", JSONB, nullable=False, server_default="{}"),
     Column("field_order", JSONB, nullable=False, server_default="[]"),
+    Column("creation_status", Text, nullable=False, server_default="done"),
+    CheckConstraint(
+        "creation_status IN ('queued','running','done','failed')",
+        name="ck_simulation_creation_status",
+    ),
     Index("ix_simulation_farm_id", "farm_id"),
 )
 

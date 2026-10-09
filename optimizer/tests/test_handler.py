@@ -1,14 +1,241 @@
+import json
 import os
+import subprocess
+import sys
+import textwrap
 import unittest
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from unittest.mock import Mock, call, patch
 
+from app.domain.creation import CreationActiveError
+from app.domain.creation_job import CreationJob
 from app.domain.optimization import OptimizationLeaseActiveError
 from plantperform_optimizer import handler as worker
 
 
 class HandlerTests(unittest.TestCase):
+    def test_explicit_creation_and_optimization_route_independently_after_configuration(self):
+        calls = []
+        creation, optimization = Mock(), Mock()
+        event = {
+            "Records": [
+                {
+                    "messageId": "create",
+                    "body": json.dumps(
+                        {
+                            "jobType": "create_simulation",
+                            "simulationId": "new",
+                            "jobId": "job",
+                            "farmId": "farm",
+                            "requestedBy": "member@example.com",
+                            "expectedRevision": 0,
+                            "parameters": {"name": "new", "optimizeOnCreate": True},
+                        }
+                    ),
+                    "attributes": {"ApproximateReceiveCount": "2"},
+                },
+                {
+                    "messageId": "optimize",
+                    "body": json.dumps(
+                        {
+                            "jobType": "optimization",
+                            "farmId": "farm",
+                            "simulationId": "old",
+                            "runId": "run",
+                        }
+                    ),
+                },
+            ]
+        }
+
+        def initialize_creation():
+            self.assertEqual(calls[-1], "configured")
+            calls.append("creation")
+            return creation
+
+        def initialize_optimization():
+            self.assertEqual(calls[-1], "configured")
+            calls.append("optimization")
+            return optimization
+
+        with (
+            patch.object(
+                worker, "initialize_configuration", side_effect=lambda: calls.append("configured")
+            ),
+            patch.object(worker, "initialize_creation", side_effect=initialize_creation),
+            patch.object(worker, "initialize", side_effect=initialize_optimization),
+        ):
+            context = Mock()
+            self.assertEqual(worker.handler(event, context), {"batchItemFailures": []})
+        creation.execute.assert_called_once_with(
+            CreationJob.model_validate_json(event["Records"][0]["body"]),
+            context,
+            sqs_delivery=True,
+            receive_count=2,
+        )
+        optimization.execute.assert_called_once_with(
+            "old", "run", context, sqs_delivery=True, farm_id="farm"
+        )
+
+    def test_invalid_envelopes_fail_without_loading_configuration_or_executors(self):
+        valid = {"jobType": "optimization", "farmId": "farm", "simulationId": "sim", "runId": "run"}
+        invalid = [
+            [],
+            None,
+            {**valid, "jobType": "unknown"},
+            {key: value for key, value in valid.items() if key != "jobType"},
+        ]
+        for kind, identifier in (("optimization", "runId"), ("create_simulation", "jobId")):
+            envelope = {"jobType": kind, "farmId": "farm", "simulationId": "sim", identifier: "id"}
+            for key in ("farmId", "simulationId", identifier):
+                invalid.extend(
+                    [
+                        {k: v for k, v in envelope.items() if k != key},
+                        {**envelope, key: " "},
+                        {**envelope, key: 42},
+                    ]
+                )
+        for envelope in invalid:
+            with (
+                self.subTest(envelope=envelope),
+                patch.object(worker, "initialize_configuration") as configuration,
+                patch.object(worker, "initialize_creation") as creation,
+                patch.object(worker, "initialize") as optimization,
+                patch.object(worker, "sqs_client", return_value=Mock()),
+                patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": "queue"}),
+                self.assertLogs(worker.logger, level="ERROR"),
+            ):
+                result = worker.handler(
+                    {
+                        "Records": [
+                            {
+                                "messageId": "invalid",
+                                "receiptHandle": "receipt",
+                                "body": json.dumps(envelope),
+                            }
+                        ]
+                    },
+                    Mock(),
+                )
+                self.assertEqual(result, {"batchItemFailures": [{"itemIdentifier": "invalid"}]})
+                configuration.assert_not_called()
+                creation.assert_not_called()
+                optimization.assert_not_called()
+
+    def test_invalid_creation_inputs_fail_before_initialization(self):
+        valid = {
+            "jobType": "create_simulation",
+            "farmId": "farm",
+            "simulationId": "sim",
+            "jobId": "job",
+            "requestedBy": "member@example.com",
+            "expectedRevision": 0,
+            "parameters": {"name": "new"},
+        }
+        invalid = [
+            {k: v for k, v in valid.items() if k != key}
+            for key in (
+                "requestedBy",
+                "expectedRevision",
+                "parameters",
+            )
+        ]
+        invalid.extend(
+            [
+                {**valid, "requestedBy": " "},
+                {**valid, "expectedRevision": -1},
+                {**valid, "expectedRevision": True},
+                {**valid, "parameters": []},
+                {**valid, "parameters": {}},
+                {**valid, "parameters": {"name": ""}},
+            ]
+        )
+        for envelope in invalid:
+            with self.subTest(envelope=envelope), self.assertRaises(ValueError):
+                worker.parse_envelope(json.dumps(envelope))
+
+    def test_busy_creation_is_deferred_with_partial_batch_failure(self):
+        envelope = {
+            "jobType": "create_simulation",
+            "farmId": "farm",
+            "simulationId": "sim",
+            "jobId": "job",
+            "requestedBy": "member@example.com",
+            "expectedRevision": 0,
+            "parameters": {"name": "new"},
+        }
+        executor = Mock()
+        executor.execute.side_effect = CreationActiveError("busy")
+        queue = Mock()
+        with (
+            patch.object(worker, "initialize_configuration"),
+            patch.object(worker, "initialize_creation", return_value=executor),
+            patch.object(worker, "sqs_client", return_value=queue),
+            patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": "queue"}),
+        ):
+            result = worker.handler(
+                {
+                    "Records": [
+                        {
+                            "messageId": "create",
+                            "receiptHandle": "receipt",
+                            "body": json.dumps(envelope),
+                        }
+                    ]
+                },
+                Mock(),
+            )
+        self.assertEqual(result, {"batchItemFailures": [{"itemIdentifier": "create"}]})
+        queue.change_message_visibility.assert_called_once_with(
+            QueueUrl="queue",
+            ReceiptHandle="receipt",
+            VisibilityTimeout=60,
+        )
+
+    def test_creation_bootstrap_needs_neither_solver_nor_api_dependencies(self):
+        script = textwrap.dedent("""
+            import importlib.abc
+            import os
+            import sys
+            from io import BytesIO
+            from unittest.mock import Mock, patch
+
+            class BlockHeavyImports(importlib.abc.MetaPathFinder):
+                def find_spec(self, fullname, path=None, target=None):
+                    if fullname in {'plantperform_optimizer.worker'} or fullname.split('.')[0] in {
+                        'ortools', 'fastapi', 'anyio',
+                    }:
+                        raise AssertionError('Creation imported: ' + fullname)
+
+            sys.meta_path.insert(0, BlockHeavyImports())
+            from plantperform_optimizer import handler
+            os.environ.pop('DATABASE_URL', None)
+            os.environ.pop('APP_ENV', None)
+            client = Mock()
+            client.get_object.return_value = {'Body': BytesIO(
+                b'DATABASE_URL=postgresql+psycopg://test@localhost/test\\n'
+            )}
+            with (
+                patch.object(handler.boto3, 'client', return_value=client),
+                patch('dotenv.load_dotenv'),
+            ):
+                executor = handler.initialize_creation()
+            assert callable(executor.execute)
+            assert 'plantperform_optimizer.worker' not in sys.modules
+            assert 'APP_ENV' not in os.environ
+            assert os.environ['DB_POOL_SIZE'] == '2'
+            client.get_object.assert_called_once_with(Bucket='config', Key='.env.test')
+        """)
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env={**os.environ, "APP_CONFIG_BUCKET": "config", "APP_CONFIG_KEY": ".env.test"},
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_shared_worker_leaves_all_three_failures_for_sqs_redrive(self):
         from app.data import optimization_store
         from plantperform_optimizer import worker as executor
@@ -17,7 +244,10 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "job",
-                    "body": '{"simulationId":"sim","runId":"run"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"run"}'
+                    ),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -83,12 +313,18 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "ok",
-                    "body": '{"simulationId":"sim","runId":"old"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"old"}'
+                    ),
                     "receiptHandle": "receipt1",
                 },
                 {
                     "messageId": "retry",
-                    "body": '{"simulationId":"sim","runId":"new"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"new"}'
+                    ),
                     "receiptHandle": "receipt2",
                 },
             ]
@@ -121,7 +357,10 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "active",
-                    "body": '{"simulationId":"sim","runId":"run"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"run"}'
+                    ),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -140,7 +379,9 @@ class HandlerTests(unittest.TestCase):
         queue.change_message_visibility.assert_called_once_with(
             QueueUrl="queue", ReceiptHandle="receipt", VisibilityTimeout=901
         )
-        jobs.execute.assert_called_once_with("sim", "run", unittest.mock.ANY, sqs_delivery=True)
+        jobs.execute.assert_called_once_with(
+            "sim", "run", unittest.mock.ANY, sqs_delivery=True, farm_id="farm"
+        )
 
     def test_initialization_failure_retries_without_initializing_again(self):
         queue = Mock()
@@ -148,7 +389,10 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "cold",
-                    "body": '{"simulationId":"sim","runId":"run"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"run"}'
+                    ),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -178,7 +422,10 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "retry",
-                    "body": '{"simulationId":"sim","runId":"run"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"run"}'
+                    ),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -199,7 +446,10 @@ class HandlerTests(unittest.TestCase):
             "Records": [
                 {
                     "messageId": "message",
-                    "body": '{"simulationId":"sim","runId":"run"}',
+                    "body": (
+                        '{"jobType":"optimization","farmId":"farm",'
+                        '"simulationId":"sim","runId":"run"}'
+                    ),
                     "attributes": {"SentTimestamp": "100000", "ApproximateReceiveCount": "1"},
                 }
             ]

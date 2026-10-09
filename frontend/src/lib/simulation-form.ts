@@ -456,6 +456,7 @@ export const toCreateSimulationInput = (
   const withoutFertiliser = values.fertiliserChoice === NO_FERTILISER
   return {
     name: values.name.trim(),
+    optimizeOnCreate: values.optimizeOnCreate,
     allowedRotationVariants: values.rotationVariants,
     allowedNNormPercentages: nNormPercentagesFor(
       values.nNormPercentages,

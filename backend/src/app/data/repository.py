@@ -531,6 +531,101 @@ def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
         return result.rowcount > 0
 
 
+def prepare_simulation_field(copied_field, registry_row, request, *, prepared=None):
+    """Calculate one field, without opening a database transaction."""
+    jbnr = (
+        registry_row.jbnr
+        if registry_row is not None and registry_row.jbnr is not None
+        else FALLBACK_JBNR
+    )
+    latest_crop_code = (
+        registry_row.crop_history.get(str(REAL_HISTORY_END_YEAR))
+        if registry_row is not None and registry_row.crop_history
+        else None
+    )
+    latest_crop_code = int(latest_crop_code) if latest_crop_code is not None else None
+
+    soil_data = _soil_data_for_context(registry_row)
+    percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
+
+    candidates: list[RotationCandidateEvaluation] = []
+    real_history = None
+    if registry_row is not None:
+        real_history = real_history_lookback(
+            registry_row.crop_history or {},
+            jbnr,
+            registry_row.goedningsregion,
+            bool(registry_row.oeko),
+        )
+
+        # A mark whose latest real afgrøde is permanent (ikke-omdrift -
+        # e.g. frugtplantage, skov, permanent græs) has no meaningful
+        # sædskifte to pick from: none of the chosen sædskiftevarianter
+        # ever include it. Auto-lock it to a candidate that keeps
+        # growing that same afgrøde instead of leaving it with zero
+        # candidates and failing "Optimér".
+        if is_permanent_afgrode(latest_crop_code):
+            permanent_candidate = generate_permanent_crop_candidate(
+                latest_crop_code,
+                registry_row.crop_history or {},
+                jbnr,
+                registry_row.goedningsregion,
+                bool(registry_row.oeko),
+                fdato=request.eea_fdato,
+                precision_dagsbasis=request.eea_precision_dagsbasis,
+                percolation_by_kategori=percolation,
+                org_n_topsoil=org_n_topsoil,
+                s_soil=s_soil,
+            )
+            candidates.append(permanent_candidate)
+            locked_id = permanent_candidate.ref.to_id()
+            copied_field = copied_field.model_copy(
+                update={
+                    "rotation_id": locked_id,
+                    "allowed_rotation_ids": [locked_id],
+                    # Without this, crop_rotation keeps whatever "Tilføj
+                    # marker" seeded it with - the mark's actual 2019-2026
+                    # history (see evaluate_real_history_for_field above) -
+                    # instead of the forward-looking locked afgrøde. The two
+                    # only coincidentally match when the history happens to
+                    # already be a flat repeat of the 2026 afgrøde.
+                    "crop_rotation": [y.year for y in permanent_candidate.years],
+                },
+            )
+
+    if request.saedskiftevarianter and request.n_norm_procenter:
+        candidates.extend(
+            generate_candidates_for_field(
+                request.saedskiftevarianter,
+                request.n_norm_procenter,
+                jbnr,
+                request.godning,
+                fdato=request.eea_fdato,
+                precision_dagsbasis=request.eea_precision_dagsbasis,
+                praecisionsjordbrug=request.praecisionsjordbrug,
+                tidlig_saaning=request.tidlig_saaning,
+                mellemafgrode=request.mellemafgrode,
+                real_history=real_history,
+                percolation_by_kategori=percolation,
+                org_n_topsoil=org_n_topsoil,
+                s_soil=s_soil,
+                prepared=prepared,
+            )
+        )
+    setup = split_field(_dump(copied_field))
+    field_candidates = SimulationFieldCandidates(
+        field_id=copied_field.id,
+        jbnr=jbnr,
+        candidates=candidates,
+        real_history=real_history,
+    )
+    if copied_field.allowed_rotation_ids:
+        selected = next((c for c in candidates if c.ref.to_id() == copied_field.rotation_id), None)
+        if selected:
+            setup["fixed_candidate"] = _dump(selected)
+    return setup, field_candidates
+
+
 def create_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
@@ -586,98 +681,14 @@ def create_simulation(
                 deep=True,
             )
 
-            registry_row = registry_contexts.get(copied_field.imk_id)
-            jbnr = (
-                registry_row.jbnr
-                if registry_row is not None and registry_row.jbnr is not None
-                else FALLBACK_JBNR
+            setup, field_candidates = prepare_simulation_field(
+                copied_field,
+                registry_contexts.get(copied_field.imk_id),
+                request,
             )
-            latest_crop_code = (
-                registry_row.crop_history.get(str(REAL_HISTORY_END_YEAR))
-                if registry_row is not None and registry_row.crop_history
-                else None
-            )
-            latest_crop_code = int(latest_crop_code) if latest_crop_code is not None else None
-
-            soil_data = _soil_data_for_context(registry_row)
-            percolation, org_n_topsoil, s_soil = (
-                soil_data if soil_data is not None else (None, None, None)
-            )
-
-            candidates: list[RotationCandidateEvaluation] = []
-            real_history = None
-            if registry_row is not None:
-                real_history = real_history_lookback(
-                    registry_row.crop_history or {},
-                    jbnr,
-                    registry_row.goedningsregion,
-                    bool(registry_row.oeko),
-                )
-
-                # A mark whose latest real afgrøde is permanent (ikke-omdrift -
-                # e.g. frugtplantage, skov, permanent græs) has no meaningful
-                # sædskifte to pick from: none of the chosen sædskiftevarianter
-                # ever include it. Auto-lock it to a candidate that keeps
-                # growing that same afgrøde instead of leaving it with zero
-                # candidates and failing "Optimér".
-                if is_permanent_afgrode(latest_crop_code):
-                    permanent_candidate = generate_permanent_crop_candidate(
-                        latest_crop_code,
-                        registry_row.crop_history or {},
-                        jbnr,
-                        registry_row.goedningsregion,
-                        bool(registry_row.oeko),
-                        fdato=request.eea_fdato,
-                        precision_dagsbasis=request.eea_precision_dagsbasis,
-                        percolation_by_kategori=percolation,
-                        org_n_topsoil=org_n_topsoil,
-                        s_soil=s_soil,
-                    )
-                    candidates.append(permanent_candidate)
-                    locked_id = permanent_candidate.ref.to_id()
-                    copied_field = copied_field.model_copy(
-                        update={
-                            "rotation_id": locked_id,
-                            "allowed_rotation_ids": [locked_id],
-                            # Without this, crop_rotation keeps whatever "Tilføj
-                            # marker" seeded it with - the mark's actual 2019-2026
-                            # history (see evaluate_real_history_for_field above) -
-                            # instead of the forward-looking locked afgrøde. The two
-                            # only coincidentally match when the history happens to
-                            # already be a flat repeat of the 2026 afgrøde.
-                            "crop_rotation": [y.year for y in permanent_candidate.years],
-                        },
-                    )
-
-            setup_fields[copied_field.id] = split_field(_dump(copied_field))
+            setup_fields[copied_field.id] = setup
             field_order.append(copied_field.id)
-
-            if request.saedskiftevarianter and request.n_norm_procenter:
-                candidates.extend(
-                    generate_candidates_for_field(
-                        request.saedskiftevarianter,
-                        request.n_norm_procenter,
-                        jbnr,
-                        request.godning,
-                        fdato=request.eea_fdato,
-                        precision_dagsbasis=request.eea_precision_dagsbasis,
-                        praecisionsjordbrug=request.praecisionsjordbrug,
-                        tidlig_saaning=request.tidlig_saaning,
-                        mellemafgrode=request.mellemafgrode,
-                        real_history=real_history,
-                        percolation_by_kategori=percolation,
-                        org_n_topsoil=org_n_topsoil,
-                        s_soil=s_soil,
-                    )
-                )
-
-            if candidates:
-                field_candidates = SimulationFieldCandidates(
-                    field_id=copied_field.id,
-                    jbnr=jbnr,
-                    candidates=candidates,
-                    real_history=real_history,
-                )
+            if field_candidates.candidates:
                 session.execute(
                     insert(simulation_field_candidates_table).values(
                         id=str(uuid4()),
@@ -687,12 +698,6 @@ def create_simulation(
                         optimizer_input=optimizer_input(field_candidates),
                     )
                 )
-                if copied_field.allowed_rotation_ids:
-                    selected = next(
-                        (c for c in candidates if c.ref.to_id() == copied_field.rotation_id), None
-                    )
-                    if selected:
-                        setup_fields[copied_field.id]["fixed_candidate"] = _dump(selected)
 
         session.execute(
             update(simulation_table)

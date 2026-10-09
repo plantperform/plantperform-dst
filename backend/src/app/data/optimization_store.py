@@ -87,7 +87,7 @@ def check_delivery_state(simulation_id, run_id):
         raise RuntimeError("The optimization run still requires execution")
 
 
-def claim(simulation_id, run_id, *, sqs_delivery=False):
+def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
     with SessionLocal.begin() as session:
         setup = session.execute(
             select(setups.c.id, setups.c.farm_id, setups.c.revision)
@@ -96,6 +96,8 @@ def claim(simulation_id, run_id, *, sqs_delivery=False):
         ).first()
         if setup is None:
             return None
+        if farm_id is not None and setup.farm_id != farm_id:
+            raise ValueError("Optimization message farm does not match the simulation")
         row = session.execute(
             select(*[c for c in results.c if c.name != "output"])
             .where(results.c.simulation_id == simulation_id)
@@ -152,7 +154,13 @@ def claim(simulation_id, run_id, *, sqs_delivery=False):
 
 def _execution_setup(session, simulation_id, run_id, token, revision, *, include_data=False):
     setup = session.execute(
-        select(*([setups.c.data, setups.c.revision] if include_data else [setups.c.revision]))
+        select(
+            *(
+                [setups.c.data, setups.c.revision, setups.c.creation_status]
+                if include_data
+                else [setups.c.revision]
+            )
+        )
         .where(setups.c.id == simulation_id)
         .with_for_update()
     ).first()

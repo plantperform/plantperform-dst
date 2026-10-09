@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -8,7 +8,6 @@ from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data.repository import (
     FieldNotOptimizedError,
-    create_simulation,
     delete_simulation,
     get_registry_soil_data,
     get_simulation,
@@ -24,6 +23,11 @@ from app.data.repository import (
 )
 from app.data.simulation_store import SetupRevisionConflictError, get_result
 from app.domain.base import CamelModel
+from app.domain.creation import (
+    CreationConflictError,
+    CreationQueueUnavailableError,
+    RetrySimulationCreationRequest,
+)
 from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import (
     OptimizeSimulationRequest,
@@ -40,6 +44,8 @@ from app.domain.simulation import (
     OptimizationConstraints,
     Simulation,
 )
+from app.services.creation.jobs import retry as retry_creation
+from app.services.creation.jobs import submit as submit_creation
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.optimization.jobs import (
     QueueUnavailableError,
@@ -59,8 +65,33 @@ from app.services.scenario.rotations import (
 
 NUM_ROTATION_YEARS = 8
 
-router = APIRouter(prefix="/farms/{farm_id}/simulations", tags=["simulations"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
+
+
+def require_completed_creation(request: Request, user: CurrentUser):
+    simulation_id = request.path_params.get("simulation_id")
+    path = request.scope["route"].path
+    if (
+        simulation_id is None
+        or (request.method in ("GET", "DELETE") and path.endswith("/{simulation_id}"))
+        or path.endswith("/result")
+        or path.endswith("/creation/retry")
+    ):
+        return
+    simulation = get_simulation(request.path_params["farm_id"], simulation_id, user.email)
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    if simulation.creation_status != "done":
+        raise HTTPException(
+            status_code=409, detail="Simuleringen er ikke færdig med at blive oprettet."
+        )
+
+
+router = APIRouter(
+    prefix="/farms/{farm_id}/simulations",
+    tags=["simulations"],
+    dependencies=[Depends(require_completed_creation)],
+)
 
 
 class YearlySummaryEntryResponse(CamelModel):
@@ -84,17 +115,66 @@ def get_farm_simulations(
     return simulations
 
 
-@router.post("", response_model=Simulation)
+@router.post("", response_model=Simulation, status_code=202)
 def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> Simulation:
-    simulation = create_simulation(farm_id, request, user.email)
+    try:
+        simulation = submit_creation(
+            farm_id, request, user.email, background_tasks=background_tasks
+        )
+    except CreationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CreationQueueUnavailableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "QUEUE_UNAVAILABLE",
+                "message": str(error),
+                "simulationId": error.simulation_id,
+            },
+        ) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     if simulation is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
+    return simulation
+
+
+@router.post("/{simulation_id}/creation/retry", response_model=Simulation, status_code=202)
+def post_farm_simulation_creation_retry(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    request: RetrySimulationCreationRequest | None = None,
+) -> Simulation:
+    try:
+        simulation = retry_creation(
+            farm_id,
+            simulation_id,
+            user.email,
+            optimize_on_create=request.optimize_on_create if request is not None else False,
+            background_tasks=background_tasks,
+        )
+    except CreationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CreationQueueUnavailableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "QUEUE_UNAVAILABLE",
+                "message": str(error),
+                "simulationId": error.simulation_id,
+            },
+        ) from error
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return simulation
 
 
