@@ -10,7 +10,12 @@ import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  averageNNormPct,
+  availableNKgNHa,
+  availableNShareOfNorm,
+  totalFertiliser,
+  type FertiliserFigures,
+} from '@/lib/fertiliser-overview'
+import {
   describeSeparateQuotas,
   describeUncalculatedCount,
   EXCLUDED_FROM_CALCULATION,
@@ -20,6 +25,8 @@ import {
   formatNumber,
   formatQuotaAmount,
   formatRotationYear,
+  formatShare,
+  formatWholeNumber,
   getFieldQuotaStatus,
   isFieldCalculated,
   isFieldLocked,
@@ -42,6 +49,8 @@ declare module '@tanstack/react-table' {
     headerClassName?: string
     cellClassName?: string
     toggleLabel?: string
+    // Columns sharing a group are shown and hidden together.
+    toggleGroup?: string
   }
 }
 
@@ -53,6 +62,14 @@ const NUMERIC_HEADER_CLASS = `${HEADER_CELL_CLASS} text-right`
 const NUMERIC_CELL_CLASS = `${BODY_CELL_CLASS} text-right tabular-nums`
 const SECONDARY_LINE_CLASS =
   'hidden text-xs font-normal text-muted-foreground full:block'
+// The totals row keeps its second line when the list is compact: the
+// bedrift's totals are the figures to read there.
+const FOOTER_SECONDARY_LINE_CLASS = 'text-xs font-normal text-muted-foreground'
+
+type Placement = 'cell' | 'footer'
+
+const secondaryLineClass = (placement: Placement) =>
+  placement === 'footer' ? FOOTER_SECONDARY_LINE_CLASS : SECONDARY_LINE_CLASS
 
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
@@ -154,14 +171,19 @@ type NumericMetricColumnConfig = {
   key: PerHaMetric
   label: string
   heading: string
-  emptyCell: (placement: 'cell' | 'footer') => ReactNode
-  quotaGatedCell?: (placement: 'cell' | 'footer') => ReactNode
+  emptyCell: (placement: Placement) => ReactNode
+  quotaGatedCell?: (placement: Placement) => ReactNode
 }
 
-const renderMetricFigure = ({ value, total }: PerHaFigure): ReactNode => (
+const renderMetricFigure = (
+  { value, total }: PerHaFigure,
+  placement: Placement,
+): ReactNode => (
   <>
     <div className="font-medium">{value}</div>
-    {total ? <div className={SECONDARY_LINE_CLASS}>{total}</div> : null}
+    {total ? (
+      <div className={secondaryLineClass(placement)}>{total}</div>
+    ) : null}
   </>
 )
 
@@ -193,12 +215,12 @@ const numericMetricColumn = (
       if (!isFieldCalculated(field, isSimulationView)) {
         return emptyCell('cell')
       }
-      return renderMetricFigure(fieldFigure(field, key))
+      return renderMetricFigure(fieldFigure(field, key), 'cell')
     },
     footer: () =>
       totals.calculatedCount === 0
         ? emptyCell('footer')
-        : renderMetricFigure(totalsFigure(totals, key)),
+        : renderMetricFigure(totalsFigure(totals, key), 'footer'),
     meta: {
       headerClassName: NUMERIC_HEADER_CLASS,
       cellClassName: NUMERIC_CELL_CLASS,
@@ -326,11 +348,161 @@ const detachColumn = (
   },
 })
 
+type FertiliserColumnConfig = {
+  id: string
+  heading: string
+  unit: string
+  totalUnit: string
+  tooltip?: string
+  pick: (figures: FertiliserFigures) => number | null
+  format: (value: number) => string
+  // Replaces the mark's total on the second line.
+  secondary?: (figures: FertiliserFigures) => string | null
+  // A norm or level per hectare, not something to total over the marker.
+  noFarmTotal?: boolean
+}
+
+const describeShareOfNorm = (figures: FertiliserFigures): string | null => {
+  const share = availableNShareOfNorm(figures)
+  return share === null ? null : `${formatShare(share)} af norm`
+}
+
+// In the order of the Gødning card in the mark's year detail.
+const FERTILISER_COLUMNS: FertiliserColumnConfig[] = [
+  {
+    id: 'cropNorm',
+    heading: 'Afgrøde-norm',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    pick: (figures) => figures.cropNormKgNHa,
+    format: formatWholeNumber,
+    noFarmTotal: true,
+  },
+  {
+    id: 'precedingCropValue',
+    heading: 'Forfrugt',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    tooltip: 'Forfrugtsværdi',
+    pick: (figures) => figures.precedingCropValueKgNHa,
+    format: formatWholeNumber,
+  },
+  {
+    id: 'mineralFertiliser',
+    heading: 'Handelsgødning',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    pick: (figures) => figures.mineralFertiliserKgNHa,
+    format: formatWholeNumber,
+  },
+  {
+    id: 'manureUtilised',
+    heading: 'Org. gødning',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    tooltip:
+      'Mineralsk andel af organisk gødning, som tæller med i normen. Den organisk bundne andel tæller ikke med, men indgår i udvaskningen.',
+    pick: (figures) => figures.manureUtilisedKgNHa,
+    format: formatWholeNumber,
+  },
+  {
+    id: 'availableN',
+    heading: 'Tilgængeligt N',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    tooltip:
+      'Forfrugt + handelsgødning + mineralsk andel af organisk gødning',
+    pick: availableNKgNHa,
+    format: formatWholeNumber,
+    secondary: describeShareOfNorm,
+    noFarmTotal: true,
+  },
+  {
+    id: 'manureTons',
+    heading: 'Ton gødning',
+    unit: 'ton/ha',
+    totalUnit: 'ton',
+    tooltip: 'Organisk gødning i ton',
+    pick: (figures) => figures.manureTonsPerHa,
+    format: formatNumber,
+  },
+]
+
+const fertiliserColumn = (
+  config: FertiliserColumnConfig,
+  fertiliser: Map<string, FertiliserFigures>,
+  fields: FieldRecord[],
+): ColumnDef<FieldRecord, unknown> => {
+  const {
+    id,
+    heading,
+    unit,
+    totalUnit,
+    tooltip,
+    pick,
+    format,
+    secondary,
+    noFarmTotal,
+  } = config
+  const describeTotal = (amount: number) =>
+    `${format(amount)} ${totalUnit} i alt`
+  const label = (
+    <div className="flex flex-col whitespace-nowrap">
+      <span>{heading}</span>
+      <span className={HEADER_SUBLINE_CLASS}>{unit}</span>
+    </div>
+  )
+  return {
+    id,
+    header: () =>
+      tooltip ? <AppTooltip content={tooltip}>{label}</AppTooltip> : label,
+    cell: ({ row }) => {
+      const field = row.original
+      const figures = fertiliser.get(field.id)
+      const value = figures ? pick(figures) : null
+      if (figures === undefined || value === null) {
+        return <span className="text-muted-foreground">-</span>
+      }
+      return renderMetricFigure(
+        {
+          value: `${format(value)} ${unit}`,
+          total:
+            (secondary
+              ? secondary(figures)
+              : describeTotal(value * field.areaHa)) ?? undefined,
+        },
+        'cell',
+      )
+    },
+    footer: () => {
+      if (noFarmTotal) return null
+      const total = totalFertiliser(fields, fertiliser, pick)
+      if (total === null) return null
+      return renderMetricFigure(
+        {
+          value: `${format(total.amount / total.areaHa)} ${unit}`,
+          total: describeTotal(total.amount),
+        },
+        'footer',
+      )
+    },
+    enableSorting: false,
+    meta: {
+      headerClassName: NUMERIC_HEADER_CLASS,
+      cellClassName: NUMERIC_CELL_CLASS,
+      // One entry in the column menu, so the gødning reads as a whole.
+      toggleLabel: 'Gødning',
+      toggleGroup: 'fertiliser',
+    },
+  }
+}
+
 export type FarmFieldsColumnsArgs = {
   isSimulationView: boolean
   maxYears: number
   selectedYearIndex: number | null
   fields: FieldRecord[]
+  fertiliser: Map<string, FertiliserFigures>
   quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
   detachingFieldIds: string[]
@@ -342,6 +514,7 @@ export const buildFarmFieldsColumns = ({
   maxYears,
   selectedYearIndex,
   fields,
+  fertiliser,
   quota,
   catchmentLabel,
   detachingFieldIds,
@@ -476,14 +649,8 @@ export const buildFarmFieldsColumns = ({
           `${formatNumber(pct)} %`
         )
       },
-      footer: () => {
-        const average = averageNNormPct(fields)
-        return average === null ? null : (
-          <AppTooltip content="Gennemsnit vægtet efter areal">
-            <span>{`${formatNumber(average)} %`}</span>
-          </AppTooltip>
-        )
-      },
+      // A level per mark, not something to total.
+      footer: () => null,
       meta: {
         headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
         cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),
@@ -528,6 +695,13 @@ export const buildFarmFieldsColumns = ({
         toggleLabel: 'Udledning mod kvote',
       },
     },
+    // Per hectare for the selected year, or the average per year. Only in a
+    // simulation, not in the afgrødehistorik.
+    ...(isSimulationView
+      ? FERTILISER_COLUMNS.map((config) =>
+          fertiliserColumn(config, fertiliser, fields),
+        )
+      : []),
     {
       id: 'catchment',
       accessorFn: (field) => field.catchmentId,

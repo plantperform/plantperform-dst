@@ -199,7 +199,9 @@ export const FarmSplitView = ({
                 effectiveView === 'split' ? { width: listWidth } : undefined
               }
             >
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              {/* A flex column, so the mark list fills the pane and scrolls
+                  inside its table, under a header and totals that stay put. */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
                 {list({ width: listWidth })}
               </div>
             </div>

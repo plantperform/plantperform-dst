@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
 import {
-  averageNNormPct,
   computeFieldTotals,
   emptyMeasures,
   fieldFigure,
@@ -224,16 +223,5 @@ describe('N-norm level per mark', () => {
   it('reads the level from the candidate ID', () => {
     expect(fieldNNormPct(field({ rotationId: '315:4:80' }))).toBe(80)
     expect(fieldNNormPct(field({ rotationId: null }))).toBeNull()
-  })
-
-  it('averages the level by area over the optimized marker', () => {
-    expect(
-      averageNNormPct([
-        field({ rotationId: '1:1:100', areaHa: 3 }),
-        field({ rotationId: '2:1:60', areaHa: 1 }),
-        field({ rotationId: null, areaHa: 10 }),
-      ]),
-    ).toBe(90)
-    expect(averageNNormPct([field({ rotationId: null })])).toBeNull()
   })
 })

@@ -26,11 +26,22 @@ export const DEFAULT_FIELDS_SORT: FieldsSortState = {
   direction: 'asc',
 }
 
+// The Gødning group's columns, shown and hidden together.
+export const FERTILISER_COLUMN_IDS = [
+  'cropNorm',
+  'precedingCropValue',
+  'mineralFertiliser',
+  'manureUtilised',
+  'availableN',
+  'manureTons',
+]
+
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
   'nNormPct',
   'db2',
   'quotaStatus',
+  ...FERTILISER_COLUMN_IDS,
   'catchment',
   'nLoad',
   'leaching',
@@ -47,6 +58,7 @@ const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'nNormPct',
   'db2',
   'quotaStatus',
+  ...FERTILISER_COLUMN_IDS,
 ])
 const CURRENT_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',

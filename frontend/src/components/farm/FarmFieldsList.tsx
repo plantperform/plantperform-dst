@@ -3,6 +3,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type Cell,
+  type Column,
   type OnChangeFn,
   type SortingState,
   type VisibilityState,
@@ -22,7 +23,7 @@ import {
 } from 'react'
 
 import { useFarmFields } from '@/api/hooks'
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, FieldYearValues } from '@/api/types'
 import {
   catchmentKey,
   fieldInCatchment,
@@ -59,6 +60,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { fertiliserByFieldId } from '@/lib/fertiliser-overview'
 import {
   catchmentRuns,
   changedFieldIds,
@@ -72,6 +74,12 @@ import {
   type FieldTotals,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
+
+type ColumnToggle = {
+  id: string
+  label: string
+  columns: Column<FieldRecord, unknown>[]
+}
 
 const ROW_ACCENT_CLASS =
   'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
@@ -237,6 +245,7 @@ type FarmFieldsListProps = {
   onHighlightedCatchmentKeyChange: (key: string | null) => void
   onZoomToField?: (fieldId: string) => void
   selectedYearIndex?: number | null
+  yearValues?: FieldYearValues
   paneWidth?: number
   onRequiredWidthChange?: (width: number) => void
   detachingFieldIds: string[]
@@ -260,6 +269,7 @@ export const FarmFieldsList = ({
   onHighlightedCatchmentKeyChange,
   onZoomToField,
   selectedYearIndex = null,
+  yearValues,
   paneWidth,
   onRequiredWidthChange,
   detachingFieldIds,
@@ -289,6 +299,14 @@ export const FarmFieldsList = ({
   const quota = useMemo(
     () => resolveFarmQuota(sortedFields, isSimulationView),
     [sortedFields, isSimulationView],
+  )
+
+  const fertiliser = useMemo(
+    () =>
+      isSimulationView
+        ? fertiliserByFieldId(sortedFields, yearValues, selectedYearIndex)
+        : new Map(),
+    [isSimulationView, sortedFields, yearValues, selectedYearIndex],
   )
 
   const runStarts = useMemo(
@@ -371,6 +389,7 @@ export const FarmFieldsList = ({
         maxYears,
         selectedYearIndex,
         fields: sortedFields,
+        fertiliser,
         quota,
         catchmentLabel,
         detachingFieldIds,
@@ -381,6 +400,7 @@ export const FarmFieldsList = ({
       maxYears,
       selectedYearIndex,
       sortedFields,
+      fertiliser,
       quota,
       catchmentLabel,
       detachingFieldIds,
@@ -422,12 +442,19 @@ export const FarmFieldsList = ({
     getCoreRowModel: getCoreRowModel(),
   })
 
-  const optionalColumns = table
-    .getAllLeafColumns()
-    .filter((column) => column.columnDef.meta?.toggleLabel !== undefined)
-  const visibleOptionalCount = optionalColumns.filter((column) =>
-    column.getIsVisible(),
-  ).length
+  // Columns sharing a toggle group are one entry in the menu.
+  const columnToggles: ColumnToggle[] = []
+  for (const column of table.getAllLeafColumns()) {
+    const meta = column.columnDef.meta
+    if (meta?.toggleLabel === undefined) continue
+    const id = meta.toggleGroup ?? column.id
+    const toggle = columnToggles.find((candidate) => candidate.id === id)
+    if (toggle) toggle.columns.push(column)
+    else columnToggles.push({ id, label: meta.toggleLabel, columns: [column] })
+  }
+  const isToggleVisible = (toggle: ColumnToggle) =>
+    toggle.columns.some((column) => column.getIsVisible())
+  const visibleOptionalCount = columnToggles.filter(isToggleVisible).length
 
   const hasFields = sortedFields.length > 0
 
@@ -523,24 +550,39 @@ export const FarmFieldsList = ({
                       <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
                       Kolonner
                       <span className="text-muted-foreground">
-                        {visibleOptionalCount} af {optionalColumns.length}
+                        {visibleOptionalCount} af {columnToggles.length}
                       </span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {optionalColumns.map((column) => (
+                    {columnToggles.map((toggle) => (
                       <DropdownMenuCheckboxItem
-                        key={column.id}
-                        checked={column.getIsVisible()}
+                        key={toggle.id}
+                        checked={isToggleVisible(toggle)}
                         onSelect={(event) => event.preventDefault()}
                         onCheckedChange={(checked) => {
-                          column.toggleVisibility(Boolean(checked))
-                          if (!checked && column.id === sort.key) {
+                          // One update, since each toggleVisibility call
+                          // would start from the same stale visibility.
+                          table.setColumnVisibility((current) => ({
+                            ...current,
+                            ...Object.fromEntries(
+                              toggle.columns.map((column) => [
+                                column.id,
+                                Boolean(checked),
+                              ]),
+                            ),
+                          }))
+                          if (
+                            !checked &&
+                            toggle.columns.some(
+                              (column) => column.id === sort.key,
+                            )
+                          ) {
                             onSortChange(DEFAULT_FIELDS_SORT)
                           }
                         }}
                       >
-                        {column.columnDef.meta?.toggleLabel ?? column.id}
+                        {toggle.label}
                       </DropdownMenuCheckboxItem>
                     ))}
                   </DropdownMenuContent>
