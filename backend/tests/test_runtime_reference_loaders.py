@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from app.services.rotations import afgroede_normer
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
@@ -29,7 +30,7 @@ MASTER_CSV_HEADERS = [
     "udbytteenhed", "indregn_ffv",
     "udbyttenorm_grovsand_konventionel", "n_norm_grovsand_konventionel",
     "p_norm_grovsand_konventionel", "forfrugtsvaerdi_grovsand_konventionel",
-    "nfix_normgrp1",
+    "nfix_normgrp1", "nfix_normgrp3",
     "nuar_afstromningskategori", "p_afstromningskategori_med_w",
     "kvotegivende_aktivitet", "kvotegivende_areal", "er_permanent_afgroede",
 ]
@@ -42,7 +43,7 @@ def master_csv_row(**overrides: str) -> list[str]:
         "nuar_mp": "4", "nuar_wp": "5", "udbytteenhed": "hkg", "indregn_ffv": "Ja",
         "udbyttenorm_grovsand_konventionel": "50", "n_norm_grovsand_konventionel": "100",
         "p_norm_grovsand_konventionel": "20", "forfrugtsvaerdi_grovsand_konventionel": "5",
-        "nfix_normgrp1": "7",
+        "nfix_normgrp1": "7", "nfix_normgrp3": "",
         "nuar_afstromningskategori": "3", "p_afstromningskategori_med_w": "1",
         "kvotegivende_aktivitet": "Ja", "kvotegivende_areal": "Ja", "er_permanent_afgroede": "",
     }
@@ -70,9 +71,23 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
         self.assertEqual(norm_rows[0][9], 100.0)  # n_norm
         self.assertTrue(norm_rows[0][12])  # indregn_ffv
         self.assertEqual({row[1] for row in nfix_rows}, {1, 3})  # normgrp1 -> jb_nr 1, 3
+        self.assertEqual(nfix_rows[0][3], "Uvandet")
         self.assertEqual(nfix_rows[0][4], 7.0)
         self.assertEqual(runoff_rows, [(1, "Vårbyg", 3, 1)])
         self.assertEqual(permanent_rows, [])  # er_permanent_afgroede is blank for code 1
+
+    def test_nfix_rows_carry_a_vanding_the_runtime_lookup_finds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            master = Path(directory) / "master.csv"
+            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row(nfix_normgrp3="9")])
+            _, nfix_rows, _ = parse_afgroede_normer(master)
+
+        # lookup_nfix only matches these vanding values; anything else silently
+        # makes the N fixation 0.
+        known = set(afgroede_normer._VANDING_PRIORITY[False])
+        self.assertTrue(all(row[3] in known for row in nfix_rows))
+        vandet = {(row[1], row[4]) for row in nfix_rows if row[3] == "Vandet"}
+        self.assertEqual(vandet, {(1, 9.0), (2, 9.0), (3, 9.0), (4, 9.0)})
 
     def test_master_csv_false_flags_are_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

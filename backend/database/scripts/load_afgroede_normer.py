@@ -40,15 +40,16 @@ JORDTYPE_NAVN = {
 }
 DRIFTSFORM_SUFFIX = {"konventionel": KONVENTIONEL, "okologisk": OEKOLOGISK}
 
-# Normgruppe (Kvælstoffiksering-kilden) -> de individuelle jb_nr den dækker.
-# Samme grupper som JORDTYPE ovenfor, minus vandet-varianten (normgruppe 3 er
-# udgået, ingen data for den i kilden).
-NORMGRUPPE_JB_NR: dict[int, tuple[int, ...]] = {
-    1: (1, 3),
-    2: (2, 4, 10, 12),
-    4: (5, 6),
-    5: (7, 8, 9),
-    6: (11,),
+# Normgruppe (Bilag 5, tabel 1) -> de individuelle jb_nr den dækker og deres
+# vanding. Samme grupper og vanding-værdier som JORDTYPE ovenfor; normgruppe 3
+# er vandet sandjord. lookup_nfix finder kun rækker med en af disse værdier.
+NORMGRUPPE: dict[int, tuple[tuple[int, ...], str]] = {
+    1: ((1, 3), "Uvandet"),
+    2: ((2, 4, 10, 12), "Uvandet"),
+    3: ((1, 2, 3, 4), "Vandet"),
+    4: ((5, 6), "Ikke særskilt vanding"),
+    5: ((7, 8, 9), "Ikke særskilt vanding"),
+    6: ((11,), "Ikke særskilt vanding"),
 }
 
 
@@ -142,12 +143,12 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
                     norm_rows.append((source_order, jb_nr, *common))
                 source_order += 1
 
-        for normgruppe, jb_nrs in NORMGRUPPE_JB_NR.items():
+        for normgruppe, (jb_nrs, vanding) in NORMGRUPPE.items():
             nfix = _norm_cell(row, f"nfix_normgrp{normgruppe}", row_number=row_number)
             if nfix is None:
                 continue
             for jb_nr in jb_nrs:
-                nfix_rows.append((source_order, jb_nr, crop_code, "", nfix))
+                nfix_rows.append((source_order, jb_nr, crop_code, vanding, nfix))
             source_order += 1
 
     if not norm_rows or not nfix_rows or not nuar_rows:
