@@ -13,9 +13,9 @@ from app.data.db import (
     afgroede_table,
 )
 
-# Potatoes use M2 (Vårsæd) in NLES5 per the NUAR AU recommendation applicable
-# from the 2027 regulation. W is not changed (typically W3). The rule always
-# applies and overrides any other M values.
+# Potatoes use M7 in NLES5: the supplerende høring of October 2026 moved them
+# from M2 to M7 (and W3 to W6) in Bilag 2. W is not changed here. The rule
+# always applies and overrides any other M values.
 KARTOFFEL_KODER: frozenset = frozenset({149, 150, 151, 152, 154, 155, 156})
 
 _VANDING_PRIORITY = {
@@ -37,9 +37,9 @@ def _missing_lookup(table_name: str, task_name: str) -> RuntimeError:
 
 
 def apply_kartoffel_regel(sample: dict) -> dict:
-    """Return the sample with M=2 for potato codes and other fields unchanged."""
+    """Return the sample with M=7 for potato codes and other fields unchanged."""
     if sample.get("crop_code") in KARTOFFEL_KODER:
-        return {**sample, "M": 2}
+        return {**sample, "M": 7}
     return sample
 
 

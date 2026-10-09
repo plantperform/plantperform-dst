@@ -79,13 +79,14 @@ _LANGVARIG_FORFRUGT_KODER: frozenset[int] = frozenset({
 # This afgrødekode's own M -> the M to use instead when the forfrugt is one of
 # _LANGVARIG_FORFRUGT_KODER (same source ark as above). MP has no per-afgrøde
 # variant: every afgrøde with an MP override always overrides to MP4 (see
-# _resolve_mp), so no equivalent dict is needed for MP.
+# _resolve_mp), so no equivalent dict is needed for MP. Kartofler 149-156 have
+# no override: the supplerende høring of October 2026 struck their M10 from
+# Bilag 2, table 4, so they keep M7 after græs too.
 _FORFRUGT_M_OVERRIDE: dict[int, int] = {
     1: 12, 2: 12, 3: 12, 4: 12, 5: 11, 6: 12, 8: 12, 9: 10, 10: 10, 11: 10,
     13: 10, 14: 10, 15: 10, 16: 10, 17: 10, 19: 11, 24: 11, 40: 12, 41: 12,
     52: 12, 53: 12, 55: 12, 56: 12, 57: 10, 58: 11, 122: 12, 123: 12, 124: 12,
-    149: 12, 150: 12, 151: 12, 152: 12, 154: 12, 155: 12, 156: 12, 157: 11,
-    210: 12, 211: 12, 212: 12, 213: 12, 214: 12, 216: 11, 218: 11, 220: 10,
+    157: 11, 210: 12, 211: 12, 212: 12, 213: 12, 214: 12, 216: 11, 218: 11, 220: 10,
     221: 10, 222: 10, 223: 10, 224: 10, 230: 12, 235: 10, 402: 11, 403: 11,
     404: 11, 409: 11, 410: 11, 420: 11, 422: 11, 423: 11, 425: 11, 428: 11,
     430: 11, 431: 11, 432: 11, 434: 11, 450: 11, 497: 11, 502: 11, 540: 11,
@@ -97,13 +98,15 @@ _FORFRUGT_M_OVERRIDE: dict[int, int] = {
 
 # Afgrødekoder where the MP4 override (see _resolve_mp) actually applies.
 # Unlike M, MP4 is NOT universal across every afgrøde whenever the forfrugt is
-# in _LANGVARIG_FORFRUGT_KODER - only these 161 codes are eligible (source:
+# in _LANGVARIG_FORFRUGT_KODER - only these 160 codes are eligible (source:
 # Afgrødetabel2027_07092026_Udkast_3_pr_10_9_2026.xlsx, column "Udv.kat.
 # Forfrugt Undt. (MP)" - codes with a value there, always MP4 in practice).
+# 127 Lucernefrø is not eligible: the supplerende høring of October 2026 lists
+# it in Bilag 2, table 12 as MP2 without an MP4 exception.
 _MP4_BERETTIGET_KODER: frozenset[int] = frozenset({
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 21, 22,
     23, 24, 25, 26, 27, 30, 31, 32, 35, 36, 40, 41, 42, 51, 52, 53, 54, 55,
-    56, 57, 58, 70, 71, 72, 120, 121, 122, 123, 124, 125, 127, 149, 150,
+    56, 57, 58, 70, 71, 72, 120, 121, 122, 123, 124, 125, 149, 150,
     151, 152, 154, 155, 156, 157, 160, 161, 162, 182, 210, 211, 212, 213,
     214, 215, 216, 217, 218, 220, 221, 222, 223, 224, 225, 230, 234, 235,
     280, 281, 282, 283, 310, 324, 328, 342, 400, 401, 402, 403, 404, 405,

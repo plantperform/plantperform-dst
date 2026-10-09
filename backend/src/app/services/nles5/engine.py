@@ -419,9 +419,11 @@ def majs_m11_korrektionsfaktor(mncs):
 
 def calculate_leaching(sample):
     """Calculate leaching from a sample dictionary of inputs."""
-    # Potato rule: M=2 for these codes regardless of user choice (NUAR AU 2027 recommendation)
+    # Potato rule: M=7 for these codes regardless of user choice or forfrugt.
+    # The supplerende høring of October 2026 moved kartofler from M2 to M7 and
+    # struck their græs exception (Bilag 2, table 4); 157 keeps M2.
     if sample.get("crop_code") in _KARTOFFEL_KODER:
-        sample = {**sample, "M": 2}
+        sample = {**sample, "M": 7}
 
     nt_source = sample.get("NT_source", "manual")
     if sample.get("NT_source") == "jb_calc":
