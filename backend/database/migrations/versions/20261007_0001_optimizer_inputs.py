@@ -4,6 +4,9 @@ Revision ID: 20261007_0001
 Revises: 20261005_0001
 """
 
+import logging
+import time
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
@@ -12,6 +15,7 @@ revision = "20261007_0001"
 down_revision = "20261005_0001"
 branch_labels = None
 depends_on = None
+logger = logging.getLogger("alembic.runtime.migration")
 
 # Derive one field at a time entirely inside PostgreSQL. Neither Python nor a
 # simulation-wide JSONB aggregate needs to hold all the calculation details.
@@ -46,21 +50,24 @@ COMPACT_INPUT_SQL = """jsonb_build_object(
 
 
 def upgrade():
+    started = time.monotonic()
+    logger.info("Optimizer inputs: adding compact input column")
     op.add_column("simulation_field_candidates", sa.Column("optimizer_input", JSONB()))
     connection = op.get_bind()
-    rows = connection.execute(
-        sa.text("SELECT id FROM simulation_field_candidates").execution_options(yield_per=1)
-    )
-    for row in rows:
-        connection.execute(
-            sa.text(
-                "UPDATE simulation_field_candidates SET optimizer_input = "
-                + COMPACT_INPUT_SQL
-                + " WHERE id = :id"
-            ),
-            {"id": row.id},
+    logger.info("Optimizer inputs: backfilling candidate caches inside PostgreSQL")
+    backfill_started = time.monotonic()
+    updated = connection.execute(
+        sa.text(
+            "UPDATE simulation_field_candidates SET optimizer_input = " + COMPACT_INPUT_SQL
         )
+    ).rowcount
+    logger.info(
+        "Optimizer inputs: backfilled %d candidate caches in %.1fs",
+        updated, time.monotonic() - backfill_started,
+    )
+    logger.info("Optimizer inputs: enforcing non-null compact inputs")
     op.alter_column("simulation_field_candidates", "optimizer_input", nullable=False)
+    logger.info("Optimizer inputs: conversion finished in %.1fs", time.monotonic() - started)
 
 
 def downgrade():

@@ -3,6 +3,8 @@
 Run with simulation writes paused. The conversion and verification are transactional.
 """
 
+import logging
+import time
 from copy import deepcopy
 
 import sqlalchemy as sa
@@ -15,6 +17,32 @@ branch_labels = None
 depends_on = None
 OUTPUT_KEYS = ("crop_rotation", "rotation_id", "db2", "n_load", "leaching", "fen")
 CANDIDATE_INDEX = "ix_simulation_field_candidates_simulation_field"
+logger = logging.getLogger("alembic.runtime.migration")
+
+# Return only the selected evaluation, keeping unselected calculation details
+# inside PostgreSQL and avoiding a cache download/query for every field.
+FIELDS_WITH_SELECTED_CANDIDATES_SQL = """
+SELECT sf.id, sf.data, selected.candidate AS selected_candidate
+FROM simulation_field AS sf
+LEFT JOIN LATERAL (
+    SELECT candidate.value AS candidate
+    FROM simulation_field_candidates AS cache
+    CROSS JOIN LATERAL jsonb_array_elements(cache.data->'candidates')
+        WITH ORDINALITY AS candidate(value, position)
+    WHERE cache.simulation_id = sf.simulation_id
+      AND cache.field_id = sf.id
+      AND sf.data->>'rotation_id' <> ''
+      AND (
+          (candidate.value #>> '{ref,saedskiftevariant}') || ':' ||
+          (candidate.value #>> '{ref,variant}') || ':' ||
+          (candidate.value #>> '{ref,n_norm_pct}')
+      ) = sf.data->>'rotation_id'
+    ORDER BY candidate.position
+    LIMIT 1
+) AS selected ON TRUE
+WHERE sf.simulation_id = :simulation_id
+ORDER BY sf.created_at, sf.id
+"""
 
 
 def candidate_id(candidate):
@@ -23,6 +51,8 @@ def candidate_id(candidate):
 
 
 def upgrade():
+    started = time.monotonic()
+    logger.info("Simulation aggregates: preparing schema and candidate index")
     for name, datatype, default in (
         ("revision", sa.Integer(), "0"),
         ("fields", JSONB(), "{}"),
@@ -75,17 +105,23 @@ def upgrade():
     metadata = sa.MetaData()
     setup = sa.Table("simulation", metadata, autoload_with=bind)
     result = sa.Table("simulation_result", metadata, autoload_with=bind)
-    old_fields = sa.Table("simulation_field", metadata, autoload_with=bind)
     old_candidates = sa.Table("simulation_field_candidates", metadata, autoload_with=bind)
     candidate_count = bind.execute(
         sa.select(sa.func.count()).select_from(old_candidates)
     ).scalar_one()
     ids = bind.execute(sa.select(setup.c.id)).scalars().all()
-    for simulation_id in ids:
+    logger.info("Simulation aggregates: schema prepared in %.1fs", time.monotonic() - started)
+    logger.info(
+        "Simulation aggregates: converting %d simulations, preserving %d candidate caches",
+        len(ids), candidate_count,
+    )
+    conversion_started = last_progress = time.monotonic()
+    field_query = sa.text(FIELDS_WITH_SELECTED_CANDIDATES_SQL).columns(
+        id=sa.Text(), data=JSONB(), selected_candidate=JSONB(),
+    )
+    for position, simulation_id in enumerate(ids, start=1):
         rows = bind.execute(
-            sa.select(old_fields.c.id, old_fields.c.data)
-            .where(old_fields.c.simulation_id == simulation_id)
-            .order_by(old_fields.c.created_at, old_fields.c.id)
+            field_query, {"simulation_id": simulation_id},
         ).all()
         fields = {}
         for row in rows:
@@ -101,27 +137,18 @@ def upgrade():
         order = [row.id for row in rows]
         selected = {}
         for row in rows:
-            rotation_id = row.data.get("rotation_id")
-            if not rotation_id:
+            candidate = row.selected_candidate
+            if candidate is None:
                 continue
-            # Load one field's cache without assembling a simulation-wide JSONB value.
-            cached = bind.execute(
-                sa.select(old_candidates.c.data).where(
-                    old_candidates.c.simulation_id == simulation_id,
-                    old_candidates.c.field_id == row.id,
-                )
-            ).scalar_one_or_none()
-            for candidate in (cached or {}).get("candidates", []):
-                if candidate_id(candidate) == rotation_id:
-                    selected[row.id] = candidate
-                    if fields[row.id].get("allowed_rotation_ids"):
-                        fields[row.id]["fixed_candidate"] = candidate
-                    break
-        bind.execute(
+            selected[row.id] = candidate
+            if fields[row.id].get("allowed_rotation_ids"):
+                fields[row.id]["fixed_candidate"] = candidate
+        stored = bind.execute(
             setup.update()
             .where(setup.c.id == simulation_id)
             .values(fields=fields, field_order=order)
-        )
+            .returning(setup.c.fields, setup.c.field_order)
+        ).one()
         has_output = any(row.data.get("rotation_id") for row in rows)
         complete = has_output and all(row.data.get("rotation_id") for row in rows)
         output = (
@@ -154,11 +181,16 @@ def upgrade():
                 output=output,
             )
         )
-        stored = bind.execute(
-            sa.select(setup.c.fields, setup.c.field_order).where(setup.c.id == simulation_id)
-        ).one()
         if stored.fields != fields or stored.field_order != order:
             raise RuntimeError(f"Simulation migration verification failed: {simulation_id}")
+        now = time.monotonic()
+        if position == len(ids) or now - last_progress >= 5:
+            logger.info(
+                "Simulation aggregates: converted %d/%d simulations in %.1fs",
+                position, len(ids), now - conversion_started,
+            )
+            last_progress = now
+    logger.info("Simulation aggregates: verifying row counts and removing legacy field table")
     if bind.execute(sa.select(sa.func.count()).select_from(result)).scalar_one() != len(ids):
         raise RuntimeError("Simulation result migration count mismatch")
     if (
@@ -167,6 +199,7 @@ def upgrade():
     ):
         raise RuntimeError("Simulation candidate migration count mismatch")
     op.drop_table("simulation_field")
+    logger.info("Simulation aggregates: conversion finished in %.1fs", time.monotonic() - started)
 
 
 def downgrade():

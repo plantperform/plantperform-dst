@@ -1392,6 +1392,168 @@ class MigrationTests(DatabaseTests):
             )
         )
 
+    def test_selection_preserves_first_match_missing_candidates_and_tied_field_order(self):
+        first = candidate(110).model_dump(mode="json")
+        first["legacy_detail"] = {"preserve": [1, 2, 3]}
+        payloads = {
+            "duplicate": {
+                "candidates": [
+                    candidate(330, "2").model_dump(mode="json"),
+                    first,
+                    candidate(220).model_dump(mode="json"),
+                ]
+            },
+            "empty-cache": {"candidates": []},
+            "no-match": {"candidates": [candidate(440, "2").model_dump(mode="json")]},
+            # An unoptimized field must not inspect its candidate array.
+            "unoptimized": {"candidates": None},
+        }
+        originals = {}
+        with self.engine.begin() as connection:
+            self.insert_setup(connection)
+            self.insert_setup(connection, "other")
+            for field_id in ("unoptimized", "no-match", "no-cache", "empty-cache", "duplicate"):
+                original = field(field_id).model_copy(
+                    update={
+                        "rotation_id": None if field_id == "unoptimized" else "1:1:100",
+                        "allowed_rotation_ids": ["1:1:100"] if field_id == "duplicate" else [],
+                    }
+                ).model_dump(mode="json")
+                originals[field_id] = original
+                connection.execute(
+                    self.old_fields.insert().values(
+                        id=field_id, simulation_id="sim", data=original,
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    )
+                )
+                if field_id in payloads:
+                    connection.execute(
+                        self.old_candidates.insert().values(
+                            id=f"cache-{field_id}", simulation_id="sim", field_id=field_id,
+                            data=payloads[field_id],
+                        )
+                    )
+            # A cache with the same field ID in a different simulation must not match.
+            connection.execute(
+                self.old_candidates.insert().values(
+                    id="other-cache", simulation_id="other", field_id="no-cache",
+                    data={"candidates": [candidate().model_dump(mode="json")]},
+                )
+            )
+            preserved = connection.execute(
+                select(self.old_candidates).order_by(self.old_candidates.c.id)
+            ).all()
+        queries = []
+
+        def record(connection, cursor, statement, parameters, context, executemany):
+            queries.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            with self.engine.begin() as connection:
+                self.migrate(connection)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        with self.engine.connect() as connection:
+            setup = connection.execute(select(setups).where(setups.c.id == "sim")).one()
+            result = connection.execute(select(results).where(results.c.simulation_id == "sim"))
+            result = result.one()
+            self.assertEqual(setup.field_order, sorted(originals))
+            self.assertEqual(result.status, "outdated")
+            self.assertEqual(result.output["selected_candidates"], {"duplicate": first})
+            self.assertEqual(setup.fields["duplicate"]["fixed_candidate"], first)
+            self.assertEqual(
+                result.output["response"]["fields"],
+                [originals[field_id] for field_id in sorted(originals)],
+            )
+            self.assertEqual(
+                connection.execute(
+                    select(self.old_candidates).order_by(self.old_candidates.c.id)
+                ).all(),
+                preserved,
+            )
+        field_reads = [
+            query for query in queries
+            if query.lstrip().startswith("SELECT") and "FROM simulation_field AS" in query
+        ]
+        self.assertEqual(len(field_reads), 2)  # One read per simulation, including an empty one.
+        self.assertFalse(any("SELECT simulation_field_candidates.data" in sql for sql in queries))
+        self.assertFalse(any("SELECT simulation.fields" in sql for sql in queries))
+
+    def test_both_upgrades_preserve_full_caches_and_derive_equivalent_compact_inputs(self):
+        original_fields = {}
+        with self.engine.begin() as connection:
+            self.insert_setup(connection)
+            self.insert_setup(connection, "empty")
+            for field_id in ("chain-b", "chain-a"):
+                evaluations = [candidate(110), candidate(220, "2")]
+                evaluations[1].years[0].db_detail = {"costs": [1, 2, 3]}
+                original = field(field_id).model_copy(
+                    update={
+                        "rotation_id": evaluations[1].ref.to_id(),
+                        "allowed_rotation_ids": [evaluations[1].ref.to_id()],
+                        "crop_rotation": [evaluation.year for evaluation in evaluations[1].years],
+                        "db2": 220,
+                    }
+                ).model_dump(mode="json")
+                original_fields[field_id] = original
+                data = SimulationFieldCandidates(
+                    field_id=field_id, jbnr=5, candidates=evaluations,
+                    real_history={"2025": {"afgrode_kode": 1, "n_input": 120}},
+                ).model_dump(mode="json")
+                for key in ("base_ref", "overrides", "start_year"):
+                    data["candidates"][0].pop(key)
+                connection.execute(
+                    self.old_fields.insert().values(
+                        id=field_id, simulation_id="sim", data=original,
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    )
+                )
+                connection.execute(
+                    self.old_candidates.insert().values(
+                        id=f"cache-{field_id}", simulation_id="sim", field_id=field_id, data=data,
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                        updated_at=datetime(2026, 2, 1, tzinfo=UTC),
+                    )
+                )
+            identity_query = select(self.old_candidates).order_by(self.old_candidates.c.id)
+            preserved = connection.execute(identity_query).all()
+        path = (
+            Path(__file__).parents[1]
+            / "database/migrations/versions/20261007_0001_optimizer_inputs.py"
+        )
+        spec = importlib.util.spec_from_file_location("compact_migration", path)
+        compact_migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(compact_migration)
+        with self.engine.begin() as connection:
+            self.migrate(connection)
+            with Operations.context(MigrationContext.configure(connection)):
+                compact_migration.upgrade()
+            self.assertEqual(connection.execute(identity_query).all(), preserved)
+            for row in connection.execute(select(caches)):
+                self.assertEqual(
+                    row.optimizer_input,
+                    optimizer_input(SimulationFieldCandidates.model_validate(row.data)),
+                )
+            self.assertEqual(
+                connection.execute(
+                    select(results.c.status).where(results.c.simulation_id == "empty")
+                ).scalar_one(),
+                "not_started",
+            )
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                compact_migration.downgrade()
+            self.migrate(connection, "downgrade")
+            self.assertEqual(connection.execute(identity_query).all(), preserved)
+            restored_fields = connection.execute(
+                select(self.old_fields.c.id, self.old_fields.c.data)
+            ).all()
+            self.assertEqual(
+                dict(restored_fields),
+                original_fields,
+            )
+
     def test_legacy_fields_candidates_and_missing_fen_survive_conversion(self):
         old_fields, old_candidates = self.old_fields, self.old_candidates
         original = (

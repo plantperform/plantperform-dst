@@ -8,7 +8,7 @@ from unittest.mock import patch
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import event, inspect, null, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from test_optimizer_lifecycle import (
     CONTEXT,
     EMAIL,
@@ -303,6 +303,65 @@ class CompactMigrationTests(DatabaseTests):
     def migrate(self, connection, direction="upgrade"):
         with Operations.context(MigrationContext.configure(connection)):
             getattr(self.migration, direction)()
+
+    def test_backfill_uses_one_update_for_many_candidate_caches(self):
+        data = {
+            f"field-{i}": SimulationFieldCandidates(
+                field_id=f"field-{i}", jbnr=5, candidates=[rich_candidate()],
+            ).model_dump(mode="json")
+            for i in range(32)
+        }
+        with self.engine.begin() as connection:
+            replace_cached_candidates(connection, data)
+            self.migrate(connection, "downgrade")
+        queries = []
+
+        def record(connection, cursor, statement, parameters, context, executemany):
+            queries.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            with self.assertLogs(self.migration.logger, level="INFO") as logs:
+                with self.engine.begin() as connection:
+                    self.migrate(connection)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        updates = [
+            sql for sql in queries
+            if sql.lstrip().startswith("UPDATE simulation_field_candidates")
+        ]
+        self.assertEqual(len(updates), 1)
+        self.assertFalse(
+            any("SELECT id FROM simulation_field_candidates" in sql for sql in queries)
+        )
+        self.assertTrue(any("backfilled 32 candidate caches" in line for line in logs.output))
+        with self.engine.connect() as connection:
+            for row in connection.execute(select(caches)):
+                self.assertEqual(
+                    row.optimizer_input,
+                    optimizer_input(SimulationFieldCandidates.model_validate(data[row.field_id])),
+                )
+
+    def test_backfill_failure_rolls_back_column_and_preserves_candidate_rows(self):
+        with self.engine.begin() as connection:
+            self.migrate(connection, "downgrade")
+            connection.execute(
+                update(caches).where(caches.c.field_id == "field-a").values(
+                    data={"field_id": "field-a", "candidates": "invalid-array"},
+                )
+            )
+            preserved_query = select(
+                caches.c.id, caches.c.data, caches.c.created_at, caches.c.updated_at,
+            ).order_by(caches.c.id)
+            preserved = connection.execute(preserved_query).all()
+        with self.assertRaises(DataError), self.engine.begin() as connection:
+            self.migrate(connection)
+        with self.engine.connect() as connection:
+            self.assertNotIn(
+                "optimizer_input",
+                {column["name"] for column in inspect(connection).get_columns(caches.name)},
+            )
+            self.assertEqual(connection.execute(preserved_query).all(), preserved)
 
     def test_backfill_empty_and_legacy_defaults_round_trip_without_changing_full_data(self):
         full = SimulationFieldCandidates(field_id="field-b", jbnr=5, candidates=[rich_candidate()])
