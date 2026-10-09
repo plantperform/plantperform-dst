@@ -14,7 +14,7 @@ Backend’en bruger de indlæste databasetabeller under API-kald.
 pixi run load-registry-data
 ```
 
-Kommandoen kører migrationer og derefter de otte loaders i rækkefølgen nedenfor.
+Kommandoen kører migrationer og derefter de ni loaders i rækkefølgen nedenfor.
 Kæden bruger `&&` og stopper ved første fejl. Allerede gennemførte trin bliver
 ikke rullet tilbage; hele indlæsningen er ikke én fælles transaktion.
 
@@ -39,3 +39,4 @@ Migrationernes stier er relative til `backend/`.
 | 7 | `pixi run load-afgroeder` | [load_afgroeder.py](load_afgroeder.py) | `ANGJ-data/Afgroedetabel2027_master.csv`; `V1_1_IMK2026_n604144_gpkg_merged.gpkg` bruges også, hvis den findes, til historiske afgrødenavne | Erstatter `afgroede`, `afgroede_norm_lookup` og `afgroede_nfix_lookup`, inkl. NUAR, afstrømningskategorier og permanente afgrødekoder. Læser også historiske koder fra `registry_field.crop_history`. |
 | 8 | `pixi run load-oekonomital-afgroedebundet` | [load_oekonomital_afgroedebundet.py](load_oekonomital_afgroedebundet.py) | `ANGJ-data/Oekonomital_afgroedebundet.csv` | Erstatter `salgspris`, `halmudbytte`, `arbejdsmaengde` og `dyrkningsomkostning`. |
 | 9 | `pixi run load-oekonomital-generelle-satser` | [load_oekonomital_generelle_satser.py](load_oekonomital_generelle_satser.py) | `ANGJ-data/Oekonomital_generelle_satser.csv` | Erstatter `arbejdssats` og `prisliste`. |
+| 10 | `pixi run load-kvotegivende-areal` | [load_kvotegivende_areal.py](load_kvotegivende_areal.py) | `ANGJ-data/Afgroedetabel2027_master.csv` | Opdaterer `registry_field.kvotegivende` ud fra markens 2026-afgrøde og masterens `kvotegivende_areal`, og nulstiller `udledningskvote_mark_kgn` for ikke-kvotegivende arealer (skov, natur, miljøtilsagn). GeoPackage-filens eget flag er tomt for ca. 17.500 marker og mangler nyere afgrødekoder, så trinnet skal køre efter trin 2. |
