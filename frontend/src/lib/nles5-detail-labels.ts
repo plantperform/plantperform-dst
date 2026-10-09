@@ -4,12 +4,12 @@
 
 export const M_LABELS: Record<number, string> = {
   1: 'Vintersæd',
-  2: 'Vårsæd (inkl. kartofler)',
+  2: 'Vårsæd',
   3: 'Bælgsæd-korn blanding',
   4: 'Græs og kløvergræs',
   5: 'Frøgræs',
   6: 'Brak',
-  7: 'Sukkerroer, foderroer og hamp',
+  7: 'Sukkerroer, foderroer og kartofler',
   8: 'Majshelsæd',
   9: 'Vinterraps',
   10: 'Vintersæd efter græs',
