@@ -197,6 +197,7 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        secondary_crop_history=row.secondary_crop_history,
     )
     avg_leaching = sum(y.leaching_kg_n_ha for y in years) / len(years)
     avg_db = sum(y.db_kr_ha for y in years) / len(years)
@@ -387,6 +388,7 @@ def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        secondary_crop_history=row.secondary_crop_history,
     )
 
 

@@ -48,6 +48,7 @@ field" column is the name on the wire.
 | afgrøde | crop | | |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
 | normal såmåned | sowing month | | The crop table's month the crop is normally sown, stored as `afgroede.saamaaned` |
+| efterårssået | autumn-sown, `is_autumn_sown`, `AUTUMN_SOWING_MONTHS` | | Normal såmåned August to November |
 | afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
 | helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and grønkorn blends. Majshelsæd counts as Majs |
 | afgrødefordeling | `CropShare`, `CropShareLevel`, `summarizeCropDistribution` | | Area and N load per crop group or per crop for a year, or the average per year |
