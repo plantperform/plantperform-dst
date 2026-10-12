@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Check, LogOut, Tractor, Users, type LucideIcon } from 'lucide-react'
 
 import { useAuth } from '@/auth/context'
-import { AppTopBar } from '@/components/AppTopBar'
+import { AppBar, AppBarCurrent } from '@/components/AppBar'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import {
   getAutoOpenSingleFarm,
@@ -141,7 +141,9 @@ export const ProfilePage = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <AppTopBar />
+      <AppBar>
+        <AppBarCurrent>Profil</AppBarCurrent>
+      </AppBar>
       <div className="mx-auto max-w-6xl px-6 pt-12 pb-20 sm:px-10">
         <div className="grid items-start gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-16">
           <div className="flex flex-col gap-5 lg:sticky lg:top-[72px]">

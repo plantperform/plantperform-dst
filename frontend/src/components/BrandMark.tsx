@@ -40,31 +40,3 @@ export const SproutMark = ({ className }: { className?: string }) => (
     </g>
   </svg>
 )
-
-type BrandMarkProps = {
-  variant?: 'default' | 'onDark'
-  compact?: boolean
-  className?: string
-}
-
-export const BrandMark = ({
-  variant = 'default',
-  compact = false,
-  className,
-}: BrandMarkProps) => (
-  <span
-    className={cn('flex items-center gap-2.5', className)}
-    role={compact ? 'img' : undefined}
-    aria-label={compact ? 'PlantPerform' : undefined}
-  >
-    <BrandIcon
-      onDark={variant === 'onDark'}
-      className={compact ? 'size-8' : 'size-9'}
-    />
-    {compact ? null : (
-      <span className="truncate text-lg font-semibold tracking-tight">
-        PlantPerform
-      </span>
-    )}
-  </span>
-)

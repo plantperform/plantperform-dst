@@ -5,7 +5,7 @@ import { Tractor, Users } from 'lucide-react'
 
 import { useAuth } from '@/auth/context'
 import { useFarms, useFarmsFields } from '@/api/hooks'
-import { AppTopBar } from '@/components/AppTopBar'
+import { AppBar } from '@/components/AppBar'
 import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
 import { SproutMark } from '@/components/BrandMark'
 import {
@@ -140,7 +140,7 @@ export const HomePage = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <AppTopBar />
+      <AppBar />
 
       <div className="mx-auto flex max-w-6xl flex-col gap-5.5 px-6 pt-10 pb-16 sm:px-10">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">

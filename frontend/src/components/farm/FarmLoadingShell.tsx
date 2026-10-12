@@ -1,49 +1,31 @@
-import type { Farm } from '@/api/types'
 import { FarmFieldsSkeleton } from '@/components/farm/FarmFieldsSkeleton'
 import {
+  FARM_SIDEBAR_CLASS,
   GROUP_CLASS,
   GROUP_LABEL_CLASS,
-  SidebarBrand,
 } from '@/components/farm/FarmSidebar'
-import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 
-const SIDEBAR_ROW_CLASS = 'h-11 rounded-md bg-sidebar-accent'
+const SIDEBAR_ROW_CLASS = 'h-11 rounded-[10px] bg-sidebar-accent'
 
-type FarmSidebarSkeletonProps = {
-  farm?: Farm
-}
-
-export const FarmSidebarSkeleton = ({ farm }: FarmSidebarSkeletonProps) => (
-  <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
-    <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
-      <SidebarBrand />
-      {farm ? (
-        <FarmSwitcher farm={farm} />
-      ) : (
-        <Skeleton className="h-10 rounded-md bg-sidebar-accent group-data-[collapsible=icon]:size-8" />
-      )}
-    </SidebarHeader>
-    <SidebarContent>
-      <div className="px-3 pt-2 group-data-[collapsible=icon]:hidden">
-        <Skeleton className="h-9 rounded-md bg-sidebar-accent" />
-      </div>
+export const FarmSidebarSkeleton = () => (
+  <Sidebar className={FARM_SIDEBAR_CLASS} aria-label="Navigation for bedriften">
+    <SidebarContent className="gap-0 pt-0.5">
       <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
           Visninger
         </SidebarGroupLabel>
-        <SidebarGroupContent className="space-y-2 pt-1">
+        <SidebarGroupContent className="space-y-2">
           <Skeleton className={SIDEBAR_ROW_CLASS} />
-          <Skeleton className="h-8 w-2/3 rounded-md bg-sidebar-accent" />
-          <div className="ml-3.5 space-y-2 border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
+          <Skeleton className="h-8 w-2/3 rounded-[10px] bg-sidebar-accent" />
+          <div className="space-y-2 pl-7">
             <Skeleton className={SIDEBAR_ROW_CLASS} />
             <Skeleton className={`${SIDEBAR_ROW_CLASS} w-5/6`} />
           </div>
