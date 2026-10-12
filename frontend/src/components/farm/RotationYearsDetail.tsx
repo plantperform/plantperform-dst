@@ -698,9 +698,12 @@ const LeachingDetailSection = ({
           <p className="text-xs text-muted-foreground">
             Afstrømningskategori{' '}
             <strong>{String(detail.runoffCategory ?? '—')}</strong>
-            {detail.EEA ? ', EEA-virkemiddel' : ''} (Bilag 7 tabel 1, ud fra
-            afgrøden{detail.EEA ? ' og vinterdække-ændringen' : ''}). Markens
-            egen perkolationsværdi for denne kategori.
+            {detail.runoffWinterCover ? ', med vinterplantedække' : ''} (Bilag
+            7 tabel 1, ud fra afgrøden
+            {detail.runoffWinterCover
+              ? ' og vinterplantedækket efter den, PUMR felt A64'
+              : ''}
+            ). Markens egen perkolationsværdi for denne kategori.
             {detail.runoffCategoryUnknown ? (
               <span className="text-warning-strong">
                 {' '}

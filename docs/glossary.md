@@ -120,7 +120,7 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | JB-nummer | `soilTypeNumber` | `jbnr` | JB kept in names like `JB_COLORS` |
-| afstrømningskategori | `runoffCategory`, `runoffCategoryUnknown` | `afstromningskategori`, `afstromningskategori_ukendt` | |
+| afstrømningskategori | `runoffCategory`, `runoffCategoryUnknown`, `runoffWinterCover` | `afstromningskategori`, `afstromningskategori_ukendt`, `afstromning_vinterdaekke` | |
 | efterafgrødens N-fiksering | `catchCropNFixation`, `catchCropNFixationBonus` | `efterafgroede_nfiks`, `efterafgroede_nfiks_bonus` | |
 | Fmajs-korrektion | `fmajsApplied`, `fmajsCorrectionFactor`, `fmajsMineralN` | `Fmajs_anvendt`, `Fmajs_korrektionsfaktor`, `Fmajs_mineralsk_n` | Maize after clover grass |
 | simulering | `Simulation`, simulation | | |

@@ -72,6 +72,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   udgift_kr_ha: 'costDkkHa',
   afstromningskategori: 'runoffCategory',
   afstromningskategori_ukendt: 'runoffCategoryUnknown',
+  afstromning_vinterdaekke: 'runoffWinterCover',
   efterafgroede_nfiks: 'catchCropNFixation',
   efterafgroede_nfiks_bonus: 'catchCropNFixationBonus',
   Fmajs_anvendt: 'fmajsApplied',
