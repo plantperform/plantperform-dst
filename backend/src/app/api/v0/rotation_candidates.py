@@ -253,7 +253,9 @@ def list_udlaeg_koder(
     hovedafgrode_kode and driftsform apply the PUMR Tabel A, felt A32
     "Vinterplantedække" eligibility rules for the position currently being
     edited (docs/nles5-kategorier.md's udlægskode-afsnit): "Bar jord" (921)
-    only for økologiske marker, and the "Efterafgrøde type" family
+    for økologiske marker and, for every driftsform, after græs in Bilag 2,
+    table 8, where it marks the græs as ploughed after the harvest (W8 ved
+    ompløjning, see bridge_v2._resolve_w), and the "Efterafgrøde type" family
     (950-954/968) narrowed by the hovedafgrøde's own majs-status and
     Grund6Procent-flag. Both parameters are optional - omitting either
     skips only the rule(s) that depend on it, for callers that don't yet
@@ -266,7 +268,10 @@ def list_udlaeg_koder(
         if code in _REAL_UDLAEG_KODER
     ]
 
-    if driftsform == "Økologisk":
+    after_ploughable_graes = hovedafgrode_kode is not None and bool(
+        afgroede_normer.lookup_crop_params(hovedafgrode_kode).get("W_omploejning")
+    )
+    if driftsform == "Økologisk" or after_ploughable_graes:
         bar_jord_navn = names.get(_BAR_JORD_KODE)
         if bar_jord_navn is not None:
             options.append(AfgrodeKodeOption(code=_BAR_JORD_KODE, navn=bar_jord_navn))
