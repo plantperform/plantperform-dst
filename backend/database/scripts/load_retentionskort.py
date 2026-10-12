@@ -1,172 +1,81 @@
-"""Compute each registry field's retention (%) as a real pixel-weighted
-zonal mean from the national retention raster, replacing the old
-RedTot_pct-from-gpkg source.
+"""Set RetTot in the merged GeoPackage to each field's retention (%) as the
+PUMR 2027 requirements spec (table A, field A22) and the draft 2027 executive
+order (§ 13(3)) specify it: overlap the field with every polygon of the
+retention map, take the overlap-area-weighted mean of their RetTot, and round
+to 2 decimals. The rounded value is the one the N load calculation uses.
 
-Method: rasterize every field polygon into a single zone-id raster aligned
-with the source grid (burn value = imk_id), then average the source raster's
-pixel values per zone with a vectorised numpy bincount — equivalent to a
-standard GIS zonal-mean (each 100m pixel counted once, for whichever field
-its center falls in), not a sub-pixel fractional-coverage weighting (which
-would need a much finer resample to approximate and isn't a real precision
-gain over a 100m-resolution source anyway).
+Run it whenever the GeoPackage or the retention map is replaced, before
+`pixi run load-registry-data`, which loads RetTot into registry_field.retention.
 
-Source: TotalRetention_regioner_v260327.tif (EPSG:25832, 100m grid, float32
-percent 0-100, nodata sentinel ~-3.4e38).
+A field that overlaps no retention polygon gets RetTot NULL: the spec gives no
+fallback value.
+
+Sources: Kvaelstofretention_UMR_2027.shp (EPSG:25832, polygons with RetTot in
+percent) and the merged GeoPackage's PlantPerform layer.
 """
 
 import time
 from pathlib import Path
 
-import geopandas as gpd
 import numpy as np
-import psycopg
-import rasterio
-import rasterio.features
-from dotenv import load_dotenv
-from shapely import wkb
+from pyogrio import read_dataframe
 
-from app.data.db import DATABASE_URL
-
-ROOT = Path(__file__).resolve().parents[1]
-RASTER_PATH = (
-    ROOT
-    / "data"
-    / "raw"
-    / "ANGJ-data"
-    / "Marker 24-25-25"
-    / "Retentionskort"
-    / "TotalRetention_regioner_v260327.tif"
+from database.scripts.merged_gpkg import (
+    LAYER,
+    MERGED_GPKG,
+    RAW_DIR,
+    area_weighted,
+    format_duration,
+    overlaps,
+    write_columns,
 )
 
-
-def format_duration(seconds: float) -> str:
-    total_seconds = max(0, int(seconds))
-    minutes, seconds = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"
+RETENTION_MAP = (
+    RAW_DIR / "ANGJ-data" / "Udeledningsdata" / "UMR_2027" / "Kvaelstofretention_UMR_2027.shp"
+)
+# Field A22: the value rounded to 2 decimals is the one the calculation uses.
+RETENTION_DECIMALS = 2
 
 
-def fetch_fields(dsn: str) -> gpd.GeoDataFrame:
-    print("Fetching registry field geometries...", flush=True)
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT imk_id, ST_AsBinary(ST_Transform(geom, 25832)) FROM registry_field"
-            )
-            rows = cursor.fetchall()
-
-    imk_ids = np.array([row[0] for row in rows], dtype=np.int64)
-    geometries = [wkb.loads(bytes(row[1])) for row in rows]
-    print(f"  fetched {len(imk_ids):,} fields", flush=True)
-    return gpd.GeoDataFrame({"imk_id": imk_ids, "geometry": geometries}, crs="EPSG:25832")
+def area_weighted_retention(
+    fields: np.ndarray, map_values: np.ndarray, map_polygons: np.ndarray
+) -> np.ndarray:
+    """Return each field's overlap-area-weighted mean map value, rounded to
+    RETENTION_DECIMALS; NaN where the field overlaps no map polygon."""
+    field_index, map_index, area = overlaps(fields, map_polygons)
+    means = area_weighted(field_index, map_values[map_index], area, len(fields))
+    return np.round(means, RETENTION_DECIMALS)
 
 
-def compute_zonal_means(fields: gpd.GeoDataFrame) -> dict[int, float]:
-    print(f"Rasterizing {len(fields):,} field zones against the retention grid...", flush=True)
+def load_retentionskort(gpkg_path: Path = MERGED_GPKG, map_path: Path = RETENTION_MAP) -> None:
+    for path in (gpkg_path, map_path):
+        if not path.exists():
+            raise FileNotFoundError(f"Expected {path}")
+
+    print(f"Reading fields from {gpkg_path.name}...", flush=True)
+    fields = read_dataframe(str(gpkg_path), layer=LAYER, columns=["RetTot"], fid_as_index=True)
+    print(f"Reading retention polygons from {map_path.name}...", flush=True)
+    retention_map = read_dataframe(str(map_path), columns=["RetTot"]).to_crs(fields.crs)
+    retention_map = retention_map[retention_map["RetTot"].notna()]
+    print(f"  {len(fields):,} fields, {len(retention_map):,} retention polygons", flush=True)
+
     start = time.monotonic()
-
-    with rasterio.open(RASTER_PATH) as src:
-        data = src.read(1, masked=True)
-        transform = src.transform
-        out_shape = src.shape
-
-        zones = rasterio.features.rasterize(
-            zip(fields.geometry, fields["imk_id"], strict=True),
-            out_shape=out_shape,
-            transform=transform,
-            fill=0,
-            dtype="float64",
-        ).astype(np.int64)
-
-    valid = (zones > 0) & (~data.mask)
-    max_id = int(zones.max()) if valid.any() else 0
-    sums = np.bincount(zones[valid], weights=data.data[valid], minlength=max_id + 1)
-    counts = np.bincount(zones[valid], minlength=max_id + 1)
-
-    means: dict[int, float] = {}
-    for imk_id in fields["imk_id"]:
-        imk_id = int(imk_id)
-        if imk_id <= max_id and counts[imk_id] > 0:
-            means[imk_id] = float(sums[imk_id] / counts[imk_id])
-
-    elapsed = time.monotonic() - start
+    retention = area_weighted_retention(
+        fields.geometry.to_numpy(),
+        retention_map["RetTot"].to_numpy(dtype=np.float64),
+        retention_map.geometry.to_numpy(),
+    )
+    previous = fields["RetTot"].to_numpy(dtype=np.float64)
+    changed = ~np.isclose(retention, previous, rtol=0, atol=1e-9, equal_nan=True)
     print(
-        f"  computed retention for {len(means):,} / {len(fields):,} fields "
-        f"in {format_duration(elapsed)} ({len(fields) - len(means):,} had no raster coverage)",
+        f"  computed in {format_duration(time.monotonic() - start)}: "
+        f"{np.count_nonzero(np.isnan(retention)):,} fields overlap no retention polygon "
+        f"and get NULL; {np.count_nonzero(changed):,} values change",
         flush=True,
     )
-    return means
 
-
-def write_retention(dsn: str, means: dict[int, float]) -> None:
-    print("Writing retention back to registry_field...", flush=True)
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("DROP TABLE IF EXISTS retentionskort_result")
-            cursor.execute(
-                """CREATE TABLE retentionskort_result (
-                    imk_id bigint PRIMARY KEY, retention double precision
-                )"""
-            )
-            with cursor.copy(
-                "COPY retentionskort_result (imk_id, retention) FROM STDIN WITH (FORMAT CSV)"
-            ) as copy:
-                for imk_id, retention in means.items():
-                    copy.write(f"{imk_id},{retention}\n")
-            cursor.execute(
-                """
-                UPDATE registry_field rf
-                SET retention = r.retention
-                FROM retentionskort_result r
-                WHERE rf.imk_id = r.imk_id
-                """
-            )
-            updated = cursor.rowcount
-            cursor.execute("DROP TABLE retentionskort_result")
-        connection.commit()
-    print(f"Updated {updated:,} registry fields", flush=True)
-
-
-def fill_missing_from_nearest(dsn: str) -> None:
-    """Fields too small to catch a raster pixel center (91% of the gaps are
-    under 1 ha, smaller than the 100m grid) get their nearest already-resolved
-    field's retention value instead — retention varies smoothly over the
-    landscape, so a neighbour a few dozen metres away is a fine stand-in."""
-    print("Filling remaining gaps from the nearest resolved field...", flush=True)
-    start = time.monotonic()
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                UPDATE registry_field AS target
-                SET retention = (
-                    SELECT r.retention
-                    FROM registry_field r
-                    WHERE r.retention IS NOT NULL
-                    ORDER BY r.centroid <-> target.centroid
-                    LIMIT 1
-                )
-                WHERE target.retention IS NULL
-                """
-            )
-            filled = cursor.rowcount
-        connection.commit()
-    print(f"  filled {filled:,} fields in {format_duration(time.monotonic() - start)}", flush=True)
-
-
-def load_retentionskort() -> None:
-    if not RASTER_PATH.exists():
-        raise FileNotFoundError(f"Expected {RASTER_PATH}")
-
-    load_dotenv(ROOT.parent / ".env")
-    dsn = DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
-
-    fields = fetch_fields(dsn)
-    means = compute_zonal_means(fields)
-    write_retention(dsn, means)
-    fill_missing_from_nearest(dsn)
+    write_columns(gpkg_path, fields.index.to_numpy(), {"RetTot": retention})
+    print(f"Updated RetTot for {len(fields):,} features in {gpkg_path.name}", flush=True)
 
 
 if __name__ == "__main__":

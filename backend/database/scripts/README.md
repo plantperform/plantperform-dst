@@ -40,3 +40,23 @@ Migrationernes stier er relative til `backend/`.
 | 8 | `pixi run load-oekonomital-afgroedebundet` | [load_oekonomital_afgroedebundet.py](load_oekonomital_afgroedebundet.py) | `ANGJ-data/Oekonomital_afgroedebundet.csv` | Erstatter `salgspris`, `halmudbytte`, `arbejdsmaengde` og `dyrkningsomkostning`. |
 | 9 | `pixi run load-oekonomital-generelle-satser` | [load_oekonomital_generelle_satser.py](load_oekonomital_generelle_satser.py) | `ANGJ-data/Oekonomital_generelle_satser.csv` | Erstatter `arbejdssats` og `prisliste`. |
 | 10 | `pixi run load-kvotegivende-areal` | [load_kvotegivende_areal.py](load_kvotegivende_areal.py) | `ANGJ-data/Afgroedetabel2027_master.csv` | Opdaterer `registry_field.kvotegivende` ud fra markens 2026-afgrøde og masterens `kvotegivende_areal`, og nulstiller `udledningskvote_mark_kgn` for ikke-kvotegivende arealer (skov, natur, miljøtilsagn). GeoPackage-filens eget flag er tomt for ca. 17.500 marker og mangler nyere afgrødekoder, så trinnet skal køre efter trin 2. |
+
+## Kortdata i GeoPackage’en
+
+Retention i den sammenlagte GeoPackage beregnes fra det officielle
+retentionskort efter bekendtgørelsen om udledningsbaseret markregulering for
+2027. Kør scriptet, hver gang GeoPackage’en eller kortet udskiftes, og før
+`pixi run load-registry-data`:
+
+```bash
+pixi run load-retentionskort
+```
+
+Scriptet overskriver kolonnen for alle marker direkte i GeoPackage-filen. Tag
+en kopi af filen først, hvis de gamle værdier skal kunne genskabes. Kortet
+ligger i `ANGJ-data/Udeledningsdata/UMR_2027/` samt `.shx`, `.dbf`, `.prj` og
+`.cpg` med samme filnavn.
+
+| Script | Kilde | Skriver |
+| --- | --- | --- |
+| [load_retentionskort.py](load_retentionskort.py) | `Kvaelstofretention_UMR_2027.shp` | `RetTot`: arealvægtet gennemsnit over markens overlap, afrundet til 2 decimaler (§ 13, stk. 3; PUMR-kravspec felt A22). Marker uden overlap får en tom værdi. |
