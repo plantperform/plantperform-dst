@@ -34,12 +34,17 @@ def clear_lookup_cache() -> None:
     _load.cache_clear()
 
 
-def afstromningskategori(crop_code: int | None, eea_on: bool = False) -> int | None:
-    """Return the P-runoff category, accounting for winter-cover measures."""
+def afstromningskategori(crop_code: int | None, vinterdaekke: bool = False) -> int | None:
+    """Return the P-runoff category of the afgrøde.
+
+    vinterdaekke: a vinterplantedække other than bar jord or stub follows the
+    afgrøde. The afgrøder marked in "NUAR ekstrakolonne 2" then use their
+    alternative category (PUMR, Tabel A, felt A64).
+    """
     entry = _load().get(crop_code) if crop_code is not None else None
     if entry is None:
         return None
     base, alternate = entry
-    if eea_on and alternate is not None:
+    if vinterdaekke and alternate is not None:
         return alternate
     return base

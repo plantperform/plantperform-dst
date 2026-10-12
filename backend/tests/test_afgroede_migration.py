@@ -231,7 +231,7 @@ class AfgroedeMigrationTests(unittest.TestCase):
                 self.assertTrue(afgroede_normer.lookup_crop_params(1)["grund6procent"])
                 self.assertEqual(afgroede_normer.lookup_crop_params(905), {})
                 self.assertTrue(afgroede_normer.is_permanent_afgrode(1))
-                self.assertEqual(afstromning.afstromningskategori(1, eea_on=True), 1)
+                self.assertEqual(afstromning.afstromningskategori(1, vinterdaekke=True), 1)
                 self.assertEqual(afstromning.afstromningskategori(2), 4)
                 self.assertEqual(
                     db_calculator._lookup_udbyttenorm(1, 1)[0],

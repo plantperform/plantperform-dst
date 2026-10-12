@@ -41,8 +41,9 @@ P/S/NT come from the mark's own registry_field values supplied by the caller.
 The afgrøde determines which of the eight P values is used:
 services.rotations.afstromning looks up the afgrødekode in Bilag 7, table 1
 (loaded from Afgroedetabel2027_master.csv), and returns its
-afstrømningskategori (1-8), with an alternative category when the position
-has a winter-cover-changing virkemiddel (EEA/efterafgrøde) in the same year.
+afstrømningskategori (1-8). An afgrøde marked in "NUAR ekstrakolonne 2" uses
+its alternative category instead when a vinterplantedække other than bar jord
+or stub follows it (PUMR, Tabel A, felt A64; see _har_vinterplantedaekke).
 
 Historical crop_history can reference afgrødekoder that predate or fall
 outside Bilag 1 (e.g. administrative codes like "slettet mark"). For those,
@@ -130,6 +131,7 @@ _FMAJS_FORFRUGT_KODER: frozenset[int] = frozenset({
 # Neither does frøgræs that continues after harvest (9680): it is the frøgræs
 # itself, so its own W applies (table 8, agreed with Anders 2026-10-09).
 _BAR_JORD_KODE = 921
+_STUB_KODE = 922
 
 _UDL_W_MAPPING: dict[int, int | None] = {
     960: 4, 961: 4, 962: 4, 963: 4, 964: 4, 965: 4, 966: 4,
@@ -274,6 +276,28 @@ def _resolve_w(
     if next_params.get("W_efteraar"):
         return next_params["W_efteraar"]
     return 5
+
+
+def _har_vinterplantedaekke(
+    afgrode_kode: int,
+    this_params: dict,
+    next_afgrode_kode: int | None,
+    next_params: dict,
+    udlaeg_kode: int | None,
+) -> bool:
+    """Whether a vinterplantedække other than bar jord or stub follows the afgrøde.
+
+    PUMR, Tabel A, felt A64 gives an afgrøde marked in "NUAR ekstrakolonne 2"
+    afstrømningskategori 1 when the reported vinterplantedække (felt A32) is
+    not 921 Bar jord or 922 Stub. Inferred as in steps 4 and 5 of _resolve_w:
+    a sekundær afgrøde on the position, or next year's afgrøde in table 7,
+    which is assumed to be established in autumn - unless the same afgrøde
+    with a fixed W simply continues, as nothing new is established then.
+    """
+    if udlaeg_kode not in (None, 0):
+        return udlaeg_kode not in (_BAR_JORD_KODE, _STUB_KODE)
+    continues = next_afgrode_kode == afgrode_kode and this_params.get("W") is not None
+    return bool(next_params.get("W_efteraar")) and not continues
 
 
 def _resolve_m(afgrode_kode: int, this_params: dict, prev_afgrode_kode: int | None) -> int:
@@ -443,14 +467,17 @@ def evaluate_leaching_position(
         else _NO_VIRKEMIDDEL
     )
 
-    # The afgrøde determines which of the eight P values is used, including
-    # whether the position has a winter-cover-changing virkemiddel that year;
-    # see afstromning.py. Not every historical afgrødekode is in Bilag 1
+    # The afgrøde and the vinterplantedække after it determine which of the
+    # eight P values is used; see afstromning.py. Not every historical
+    # afgrødekode is in Bilag 1
     # (e.g. administrative codes such as "slettet mark"); for those,
     # afstromningskategori() returns None and the position falls back to
     # leaching 0/ukendt below instead of blocking the whole mark on a missing
     # crop code. A genuinely missing P/S/Nt soil measurement still raises.
-    kategori = afstromning.afstromningskategori(afgrode_kode, eea_on=vk["eea"])
+    vinterdaekke = _har_vinterplantedaekke(
+        afgrode_kode, this_params, next_afgrode_kode, next_params, udlaeg_kode,
+    )
+    kategori = afstromning.afstromningskategori(afgrode_kode, vinterdaekke=vinterdaekke)
     kategori_ukendt = kategori is None
     p_value = (
         percolation_by_kategori[kategori - 1]
@@ -477,6 +504,11 @@ def evaluate_leaching_position(
         "P_override": p_value, "S_override": s_soil,
         "afstromningskategori": kategori,
         "afstromningskategori_ukendt": kategori_ukendt,
+        # Whether the vinterplantedække moved the afgrøde to its alternative
+        # afstrømningskategori.
+        "afstromning_vinterdaekke": (
+            vinterdaekke and kategori != afstromning.afstromningskategori(afgrode_kode)
+        ),
         "Fmajs_anvendt": fmajs_anvendt,
         # EEA/EMA/ETS are derived from the rotation's udlægskode (see
         # _UDL_VIRKEMIDDEL above), not freely selected. Fdato/precision_dagsbasis

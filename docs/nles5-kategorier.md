@@ -448,6 +448,25 @@ og fra udegående dyr (felterne A25+A26+A31 — ikke forårsdelen alene):
 | 190-199 | 1,19 |
 | 200+ | 1,23 |
 
+### P — afstrømningskategori ved vinterplantedække (aftalt 2026-10-09)
+
+**Kilde:** PUMR, felt A64; Bilag 7, tabel 1.
+
+Hovedafgrøden afgør, hvilken af markens otte P-værdier der bruges
+(`nuar_afstromningskategori`). Undtagelsen er de 43 afgrøder med 1 i
+"NUAR ekstrakolonne 2" (vårsæd, bælgsæd, helsæd, grønkorn m.fl.). De får
+kategori 1 "Vårbyg med udlæg" (`p_afstromningskategori_med_w`), når
+vinterplantedækket (felt A32) ikke er 921 Bar jord eller 922 Stub.
+
+`bridge_v2._har_vinterplantedaekke` udleder vinterplantedækket som i W-reglens
+trin 4 og 5. Der er vinterplantedække, når positionen har en sekundær afgrøde
+(undtagen 921/922), eller når næste års afgrøde står i tabel 7 og dermed
+antages etableret i efteråret, fx vintersæd, vinterraps eller græs.
+Tidligere skiftede kategorien kun ved en efterafgrøde. Ændringen flytter 553
+af 1.196 positioner i sædskiftebiblioteket og ca. 49.600 marker i
+historikken (2025 → 2026) fra kategori 3 til 1. Kategori 1's P er i median
+ca. 3 % lavere end kategori 3's.
+
 ## Status
 
 Alle fem kategorier (M, W, MP, WP, WC) samt de to beslægtede korrektioner
