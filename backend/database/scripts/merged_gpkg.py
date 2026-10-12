@@ -85,6 +85,15 @@ def sql_value(value: object) -> object:
     return value
 
 
+def add_columns(gpkg_path: Path, columns: dict[str, str]) -> None:
+    """Add the attribute columns (name: SQLite type) the layer lacks."""
+    with closing(sqlite3.connect(gpkg_path)) as connection, connection:
+        existing = {row[1] for row in connection.execute(f'PRAGMA table_info("{LAYER}")')}
+        for name, sql_type in columns.items():
+            if name not in existing:
+                connection.execute(f'ALTER TABLE "{LAYER}" ADD COLUMN "{name}" {sql_type}')
+
+
 def write_columns(gpkg_path: Path, fids: np.ndarray, columns: dict[str, np.ndarray]) -> None:
     """Overwrite the given attribute columns for the given features, None and
     NaN as NULL. Geometry and spatial index stay as they are."""
