@@ -53,6 +53,11 @@ export const setStoredRole = (email: string, role: OnboardingRole) => {
 export const opensSingleFarmDirectly = (role: OnboardingRole | null) =>
   role !== 'advisor'
 
+export const describeLanding = (role: OnboardingRole | null): string =>
+  opensSingleFarmDirectly(role)
+    ? 'Bedriften åbner direkte, når du kun har en. Ellers lander du på Dine bedrifter.'
+    : 'Du lander på Dine bedrifter.'
+
 export const hasVisitedHomeThisSession = (email: string): boolean => {
   try {
     return window.sessionStorage.getItem(homeVisitedKey(email)) === '1'

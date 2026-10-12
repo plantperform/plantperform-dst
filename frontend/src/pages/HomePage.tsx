@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
+import { useUserName } from '@/hooks/use-user-name'
 import { cn } from '@/lib/utils'
 import {
   farmMatchesSearch,
@@ -37,11 +38,13 @@ import {
   setStoredRole,
   type OnboardingRole,
 } from '@/lib/onboarding'
+import { welcomeGreeting } from '@/lib/user-name'
 
 export const HomePage = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
+  const { name: userName } = useUserName()
   const {
     data: farms,
     error,
@@ -237,7 +240,7 @@ export const HomePage = () => {
               id="welcome-heading"
               className="font-display text-3xl tracking-tight"
             >
-              Velkommen
+              {welcomeGreeting(userName)}
             </h1>
             {selectedRole ? (
               <div key={selectedRole} className="motion-safe:animate-rise-in">
