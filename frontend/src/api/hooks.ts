@@ -533,6 +533,7 @@ export const undersownCropCodesKey = (
   farmId?: string,
   cropCode?: number,
   farmingSystem?: string,
+  nextCropCode?: number,
 ) => {
   if (!farmId) return null
 
@@ -541,6 +542,9 @@ export const undersownCropCodesKey = (
     params.set('hovedafgrode_kode', String(cropCode))
   }
   if (farmingSystem !== undefined) params.set('driftsform', farmingSystem)
+  if (nextCropCode !== undefined) {
+    params.set('naeste_afgrode_kode', String(nextCropCode))
+  }
   const query = params.toString()
 
   return (
@@ -553,9 +557,10 @@ export const useUndersownCropCodes = (
   farmId?: string,
   cropCode?: number,
   farmingSystem?: string,
+  nextCropCode?: number,
 ) =>
   useSWR<CropCodeOption[]>(
-    undersownCropCodesKey(farmId, cropCode, farmingSystem),
+    undersownCropCodesKey(farmId, cropCode, farmingSystem, nextCropCode),
     fetcher,
   )
 

@@ -427,11 +427,17 @@ export const ManualRotationEditor = ({
   )
   const activeYear =
     activeYearIndex !== null ? years[activeYearIndex] : undefined
+  // Mellemafgrøde and tidlig såning depend on next year's afgrøde too.
+  const nextYear =
+    activeYearIndex !== null && years.length > 0
+      ? years[(activeYearIndex + 1) % years.length]
+      : undefined
 
   const { data: undersownCropCodes } = useUndersownCropCodes(
     farmId,
     activeYear?.year.cropCode,
     simulation.fertiliser.farmingSystem,
+    nextYear?.year.cropCode,
   )
   const undersownCropPickerItems = useMemo(
     () => [
