@@ -26,7 +26,7 @@ def write_csv(
 
 MASTER_CSV_HEADERS = [
     "AfgroedeKode", "Navn", "Hovedafgrøde", "Grund6Procent",
-    "ME - mellemafgroeder", "ME - tidlig saaning", "Praec.goedsk.eff.",
+    "ME - mellemafgroeder", "ME - tidlig saaning", "Praec.goedsk.eff.", "Normal såmåned",
     "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
     "udbytteenhed", "indregn_ffv",
     "udbyttenorm_grovsand_konventionel", "n_norm_grovsand_konventionel",
@@ -41,7 +41,7 @@ def master_csv_row(**overrides: str) -> list[str]:
     row = {
         "AfgroedeKode": "1", "Navn": "Vårbyg", "Hovedafgrøde": "1", "Grund6Procent": "1",
         "ME - mellemafgroeder": "1", "ME - tidlig saaning": "2", "Praec.goedsk.eff.": "1",
-        "nuar_m": "1", "nuar_w": "2", "nuar_wc": "3",
+        "Normal såmåned": "4", "nuar_m": "1", "nuar_w": "2", "nuar_wc": "3",
         "nuar_mp": "4", "nuar_wp": "5", "udbytteenhed": "hkg", "indregn_ffv": "Ja",
         "udbyttenorm_grovsand_konventionel": "50", "n_norm_grovsand_konventionel": "100",
         "p_norm_grovsand_konventionel": "20", "forfrugtsvaerdi_grovsand_konventionel": "5",
@@ -69,6 +69,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
         # mellemafgroede_mulig, tidlig_saaning_mulig: any non-zero flag allows it.
         self.assertEqual(nuar_rows[0][17:19], (True, True))
         self.assertTrue(nuar_rows[0][19])  # praecisionsgoedskning_mulig
+        self.assertEqual(nuar_rows[0][20], 4)  # saamaaned
         # JB 1 + 3 -> jb_nr 1 and 3, both konventionel-only rows for code 1.
         self.assertEqual({row[1] for row in norm_rows}, {1, 3})
         self.assertEqual(norm_rows[0][2], 1)  # afgroedekode
