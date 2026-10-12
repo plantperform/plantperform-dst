@@ -293,24 +293,6 @@ def fdato_step_factor(value):
     return 0.0
 
 
-_MAIZE_M_CODES = {8, 11}
-
-
-def reference_w_for_eea(M, crop_name=""):
-    """Return reference autumn plant cover (W) for NUAR EEA (Table 1.3).
-
-    Majshelsæd (M=8/11) and potatoes use W3 (bare soil after
-    majshelsæd/potatoes). Frøgræs (M=5) is excluded from the standard reference,
-    so None is returned and the user's W is used. All other afgrøder use W5
-    (volunteer cereals and weeds).
-    """
-    if M in _MAIZE_M_CODES or "kartofl" in (crop_name or "").lower():
-        return 3
-    if M == 5:
-        return None
-    return 5
-
-
 def resolve_ema(sample):
     """Resolve EMA from a mellemafgrøde choice or explicit EMA value."""
     if sample.get("mellemafgroede", False):
@@ -456,13 +438,11 @@ def calculate_leaching(sample):
     ema = resolve_ema(sample)
     eea = 0 if sample.get("mellemafgroede", False) else sample.get("EEA", 0)
 
+    # An efterafgrøde does not swap W for a reference W: the caller resolves W
+    # from the efterafgrøde code itself (Bilag 2, table 7: W5), and EEA is the
+    # separate (1 - EEA·Fdato - ...) factor of Bilag 2, ligning 1-2.
     w_original = sample.get("W", 1)
-    w_ref = (
-        reference_w_for_eea(sample.get("M", 1), sample.get("crop_name", ""))
-        if eea > 0
-        else None
-    )
-    w_used = w_ref if (w_ref is not None and eea > 0) else w_original
+    w_used = w_original
 
     c = C_func(
         M=sample.get("M", 1),
@@ -533,7 +513,6 @@ def calculate_leaching(sample):
         "NT_source": nt_source,
         "NT_from_jb": sample.get("NT_source") == "jb_calc",
         "W_original": w_original,
-        "W_ref": w_ref,
         "W_used": w_used,
         "Fmajs_anvendt": fmajs_anvendt,
         "Fmajs_korrektionsfaktor": fmajs_faktor,

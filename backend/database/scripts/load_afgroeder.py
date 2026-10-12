@@ -36,6 +36,9 @@ AFGROEDE_COLUMNS = (
     "wc_ambig",
     "mp_ambig",
     "wp_ambig",
+    "w_efteraar",
+    "w_efteraar_efter_graes",
+    "w_omploejning",
     "standard_kategori",
     "vinterdaekke_kategori",
     "udbytteenhed",
@@ -195,6 +198,7 @@ def build_afgroede_rows(
         )
         entry["er_hovedafgrode"] = row[12]
         entry["grund6procent"] = row[13]
+        entry["w_efteraar"], entry["w_efteraar_efter_graes"], entry["w_omploejning"] = row[14:17]
         name_for(code, row[1], 4)
 
     afgroede_rows = [

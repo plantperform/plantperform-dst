@@ -134,6 +134,12 @@ afgroede_table = Table(
     Column("wc_ambig", Boolean, nullable=True),
     Column("mp_ambig", Boolean, nullable=True),
     Column("wp_ambig", Boolean, nullable=True),
+    # Bilag 2, table 7: W when the afgrøde is the vinterplantedække established
+    # in autumn (first column, and the W7 column after græs, brak or frøgræs);
+    # table 8: W when the græs is ploughed.
+    Column("w_efteraar", SmallInteger, nullable=True),
+    Column("w_efteraar_efter_graes", SmallInteger, nullable=True),
+    Column("w_omploejning", SmallInteger, nullable=True),
     Column("standard_kategori", SmallInteger, nullable=True),
     Column("vinterdaekke_kategori", SmallInteger, nullable=True),
     Column("udbytteenhed", Text, nullable=True),

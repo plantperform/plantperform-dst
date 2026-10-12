@@ -110,6 +110,16 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
                 False, False, False, False, False,  # *_ambig: unused by any consumer today
                 er_hovedafgrode,
                 grund6procent,
+                *(
+                    integer(
+                        row.get(column, ""), field=column, row_number=row_number, required=False,
+                    )
+                    for column in (
+                        "nuar_w_undtagelse",
+                        "nuar_w_undtagelse_efter_graes",
+                        "nuar_w_omploejning",
+                    )
+                ),
             )
         )
 

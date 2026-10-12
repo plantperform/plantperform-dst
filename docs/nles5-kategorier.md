@@ -65,6 +65,57 @@ der bruges, hvis den findes.
 4. λwa-tallet for den fundne W-kategori slås op i Parametre og konstanter
    (nøgler `W1`-`W8`).
 
+### Hvordan vælger koden W i dag (aftalt 2026-10-09)
+
+Landmanden indberetter selv sit vinterplantedække i PUMR. PlantPerform
+giver et automatisk bud ud fra sædskiftet og følger PUMR's rækkefølge ovenfor
+(aftalt med Anders). `bridge_v2.py`s `_resolve_w` bruger den første regel,
+der giver en værdi:
+
+1. Græs, brak eller frøgræs (`_LANGVARIG_FORFRUGT_KODER`) efterfulgt af
+   vintersæd → tabel 7's W7-kolonne (`w_efteraar_efter_graes`). PUMR's trin 1.
+2. En kode fra tabel 8 (græs, kløvergræs og frøgræs) med 921 "Bar jord"
+   (den tidligere "Jordbearbejdning efterår") som sekundær afgrøde → tabel 8's
+   W ved ompløjning (`w_omploejning`, W8). Uden 921 antages græsset at stå
+   vinteren over (W6 uden ompløjning, trin 3). Tabel 8 er ny i høringen og
+   står ikke i PUMR's A60-tekst. Trinnet skal ligge før trin 3, ellers kan
+   W8 aldrig gives.
+3. Fast W fra tabel 6 (`w`). PUMR's trin 2. Den slår alt vinterplantedække
+   efter afgrøden: kartofler og roer beholder W6 før vintersæd og med
+   efterafgrøde, majs beholder W3 med efterafgrøde, og brak beholder W4.
+4. Sekundær afgrøde (udlæg eller efterafgrøde) på positionen → dens tabel
+   7-W (`w_efteraar`, fx 968 → W5 og 960-966 → W4) eller `_UDL_W_MAPPING`
+   for lookupens egne markører (2000 → W4). Mellemafgrøde (9682/9684) og
+   tidlig såning (9683) giver ingen W: efter dem er det den efterfølgende
+   vintersæd, der er vinterplantedækket. PUMR's trin 3.
+5. Næste års afgrøde har en tabel 7-W → den W, fx vintersæd W1, vinterraps
+   W6, græs- eller frøgræsudlæg W6. Afgrøder i tabel 7 antages etableret i
+   efteråret (aftalt med Anders). Også PUMR's trin 3, med næste års afgrøde
+   som det indberettede vinterplantedække.
+6. Ellers W5, som for 922 Stub.
+
+En efterafgrøde udskifter ikke længere W med en reference-W i `engine.py`.
+W kommer fra efterafgrødekoden selv (trin 4), og efterafgrødens effekt er
+den separate faktor `(1 − EEA·Fdato − EMA − ETS)` i Bilag 2, ligning 1-2.
+
+Målt mod reglen før den supplerende høring (begge på det opdaterede
+masterark) ændres W for 302 af 3.578 positioner i sædskiftebiblioteket, især:
+
+- græs og frøgræs før vårafgrøde og majs W8 → W6, nu uden antaget
+  ompløjning (216)
+- majs, roer og kartofler før vintersæd W1 → W3/W6 (57)
+- kartofler med efterafgrøde W3 → W6 (8)
+
+I historikken 2025→2026 ændres 38.389 af 589.485 marker, især:
+
+- vårsæd før græs- eller frøgræsudlæg W5 → W6 (ca. 14.000)
+- græs før vårafgrøde W8 → W6 (ca. 14.000)
+- majs, roer og kartofler før vintersæd W1 → W3/W6 (ca. 5.000)
+- brak før vårafgrøde W8 → W4 (ca. 3.100)
+
+Eksempel, spisekartofler på sandjord: uden vinterdække og før vinterhvede
+57,6 kg N/ha, med efterafgrøde 31,7 kg N/ha.
+
 ## MP — Forfrugt-effekt (ηmp)
 
 **Kilde:** PUMR, felt A61.

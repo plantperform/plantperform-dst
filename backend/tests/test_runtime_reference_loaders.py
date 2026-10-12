@@ -99,7 +99,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             )
             _, _, nuar_rows = parse_afgroede_normer(master)
 
-        self.assertEqual(nuar_rows[0][-2:], (False, False))
+        self.assertEqual(nuar_rows[0][12:14], (False, False))
 
     def test_permanent_afgrode_filters_on_ja(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

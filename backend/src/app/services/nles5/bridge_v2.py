@@ -19,8 +19,8 @@ brak - see _LANGVARIG_FORFRUGT_KODER), but in three different years:
   an afgrøde-specific category (M10/M11/M12, see _FORFRUGT_M_OVERRIDE and
   _resolve_m).
 - W shifts the langvarig year itself, decided by what is sown after it: W7
-  before vintersæd (_W7_VINTERPLANTEDAEKKE_KODER) and otherwise W follows the
-  next year's M including its override, so W8 before spring crops and majs
+  before vintersæd (Bilag 2, table 7's W7 column) and, for the græs codes of
+  table 8, W8 when "Bar jord" (921) shows it is ploughed after the harvest
   (see _resolve_w).
 - MP shifts two years after it, when the FORFORFRUGT was langvarig: the fixed
   MP4, but only for the 161 forfrugt-afgrøder in _MP4_BERETTIGET_KODER (see
@@ -58,11 +58,6 @@ from app.domain.soil import MissingSoilDataError, PercolationByKategori
 from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer, afstromning
 from app.services.virkemidler import KORN_OG_RAPS_KODER
-
-# Next-year M code -> this position's W (Bilag 2, table 6: what is sown/ploughed
-# in autumn depends on next year's M). Same mapping as bridge.py/streamlit_app.py.
-_NEXT_M_TO_W: dict[int, int] = {1: 1, 9: 6, 10: 7, 11: 8, 12: 8}
-_AUTUMNSOWN_M = frozenset({1, 9, 10})
 
 # Forfrugtskoder (last year's afgrøde) that trigger the "efter græs, kløvergræs,
 # frøgræs eller brak" M/MP override below. Bilag 2, table M/MP's "Afgrødekoder
@@ -117,15 +112,6 @@ _MP4_BERETTIGET_KODER: frozenset[int] = frozenset({
     702, 703, 704, 705, 706, 707, 708, 709, 710, 711,
 })
 
-# Vinterplantedække (the afgrøde sown in autumn) that makes W7 the fixed W of a
-# græs/kløvergræs/frøgræs/brak position (PUMR 2027 kravspec, Tabel A, felt A60,
-# step 1; docs/nles5-kategorier.md). W belongs to the winter after the position,
-# so it is the græs year - where the græs is ploughed and the vintersæd sown -
-# that gets W7, decided by the NEXT position's afgrøde.
-_W7_VINTERPLANTEDAEKKE_KODER: frozenset[int] = frozenset({
-    9, 10, 11, 13, 14, 15, 16, 17, 57, 70, 71, 72, 220, 221, 222, 223, 224,
-})
-
 # Fmajs (see engine.py's majs_m11_korrektionsfaktor) only applies when the
 # CURRENT afgrøde is one of these six maize codes AND the forfrugt is one of
 # these fourteen græs/kløvergræs codes (PUMR 2027 kravspec, Tabel A, felt
@@ -137,16 +123,20 @@ _FMAJS_FORFRUGT_KODER: frozenset[int] = frozenset({
 })
 
 # Udlægskode -> W when the udlæg itself determines the winter cover, such as
-# efterafgrøde, mellemafgrøde, or udlæg til frø. Ported from UDL_W_MAPPING in
-# streamlit_app.py.
+# efterafgrøde or udlæg til frø. Ported from UDL_W_MAPPING in streamlit_app.py;
+# only used for codes without a table 7 W (the lookup's own markers 2000/968x).
+# Mellemafgrøde and tidlig såning give no W: the vintersæd sown after them is the
+# vinterplantedække (Afgrøde beslutningstræ, ark W), so next year's afgrøde decides.
+_BAR_JORD_KODE = 921
+
 _UDL_W_MAPPING: dict[int, int | None] = {
     960: 4, 961: 4, 962: 4, 963: 4, 964: 4, 965: 4, 966: 4,
     968: 5,     # "Efterafgrøde, pligtig"
     950: 5, 951: 5, 952: 5, 953: 5, 954: 5,  # "Efterafgrøde" renbestand/udlæg varianter
     9680: 4,    # "Efterafgrøde e. frøgræs"
-    9682: 4,    # Mellemafgrøde
-    9683: None, # "Tidlig såning"; W is determined by the afgrøde itself
-    9684: 4,    # "Mellemafgrøde e. frøgræs"
+    9682: None, # Mellemafgrøde
+    9683: None, # "Tidlig såning"
+    9684: None, # "Mellemafgrøde e. frøgræs"
     970: 5,     # "Øvrige udlæg og efterafgrøder"
     2000: 4,    # "Udlæg til frø"
     # 921 "Bar jord" is the real afgrødekode the source data now uses for what
@@ -239,37 +229,42 @@ def _resolve_w(
 ) -> int:
     """Resolve W, the winter cover after this position's afgrøde.
 
-    What is sown in autumn is the NEXT position's afgrøde, so W follows next
-    year's M - the M it actually gets, i.e. including the græs override (this
-    afgrøde is next year's forfrugt). A græs/brak position followed by
-    vintersæd is therefore W7, and one followed by spring crops or majs W8
-    (the "ploughed late" categories behind _NEXT_M_TO_W's 10-12).
+    A landmand reports the vinterplantedække himself; here it is inferred from
+    the rotation, in PUMR's order (Tabel A, felt A60; Bilag 2, tables 5-8),
+    as agreed with Anders 2026-10-09:
+    1. Græs, brak or frøgræs followed by vintersæd: table 7's W7 column.
+    2. Græs ploughed after the harvest: a table 8 code (græs, kløvergræs and
+       frøgræs) with "Bar jord" (921, the former "Jordbearbejdning efterår")
+       as sekundær afgrøde gets its table 8 W ved ompløjning (W8). Without it
+       the græs is assumed to stand through the winter (agreed with Anders
+       2026-10-09), so it keeps its fixed W uden ompløjning in step 3.
+    3. The afgrøde's fixed W (table 6). It beats any vinterplantedække after
+       the afgrøde, so e.g. kartofler keep W6 before vintersæd and majs keeps
+       W3 with an efterafgrøde.
+    4. A sekundær afgrøde (udlæg or efterafgrøde) on this position: its table 7
+       W, or _UDL_W_MAPPING for the lookup's own markers. Mellemafgrøde and
+       frøgræs continuing after harvest give none.
+    5. Next year's afgrøde has a table 7 W: that W, e.g. W1 for vintersæd, W6
+       for vinterraps or a græsudlæg. An afgrøde in table 7 is assumed to be
+       established in autumn (agreed with Anders 2026-10-09).
+    6. Otherwise W5 (ukrudt og spildkornsplanter, as for 922 Stub).
     """
-    auto_w = this_params.get("W")
-    if (
-        afgrode_kode in _LANGVARIG_FORFRUGT_KODER
-        and next_afgrode_kode in _W7_VINTERPLANTEDAEKKE_KODER
-    ):
-        return 7
-    next_m = (
-        _resolve_m(next_afgrode_kode, next_params, afgrode_kode)
-        if next_afgrode_kode is not None and next_params
-        else None
-    )
-    next_w_from_m = _NEXT_M_TO_W.get(next_m) if next_m is not None else None
-    has_lookup_w = auto_w is not None
-    udl_w = _UDL_W_MAPPING.get(udlaeg_kode) if udlaeg_kode is not None else None
-    next_is_spring = next_m is not None and next_m not in _AUTUMNSOWN_M
-
-    if next_w_from_m is not None:
-        return next_w_from_m
-    if has_lookup_w:
-        return auto_w
-    if udl_w is not None:
-        return udl_w
-    if next_is_spring:
-        return 5
-    return auto_w if auto_w is not None else 5
+    langvarig = afgrode_kode in _LANGVARIG_FORFRUGT_KODER
+    if langvarig and next_params.get("W_efter_graes"):
+        return next_params["W_efter_graes"]
+    if this_params.get("W_omploejning") and udlaeg_kode == _BAR_JORD_KODE:
+        return this_params["W_omploejning"]
+    if this_params.get("W") is not None:
+        return this_params["W"]
+    if udlaeg_kode is not None:
+        udlaeg_w = afgroede_normer.lookup_crop_params(udlaeg_kode).get("W_efteraar")
+        if udlaeg_w is None:
+            udlaeg_w = _UDL_W_MAPPING.get(udlaeg_kode)
+        if udlaeg_w is not None:
+            return udlaeg_w
+    if next_params.get("W_efteraar"):
+        return next_params["W_efteraar"]
+    return 5
 
 
 def _resolve_m(afgrode_kode: int, this_params: dict, prev_afgrode_kode: int | None) -> int:
