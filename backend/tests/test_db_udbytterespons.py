@@ -10,6 +10,7 @@ os.environ.setdefault(
 from app.services.economics import db_calculator
 
 VINTERHVEDE = 11
+VAARBYG = 1
 VAARHVEDE = 2
 NORM = {"udbyttenorm": 57.0, "n_norm": 175.0, "udbytteenhed": "hkg"}
 PRISLISTE = {
@@ -65,6 +66,19 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
     def test_crop_without_curve_keeps_the_udbyttenorm(self) -> None:
         result = db_calculator.calculate_db(VAARHVEDE, "Konventionel", 1, mncs=100.0)
         self.assertEqual(result["udbytte"], 57.0)
+
+    def test_efteraarssaaet_vaarsaed_is_priced_and_responds_as_the_vaarsaed(self) -> None:
+        priced: list[int] = []
+
+        def salgspris(code, *args, **kwargs):
+            priced.append(code)
+            return {"salgspris": 150.0, "enhed": "kr/hkg", "halm_pris_kr_kg": 0.0}
+
+        with patch.object(db_calculator, "_lookup_salgspris", salgspris):
+            result = db_calculator.calculate_db(70, "Konventionel", 1, mncs=122.0)
+        self.assertEqual(priced, [VAARBYG])
+        self.assertTrue(result["udbytterespons"])
+        self.assertLess(result["udbytte_faktor"], 1.0)
 
     def test_oekologisk_keeps_the_norm_based_yield(self) -> None:
         result = db_calculator.calculate_db(VINTERHVEDE, "Økologisk", 1, mncs=100.0)

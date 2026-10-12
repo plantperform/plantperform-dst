@@ -123,6 +123,10 @@ _RESPONS: dict[int, dict[str, tuple[float, float]]] = {
         "humusjord": (0.339288, 0.613109),
     },
 }
+# Efterårssået vårbyg and vårhavre have the udbyttenorm of the spring-sown
+# crop, so they follow its curve.
+_RESPONS[70] = _RESPONS[1]
+_RESPONS[72] = _RESPONS[3]
 
 
 def _jordtype(jbnr: int, irrigated: bool) -> str | None:

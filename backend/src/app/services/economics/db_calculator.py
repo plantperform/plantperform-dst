@@ -52,6 +52,10 @@ _GYLLE_UDBRINGNING_PLACEHOLDER_POST = "Handelsgødning, udbringning"
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
 
+# Efterårssået vårsæd is grown and sold as the spring-sown crop, which is the
+# one the budgetkalkuler price; the codes have no economics rows of their own.
+_KALKULE_KODE: dict[int, int] = {70: 1, 71: 2, 72: 3}
+
 # Udlægskode -> the price-list category covering seed/establishment for this
 # udlæg. This uses the same code family as bridge_v2.py's _UDL_VIRKEMIDDEL but
 # groups by the PHYSICAL afgrøde being sown, not NUAR virkemiddel eligibility.
@@ -362,11 +366,12 @@ def calculate_db(
     norm, er_reel_oeko_norm = _lookup_udbyttenorm(
         afgrodekode, jbnr, irrigated, driftsform,
     )
-    pris = _lookup_salgspris(afgrodekode, driftsform, kvalitet)
+    kalkule_kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
+    pris = _lookup_salgspris(kalkule_kode, driftsform, kvalitet)
 
     salgspris = pris["salgspris"] if pris else 0.0
     halm_pris = pris["halm_pris_kr_kg"] if pris else 0.0
-    halm_indtaegt = _lookup_halm_udbytte(afgrodekode, jbnr, irrigated) * halm_pris
+    halm_indtaegt = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated) * halm_pris
     if norm is not None:
         udbytte = norm["udbyttenorm"] or 0.0
         udbytteenhed = norm["udbytteenhed"]
@@ -434,7 +439,7 @@ def calculate_db(
         if line["kategori"] == "Tørring/lagring"
         else line
         for line in _lookup_omkostningslinjer(
-            afgrodekode, driftsform, jbnr, irrigated, kvalitet,
+            kalkule_kode, driftsform, jbnr, irrigated, kvalitet,
         )
     ]
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode, afgrodekode)

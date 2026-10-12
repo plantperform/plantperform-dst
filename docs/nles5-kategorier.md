@@ -400,6 +400,9 @@ brød reglen:
 - I 4 rækker stod mellemafgrøde før vinterraps, og i 1 økologisk række stod
   tidlig såning før vårbyg. Her er virkemidlet fjernet.
 
+70-72 har ingen egne rækker i budgetkalkulerne og prissættes derfor som
+vårbyg, vårhvede og vårhavre (`db_calculator._KALKULE_KODE`). 70 og 72 følger
+vårsædens udbytterespons. De har ingen økologiske normer.
 
 Samme felter afklarer også `EEA`/`EMA`/`ETS`-navngivningen i
 `bridge_v2.py`: PUMR felt A77 "Virkemiddel" har det officielle 3-vejs-valg
