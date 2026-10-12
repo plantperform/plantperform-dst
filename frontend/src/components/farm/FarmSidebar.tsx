@@ -6,6 +6,7 @@ import {
 import {
   ChevronRight,
   ChevronsUpDown,
+  Coins,
   Copy,
   FlaskConical,
   History,
@@ -76,7 +77,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { UserMenuContent } from '@/components/UserMenu'
-import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import {
+  describeOwnProfiles,
+  STANDARD_PROFILE_ID,
+} from '@/lib/economics-profiles'
 import { describeFarmAccess, otherMemberEmails } from '@/lib/farm-access'
 import {
   changedFieldIds,
@@ -223,6 +227,7 @@ export const FarmSidebar = ({
   const pageActive = overviewActive || economicsPageActive || aboutActive
   const { user } = useAuth()
   const { data: members } = useFarmMembers(farm.id)
+  const economics = useEconomicsProfiles()
   const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
     !pageActive && selection.kind === 'simulation' ? selection.id : null
@@ -397,6 +402,29 @@ export const FarmSidebar = ({
               <SidebarMenuButton
                 asChild
                 size="lg"
+                isActive={economicsPageActive}
+                className={cn(
+                  VIEW_BUTTON_CLASS,
+                  'group-data-[collapsible=icon]:justify-center',
+                )}
+                tooltip="Økonomi"
+              >
+                <NavLink to={economics.overviewPath}>
+                  <Coins />
+                  <ViewMenuLabel name="Økonomi">
+                    <span className="truncate text-xs font-normal text-sidebar-foreground/70">
+                      {describeOwnProfiles(
+                        economics.ownProfiles.map((profile) => profile.name),
+                      )}
+                    </span>
+                  </ViewMenuLabel>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                size="lg"
                 isActive={aboutActive}
                 className={cn(
                   VIEW_BUTTON_CLASS,
@@ -422,18 +450,20 @@ export const FarmSidebar = ({
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <SidebarGroup className={GROUP_CLASS}>
-        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-          Vis som
-        </SidebarGroupLabel>
-        <SidebarGroupContent>
-          <ViewModeSwitch
-            view={view}
-            splitAvailable={splitAvailable}
-            onViewChange={onViewChange}
-          />
-        </SidebarGroupContent>
-      </SidebarGroup>
+      {pageActive ? null : (
+        <SidebarGroup className={GROUP_CLASS}>
+          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+            Vis som
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <ViewModeSwitch
+              view={view}
+              splitAvailable={splitAvailable}
+              onViewChange={onViewChange}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+      )}
 
       <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
         <CollapseMenuButton />
@@ -480,7 +510,6 @@ const CollapseMenuButton = () => {
 
 const SidebarUserMenu = () => {
   const { user } = useAuth()
-  const { overviewPath } = useEconomicsProfiles()
   const iconRail = useSidebar().state === 'collapsed'
   const email = user?.email ?? ''
   const initial = email.charAt(0).toUpperCase()
@@ -519,7 +548,7 @@ const SidebarUserMenu = () => {
             align="start"
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
           >
-            <UserMenuContent economicsPath={overviewPath} />
+            <UserMenuContent />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
