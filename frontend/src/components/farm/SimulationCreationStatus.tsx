@@ -20,7 +20,7 @@ export const SimulationCreationStatus = ({
 }) => {
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [optimizeOnCreate, setOptimizeOnCreate] = useState(false)
+  const [optimizeOnCreate, setOptimizeOnCreate] = useState(true)
   const retry = async () => {
     setRetrying(true)
     setError(null)
@@ -41,10 +41,6 @@ export const SimulationCreationStatus = ({
   }
   return (
     <div className="space-y-3 rounded-lg border border-dashed p-4">
-      <p role="status" className="flex items-center gap-2 font-medium">
-        {isSimulationCreating(simulation) ? <Spinner /> : null}
-        {creationStatusLabel(simulation)}
-      </p>
       {simulation.creationStatus === 'failed' ? (
         <>
           <p role="alert" className="text-sm text-destructive">
@@ -64,10 +60,16 @@ export const SimulationCreationStatus = ({
           </Button>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Du kan lukke siden. Oprettelsen fortsætter, og simuleringen bliver
-          klar, når beregningerne er færdige.
-        </p>
+        <>
+          <p role="status" className="flex items-center gap-2 font-medium">
+            {isSimulationCreating(simulation) ? <Spinner /> : null}
+            {creationStatusLabel(simulation)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Du kan lukke siden. Oprettelsen fortsætter, og simuleringen bliver
+            klar, når beregningerne er færdige.
+          </p>
+        </>
       )}
     </div>
   )

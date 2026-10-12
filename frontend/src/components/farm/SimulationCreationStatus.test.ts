@@ -66,7 +66,7 @@ describe('SimulationCreationStatus', () => {
     }
   })
 
-  it('shows a generic failure, an unchecked optimization choice, and Retry', () => {
+  it('shows one failure message, a checked optimization choice, and Retry', () => {
     const html = renderToStaticMarkup(
       createElement(SimulationCreationStatus, {
         farmId: 'farm',
@@ -77,7 +77,8 @@ describe('SimulationCreationStatus', () => {
     expect(html).toContain('Kunne ikke oprette simuleringen.')
     expect(html).toContain('type="checkbox"')
     expect(html).toContain('Optimér, når simuleringen er klar')
-    expect(html).not.toContain('checked=""')
+    expect(html).not.toContain('Oprettelsen fejlede')
+    expect(html).toContain('checked=""')
     expect(html).toContain('<button')
     expect(html).not.toContain('disabled=')
   })
