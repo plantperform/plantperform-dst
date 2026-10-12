@@ -24,6 +24,9 @@ MERGED_GPKG = ROOT / "data" / "raw" / "V1_1_IMK2026_n604144_gpkg_merged.gpkg"
 LAYER = "PlantPerform"
 BATCH_SIZE = 50_000
 ROUND_DIGITS = 3
+# PUMR 2027 requirements spec, table A, field A22: retention is rounded to 2
+# decimals, and that rounded value is the one the N load calculation uses.
+RETENTION_ROUND_DIGITS = 2
 STATUS_INTERVAL_SECONDS = 10.0
 CROP_HISTORY_YEARS = range(2016, 2027)
 PERCOLATION_COLUMNS_BY_KATEGORI = (
@@ -118,9 +121,9 @@ def clean_float(value: object) -> float | None:
         return None
 
 
-def clean_float_rounded(value: object) -> float | None:
+def clean_float_rounded(value: object, digits: int = ROUND_DIGITS) -> float | None:
     cleaned = clean_float(value)
-    return round(cleaned, ROUND_DIGITS) if cleaned is not None else None
+    return round(cleaned, digits) if cleaned is not None else None
 
 
 def clean_bool(value: object) -> bool:
@@ -223,7 +226,8 @@ def load_staging(dsn: str) -> None:
                             str(cvr).zfill(8) if cvr is not None else None,
                             area_ha, json.dumps(crop_history), clean_int(row.JB_Kode),
                             clean_int(row.KystvandID), clean_str(row.kystvand_navn),
-                            clean_float_rounded(row.RetTot), udledningsgraense,
+                            clean_float_rounded(row.RetTot, RETENTION_ROUND_DIGITS),
+                            udledningsgraense,
                             clean_str(row.goedningsregion), clean_bool(row.oeko),
                             clean_bool(row.oestoette), clean_int(row.hoejeste_hnv),
                             clean_bool(row.kvotegivende), virkemiddel,
