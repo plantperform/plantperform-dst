@@ -35,7 +35,7 @@ export const ComparisonEconomics = ({
 
   return (
     <ComparisonColumnsTable {...table}>
-      <ComparisonFigureRow label="Økonomiprofil" {...table}>
+      <ComparisonFigureRow label="Regner med" {...table}>
         {(_, index) => (
           <EconomicsChip
             profile={profiles[index]}

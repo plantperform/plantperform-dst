@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import type { RotationCandidateYearResult, RotationYear } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
-import { CustomisedChip, TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { FieldEconomicsContext } from '@/components/farm/field-economics'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
@@ -955,7 +955,10 @@ const CustomisedLabel = ({
   if (!line || !fieldEconomics) return label
   return (
     <>
-      {label} <CustomisedChip />
+      {label}
+      <span className="block text-[11px] font-normal text-muted-foreground">
+        Rettet i {fieldEconomics.profile.name}
+      </span>
       <Link
         to={fieldEconomics.profilePath}
         state={{

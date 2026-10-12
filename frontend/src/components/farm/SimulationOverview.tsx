@@ -1,11 +1,10 @@
-import { ArrowRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { FieldRecord, Simulation } from '@/api/types'
-import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
+import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { SimulationCard } from '@/components/farm/SimulationCard'
 import type {
   FarmInspectorMode,
@@ -13,10 +12,7 @@ import type {
 } from '@/components/farm/types'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import {
-  describeEconomicsEntry,
-  STANDARD_PROFILE_ID,
-} from '@/lib/economics-profiles'
+import { describeEconomicsLine } from '@/lib/economics-profiles'
 import { resolveFarmQuota } from '@/lib/field-domain'
 
 type SimulationOverviewProps = {
@@ -46,11 +42,6 @@ export const SimulationOverview = ({
 }: SimulationOverviewProps) => {
   const historyQuota = useMemo(() => resolveFarmQuota(fields, false), [fields])
   const economics = useEconomicsProfiles()
-  const startGuide = useStartGuide()
-  const { ownProfiles } = economics
-  const economicsEntry = describeEconomicsEntry(
-    ownProfiles.map((profile) => profile.name),
-  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -80,26 +71,12 @@ export const SimulationOverview = ({
             </Button>
           </div>
         </header>
-        <EconomicsBanner
-          label="Økonomi"
-          title={economicsEntry.title}
-          text={economicsEntry.text}
-        >
-          {ownProfiles.length > 0 ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={economics.overviewPath}>Se profilerne</Link>
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            onClick={() => startGuide({ fromProfileId: STANDARD_PROFILE_ID })}
-          >
-            {ownProfiles.length > 0
-              ? 'Ny økonomiprofil'
-              : 'Tilpas økonomien til bedriften'}
-            <ArrowRight aria-hidden="true" />
-          </Button>
-        </EconomicsBanner>
+        <p className="text-sm text-muted-foreground">
+          {describeEconomicsLine(economics.ownProfiles.length)}{' '}
+          <Link to={economics.overviewPath} className={TEXT_LINK_CLASS}>
+            Se Økonomi
+          </Link>
+        </p>
         <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
           {simulations.map((simulation) => (
             <SimulationCard

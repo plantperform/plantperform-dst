@@ -36,12 +36,6 @@ export const NotInCalculationNote = () => (
   </span>
 )
 
-export const CustomisedChip = () => (
-  <span className="rounded bg-changed/40 px-1.5 text-[11px] font-medium text-foreground">
-    tilpasset
-  </span>
-)
-
 export const ChangedValue = ({ children }: { children: ReactNode }) => (
   <span className="rounded-md bg-changed/40 px-1.5 py-0.5 font-semibold">
     {children}

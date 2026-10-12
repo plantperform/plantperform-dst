@@ -2,13 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { NO_OVERRIDES, type EconomicsOverrides } from '@/lib/economics'
 import {
-  ECONOMICS_INVITATION,
   NO_PROFILES,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
   allProfiles,
   deleteProfileMessage,
-  describeEconomicsEntry,
+  describeEconomicsLine,
   describeOwnProfileCount,
   describeOwnProfiles,
   describeProfileOption,
@@ -143,21 +142,14 @@ describe('economics profiles', () => {
     )
   })
 
-  it('introduces the economics above the simulations', () => {
-    expect(describeEconomicsEntry([])).toEqual({
-      title: 'Simuleringerne regner med Standard (SEGES 2026)',
-      text: ECONOMICS_INVITATION,
-    })
-    expect(describeEconomicsEntry(['Bakkegården 2027'])).toEqual({
-      title: 'Bedriftens økonomiprofil: Bakkegården 2027',
-      text: 'Indtil profilen indgår i beregningen, er tallene regnet med Standard (SEGES 2026).',
-    })
-    expect(
-      describeEconomicsEntry(['Bakkegården 2027', 'Forsigtig 2027']),
-    ).toEqual({
-      title: 'Bedriftens økonomiprofiler: Bakkegården 2027 og Forsigtig 2027',
-      text: 'Indtil profilerne indgår i beregningen, er tallene regnet med Standard (SEGES 2026).',
-    })
+  it('sums up the profiles above the simulations', () => {
+    expect(describeEconomicsLine(0)).toBe('Simuleringerne regner med Standard.')
+    expect(describeEconomicsLine(1)).toBe(
+      'Bedriften har 1 egen økonomiprofil ud over Standard, og hver simulering regner med en af dem. Indtil profilen indgår i beregningen, er tallene regnet med Standard.',
+    )
+    expect(describeEconomicsLine(2)).toBe(
+      'Bedriften har 2 egne økonomiprofiler ud over Standard, og hver simulering regner med en af dem. Indtil profilerne indgår i beregningen, er tallene regnet med Standard.',
+    )
   })
 
   it('describes a profile where a simulation chooses it', () => {
