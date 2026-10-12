@@ -34,6 +34,7 @@ import {
   OPTIONAL_COLUMN_IDS,
   readStoredColumnVisibility,
   storeColumnVisibility,
+  withoutManureColumns,
   type FieldsSortKey,
   type FieldsSortState,
 } from '@/components/farm/field-list-state'
@@ -60,7 +61,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fertiliserByFieldId } from '@/lib/fertiliser-overview'
+import { fertiliserByFieldId, usesManure } from '@/lib/fertiliser-overview'
 import {
   catchmentRuns,
   changedFieldIds,
@@ -332,6 +333,14 @@ export const FarmFieldsList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSimulationView])
 
+  const shownColumnVisibility = useMemo(
+    () =>
+      usesManure(yearValues)
+        ? columnVisibility
+        : withoutManureColumns(columnVisibility),
+    [columnVisibility, yearValues],
+  )
+
   const rowCallbacks = useRef({
     onSelectedFieldChange,
     onHoveredFieldChange,
@@ -435,7 +444,7 @@ export const FarmFieldsList = ({
   const table = useReactTable({
     data: sortedFields,
     columns,
-    state: { sorting, columnVisibility },
+    state: { sorting, columnVisibility: shownColumnVisibility },
     onSortingChange: handleSortingChange,
     onColumnVisibilityChange: handleColumnVisibilityChange,
     manualSorting: true,
@@ -484,7 +493,7 @@ export const FarmFieldsList = ({
     return () => {
       cancelled = true
     }
-  }, [columns, columnVisibility, runStarts, onRequiredWidthChange])
+  }, [columns, shownColumnVisibility, runStarts, onRequiredWidthChange])
 
   useLayoutEffect(() => {
     const root = rootRef.current

@@ -73,6 +73,18 @@ export const fertiliserByFieldId = (
   return byFieldId
 }
 
+export const usesManure = (
+  yearsByFieldId: FieldYearValues | undefined,
+): boolean =>
+  Object.values(yearsByFieldId ?? {}).some((years) =>
+    years.some(
+      (yearResult) =>
+        yearResult.manureTonsPerHa !== 0 ||
+        yearResult.appliedManureUtilisedKgNHa !== 0 ||
+        yearResult.manureOrganicBoundKgNHa !== 0,
+    ),
+  )
+
 // Forfrugt plus the tildelt N that counts toward the norm.
 export const availableNKgNHa = (figures: FertiliserFigures): number =>
   figures.precedingCropValueKgNHa +
