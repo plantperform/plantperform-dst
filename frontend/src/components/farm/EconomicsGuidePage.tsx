@@ -1,13 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
-import {
-  Navigate,
-  useBlocker,
-  useLocation,
-  useNavigate,
-  useParams,
-  type Blocker,
-} from 'react-router-dom'
+import { useId, useState } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import type { Simulation } from '@/api/types'
 import {
@@ -31,16 +24,9 @@ import {
   type GuideUseOption,
 } from '@/components/farm/EconomicsGuideSteps'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
+import { LeaveFlowDialog } from '@/components/LeaveFlowDialog'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   Sheet,
   SheetClose,
@@ -48,6 +34,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import {
   FERTILISER_NOTE,
   formatDbDkk,
@@ -158,40 +145,6 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => (
   </section>
 )
 
-type LeaveGuideDialogProps = {
-  blocker: Blocker
-  profileName: string
-}
-
-const LeaveGuideDialog = ({ blocker, profileName }: LeaveGuideDialogProps) => (
-  <Dialog
-    open={blocker.state === 'blocked'}
-    onOpenChange={(open) => {
-      if (!open) blocker.reset?.()
-    }}
-  >
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Forlad guiden uden at gemme?</DialogTitle>
-        <DialogDescription>
-          Ændringerne i{' '}
-          <b className="font-semibold text-foreground">{profileName}</b> gemmes
-          først, når du klikker Færdig under Gennemgang. Forlader du siden nu,
-          går de tabt.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <Button variant="outline" onClick={() => blocker.proceed?.()}>
-          Forlad uden at gemme
-        </Button>
-        <Button autoFocus onClick={() => blocker.reset?.()}>
-          Bliv på siden
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-)
-
 type EconomicsGuidePageProps = {
   farmName: string
   simulations: Simulation[]
@@ -222,7 +175,6 @@ const Guide = ({
   const [name, setName] = useState(profile.name)
   const [overrides, setOverrides] = useState(profile.overrides)
   const [toggledUses, setToggledUses] = useState<string[]>([])
-  const saved = useRef(false)
 
   const changes = profileChanges(assumptions, overrides)
   const changedSteps = new Set<number | null>(
@@ -248,19 +200,7 @@ const Guide = ({
     !sameOverrides(overrides, profile.overrides) ||
     toggledUses.length > 0
 
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty &&
-      !saved.current &&
-      currentLocation.pathname !== nextLocation.pathname,
-  )
-
-  useEffect(() => {
-    if (!dirty) return
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty])
+  const leaveGuard = useLeaveGuard(dirty)
 
   const toggleUse = (simulationId: string) =>
     setToggledUses((toggled) =>
@@ -276,7 +216,7 @@ const Guide = ({
 
   const finish = () => {
     if (nameError) return
-    saved.current = true
+    leaveGuard.release()
     economics.ensureProfile(profile.id, name)
     economics.renameProfile(profile.id, name)
     economics.changeOverrides(profile.id, () => overrides)
@@ -487,9 +427,19 @@ const Guide = ({
           </div>
         </SheetContent>
       </Sheet>
-      <LeaveGuideDialog
-        blocker={blocker}
-        profileName={name.trim() || profile.name}
+      <LeaveFlowDialog
+        blocker={leaveGuard.blocker}
+        title="Forlad guiden uden at gemme?"
+        description={
+          <>
+            Ændringerne i{' '}
+            <b className="font-semibold text-foreground">
+              {name.trim() || profile.name}
+            </b>{' '}
+            gemmes først, når du klikker Færdig under Gennemgang. Forlader du
+            siden nu, går de tabt.
+          </>
+        }
       />
     </div>
   )
