@@ -1,9 +1,10 @@
-import { ArrowLeft, Pencil, TextCursorInput, Trash2, X } from 'lucide-react'
+import { Pencil, TextCursorInput, Trash2 } from 'lucide-react'
 import { Fragment, useId, useRef, useState } from 'react'
-import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import type { Simulation } from '@/api/types'
+import { BackButton, BackLink } from '@/components/BackLink'
 import {
   returnTargetLabel,
   returnTargetSchema,
@@ -89,6 +90,7 @@ const ProfileNameInput = ({ profile, onDone }: ProfileNameInputProps) => {
 
 type ProfileViewProps = {
   profile: EconomicsProfile
+  farmName: string
   simulations: Simulation[]
   onOpenSimulation: (simulationId: string) => void
   onDeleteProfile: (profile: EconomicsProfile) => void
@@ -97,6 +99,7 @@ type ProfileViewProps = {
 
 const ProfileView = ({
   profile,
+  farmName,
   simulations,
   onOpenSimulation,
   onDeleteProfile,
@@ -108,12 +111,8 @@ const ProfileView = ({
   const isStandard = profile.id === STANDARD_PROFILE_ID
   const [editingName, setEditingName] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
-  const [dismissedReturn, setDismissedReturn] = useState<string | null>(null)
   const returnState = returnStateSchema.safeParse(location.state)
-  const returnTo =
-    returnState.success && dismissedReturn !== location.key
-      ? returnState.data.returnTo
-      : null
+  const returnTo = returnState.success ? returnState.data.returnTo : null
 
   const users = economics.simulationsUsingProfile(simulations, profile.id)
   const userNames = new Map(
@@ -125,34 +124,14 @@ const ProfileView = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      {returnTo ? (
-        <div className="flex items-center gap-2.5 bg-foreground px-6 py-2 text-[13px] text-background sm:px-10">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-background focus-visible:outline-none"
-            onClick={() => onReturn(returnTo)}
-          >
-            <ArrowLeft className="size-3.5" aria-hidden="true" />
+      <div className="@container flex max-w-6xl flex-col gap-6 px-6 pt-7 pb-15 sm:px-10">
+        {returnTo ? (
+          <BackButton onClick={() => onReturn(returnTo)}>
             {returnTargetLabel(returnTo)}
-          </button>
-          <button
-            type="button"
-            aria-label="Skjul linjen"
-            className="ml-auto rounded-sm text-background/70 transition-colors hover:text-background focus-visible:ring-2 focus-visible:ring-background focus-visible:outline-none"
-            onClick={() => setDismissedReturn(location.key)}
-          >
-            <X className="size-3.5" aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-      <div className="@container mx-auto flex max-w-6xl flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
-        <Link
-          to={economics.overviewPath}
-          className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Økonomi
-        </Link>
+          </BackButton>
+        ) : (
+          <BackLink to={economics.overviewPath}>Tilbage til Økonomi</BackLink>
+        )}
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0 flex-1">
             {editingName ? (
@@ -165,18 +144,17 @@ const ProfileView = ({
                 {profile.name}
               </h1>
             )}
-            <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              {farmName} ·{' '}
               {isStandard
-                ? `Priser og mængder fra ${STANDARD_SOURCE}. Standarden kan ikke rettes.`
-                : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Ændringer gemmes med det samme.`}
+                ? `${STANDARD_SOURCE}. Standard kan ikke rettes.`
+                : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Rettelser gemmes med det samme.`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => startGuide({ fromProfileId: profile.id })}>
               <Pencil aria-hidden="true" />
-              {isStandard
-                ? 'Tilpas økonomien til bedriften'
-                : 'Tilpas i guiden'}
+              {isStandard ? 'Lav en profil ud fra Standard' : 'Tilpas i guiden'}
             </Button>
             {isStandard ? null : (
               <>

@@ -93,7 +93,7 @@ const FarmDetail = () => {
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
   const onEconomicsPage = useMatch('/farms/:farmId/economics/*') !== null
   const onAboutPage = useMatch('/farms/:farmId/about') !== null
-  const { showError } = useToast()
+  const { showToast, showError } = useToast()
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const farmView = useFarmView(farmId)
@@ -546,6 +546,7 @@ const FarmDetail = () => {
                 path="economics"
                 element={
                   <EconomicsOverview
+                    farmName={loadedFarm.name}
                     simulations={simulations}
                     onDeleteProfile={setProfileToDelete}
                   />
@@ -555,6 +556,7 @@ const FarmDetail = () => {
                 path="economics/:profileId"
                 element={
                   <EconomicsProfilePage
+                    farmName={loadedFarm.name}
                     simulations={simulations}
                     onOpenSimulation={(simulationId) =>
                       openView(
@@ -640,7 +642,9 @@ const FarmDetail = () => {
               if (!open) setProfileToDelete(null)
             }}
             onConfirm={() => {
-              if (profileToDelete) economics.deleteProfile(profileToDelete.id)
+              if (!profileToDelete) return
+              economics.deleteProfile(profileToDelete.id)
+              showToast(`${profileToDelete.name} er slettet`)
             }}
           />
         </>

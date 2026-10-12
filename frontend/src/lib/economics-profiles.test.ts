@@ -9,6 +9,7 @@ import {
   allProfiles,
   deleteProfileMessage,
   describeEconomicsEntry,
+  describeOwnProfileCount,
   describeOwnProfiles,
   describeProfileOption,
   describeProfileUsers,
@@ -135,10 +136,10 @@ describe('economics profiles', () => {
 
   it('says which simulations go back to Standard when a profile is deleted', () => {
     expect(deleteProfileMessage([])).toBe(
-      'Bruges ikke af nogen simulering endnu.',
+      'Profilen slettes. Ingen simuleringer regner med den. Det kan ikke fortrydes.',
     )
     expect(deleteProfileMessage(['Reduceret kvælstof', 'Mere vintersæd'])).toBe(
-      'Bruges af Reduceret kvælstof og Mere vintersæd, som går tilbage til Standard (SEGES 2026).',
+      'Profilen slettes. Reduceret kvælstof og Mere vintersæd regner derefter med Standard. Det kan ikke fortrydes.',
     )
   })
 
@@ -218,6 +219,12 @@ describe('economics profiles', () => {
         }),
       ),
     ).toEqual(farm)
+  })
+
+  it('counts the own profiles next to Standard', () => {
+    expect(describeOwnProfileCount(0)).toBe('Kun Standard.')
+    expect(describeOwnProfileCount(1)).toBe('1 egen profil ud over Standard.')
+    expect(describeOwnProfileCount(2)).toBe('2 egne profiler ud over Standard.')
   })
 
   it('names the own profiles in one short line', () => {

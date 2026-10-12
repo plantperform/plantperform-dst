@@ -1,4 +1,5 @@
 import { ChevronLeft } from 'lucide-react'
+import type { ComponentProps } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
@@ -11,4 +12,19 @@ export const BackLink = ({ className, children, ...linkProps }: LinkProps) => (
     <ChevronLeft className="size-4" aria-hidden="true" />
     {children}
   </Link>
+)
+
+export const BackButton = ({
+  className,
+  children,
+  ...buttonProps
+}: ComponentProps<'button'>) => (
+  <button
+    type="button"
+    {...buttonProps}
+    className={cn(BACK_LINK_CLASS, className)}
+  >
+    <ChevronLeft className="size-4" aria-hidden="true" />
+    {children}
+  </button>
 )
