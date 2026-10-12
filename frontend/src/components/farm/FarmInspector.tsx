@@ -516,6 +516,7 @@ export const FarmInspector = ({
                     }
                     selectedYearIndex={effectiveSelectedYearIndex}
                     yearValues={yearValues}
+                    yearValuesLoading={yearValuesLoading}
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
                     detachingFieldIds={detachingFieldIds}

@@ -9,6 +9,7 @@ import { SortableColumnHeaderContent } from '@/components/farm/SortableColumnHea
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   availableNKgNHa,
   availableNShareOfNorm,
@@ -428,10 +429,15 @@ const FERTILISER_COLUMNS: FertiliserColumnConfig[] = [
   },
 ]
 
+const loadingFigure = (
+  <Skeleton className="ml-auto h-4 w-14 bg-muted-foreground/20" />
+)
+
 const fertiliserColumn = (
   config: FertiliserColumnConfig,
   fertiliser: Map<string, FertiliserFigures>,
   fields: FieldRecord[],
+  loading: boolean,
 ): ColumnDef<FieldRecord, unknown> => {
   const {
     id,
@@ -457,6 +463,7 @@ const fertiliserColumn = (
     header: () =>
       tooltip ? <AppTooltip content={tooltip}>{label}</AppTooltip> : label,
     cell: ({ row }) => {
+      if (loading) return loadingFigure
       const field = row.original
       const figures = fertiliser.get(field.id)
       const value = figures ? pick(figures) : null
@@ -476,6 +483,7 @@ const fertiliserColumn = (
     },
     footer: () => {
       if (noFarmTotal) return null
+      if (loading) return loadingFigure
       const total = totalFertiliser(fields, fertiliser, pick)
       if (total === null) return null
       return renderMetricFigure(
@@ -503,6 +511,7 @@ export type FarmFieldsColumnsArgs = {
   selectedYearIndex: number | null
   fields: FieldRecord[]
   fertiliser: Map<string, FertiliserFigures>
+  fertiliserLoading: boolean
   quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
   detachingFieldIds: string[]
@@ -515,6 +524,7 @@ export const buildFarmFieldsColumns = ({
   selectedYearIndex,
   fields,
   fertiliser,
+  fertiliserLoading,
   quota,
   catchmentLabel,
   detachingFieldIds,
@@ -699,7 +709,7 @@ export const buildFarmFieldsColumns = ({
     // simulation, not in the afgrødehistorik.
     ...(isSimulationView
       ? FERTILISER_COLUMNS.map((config) =>
-          fertiliserColumn(config, fertiliser, fields),
+          fertiliserColumn(config, fertiliser, fields, fertiliserLoading),
         )
       : []),
     {
