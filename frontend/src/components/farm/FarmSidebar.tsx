@@ -5,19 +5,16 @@ import {
 } from '@/lib/simulation-creation'
 import {
   ChevronRight,
-  ChevronsUpDown,
   Coins,
   Copy,
   FlaskConical,
   History,
   Info,
-  LayoutGrid,
   MoreVertical,
   RefreshCw,
   PanelLeft,
   Play,
   Plus,
-  Scale,
   SlidersHorizontal,
   Table2,
   Trash2,
@@ -33,10 +30,8 @@ import {
   useOptimizationRun,
   type OptimizationRun,
 } from '@/api/optimization-runs'
-import { BrandIcon } from '@/components/BrandMark'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { CustomisedDot } from '@/components/farm/economics-ui'
-import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
@@ -60,7 +55,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
@@ -68,6 +62,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Spinner } from '@/components/ui/spinner'
@@ -76,7 +71,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { UserMenuContent } from '@/components/UserMenu'
 import {
   describeOwnProfiles,
   STANDARD_PROFILE_ID,
@@ -97,7 +91,6 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-import { getStoredRole, ROLE_LABELS } from '@/lib/onboarding'
 import { optimizationRunName } from '@/lib/optimization-run'
 import {
   describeFieldChanges,
@@ -148,14 +141,18 @@ const describeKeyFigures = (
   }
 }
 
-export const GROUP_CLASS = 'px-3 py-1 group-data-[collapsible=icon]:px-2'
+export const FARM_SIDEBAR_CLASS = 'top-12 h-[calc(100svh-3rem)]!'
+
+export const GROUP_CLASS = 'px-3 py-0'
 
 export const GROUP_LABEL_CLASS =
-  'h-7 text-[11px] font-semibold tracking-[0.06em] uppercase'
-const RAIL_ICON_CLASS = 'hidden group-data-[collapsible=icon]:block'
+  'h-auto px-2 pt-4 pb-2 text-[11px] font-bold tracking-[0.1em] text-muted-foreground uppercase'
 
 const VIEW_BUTTON_CLASS =
-  'h-auto min-h-12 rounded-md px-3 py-2 data-[active=true]:[&>svg]:text-primary'
+  'h-auto min-h-0 items-start gap-2.5 rounded-[10px] p-2.5 text-[15px] data-[active=true]:font-normal [&>svg]:mt-0.5 [&>svg]:size-[18px]'
+
+const SUB_BUTTON_CLASS =
+  'h-auto min-h-0 rounded-lg px-2.5 py-2 text-[15px] data-[active=true]:font-normal'
 
 type FarmSidebarProps = {
   farm: Farm
@@ -184,12 +181,6 @@ type FarmSidebarProps = {
   onWidthChange: (width: number) => void
 }
 
-/**
- * Navigation for the farm: the farm menu, then the views.
- * Rows are single-line so the list stays dense; only the selected view
- * expands to describe itself, which keeps the detail where it is being read.
- * Collapses to an icon rail, so every view keeps a row even when minimised.
- */
 export const FarmSidebar = ({
   farm,
   fields,
@@ -220,8 +211,6 @@ export const FarmSidebar = ({
     resolveFarmQuota(fields, false),
     false,
   )
-  const { state: sidebarState, isMobile } = useSidebar()
-  const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
   const pageActive = overviewActive || economicsPageActive || aboutActive
@@ -236,27 +225,21 @@ export const FarmSidebar = ({
     {
       to: `/farms/${farm.id}/simulations`,
       label: 'Oversigt',
-      tooltip: 'Simuleringsoversigt',
-      icon: LayoutGrid,
       active: overviewActive && !compareActive,
     },
     {
       to: `/farms/${farm.id}/simulations/compare`,
       label: 'Sammenlign',
-      tooltip: 'Sammenlign simuleringer',
-      icon: Scale,
       active: compareActive,
     },
   ]
 
   return (
-    <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
-      <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
-        <SidebarBrand />
-        <FarmSwitcher farm={farm} />
-      </SidebarHeader>
-
-      <SidebarContent>
+    <Sidebar
+      className={FARM_SIDEBAR_CLASS}
+      aria-label="Navigation for bedriften"
+    >
+      <SidebarContent className="gap-0 pt-0.5">
         <SidebarGroup className={GROUP_CLASS}>
           <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
             Visninger
@@ -268,19 +251,7 @@ export const FarmSidebar = ({
                   size="lg"
                   isActive={historyActive}
                   aria-current={historyActive ? 'page' : undefined}
-                  className={cn(
-                    VIEW_BUTTON_CLASS,
-                    'group-data-[collapsible=icon]:justify-center',
-                  )}
-                  tooltip={{
-                    children: (
-                      <div className="grid gap-0.5">
-                        <span>Afgrødehistorik</span>
-                        <span>{historyFigures.label}</span>
-                        <span>{historyFigures.title}</span>
-                      </div>
-                    ),
-                  }}
+                  className={VIEW_BUTTON_CLASS}
                   onClick={() => onSelectionChange({ kind: 'current' })}
                 >
                   <History />
@@ -308,11 +279,11 @@ export const FarmSidebar = ({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </SidebarMenuItem>
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+              <SidebarMenuItem>
                 <SidebarMenuButton
                   aria-expanded={simulationsOpen}
                   aria-controls={simulationListId}
-                  className="rounded-md px-3 font-medium"
+                  className="h-auto gap-2.5 rounded-[10px] px-2.5 pt-2.5 pb-1.5 text-[15px] [&>svg:first-child]:size-[18px]"
                   onClick={() => setSimulationsOpen((open) => !open)}
                 >
                   <FlaskConical />
@@ -326,25 +297,21 @@ export const FarmSidebar = ({
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <li id={simulationListId}>
-                <SidebarMenu className="ml-3.5 w-auto border-l border-sidebar-border pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
-                  {simulationPages.map(
-                    ({ to, label, tooltip, icon: Icon, active }) =>
-                      simulations.length > 0 &&
-                      (simulationsOpen || iconRail) ? (
-                        <SidebarMenuItem key={to}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={active}
-                            className="rounded-md px-3 font-medium data-[active=true]:[&>svg]:text-primary"
-                            tooltip={tooltip}
-                          >
-                            <NavLink to={to} end>
-                              <Icon className={RAIL_ICON_CLASS} />
-                              <span>{label}</span>
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ) : null,
+                <SidebarMenu className="w-auto gap-0.5 pl-7">
+                  {simulationPages.map(({ to, label, active }) =>
+                    simulations.length > 0 && simulationsOpen ? (
+                      <SidebarMenuItem key={to}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active}
+                          className={SUB_BUTTON_CLASS}
+                        >
+                          <NavLink to={to} end>
+                            <span>{label}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ) : null,
                   )}
                   {simulations.map((simulation) => {
                     const selected = simulation.id === selectedSimulationId
@@ -355,7 +322,7 @@ export const FarmSidebar = ({
                         simulation={simulation}
                         liveFields={fields}
                         selected={selected}
-                        folded={!simulationsOpen && !iconRail}
+                        folded={!simulationsOpen}
                         loading={loadingSelection && selected}
                         deleting={deletingSimulationId === simulation.id}
                         copying={copyingSimulationId === simulation.id}
@@ -373,11 +340,13 @@ export const FarmSidebar = ({
                       />
                     )
                   })}
-                  {simulationsOpen || iconRail ? (
+                  {simulationsOpen ? (
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        className="rounded-md px-3 font-medium text-primary hover:text-primary"
-                        tooltip="Ny simulering"
+                        className={cn(
+                          SUB_BUTTON_CLASS,
+                          'text-primary hover:text-primary',
+                        )}
                         onClick={onNewSimulation}
                       >
                         <Plus />
@@ -392,6 +361,21 @@ export const FarmSidebar = ({
         </SidebarGroup>
       </SidebarContent>
 
+      {pageActive ? null : (
+        <SidebarGroup className={GROUP_CLASS}>
+          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+            Vis som
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <ViewModeSwitch
+              view={view}
+              splitAvailable={splitAvailable}
+              onViewChange={onViewChange}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+      )}
+
       <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
           Bedriften
@@ -403,11 +387,7 @@ export const FarmSidebar = ({
                 asChild
                 size="lg"
                 isActive={economicsPageActive}
-                className={cn(
-                  VIEW_BUTTON_CLASS,
-                  'group-data-[collapsible=icon]:justify-center',
-                )}
-                tooltip="Økonomi"
+                className={VIEW_BUTTON_CLASS}
               >
                 <NavLink to={economics.overviewPath}>
                   <Coins />
@@ -426,11 +406,7 @@ export const FarmSidebar = ({
                 asChild
                 size="lg"
                 isActive={aboutActive}
-                className={cn(
-                  VIEW_BUTTON_CLASS,
-                  'group-data-[collapsible=icon]:justify-center',
-                )}
-                tooltip="Om bedriften"
+                className={VIEW_BUTTON_CLASS}
               >
                 <NavLink to={`/farms/${farm.id}/about`}>
                   <Info />
@@ -450,24 +426,8 @@ export const FarmSidebar = ({
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {pageActive ? null : (
-        <SidebarGroup className={GROUP_CLASS}>
-          <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-            Vis som
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <ViewModeSwitch
-              view={view}
-              splitAvailable={splitAvailable}
-              onViewChange={onViewChange}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-      )}
-
-      <SidebarFooter className="gap-2 border-t border-sidebar-border p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
+      <SidebarFooter className="px-3 pt-1 pb-3">
         <CollapseMenuButton />
-        <SidebarUserMenu />
       </SidebarFooter>
 
       <SidebarWidthHandle width={width} onWidthChange={onWidthChange} />
@@ -475,19 +435,17 @@ export const FarmSidebar = ({
   )
 }
 
-// A full-bleed band in the brand red, cancelling the header's padding, so the
-// sidebar reads like the ICOEL guide's pages: red top, sand column below.
-export const SidebarBrand = () => (
-  <div className="-mx-3 -mt-3 mb-1 flex items-center gap-2 self-stretch bg-brand px-3 py-3 text-brand-foreground group-data-[collapsible=icon]:-mx-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-    <BrandIcon onDark className="size-8" />
-    <div className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-      <span className="truncate text-sm font-semibold">PlantPerform</span>
-      <span className="truncate text-xs text-brand-foreground/85">
-        Sædskifteplanlægning
-      </span>
-    </div>
-  </div>
-)
+export const ShowSidebarButton = () => {
+  const { state, isMobile } = useSidebar()
+  if (isMobile || state === 'expanded') return null
+
+  return (
+    <SidebarTrigger
+      aria-label="Vis sidepanel"
+      className="absolute top-3 left-3 z-20 size-9 rounded-lg border bg-card text-muted-foreground"
+    />
+  )
+}
 
 const CollapseMenuButton = () => {
   const { toggleSidebar } = useSidebar()
@@ -496,61 +454,12 @@ const CollapseMenuButton = () => {
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton
-          className="h-7 px-2 text-xs text-sidebar-foreground/70"
-          tooltip="Vis sidepanel"
+          className="h-auto gap-2 px-2.5 py-2 text-[13px] text-muted-foreground"
           onClick={toggleSidebar}
         >
           <PanelLeft />
           <span>Skjul sidepanel</span>
         </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
-  )
-}
-
-const SidebarUserMenu = () => {
-  const { user } = useAuth()
-  const iconRail = useSidebar().state === 'collapsed'
-  const email = user?.email ?? ''
-  const initial = email.charAt(0).toUpperCase()
-  const role = email ? getStoredRole(email) : null
-
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              aria-label={email ? `Brugermenu, ${email}` : 'Brugermenu'}
-              tooltip={email}
-              className="h-auto rounded-md border border-sidebar-border bg-card px-2 py-1.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:py-0!"
-            >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                {initial}
-              </span>
-              <div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-xs font-semibold">{email}</span>
-                {role ? (
-                  <span className="truncate text-[11px] text-sidebar-foreground/70">
-                    {ROLE_LABELS[role]}
-                  </span>
-                ) : null}
-              </div>
-              <ChevronsUpDown
-                className="ml-auto text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden"
-                aria-hidden="true"
-              />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side={iconRail ? 'right' : 'top'}
-            align="start"
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
-          >
-            <UserMenuContent />
-          </DropdownMenuContent>
-        </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
   )
@@ -562,8 +471,8 @@ type ViewMenuLabelProps = {
 }
 
 const ViewMenuLabel = ({ name, children }: ViewMenuLabelProps) => (
-  <div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-    <span className="block truncate font-medium">{name}</span>
+  <div className="grid min-w-0 flex-1 gap-[3px] leading-tight">
+    <span className="block truncate">{name}</span>
     {children}
   </div>
 )
@@ -690,7 +599,6 @@ const SimulationMenuItem = ({
   onCopy,
   onDelete,
 }: SimulationMenuItemProps) => {
-  const iconRail = useSidebar().state === 'collapsed'
   const profile = useEconomicsProfiles().profileForSimulation(simulation.id)
   const ownProfileName =
     profile.id === STANDARD_PROFILE_ID ? null : profile.name
@@ -744,23 +652,10 @@ const SimulationMenuItem = ({
               isActive={selected}
               aria-current={selected ? 'page' : undefined}
               aria-busy={running || undefined}
-              className={cn(
-                VIEW_BUTTON_CLASS,
-                'relative group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center',
-              )}
+              className={cn(SUB_BUTTON_CLASS, 'items-start gap-2')}
               onClick={onSelect}
             >
-              {loading || running ? (
-                <Spinner />
-              ) : (
-                <FlaskConical className={RAIL_ICON_CLASS} />
-              )}
-              {failedRun ? (
-                <span
-                  className="absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
-                  aria-hidden="true"
-                />
-              ) : null}
+              {loading || running ? <Spinner className="mt-0.5" /> : null}
               <ViewMenuLabel name={simulation.name}>
                 {!isSimulationReady(simulation) ? (
                   <span className="truncate text-xs">
@@ -791,33 +686,17 @@ const SimulationMenuItem = ({
             </SidebarMenuButton>
           </TooltipTrigger>
           <TooltipContent side="right" align="center" className="max-w-64">
-            {iconRail ? (
-              <div className="grid gap-0.5">
-                <span>{simulation.name}</span>
-                <span>{createdLabel}</span>
-                {figures ? <span>{figures.label}</span> : null}
-                {figures ? <span>{figures.title}</span> : null}
-                {runningRun ? (
-                  <span className="tabular-nums">
-                    <OptimizationRunElapsed run={runningRun} />
-                  </span>
-                ) : failedRun ? (
-                  <span>{optimizationRunName(failedRun.kind)} fejlede</span>
-                ) : null}
-              </div>
-            ) : (
-              <div className="grid gap-0.5">
-                <span>{createdLabel}</span>
-                {figures ? <span>{figures.title}</span> : null}
-                {changesTitle ? <span>{changesTitle}</span> : null}
-                {ownProfileName ? (
-                  <span>
-                    Regner med {ownProfileName}, som ikke indgår i beregningen
-                    endnu
-                  </span>
-                ) : null}
-              </div>
-            )}
+            <div className="grid gap-0.5">
+              <span>{createdLabel}</span>
+              {figures ? <span>{figures.title}</span> : null}
+              {changesTitle ? <span>{changesTitle}</span> : null}
+              {ownProfileName ? (
+                <span>
+                  Regner med {ownProfileName}, som ikke indgår i beregningen
+                  endnu
+                </span>
+              ) : null}
+            </div>
           </TooltipContent>
         </Tooltip>
         <DropdownMenu>
@@ -882,7 +761,7 @@ const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
   return (
     <div
       role="alert"
-      className="flex items-center gap-1 pr-1 pl-9 text-[11px] text-destructive group-data-[collapsible=icon]:hidden"
+      className="flex items-center gap-1 pr-1 pl-2.5 text-[11px] text-destructive"
     >
       {/* The type is left to the tooltip; with it the line is too long to fit
           next to "Prøv igen". */}

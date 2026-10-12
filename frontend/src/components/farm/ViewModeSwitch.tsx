@@ -5,7 +5,6 @@ import {
   SegmentedControl,
   type SegmentedControlOption,
 } from '@/components/ui/segmented-control'
-import { useSidebar } from '@/components/ui/sidebar'
 
 const SPLIT_UNAVAILABLE_TITLE = 'Skærmen er for smal til delt visning'
 
@@ -14,23 +13,6 @@ const VIEW_OPTIONS: SegmentedControlOption<FarmView>[] = [
   { value: 'split', label: 'Delt', icon: Columns2 },
   { value: 'map', label: 'Kort', icon: MapIcon },
 ]
-
-const buildViewOptions = (
-  splitAvailable: boolean,
-  iconRail: boolean,
-): SegmentedControlOption<FarmView>[] =>
-  VIEW_OPTIONS.map((option) => {
-    const splitUnavailable = option.value === 'split' && !splitAvailable
-    return {
-      ...option,
-      disabled: splitUnavailable,
-      title: splitUnavailable
-        ? SPLIT_UNAVAILABLE_TITLE
-        : iconRail
-          ? option.label
-          : undefined,
-    }
-  })
 
 type ViewModeSwitchProps = {
   view: FarmView
@@ -42,26 +24,20 @@ export const ViewModeSwitch = ({
   view,
   splitAvailable,
   onViewChange,
-}: ViewModeSwitchProps) => {
-  const iconRail = useSidebar().state === 'collapsed'
-
-  return (
-    <SegmentedControl
-      aria-label="Liste, delt eller kort"
-      value={view}
-      options={buildViewOptions(splitAvailable, iconRail)}
-      onValueChange={(next) => {
-        if (next !== view) onViewChange(next)
-      }}
-      className={
-        iconRail
-          ? 'h-auto w-8 flex-col border-sidebar-border bg-sidebar-accent'
-          : 'grid h-8 w-full grid-cols-3 border-sidebar-border bg-sidebar-accent'
-      }
-      optionClassName={
-        iconRail ? 'size-7 justify-center px-0' : 'justify-center px-0'
-      }
-      labelClassName={iconRail ? 'sr-only' : 'inline'}
-    />
-  )
-}
+}: ViewModeSwitchProps) => (
+  <SegmentedControl
+    aria-label="Liste, delt eller kort"
+    value={view}
+    options={VIEW_OPTIONS.map((option) =>
+      option.value === 'split' && !splitAvailable
+        ? { ...option, disabled: true, title: SPLIT_UNAVAILABLE_TITLE }
+        : option,
+    )}
+    onValueChange={(next) => {
+      if (next !== view) onViewChange(next)
+    }}
+    className="grid h-auto w-full grid-cols-3 gap-0.5 rounded-[10px] border-0 bg-sidebar-accent p-[3px]"
+    optionClassName="h-[30px] justify-center rounded-lg px-0 text-[13px]"
+    labelClassName="inline"
+  />
+)

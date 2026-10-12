@@ -1,105 +1,138 @@
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Check, ChevronsUpDown, Home, Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { useFarms } from '@/api/hooks'
 import type { Farm } from '@/api/types'
+import { useAuth } from '@/auth/context'
+import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from '@/components/ui/sidebar'
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { switcherFarms } from '@/lib/farm-switcher'
+import { getLastOpenedMap, HOME_OVERVIEW_STATE } from '@/lib/onboarding'
+import { cn } from '@/lib/utils'
+
+const MENU_ROW_CLASS =
+  'flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:outline-none'
 
 type FarmSwitcherProps = {
   farm: Farm
+  samePage: string
 }
 
-export const FarmSwitcher = ({ farm }: FarmSwitcherProps) => {
-  const navigate = useNavigate()
-  const iconRail = useSidebar().state === 'collapsed'
+export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
+  const { user } = useAuth()
+  const email = user?.email ?? ''
+  const [open, setOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const { data: farms } = useFarms()
-  const farmList = [
-    farm,
-    ...(farms ?? []).filter((candidate) => candidate.id !== farm.id),
-  ].sort((left, right) => left.name.localeCompare(right.name, 'da'))
+  const list = switcherFarms(
+    [farm, ...(farms ?? []).filter((candidate) => candidate.id !== farm.id)],
+    open && email ? getLastOpenedMap(email) : {},
+    searchText,
+  )
+
+  const changeOpen = (nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) setSearchText('')
+  }
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <h1 className="min-w-0">
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                aria-label={`Menu for bedriften ${farm.name}`}
-                tooltip={farm.name}
-                className="h-auto rounded-md border border-sidebar-border bg-card px-3 py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0! group-data-[collapsible=icon]:py-0!"
-              >
-                <span className="truncate font-display text-base font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-                  {farm.name}
-                </span>
-                <span className="hidden font-display text-base font-semibold group-data-[collapsible=icon]:inline">
-                  {farm.name.charAt(0)}
-                </span>
-                <ChevronsUpDown
-                  className="ml-auto size-3.5 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden"
-                  aria-hidden="true"
-                />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-          </h1>
-          <DropdownMenuContent
-            side={iconRail ? 'right' : 'bottom'}
-            align="start"
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
+    <Popover open={open} onOpenChange={changeOpen}>
+      <h1 className="min-w-0">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Skift bedrift, ${farm.name}`}
+            className="flex h-8 max-w-full items-center gap-2 rounded-lg border border-brand-foreground/30 bg-brand-foreground/15 pr-2.5 pl-3 text-sm font-bold text-brand-foreground transition-colors hover:bg-brand-foreground/25 focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:outline-none"
           >
-            <DropdownMenuLabel>Bedrifter</DropdownMenuLabel>
-            {farmList.map((candidate) => {
-              const current = candidate.id === farm.id
-              return (
-                <DropdownMenuItem
-                  key={candidate.id}
-                  className={current ? 'font-medium' : undefined}
+            <span className="truncate">{farm.name}</span>
+            <ChevronsUpDown className="size-3.5 shrink-0" aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+      </h1>
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0"
+      >
+        {list.searchable ? (
+          <FarmSearchInput
+            className="mx-2.5 mt-2.5 mb-1"
+            autoFocus
+            value={searchText}
+            onChange={setSearchText}
+          />
+        ) : null}
+        <p className="px-4 pt-2 pb-1 text-xs text-muted-foreground">
+          {list.heading}
+        </p>
+        <ul className="max-h-[360px] overflow-y-auto px-2 pb-2">
+          {list.farms.map((candidate) => {
+            const current = candidate.id === farm.id
+            return (
+              <li key={candidate.id}>
+                <Link
+                  to={`/farms/${candidate.id}${samePage}`}
                   aria-current={current ? 'page' : undefined}
-                  onSelect={() => {
-                    if (!current) navigate(`/farms/${candidate.id}`)
-                  }}
+                  className={cn(
+                    MENU_ROW_CLASS,
+                    'h-10',
+                    current && 'bg-sidebar',
+                  )}
+                  onClick={() => changeOpen(false)}
                 >
+                  <span className="min-w-0 flex-1 truncate">
+                    {candidate.name}
+                  </span>
+                  <span className="shrink-0 text-[13px] text-muted-foreground">
+                    {candidate.ownerName}
+                  </span>
                   {current ? (
                     <Check
-                      className="mr-2 size-4 shrink-0"
+                      className="size-4 shrink-0 text-primary"
                       aria-hidden="true"
                     />
-                  ) : (
-                    <span className="mr-2 size-4 shrink-0" aria-hidden="true" />
-                  )}
-                  <span className="min-w-0 truncate">{candidate.name}</span>
-                  {candidate.ownerName ? (
-                    <span className="ml-auto shrink-0 pl-3 text-xs font-normal text-muted-foreground">
-                      {candidate.ownerName}
-                    </span>
                   ) : null}
-                </DropdownMenuItem>
-              )
-            })}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/farms/new">
-                <Plus className="mr-2 size-4 shrink-0" aria-hidden="true" />
-                Opret ny bedrift
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+                </Link>
+              </li>
+            )
+          })}
+          {list.farms.length === 0 ? (
+            <li className="p-2.5 text-sm text-muted-foreground">
+              Ingen bedrifter matcher
+            </li>
+          ) : null}
+        </ul>
+        <div className="flex flex-col gap-0.5 border-t p-2">
+          <Link
+            to="/"
+            state={HOME_OVERVIEW_STATE}
+            className={cn(MENU_ROW_CLASS, 'h-[38px]')}
+            onClick={() => changeOpen(false)}
+          >
+            <Home
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            Dine bedrifter
+          </Link>
+          <Link
+            to="/farms/new"
+            className={cn(MENU_ROW_CLASS, 'h-[38px]')}
+            onClick={() => changeOpen(false)}
+          >
+            <Plus
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            Opret bedrift
+          </Link>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

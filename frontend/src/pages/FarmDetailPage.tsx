@@ -21,6 +21,7 @@ import {
 import type { Simulation } from '@/api/types'
 import { retryFarmHistory } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
+import { AppBar } from '@/components/AppBar'
 import { ConfirmDeleteDialog } from '@/components/farm/ConfirmDeleteDialog'
 import { useToast } from '@/components/toast'
 import {
@@ -41,7 +42,8 @@ import {
   FarmContentSkeleton,
   FarmSidebarSkeleton,
 } from '@/components/farm/FarmLoadingShell'
-import { FarmSidebar } from '@/components/farm/FarmSidebar'
+import { FarmSidebar, ShowSidebarButton } from '@/components/farm/FarmSidebar'
+import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSimulationActions } from '@/components/farm/simulation-actions'
@@ -72,6 +74,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   deleteProfileMessage,
   type EconomicsProfile,
@@ -296,8 +299,9 @@ const FarmDetail = () => {
 
   if (notFound || loadFailed) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-3xl">
+      <main className="min-h-screen bg-background">
+        <AppBar />
+        <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10">
           <Card>
             <CardHeader>
               <CardTitle>
@@ -359,190 +363,216 @@ const FarmDetail = () => {
 
   return (
     <SidebarProvider
-      className="h-svh overflow-hidden"
+      className="h-svh flex-col overflow-hidden"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
-      {loadedFarm ? (
-        <FarmSidebar
-          farm={loadedFarm}
-          fields={fields}
-          simulations={simulations}
-          selection={activeSelection}
-          overviewActive={onOverview}
-          economicsPageActive={onEconomicsPage}
-          aboutActive={onAboutPage}
-          loadingSelection={simulationFieldsLoading}
-          onSelectionChange={(next) => {
-            changeSelection(next)
-            leavePage()
-          }}
-          mode={mode}
-          onModeChange={(next) => {
-            changeMode(next)
-            leavePage()
-          }}
-          onOptimize={() => {
-            setOptimizeDialogOpen(true)
-            leavePage()
-          }}
-          view={effectiveView}
-          splitAvailable={splitAvailable}
-          onViewChange={(next) => {
-            selectView(next)
-            leavePage()
-          }}
-          copyingSimulationId={simulationActions.copyingSimulationId}
-          deletingSimulationId={simulationActions.deletingSimulationId}
-          onCopySimulation={(simulation) =>
-            void simulationActions.copySimulation(simulation)
-          }
-          onDeleteSimulation={setSimulationToDelete}
-          onNewSimulation={() => openNewSimulation(null)}
-          onRecalculateHistory={() => void recalculateHistory()}
-          recalculatingHistory={retryingHistory}
-          width={sidebarWidth}
-          onWidthChange={setSidebarWidth}
-        />
-      ) : (
-        <FarmSidebarSkeleton farm={farm} />
-      )}
-      <SidebarInset className="min-w-0 overflow-x-hidden">
-        <SidebarTrigger
-          className="fixed top-2 left-2 z-30 size-8 border bg-background shadow-sm md:hidden"
-          aria-label="Vis eller skjul sidepanelet"
-        />
-        {loadedFarm ? (
-          <Routes>
-            <Route
-              index
-              element={selectedSimulation && !isSimulationReady(selectedSimulation) ? (
-                <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
-                  <h1 className="font-display text-4xl tracking-tight">{selectedSimulation.name}</h1>
-                  <SimulationCreationStatus farmId={loadedFarm.id} simulation={selectedSimulation} />
-                  <Button variant="outline" onClick={() => setSimulationToDelete(selectedSimulation)}>
-                    Slet simulering
-                  </Button>
-                </div>
-              ) : (
-                <FarmInspector
-                  farm={loadedFarm}
-                  fields={activeFields}
-                  selection={activeSelection}
-                  selectedSimulation={
-                    activeSelection.kind === 'simulation'
-                      ? simulations.find(
-                          (simulation) => simulation.id === activeSelection.id,
-                        )
-                      : undefined
-                  }
-                  simulations={simulations}
-                  fieldsLoading={simulationFieldsLoading}
-                  summaryMissing={simulationSummaryMissing}
-                  fieldsError={
-                    Boolean(simulationFieldsError) &&
-                    simulationFieldsData === undefined
-                  }
-                  fieldsRetrying={simulationFieldsValidating}
-                  onRetryFields={() => void retrySimulationFields()}
-                  mode={mode}
-                  onModeChange={changeMode}
-                  view={snappedView}
-                  effectiveView={effectiveView}
-                  onViewChange={selectView}
-                  onSplitAvailableChange={setSplitAvailable}
-                  onAddModeChange={setAddModeSnap}
-                  listSlack={listSlack}
-                  onListSlackChange={changeListSlack}
-                  selectedFieldId={selectedFieldId}
-                  onSelectedFieldChange={setSelectedFieldId}
-                  onSelectField={selectFieldFromSearch}
-                  selectedYearIndex={selectedYearIndex}
-                  onSelectedYearIndexChange={setSelectedYearIndex}
-                  optimizeDialogOpen={optimizeDialogOpen}
-                  onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-                  onEditBasis={openNewSimulation}
-                  onError={showError}
-                />
-              )}
-            />
-            <Route
-              path="simulations"
-              element={
-                <SimulationOverview
-                  farmId={loadedFarm.id}
-                  fields={fields}
-                  simulations={simulations}
-                  selection={activeSelection}
-                  copyingSimulationId={simulationActions.copyingSimulationId}
-                  deletingSimulationId={simulationActions.deletingSimulationId}
-                  onOpen={openView}
-                  onCopySimulation={(simulation) =>
-                    void simulationActions.copySimulation(simulation)
-                  }
-                  onDeleteSimulation={setSimulationToDelete}
-                  onNewSimulation={() => openNewSimulation(null)}
-                />
-              }
-            />
-            <Route
-              path="simulations/compare"
-              element={
-                <SimulationComparison
-                  farmId={loadedFarm.id}
-                  fields={fields}
-                  simulations={simulations}
-                />
-              }
-            />
-            <Route
-              path="economics"
-              element={
-                <EconomicsOverview
-                  simulations={simulations}
-                  onDeleteProfile={setProfileToDelete}
-                />
-              }
-            />
-            <Route
-              path="economics/:profileId"
-              element={
-                <EconomicsProfilePage
-                  simulations={simulations}
-                  onOpenSimulation={(simulationId) =>
-                    openView({ kind: 'simulation', id: simulationId }, 'values')
-                  }
-                  onDeleteProfile={setProfileToDelete}
-                  onReturn={returnFromProfile}
-                />
-              }
-            />
-            <Route
-              path="economics/:profileId/guide"
-              element={
-                <EconomicsGuidePage
-                  farmName={loadedFarm.name}
-                  simulations={simulations}
-                  onOpenSimulation={(simulationId) =>
-                    openView({ kind: 'simulation', id: simulationId }, 'values')
-                  }
-                />
-              }
-            />
-            <Route
-              path="about"
-              element={<FarmAboutPage key={loadedFarm.id} farm={loadedFarm} />}
-            />
-            <Route path="*" element={<Navigate to={farmPath} replace />} />
-          </Routes>
+      <AppBar>
+        {farm ? (
+          <FarmSwitcher
+            farm={farm}
+            samePage={
+              onEconomicsPage ? '/economics' : onAboutPage ? '/about' : ''
+            }
+          />
         ) : (
-          <>
-            <p role="status" className="sr-only">
-              Indlæser bedriften.
-            </p>
-            <FarmContentSkeleton />
-          </>
+          <Skeleton className="h-8 w-40 rounded-lg bg-brand-foreground/20" />
         )}
-      </SidebarInset>
+      </AppBar>
+      <div className="flex min-h-0 flex-1">
+        {loadedFarm ? (
+          <FarmSidebar
+            farm={loadedFarm}
+            fields={fields}
+            simulations={simulations}
+            selection={activeSelection}
+            overviewActive={onOverview}
+            economicsPageActive={onEconomicsPage}
+            aboutActive={onAboutPage}
+            loadingSelection={simulationFieldsLoading}
+            onSelectionChange={(next) => {
+              changeSelection(next)
+              leavePage()
+            }}
+            mode={mode}
+            onModeChange={(next) => {
+              changeMode(next)
+              leavePage()
+            }}
+            onOptimize={() => {
+              setOptimizeDialogOpen(true)
+              leavePage()
+            }}
+            view={effectiveView}
+            splitAvailable={splitAvailable}
+            onViewChange={(next) => {
+              selectView(next)
+              leavePage()
+            }}
+            copyingSimulationId={simulationActions.copyingSimulationId}
+            deletingSimulationId={simulationActions.deletingSimulationId}
+            onCopySimulation={(simulation) =>
+              void simulationActions.copySimulation(simulation)
+            }
+            onDeleteSimulation={setSimulationToDelete}
+            onNewSimulation={() => openNewSimulation(null)}
+            onRecalculateHistory={() => void recalculateHistory()}
+            recalculatingHistory={retryingHistory}
+            width={sidebarWidth}
+            onWidthChange={setSidebarWidth}
+          />
+        ) : (
+          <FarmSidebarSkeleton />
+        )}
+        <SidebarInset className="min-w-0 overflow-x-hidden md:peer-data-[state=collapsed]:pl-14">
+          <SidebarTrigger
+            className="fixed top-14 left-2 z-30 size-8 border bg-background shadow-sm md:hidden"
+            aria-label="Vis eller skjul sidepanelet"
+          />
+          <ShowSidebarButton />
+          {loadedFarm ? (
+            <Routes>
+              <Route
+                index
+                element={selectedSimulation && !isSimulationReady(selectedSimulation) ? (
+                  <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
+                    <h1 className="font-display text-4xl tracking-tight">{selectedSimulation.name}</h1>
+                    <SimulationCreationStatus farmId={loadedFarm.id} simulation={selectedSimulation} />
+                    <Button variant="outline" onClick={() => setSimulationToDelete(selectedSimulation)}>
+                      Slet simulering
+                    </Button>
+                  </div>
+                ) : (
+                  <FarmInspector
+                    farm={loadedFarm}
+                    fields={activeFields}
+                    selection={activeSelection}
+                    selectedSimulation={
+                      activeSelection.kind === 'simulation'
+                        ? simulations.find(
+                            (simulation) =>
+                              simulation.id === activeSelection.id,
+                          )
+                        : undefined
+                    }
+                    simulations={simulations}
+                    fieldsLoading={simulationFieldsLoading}
+                    summaryMissing={simulationSummaryMissing}
+                    fieldsError={
+                      Boolean(simulationFieldsError) &&
+                      simulationFieldsData === undefined
+                    }
+                    fieldsRetrying={simulationFieldsValidating}
+                    onRetryFields={() => void retrySimulationFields()}
+                    mode={mode}
+                    onModeChange={changeMode}
+                    view={snappedView}
+                    effectiveView={effectiveView}
+                    onViewChange={selectView}
+                    onSplitAvailableChange={setSplitAvailable}
+                    onAddModeChange={setAddModeSnap}
+                    listSlack={listSlack}
+                    onListSlackChange={changeListSlack}
+                    selectedFieldId={selectedFieldId}
+                    onSelectedFieldChange={setSelectedFieldId}
+                    onSelectField={selectFieldFromSearch}
+                    selectedYearIndex={selectedYearIndex}
+                    onSelectedYearIndexChange={setSelectedYearIndex}
+                    optimizeDialogOpen={optimizeDialogOpen}
+                    onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                    onEditBasis={openNewSimulation}
+                    onError={showError}
+                  />
+                )}
+              />
+              <Route
+                path="simulations"
+                element={
+                  <SimulationOverview
+                    farmId={loadedFarm.id}
+                    fields={fields}
+                    simulations={simulations}
+                    selection={activeSelection}
+                    copyingSimulationId={simulationActions.copyingSimulationId}
+                    deletingSimulationId={
+                      simulationActions.deletingSimulationId
+                    }
+                    onOpen={openView}
+                    onCopySimulation={(simulation) =>
+                      void simulationActions.copySimulation(simulation)
+                    }
+                    onDeleteSimulation={setSimulationToDelete}
+                    onNewSimulation={() => openNewSimulation(null)}
+                  />
+                }
+              />
+              <Route
+                path="simulations/compare"
+                element={
+                  <SimulationComparison
+                    farmId={loadedFarm.id}
+                    fields={fields}
+                    simulations={simulations}
+                  />
+                }
+              />
+              <Route
+                path="economics"
+                element={
+                  <EconomicsOverview
+                    simulations={simulations}
+                    onDeleteProfile={setProfileToDelete}
+                  />
+                }
+              />
+              <Route
+                path="economics/:profileId"
+                element={
+                  <EconomicsProfilePage
+                    simulations={simulations}
+                    onOpenSimulation={(simulationId) =>
+                      openView(
+                        { kind: 'simulation', id: simulationId },
+                        'values',
+                      )
+                    }
+                    onDeleteProfile={setProfileToDelete}
+                    onReturn={returnFromProfile}
+                  />
+                }
+              />
+              <Route
+                path="economics/:profileId/guide"
+                element={
+                  <EconomicsGuidePage
+                    farmName={loadedFarm.name}
+                    simulations={simulations}
+                    onOpenSimulation={(simulationId) =>
+                      openView(
+                        { kind: 'simulation', id: simulationId },
+                        'values',
+                      )
+                    }
+                  />
+                }
+              />
+              <Route
+                path="about"
+                element={
+                  <FarmAboutPage key={loadedFarm.id} farm={loadedFarm} />
+                }
+              />
+              <Route path="*" element={<Navigate to={farmPath} replace />} />
+            </Routes>
+          ) : (
+            <>
+              <p role="status" className="sr-only">
+                Indlæser bedriften.
+              </p>
+              <FarmContentSkeleton />
+            </>
+          )}
+        </SidebarInset>
+      </div>
       {loadedFarm ? (
         <>
           <NewScenarioPanel

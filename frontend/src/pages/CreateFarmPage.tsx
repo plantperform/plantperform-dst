@@ -19,7 +19,7 @@ import {
 import { createFarm, createFieldsFromRegistry } from '@/api/mutations'
 import { waitForFarmHistory } from '@/api/views'
 import type { RegistryField } from '@/api/types'
-import { AppTopBar } from '@/components/AppTopBar'
+import { AppBar, AppBarCurrent } from '@/components/AppBar'
 import { RegistryFieldsMap } from '@/components/farm/RegistryFieldsMap'
 import {
   CreateStatus,
@@ -305,23 +305,9 @@ export const CreateFarmPage = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <AppTopBar>
-        <ol className="hidden items-center gap-[26px] text-[13px] sm:flex">
-          {STEPS.map((label, index) => (
-            <li
-              key={label}
-              aria-current={index === activeStep ? 'step' : undefined}
-              className={
-                index <= activeStep
-                  ? 'font-semibold'
-                  : 'text-brand-foreground/70'
-              }
-            >
-              {index + 1} {label}
-            </li>
-          ))}
-        </ol>
-      </AppTopBar>
+      <AppBar steps={STEPS} activeStep={activeStep}>
+        <AppBarCurrent>Opret bedrift</AppBarCurrent>
+      </AppBar>
       <div className="mx-auto grid max-w-6xl justify-center gap-10 px-6 pt-10 pb-16 sm:px-10 lg:grid-cols-[640px_380px]">
         <div className="min-w-0">
           {lookupCvr !== null ? (
