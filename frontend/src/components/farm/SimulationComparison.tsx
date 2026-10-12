@@ -1,7 +1,6 @@
 import { isSimulationReady } from '@/lib/simulation-creation'
-import { ArrowLeft } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   useFieldYearValues,
@@ -11,6 +10,7 @@ import {
 } from '@/api/hooks'
 import { combineProgress, type RequestProgress } from '@/api/request-progress'
 import type { FieldRecord, FieldYearValues, Simulation } from '@/api/types'
+import { BackLink } from '@/components/BackLink'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { ComparisonCharts } from '@/components/farm/ComparisonCharts'
@@ -326,13 +326,9 @@ export const SimulationComparison = ({
   return (
     <div className="@container min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full max-w-[96rem] flex-col gap-6 px-6 pt-8 pb-16 sm:px-10">
-        <Link
-          to={`/farms/${farmId}/simulations`}
-          className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Simuleringer
-        </Link>
+        <BackLink to={`/farms/${farmId}/simulations`}>
+          Tilbage til Simuleringer
+        </BackLink>
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="font-display text-4xl tracking-tight">Sammenlign</h1>

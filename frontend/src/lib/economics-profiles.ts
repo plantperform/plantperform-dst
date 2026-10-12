@@ -84,9 +84,11 @@ export const describeProfileUsers = (simulationNames: string[]): string =>
     : 'Bruges ikke af nogen simulering endnu'
 
 export const deleteProfileMessage = (simulationNames: string[]): string =>
-  simulationNames.length > 0
-    ? `${describeProfileUsers(simulationNames)}, som går tilbage til ${STANDARD_PROFILE.name}.`
-    : `${describeProfileUsers(simulationNames)}.`
+  `Profilen slettes. ${
+    simulationNames.length > 0
+      ? `${formatNameList(simulationNames)} regner derefter med Standard.`
+      : 'Ingen simuleringer regner med den.'
+  } Det kan ikke fortrydes.`
 
 export const ECONOMICS_INVITATION =
   'Har bedriften en anden salgspris, et andet udbytte eller andre priser for markarbejdet, kan tallene rettes i en økonomiprofil.'
@@ -110,6 +112,11 @@ export const describeEconomicsEntry = (
     }: ${formatNameList(ownProfileNames)}`,
     text: `Indtil ${single ? 'profilen' : 'profilerne'} indgår i beregningen, er tallene regnet med ${STANDARD_PROFILE.name}.`,
   }
+}
+
+export const describeOwnProfileCount = (count: number): string => {
+  if (count === 0) return 'Kun Standard.'
+  return `${count} ${count === 1 ? 'egen profil' : 'egne profiler'} ud over Standard.`
 }
 
 export const describeOwnProfiles = (names: string[]): string => {

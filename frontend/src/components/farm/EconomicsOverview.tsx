@@ -22,6 +22,7 @@ import {
   type DbDeltaScale,
 } from '@/lib/economics'
 import {
+  describeOwnProfileCount,
   describeProfileUsers,
   describeStandard,
   ECONOMICS_INVITATION,
@@ -164,11 +165,13 @@ const ProfileCard = ({
 }
 
 type EconomicsOverviewProps = {
+  farmName: string
   simulations: Simulation[]
   onDeleteProfile: (profile: EconomicsProfile) => void
 }
 
 export const EconomicsOverview = ({
+  farmName,
   simulations,
   onDeleteProfile,
 }: EconomicsOverviewProps) => {
@@ -186,22 +189,25 @@ export const EconomicsOverview = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-5 px-6 pt-10 pb-16 sm:px-10">
+      <div className="@container mx-auto flex max-w-[96rem] flex-col gap-5 px-6 pt-9 pb-15 sm:px-10">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="font-display text-4xl tracking-tight">Økonomi</h1>
-            <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-              En økonomiprofil er bedriftens egne priser, mængder og udbytter
-              oven på Standard, og hver simulering regner med en af profilerne.
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              <b className="font-semibold text-foreground">{farmName}</b>.{' '}
+              {describeOwnProfileCount(cards.length)} Priser, mængder og
+              udbytter, som beregningen bygger på.
             </p>
             <p className="mt-1 text-sm text-warning-strong">
               {PROFILES_NOT_IN_CALCULATION}
             </p>
           </div>
-          <Button onClick={startFromStandard}>
-            <Plus aria-hidden="true" />
-            Ny økonomiprofil
-          </Button>
+          {cards.length > 0 ? (
+            <Button onClick={startFromStandard}>
+              <Plus aria-hidden="true" />
+              Ny økonomiprofil
+            </Button>
+          ) : null}
         </header>
         <EconomicsBanner
           label="Standard"
@@ -232,11 +238,11 @@ export const EconomicsOverview = ({
             />
           ))}
           {cards.length === 0 ? (
-            <Card className="flex flex-col items-start justify-center gap-3 border-dashed p-6">
-              <h2 className="font-display text-[19px] leading-6">
+            <Card className="col-span-full flex flex-col items-center gap-3 border-dashed px-6 py-11 text-center">
+              <h2 className="text-[17px] font-semibold">
                 Ingen egne profiler endnu
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="max-w-[460px] text-sm text-muted-foreground">
                 {ECONOMICS_INVITATION}
               </p>
               <Button onClick={startFromStandard}>
