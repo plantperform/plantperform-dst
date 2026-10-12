@@ -26,14 +26,15 @@ export const DEFAULT_FIELDS_SORT: FieldsSortState = {
   direction: 'asc',
 }
 
+const MANURE_COLUMN_IDS = ['manureUtilised', 'manureTons']
+
 // The Gødning group's columns, shown and hidden together.
 export const FERTILISER_COLUMN_IDS = [
   'cropNorm',
   'precedingCropValue',
   'mineralFertiliser',
-  'manureUtilised',
   'availableN',
-  'manureTons',
+  ...MANURE_COLUMN_IDS,
 ]
 
 export const OPTIONAL_COLUMN_IDS = [
@@ -104,6 +105,13 @@ export const readStoredColumnVisibility = (
     return defaults
   }
 }
+
+export const withoutManureColumns = (
+  visibility: VisibilityState,
+): VisibilityState => ({
+  ...visibility,
+  ...Object.fromEntries(MANURE_COLUMN_IDS.map((id) => [id, false])),
+})
 
 export const storeColumnVisibility = (
   isSimulationView: boolean,

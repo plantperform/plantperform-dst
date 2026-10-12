@@ -7,6 +7,7 @@ import {
   fertiliserByFieldId,
   fieldFertiliser,
   totalFertiliser,
+  usesManure,
 } from '@/lib/fertiliser-overview'
 import { emptyMeasures } from '@/lib/field-domain'
 
@@ -144,6 +145,22 @@ describe('available N', () => {
       null,
     )
     expect(availableNShareOfNorm({ ...figures, cropNormKgNHa: 0 })).toBe(null)
+  })
+})
+
+describe('usesManure', () => {
+  it('is false without year values or without organisk gødning', () => {
+    expect(usesManure(undefined)).toBe(false)
+    expect(usesManure({ a: [yearResult(), yearResult()] })).toBe(false)
+  })
+
+  it('is true when one mark gets organisk gødning in one year', () => {
+    expect(
+      usesManure({
+        a: [yearResult()],
+        b: [yearResult(), yearResult({ manureTonsPerHa: 12 })],
+      }),
+    ).toBe(true)
   })
 })
 
