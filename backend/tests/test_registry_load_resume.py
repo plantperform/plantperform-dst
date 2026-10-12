@@ -125,7 +125,7 @@ class RegistryLoadRecoveryTests(unittest.TestCase):
                     oeko boolean, oestoette boolean, hoejeste_hnv smallint, kvotegivende boolean,
                     omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
                     percolation_by_kategori jsonb, org_n_topsoil double precision,
-                    s_soil double precision, banned boolean
+                    s_soil double precision, banned boolean, secondary_crop_history jsonb
                 );
                 CREATE TABLE afgroede (afgroedekode integer PRIMARY KEY);
                 INSERT INTO registry_field (imk_id, marknr) VALUES (999, 'original');
