@@ -403,6 +403,7 @@ describe('toCreateSimulationInput', () => {
     }
     expect(toCreateSimulationInput(values)).toEqual({
       name: 'Sædskifte 2026',
+      optimizeOnCreate: true,
       allowedRotationVariants: ['10', '20'],
       allowedNNormPercentages: ['100'],
       fertiliser: {
@@ -508,6 +509,7 @@ describe('simulationToFormValues', () => {
     expect(values.fertiliserChoice).toBe('Kvæggylle')
     expect(toCreateSimulationInput(values)).toEqual({
       name: 'Test2 (kopi)',
+      optimizeOnCreate: true,
       allowedRotationVariants: ['10', '20'],
       allowedNNormPercentages: ['100', '95', '85'],
       fertiliser: kvaeggylle.fertiliser,
@@ -555,11 +557,10 @@ describe('simulationToFormValues', () => {
 })
 
 describe('optimize on create', () => {
-  it('is on by default and stays out of the createSimulation payload', () => {
+  it('is on by default and is persisted in the creation payload', () => {
     expect(DEFAULT_SIMULATION_FORM_VALUES.optimizeOnCreate).toBe(true)
-    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty(
-      'optimizeOnCreate',
-    )
+    expect(toCreateSimulationInput(filledValues).optimizeOnCreate).toBe(true)
+    expect(toCreateSimulationInput({ ...filledValues, optimizeOnCreate: false }).optimizeOnCreate).toBe(false)
   })
 
   it('accepts both choices on the confirm step', () => {

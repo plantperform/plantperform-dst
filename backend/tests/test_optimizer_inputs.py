@@ -1,6 +1,7 @@
 """Compact cache parity, selective detail reads, and derived-column migration."""
 
 import importlib.util
+import json
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,7 +25,7 @@ from test_optimizer_lifecycle import (
 
 from app.data import optimization_store
 from app.data import simulation_store as store
-from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
+from app.data.optimizer_inputs import optimizer_input, optimizer_input_json, parse_optimizer_input
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import OptimizationConstraints
 from app.services.scenario.rotations import compute_yearly_summary
@@ -61,6 +62,7 @@ class CompactFodderTests(unittest.TestCase):
             field_id="field-b", jbnr=5, candidates=[mixed_fodder_candidate()]
         )
         compact = optimizer_input(full)
+        self.assertEqual(json.loads(optimizer_input_json(full)), compact)
         years = compact["candidates"][0]["years"]
         self.assertEqual([year["fen_fe_ha"] for year in years], MIXED_FEN_FE_HA)
         self.assertTrue(all("db_detail" not in year for year in years))
@@ -382,9 +384,10 @@ class CompactMigrationTests(DatabaseTests):
 
         event.listen(self.engine, "before_cursor_execute", record)
         try:
-            with self.assertLogs(self.migration.logger, level="INFO") as logs:
+            with self.assertLogs(self.migrations[0].logger, level="INFO") as logs:
                 with self.engine.begin() as connection:
-                    self.migrate(connection)
+                    with Operations.context(MigrationContext.configure(connection)):
+                        self.migrations[0].upgrade()
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
         updates = [
@@ -396,6 +399,9 @@ class CompactMigrationTests(DatabaseTests):
             any("SELECT id FROM simulation_field_candidates" in sql for sql in queries)
         )
         self.assertTrue(any("backfilled 32 candidate caches" in line for line in logs.output))
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                self.migrations[1].upgrade()
         with self.engine.connect() as connection:
             for row in connection.execute(select(caches)):
                 self.assertEqual(

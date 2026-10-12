@@ -1,8 +1,10 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
+from app.domain.creation import CreationStatus
 from app.domain.field import Crop
 from app.domain.optimization import SimulationResultSummary
 
@@ -129,6 +131,7 @@ class OptimizationConstraints(CamelModel):
 
 
 class Simulation(CamelModel):
+    creation_status: CreationStatus = "done"
     revision: int = 0
     result: SimulationResultSummary = Field(default_factory=SimulationResultSummary)
     id: str
@@ -159,6 +162,8 @@ class Simulation(CamelModel):
 
 
 class CreateSimulationRequest(CamelModel):
+    request_id: UUID | None = None
+    optimize_on_create: bool = False
     name: str = Field(min_length=1)
     constraints: OptimizationConstraints = Field(default_factory=OptimizationConstraints)
     # Flat list of selected saedskiftevariant IDs (from the expandable list in

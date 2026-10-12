@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -8,7 +8,6 @@ from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data.repository import (
     FieldNotOptimizedError,
-    create_simulation,
     delete_simulation,
     get_registry_soil_data,
     get_simulation,
@@ -24,6 +23,12 @@ from app.data.repository import (
 )
 from app.data.simulation_store import SetupRevisionConflictError, get_result
 from app.domain.base import CamelModel
+from app.domain.creation import (
+    CreationConflictError,
+    CreationNotReadyError,
+    CreationQueueUnavailableError,
+    RetrySimulationCreationRequest,
+)
 from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import (
     OptimizeSimulationRequest,
@@ -40,6 +45,8 @@ from app.domain.simulation import (
     OptimizationConstraints,
     Simulation,
 )
+from app.services.creation.jobs import retry as retry_creation
+from app.services.creation.jobs import submit as submit_creation
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.optimization.jobs import (
     QueueUnavailableError,
@@ -59,8 +66,33 @@ from app.services.scenario.rotations import (
 
 NUM_ROTATION_YEARS = 8
 
-router = APIRouter(prefix="/farms/{farm_id}/simulations", tags=["simulations"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
+
+
+def require_completed_creation(request: Request, user: CurrentUser):
+    simulation_id = request.path_params.get("simulation_id")
+    path = request.scope["route"].path
+    if (
+        simulation_id is None
+        or (request.method in ("GET", "DELETE") and path.endswith("/{simulation_id}"))
+        or path.endswith("/result")
+        or path.endswith("/creation/retry")
+    ):
+        return
+    simulation = get_simulation(request.path_params["farm_id"], simulation_id, user.email)
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    if simulation.creation_status != "done":
+        raise HTTPException(
+            status_code=409, detail="Simuleringen er ikke færdig med at blive oprettet."
+        )
+
+
+router = APIRouter(
+    prefix="/farms/{farm_id}/simulations",
+    tags=["simulations"],
+    dependencies=[Depends(require_completed_creation)],
+)
 
 
 class YearlySummaryEntryResponse(CamelModel):
@@ -84,17 +116,66 @@ def get_farm_simulations(
     return simulations
 
 
-@router.post("", response_model=Simulation)
+@router.post("", response_model=Simulation, status_code=202)
 def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> Simulation:
-    simulation = create_simulation(farm_id, request, user.email)
+    try:
+        simulation = submit_creation(
+            farm_id, request, user.email, background_tasks=background_tasks
+        )
+    except CreationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CreationQueueUnavailableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "QUEUE_UNAVAILABLE",
+                "message": str(error),
+                "simulationId": error.simulation_id,
+            },
+        ) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     if simulation is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
+    return simulation
+
+
+@router.post("/{simulation_id}/creation/retry", response_model=Simulation, status_code=202)
+def post_farm_simulation_creation_retry(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    request: RetrySimulationCreationRequest | None = None,
+) -> Simulation:
+    try:
+        simulation = retry_creation(
+            farm_id,
+            simulation_id,
+            user.email,
+            optimize_on_create=request.optimize_on_create if request is not None else False,
+            background_tasks=background_tasks,
+        )
+    except CreationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CreationQueueUnavailableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "QUEUE_UNAVAILABLE",
+                "message": str(error),
+                "simulationId": error.simulation_id,
+            },
+        ) from error
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return simulation
 
 
@@ -136,6 +217,8 @@ def patch_farm_simulation_constraints(
 ) -> Simulation:
     try:
         simulation = update_simulation_constraints(farm_id, simulation_id, request, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -182,8 +265,11 @@ def get_farm_simulation_crop_area_ranges(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[CropAreaRangeResponse]:
-    fields = list_simulation_fields(farm_id, simulation_id, user.email)
-    field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
+    try:
+        fields = list_simulation_fields(farm_id, simulation_id, user.email)
+        field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     if fields is None or field_candidates is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
@@ -211,7 +297,7 @@ def _submit_optimization(farm_id, simulation_id, user, kind, request, background
         )
     except SimulationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
-    except SubmissionConflictError as error:
+    except (SubmissionConflictError, CreationNotReadyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except QueueUnavailableError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
@@ -277,7 +363,10 @@ def get_farm_simulation_yearly_optimization_candidates(
     shown (base_ref is None); "+manuel" variants left by earlier Phase 10/11
     runs are filtered out using the same pattern as _expand_yearly_options.
     """
-    field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
+    try:
+        field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     if field_candidates is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
@@ -343,7 +432,10 @@ def get_farm_simulation_fields(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[FieldRecord]:
-    fields = list_simulation_fields(farm_id, simulation_id, user.email)
+    try:
+        fields = list_simulation_fields(farm_id, simulation_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     if fields is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -359,7 +451,10 @@ def patch_farm_simulation_field(
     request: UpdateFieldRequest,
     user: CurrentUser,
 ) -> FieldRecord:
-    field = update_simulation_field(farm_id, simulation_id, field_id, request, user.email)
+    try:
+        field = update_simulation_field(farm_id, simulation_id, field_id, request, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     if field is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
@@ -379,6 +474,8 @@ def get_farm_simulation_field_candidate_detail(
 ) -> RotationCandidateEvaluation:
     try:
         detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except FieldNotOptimizedError as error:
         raise HTTPException(
             status_code=422,
@@ -418,15 +515,18 @@ def post_farm_simulation_field_preview_rotation(
     if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
-    candidates_row = get_simulation_field_candidates(
-        farm_id,
-        simulation_id,
-        field_id,
-        user.email,
-    )
-    if candidates_row is None:
-        raise HTTPException(status_code=404, detail="Mark ikke fundet")
-    field = get_simulation_field(farm_id, simulation_id, field_id, user.email)
+    try:
+        candidates_row = get_simulation_field_candidates(
+            farm_id,
+            simulation_id,
+            field_id,
+            user.email,
+        )
+        if candidates_row is None:
+            raise HTTPException(status_code=404, detail="Mark ikke fundet")
+        field = get_simulation_field(farm_id, simulation_id, field_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     if field is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
     soil_data = get_registry_soil_data(field.imk_id)
@@ -486,7 +586,7 @@ def post_farm_simulation_field_apply_rotation(
             user.email,
             request.start_year,
         )
-    except SetupRevisionConflictError as error:
+    except (SetupRevisionConflictError, CreationNotReadyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except ManualRotationNotFoundError as error:
         raise HTTPException(status_code=404, detail="Simulering eller mark ikke fundet") from error
@@ -506,7 +606,10 @@ def get_farm_simulation_yearly_summary(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlySummaryEntryResponse]:
-    summary = compute_yearly_summary(farm_id, simulation_id, user.email)
+    try:
+        summary = compute_yearly_summary(farm_id, simulation_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     if summary is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")

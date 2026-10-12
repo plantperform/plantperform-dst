@@ -100,9 +100,19 @@ class AfgroedeMigrationTests(unittest.TestCase):
         permanent = load_migration("20260922_0001_permanent_afgrode.py")
         current = load_migration("20260925_0001_consolidate_afgroede.py")
         flags = load_migration("20260928_0001_afgroede_crop_flags.py")
+        crop_updates = [
+            load_migration(name)
+            for name in (
+                "20261009_0001_afgroede_w_vinterplantedaekke.py",
+                "20261009_0002_afgroede_virkemiddel_flag.py",
+                "20261009_0003_afgroede_praecisionsgoedskning.py",
+            )
+        ]
         with self.engine.begin() as connection:
             op = Operations(MigrationContext.configure(connection))
             previous.op = permanent.op = current.op = flags.op = op
+            for migration in crop_updates:
+                migration.op = op
             connection.execute(sa.text("CREATE TABLE registry_field (crop_history json NOT NULL)"))
             previous.upgrade()
             permanent.upgrade()
@@ -157,6 +167,8 @@ class AfgroedeMigrationTests(unittest.TestCase):
             )
             current.upgrade()
             flags.upgrade()
+            for migration in crop_updates:
+                migration.upgrade()
 
             crops = {
                 row.afgroedekode: row
@@ -245,6 +257,8 @@ class AfgroedeMigrationTests(unittest.TestCase):
                 afstromning.clear_lookup_cache()
                 db_calculator._load_udbyttenormer.cache_clear()
 
+            for migration in reversed(crop_updates):
+                migration.downgrade()
             flags.downgrade()
             columns = {column["name"] for column in sa.inspect(connection).get_columns("afgroede")}
             self.assertNotIn("er_hovedafgrode", columns)

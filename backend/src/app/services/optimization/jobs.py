@@ -40,10 +40,17 @@ class QueueUnavailableError(Exception):
 
 
 def submit(
-    farm_id, simulation_id, email, kind, request, *, background_tasks: BackgroundTasks | None = None
+    farm_id,
+    simulation_id,
+    email,
+    kind,
+    request,
+    *,
+    background_tasks: BackgroundTasks | None = None,
+    transport: str | None = None,
 ):
     started = time.monotonic()
-    production = is_production()
+    production = transport == "sqs" if transport is not None else is_production()
     queue_url = os.getenv("OPTIMIZER_QUEUE_URL")
     if production and not queue_url:
         raise QueueUnavailableError("Optimeringskøen er ikke konfigureret.")
@@ -114,6 +121,8 @@ def submit(
                 DelaySeconds=0,
                 MessageBody=json.dumps(
                     {
+                        "jobType": "optimization",
+                        "farmId": farm_id,
                         "simulationId": simulation_id,
                         "runId": run_id,
                     }

@@ -23,8 +23,11 @@ class ProductionBoundaryTests(unittest.TestCase):
             sys.meta_path.insert(0, BlockSolverImports())
             from fastapi.testclient import TestClient
             from app import main
+            from app.api.v0 import simulations
             from app.auth import AuthenticatedUser, current_user
             from app.domain.optimization import OptimizeSimulationRequest, SimulationResult
+            from app.domain.simulation import CreateSimulationRequest, Simulation
+            from app.services.creation import jobs as creation_jobs
             from app.services.optimization import jobs
 
             request = OptimizeSimulationRequest(expected_revision=0, run_id=uuid4())
@@ -35,7 +38,11 @@ class ProductionBoundaryTests(unittest.TestCase):
             )
             with (
                 patch.object(main, 'validate_aws_region') as validate,
-                patch.object(main, 'recover_local_runs') as recover,
+                patch.object(main, 'recover_local_optimization_runs') as recover,
+                patch.object(main, 'recover_local_simulation_creations') as recover_creations,
+                patch.object(simulations, 'get_simulation', return_value=Simulation(
+                    id='sim', farm_id='farm', name='test', created_at='2026-10-09'
+                )),
                 patch.object(jobs, 'SessionLocal') as sessions,
                 patch.object(jobs, '_row', return_value=SimpleNamespace(revision=0)),
                 patch.object(jobs, 'get_result', return_value=queued),
@@ -54,11 +61,34 @@ class ProductionBoundaryTests(unittest.TestCase):
                 assert response.json()['runId'] == str(request.run_id)
                 validate.assert_called_once_with()
                 recover.assert_not_called()
+                recover_creations.assert_not_called()
                 queue.send_message.assert_called_once()
                 assert queue.send_message.call_args.kwargs['DelaySeconds'] == 0
                 assert json.loads(queue.send_message.call_args.kwargs['MessageBody']) == {
+                    'jobType': 'optimization', 'farmId': 'farm',
                     'simulationId': 'sim', 'runId': str(request.run_id),
                 }
+            creation_request = CreateSimulationRequest(name='new')
+            creation_job = creation_jobs.creation_store.job_for(
+                'farm', 'new', 0, creation_request, 'member@example.com'
+            )
+            queue.reset_mock()
+            with (
+                patch.object(creation_jobs.creation_store, 'create',
+                    return_value=('new', creation_job)),
+                patch.object(creation_jobs.repository, 'get_simulation',
+                    return_value=Simulation(
+                        id='new', farm_id='farm', name='new', created_at='2026-10-12',
+                        creation_status='queued',
+                    )),
+                patch.object(creation_jobs, 'sqs_client', return_value=queue),
+            ):
+                created = creation_jobs.submit('farm', creation_request, 'member@example.com')
+            assert created.creation_status == 'queued'
+            queue.send_message.assert_called_once()
+            assert json.loads(queue.send_message.call_args.kwargs['MessageBody']) == (
+                creation_job.envelope()
+            )
             assert not any(
                 name.split('.')[0] in {'plantperform_optimizer', 'ortools'}
                 for name in sys.modules

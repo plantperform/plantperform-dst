@@ -2,16 +2,19 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
 )
 
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from app.api.v0 import farm_fields, registry, rotation_candidates, simulations
 from app.auth import AuthenticatedUser, current_user
+from app.domain.creation import CreationNotReadyError
 from app.domain.soil import MissingSoilDataError
 
 MEMBER = AuthenticatedUser(email="member@example.com")
@@ -148,6 +151,71 @@ class SimulationAccessControlTests(unittest.TestCase):
             )
 
         self.assertEqual(yearly_summary.call_args.args[-1], MEMBER.email)
+
+
+class SimulationReadinessTests(unittest.TestCase):
+    def test_downstream_readiness_errors_return_conflict_after_initial_check_passes(self) -> None:
+        app = FastAPI()
+        app.include_router(simulations.router, prefix="/api/v0")
+        app.dependency_overrides[current_user] = lambda: MEMBER
+        optimization = {"runId": str(uuid4()), "expectedRevision": 0}
+        rotation = {"baseRef": {"saedskiftevariant": "1", "variant": "1", "nNormPct": "100"}}
+        cases = (
+            ("GET", "/fields", "list_simulation_fields", None),
+            ("GET", "/crop-area-ranges", "list_simulation_fields", None),
+            ("GET", "/crop-area-ranges", "list_simulation_field_candidates", None),
+            ("PATCH", "/constraints", "update_simulation_constraints", {}),
+            ("POST", "/optimize", "submit", optimization),
+            ("POST", "/optimize-yearly", "submit", optimization),
+            (
+                "GET",
+                "/yearly-optimization-candidates",
+                "list_simulation_field_candidates",
+                None,
+            ),
+            ("PATCH", "/fields/field-1", "update_simulation_field", {}),
+            (
+                "GET",
+                "/fields/field-1/candidate-detail",
+                "get_simulation_field_candidate_detail",
+                None,
+            ),
+            (
+                "POST",
+                "/fields/field-1/preview-rotation",
+                "get_simulation_field_candidates",
+                rotation,
+            ),
+            ("POST", "/fields/field-1/preview-rotation", "get_simulation_field", rotation),
+            ("POST", "/fields/field-1/apply-rotation", "apply_manual_rotation", rotation),
+            ("GET", "/yearly-summary", "compute_yearly_summary", None),
+        )
+        detail = "Simuleringen er ikke færdig med at blive oprettet."
+        with (
+            patch.object(
+                simulations, "get_simulation", return_value=SimpleNamespace(creation_status="done")
+            ) as get_simulation,
+            patch.object(simulations, "list_simulation_fields", return_value=[]),
+            patch.object(
+                simulations, "get_simulation_field_candidates", return_value=SimpleNamespace()
+            ),
+            TestClient(app) as client,
+        ):
+            for method, suffix, operation, body in cases:
+                with (
+                    self.subTest(method=method, suffix=suffix, operation=operation),
+                    patch.object(
+                        simulations, operation, side_effect=CreationNotReadyError(detail)
+                    ) as guarded_operation,
+                ):
+                    get_simulation.reset_mock()
+                    response = client.request(
+                        method, "/api/v0/farms/farm-1/simulations/simulation-1" + suffix, json=body
+                    )
+                    self.assertEqual(response.status_code, 409, response.text)
+                    self.assertEqual(response.json(), {"detail": detail})
+                    get_simulation.assert_called_with("farm-1", "simulation-1", MEMBER.email)
+                    guarded_operation.assert_called_once()
 
 
 class FarmFieldAccessControlTests(unittest.TestCase):

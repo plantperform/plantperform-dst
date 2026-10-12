@@ -1,3 +1,4 @@
+import { isSimulationReady } from '@/lib/simulation-creation'
 import { ArrowLeft } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
@@ -141,8 +142,9 @@ type SimulationComparisonProps = {
 export const SimulationComparison = ({
   farmId,
   fields,
-  simulations,
+  simulations: allSimulations,
 }: SimulationComparisonProps) => {
+  const simulations = useMemo(() => allSimulations.filter(isSimulationReady), [allSimulations])
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')

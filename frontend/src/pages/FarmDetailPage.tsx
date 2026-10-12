@@ -30,6 +30,8 @@ import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSimulationActions } from '@/components/farm/simulation-actions'
 import { SimulationComparison } from '@/components/farm/SimulationComparison'
+import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
+import { isSimulationReady } from '@/lib/simulation-creation'
 import { SimulationOverview } from '@/components/farm/SimulationOverview'
 import {
   resolveEffectiveView,
@@ -102,13 +104,20 @@ export const FarmDetailPage = () => {
       : selection
   const selectedSimulationId =
     activeSelection.kind === 'simulation' ? activeSelection.id : undefined
+  const selectedSimulation = simulations.find(
+    (simulation) => simulation.id === selectedSimulationId,
+  )
   const {
     data: simulationFieldsData,
     error: simulationFieldsError,
     isLoading: simulationFieldsLoading,
     isValidating: simulationFieldsValidating,
     mutate: retrySimulationFields,
-  } = useSimulationFields(farmId, selectedSimulationId)
+  } = useSimulationFields(
+    farmId,
+    selectedSimulationId,
+    Boolean(selectedSimulation && isSimulationReady(selectedSimulation)),
+  )
   const simulationFields = simulationFieldsData ?? []
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
@@ -356,7 +365,15 @@ export const FarmDetailPage = () => {
           <Routes>
             <Route
               index
-              element={
+              element={selectedSimulation && !isSimulationReady(selectedSimulation) ? (
+                <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
+                  <h1 className="font-display text-3xl">{selectedSimulation.name}</h1>
+                  <SimulationCreationStatus farmId={loadedFarm.id} simulation={selectedSimulation} />
+                  <Button variant="outline" onClick={() => setSimulationToDelete(selectedSimulation)}>
+                    Slet simulering
+                  </Button>
+                </div>
+              ) : (
                 <FarmInspector
                   farm={loadedFarm}
                   fields={activeFields}
@@ -394,7 +411,7 @@ export const FarmDetailPage = () => {
                   onEditBasis={openNewSimulation}
                   onError={showErrorToast}
                 />
-              }
+              )}
             />
             <Route
               path="simulations"
