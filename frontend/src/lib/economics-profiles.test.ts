@@ -9,6 +9,7 @@ import {
   allProfiles,
   deleteProfileMessage,
   describeEconomicsEntry,
+  describeOwnProfiles,
   describeProfileOption,
   describeProfileUsers,
   describeStandard,
@@ -217,5 +218,16 @@ describe('economics profiles', () => {
         }),
       ),
     ).toEqual(farm)
+  })
+
+  it('names the own profiles in one short line', () => {
+    expect(describeOwnProfiles([])).toBe('Kun Standard')
+    expect(describeOwnProfiles(['Bakkegården 2027'])).toBe('Bakkegården 2027')
+    expect(describeOwnProfiles(['Bakkegården 2027', 'Forsigtig 2027'])).toBe(
+      'Bakkegården 2027 og Forsigtig 2027',
+    )
+    expect(
+      describeOwnProfiles(['Bakkegården 2027', 'Forsigtig 2027', 'Våd høst']),
+    ).toBe('Bakkegården 2027 og 2 mere')
   })
 })
