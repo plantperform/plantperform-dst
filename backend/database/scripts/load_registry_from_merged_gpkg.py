@@ -131,10 +131,23 @@ def clean_bool(value: object) -> bool:
     return text_value is not None and text_value.casefold() in {"true", "1", "t", "yes"}
 
 
+def secondary_crop_history(row: object, years: list[int]) -> dict[str, int]:
+    """Return the years the row has a secondary crop (SekAfg<year>) in, with
+    its crop code."""
+    return {
+        str(year): code
+        for year in years
+        if (code := clean_int(getattr(row, f"SekAfg{year}"))) is not None
+    }
+
+
 def load_staging(dsn: str) -> None:
     info = read_info(str(MERGED_GPKG), layer=LAYER)
     feature_count = info["features"]
     print(f"Loading {feature_count:,} fields from merged gpkg into staging", flush=True)
+    # An older GeoPackage without SekAfg<year> columns gives every field none.
+    available = set(info["fields"])
+    secondary_years = [year for year in CROP_HISTORY_YEARS if f"SekAfg{year}" in available]
     columns = (
         [
             "IMK_ID", "Marknr", "IMK_areal", "CVR", "JB_Kode", "UdledgrKgNPerHa",
@@ -144,6 +157,7 @@ def load_staging(dsn: str) -> None:
         ]
         + list(PERCOLATION_COLUMNS_BY_KATEGORI)
         + [f"Afg{year}" for year in CROP_HISTORY_YEARS]
+        + [f"SekAfg{year}" for year in secondary_years]
     )
 
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
@@ -160,6 +174,7 @@ def load_staging(dsn: str) -> None:
                     omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
                     percolation_by_kategori jsonb, org_n_topsoil double precision,
                     s_soil double precision, banned boolean NOT NULL,
+                    secondary_crop_history jsonb NOT NULL,
                     geom geometry(MULTIPOLYGON, 4326) NOT NULL
                 )
                 """
@@ -170,7 +185,8 @@ def load_staging(dsn: str) -> None:
                 kystvand_id, kystvand_navn, retention, udledningsgraense_kgn_ha,
                 goedningsregion, oeko, oestoette, hoejeste_hnv, kvotegivende,
                 omlaegningsplan_virkemiddel, omlaegningsplan_status,
-                percolation_by_kategori, org_n_topsoil, s_soil, banned, geom
+                percolation_by_kategori, org_n_topsoil, s_soil, banned,
+                secondary_crop_history, geom
             ) FROM STDIN"""
         ) as copy:
             loaded = skipped_no_geom = skipped_dup_imk_id = 0
@@ -233,6 +249,7 @@ def load_staging(dsn: str) -> None:
                             clean_bool(row.kvotegivende), virkemiddel,
                             clean_str(row.omlaegningsplan_status), json.dumps(percolation),
                             org_n_topsoil, s_soil, banned,
+                            json.dumps(secondary_crop_history(row, secondary_years)),
                             f"SRID=4326;{to_multipolygon_wkt(row.geometry)}",
                         )
                     )
@@ -273,7 +290,7 @@ def finalize_registry_field(dsn: str) -> None:
                 udledningskvote_mark_kgn, jbnr, kystvand_id, kystvand_navn, retention,
                 goedningsregion, oeko, oestoette, hoejeste_hnv, kvotegivende,
                 omlaegningsplan_virkemiddel, omlaegningsplan_status,
-                percolation_by_kategori, org_n_topsoil, s_soil, banned
+                percolation_by_kategori, org_n_topsoil, s_soil, banned, secondary_crop_history
             )
             SELECT
                 imk_id, cvr, marknr, markblok, journalnr, area_ha, '', crop_history,
@@ -283,7 +300,8 @@ def finalize_registry_field(dsn: str) -> None:
                       {ROUND_DIGITS})::float,
                 jbnr, kystvand_id, kystvand_navn, retention, goedningsregion, oeko, oestoette,
                 hoejeste_hnv, kvotegivende, omlaegningsplan_virkemiddel,
-                omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned
+                omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned,
+                secondary_crop_history
             FROM {STAGING_TABLE}
             WHERE area_ha IS NOT NULL AND area_ha > 0
                 """
