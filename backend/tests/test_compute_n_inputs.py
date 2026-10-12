@@ -63,6 +63,24 @@ class ComputeNInputsTests(unittest.TestCase):
     def test_oekologisk_is_fertilized_at_full_norm(self) -> None:
         self.assertEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 175.0 - 18.0)
 
+    def fv(self, prev_udlaeg: int | None) -> float:
+        result = candidate_evaluator.compute_n_inputs(
+            VAARBYG, VINTERHVEDE, prev_udlaeg, 1, 100, 0.0, 70.0, False, False,
+        )
+        return result["fv_forfrugt"]
+
+    def test_efterafgroede_gives_the_following_afgroede_a_forfrugtsvaerdi(self) -> None:
+        for code in (950, 951, 954, 968, 970):
+            self.assertEqual(self.fv(code), 21.0)
+
+    def test_kvaelstoffikserende_efterafgroede_gives_50_kg(self) -> None:
+        self.assertEqual(self.fv(952), 50.0)
+        self.assertEqual(self.fv(953), 50.0)
+
+    def test_mellemafgroede_gives_no_forfrugtsvaerdi(self) -> None:
+        self.assertEqual(self.fv(9682), 0.0)
+        self.assertEqual(self.fv(None), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
