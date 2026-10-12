@@ -71,6 +71,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useStoredFlag } from '@/hooks/use-stored-flag'
 import {
   describeOwnProfiles,
   STANDARD_PROFILE_ID,
@@ -213,6 +214,13 @@ export const FarmSidebar = ({
   )
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
+  const [farmGroupMinimized, setFarmGroupMinimized] = useStoredFlag(
+    'plantperform.farmGroupMinimized',
+  )
+  const farmGroupOpen = !farmGroupMinimized
+  const farmGroupId = useId()
+  const showEconomics = farmGroupOpen || economicsPageActive
+  const showAbout = farmGroupOpen || aboutActive
   const pageActive = overviewActive || economicsPageActive || aboutActive
   const { user } = useAuth()
   const { data: members } = useFarmMembers(farm.id)
@@ -377,52 +385,57 @@ export const FarmSidebar = ({
       )}
 
       <SidebarGroup className={GROUP_CLASS}>
-        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
-          Bedriften
+        <SidebarGroupLabel
+          asChild
+          className={cn(GROUP_LABEL_CLASS, 'w-full hover:text-foreground')}
+        >
+          <button
+            type="button"
+            aria-expanded={farmGroupOpen}
+            aria-controls={farmGroupId}
+            onClick={() => setFarmGroupMinimized(farmGroupOpen)}
+          >
+            Bedriften
+            <ChevronRight
+              className={cn(
+                'ml-auto motion-safe:transition-transform',
+                farmGroupOpen && 'rotate-90',
+              )}
+              aria-hidden="true"
+            />
+          </button>
         </SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                size="lg"
-                isActive={economicsPageActive}
-                className={VIEW_BUTTON_CLASS}
-              >
-                <NavLink to={economics.overviewPath}>
-                  <Coins />
-                  <ViewMenuLabel name="Økonomi">
-                    <span className="truncate text-xs font-normal text-sidebar-foreground/70">
-                      {describeOwnProfiles(
-                        economics.ownProfiles.map((profile) => profile.name),
-                      )}
-                    </span>
-                  </ViewMenuLabel>
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                size="lg"
-                isActive={aboutActive}
-                className={VIEW_BUTTON_CLASS}
-              >
-                <NavLink to={`/farms/${farm.id}/about`}>
-                  <Info />
-                  <ViewMenuLabel name="Om bedriften">
-                    <span className="truncate text-xs font-normal text-sidebar-foreground/70">
-                      {members
-                        ? describeFarmAccess(
-                            otherMemberEmails(members, user?.email ?? ''),
-                          )
-                        : null}
-                    </span>
-                  </ViewMenuLabel>
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
+        <SidebarGroupContent id={farmGroupId}>
+          {showEconomics || showAbout ? (
+            <SidebarMenu>
+              {showEconomics ? (
+                <PageMenuItem
+                  to={economics.overviewPath}
+                  active={economicsPageActive}
+                  name="Økonomi"
+                  icon={<Coins />}
+                >
+                  {describeOwnProfiles(
+                    economics.ownProfiles.map((profile) => profile.name),
+                  )}
+                </PageMenuItem>
+              ) : null}
+              {showAbout ? (
+                <PageMenuItem
+                  to={`/farms/${farm.id}/about`}
+                  active={aboutActive}
+                  name="Om bedriften"
+                  icon={<Info />}
+                >
+                  {members
+                    ? describeFarmAccess(
+                        otherMemberEmails(members, user?.email ?? ''),
+                      )
+                    : null}
+                </PageMenuItem>
+              ) : null}
+            </SidebarMenu>
+          ) : null}
         </SidebarGroupContent>
       </SidebarGroup>
 
@@ -464,6 +477,40 @@ const CollapseMenuButton = () => {
     </SidebarMenu>
   )
 }
+
+type PageMenuItemProps = {
+  to: string
+  active: boolean
+  name: string
+  icon: ReactNode
+  children: ReactNode
+}
+
+const PageMenuItem = ({
+  to,
+  active,
+  name,
+  icon,
+  children,
+}: PageMenuItemProps) => (
+  <SidebarMenuItem>
+    <SidebarMenuButton
+      asChild
+      size="lg"
+      isActive={active}
+      className={VIEW_BUTTON_CLASS}
+    >
+      <NavLink to={to}>
+        {icon}
+        <ViewMenuLabel name={name}>
+          <span className="truncate text-xs font-normal text-sidebar-foreground/70">
+            {children}
+          </span>
+        </ViewMenuLabel>
+      </NavLink>
+    </SidebarMenuButton>
+  </SidebarMenuItem>
+)
 
 type ViewMenuLabelProps = {
   name: string
