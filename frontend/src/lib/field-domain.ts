@@ -127,17 +127,24 @@ export const isFieldLocked = (field: FieldRecord): boolean =>
   field.rotationId !== null &&
   field.allowedRotationIds[0] === field.rotationId
 
-export const formatNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)
+const numberFormat = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 1,
+})
+const wholeNumberFormat = new Intl.NumberFormat('da-DK', {
+  maximumFractionDigits: 0,
+})
+const oneDecimalFormat = new Intl.NumberFormat('da-DK', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
+export const formatNumber = (value: number) => numberFormat.format(value)
 
 export const formatWholeNumber = (value: number) =>
-  new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(value)
+  wholeNumberFormat.format(value)
 
 export const formatHectares = (areaHa: number) =>
-  new Intl.NumberFormat('da-DK', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(areaHa)
+  oneDecimalFormat.format(areaHa)
 
 export const formatShare = (share: number) => {
   const percent = share * 100
@@ -169,15 +176,10 @@ export const fieldTitle = (field: Pick<FieldRecord, 'name' | 'alias'>): string =
   field.alias ??
   (field.name.startsWith('Mark ') ? field.name : `Mark ${field.name}`)
 
-const compactMillionFormat = new Intl.NumberFormat('da-DK', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-})
-
 export const formatCompactDkk = (value: number): string => {
   const magnitude = Math.abs(value)
   if (magnitude >= 999_500) {
-    return `${compactMillionFormat.format(value / 1_000_000)} mio. kr`
+    return `${oneDecimalFormat.format(value / 1_000_000)} mio. kr`
   }
   if (magnitude >= 999.5) return `${formatWholeNumber(value / 1_000)} t.kr`
   return `${formatWholeNumber(value)} kr`
