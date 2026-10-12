@@ -79,8 +79,10 @@ def real_history_lookback(
     jbnr: int | None,
     goedningsregion: str | None,
     oeko: bool,
+    secondary_crop_history: dict[str, int] | None = None,
 ) -> dict[str, dict]:
-    """Return actual 2025/26 crop codes and historical N inputs for a field."""
+    """Return actual 2025/26 crop codes, historical N inputs and reported
+    catch crops for a field."""
     result: dict[str, dict] = {}
     for year in (2025, 2026):
         value = crop_history.get(str(year))
@@ -91,5 +93,6 @@ def real_history_lookback(
             "mncs": n_input["mncs"],
             "mnca": 0.0,
             "g0": n_input["g0"],
+            "secondary_crop": (secondary_crop_history or {}).get(str(year)),
         }
     return result

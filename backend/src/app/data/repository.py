@@ -535,6 +535,7 @@ def prepare_simulation_field(copied_field, registry_row, request, *, prepared=No
             jbnr,
             registry_row.goedningsregion,
             bool(registry_row.oeko),
+            registry_row.secondary_crop_history,
         )
 
         # A mark whose latest real afgrøde is permanent (ikke-omdrift -
@@ -555,6 +556,7 @@ def prepare_simulation_field(copied_field, registry_row, request, *, prepared=No
                 percolation_by_kategori=percolation,
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
+                secondary_crop_history=registry_row.secondary_crop_history,
             )
             candidates.append(permanent_candidate)
             locked_id = permanent_candidate.ref.to_id()

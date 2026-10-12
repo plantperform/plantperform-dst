@@ -1,4 +1,5 @@
-"""Checks for what a reported catch crop stands for in the history calculation."""
+"""Checks for what a reported catch crop stands for in the history and
+simulation calculations."""
 
 import os
 import unittest
@@ -9,12 +10,13 @@ os.environ.setdefault(
     "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
 )
 
-from app.services.rotations import afgroede_normer
+from app.domain.rotation_candidate import RotationCandidateRef
+from app.services.rotations import afgroede_normer, historisk_goedning
 from app.services.rotations.historical_secondary_crop import (
     historical_secondary_crop,
     secondary_crop_name,
 )
-from app.services.scenario import field_history_evaluator
+from app.services.scenario import candidate_evaluator, field_history_evaluator
 
 VAARBYG = 1
 VINTERHVEDE = 11
@@ -167,6 +169,79 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
         years, _ = self.evaluate({"2025": VAARBYG, "2026": VAARBYG}, {"2025": CATCH_CROP})
 
         self.assertEqual(years[-1].forfrugtsvaerdi_kgn_ha, 21.0)
+
+
+class RealHistoryLookbackTests(unittest.TestCase):
+    @patch.object(
+        historisk_goedning, "lookup_historisk_n_input", lambda *args: {"mncs": 0.0, "g0": 0.0}
+    )
+    def test_carries_the_reported_catch_crops(self) -> None:
+        history = historisk_goedning.real_history_lookback(
+            {"2025": VAARBYG, "2026": VAARBYG}, 4, "Fyn", False, {"2026": CATCH_CROP}
+        )
+
+        self.assertEqual(
+            [history[year]["secondary_crop"] for year in ("2025", "2026")], [None, CATCH_CROP]
+        )
+
+
+def fake_n_inputs(*args, **kwargs) -> dict:
+    return {
+        "mncs": 100.0,
+        "mnca": 0.0,
+        "g0": 0.0,
+        "net_n": 100.0,
+        "org_mineral_n_applied": 0.0,
+        "fv_forfrugt": 0.0,
+        "n_norm": 100.0,
+    }
+
+
+@patch.object(afgroede_normer, "lookup_crop_params", fake_crop_params)
+@patch.object(afgroede_normer, "lookup_nfix", lambda *args, **kwargs: 0.0)
+@patch.object(candidate_evaluator, "compute_n_inputs", fake_n_inputs)
+@patch.object(
+    candidate_evaluator,
+    "calculate_db",
+    lambda *args, **kwargs: {"db": 0.0, "udbytte": 0.0, "udbytteenhed": ""},
+)
+class SimulationSecondaryCropTests(unittest.TestCase):
+    def first_position_prev_secondary_crop(self, first_crop: int, history_2026: dict):
+        calls: dict[int, dict] = {}
+
+        def record(**kwargs):
+            calls[kwargs["y"]] = kwargs
+            return {"L_nuar": 0.0}
+
+        with patch.object(candidate_evaluator.bridge_v2, "evaluate_leaching_position", record):
+            candidate_evaluator.evaluate_sequence_for_mark(
+                RotationCandidateRef(saedskiftevariant="test", variant="1", n_norm_pct="100"),
+                afgrode_seq=[first_crop] + [VAARBYG] * 7,
+                udlaeg_seq=[None] * 8,
+                udlaeg_navn_seq=[None] * 8,
+                active_len=8,
+                jbnr=4,
+                driftsform="Konventionel",
+                org_mineral_n=0.0,
+                mineralsk_andel_pct=70.0,
+                only_organic=False,
+                real_history={
+                    "2025": {"code": VAARBYG, "mncs": 0.0, "mnca": 0.0, "g0": 0.0},
+                    "2026": {"code": VAARBYG, "mncs": 0.0, "mnca": 0.0, "g0": 0.0, **history_2026},
+                },
+            )
+        return calls[candidate_evaluator.START_CALENDAR_YEAR]["prev_udlaeg_kode"]
+
+    def test_reads_2026s_catch_crop_against_the_candidates_first_crop(self) -> None:
+        reported = {"secondary_crop": CATCH_CROP}
+
+        self.assertEqual(self.first_position_prev_secondary_crop(VAARBYG, reported), CATCH_CROP)
+        self.assertEqual(
+            self.first_position_prev_secondary_crop(VINTERHVEDE, reported), INTERMEDIATE_CROP
+        )
+
+    def test_has_none_for_history_stored_without_catch_crops(self) -> None:
+        self.assertIsNone(self.first_position_prev_secondary_crop(VAARBYG, {}))
 
 
 if __name__ == "__main__":

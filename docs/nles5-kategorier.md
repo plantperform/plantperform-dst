@@ -449,7 +449,9 @@ står for i beregningen:
 
 Historikberegningen (`field_history_evaluator`) sender årets og forrige års
 sekundære afgrøde til NLES5 og dækningsbidraget og lægger efterafgrødens
-forfrugtsværdi til.
+forfrugtsværdi til. Simuleringerne tolker 2026's efterafgrøde mod kandidatens
+2027-afgrøde og bruger den som 2027's sekundære afgrøde året før
+(`prev_udlaeg_kode`: forfrugtens vinterplantedække og forfrugtsværdi).
 
 ## WC — Responsfaktor (θ)
 

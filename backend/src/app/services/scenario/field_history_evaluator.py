@@ -222,6 +222,7 @@ def generate_permanent_crop_candidate(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    secondary_crop_history: dict[str, int] | None = None,
 ) -> RotationCandidateEvaluation:
     """Build the single "keep growing this permanent afgrøde" candidate for a mark.
 
@@ -251,9 +252,15 @@ def generate_permanent_crop_candidate(
         # Positions 0/1 still reach back into the mark's real crop_history for
         # forfrugt continuity (2026, then 2025); from position 2 on, every
         # earlier position was already this same synthetic afgrøde.
+        prev_udlaeg_kode = None
         if i == 0:
             prev_code = real_code_for(REAL_HISTORY_END_YEAR)
             prev2_code = real_code_for(REAL_HISTORY_END_YEAR - 1)
+            prev_udlaeg_kode = historical_secondary_crop(
+                (secondary_crop_history or {}).get(str(REAL_HISTORY_END_YEAR)),
+                prev_code,
+                afgrode_kode,
+            )
         elif i == 1:
             prev_code = afgrode_kode
             prev2_code = real_code_for(REAL_HISTORY_END_YEAR)
@@ -281,7 +288,9 @@ def generate_permanent_crop_candidate(
             if prev_code is not None
             else None
         )
-        fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        fv_forfrugt = (
+            prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        ) + afgroede_normer.catch_crop_preceding_crop_value(prev_udlaeg_kode)
 
         try:
             leaching = bridge_v2.evaluate_leaching_position(
@@ -290,7 +299,7 @@ def generate_permanent_crop_candidate(
                 prev_afgrode_kode=prev_code,
                 prev_prev_afgrode_kode=prev2_code,
                 udlaeg_kode=None,
-                prev_udlaeg_kode=None,
+                prev_udlaeg_kode=prev_udlaeg_kode,
                 jbnr=jbnr,
                 mncs=n_input["mncs"], mnca=n_input["mnca"], g0=n_input["g0"],
                 m1=n1["mncs"] + n1["mnca"], m2=n2["mncs"] + n2["mnca"],
