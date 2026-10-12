@@ -22,6 +22,8 @@ class RegistryField(CamelModel):
     area_ha: float
     crop_rotation: str
     crop_history: dict[str, int | None]
+    # The catch crops reported per year, {year: crop code}.
+    secondary_crop_history: dict[str, int] = Field(default_factory=dict)
     in_takeout_plan: str = "nej"
     udledningsgraense_kgn_ha: float = 0
     udledningskvote_mark_kgn: float = 0

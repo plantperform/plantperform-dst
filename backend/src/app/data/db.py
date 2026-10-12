@@ -66,6 +66,9 @@ registry_field_table = Table(
     Column("goedningsregion", Text, nullable=True),
     Column("kvotegivende", Boolean, nullable=False, server_default=false()),
     Column("crop_history", JSON, nullable=False),
+    # The catch crops reported per year, {year: 968}, as the GeoPackage's
+    # SekAfg<year> columns hold them; the calculation decides what they stand for.
+    Column("secondary_crop_history", JSON, nullable=False, server_default="{}"),
     Column("percolation_by_kategori", JSON, nullable=True),
     Column("org_n_topsoil", Float, nullable=True),
     Column("s_soil", Float, nullable=True),
