@@ -20,18 +20,14 @@ const SIDEBAR_ROW_CLASS = 'h-11 rounded-md bg-sidebar-accent'
 
 type FarmSidebarSkeletonProps = {
   farm?: Farm
-  onError: (message: string | null) => void
 }
 
-export const FarmSidebarSkeleton = ({
-  farm,
-  onError,
-}: FarmSidebarSkeletonProps) => (
+export const FarmSidebarSkeleton = ({ farm }: FarmSidebarSkeletonProps) => (
   <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
     <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
       <SidebarBrand />
       {farm ? (
-        <FarmSwitcher farm={farm} onError={onError} />
+        <FarmSwitcher farm={farm} />
       ) : (
         <Skeleton className="h-10 rounded-md bg-sidebar-accent group-data-[collapsible=icon]:size-8" />
       )}

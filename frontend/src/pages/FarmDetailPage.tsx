@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Link,
   Navigate,
@@ -22,6 +22,7 @@ import type { Simulation } from '@/api/types'
 import { retryFarmHistory } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
 import { ConfirmDeleteDialog } from '@/components/farm/ConfirmDeleteDialog'
+import { useToast } from '@/components/toast'
 import {
   calculationReturnState,
   type ReturnTarget,
@@ -34,6 +35,7 @@ import {
 import { EconomicsGuidePage } from '@/components/farm/EconomicsGuidePage'
 import { EconomicsOverview } from '@/components/farm/EconomicsOverview'
 import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
+import { FarmAboutPage } from '@/components/farm/FarmAboutPage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
 import {
   FarmContentSkeleton,
@@ -86,6 +88,8 @@ const FarmDetail = () => {
   const navigate = useNavigate()
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
   const onEconomicsPage = useMatch('/farms/:farmId/economics/*') !== null
+  const onAboutPage = useMatch('/farms/:farmId/about') !== null
+  const { showError } = useToast()
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const farmView = useFarmView(farmId)
@@ -168,10 +172,6 @@ const FarmDetail = () => {
     useState<Simulation | null>(null)
   const [profileToDelete, setProfileToDelete] =
     useState<EconomicsProfile | null>(null)
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(
-    null,
-  )
-  const toastTimeoutRef = useRef<number | null>(null)
   const { width: sidebarWidth, changeWidth: setSidebarWidth } =
     useSidebarWidth()
   const notFound = farmError instanceof ApiError && farmError.status === 404
@@ -195,10 +195,7 @@ const FarmDetail = () => {
     if (simulationsFailed) void retrySimulations()
   }
   const isReady =
-    farm !== undefined &&
-    !farmLoading &&
-    !fieldsLoading &&
-    !simulationsLoading
+    farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
   const activeFields =
     activeSelection.kind === 'current' ? fields : simulationFields
   const activeFieldsLoading =
@@ -225,33 +222,6 @@ const FarmDetail = () => {
     }
   }, [email, loadedFarmId])
 
-  useEffect(
-    () => () => {
-      if (toastTimeoutRef.current !== null) {
-        window.clearTimeout(toastTimeoutRef.current)
-      }
-    },
-    [],
-  )
-
-  const showErrorToast = (message: string | null) => {
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current)
-    }
-
-    if (!message) {
-      setToast(null)
-      return
-    }
-
-    const toastId = Date.now()
-    setToast({ id: toastId, message })
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast((current) => (current?.id === toastId ? null : current))
-      toastTimeoutRef.current = null
-    }, 4000)
-  }
-
   const changeSelection = (next: FarmViewSelection) => {
     setSelection(next)
     if (!isSameSelection(next, activeSelection)) {
@@ -267,7 +237,7 @@ const FarmDetail = () => {
       const next = await retryFarmHistory(farmId)
       await farmView.mutate(next, { revalidate: next.status === 'done' })
     } catch {
-      showErrorToast('Kunne ikke starte beregningen.')
+      showError('Kunne ikke starte beregningen.')
     } finally {
       setRetryingHistory(false)
     }
@@ -291,11 +261,11 @@ const FarmDetail = () => {
     farmId,
     selection: activeSelection,
     onSelectionChange: changeSelection,
-    onError: showErrorToast,
+    onError: showError,
   })
 
   const leavePage = () => {
-    if (onOverview || onEconomicsPage) navigate(farmPath)
+    if (onOverview || onEconomicsPage || onAboutPage) navigate(farmPath)
   }
 
   const openView = (next: FarmViewSelection, nextMode: FarmInspectorMode) => {
@@ -374,7 +344,6 @@ const FarmDetail = () => {
               {failed ? 'Prøv beregningen igen.' : 'Markernes tal vises, når beregningen er færdig.'}
             </CardDescription>
           </CardHeader>
-          {toast ? <p role="alert" className="px-6 text-destructive">{toast.message}</p> : null}
           <CardContent className="flex gap-3">
             {failed && farmId ? (
               <Button loading={retryingHistory} onClick={() => void recalculateHistory()}>
@@ -400,6 +369,8 @@ const FarmDetail = () => {
           simulations={simulations}
           selection={activeSelection}
           overviewActive={onOverview}
+          economicsPageActive={onEconomicsPage}
+          aboutActive={onAboutPage}
           loadingSelection={simulationFieldsLoading}
           onSelectionChange={(next) => {
             changeSelection(next)
@@ -420,7 +391,6 @@ const FarmDetail = () => {
             selectView(next)
             leavePage()
           }}
-          onError={showErrorToast}
           copyingSimulationId={simulationActions.copyingSimulationId}
           deletingSimulationId={simulationActions.deletingSimulationId}
           onCopySimulation={(simulation) =>
@@ -434,18 +404,13 @@ const FarmDetail = () => {
           onWidthChange={setSidebarWidth}
         />
       ) : (
-        <FarmSidebarSkeleton farm={farm} onError={showErrorToast} />
+        <FarmSidebarSkeleton farm={farm} />
       )}
       <SidebarInset className="min-w-0 overflow-x-hidden">
         <SidebarTrigger
           className="fixed top-2 left-2 z-30 size-8 border bg-background shadow-sm md:hidden"
           aria-label="Vis eller skjul sidepanelet"
         />
-        {toast ? (
-          <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg">
-            <p role="alert">{toast.message}</p>
-          </div>
-        ) : null}
         {loadedFarm ? (
           <Routes>
             <Route
@@ -496,7 +461,7 @@ const FarmDetail = () => {
                   optimizeDialogOpen={optimizeDialogOpen}
                   onOptimizeDialogOpenChange={setOptimizeDialogOpen}
                   onEditBasis={openNewSimulation}
-                  onError={showErrorToast}
+                  onError={showError}
                 />
               )}
             />
@@ -563,6 +528,10 @@ const FarmDetail = () => {
                 />
               }
             />
+            <Route
+              path="about"
+              element={<FarmAboutPage key={loadedFarm.id} farm={loadedFarm} />}
+            />
             <Route path="*" element={<Navigate to={farmPath} replace />} />
           </Routes>
         ) : (
@@ -585,7 +554,7 @@ const FarmDetail = () => {
             onSimulationCreated={(simulation) =>
               changeSelection({ kind: 'simulation', id: simulation.id })
             }
-            onError={showErrorToast}
+            onError={showError}
           />
           <ConfirmDeleteDialog
             name={simulationToDelete?.name ?? null}

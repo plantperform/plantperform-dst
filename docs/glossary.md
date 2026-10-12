@@ -20,6 +20,9 @@ field" column is the name on the wire.
 | driftsform | `farmingSystem` | `driftsform` | Values stay Konventionel and Økologisk |
 | dyrkningssystem | `croppingSystem` | `dyrkningssystem` | |
 | landmand, konsulent | `farmer`, `advisor` | | `OnboardingRole`; old stored Danish values are still read |
+| Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
+| adgang (til en bedrift) | farm access, `FarmMember` | | The users a farm is shared with |
+| kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota
 

@@ -9,6 +9,7 @@ import {
   Copy,
   FlaskConical,
   History,
+  Info,
   LayoutGrid,
   MoreVertical,
   RefreshCw,
@@ -24,7 +25,7 @@ import {
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useMatch } from 'react-router-dom'
 
-import { useSimulationFields } from '@/api/hooks'
+import { useFarmMembers, useSimulationFields } from '@/api/hooks'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import {
@@ -76,6 +77,7 @@ import {
 } from '@/components/ui/tooltip'
 import { UserMenuContent } from '@/components/UserMenu'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import { describeFarmAccess, otherMemberEmails } from '@/lib/farm-access'
 import {
   changedFieldIds,
   describeSeparateQuotas,
@@ -157,6 +159,8 @@ type FarmSidebarProps = {
   simulations: Simulation[]
   selection: FarmViewSelection
   overviewActive: boolean
+  economicsPageActive: boolean
+  aboutActive: boolean
   loadingSelection?: boolean
   onSelectionChange: (selection: FarmViewSelection) => void
   mode: FarmInspectorMode
@@ -165,7 +169,6 @@ type FarmSidebarProps = {
   view: FarmView
   splitAvailable: boolean
   onViewChange: (view: FarmView) => void
-  onError: (message: string | null) => void
   copyingSimulationId: string | null
   deletingSimulationId: string | null
   onCopySimulation: (simulation: Simulation) => void
@@ -189,6 +192,8 @@ export const FarmSidebar = ({
   simulations,
   selection,
   overviewActive,
+  economicsPageActive,
+  aboutActive,
   loadingSelection = false,
   onSelectionChange,
   mode,
@@ -197,7 +202,6 @@ export const FarmSidebar = ({
   view,
   splitAvailable,
   onViewChange,
-  onError,
   copyingSimulationId,
   deletingSimulationId,
   onCopySimulation,
@@ -216,8 +220,9 @@ export const FarmSidebar = ({
   const iconRail = sidebarState === 'collapsed' && !isMobile
   const [simulationsOpen, setSimulationsOpen] = useState(true)
   const simulationListId = useId()
-  const economicsPageActive = useMatch('/farms/:farmId/economics/*') !== null
-  const pageActive = overviewActive || economicsPageActive
+  const pageActive = overviewActive || economicsPageActive || aboutActive
+  const { user } = useAuth()
+  const { data: members } = useFarmMembers(farm.id)
   const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
     !pageActive && selection.kind === 'simulation' ? selection.id : null
@@ -243,7 +248,7 @@ export const FarmSidebar = ({
     <Sidebar collapsible="icon" aria-label="Navigation for bedriften">
       <SidebarHeader className="gap-2 px-3 pt-3 pb-0 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
         <SidebarBrand />
-        <FarmSwitcher farm={farm} onError={onError} />
+        <FarmSwitcher farm={farm} />
       </SidebarHeader>
 
       <SidebarContent>
@@ -381,6 +386,41 @@ export const FarmSidebar = ({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarGroup className={GROUP_CLASS}>
+        <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
+          Bedriften
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                size="lg"
+                isActive={aboutActive}
+                className={cn(
+                  VIEW_BUTTON_CLASS,
+                  'group-data-[collapsible=icon]:justify-center',
+                )}
+                tooltip="Om bedriften"
+              >
+                <NavLink to={`/farms/${farm.id}/about`}>
+                  <Info />
+                  <ViewMenuLabel name="Om bedriften">
+                    <span className="truncate text-xs font-normal text-sidebar-foreground/70">
+                      {members
+                        ? describeFarmAccess(
+                            otherMemberEmails(members, user?.email ?? ''),
+                          )
+                        : null}
+                    </span>
+                  </ViewMenuLabel>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
 
       <SidebarGroup className={GROUP_CLASS}>
         <SidebarGroupLabel className={GROUP_LABEL_CLASS}>
@@ -733,9 +773,7 @@ const SimulationMenuItem = ({
                     <OptimizationRunElapsed run={runningRun} />
                   </span>
                 ) : failedRun ? (
-                  <span>
-                    {optimizationRunName(failedRun.kind)} fejlede
-                  </span>
+                  <span>{optimizationRunName(failedRun.kind)} fejlede</span>
                 ) : null}
               </div>
             ) : (
