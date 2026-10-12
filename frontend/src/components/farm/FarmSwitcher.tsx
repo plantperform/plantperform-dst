@@ -123,6 +123,7 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
           </Link>
           <Link
             to="/farms/new"
+            state={{ from: { farmId: farm.id, name: farm.name } }}
             className={cn(MENU_ROW_CLASS, 'h-9')}
             onClick={() => changeOpen(false)}
           >

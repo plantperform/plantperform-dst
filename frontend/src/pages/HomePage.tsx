@@ -7,7 +7,6 @@ import { useAuth } from '@/auth/context'
 import { useFarms, useFarmsFields } from '@/api/hooks'
 import { AppBar } from '@/components/AppBar'
 import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
-import { SproutMark } from '@/components/BrandMark'
 import {
   FARM_LIST_CLASS,
   FarmListHeader,
@@ -16,6 +15,7 @@ import {
 } from '@/components/farm/FarmList'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
@@ -83,11 +83,15 @@ export const HomePage = () => {
     farmMatchesSearch(farm, searchText),
   )
   const isReady = Boolean(email) && !isLoading && !error && farms !== undefined
+  const isEmpty = !isLoading && !error && farmList.length === 0
   const pending = email ? getPendingFarm(email) : null
-  const shouldOpenCreateFarm =
-    isReady && farmList.length === 0 && pending !== null
-  const singleFarmId = isReady && farmList.length === 1 ? farmList[0].id : null
   const hasVisitedHome = email ? hasVisitedHomeThisSession(email) : false
+  const shouldOpenCreateFarm =
+    isReady &&
+    farmList.length === 0 &&
+    (pending !== null ||
+      (selectedRole === 'farmer' && !showOverview && !hasVisitedHome))
+  const singleFarmId = isReady && farmList.length === 1 ? farmList[0].id : null
   const shouldOpenSingleFarm =
     singleFarmId !== null &&
     !showOverview &&
@@ -97,9 +101,12 @@ export const HomePage = () => {
   useEffect(() => {
     if (!isReady) return
     markHomeVisitedThisSession(email)
-    if (shouldOpenCreateFarm && pending) {
-      clearPendingFarm(email)
-      navigate('/farms/new', { replace: true, state: { prefill: pending } })
+    if (shouldOpenCreateFarm) {
+      if (pending) clearPendingFarm(email)
+      navigate('/farms/new', {
+        replace: true,
+        state: pending ? { prefill: pending } : null,
+      })
       return
     }
     if (shouldOpenSingleFarm && singleFarmId) {
@@ -142,35 +149,37 @@ export const HomePage = () => {
       <AppBar />
 
       <div className="mx-auto flex max-w-6xl flex-col gap-5.5 px-6 pt-10 pb-16 sm:px-10">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-          <div>
-            <h1 className="font-display text-3xl tracking-tight">
-              Dine bedrifter
-            </h1>
+        {isEmpty ? null : (
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+            <div>
+              <h1 className="font-display text-3xl tracking-tight">
+                Dine bedrifter
+              </h1>
+              {farmList.length > 0 ? (
+                <p className="mt-1.5 text-[13px] text-muted-foreground">
+                  {formatFarmCount(farmList.length)}, sorteret efter hvor kvoten
+                  er under pres. Tal for gennemsnittet af afgrødehistorikken.
+                </p>
+              ) : null}
+            </div>
             {farmList.length > 0 ? (
-              <p className="mt-1.5 text-[13px] text-muted-foreground">
-                {formatFarmCount(farmList.length)}, sorteret efter hvor kvoten
-                er under pres. Tal for gennemsnittet af afgrødehistorikken.
-              </p>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <FarmSearchInput
+                  className="w-65 max-w-full"
+                  value={searchText}
+                  onChange={setSearchText}
+                />
+                <Button
+                  asChild
+                  size="sm"
+                  className="rounded-full px-3.5 text-[13px]"
+                >
+                  <Link to="/farms/new">Opret bedrift</Link>
+                </Button>
+              </div>
             ) : null}
           </div>
-          {farmList.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <FarmSearchInput
-                className="w-65 max-w-full"
-                value={searchText}
-                onChange={setSearchText}
-              />
-              <Button
-                asChild
-                size="sm"
-                className="rounded-full px-3.5 text-[13px]"
-              >
-                <Link to="/farms/new">Opret bedrift</Link>
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        )}
 
         {pending && farmList.length > 0 && !pendingBannerHidden ? (
           <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-foreground sm:flex-row sm:items-center sm:justify-between">
@@ -222,22 +231,35 @@ export const HomePage = () => {
           />
         ) : null}
 
-        {!isLoading && !error && farmList.length === 0 ? (
-          <div className="relative isolate overflow-hidden rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
-            <SproutMark className="pointer-events-none absolute -right-16 -bottom-20 -z-10 size-72 text-brand opacity-[0.07]" />
-            <p id="get-started-heading" className="text-lg font-semibold">
-              Kom i gang
-            </p>
-            {!selectedRole ? (
+        {isEmpty ? (
+          <Card className="mx-auto mt-8 w-full max-w-[560px] px-6 py-11 text-center sm:px-10">
+            <h1
+              id="welcome-heading"
+              className="font-display text-3xl tracking-tight"
+            >
+              Velkommen
+            </h1>
+            {selectedRole ? (
+              <div key={selectedRole} className="motion-safe:animate-rise-in">
+                <p className="mx-auto mt-3 max-w-[420px] text-[15px] leading-normal text-muted-foreground">
+                  {selectedRole === 'farmer'
+                    ? 'Opret din bedrift. Du skal kun bruge CVR-nummeret, så henter vi markerne fra markregistret.'
+                    : 'Opret den første bedrift for en kunde. Når en landmand deler sin bedrift med dig, dukker den op her.'}
+                </p>
+                <Button asChild size="lg" className="mt-6">
+                  <Link to="/farms/new">Opret bedrift</Link>
+                </Button>
+              </div>
+            ) : (
               <>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Fortæl os, hvordan du bruger værktøjet, så tilpasser vi
-                  visningen. Valget gemmes og kan ikke ændres bagefter.
+                <p className="mx-auto mt-3 max-w-[420px] text-[15px] leading-normal text-muted-foreground">
+                  Fortæl os, hvordan du bruger værktøjet, så viser vi dig det
+                  rigtige først.
                 </p>
                 <div
-                  className="mt-5 grid gap-3 sm:grid-cols-2"
+                  className="mt-6 grid gap-3 text-left sm:grid-cols-2"
                   role="group"
-                  aria-labelledby="get-started-heading"
+                  aria-labelledby="welcome-heading"
                 >
                   <RoleCard
                     selected={false}
@@ -261,27 +283,8 @@ export const HomePage = () => {
                   />
                 </div>
               </>
-            ) : null}
-            {selectedRole ? (
-              <div
-                key={selectedRole}
-                className="mt-5 motion-safe:animate-rise-in"
-              >
-                <p className="text-sm text-muted-foreground">
-                  {selectedRole === 'farmer'
-                    ? 'Opret din bedrift for at komme i gang - fremover lander du direkte i den, når du logger ind.'
-                    : 'Opret en bedrift pr. landmand, du hjælper. Du kan altid vende tilbage til denne oversigt.'}
-                </p>
-                <Button asChild className="mt-4 rounded-full">
-                  <Link to="/farms/new">
-                    {selectedRole === 'farmer'
-                      ? 'Opret din bedrift'
-                      : 'Opret bedrift'}
-                  </Link>
-                </Button>
-              </div>
-            ) : null}
-          </div>
+            )}
+          </Card>
         ) : null}
 
         {farmList.length > 0 && !fieldsLoading ? (
