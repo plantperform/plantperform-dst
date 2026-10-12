@@ -16,6 +16,7 @@ from app.services.rotations import afgroede_normer, saedskifte_kategorier, saeds
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
+from app.services.virkemidler import virkemiddel_tilladt
 
 router = APIRouter(prefix="/farms/{farm_id}/rotation-candidates", tags=["rotation candidates"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
@@ -244,6 +245,7 @@ def list_udlaeg_koder(
     _: FarmMember,
     hovedafgrode_kode: int | None = None,
     driftsform: str | None = None,
+    naeste_afgrode_kode: int | None = None,
 ) -> list[AfgrodeKodeOption]:
     """Return the valid sekundær afgrøde/udlæg choices for the "Rediger
     manuelt" picker: real efterafgrøde-type afgrødekoder plus the five
@@ -257,9 +259,11 @@ def list_udlaeg_koder(
     table 8, where it marks the græs as ploughed after the harvest (W8 ved
     ompløjning, see bridge_v2._resolve_w), and the "Efterafgrøde type" family
     (950-954/968) narrowed by the hovedafgrøde's own majs-status and
-    Grund6Procent-flag. Both parameters are optional - omitting either
-    skips only the rule(s) that depend on it, for callers that don't yet
-    know the position's hovedafgrøde/driftsform.
+    Grund6Procent-flag. Mellemafgrøde and tidlig såning are offered only where
+    virkemidler.virkemiddel_tilladt allows them after the hovedafgrøde and
+    before naeste_afgrode_kode (next year's afgrøde). Every parameter is
+    optional - omitting one skips only the rule(s) that depend on it, for
+    callers that don't yet know the position's hovedafgrøde/driftsform.
     """
     names = afgroede_normer.crop_names_from_normer()
     options = [
@@ -290,7 +294,12 @@ def list_udlaeg_koder(
         if code in names
     )
 
-    options.extend(_VIRKEMIDDEL_UDLAEG_OPTIONS)
+    options.extend(
+        option
+        for option in _VIRKEMIDDEL_UDLAEG_OPTIONS
+        if hovedafgrode_kode is None
+        or virkemiddel_tilladt(option.code, hovedafgrode_kode, naeste_afgrode_kode)
+    )
     return sorted(options, key=lambda o: o.navn)
 
 

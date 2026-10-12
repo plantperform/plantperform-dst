@@ -26,6 +26,7 @@ def write_csv(
 
 MASTER_CSV_HEADERS = [
     "AfgroedeKode", "Navn", "Hovedafgrøde", "Grund6Procent",
+    "ME - mellemafgroeder", "ME - tidlig saaning",
     "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
     "udbytteenhed", "indregn_ffv",
     "udbyttenorm_grovsand_konventionel", "n_norm_grovsand_konventionel",
@@ -39,6 +40,7 @@ MASTER_CSV_HEADERS = [
 def master_csv_row(**overrides: str) -> list[str]:
     row = {
         "AfgroedeKode": "1", "Navn": "Vårbyg", "Hovedafgrøde": "1", "Grund6Procent": "1",
+        "ME - mellemafgroeder": "1", "ME - tidlig saaning": "2",
         "nuar_m": "1", "nuar_w": "2", "nuar_wc": "3",
         "nuar_mp": "4", "nuar_wp": "5", "udbytteenhed": "hkg", "indregn_ffv": "Ja",
         "udbyttenorm_grovsand_konventionel": "50", "n_norm_grovsand_konventionel": "100",
@@ -64,6 +66,8 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
         self.assertEqual(nuar_rows[0][0:7], (1, "Vårbyg", 1, 2, 3, 4, 5))
         self.assertTrue(nuar_rows[0][12])  # er_hovedafgrode
         self.assertTrue(nuar_rows[0][13])  # grund6procent
+        # mellemafgroede_mulig, tidlig_saaning_mulig: any non-zero flag allows it.
+        self.assertEqual(nuar_rows[0][17:19], (True, True))
         # JB 1 + 3 -> jb_nr 1 and 3, both konventionel-only rows for code 1.
         self.assertEqual({row[1] for row in norm_rows}, {1, 3})
         self.assertEqual(norm_rows[0][2], 1)  # afgroedekode
@@ -95,11 +99,19 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             write_csv(
                 master,
                 MASTER_CSV_HEADERS,
-                [master_csv_row(Hovedafgrøde="0", Grund6Procent="0")],
+                [
+                    master_csv_row(
+                        **{
+                            "Hovedafgrøde": "0", "Grund6Procent": "0",
+                            "ME - mellemafgroeder": "0", "ME - tidlig saaning": "0",
+                        }
+                    )
+                ],
             )
             _, _, nuar_rows = parse_afgroede_normer(master)
 
         self.assertEqual(nuar_rows[0][12:14], (False, False))
+        self.assertEqual(nuar_rows[0][17:19], (False, False))
 
     def test_permanent_afgrode_filters_on_ja(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

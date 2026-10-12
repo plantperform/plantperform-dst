@@ -368,6 +368,39 @@ disse betingede indsnævringer:
 majs, når `953`/`954` vælges — er bevidst **ikke** taget med her endnu;
 venter til senere.)
 
+### Hvornår er mellemafgrøde og tidlig såning tilladt (aftalt 2026-10-09)
+
+Mellemafgrøde (9682/9684) og tidlig såning (9683) er virkemidler og ikke
+vinterplantedække. `virkemidler.virkemiddel_tilladt` tillader dem kun, når
+begge betingelser er opfyldt:
+
+1. Hovedafgrøden har et ikke-nul i afgrødetabellens `ME - mellemafgroeder`
+   hhv. `ME - tidlig saaning` (DB-kolonnerne `mellemafgroede_mulig` og
+   `tidlig_saaning_mulig`, migration 20261009_0002). Kolonnerne angiver
+   afgrøden **før** virkemidlet. `ME - tidlig saaning` har værdien 2 for ti
+   kløvergræskoder; den tæller som tilladt.
+2. Næste års afgrøde står på listen i PUMR's beslutningstræ (ark W) over den
+   vintersæd, der må stå på marken ved virkemidlet: 10, 11, 13-17, 57,
+   70-72, 220-224. Vinterraps er ikke med (§ 55, stk. 1, nr. 2).
+
+Et virkemiddel, der ikke er tilladt, fjernes i `candidate_evaluator` før
+beregningen, også efter en manuel rettelse. Det giver ingen effekt, ingen
+etableringsomkostning og vises ikke. Vælgeren i "Rediger manuelt" tilbyder
+kun de tilladte (`/udlaeg-koder` får `naeste_afgrode_kode`).
+`ME - fleraarige energiafgroeder` og `ME - braklagte arealer` hører til de
+gamle alternativer til målrettede efterafgrøder og bruges ikke.
+
+**Sædskiftelookuppen rettet 2026-10-09** (`Ny_sædskifte_lookup_sammenlagt.csv`,
+backup i `Legacy data/…BACKUP-before-virkemiddel-2026-10-09.csv`). 56 rækker
+brød reglen:
+
+- 51 rækker havde mellemafgrøde (efter frøgræs) eller tidlig såning før
+  vårbyg på en konventionel rotation. Vårbyggen er lavet om til 70 "Vårbyg,
+  efterårssået".
+- I 4 rækker stod mellemafgrøde før vinterraps, og i 1 økologisk række stod
+  tidlig såning før vårbyg. Her er virkemidlet fjernet.
+
+
 Samme felter afklarer også `EEA`/`EMA`/`ETS`-navngivningen i
 `bridge_v2.py`: PUMR felt A77 "Virkemiddel" har det officielle 3-vejs-valg
 `0 = Efterafgrøder (EEA), 1 = Mellemafgrøder (EMA), 2 = Tidlig såning

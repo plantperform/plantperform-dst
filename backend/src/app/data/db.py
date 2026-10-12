@@ -124,6 +124,10 @@ afgroede_table = Table(
     Column("has_nuar", Boolean, nullable=False, server_default=false()),
     Column("er_hovedafgrode", Boolean, nullable=False, server_default=false()),
     Column("grund6procent", Boolean, nullable=False, server_default=false()),
+    # The afgrødetabel's "ME - mellemafgroeder"/"ME - tidlig saaning": the
+    # hovedafgrøder a mellemafgrøde or tidlig såning may follow.
+    Column("mellemafgroede_mulig", Boolean, nullable=False, server_default=false()),
+    Column("tidlig_saaning_mulig", Boolean, nullable=False, server_default=false()),
     Column("m", SmallInteger, nullable=True),
     Column("w", SmallInteger, nullable=True),
     Column("wc", SmallInteger, nullable=True),

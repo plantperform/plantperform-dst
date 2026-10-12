@@ -74,6 +74,7 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
         required_columns={
             "AfgroedeKode", "Navn", "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
             "udbytteenhed", "indregn_ffv", "Hovedafgrøde", "Grund6Procent",
+            "ME - mellemafgroeder", "ME - tidlig saaning",
         },
     )
 
@@ -98,6 +99,12 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
             )
             == 1
         )
+        # 0 rules the virkemiddel out after the afgrøde. "ME - tidlig saaning"
+        # also holds a 2 for ten kløvergræs codes; it is counted as allowed.
+        mellemafgroede_mulig, tidlig_saaning_mulig = (
+            integer(row[column], field=column, row_number=row_number) != 0
+            for column in ("ME - mellemafgroeder", "ME - tidlig saaning")
+        )
         nuar_rows.append(
             (
                 crop_code,
@@ -120,6 +127,8 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
                         "nuar_w_omploejning",
                     )
                 ),
+                mellemafgroede_mulig,
+                tidlig_saaning_mulig,
             )
         )
 

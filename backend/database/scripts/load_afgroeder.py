@@ -26,6 +26,8 @@ AFGROEDE_COLUMNS = (
     "has_nuar",
     "er_hovedafgrode",
     "grund6procent",
+    "mellemafgroede_mulig",
+    "tidlig_saaning_mulig",
     "m",
     "w",
     "wc",
@@ -120,6 +122,8 @@ def build_afgroede_rows(
                 "has_nuar": False,
                 "er_hovedafgrode": False,
                 "grund6procent": False,
+                "mellemafgroede_mulig": False,
+                "tidlig_saaning_mulig": False,
             },
         )
 
@@ -199,6 +203,7 @@ def build_afgroede_rows(
         entry["er_hovedafgrode"] = row[12]
         entry["grund6procent"] = row[13]
         entry["w_efteraar"], entry["w_efteraar_efter_graes"], entry["w_omploejning"] = row[14:17]
+        entry["mellemafgroede_mulig"], entry["tidlig_saaning_mulig"] = row[17:19]
         name_for(code, row[1], 4)
 
     afgroede_rows = [

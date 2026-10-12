@@ -28,6 +28,7 @@ from app.services.economics.udbytterespons import KONVENTIONEL, har_udbytterespo
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
+from app.services.virkemidler import virkemiddel_tilladt
 
 # The displayed/calculated eight-year rotation starts in 2027 for new
 # simuleringer, but NLES5's time-trend term (τ·(Y−1991)) requires the correct
@@ -206,6 +207,17 @@ def evaluate_sequence_for_mark(
     the previous behavior of purely cyclic lookback.
     """
     n_norm_pct = float(result_ref.n_norm_pct)
+
+    # A mellemafgrøde or tidlig såning that the hovedafgrøde or next year's
+    # afgrøde rules out, also after a manual edit, is no virkemiddel at all:
+    # no effect, no establishment cost, and no udlæg shown.
+    udlaeg_seq = list(udlaeg_seq)
+    udlaeg_navn_seq = list(udlaeg_navn_seq)
+    for i in range(8):
+        if not virkemiddel_tilladt(
+            udlaeg_seq[i], afgrode_seq[i], afgrode_seq[(i + 1) % active_len],
+        ):
+            udlaeg_seq[i] = udlaeg_navn_seq[i] = None
 
     def prev_code_for(i: int) -> int | None:
         """Return the afgrødekode one year before position i.

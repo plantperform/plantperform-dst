@@ -128,6 +128,8 @@ def _load_nuar_koder() -> dict[int, dict]:
             "WP_ambig": row.wp_ambig,
             "er_hovedafgrode": row.er_hovedafgrode,
             "grund6procent": row.grund6procent,
+            "mellemafgroede_mulig": row.mellemafgroede_mulig,
+            "tidlig_saaning_mulig": row.tidlig_saaning_mulig,
         }
         for row in rows
         if row.has_nuar
