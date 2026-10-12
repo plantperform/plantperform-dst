@@ -34,6 +34,7 @@ import { FieldDetailPanel } from '@/components/farm/FieldDetailPanel'
 import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { OptimizeDialog } from '@/components/farm/OptimizeDialog'
+import { EconomicsNudge } from '@/components/farm/EconomicsNudge'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
 import { SimulationSummaryMissing } from '@/components/farm/SimulationSummaryMissing'
 import { RULES_PANEL_WIDTH } from '@/components/farm/split-layout'
@@ -411,6 +412,9 @@ export const FarmInspector = ({
             isRules && 'bg-rules/5',
           )}
         >
+          {isSimulationView ? null : (
+            <EconomicsNudge key={farm.id} farmId={farm.id} />
+          )}
           {isSimulationView && selectedSimulation ? (
             <OptimizationBanner
               farmId={farm.id}

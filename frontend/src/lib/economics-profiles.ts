@@ -96,22 +96,14 @@ export const ECONOMICS_INVITATION =
 export const PROFILES_NOT_IN_CALCULATION =
   'Profilerne gemmes kun i denne browser og indgår ikke i beregningen endnu.'
 
-export const describeEconomicsEntry = (
-  ownProfileNames: string[],
-): { title: string; text: string } => {
-  if (ownProfileNames.length === 0) {
-    return {
-      title: `Simuleringerne regner med ${STANDARD_PROFILE.name}`,
-      text: ECONOMICS_INVITATION,
-    }
-  }
-  const single = ownProfileNames.length === 1
-  return {
-    title: `${
-      single ? 'Bedriftens økonomiprofil' : 'Bedriftens økonomiprofiler'
-    }: ${formatNameList(ownProfileNames)}`,
-    text: `Indtil ${single ? 'profilen' : 'profilerne'} indgår i beregningen, er tallene regnet med ${STANDARD_PROFILE.name}.`,
-  }
+export const describeEconomicsLine = (ownProfileCount: number): string => {
+  if (ownProfileCount === 0) return 'Simuleringerne regner med Standard.'
+  const single = ownProfileCount === 1
+  return `Bedriften har ${ownProfileCount} ${
+    single ? 'egen økonomiprofil' : 'egne økonomiprofiler'
+  } ud over Standard, og hver simulering regner med en af dem. Indtil ${
+    single ? 'profilen' : 'profilerne'
+  } indgår i beregningen, er tallene regnet med Standard.`
 }
 
 export const describeOwnProfileCount = (count: number): string => {
