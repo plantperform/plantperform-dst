@@ -26,7 +26,7 @@ def write_csv(
 
 MASTER_CSV_HEADERS = [
     "AfgroedeKode", "Navn", "Hovedafgrøde", "Grund6Procent",
-    "ME - mellemafgroeder", "ME - tidlig saaning",
+    "ME - mellemafgroeder", "ME - tidlig saaning", "Praec.goedsk.eff.",
     "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
     "udbytteenhed", "indregn_ffv",
     "udbyttenorm_grovsand_konventionel", "n_norm_grovsand_konventionel",
@@ -40,7 +40,7 @@ MASTER_CSV_HEADERS = [
 def master_csv_row(**overrides: str) -> list[str]:
     row = {
         "AfgroedeKode": "1", "Navn": "Vårbyg", "Hovedafgrøde": "1", "Grund6Procent": "1",
-        "ME - mellemafgroeder": "1", "ME - tidlig saaning": "2",
+        "ME - mellemafgroeder": "1", "ME - tidlig saaning": "2", "Praec.goedsk.eff.": "1",
         "nuar_m": "1", "nuar_w": "2", "nuar_wc": "3",
         "nuar_mp": "4", "nuar_wp": "5", "udbytteenhed": "hkg", "indregn_ffv": "Ja",
         "udbyttenorm_grovsand_konventionel": "50", "n_norm_grovsand_konventionel": "100",
@@ -68,6 +68,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
         self.assertTrue(nuar_rows[0][13])  # grund6procent
         # mellemafgroede_mulig, tidlig_saaning_mulig: any non-zero flag allows it.
         self.assertEqual(nuar_rows[0][17:19], (True, True))
+        self.assertTrue(nuar_rows[0][19])  # praecisionsgoedskning_mulig
         # JB 1 + 3 -> jb_nr 1 and 3, both konventionel-only rows for code 1.
         self.assertEqual({row[1] for row in norm_rows}, {1, 3})
         self.assertEqual(norm_rows[0][2], 1)  # afgroedekode
@@ -202,6 +203,26 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no rows"):
                 runtime_lookup_loader.replace_tables([("salgspris", ("source_order",), [])])
         connect.assert_not_called()
+
+
+class PraecisionsgoedskningFlagTests(unittest.TestCase):
+    def test_korn_and_raps_may_be_praecisionsgoedsket_but_not_majs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            master = Path(directory) / "master.csv"
+            write_csv(
+                master,
+                MASTER_CSV_HEADERS,
+                [
+                    master_csv_row(AfgroedeKode=str(code), **{"Praec.goedsk.eff.": value})
+                    for code, value in ((1, "1"), (22, "2"), (5, "3"), (260, "0"))
+                ],
+            )
+            _, _, nuar_rows = parse_afgroede_normer(master)
+
+        self.assertEqual(
+            {row[0]: row[19] for row in nuar_rows},
+            {1: True, 22: True, 5: False, 260: False},
+        )
 
 
 if __name__ == "__main__":

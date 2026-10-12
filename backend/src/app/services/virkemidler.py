@@ -2,9 +2,19 @@
 
 from app.services.rotations import afgroede_normer
 
-# SKH's 2026 faktaark limits præcisionsjordbrug to korn and raps. Maize and
-# legumes are deliberately excluded even where source tables group them nearby.
-KORN_OG_RAPS_KODER = frozenset({1, 2, 3, 10, 11, 14, 15, 22})
+
+def praecisionsgoedskning_tilladt(afgrode_kode: int | None) -> bool:
+    """Whether the afgrøde may be præcisionsgødsket: korn or raps i renbestand.
+
+    § 57, stk. 1, nr. 1; PUMR, Tabel A, felt A37 reads it from the
+    afgrødetabel's "Praec.goedsk.eff." (1 korn, 2 raps; 3 majs is excluded).
+    """
+    if afgrode_kode is None:
+        return False
+    return bool(
+        afgroede_normer.lookup_crop_params(afgrode_kode).get("praecisionsgoedskning_mulig")
+    )
+
 
 # The rotation lookup's virkemiddel markers in the udlæg column.
 MELLEMAFGROEDE_KODER = frozenset({9682, 9684})

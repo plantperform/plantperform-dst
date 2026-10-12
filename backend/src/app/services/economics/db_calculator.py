@@ -22,7 +22,7 @@ from app.data.db import (
     salgspris_table,
 )
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
-from app.services.virkemidler import KORN_OG_RAPS_KODER
+from app.services.virkemidler import praecisionsgoedskning_tilladt
 
 KONVENTIONEL = "Konventionel"
 OEKOLOGISK = "Økologisk"
@@ -453,7 +453,7 @@ def calculate_db(
             "kategori": "Markarbejde", "behandling": "Udlæg/efterafgrøde, etablering",
             "udgift_kr_ha": udlaeg_etablering,
         })
-    if praecisionsjordbrug and afgrodekode in KORN_OG_RAPS_KODER:
+    if praecisionsjordbrug and praecisionsgoedskning_tilladt(afgrodekode):
         linjer.append({
             "kategori": "Markarbejde",
             "behandling": "Præcisionsjordbrug",

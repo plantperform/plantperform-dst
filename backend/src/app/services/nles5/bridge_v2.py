@@ -58,7 +58,7 @@ from functools import lru_cache
 from app.domain.soil import MissingSoilDataError, PercolationByKategori
 from app.services.nles5.engine import calculate_leaching
 from app.services.rotations import afgroede_normer, afstromning
-from app.services.virkemidler import KORN_OG_RAPS_KODER
+from app.services.virkemidler import praecisionsgoedskning_tilladt
 
 # Forfrugtskoder (last year's afgrøde) that trigger the "efter græs, kløvergræs,
 # frøgræs eller brak" M/MP override below. Bilag 2, table M/MP's "Afgrødekoder
@@ -526,7 +526,7 @@ def evaluate_leaching_position(
         "ETS": _ETS_STRENGTH if vk["ets"] else 0.0,
         "EPJ": (
             _PRAECISIONSJORDBRUG_EPJ
-            if praecisionsjordbrug and afgrode_kode in KORN_OG_RAPS_KODER
+            if praecisionsjordbrug and praecisionsgoedskning_tilladt(afgrode_kode)
             else 0.0
         ),
         "mellemafgroede": vk["ema"], "early_sowing": vk["ets"],

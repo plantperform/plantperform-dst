@@ -503,6 +503,21 @@ af 1.196 positioner i sædskiftebiblioteket og ca. 49.600 marker i
 historikken (2025 → 2026) fra kategori 3 til 1. Kategori 1's P er i median
 ca. 3 % lavere end kategori 3's.
 
+### EPJ — præcisionsgødskning (aftalt 2026-10-09)
+
+**Kilde:** § 57, stk. 1, nr. 1 og stk. 2; PUMR, felt A37 og A81.
+
+Når simuleringen har præcisionsjordbrug slået til, får en position en effekt
+på 4 % (`(1 − EPJ)` i virkemiddelleddet) og præcisionsjordbrugets
+omkostning, men kun hvis hovedafgrøden er korn eller raps i renbestand.
+`virkemidler.praecisionsgoedskning_tilladt` læser det fra afgrødetabellens
+`Praec.goedsk.eff.` (DB-kolonnen `praecisionsgoedskning_mulig`, migration
+20261009_0003). Det er samme opslag som PUMR's A37: 1 = korn (26 koder,
+inkl. helsæd og efterårssået vårsæd), 2 = raps (21, 22). 3 = majs er ikke
+med. Tidligere stod der en fast liste med 8 koder. Den nye regel giver 20
+koder mere og flytter 152 positioner i sædskiftebiblioteket ind under
+virkemidlet.
+
 ## Status
 
 Alle fem kategorier (M, W, MP, WP, WC) samt de to beslægtede korrektioner

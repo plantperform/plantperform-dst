@@ -74,7 +74,7 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
         required_columns={
             "AfgroedeKode", "Navn", "nuar_m", "nuar_w", "nuar_wc", "nuar_mp", "nuar_wp",
             "udbytteenhed", "indregn_ffv", "Hovedafgrøde", "Grund6Procent",
-            "ME - mellemafgroeder", "ME - tidlig saaning",
+            "ME - mellemafgroeder", "ME - tidlig saaning", "Praec.goedsk.eff.",
         },
     )
 
@@ -105,6 +105,11 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
             integer(row[column], field=column, row_number=row_number) != 0
             for column in ("ME - mellemafgroeder", "ME - tidlig saaning")
         )
+        # 1 = korn and 2 = raps i renbestand may be præcisionsgødsket; 3 marks
+        # majs, which may not.
+        praecisionsgoedskning_mulig = integer(
+            row["Praec.goedsk.eff."], field="Praec.goedsk.eff.", row_number=row_number,
+        ) in (1, 2)
         nuar_rows.append(
             (
                 crop_code,
@@ -129,6 +134,7 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
                 ),
                 mellemafgroede_mulig,
                 tidlig_saaning_mulig,
+                praecisionsgoedskning_mulig,
             )
         )
 
