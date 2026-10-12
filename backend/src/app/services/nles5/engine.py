@@ -9,8 +9,8 @@ def S_func(cu, p_ler=0.001849):
     """Soil factor S based on clay content (Ligning 7: S = exp(-p_ler * lerprocent))."""
     return math.exp(-p_ler * cu)
 
-# ηwp for a WP outside WP1-10: the "WP" constant in Parametre og konstanter
-# (§ 23(4)'s fixed 2027 value). See C_func.
+# ηwp for a WP outside WP1-10: the "WP" constant in Parametre og konstanter,
+# the value used when the 2026 vinterplantedække is not reported. See C_func.
 WP_FALLBACK = 7.2595
 
 HUMUS_BY_JB = {
@@ -95,13 +95,13 @@ def P_func(jbnr, AAa, AAb, APb,
 def C_func(M, W, MP, WP):
     """Crop effect C based on crop group codes (Bilag 2, tabel 3/5/8).
 
-    The bekendtgørelse's fixed 2027 parameter value under § 23(4) (7.2595 for
-    vinterplantedække for the forfrugt, regardless of the actual forfrugt) is
-    not applied across the board. The rule is unresolved and expected to
-    change, so WP uses the category lookup as in every other year (see WP_p).
-    It is only used as the fallback for a WP outside WP1-10, such as the WP11
-    placeholder the afgrøde table still carries for codes without a source
-    value; treating those as 0 would silently count them as WP1 Vintersæd.
+    WP uses the category lookup (see WP_p): the supplerende høring of October
+    2026 replaced the fixed 2027 value for vinterplantedække for the forfrugt
+    with Bilag 2, tables 9 and 10. The old fixed value 7.2595 now only applies
+    when the 2026 vinterplantedække is not reported; here it is the fallback
+    for a WP outside WP1-10, such as the WP11 placeholder for codes table 10
+    does not list. Treating those as 0 would silently count them as WP1
+    Vintersæd.
     """
     M_p = {
         1: 0,

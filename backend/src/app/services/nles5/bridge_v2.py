@@ -153,15 +153,17 @@ _UDL_W_MAPPING: dict[int, int | None] = {
 # onto WP's 10-category scale (DCA rapport nr. 163, s. 24-25) instead of W's 8.
 # Only used when the afgrøde table has no WP category for the code: the
 # lookup's own markers (2000, 968x) are not afgrødekoder, and 960-966 still
-# carry the table's WP11 placeholder.
+# carry the table's WP11 placeholder. Mellemafgrøde and tidlig såning are
+# virkemidler, not vinterplantedække: the efterårssået afgrøde after them
+# covers the winter (§ 55, stk. 1, nr. 2), so it decides WP, as it decides W.
 _UDL_WP_MAPPING: dict[int, int | None] = {
     960: 3, 961: 3, 962: 3, 963: 3, 964: 3, 965: 3, 966: 3,  # græs/kløvergræs udlæg -> WP3
     968: 4,     # "Efterafgrøde, pligtig" -> WP4
     950: 4, 951: 4, 952: 4, 953: 4, 954: 4,  # "Efterafgrøde" renbestand/udlæg varianter -> WP4
     9680: 4,    # "Efterafgrøde e. frøgræs" -> WP4
-    9682: 4,    # Mellemafgrøde -> WP4
-    9683: None, # "Tidlig såning"; WP is determined by the afgrøde itself
-    9684: 4,    # "Mellemafgrøde e. frøgræs" -> WP4
+    9682: None, # Mellemafgrøde
+    9683: None, # "Tidlig såning"
+    9684: None, # "Mellemafgrøde e. frøgræs"
     970: 4,     # "Øvrige udlæg og efterafgrøder" -> WP4
     2000: 5,    # "Udlæg til frø" -> WP5 (Frøgræs og brak)
     # 921 "Bar jord" replaces the old pseudo-code 3000 in the source data (see
@@ -304,18 +306,20 @@ def _resolve_mp(
     return prev_params.get("MP") or 1
 
 
-# The afgrøde table's WP column classifies what an afgrøde represents when it
-# stands in the WP window (the winter between the forfrugt and the current
-# afgrøde). WP1/WP8 are autumn-sown afgrøder, so they describe the CURRENT
-# afgrøde occupying that winter; WP3/WP5/WP6 are afgrøder that stand through
-# the winter after their own year, so they describe the FORFRUGT.
+# The afgrøde table's WP column (Bilag 2, table 10) classifies what an afgrøde
+# represents when it stands in the WP window (the winter between the forfrugt
+# and the current afgrøde). WP1/WP8 describe an autumn-sown CURRENT afgrøde
+# occupying that winter; WP3/WP5/WP6 are afgrøder that stand through the
+# winter after their own year, so they describe the FORFRUGT.
 _WP_CATEGORIES = range(1, 11)
 _AUTUMN_SOWN_WP = frozenset({1, 8})
 _OVERWINTERING_WP = frozenset({3, 5, 6})
 
-# M1 Vintersæd / M9 Vinterraps -> WP1/WP8, only for an afgrøde without a WP
-# category in the table (WP11 or missing), e.g. a database loaded before the
-# per-afgrødekode WP values were added.
+# M1 Vintersæd / M9 Vinterraps -> WP1/WP8 for an afgrøde without a WP
+# category in the table (WP11 or missing). Any other M rules out autumn
+# sowing even where table 10 gives WP1/WP8: it does so for spring-sown codes
+# such as 180 Gul sennep (M13), describing them as a reported
+# vinterplantedække rather than an afgrøde occupying the WP window.
 _AUTUMN_SOWN_M_TO_WP: dict[int, int] = {1: 1, 9: 8}
 
 # Forfrugter after which a bare winter is WP7 ("Bar jord efter majs eller
@@ -348,9 +352,11 @@ def _resolve_wp(
        window: its own WP from the afgrøde table, or _UDL_WP_MAPPING for the
        udlægskoder the table has no WP category for.
     2. The current afgrøde is autumn-sown (WP1/WP8) and occupies the window.
-       Without a WP category in the table, its M (M1/M9) decides instead.
+       Without a WP category in the table, its M (M1/M9) decides instead; a
+       spring-sown M overrules a WP1/WP8 in the table.
     3. The forfrugt stood through the winter (WP3/WP5/WP6): its own WP.
-    4. Otherwise the soil was bare: WP7 after majs or kartofler, else WP2.
+    4. Otherwise the soil was bare: WP7 after a WP7 forfrugt (majs, kartofler,
+       planteskole, blomsterløg) or after majs/kartofler, else WP2.
     """
     if prev_udlaeg_kode is not None:
         udlaeg_wp = _wp_category(afgroede_normer.lookup_crop_params(prev_udlaeg_kode))
@@ -359,16 +365,17 @@ def _resolve_wp(
         if udlaeg_wp is not None:
             return udlaeg_wp
     this_wp = _wp_category(this_params)
+    this_m = this_params.get("M")
     if this_wp is None:
-        this_wp = _AUTUMN_SOWN_M_TO_WP.get(this_params.get("M"))
-    if this_wp in _AUTUMN_SOWN_WP:
+        this_wp = _AUTUMN_SOWN_M_TO_WP.get(this_m)
+    if this_wp in _AUTUMN_SOWN_WP and this_m in (None, *_AUTUMN_SOWN_M_TO_WP):
         return this_wp
     if prev_afgrode_kode is None:
         return _WP_UKENDT
     prev_wp = _wp_category(prev_params)
     if prev_wp in _OVERWINTERING_WP:
         return prev_wp
-    return 7 if prev_afgrode_kode in _MAJS_KARTOFFEL_KODER else 2
+    return 7 if prev_wp == 7 or prev_afgrode_kode in _MAJS_KARTOFFEL_KODER else 2
 
 
 @lru_cache(maxsize=20_000)

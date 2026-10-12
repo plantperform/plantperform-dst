@@ -210,7 +210,7 @@ koden). De er **ikke** det samme som den flade 2027-konstant på 7,2595
 (se nedenfor) — modellen har et fuldt kategorisystem, konstanten er en
 administrativ nødløsning for netop 2027.
 
-### 2027-databegrænsningen (uændret konklusion, nu i rette kontekst)
+### 2027-databegrænsningen (afløst 2026-10-08, se den supplerende høring nedenfor)
 
 PUMR, felt A62, forklarer at oplysningen "hvilket vinterplantedække lå der
 i forfrugtens efterår" ikke findes i nogen dansk indberetning før 2028.
@@ -250,6 +250,19 @@ Værdierne er lagt ind i `nuar_wp`-kolonnen i masterarket
 resterende 229 koder står fortsat på WP11 (uændret placeholder — ingen
 kilde har endnu givet en værdi for dem).
 
+### Opdatering 2026-10-08 — supplerende høring (7. okt. 2026)
+
+Den supplerende høring erstatter den faste 2027-værdi: vinterplantedække
+til forfrugt følger nu Bilag 2, tabel 9 (kategorierne WP1-WP8 med samme
+ηwp som ovenfor) og tabel 10 (inddelingsmodel pr. afgrødekode). 7,2595
+bruges kun, når virksomheden ikke indberetter sit vinterplantedække for
+2026 (udkast til regnskabsbekendtgørelsen, § 12, stk. 4).
+
+Tabel 10 dækker 260 koder, og `nuar_wp` er udfyldt fra den: 129 koder
+ændret, heraf 235 WP3 → WP1 og 328 WP3 → WP5, resten fra WP11. Koder uden
+for tabellen beholder WP11 og dermed 7,2595. WP9/WP10 findes ikke i
+bekendtgørelsens tabel 9.
+
 ### Hvordan vælger koden WP i dag (uafhængigt af kilderne ovenfor)
 
 Dette er ikke hentet fra en kilde, men en beskrivelse af den faktiske kode,
@@ -260,17 +273,25 @@ igennem fire trin og bruger det første, der giver en kategori:
 
 1. **Sekundær afgrøde året før** (`prev_udlaeg_kode`) → dens WP fra
    afgrødetabellen. Har tabellen ingen WP1-10 for koden (lookupens egne
-   markører 2000/9680/9682/9684, og 960-966 der står på WP11), bruges
-   `_UDL_WP_MAPPING`. 9683 "Tidlig såning" giver ingen WP og går videre.
+   markører som 2000, og 960-966 der står på WP11), bruges
+   `_UDL_WP_MAPPING`. Mellemafgrøde (9682/9684) og tidlig såning (9683) er
+   virkemidler og ikke vinterplantedække. De giver ingen WP og går videre,
+   så den efterårssåede afgrøde efter dem afgør WP (trin 2), ligesom den
+   afgør W (aftalt med Anders 2026-10-09; § 55, stk. 1, nr. 2, og PUMR's
+   beslutningstræ: "Mellemafgrøder = W1"). Det flytter 146 positioner i
+   sædskiftebiblioteket fra WP4 til WP1 og 4 fra WP4 til WP8 (vinterraps).
 2. **Beregningsårets hovedafgrøde er sået om efteråret** (WP1 eller WP8 i
    tabellen) → WP1 hhv. WP8. Tabellens WP1/WP8 beskriver en afgrøde, der
    selv står i vinteren før sit eget høstår, ikke vinteren efter. Har
-   afgrøden ingen WP-kategori i tabellen (WP11 eller tom, fx en database
-   indlæst før WP-værdierne kom med), afgør dens M i stedet: M1 → WP1,
-   M9 → WP8.
+   afgrøden ingen WP-kategori i tabellen, afgør dens M i stedet: M1 → WP1,
+   M9 → WP8. Tabel 10 giver også WP1/WP8 til fire vårsåede koder (23 Rybs,
+   35, 180 Gul sennep og 182, alle M13), fordi de kan indberettes som
+   vinterplantedække; et M uden for M1/M9 tilsidesætter derfor tabellens
+   WP1/WP8.
 3. **Hovedafgrøden året før står hen over vinteren** (WP3, WP5 eller WP6
    i tabellen) → dens WP.
-4. **Ellers har jorden været bar**: forfrugten er majs eller kartofler →
+4. **Ellers har jorden været bar**: forfrugten har WP7 i tabellen (majs,
+   kartofler, planteskolekulturer, blomsterløg) eller er majs/kartofler →
    WP7, alt andet → WP2.
 
 Kendes forfrugten slet ikke, gives WP11, og `engine.py`s `C_func` bruger

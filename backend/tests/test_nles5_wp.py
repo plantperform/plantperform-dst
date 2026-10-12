@@ -19,10 +19,12 @@ _TABLE_WP = {
     1011: 11,  # Vinterhvede in a table without WP values
     1022: 11,  # Vinterraps in a table without WP values
     1101: 5,   # Frøgræs that would be M1
+    180: 8,    # Gul sennep: WP8 in table 10, but spring-sown
+    497: 7,    # Planteskolekulturer, vedplanter
 }
 
 # M is only set where a test relies on it.
-_TABLE_M = {1: 2, 1011: 1, 1022: 9, 1101: 1}
+_TABLE_M = {1: 2, 1011: 1, 1022: 9, 1101: 1, 180: 13}
 
 
 def _params(code):
@@ -46,6 +48,12 @@ class ResolveWpTests(unittest.TestCase):
 
     def test_tidlig_saaning_marker_falls_through_to_the_afgroeder(self) -> None:
         self.assertEqual(resolve(1, 1, prev_udlaeg=9683), 2)
+        self.assertEqual(resolve(1, 11, prev_udlaeg=9683), 1)
+
+    def test_mellemafgroede_leaves_wp_to_the_efteraarssaaet_afgroede(self) -> None:
+        self.assertEqual(resolve(1, 11, prev_udlaeg=9682), 1)
+        self.assertEqual(resolve(1, 22, prev_udlaeg=9682), 8)
+        self.assertEqual(resolve(101, 11, prev_udlaeg=9684), 1)
 
     def test_autumn_sown_current_afgroede_occupies_the_winter(self) -> None:
         self.assertEqual(resolve(1, 11), 1)
@@ -56,6 +64,9 @@ class ResolveWpTests(unittest.TestCase):
         self.assertEqual(resolve(1, 1022), 8)
         self.assertEqual(resolve(1, 1101), 2)
 
+    def test_spring_sown_m_overrules_a_table_wp1_or_wp8(self) -> None:
+        self.assertEqual(resolve(1, 180), 2)
+
     def test_overwintering_forfrugt_uses_its_own_wp(self) -> None:
         self.assertEqual(resolve(252, 1), 3)
         self.assertEqual(resolve(101, 1), 5)
@@ -64,6 +75,9 @@ class ResolveWpTests(unittest.TestCase):
     def test_bare_winter_after_majs_or_kartofler_is_wp7(self) -> None:
         self.assertEqual(resolve(216, 1), 7)
         self.assertEqual(resolve(151, 1), 7)
+
+    def test_bare_winter_after_a_wp7_forfrugt_is_wp7(self) -> None:
+        self.assertEqual(resolve(497, 1), 7)
 
     def test_other_bare_winters_are_wp2(self) -> None:
         self.assertEqual(resolve(1, 1), 2)
