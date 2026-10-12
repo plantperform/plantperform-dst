@@ -201,6 +201,25 @@ def lookup_nfix(crop_code, jb_nr, irrigated: bool = False) -> float:
     return 0.0
 
 
+# The preceding crop value (forfrugtsværdi) a catch crop gives the next crop,
+# by its code: the N after-effect in SEGES/SKH's fact sheet on catch crops
+# (21 kg N/ha) for every catch crop, and the 50 kg N/ha of the fertiliser
+# order's bilag 3, table 1 for nitrogen-fixing catch crops. The bilag's "17/25"
+# for 968 is not used: its note is missing from the draft. Grass seed
+# continuing after harvest (9680) is no catch crop here; the grass seed crop's
+# own preceding crop value applies.
+_CATCH_CROP_PRECEDING_CROP_VALUE_KGN_HA: dict[int, float] = {
+    **dict.fromkeys((950, 951, 954, 968, 970), 21.0),
+    **dict.fromkeys((952, 953), 50.0),
+}
+
+
+def catch_crop_preceding_crop_value(udlaeg_kode: int | None) -> float:
+    """Return the preceding crop value (kg N/ha) the secondary crop gives the
+    next crop, 0 for anything but a catch crop."""
+    return _CATCH_CROP_PRECEDING_CROP_VALUE_KGN_HA.get(udlaeg_kode, 0.0)
+
+
 def is_permanent_afgrode(crop_code: int | None) -> bool:
     """Return whether ``crop_code`` is a permanent (ikke-omdrift) afgrøde."""
     if crop_code is None:
