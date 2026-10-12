@@ -247,6 +247,7 @@ type FarmFieldsListProps = {
   onZoomToField?: (fieldId: string) => void
   selectedYearIndex?: number | null
   yearValues?: FieldYearValues
+  yearValuesLoading?: boolean
   paneWidth?: number
   onRequiredWidthChange?: (width: number) => void
   detachingFieldIds: string[]
@@ -271,6 +272,7 @@ export const FarmFieldsList = ({
   onZoomToField,
   selectedYearIndex = null,
   yearValues,
+  yearValuesLoading = false,
   paneWidth,
   onRequiredWidthChange,
   detachingFieldIds,
@@ -399,6 +401,7 @@ export const FarmFieldsList = ({
         selectedYearIndex,
         fields: sortedFields,
         fertiliser,
+        fertiliserLoading: yearValuesLoading,
         quota,
         catchmentLabel,
         detachingFieldIds,
@@ -410,6 +413,7 @@ export const FarmFieldsList = ({
       selectedYearIndex,
       sortedFields,
       fertiliser,
+      yearValuesLoading,
       quota,
       catchmentLabel,
       detachingFieldIds,
