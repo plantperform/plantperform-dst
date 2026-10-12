@@ -58,7 +58,6 @@ const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'nNormPct',
   'db2',
   'quotaStatus',
-  ...FERTILISER_COLUMN_IDS,
 ])
 const CURRENT_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
