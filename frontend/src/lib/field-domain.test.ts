@@ -10,8 +10,12 @@ import {
   fieldNNormPct,
   nNormTargetKgNHa,
   yieldResponse,
+  formatCompactDkk,
+  formatHectares,
+  formatNumber,
   formatPerHa,
   formatSigned,
+  formatWholeNumber,
   summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
@@ -246,6 +250,28 @@ describe('yield response in the walkthrough', () => {
 
   it('caps the N at the N-norm level', () => {
     expect(nNormTargetKgNHa(206, 80)).toBeCloseTo(164.8)
+  })
+})
+
+describe('number formatting', () => {
+  it('shows at most one decimal with Danish separators', () => {
+    expect(formatNumber(1234.56)).toBe('1.234,6')
+    expect(formatNumber(3)).toBe('3')
+  })
+
+  it('rounds to a whole number', () => {
+    expect(formatWholeNumber(1234.5)).toBe('1.235')
+  })
+
+  it('always shows one decimal for hectares', () => {
+    expect(formatHectares(3)).toBe('3,0')
+    expect(formatHectares(12.34)).toBe('12,3')
+  })
+
+  it('shortens kroner to t.kr and mio. kr', () => {
+    expect(formatCompactDkk(850)).toBe('850 kr')
+    expect(formatCompactDkk(12_400)).toBe('12 t.kr')
+    expect(formatCompactDkk(1_250_000)).toBe('1,3 mio. kr')
   })
 })
 
