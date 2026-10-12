@@ -77,8 +77,9 @@ class ComputeNInputsTests(unittest.TestCase):
         self.assertEqual(self.fv(952), 50.0)
         self.assertEqual(self.fv(953), 50.0)
 
-    def test_mellemafgroede_gives_no_forfrugtsvaerdi(self) -> None:
+    def test_mellemafgroede_and_continuing_froegraes_give_no_forfrugtsvaerdi(self) -> None:
         self.assertEqual(self.fv(9682), 0.0)
+        self.assertEqual(self.fv(9680), 0.0)
         self.assertEqual(self.fv(None), 0.0)
 
 

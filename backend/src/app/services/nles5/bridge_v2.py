@@ -127,13 +127,15 @@ _FMAJS_FORFRUGT_KODER: frozenset[int] = frozenset({
 # only used for codes without a table 7 W (the lookup's own markers 2000/968x).
 # Mellemafgrøde and tidlig såning give no W: the vintersæd sown after them is the
 # vinterplantedække (Afgrøde beslutningstræ, ark W), so next year's afgrøde decides.
+# Neither does frøgræs that continues after harvest (9680): it is the frøgræs
+# itself, so its own W applies (table 8, agreed with Anders 2026-10-09).
 _BAR_JORD_KODE = 921
 
 _UDL_W_MAPPING: dict[int, int | None] = {
     960: 4, 961: 4, 962: 4, 963: 4, 964: 4, 965: 4, 966: 4,
     968: 5,     # "Efterafgrøde, pligtig"
     950: 5, 951: 5, 952: 5, 953: 5, 954: 5,  # "Efterafgrøde" renbestand/udlæg varianter
-    9680: 4,    # "Efterafgrøde e. frøgræs"
+    9680: None, # "Efterafgrøde e. frøgræs": the frøgræs itself
     9682: None, # Mellemafgrøde
     9683: None, # "Tidlig såning"
     9684: None, # "Mellemafgrøde e. frøgræs"
@@ -160,7 +162,7 @@ _UDL_WP_MAPPING: dict[int, int | None] = {
     960: 3, 961: 3, 962: 3, 963: 3, 964: 3, 965: 3, 966: 3,  # græs/kløvergræs udlæg -> WP3
     968: 4,     # "Efterafgrøde, pligtig" -> WP4
     950: 4, 951: 4, 952: 4, 953: 4, 954: 4,  # "Efterafgrøde" renbestand/udlæg varianter -> WP4
-    9680: 4,    # "Efterafgrøde e. frøgræs" -> WP4
+    9680: None, # "Efterafgrøde e. frøgræs": the frøgræs itself (its own WP5)
     9682: None, # Mellemafgrøde
     9683: None, # "Tidlig såning"
     9684: None, # "Mellemafgrøde e. frøgræs"
@@ -190,7 +192,10 @@ _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
     952:  {"eea": True,  "ema": False, "ets": False},
     953:  {"eea": True,  "ema": False, "ets": False},
     954:  {"eea": True,  "ema": False, "ets": False},
-    9680: {"eea": True,  "ema": False, "ets": False},  # "Efterafgrøde e. frøgræs"
+    # "Efterafgrøde e. frøgræs" is the frøgræs continuing after harvest; it is
+    # counted as the NLES5 afgrøde it is, not as a NUAR efterafgrøde (agreed
+    # with Anders 2026-10-09, although § 39, nr. 9 allows it as one).
+    9680: {"eea": False, "ema": False, "ets": False},
     9682: {"eea": False, "ema": True,  "ets": False},  # Mellemafgrøde
     9683: {"eea": False, "ema": False, "ets": True},   # "Tidlig såning"
     9684: {"eea": False, "ema": True,  "ets": False},  # "Mellemafgrøde e. frøgræs"

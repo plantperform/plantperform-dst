@@ -103,6 +103,11 @@ den separate faktor `(1 − EEA·Fdato − EMA − ETS)` i Bilag 2, ligning 1-2.
 Effekten for udlæg i majs er 10 % (§ 44, stk. 2) og ikke 0,15 fra
 "Parametre og konstanter".
 
+Frøgræs, der fortsætter efter høst (9680), regnes ikke som
+NUAR-efterafgrøde. Det er en almindelig NLES5-afgrøde uden EEA, uden egen W
+og WP og uden efterafgrødens forfrugtsværdi. Frøgræs som mellemafgrøde (9684,
+§ 55) beholder EMA 20 %.
+
 Målt mod reglen før den supplerende høring (begge på det opdaterede
 masterark) ændres W for 302 af 3.578 positioner i sædskiftebiblioteket, især:
 

@@ -39,9 +39,11 @@ START_CALENDAR_YEAR = 2027
 # the N eftervirkning of SEGES/SKH's Faktaark om efterafgrøder (21 kg N/ha)
 # for every efterafgrøde, and the 50 kg N/ha of gødningsbekendtgørelsens
 # bilag 3, tabel 1 for kvælstoffikserende efterafgrøder. The bilag's "17/25"
-# for 968 is not used: its note is missing from the draft.
+# for 968 is not used: its note is missing from the draft. Frøgræs continuing
+# after harvest (9680) is no efterafgrøde here; the frøgræs's own
+# forfrugtsværdi applies.
 _EFTERAFGROEDE_FORFRUGTSVAERDI_KGN_HA: dict[int, float] = {
-    **dict.fromkeys((950, 951, 954, 968, 9680, 970), 21.0),
+    **dict.fromkeys((950, 951, 954, 968, 970), 21.0),
     **dict.fromkeys((952, 953), 50.0),
 }
 _MELLEMAFGROEDE_UDLAEG_KODER = frozenset({9682, 9684})
