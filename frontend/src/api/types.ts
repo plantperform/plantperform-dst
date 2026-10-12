@@ -220,6 +220,8 @@ export type Simulation = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
+  comparisonAvailability?: { kind: 'ready' | 'uncalculated' } |
+    { kind: 'partial'; missingCount: number } | null
 }
 
 export type CreateSimulationInput = {
@@ -345,7 +347,50 @@ export type RotationCandidateYearResult = {
   nNormPct: number
 }
 
-export type FieldYearValues = Record<string, RotationCandidateYearResult[]>
+export type FieldYearValue = Pick<RotationCandidateYearResult,
+  'year' | 'leachingKgNHa' | 'dbDkkHa' | 'precedingCropValueKgNHa' |
+  'appliedManureUtilisedKgNHa' | 'appliedMineralFertiliserKgNHa' |
+  'manureOrganicBoundKgNHa' | 'manureTonsPerHa' | 'cropNormKgNHa' | 'nNormPct'> & {
+  feedUnitsPerHa: number
+  winterCover: Record<string, unknown>
+}
+
+// Detailed calculations also satisfy the display inputs used by older fixtures.
+export type DisplayYearValue = FieldYearValue | RotationCandidateYearResult
+export type FieldYearValues = Record<string, DisplayYearValue[]>
+
+export type ViewState = {
+  inputRevision: number
+  viewVersion: number
+  status: 'queued' | 'running' | 'done' | 'failed'
+  error: { code?: string; message?: string } | null
+}
+
+export type FarmViewData = {
+  fields: FieldRecord[]
+  fieldYears: FieldYearValues
+  yearlySummary: YearlySummaryEntry[]
+}
+
+export type SavedResultView = {
+  runId: string
+  resultRevision: number
+  response: OptimizeSimulationResponse
+  fieldsBefore: FieldRecord[]
+  fieldYears: FieldYearValues
+}
+
+export type SimulationViewData = FarmViewData & {
+  cropAreaRanges: CropAreaRange[]
+  yearlyOptimizationCandidates: YearlyOptimizationCategoryOption[]
+  savedResult: SavedResultView | null
+}
+
+export type FarmView = ViewState & { farm: Farm; data: FarmViewData | null }
+export type SimulationView = ViewState & {
+  simulation: Simulation
+  data: SimulationViewData | null
+}
 
 export type RotationPositionOverride = {
   position: number

@@ -9,7 +9,7 @@ from sqlalchemy import Text, bindparam, cast, delete, func, insert, select, upda
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from app.data import repository
+from app.data import read_model_store, repository
 from app.data.db import farm_table, field_table
 from app.data.db import simulation_field_candidates_table as caches
 from app.data.db import simulation_result_table as results
@@ -57,6 +57,7 @@ def create(farm_id, request, email):
             return None
         if session.execute(select(setups.c.id).where(setups.c.id == simulation_id)).first():
             return simulation_id, None
+        read_model_store.require_farm_ready(session, farm_id)
         simulation = Simulation(
             id=simulation_id,
             farm_id=farm_id,
@@ -83,6 +84,7 @@ def create(farm_id, request, email):
             )
         )
         session.execute(insert(results).values(simulation_id=simulation_id))
+        read_model_store.initialize_simulation(session, simulation_id)
         return simulation_id, job_for(farm_id, simulation_id, 0, request, email)
 
 
@@ -155,6 +157,11 @@ def claim(session, job):
 def start_attempt(session, job):
     """Read current inputs once and atomically replace all previous partial work."""
     with session.begin():
+        # Read a ready farm consistently with registration/history publication.
+        session.execute(
+            select(farm_table.c.id).where(farm_table.c.id == job.farm_id).with_for_update()
+        )
+        read_model_store.require_farm_ready(session, job.farm_id)
         row = locked_setup(session, job)
         if row is None or row.creation_status != "running":
             return None
@@ -228,11 +235,15 @@ def checkpoint(session, job, field_id, setup, full_json, compact_json):
         return True
 
 
-def complete(session, job, *, optimization_error=None):
+def complete(session, job, *, optimization_error=None, view_data=None, view_prepared=None):
     with session.begin():
         row = locked_setup(session, job)
         if row is None or row.creation_status != "running":
             return False
+        if view_data is not None:
+            read_model_store.publish_simulation(
+                session, row.id, row.revision, view_data, view_prepared
+            )
         session.execute(update(setups).where(setups.c.id == row.id).values(creation_status="done"))
         if job.parameters.optimize_on_create:
             now = datetime.now(UTC)
@@ -294,6 +305,8 @@ def retry(farm_id, simulation_id, email, *, optimize_on_create=False):
             if row.creation_status != "failed":
                 raise CreationConflictError("Kun mislykkede oprettelser kan prøves igen.")
             revision = row.revision + 1
+            read_model_store.require_farm_ready(session, farm_id)
+            read_model_store.initialize_simulation(session, simulation_id, revision)
             session.execute(
                 update(setups)
                 .where(setups.c.id == simulation_id)

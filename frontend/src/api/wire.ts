@@ -45,6 +45,7 @@ const SHARED_NAMES: Record<string, string> = {
   maxFen: 'maxFeedUnits',
   totalFen: 'totalFeedUnits',
   avgFen: 'avgFeedUnits',
+  fenFeHa: 'feedUnitsPerHa',
   journalnr: 'journalNumber',
 }
 

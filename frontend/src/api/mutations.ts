@@ -6,6 +6,7 @@ import type {
   CreateSimulationInput,
   EvaluateRotationCandidatesInput,
   Farm,
+  FarmView,
   FarmMember,
   FieldRecord,
   FieldRotationCandidates,
@@ -22,6 +23,9 @@ import type {
 
 export const createFarm = (input: CreateFarmInput) =>
   postJson<Farm, CreateFarmInput>('/farms', input)
+
+export const retryFarmHistory = (farmId: string) =>
+  postJson<FarmView, Record<string, never>>(`/farms/${farmId}/history/retry`, {})
 
 export const deleteFarm = (farmId: string) => deleteJson(`/farms/${farmId}`)
 

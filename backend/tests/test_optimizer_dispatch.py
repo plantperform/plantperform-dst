@@ -21,6 +21,7 @@ class StartupTests(unittest.TestCase):
                 patch.dict(os.environ),
                 patch.object(main, "recover_local_optimization_runs") as recover,
                 patch.object(main, "recover_local_simulation_creations") as recover_creations,
+                patch.object(main, "recover_local_preparations") as recover_views,
                 patch.object(main, "validate_aws_region") as validate,
                 patch.object(main, "start_local_optimizer") as warmup,
             ):
@@ -31,6 +32,7 @@ class StartupTests(unittest.TestCase):
                 self.startup()
                 recover.assert_called_once_with()
                 recover_creations.assert_called_once_with()
+                recover_views.assert_called_once_with()
                 validate.assert_not_called()
                 warmup.assert_called_once_with()
                 warmup.return_value.close.assert_called_once_with()
@@ -42,6 +44,7 @@ class StartupTests(unittest.TestCase):
                 patch.dict(os.environ, {"APP_ENV": mode}),
                 patch.object(main, "recover_local_optimization_runs") as recover,
                 patch.object(main, "recover_local_simulation_creations") as recover_creations,
+                patch.object(main, "recover_local_preparations") as recover_views,
                 patch.object(main, "validate_aws_region") as validate,
                 patch.object(main, "start_local_optimizer") as warmup,
             ):
@@ -49,4 +52,5 @@ class StartupTests(unittest.TestCase):
                 validate.assert_called_once_with()
                 recover.assert_not_called()
                 recover_creations.assert_not_called()
+                recover_views.assert_not_called()
                 warmup.assert_not_called()

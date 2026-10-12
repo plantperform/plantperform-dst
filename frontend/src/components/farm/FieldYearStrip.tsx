@@ -1,7 +1,7 @@
 import { ArrowDownToLine, Coins, Droplets } from 'lucide-react'
 import { useState } from 'react'
 
-import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
+import type { FieldRecord, DisplayYearValue } from '@/api/types'
 import { CropGroupTile, CropYearBlock } from '@/components/farm/CropGroupTile'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
@@ -32,7 +32,7 @@ const METRIC_OPTIONS: SegmentedControlOption<YearMetric>[] = [
 
 const metricValue = (
   metric: YearMetric,
-  yearValue: RotationCandidateYearResult,
+  yearValue: DisplayYearValue,
   field: FieldRecord,
 ): number => {
   if (metric === 'leaching') return yearValue.leachingKgNHa
@@ -76,7 +76,7 @@ const formatColumnValue = (value: number, scale: ColumnScale): string =>
 
 type FieldYearStripProps = {
   field: FieldRecord
-  yearValues?: RotationCandidateYearResult[]
+  yearValues?: DisplayYearValue[]
   startYear: number
   selectedIndex: number | null
   onSelect?: (index: number | null) => void
@@ -110,7 +110,9 @@ export const FieldYearStrip = ({
   const scale = columnScale(metric, values)
   const yearCovers = rotationCovers(
     field.cropRotation,
-    yearValues?.map((yearValue) => yearValue.leachingDetail) ?? [],
+    yearValues?.map((yearValue) =>
+      'winterCover' in yearValue ? yearValue.winterCover : yearValue.leachingDetail,
+    ) ?? [],
   )
   const presentCovers = presentWinterCovers(yearCovers ?? [])
   const distinctCrops = field.cropRotation.filter(

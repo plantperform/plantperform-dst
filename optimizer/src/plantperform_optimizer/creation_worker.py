@@ -19,6 +19,7 @@ from app.domain.optimization import (
     OptimizeSimulationRequest,
 )
 from app.domain.soil import MissingSoilDataError
+from app.services import read_models
 from app.services.optimization import jobs as optimization_jobs
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.scenario.candidate_evaluator import prepare_candidates
@@ -52,11 +53,16 @@ def _optimization_error(session, job):
         area = ranges.get(limit.afgrode_kode)
         lowest_max = min(area.min_average_ha, max(area.min_ha_by_year)) if area else 0
         highest_min = (
-            max(area.max_average_ha, min(min(area.max_ha_by_year), area.yearly_max_average_ha))
+            max(
+                area.max_average_ha,
+                min(min(area.max_ha_by_year), area.yearly_max_average_ha),
+            )
             if area
             else 0
         )
-        if (limit.min_area_ha is not None and limit.min_area_ha > highest_min + 0.005) or (
+        if (
+            limit.min_area_ha is not None and limit.min_area_ha > highest_min + 0.005
+        ) or (
             area is not None
             and limit.max_area_ha is not None
             and limit.max_area_ha < lowest_max - 0.005
@@ -84,10 +90,17 @@ def handoff(session, job, *, sqs_delivery):
             return None
         result = session.execute(
             select(
-                results.c.parameters, results.c.run_id, results.c.status, results.c.published_at
+                results.c.parameters,
+                results.c.run_id,
+                results.c.status,
+                results.c.published_at,
             ).where(results.c.simulation_id == job.simulation_id)
         ).one()
-        if result.run_id != run_id or result.status != "queued" or result.published_at is not None:
+        if (
+            result.run_id != run_id
+            or result.status != "queued"
+            or result.published_at is not None
+        ):
             return None
     tasks = None
     if not sqs_delivery:
@@ -154,6 +167,7 @@ def _generate(session, job, context, *, sqs_delivery, receive_count):
             request.tidlig_saaning,
             request.mellemafgrode,
         )
+        view_fields, prepared_fields, effective_fields, field_years = [], {}, {}, {}
         for index, field in enumerate(fields):
             _check_deadline(context)
             phase = time.monotonic()
@@ -163,7 +177,9 @@ def _generate(session, job, context, *, sqs_delivery, receive_count):
             generation = time.monotonic() - phase
             phase = time.monotonic()
             full_json = candidates.model_dump_json() if candidates.candidates else None
-            compact_json = optimizer_input_json(candidates) if candidates.candidates else None
+            compact_json = (
+                optimizer_input_json(candidates) if candidates.candidates else None
+            )
             serialization = time.monotonic() - phase
             _check_deadline(context)
             phase = time.monotonic()
@@ -171,6 +187,28 @@ def _generate(session, job, context, *, sqs_delivery, receive_count):
                 session, job, field.id, setup, full_json, compact_json
             ):
                 return False
+            view_field = simulation_store.project_fields(
+                {field.id: setup}, [field.id], None
+            )[0]
+            view_fields.append(view_field)
+            metadata = [
+                read_models.candidate_metadata(value) for value in candidates.candidates
+            ]
+            fixed = setup.get("fixed_candidate")
+            fixed_metadata = None
+            if fixed:
+                from app.domain.rotation_candidate import RotationCandidateEvaluation
+
+                fixed_candidate = RotationCandidateEvaluation.model_validate(fixed)
+                fixed_metadata = read_models.candidate_metadata(fixed_candidate)
+                field_years[field.id] = read_models.compact_years(fixed_candidate)
+            prepared_fields[field.id] = {
+                "base": metadata,
+                "overlays": {"fixed": fixed_metadata},
+            }
+            effective_fields[field.id] = read_models.overlay_metadata(
+                metadata, [fixed_metadata]
+            )
             logger.info(
                 "creation_field simulation_id=%s field_index=%s candidate_count=%s "
                 "generation_seconds=%.3f serialization_seconds=%.3f persistence_seconds=%.3f",
@@ -185,14 +223,27 @@ def _generate(session, job, context, *, sqs_delivery, receive_count):
         _check_deadline(context)
         error = _optimization_error(session, job)
         _check_deadline(context)
-        return creation_store.complete(session, job, optimization_error=error)
+        view_data, contributions = read_models.simulation_data(
+            view_fields,
+            effective_fields,
+            field_years,
+        )
+        return creation_store.complete(
+            session,
+            job,
+            optimization_error=error,
+            view_data=view_data,
+            view_prepared={"fields": prepared_fields, "contributions": contributions},
+        )
     except (MissingSoilDataError, ValueError):
         logger.exception("creation_invalid_input simulation_id=%s", job.simulation_id)
         creation_store.fail(session, job)
         return False
     except Exception:
         logger.exception(
-            "creation_attempt_failed simulation_id=%s job_id=%s", job.simulation_id, job.job_id
+            "creation_attempt_failed simulation_id=%s job_id=%s",
+            job.simulation_id,
+            job.job_id,
         )
         retry = receive_count < MAX_JOB_ATTEMPTS
         saved = creation_store.fail(session, job, retry=retry)
@@ -216,15 +267,23 @@ def execute(job, context, *, sqs_delivery=False, receive_count=1):
                 return
             if row.creation_status == "failed":
                 if sqs_delivery and receive_count >= MAX_JOB_ATTEMPTS:
-                    raise OptimizationAttemptsExhaustedError("Creation attempts exhausted")
+                    raise OptimizationAttemptsExhaustedError(
+                        "Creation attempts exhausted"
+                    )
                 return
             if row.creation_status != "done" and receive_count > MAX_JOB_ATTEMPTS:
                 creation_store.fail(session, job)
                 if sqs_delivery:
-                    raise OptimizationAttemptsExhaustedError("Creation attempts exhausted")
+                    raise OptimizationAttemptsExhaustedError(
+                        "Creation attempts exhausted"
+                    )
                 return
             if row.creation_status != "done" and not _generate(
-                session, job, context, sqs_delivery=sqs_delivery, receive_count=receive_count
+                session,
+                job,
+                context,
+                sqs_delivery=sqs_delivery,
+                receive_count=receive_count,
             ):
                 return
             tasks = handoff(session, job, sqs_delivery=sqs_delivery)
@@ -254,7 +313,9 @@ def execute_local(job):
             execute(job, context, receive_count=attempt + 1)
             return
         except Exception:
-            logger.exception("local_creation_attempt_failed simulation_id=%s", job.simulation_id)
+            logger.exception(
+                "local_creation_attempt_failed simulation_id=%s", job.simulation_id
+            )
             if attempt + 1 < MAX_JOB_ATTEMPTS:
                 time.sleep(RETRY_DELAY_SECONDS)
             else:

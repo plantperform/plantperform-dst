@@ -6,6 +6,10 @@ from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
+from app.data.read_model_store import (
+    require_simulation_view_ready,
+    simulation_part,
+)
 from app.data.repository import (
     FieldNotOptimizedError,
     delete_simulation,
@@ -13,10 +17,8 @@ from app.data.repository import (
     get_simulation,
     get_simulation_field,
     get_simulation_field_candidate_detail,
-    get_simulation_field_candidates,
+    get_simulation_field_context,
     list_scenario_afgrodekoder,
-    list_simulation_field_candidates,
-    list_simulation_fields,
     list_simulations,
     update_simulation_constraints,
     update_simulation_field,
@@ -35,6 +37,7 @@ from app.domain.optimization import (
     SimulationResult,
     YearlyOptimizeSimulationRequest,
 )
+from app.domain.read_model import SimulationView
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
@@ -47,21 +50,20 @@ from app.domain.simulation import (
 )
 from app.services.creation.jobs import retry as retry_creation
 from app.services.creation.jobs import submit as submit_creation
-from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.optimization.jobs import (
     QueueUnavailableError,
     SimulationNotFoundError,
     SubmissionConflictError,
     submit,
 )
-from app.services.rotations import afgroede_normer, saedskifte_kategorier
+from app.services.preparation_jobs import get_or_prepare_simulation_view, retry_simulation_view
+from app.services.rotations import afgroede_normer
 from app.services.scenario.candidate_evaluator import (
     evaluate_with_overrides,
 )
 from app.services.scenario.rotations import (
     ManualRotationNotFoundError,
     apply_manual_rotation,
-    compute_yearly_summary,
 )
 
 NUM_ROTATION_YEARS = 8
@@ -77,6 +79,7 @@ def require_completed_creation(request: Request, user: CurrentUser):
         or (request.method in ("GET", "DELETE") and path.endswith("/{simulation_id}"))
         or path.endswith("/result")
         or path.endswith("/creation/retry")
+        or path.endswith("/view")
     ):
         return
     simulation = get_simulation(request.path_params["farm_id"], simulation_id, user.email)
@@ -86,6 +89,8 @@ def require_completed_creation(request: Request, user: CurrentUser):
         raise HTTPException(
             status_code=409, detail="Simuleringen er ikke færdig med at blive oprettet."
         )
+    if request.method not in ("GET", "DELETE") and not path.endswith("/view/retry"):
+        require_simulation_view_ready(simulation_id, simulation.revision)
 
 
 router = APIRouter(
@@ -193,6 +198,22 @@ def get_farm_simulation(
     return simulation
 
 
+@router.get("/{simulation_id}/view", response_model=SimulationView)
+def get_simulation_display(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    include_data: bool = True,
+):
+    view = get_or_prepare_simulation_view(
+        farm_id, simulation_id, user.email, background_tasks, include_data=include_data
+    )
+    if view is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    return view
+
+
 @router.delete("/{simulation_id}", status_code=HTTP_204_NO_CONTENT)
 def delete_farm_simulation(
     farm_id: str,
@@ -206,6 +227,19 @@ def delete_farm_simulation(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+
+
+@router.post("/{simulation_id}/view/retry", response_model=SimulationView, status_code=202)
+def retry_simulation_display(
+    farm_id: str, simulation_id: str, user: CurrentUser, background_tasks: BackgroundTasks
+):
+    try:
+        view = retry_simulation_view(farm_id, simulation_id, user.email, background_tasks)
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if view is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    return view
 
 
 @router.patch("/{simulation_id}/constraints", response_model=Simulation)
@@ -265,29 +299,10 @@ def get_farm_simulation_crop_area_ranges(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[CropAreaRangeResponse]:
-    try:
-        fields = list_simulation_fields(farm_id, simulation_id, user.email)
-        field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
-    except CreationNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    if fields is None or field_candidates is None:
+    ranges = simulation_part(farm_id, simulation_id, user.email, "crop_area_ranges")
+    if ranges is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-
-    ranges = crop_area_ranges(
-        fields,
-        {row.field_id: row.candidates for row in field_candidates},
-    )
-    return [
-        CropAreaRangeResponse(
-            afgrode_kode=area_range.afgrode_kode,
-            min_average_ha=area_range.min_average_ha,
-            max_average_ha=area_range.max_average_ha,
-            min_ha_by_year=list(area_range.min_ha_by_year),
-            max_ha_by_year=list(area_range.max_ha_by_year),
-            yearly_max_average_ha=area_range.yearly_max_average_ha,
-        )
-        for area_range in ranges
-    ]
+    return [CropAreaRangeResponse.model_validate(value) for value in ranges]
 
 
 def _submit_optimization(farm_id, simulation_id, user, kind, request, background_tasks):
@@ -356,74 +371,10 @@ def get_farm_simulation_yearly_optimization_candidates(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlyOptimizationKategoriOption]:
-    """Return the (saedskiftevariant, variant) pairs stored for the marker.
-
-    These Phase 12 options come from "Opret scenarie" and populate the explicit
-    sædskifte selector in "Års-optimering". Only real library references are
-    shown (base_ref is None); "+manuel" variants left by earlier Phase 10/11
-    runs are filtered out using the same pattern as _expand_yearly_options.
-    """
-    try:
-        field_candidates = list_simulation_field_candidates(farm_id, simulation_id, user.email)
-    except CreationNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    if field_candidates is None:
+    values = simulation_part(farm_id, simulation_id, user.email, "yearly_optimization_candidates")
+    if values is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-
-    by_pair: dict[tuple[str, str], RotationCandidateEvaluation] = {}
-    for row in field_candidates:
-        for candidate in row.candidates:
-            if candidate.base_ref is not None:
-                continue
-            pair = (candidate.ref.saedskiftevariant, candidate.ref.variant)
-            by_pair.setdefault(pair, candidate)
-
-    # Categories are normally mutually exclusive for a saedskiftevariant. The
-    # exception is "ren brak" (saedskiftevariant "1"), which belongs to every
-    # source-data category (decision 15; four categories as of 2026-09-02,
-    # previously six). Without special handling, the brak variants would appear
-    # identically, and be marked selected, under every selector category. A
-    # "select all" in one small category could then appear to select across all
-    # of them. Brak therefore receives its own category.
-    BRAK_KATEGORI = "Brak"
-    # The brak variant IDs (1-4, possibly more) all repeat the same pure brak
-    # throughout. There is no virkemiddel or afgrøde difference between them,
-    # only different internal norm-group IDs that do not matter here. Show one
-    # representative example rather than one per variant ID.
-    seen_brak_sequences: set[tuple[str, ...]] = set()
-
-    by_kategori: dict[str, list[YearlyOptimizationSaedskifteOption]] = {}
-    for (saedskiftevariant, variant), candidate in by_pair.items():
-        crop_sequence = [y.year.afgrode_navn for y in candidate.years[: candidate.active_len]]
-        option = YearlyOptimizationSaedskifteOption(
-            saedskiftevariant=saedskiftevariant,
-            variant=variant,
-            crop_sequence=crop_sequence,
-            active_len=candidate.active_len,
-        )
-        kategorier = saedskifte_kategorier.kategorier_for_saedskifte(saedskiftevariant)
-        if len(kategorier) > 1:
-            sequence_key = tuple(crop_sequence)
-            if sequence_key in seen_brak_sequences:
-                continue
-            seen_brak_sequences.add(sequence_key)
-            by_kategori.setdefault(BRAK_KATEGORI, []).append(option)
-        else:
-            for kategori in kategorier:
-                by_kategori.setdefault(kategori, []).append(option)
-
-    ordered_kategorier = [BRAK_KATEGORI, *saedskifte_kategorier.list_kategorier()]
-    return [
-        YearlyOptimizationKategoriOption(
-            kategori=kategori,
-            saedskifter=sorted(
-                by_kategori[kategori],
-                key=lambda o: (int(o.saedskiftevariant), o.variant),
-            ),
-        )
-        for kategori in ordered_kategorier
-        if kategori in by_kategori
-    ]
+    return [YearlyOptimizationKategoriOption.model_validate(value) for value in values]
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
@@ -432,15 +383,10 @@ def get_farm_simulation_fields(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[FieldRecord]:
-    try:
-        fields = list_simulation_fields(farm_id, simulation_id, user.email)
-    except CreationNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-
+    fields = simulation_part(farm_id, simulation_id, user.email, "fields")
     if fields is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-
-    return fields
+    return [FieldRecord.model_validate(field) for field in fields]
 
 
 @router.patch("/{simulation_id}/fields/{field_id}", response_model=FieldRecord)
@@ -516,7 +462,7 @@ def post_farm_simulation_field_preview_rotation(
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
     try:
-        candidates_row = get_simulation_field_candidates(
+        candidates_row = get_simulation_field_context(
             farm_id,
             simulation_id,
             field_id,
@@ -606,21 +552,7 @@ def get_farm_simulation_yearly_summary(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlySummaryEntryResponse]:
-    try:
-        summary = compute_yearly_summary(farm_id, simulation_id, user.email)
-    except CreationNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-
+    summary = simulation_part(farm_id, simulation_id, user.email, "yearly_summary")
     if summary is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-
-    return [
-        YearlySummaryEntryResponse(
-            year=entry.year,
-            total_n_load_kg=entry.total_n_load_kg,
-            total_db2=entry.total_db2,
-            total_fen=entry.total_fen,
-            field_count=entry.field_count,
-        )
-        for entry in summary
-    ]
+    return [YearlySummaryEntryResponse.model_validate(value) for value in summary]

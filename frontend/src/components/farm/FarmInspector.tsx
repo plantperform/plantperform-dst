@@ -2,7 +2,7 @@ import { useCallback, useId, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
-  simulationFieldsKey,
+  simulationViewKey,
   useFarmHistoricalYearlySummary,
   useFieldYearValues,
   useSimulationYearlySummary,
@@ -223,20 +223,13 @@ export const FarmInspector = ({
       const target = unlocking ? [] : [field.rotationId]
       setLockingFieldId(field.id)
       try {
-        const updatedField = await updateSimulationField(
+        await updateSimulationField(
           farm.id,
           selectedSimulationId,
           field.id,
           { allowedRotationIds: target },
         )
-        await mutate(
-          simulationFieldsKey(farm.id, selectedSimulationId),
-          (current: FieldRecord[] = []) =>
-            current.map((currentField) =>
-              currentField.id === updatedField.id ? updatedField : currentField,
-            ),
-          { revalidate: false },
-        )
+        await mutate(simulationViewKey(farm.id, selectedSimulationId))
         if (unlocking) markStale(selectedSimulationId)
         onError(null)
       } catch {

@@ -3,18 +3,14 @@ import { mutate } from 'swr'
 
 import {
   farmEmissionsKey,
-  farmFieldsKey,
-  farmHistoricalYearlySummaryKey,
-  farmKey,
+  farmViewKey,
 } from '@/api/hooks'
 import { detachField } from '@/api/mutations'
 
 export const refreshFarmFields = (farmId: string) =>
   Promise.all([
-    mutate(farmFieldsKey(farmId)),
-    mutate(farmKey(farmId)),
+    mutate(farmViewKey(farmId)),
     mutate(farmEmissionsKey(farmId)),
-    mutate(farmHistoricalYearlySummaryKey(farmId)),
   ]).catch(() => undefined)
 
 const describeDetachFailure = (failedCount: number, requestedCount: number) =>

@@ -266,10 +266,16 @@ def finish(simulation_id, run_id, token, revision, *, output=None, error=None, r
             error=error,
         )
         if output is not None:
+            # Keep successful provenance when later submissions replace result.run_id.
+            output = {**output, "run_id": run_id, "result_revision": revision}
             values.update(output=output, result_revision=revision)
         session.execute(
             update(results).where(results.c.simulation_id == simulation_id).values(**values)
         )
+        if output is not None:
+            from app.data.read_model_store import publish_optimization
+
+            publish_optimization(session, simulation_id, revision, run_id, output)
         return True
 
 

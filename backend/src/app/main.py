@@ -5,11 +5,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse
 
 from app.api.v0.router import router as v0_router
 from app.auth import configured_origins, validate_aws_region
 from app.data.creation_store import recover_local_simulation_creations
 from app.data.optimization_store import recover_local_optimization_runs
+from app.data.read_model_store import recover_local_preparations
+from app.domain.read_model import ReadModelNotReadyError
+from app.request_metrics import RequestMetrics
 from app.services.optimization.jobs import is_production
 from app.services.optimization.local import start_local_optimizer
 
@@ -25,12 +29,22 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         try:
             await run_in_threadpool(recover_local_optimization_runs)
             await run_in_threadpool(recover_local_simulation_creations)
+            await run_in_threadpool(recover_local_preparations)
             yield
         finally:
             await run_in_threadpool(optimizer.close)
 
 
 app = FastAPI(title="DST API", lifespan=lifespan)
+app.add_middleware(RequestMetrics)
+
+
+@app.exception_handler(ReadModelNotReadyError)
+async def not_ready(_, error):
+    return JSONResponse(
+        status_code=409, content={"detail": str(error), "code": "READ_MODEL_NOT_READY"}
+    )
+
 
 allowed_origins = configured_origins()
 

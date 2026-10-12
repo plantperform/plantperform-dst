@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
-  simulationFieldsKey,
+  simulationViewKey,
   simulationsKey,
   useRotationNNormPercentages,
 } from '@/api/hooks'
@@ -68,7 +68,7 @@ export const useSimulationActions = ({
     try {
       await deleteSimulation(farmId, simulationId)
       await mutate(simulationsKey(farmId))
-      await mutate(simulationFieldsKey(farmId, simulationId), undefined, {
+      await mutate(simulationViewKey(farmId, simulationId), undefined, {
         revalidate: false,
       })
       if (selection.kind === 'simulation' && selection.id === simulationId) {

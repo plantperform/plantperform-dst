@@ -1,7 +1,7 @@
 import type {
   FieldRecord,
   FieldYearValues,
-  RotationCandidateYearResult,
+  DisplayYearValue,
 } from '@/api/types'
 import { yearResultHasValues } from '@/lib/field-domain'
 
@@ -20,7 +20,7 @@ export type FertiliserFigures = {
 }
 
 const yearFertiliser = (
-  yearResult: RotationCandidateYearResult,
+  yearResult: DisplayYearValue,
 ): FertiliserFigures => ({
   cropNormKgNHa: yearResult.cropNormKgNHa,
   precedingCropValueKgNHa: yearResult.precedingCropValueKgNHa,
@@ -37,7 +37,7 @@ const mean = (values: number[]): number =>
 // norm is null when a counted year has no norm: a missing norm is a gap in the
 // data, not a norm of 0.
 export const fieldFertiliser = (
-  years: RotationCandidateYearResult[] | undefined,
+  years: DisplayYearValue[] | undefined,
   yearIndex: number | null,
 ): FertiliserFigures | null => {
   if (!years) return null

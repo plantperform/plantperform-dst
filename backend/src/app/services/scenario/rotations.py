@@ -58,7 +58,7 @@ def apply_manual_rotation(
     if simulation is None or field is None:
         raise ManualRotationNotFoundError
 
-    candidates_row = repository.get_simulation_field_candidates(
+    candidates_row = repository.get_simulation_field_context(
         farm_id,
         simulation_id,
         field_id,

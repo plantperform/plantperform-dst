@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import Field, field_validator
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -17,6 +17,9 @@ from app.data.repository import (
 )
 from app.domain.base import CamelModel
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
+from app.domain.read_model import FarmView
+from app.services.optimization.jobs import QueueUnavailableError
+from app.services.preparation_jobs import get_or_prepare_farm_view, retry_history
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
@@ -62,6 +65,29 @@ def get_farm_by_id(
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
     return farm
+
+
+@router.get("/{farm_id}/view", response_model=FarmView)
+def get_farm_display(
+    farm_id: str, user: CurrentUser, background_tasks: BackgroundTasks, include_data: bool = True
+):
+    view = get_or_prepare_farm_view(
+        farm_id, user.email, background_tasks, include_data=include_data
+    )
+    if view is None:
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
+    return view
+
+
+@router.post("/{farm_id}/history/retry", response_model=FarmView, status_code=202)
+def retry_farm_history(farm_id: str, user: CurrentUser, background_tasks: BackgroundTasks):
+    try:
+        view = retry_history(farm_id, user.email, background_tasks)
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if view is None:
+        raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
+    return view
 
 
 @router.get("/{farm_id}/udledning-per-kystvandopland", response_model=list[KystvandoplandUdledning])

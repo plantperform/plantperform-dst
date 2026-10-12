@@ -5,7 +5,7 @@ import type {
   FieldRecord,
   Measure,
   NamedRotation,
-  RotationCandidateYearResult,
+  DisplayYearValue,
   RotationYear,
   YearlySummaryEntry,
 } from '@/api/types'
@@ -821,20 +821,20 @@ export const catchmentRuns = (
   return runs
 }
 
-export const yearResultHasValues = (
-  yearResult: RotationCandidateYearResult,
-): boolean =>
-  yearResult.dbDkkHa !== 0 ||
-  yearResult.leachingKgNHa !== 0 ||
-  (yearResult.dbDetail.yieldUnit === 'FE/ha' &&
-    (Number(yearResult.dbDetail.yieldAmount) || 0) !== 0)
+export const yearFeedUnitsPerHa = (year: DisplayYearValue): number =>
+  'feedUnitsPerHa' in year
+    ? year.feedUnitsPerHa
+    : year.dbDetail.yieldUnit === 'FE/ha' ? Number(year.dbDetail.yieldAmount) || 0 : 0
+
+export const yearResultHasValues = (year: DisplayYearValue): boolean =>
+  year.dbDkkHa !== 0 || year.leachingKgNHa !== 0 || yearFeedUnitsPerHa(year) !== 0
 
 const calendarYearOf = (index: number, history: boolean): number =>
   history ? REAL_HISTORY_START_CALENDAR_YEAR + index : index + 1
 
 const yearResultNLoadKg = (
   field: FieldRecord,
-  yearResult: RotationCandidateYearResult,
+  yearResult: DisplayYearValue,
 ): number =>
   yearResult.leachingKgNHa * field.areaHa * (1 - (field.retention ?? 0) / 100)
 
@@ -861,10 +861,7 @@ export const summarizeFieldYears = (
         bucket.totalNLoadKg += yearResultNLoadKg(field, yearResult)
       }
       bucket.totalDb2 += yearResult.dbDkkHa * field.areaHa
-      if (yearResult.dbDetail.yieldUnit === 'FE/ha') {
-        bucket.totalFeedUnits +=
-          (Number(yearResult.dbDetail.yieldAmount) || 0) * field.areaHa
-      }
+      bucket.totalFeedUnits += yearFeedUnitsPerHa(yearResult) * field.areaHa
       bucket.fieldCount += 1
       buckets.set(year, bucket)
     })
@@ -896,10 +893,7 @@ export const applyFieldYearValues = (
         yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
         field.areaHa,
       leaching: yearResult.leachingKgNHa * field.areaHa,
-      feedUnits:
-        yearResult.dbDetail.yieldUnit === 'FE/ha'
-          ? (Number(yearResult.dbDetail.yieldAmount) || 0) * field.areaHa
-          : 0,
+      feedUnits: yearFeedUnitsPerHa(yearResult) * field.areaHa,
     }
   })
 

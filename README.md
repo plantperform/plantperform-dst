@@ -114,6 +114,12 @@ individual troubleshooting commands.
 
 ## Development checks
 
+Simulation and farm display data is prepared by workers and read through compact
+view endpoints. See [the read-model rollout](docs/read-model-rollout.md) for the
+coordinated migration, automatic preparation on first use, and checks in eusc-dev.
+Existing snapshots survive code and reference-data changes; users can choose
+"Genberegn historik" to refresh farm history.
+
 ```bash
 cd backend && pixi run test && pixi run test-optimizer && pixi run lint && pixi run lint-optimizer
 cd frontend && npm run lint && npm run build

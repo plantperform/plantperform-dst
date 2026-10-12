@@ -81,7 +81,7 @@ describe('persisted result tracking', () => {
 describe('result polling schedule', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('polls every five seconds, pauses, refreshes on focus, and cleans up', () => {
+  it('polls every two seconds, pauses, refreshes on focus, and cleans up', () => {
     vi.useFakeTimers()
     const view = new EventTarget()
     const page = Object.assign(new EventTarget(), { hidden: false })
@@ -95,11 +95,11 @@ describe('result polling schedule', () => {
       document: page as unknown as Document,
       navigator: connection,
     })
-    vi.advanceTimersByTime(4999)
+    vi.advanceTimersByTime(1999)
     expect(poll).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(poll.mock.calls).toEqual([[false]])
-    vi.advanceTimersByTime(10000)
+    vi.advanceTimersByTime(4000)
     expect(poll.mock.calls).toEqual([[false], [false], [false]])
     page.hidden = true
     vi.advanceTimersByTime(10000)
@@ -107,7 +107,7 @@ describe('result polling schedule', () => {
     page.hidden = false
     connection.onLine = false
     view.dispatchEvent(new Event('focus'))
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(2000)
     expect(poll).toHaveBeenCalledTimes(3)
     connection.onLine = true
     view.dispatchEvent(new Event('online'))

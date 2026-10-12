@@ -14,6 +14,7 @@ from dotenv import dotenv_values
 from app.domain.creation import CreationActiveError
 from app.domain.creation_job import CreationJob
 from app.domain.optimization import RETRY_DELAY_SECONDS, OptimizationLeaseActiveError
+from app.domain.read_model import PreparationJob
 from app.services.optimization.queue import sqs_client
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,9 @@ def initialize_configuration():
     if not os.getenv("DATABASE_URL"):
         response = boto3.client(
             "s3",
-            config=Config(connect_timeout=3, read_timeout=5, retries={"total_max_attempts": 2}),
+            config=Config(
+                connect_timeout=3, read_timeout=5, retries={"total_max_attempts": 2}
+            ),
         ).get_object(
             Bucket=os.environ["APP_CONFIG_BUCKET"],
             Key=os.environ["APP_CONFIG_KEY"],
@@ -50,6 +53,13 @@ def initialize_creation():
     return creation_worker
 
 
+def initialize_preparation():
+    initialize_configuration()
+    from plantperform_optimizer import read_model_worker
+
+    return read_model_worker
+
+
 def _retry_message(record, visibility_timeout):
     try:
         sqs_client().change_message_visibility(
@@ -67,14 +77,24 @@ def parse_envelope(body):
     if not isinstance(envelope, dict):
         raise ValueError("Job envelope must be an object")
     job_type = envelope.get("jobType")
-    if job_type not in ("create_simulation", "optimization"):
+    if job_type not in (
+        "create_simulation",
+        "optimization",
+        "prepare_farm_history",
+        "prepare_simulation_view",
+    ):
         raise ValueError(f"Missing or unknown job type: {job_type}")
-    identifier_key = "jobId" if job_type == "create_simulation" else "runId"
-    for key in ("farmId", "simulationId", identifier_key):
+    identifier_key = "runId" if job_type == "optimization" else "jobId"
+    required = ["farmId", identifier_key]
+    if job_type != "prepare_farm_history":
+        required.append("simulationId")
+    for key in required:
         if not isinstance(envelope.get(key), str) or not envelope[key].strip():
             raise ValueError(f"Missing or invalid {key}")
     if job_type == "create_simulation":
         CreationJob.model_validate(envelope)
+    elif job_type.startswith("prepare_"):
+        PreparationJob.model_validate(envelope)
     return envelope, identifier_key
 
 
@@ -92,7 +112,7 @@ def handler(event, context):
             logger.info(
                 "optimizer_received simulation_id=%s run_id=%s message_id=%s delivery_seconds=%s "
                 "receive_count=%s",
-                envelope["simulationId"],
+                envelope.get("simulationId") or envelope["farmId"],
                 envelope[identifier_key],
                 record["messageId"],
                 delivery_seconds,
@@ -106,6 +126,8 @@ def handler(event, context):
                     executor = initialize_creation()
                 elif job_type == "optimization":
                     executor = initialize()
+                elif job_type.startswith("prepare_"):
+                    executor = initialize_preparation()
                 else:
                     raise ValueError(f"Unknown job type: {job_type}")
             finally:
@@ -123,13 +145,22 @@ def handler(event, context):
                         record.get("attributes", {}).get("ApproximateReceiveCount", "1")
                     ),
                 )
-            else:
+            elif job_type == "optimization":
                 executor.execute(
                     envelope["simulationId"],
                     envelope[identifier_key],
                     context,
                     sqs_delivery=True,
                     farm_id=envelope["farmId"],
+                )
+            else:
+                executor.execute(
+                    PreparationJob.model_validate(envelope),
+                    context,
+                    sqs_delivery=True,
+                    receive_count=int(
+                        record.get("attributes", {}).get("ApproximateReceiveCount", "1")
+                    ),
                 )
         except CreationActiveError:
             failures.append({"itemIdentifier": record["messageId"]})
@@ -147,7 +178,9 @@ def handler(event, context):
             )
             _retry_message(record, visibility_timeout)
         except Exception:
-            logger.exception("optimizer_message_failed message_id=%s", record["messageId"])
+            logger.exception(
+                "optimizer_message_failed message_id=%s", record["messageId"]
+            )
             failures.append({"itemIdentifier": record["messageId"]})
             _retry_message(record, RETRY_DELAY_SECONDS)
     return {"batchItemFailures": failures}

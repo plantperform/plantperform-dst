@@ -37,6 +37,9 @@ from app.data.simulation_store import (
     get_simulation_field_candidates as get_simulation_field_candidates,
 )
 from app.data.simulation_store import (
+    get_simulation_field_context as get_simulation_field_context,
+)
+from app.data.simulation_store import (
     list_simulation_field_candidates as list_simulation_field_candidates,
 )
 from app.data.simulation_store import (
@@ -326,6 +329,9 @@ def create_farm(request: CreateFarmRequest, email: str) -> Farm:
         session.execute(
             insert(farm_member_table).values(farm_id=farm.id, email=email),
         )
+        from app.data.read_model_store import initialize_farm
+
+        initialize_farm(session, farm.id)
 
     return farm
 
@@ -382,139 +388,82 @@ def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
     )
 
 
-def get_field_historical_years(
-    farm_id: str,
-    field_id: str,
-    email: str,
-) -> list[RotationCandidateYearResult] | None:
-    with SessionLocal() as session:
-        if not _farm_exists(session, farm_id, email):
-            return None
+def get_field_historical_years(farm_id: str, field_id: str, email: str):
+    from app.data.read_model_store import historical_detail
 
-        data = session.execute(
-            select(field_table.c.data).where(
-                field_table.c.id == field_id,
-                field_table.c.farm_id == farm_id,
-            )
-        ).scalar_one_or_none()
-        if data is None:
-            return None
-
-        field = _load(FieldRecord, data)
-        row = _registry_context_for_imk_id(session, field.imk_id)
-
-    return _historical_years_for_context(row)
+    values = historical_detail(farm_id, field_id, email)
+    return (
+        [RotationCandidateYearResult.model_validate(value) for value in values]
+        if values is not None
+        else None
+    )
 
 
-def get_farm_historical_yearly_summary(farm_id: str, email: str) -> list[dict] | None:
-    with SessionLocal() as session:
-        if not _farm_exists(session, farm_id, email):
-            return None
+def get_farm_historical_yearly_summary(farm_id: str, email: str):
+    from app.data.read_model_store import farm_part
 
-        field_rows = (
-            session.execute(
-                select(field_table.c.data)
-                .where(field_table.c.farm_id == farm_id)
-                .order_by(field_table.c.created_at)
-            )
-            .scalars()
-            .all()
-        )
-        fields = [_load(FieldRecord, data) for data in field_rows]
-        contexts = _registry_contexts_for_imk_ids(
-            session,
-            list({field.imk_id for field in fields if field.imk_id is not None}),
-        )
-
-    start_year = REAL_HISTORY_END_YEAR - 7
-    totals: dict[int, dict[str, float]] = {}
-    for field in fields:
-        context = contexts.get(field.imk_id) if field.imk_id is not None else None
-        years = _historical_years_for_context(context)
-        retention_factor = 1 - (field.retention or 0) / 100
-        for index, year_result in enumerate(years):
-            bucket = totals.setdefault(
-                start_year + index,
-                {"n_load": 0.0, "db2": 0.0, "fen": 0.0, "count": 0},
-            )
-            # A non-kvotegivende mark does not count toward the udledning
-            # comparison at all - it does not draw down a quota, so its real
-            # leaching figure must not be summed into it either.
-            if context is not None and context.kvotegivende:
-                bucket["n_load"] += year_result.leaching_kg_n_ha * field.area_ha * retention_factor
-            bucket["db2"] += year_result.db_kr_ha * field.area_ha
-            if year_result.db_detail.get("udbytteenhed") == "FE/ha":
-                bucket["fen"] += (year_result.db_detail.get("udbytte") or 0.0) * field.area_ha
-            bucket["count"] += 1
-
-    return [
-        {
-            "year": year,
-            "total_n_load_kg": data["n_load"],
-            "total_db2": data["db2"],
-            "total_fen": data["fen"],
-            "field_count": int(data["count"]),
-        }
-        for year, data in sorted(totals.items())
-    ]
+    return farm_part(farm_id, email, "yearly_summary")
 
 
-def upsert_field(farm_id: str, request: CreateFieldRequest, email: str) -> FieldRecord | None:
+def register_fields(farm_id: str, requests: list[CreateFieldRequest], email: str):
+    """Register a batch without calculating history; prepare it once on the queue."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from app.data import read_model_store
+
     with SessionLocal.begin() as session:
-        farm = _get_farm(session, farm_id, email)
-        if farm is None:
+        if _get_farm(session, farm_id, email) is None:
             return None
-
-        existing = None
-        if request.imk_id is not None:
-            rows = session.execute(
-                select(field_table.c.data)
-                .where(field_table.c.farm_id == farm_id)
-                .order_by(field_table.c.created_at),
+        session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
+        if not requests:
+            return [], None
+        existing = {
+            value["imk_id"]: value["id"]
+            for value in session.execute(
+                select(field_table.c.data).where(field_table.c.farm_id == farm_id)
             ).scalars()
-            existing = next(
-                (_load(FieldRecord, data) for data in rows if data.get("imk_id") == request.imk_id),
-                None,
+            if value.get("imk_id") is not None
+        }
+        contexts = _registry_contexts_for_imk_ids(
+            session, list({request.imk_id for request in requests if request.imk_id is not None})
+        )
+        fields = []
+        for request in requests:
+            context = contexts.get(request.imk_id)
+            if context is None or _soil_data_for_context(context) is None:
+                raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
+            field_id = existing.get(request.imk_id) or str(uuid4())
+            existing[request.imk_id] = field_id
+            field = FieldRecord(
+                id=field_id,
+                farm_id=farm_id,
+                db2=0,
+                n_load=0,
+                leaching=0,
+                jbnr=context.jbnr if context.jbnr is not None else FALLBACK_JBNR,
+                kvotegivende=bool(context.kvotegivende),
+                **request.model_dump(),
             )
-
-        field_id = existing.id if existing is not None else str(uuid4())
-        field_data = request.model_dump()
-
-        registry_row = _registry_context_for_imk_id(session, request.imk_id)
-        aktuel = _aktuel_field_state(
-            registry_row,
-            field_data["area_ha"],
-            field_data.get("retention"),
-        )
-        field_data["crop_rotation"] = aktuel["crop_rotation"]
-        field = FieldRecord(
-            id=field_id,
-            farm_id=farm_id,
-            db2=aktuel["db2"],
-            n_load=aktuel["n_load"],
-            leaching=aktuel["leaching"],
-            fen=aktuel["fen"],
-            jbnr=aktuel["jbnr"],
-            kvotegivende=aktuel["kvotegivende"],
-            **field_data,
-        )
-
-        if existing is None:
             session.execute(
-                insert(field_table).values(
+                pg_insert(field_table)
+                .values(
                     id=field.id,
                     farm_id=farm_id,
                     data=_dump(field),
-                ),
+                )
+                .on_conflict_do_update(
+                    index_elements=[field_table.c.id],
+                    set_={"data": _dump(field), "updated_at": func.now()},
+                )
             )
-        else:
-            session.execute(
-                update(field_table)
-                .where(field_table.c.id == field.id, field_table.c.farm_id == farm_id)
-                .values(data=_dump(field), updated_at=func.now()),
-            )
+            fields.append(field)
+        job = read_model_store.invalidate_farm(session, farm_id)
+        return fields, job
 
-        return field
+
+def upsert_field(farm_id: str, request: CreateFieldRequest, email: str):
+    registered = register_fields(farm_id, [request], email)
+    return registered[0][0] if registered is not None else None
 
 
 def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
@@ -522,12 +471,19 @@ def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
         if not _farm_exists(session, farm_id, email):
             return None
 
+        # Preparation and registration lock the farm before its fields.
+        session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
+
         result = session.execute(
             delete(field_table).where(
                 field_table.c.id == field_id,
                 field_table.c.farm_id == farm_id,
             ),
         )
+        if result.rowcount:
+            from app.data.read_model_store import invalidate_farm
+
+            invalidate_farm(session, farm_id)
         return result.rowcount > 0
 
 

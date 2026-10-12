@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FieldRecord, RotationCandidateYearResult } from '@/api/types'
+import type { FieldRecord, FieldYearValue, RotationCandidateYearResult } from '@/api/types'
+import { fromWire } from '@/api/wire'
+import { fieldFertiliser } from '@/lib/fertiliser-overview'
 import {
   computeFieldTotals,
   emptyMeasures,
@@ -13,6 +15,9 @@ import {
   summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
+  applyFieldYearValues,
+  summarizeFieldYears,
+  yearFeedUnitsPerHa,
 } from '@/lib/field-domain'
 
 const field = (overrides: Partial<FieldRecord>): FieldRecord => ({
@@ -59,6 +64,31 @@ const fields = [
   }),
   field({ id: 'c', areaHa: 5, db2: 999, nLoad: 999, rotationId: null }),
 ]
+
+describe('stored compact field years', () => {
+  it('uses stored FEN and fertilizer inputs without calculation reports', () => {
+    const year = fromWire<FieldYearValue>({
+      year: { afgrodeKode: 252, afgrodeNavn: 'Græs' },
+      leachingKgNHa: 20, dbKrHa: 1000, fenFeHa: 125,
+      forfrugtsvaerdiKgnHa: 10, tildeltHusdyrgodningUdnyttetKgnHa: 30,
+      tildeltHandelsgodningKgnHa: 60, husdyrgodningOrganiskBundetKgnHa: 15,
+      husdyrgodningTonPrHa: 5, afgrodeNormKgnHa: 100, nNormPct: 100,
+      winterCover: { W: 1, EEA: 1 },
+    })
+    expect(yearFeedUnitsPerHa(year)).toBe(125)
+    expect(year).not.toHaveProperty('dbDetail')
+    expect(year.winterCover).toEqual({ W: 1, EEA: 1 })
+    const selected = field({ areaHa: 2, retention: 50 })
+    expect(applyFieldYearValues([selected], { field: [year] }, 0)[0])
+      .toMatchObject({ db2: 2000, nLoad: 20, leaching: 40, feedUnits: 250 })
+    expect(summarizeFieldYears([selected], { field: [year] }, false)[0])
+      .toMatchObject({ totalDb2: 2000, totalNLoadKg: 20, totalFeedUnits: 250 })
+    expect(fieldFertiliser([year], 0)).toEqual({
+      cropNormKgNHa: 100, precedingCropValueKgNHa: 10, mineralFertiliserKgNHa: 60,
+      manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, manureTonsPerHa: 5,
+    })
+  })
+})
 
 describe('computeFieldTotals', () => {
   it('keeps the area each total is summed over', () => {

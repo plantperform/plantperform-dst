@@ -132,8 +132,8 @@ const request = async (path: string, init: RequestInit = {}, canRetry = true): P
   return response
 }
 
-export const fetcher = async <T>(path: string): Promise<T> => {
-  const response = await request(path)
+export const fetcher = async <T>(path: string, signal?: AbortSignal): Promise<T> => {
+  const response = await request(path, { signal })
 
   if (!response.ok) {
     throw await readError(response)

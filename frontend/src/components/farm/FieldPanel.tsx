@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { preloadRotationCandidateCatalog } from '@/api/hooks'
 import type {
   FieldRecord,
-  RotationCandidateYearResult,
+  DisplayYearValue,
   Simulation,
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
@@ -131,7 +131,7 @@ type FieldPanelProps = {
   simulation?: Simulation
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
-  yearValues?: RotationCandidateYearResult[]
+  yearValues?: DisplayYearValue[]
   yearValuesLoading?: boolean
   isDetaching: boolean
   onRequestDetach: () => void

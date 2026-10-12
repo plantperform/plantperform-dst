@@ -299,6 +299,7 @@ farm_table = Table(
     metadata,
     Column("id", Text, primary_key=True),
     Column("data", JSONB, nullable=False),
+    Column("revision", Integer, nullable=False, server_default="0"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
@@ -380,6 +381,36 @@ simulation_result_table = Table(
         name="ck_simulation_result_status",
     ),
     Index("ix_simulation_result_active", "status", "lease_expires_at"),
+)
+
+
+def _read_model_table(name, owner):
+    return Table(
+        name,
+        metadata,
+        Column(
+            f"{owner}_id", Text, ForeignKey(f"{owner}.id", ondelete="CASCADE"), primary_key=True
+        ),
+        Column("input_revision", Integer, nullable=False, server_default="0"),
+        Column("view_version", BigInteger, nullable=False, server_default="0"),
+        Column("generation", Integer, nullable=False, server_default="0"),
+        Column("status", Text, nullable=False, server_default="queued"),
+        Column("data", JSONB),
+        Column("prepared", JSONB, nullable=False, server_default="{}"),
+        Column("error", JSONB),
+        CheckConstraint("status IN ('queued','running','done','failed')", name=f"ck_{name}_status"),
+    )
+
+
+farm_read_model_table = _read_model_table("farm_read_model", "farm")
+simulation_read_model_table = _read_model_table("simulation_read_model", "simulation")
+
+field_historical_detail_table = Table(
+    "field_historical_detail",
+    metadata,
+    Column("field_id", Text, ForeignKey("field.id", ondelete="CASCADE"), primary_key=True),
+    Column("input_revision", Integer, nullable=False),
+    Column("years", JSONB, nullable=False),
 )
 
 

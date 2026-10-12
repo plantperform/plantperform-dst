@@ -83,6 +83,22 @@ def _fetch_rows(table, task_name: str):
     return rows
 
 
+def clear_lookup_cache() -> None:
+    """Reload imported reference data before preparing fresh stored history."""
+    for cached in (
+        _load_udbyttenormer,
+        _load_salgspriser,
+        _load_halmudbytte,
+        _load_arbejdssatser,
+        _load_arbejdsmaengder,
+        _migrerede_afgrodekoder,
+        _load_dyrkningsomkostninger,
+        _load_prisliste,
+        calculate_db,
+    ):
+        cached.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def _load_udbyttenormer() -> dict[tuple[int, int, str, str], dict]:
     """Index database-loaded crop norms by crop, JB, irrigation, and system."""

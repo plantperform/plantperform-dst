@@ -11,6 +11,7 @@ import {
   History,
   LayoutGrid,
   MoreVertical,
+  RefreshCw,
   PanelLeft,
   Play,
   Plus,
@@ -165,6 +166,8 @@ type FarmSidebarProps = {
   onCopySimulation: (simulation: Simulation) => void
   onDeleteSimulation: (simulation: Simulation) => void
   onNewSimulation: () => void
+  onRecalculateHistory: () => void
+  recalculatingHistory: boolean
   width: number
   onWidthChange: (width: number) => void
 }
@@ -195,6 +198,8 @@ export const FarmSidebar = ({
   onCopySimulation,
   onDeleteSimulation,
   onNewSimulation,
+  onRecalculateHistory,
+  recalculatingHistory,
   width,
   onWidthChange,
 }: FarmSidebarProps) => {
@@ -266,6 +271,25 @@ export const FarmSidebar = ({
                     <KeyFiguresLine figures={historyFigures} />
                   </ViewMenuLabel>
                 </SidebarMenuButton>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuAction
+                      aria-label="Handlinger for afgrødehistorik"
+                      disabled={recalculatingHistory}
+                    >
+                      <MoreVertical />
+                    </SidebarMenuAction>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="right" align="start">
+                    <DropdownMenuItem
+                      disabled={recalculatingHistory}
+                      onSelect={onRecalculateHistory}
+                    >
+                      <RefreshCw />
+                      Genberegn historik
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SidebarMenuItem>
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton

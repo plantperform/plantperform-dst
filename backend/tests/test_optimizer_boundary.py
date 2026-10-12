@@ -40,6 +40,7 @@ class ProductionBoundaryTests(unittest.TestCase):
                 patch.object(main, 'validate_aws_region') as validate,
                 patch.object(main, 'recover_local_optimization_runs') as recover,
                 patch.object(main, 'recover_local_simulation_creations') as recover_creations,
+                patch.object(simulations, 'require_simulation_view_ready'),
                 patch.object(simulations, 'get_simulation', return_value=Simulation(
                     id='sim', farm_id='farm', name='test', created_at='2026-10-09'
                 )),

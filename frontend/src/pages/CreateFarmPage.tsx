@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react'
-import { useMemo, useState, type ComponentProps, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent } from 'react'
 import {
   Link,
   useLocation,
@@ -17,6 +17,7 @@ import {
   useRegistryFieldsByCvr,
 } from '@/api/hooks'
 import { createFarm, createFieldsFromRegistry } from '@/api/mutations'
+import { waitForFarmHistory } from '@/api/views'
 import type { RegistryField } from '@/api/types'
 import { AppTopBar } from '@/components/AppTopBar'
 import { RegistryFieldsMap } from '@/components/farm/RegistryFieldsMap'
@@ -140,6 +141,8 @@ const BackLink = ({ className, children, ...linkProps }: LinkProps) => (
 )
 
 export const CreateFarmPage = () => {
+  const historyWait = useRef<AbortController | null>(null)
+  useEffect(() => () => historyWait.current?.abort(), [])
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -205,6 +208,9 @@ export const CreateFarmPage = () => {
       ).id
       if (registryFields.length > 0) {
         await createFieldsFromRegistry(farmId, registryFields)
+        historyWait.current?.abort()
+        historyWait.current = new AbortController()
+        await waitForFarmHistory(farmId, historyWait.current.signal)
       }
       await mutate(farmsKey)
       await shown

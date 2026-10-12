@@ -1,6 +1,8 @@
 import type { OptimizationRun } from '@/api/optimization-runs'
 import type { SimulationResult } from '@/api/types'
 
+export const JOB_POLL_INTERVAL_MS = 2000
+
 // A new submission or edit invalidates requests already in flight.
 export class ResultRequests {
   private sequence = 0
@@ -75,7 +77,7 @@ export const watchResultPolling = (
     if (canPollResults(page.hidden, connection.onLine)) poll(all)
   }
   const focus = () => run(true)
-  const timer = view.setInterval(() => run(false), 5000)
+  const timer = view.setInterval(() => run(false), JOB_POLL_INTERVAL_MS)
   view.addEventListener('focus', focus)
   view.addEventListener('online', focus)
   page.addEventListener('visibilitychange', focus)

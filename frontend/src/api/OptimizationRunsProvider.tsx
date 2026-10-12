@@ -12,8 +12,7 @@ import { ApiError, fetcher } from '@/api/client'
 import {
   isSimulationsFieldsKey,
   isSimulationResultsKey,
-  simulationFieldsKey,
-  simulationYearlySummaryKey,
+  fetchSimulationView,
   simulationsKey,
 } from '@/api/hooks'
 import {
@@ -35,7 +34,6 @@ import {
 import type {
   Simulation,
   SimulationResult,
-  YearlySummaryEntry,
 } from '@/api/types'
 import { cropAreaViolationsFromDetail } from '@/lib/crop-area-limits'
 import {
@@ -145,21 +143,9 @@ export const OptimizationRunsProvider = ({
           next.delete(simulationId)
           return next
         })
-        // Refetch setup projections; snapshots are used only for comparisons.
-        const yearlyKey = simulationYearlySummaryKey(farmId, simulationId)
         await Promise.allSettled([
-          mutate(simulationFieldsKey(farmId, simulationId)),
-          mutate(
-            (key) =>
-              isSimulationsFieldsKey(key, farmId) ||
-              isSimulationResultsKey(key, farmId),
-          ),
+          mutate((key) => isSimulationsFieldsKey(key, farmId) || isSimulationResultsKey(key, farmId)),
           mutate(simulationsKey(farmId)),
-          yearlyKey
-            ? mutate(yearlyKey, fetcher<YearlySummaryEntry[]>(yearlyKey), {
-                revalidate: false,
-              })
-            : Promise.resolve(),
         ])
         if (
           runsRef.current.get(simulationId)?.id === succeeded.id &&
@@ -191,9 +177,12 @@ export const OptimizationRunsProvider = ({
           !(current?.id === result.runId && current.status === 'succeeded')
         ) {
           if (!requests.current.current(simulationId, ticket)) return
-          result = await fetcher<SimulationResult>(
-            resultKey(farmId, simulationId),
-          )
+          const view = await fetchSimulationView(farmId, simulationId)
+          const saved = view.data?.savedResult
+          if (saved?.runId === result.runId) {
+            result = { ...result, response: saved.response, fieldsBefore: saved.fieldsBefore,
+                       selectedCandidates: {} }
+          }
         }
         if (requests.current.current(simulationId, ticket))
           await acceptResult(farmId, simulationId, result, expectedId)
@@ -258,7 +247,7 @@ export const OptimizationRunsProvider = ({
           // Resolve an ambiguous POST, or restore the active run of another member.
           try {
             const result = await fetcher<SimulationResult>(
-              resultKey(request.farmId, request.simulationId),
+              `${resultKey(request.farmId, request.simulationId)}?include_output=false`,
             )
             if (requests.current.version(request.simulationId) !== version)
               return

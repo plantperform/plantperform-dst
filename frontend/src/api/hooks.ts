@@ -1,16 +1,34 @@
-import { useEffect, useId, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
-import { fetcher } from '@/api/client'
-import { isSimulationCreating, isSimulationReady } from '@/lib/simulation-creation'
-import { useOptimizationRunsContext } from '@/api/optimization-runs'
+import { fetcher, postJson } from '@/api/client'
+import { JOB_POLL_INTERVAL_MS } from '@/api/result-tracking'
+import { isViewPreparing } from '@/api/view-cache'
 import {
-  createRequestProgress,
-  type RequestProgress,
-} from '@/api/request-progress'
-import { createRequestQueue } from '@/api/request-queue'
+  useFarmView,
+  useSimulationView,
+  fetchFarmView,
+  fetchSimulationView,
+  simulationViewKey,
+} from '@/api/views'
+export {
+  useFarmView,
+  useSimulationView,
+  fetchFarmView,
+  fetchSimulationView,
+  farmViewKey,
+  simulationViewKey,
+} from '@/api/views'
+import {
+  isSimulationCreating,
+  isSimulationReady,
+} from '@/lib/simulation-creation'
+import { useOptimizationRunsContext } from '@/api/optimization-runs'
+import type { RequestProgress } from '@/api/request-progress'
 import type {
   FieldYearValues,
+  SimulationView,
+  SavedResultView,
   CropAreaRange,
   CropCodeOption,
   Farm,
@@ -25,9 +43,6 @@ import type {
   RotationCandidateYearResult,
   RotationCategoryOption,
   Simulation,
-  SimulationResult,
-  YearlyOptimizationCategoryOption,
-  YearlySummaryEntry,
 } from '@/api/types'
 
 export const farmFieldsKey = (farmId?: string) => {
@@ -54,24 +69,23 @@ export const farmKey = (farmId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}`
 }
 
-export const useFarm = (farmId?: string) =>
-  useSWR<Farm>(farmKey(farmId), fetcher)
+export const useFarm = (farmId?: string) => {
+  const response = useFarmView(farmId)
+  return { ...response, data: response.data?.farm }
+}
 
-export const useFarmFields = (farmId?: string) =>
-  useSWR<FieldRecord[]>(farmFieldsKey(farmId), fetcher)
+export const useFarmFields = (farmId?: string) => {
+  const response = useFarmView(farmId)
+  return { ...response, data: response.data?.data?.fields }
+}
 
-export type FieldsByFarmId = Record<string, FieldRecord[]>
+export type FieldsByFarmId = Record<string, FieldRecord[] | undefined>
 
 const fetchFarmsFields = async (farmIds: string[]): Promise<FieldsByFarmId> => {
   const entries = await Promise.all(
     farmIds.map(async (farmId) => {
-      const key = farmFieldsKey(farmId)
-      const fields = key
-        ? await mutate<FieldRecord[]>(key, fetcher<FieldRecord[]>(key), {
-            revalidate: false,
-          })
-        : undefined
-      return [farmId, fields ?? []] as const
+      const fields = (await fetchFarmView(farmId)).data?.fields
+      return [farmId, fields] as const
     }),
   )
   return Object.fromEntries(entries)
@@ -110,7 +124,8 @@ export const simulationFieldsKey = (farmId?: string, simulationId?: string) => {
 export const useSimulations = (farmId?: string) => {
   const previous = useRef(new Map<string, boolean>())
   const response = useSWR<Simulation[]>(simulationsKey(farmId), fetcher, {
-    refreshInterval: (data) => (data?.some(isSimulationCreating) ? 5000 : 0),
+    refreshInterval: (data) =>
+      data?.some(isSimulationCreating) ? JOB_POLL_INTERVAL_MS : 0,
   })
   const { syncSimulations } = useOptimizationRunsContext()
   useEffect(() => {
@@ -119,7 +134,7 @@ export const useSimulations = (farmId?: string) => {
     for (const simulation of response.data) {
       const ready = isSimulationReady(simulation)
       if (ready && previous.current.get(simulation.id) === false) {
-        void mutate(simulationFieldsKey(farmId, simulation.id))
+        void mutate(simulationViewKey(farmId, simulation.id))
       }
       previous.current.set(simulation.id, ready)
     }
@@ -131,22 +146,33 @@ export const useSimulationFields = (
   farmId?: string,
   simulationId?: string,
   enabled = true,
-) =>
-  useSWR<FieldRecord[]>(
-    enabled ? simulationFieldsKey(farmId, simulationId) : null, fetcher,
-  )
+) => {
+  const response = useSimulationView(farmId, enabled ? simulationId : undefined)
+  return {
+    ...response,
+    data: response.data?.data?.fields,
+    isLoading: response.isLoading || isViewPreparing(response.data),
+    error:
+      response.error ??
+      (response.data?.status === 'failed'
+        ? new Error('Simuleringens visning kunne ikke hentes.')
+        : undefined),
+    mutate: async () => {
+      if (farmId && simulationId && response.data?.status === 'failed') {
+        await postJson(
+          `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/view/retry`,
+          {},
+        )
+      }
+      return response.mutate()
+    },
+  }
+}
 
 export const fetchSimulationFields = async (
   farmId: string,
   simulationId: string,
-): Promise<FieldRecord[]> => {
-  const key = simulationFieldsKey(farmId, simulationId)
-  if (!key) return []
-  const fields = await mutate<FieldRecord[]>(key, fetcher<FieldRecord[]>(key), {
-    revalidate: false,
-  })
-  return fields ?? []
-}
+) => (await fetchSimulationView(farmId, simulationId)).data?.fields ?? []
 
 export type FieldsBySimulationId = Record<string, FieldRecord[]>
 
@@ -163,8 +189,10 @@ const cachedSimulationFields = (
   farmId: string,
   simulationId: string,
 ): FieldRecord[] | undefined => {
-  const key = simulationFieldsKey(farmId, simulationId)
-  return key ? cache.get(key)?.data : undefined
+  const key = simulationViewKey(farmId, simulationId)
+  return key
+    ? (cache.get(key)?.data as SimulationView | undefined)?.data?.fields
+    : undefined
 }
 
 const fetchSimulationsFields = async (
@@ -219,8 +247,9 @@ export const isSimulationResultsKey = (key: unknown, farmId: string) =>
 export const useSimulationResults = (
   farmId: string,
   simulations: Simulation[],
-) =>
-  useSWR<Record<string, SimulationResult>>(
+) => {
+  const { cache } = useSWRConfig()
+  return useSWR<Record<string, SavedResultView | null>>(
     simulations.length
       ? [
           'simulation-results',
@@ -237,18 +266,23 @@ export const useSimulationResults = (
     async () =>
       Object.fromEntries(
         await Promise.all(
-          simulations.map(
-            async (simulation) =>
-              [
-                simulation.id,
-                await fetcher<SimulationResult>(
-                  `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulation.id)}/result`,
-                ),
-              ] as const,
-          ),
+          simulations.map(async (simulation) => {
+            const key = simulationViewKey(farmId, simulation.id)!
+            const cached = cache.get(key)?.data as SimulationView | undefined
+            const saved = cached?.data?.savedResult
+            const fresh =
+              saved &&
+              (simulation.result.status !== 'completed' ||
+                saved.runId === simulation.result.runId)
+            const view = fresh
+              ? cached
+              : await fetchSimulationView(farmId, simulation.id)
+            return [simulation.id, view?.data?.savedResult ?? null] as const
+          }),
         ),
       ),
   )
+}
 
 export const scenarioCropCodesKey = (
   farmId?: string,
@@ -268,21 +302,18 @@ export const cropAreaRangesKey = (farmId?: string, simulationId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/crop-area-ranges`
 }
 
-export const useCropAreaRanges = (farmId?: string, simulationId?: string) =>
-  useSWR<CropAreaRange[]>(cropAreaRangesKey(farmId, simulationId), fetcher)
+export const useCropAreaRanges = (farmId?: string, simulationId?: string) => {
+  const response = useSimulationView(farmId, simulationId)
+  return { ...response, data: response.data?.data?.cropAreaRanges }
+}
 
 export const fetchCropAreaRanges = async (
   farmId: string,
   simulationId: string,
 ): Promise<CropAreaRange[]> => {
-  const key = cropAreaRangesKey(farmId, simulationId)
-  if (!key) return []
-  const ranges = await mutate<CropAreaRange[]>(
-    key,
-    fetcher<CropAreaRange[]>(key),
-    { revalidate: false },
+  return (
+    (await fetchSimulationView(farmId, simulationId)).data?.cropAreaRanges ?? []
   )
-  return ranges ?? []
 }
 
 export const simulationFieldCandidateDetailKey = (
@@ -316,137 +347,23 @@ export const useFieldHistoricalDetail = (farmId?: string, fieldId?: string) =>
     fieldHistoricalDetailKey(farmId, fieldId),
     fetcher,
   )
-const YEAR_VALUES_CONCURRENCY = 6
-
-const queueYearValuesRequest = createRequestQueue(YEAR_VALUES_CONCURRENCY)
-
-const requestProgress = createRequestProgress()
-
-const yearValuesCache = new Map<string, RotationCandidateYearResult[]>()
-
-type YearValuesSource = {
-  cacheKey: (fieldId: string, entry: string) => string
-  load: (fieldId: string) => Promise<RotationCandidateYearResult[] | undefined>
-}
-
-const simulationYearValuesSource = (
-  farmId: string,
-  simulationId: string,
-): YearValuesSource => ({
-  cacheKey: (_fieldId, entry) => `${farmId}/${simulationId}/${entry}`,
-  load: async (fieldId) => {
-    const key = simulationFieldCandidateDetailKey(farmId, simulationId, fieldId)
-    if (!key) return undefined
-    const detail = await mutate<RotationCandidateEvaluation>(
-      key,
-      fetcher<RotationCandidateEvaluation>(key),
-      { revalidate: false },
-    )
-    return detail ? detail.years.slice(0, detail.activeLen) : undefined
-  },
-})
-
-const historyYearValuesSource = (farmId: string): YearValuesSource => ({
-  cacheKey: (fieldId) => `${farmId}/history/${fieldId}`,
-  load: async (fieldId) => {
-    const key = fieldHistoricalDetailKey(farmId, fieldId)
-    if (!key) return undefined
-    return mutate<RotationCandidateYearResult[]>(
-      key,
-      fetcher<RotationCandidateYearResult[]>(key),
-      { revalidate: false },
-    )
-  },
-})
-
-const fetchFieldYearValues = async (
-  entries: string[],
-  source: YearValuesSource,
-  progressKey: string,
-): Promise<FieldYearValues> => {
-  const result: FieldYearValues = {}
-  const missing: { fieldId: string; cacheKey: string }[] = []
-  for (const entry of entries) {
-    const fieldId = entry.split(':')[0]
-    const cacheKey = source.cacheKey(fieldId, entry)
-    const cached = yearValuesCache.get(cacheKey)
-    if (cached) {
-      result[fieldId] = cached
-    } else {
-      missing.push({ fieldId, cacheKey })
-    }
-  }
-  requestProgress.start(
-    progressKey,
-    entries.length,
-    entries.length - missing.length,
-  )
-  await Promise.all(
-    missing.map(({ fieldId, cacheKey }) =>
-      queueYearValuesRequest(async () => {
-        try {
-          const years = await source.load(fieldId)
-          if (!years) return
-          yearValuesCache.set(cacheKey, years)
-          result[fieldId] = years
-        } catch {
-          return
-        } finally {
-          requestProgress.advance(progressKey)
-        }
-      }),
-    ),
-  )
-  requestProgress.finish(progressKey)
-  return result
-}
-
-const fieldYearValuesEntries = (
-  simulationId: string | undefined,
-  fields: FieldRecord[],
-) =>
-  (simulationId
-    ? fields
-        .filter((field) => field.rotationId !== null)
-        .map((field) => `${field.id}:${field.rotationId}`)
-    : fields.map((field) => field.id)
-  ).sort()
-
-const fieldYearValuesKey = (
-  farmId: string | undefined,
-  simulationId: string | undefined,
-  entries: string[],
-  enabled: boolean,
-) =>
-  enabled && farmId && entries.length > 0
-    ? ['field-year-values', farmId, simulationId ?? '', entries.join(',')]
-    : null
-
 export const useFieldYearValues = (
   farmId: string | undefined,
   simulationId: string | undefined,
-  fields: FieldRecord[],
+  _fields: FieldRecord[],
   enabled: boolean,
-) =>
-  useSWR<FieldYearValues>(
-    fieldYearValuesKey(
-      farmId,
-      simulationId,
-      fieldYearValuesEntries(simulationId, fields),
-      enabled,
-    ),
-    (key: string[]) => {
-      const [, keyFarmId, keySimulationId, joinedEntries] = key
-      return fetchFieldYearValues(
-        joinedEntries.split(','),
-        keySimulationId
-          ? simulationYearValuesSource(keyFarmId, keySimulationId)
-          : historyYearValuesSource(keyFarmId),
-        key.join('|'),
-      )
-    },
-    { revalidateOnFocus: false, revalidateIfStale: false },
+) => {
+  const farm = useFarmView(enabled && !simulationId ? farmId : undefined)
+  const simulation = useSimulationView(
+    enabled ? farmId : undefined,
+    simulationId,
   )
+  const response = simulationId ? simulation : farm
+  return {
+    ...response,
+    data: response.data?.data?.fieldYears as FieldYearValues | undefined,
+  }
+}
 
 export const useFieldYearValuesProgress = (
   farmId: string | undefined,
@@ -454,15 +371,8 @@ export const useFieldYearValuesProgress = (
   fields: FieldRecord[],
   enabled: boolean,
 ): RequestProgress => {
-  const entries = fieldYearValuesEntries(simulationId, fields)
-  const key = fieldYearValuesKey(farmId, simulationId, entries, enabled)
-  const running = useSyncExternalStore(requestProgress.subscribe, () =>
-    key === null ? undefined : requestProgress.get(key.join('|')),
-  )
-  return {
-    done: running?.done ?? 0,
-    total: key === null ? 0 : entries.length,
-  }
+  const values = useFieldYearValues(farmId, simulationId, fields, enabled)
+  return { total: fields.length, done: values.data ? fields.length : 0 }
 }
 
 export const simulationYearlySummaryKey = (
@@ -477,11 +387,10 @@ export const simulationYearlySummaryKey = (
 export const useSimulationYearlySummary = (
   farmId?: string,
   simulationId?: string,
-) =>
-  useSWR<YearlySummaryEntry[]>(
-    simulationYearlySummaryKey(farmId, simulationId),
-    fetcher,
-  )
+) => {
+  const response = useSimulationView(farmId, simulationId)
+  return { ...response, data: response.data?.data?.yearlySummary }
+}
 
 export const farmHistoricalYearlySummaryKey = (farmId?: string) => {
   if (!farmId) return null
@@ -489,8 +398,10 @@ export const farmHistoricalYearlySummaryKey = (farmId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/fields/historical-yearly-summary`
 }
 
-export const useFarmHistoricalYearlySummary = (farmId?: string) =>
-  useSWR<YearlySummaryEntry[]>(farmHistoricalYearlySummaryKey(farmId), fetcher)
+export const useFarmHistoricalYearlySummary = (farmId?: string) => {
+  const response = useFarmView(farmId)
+  return { ...response, data: response.data?.data?.yearlySummary }
+}
 
 export const useRegistryFieldsByCvr = (cvr?: string, limit = 100) =>
   useSWR<RegistryFieldSummary[]>(
@@ -613,8 +524,10 @@ export const yearlyOptimizationCandidatesKey = (
 export const useYearlyOptimizationCandidates = (
   farmId?: string,
   simulationId?: string,
-) =>
-  useSWR<YearlyOptimizationCategoryOption[]>(
-    yearlyOptimizationCandidatesKey(farmId, simulationId),
-    fetcher,
-  )
+) => {
+  const response = useSimulationView(farmId, simulationId)
+  return {
+    ...response,
+    data: response.data?.data?.yearlyOptimizationCandidates,
+  }
+}

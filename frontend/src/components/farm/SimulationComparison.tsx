@@ -32,7 +32,6 @@ import {
   alignCatchmentYears,
   catchmentQuotas,
   COMPARISON_PERIOD,
-  comparisonAvailability,
   defaultComparisonIds,
   describeComparisonVerdict,
   describeFeedUnitRequirement,
@@ -149,33 +148,10 @@ export const SimulationComparison = ({
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null)
-  const simulationsFields = useSimulationResults(farmId, simulations)
-  const fieldsBySimulationId = useMemo(
-    () =>
-      simulations.length === 0
-        ? NO_SIMULATION_FIELDS
-        : simulationsFields.data === undefined
-          ? undefined
-          : Object.fromEntries(
-              Object.entries(simulationsFields.data).map(([id, result]) => [
-                id,
-                result.response?.fields ?? [],
-              ]),
-            ),
-    [simulations, simulationsFields.data],
-  )
-  const availability = useMemo(
-    () =>
-      fieldsBySimulationId === undefined
-        ? undefined
-        : Object.fromEntries(
-            simulations.map((simulation) => [
-              simulation.id,
-              comparisonAvailability(fieldsBySimulationId[simulation.id] ?? []),
-            ]),
-          ),
-    [fieldsBySimulationId, simulations],
-  )
+  const availability = useMemo(() => Object.fromEntries(simulations.map((simulation) => [
+    simulation.id, simulation.comparisonAvailability ??
+      { kind: simulation.result.resultRevision === null ? 'uncalculated' as const : 'ready' as const },
+  ])), [simulations])
   const requested = searchParams.get('ids')
   const ids = useMemo(() => {
     if (availability === undefined) return []
@@ -188,6 +164,15 @@ export const SimulationComparison = ({
       ? defaultComparisonIds(simulations, selectable)
       : resolveComparisonIds(parseComparisonIds(requested), selectable)
   }, [availability, requested, simulations])
+  const selectedSimulations = useMemo(() => simulations.filter((simulation) => ids.includes(simulation.id)),
+                                     [ids, simulations])
+  const simulationsFields = useSimulationResults(farmId, selectedSimulations)
+  const snapshotsLoading = ids.length > 0 && simulationsFields.data === undefined
+  const fieldsBySimulationId = useMemo(() =>
+    selectedSimulations.length === 0 ? NO_SIMULATION_FIELDS :
+      Object.fromEntries(Object.entries(simulationsFields.data ?? {}).map(([id, result]) =>
+        [id, result?.response.fields ?? []])),
+    [selectedSimulations, simulationsFields.data])
   const columns = useMemo(() => {
     const history: ComparisonColumn = {
       key: HISTORY_COLUMN_KEY,
@@ -210,11 +195,7 @@ export const SimulationComparison = ({
           subtitle: `${formatCreatedAt(simulation.createdAt)}${simulation.result.status === 'completed' ? '' : simulation.result.status === 'outdated' ? ' · Forældet resultat' : ' · Seneste gemte resultat'}`,
           simulationId: id,
           fields: simulationFields,
-          yearValues: Object.fromEntries(
-            Object.entries(
-              simulationsFields.data?.[id]?.selectedCandidates ?? {},
-            ).map(([fieldId, candidate]) => [fieldId, candidate.years]),
-          ),
+          yearValues: simulationsFields.data?.[id]?.fieldYears,
           totals: computeFieldTotals(simulationFields, true),
           requirement: describeFeedUnitRequirement(simulation.constraints),
           changedCount: changedFieldIds(simulationFields, fields).size,
@@ -343,21 +324,21 @@ export const SimulationComparison = ({
             onChange={selectIds}
           />
         </header>
-        {availability === undefined && simulationsFields.error ? (
+        {simulationsFields.data === undefined && simulationsFields.error ? (
           <LoadError
             message="Kunne ikke hente simuleringerne."
             onRetry={() => void simulationsFields.mutate()}
             retrying={simulationsFields.isValidating}
           />
-        ) : availability === undefined || yearValuesLoading ? (
+        ) : snapshotsLoading || yearValuesLoading ? (
           <ComparisonLoading
             label={
-              availability === undefined
+              snapshotsLoading
                 ? 'Henter simuleringerne'
                 : 'Henter tal pr. år'
             }
             progress={
-              availability === undefined ? undefined : yearValuesProgress
+              snapshotsLoading ? undefined : yearValuesProgress
             }
           />
         ) : (

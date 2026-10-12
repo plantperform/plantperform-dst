@@ -4,8 +4,7 @@ import { mutate } from 'swr'
 
 import {
   simulationFieldCandidateDetailKey,
-  simulationFieldsKey,
-  simulationYearlySummaryKey,
+  simulationViewKey,
   useCropCodes,
   useRotationCandidateOptions,
   useRotationCategories,
@@ -386,7 +385,7 @@ export const ManualRotationEditor = ({
     if (!baseRef) return
     setIsSaving(true)
     try {
-      const updatedField = await applyFieldRotation(
+      await applyFieldRotation(
         farmId,
         simulationId,
         field.id,
@@ -396,16 +395,10 @@ export const ManualRotationEditor = ({
           startYear,
         },
       )
-      await mutate(
-        simulationFieldsKey(farmId, simulationId),
-        (current: FieldRecord[] = []) =>
-          current.map((f) => (f.id === updatedField.id ? updatedField : f)),
-        { revalidate: false },
-      )
+      await mutate(simulationViewKey(farmId, simulationId))
       void mutate(
         simulationFieldCandidateDetailKey(farmId, simulationId, field.id),
       )
-      void mutate(simulationYearlySummaryKey(farmId, simulationId))
       markStale(simulationId)
       onError(null)
       close()

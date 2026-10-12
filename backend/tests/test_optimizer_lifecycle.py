@@ -42,9 +42,18 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from app.data import optimization_store, repository
+from app.data import optimization_store, read_model_store, repository
 from app.data import simulation_store as store
-from app.data.db import app_user_table, farm_member_table, farm_table, field_table, metadata
+from app.data.db import (
+    app_user_table,
+    farm_member_table,
+    farm_read_model_table,
+    farm_table,
+    field_historical_detail_table,
+    field_table,
+    metadata,
+    simulation_read_model_table,
+)
 from app.data.db import simulation_field_candidates_table as caches
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
@@ -53,8 +62,9 @@ from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
 from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints, Simulation
+from app.services import preparation_jobs, read_models
 from app.services.optimization import jobs
-from app.services.rotations import saedskifte_library
+from app.services.rotations import saedskifte_kategorier, saedskifte_library
 from plantperform_optimizer import handler as lambda_handler
 from plantperform_optimizer import worker
 from plantperform_optimizer.deadline import remaining_time
@@ -143,26 +153,60 @@ class DatabaseTests(unittest.TestCase):
         )
         self.addCleanup(self.cleanup_schema)
         self.sessions = sessionmaker(bind=self.engine)
-        metadata.create_all(self.engine, tables=[farm_table, app_user_table, farm_member_table])
+        metadata.create_all(
+            self.engine,
+            tables=[farm_table, app_user_table, farm_member_table, farm_read_model_table],
+        )
         self.enterContext(patch.object(repository, "SessionLocal", self.sessions))
         self.enterContext(patch.object(jobs, "SessionLocal", self.sessions))
         self.enterContext(patch.object(optimization_store, "SessionLocal", self.sessions))
         # Synthetic candidates have eight library positions. Yearly solves must
         # not load the application's reference tables outside this test schema.
-        self.enterContext(patch.object(
-            saedskifte_library, "get_raw_rotation", return_value=((1, None, None),) * 8,
-        ))
+        self.enterContext(
+            patch.object(
+                saedskifte_library,
+                "get_raw_rotation",
+                return_value=((1, None, None),) * 8,
+            )
+        )
+        self.enterContext(
+            patch.object(saedskifte_kategorier, "list_kategorier", return_value=["Test"])
+        )
+        self.enterContext(
+            patch.object(saedskifte_kategorier, "kategorier_for_saedskifte", return_value=["Test"])
+        )
         self.enterContext(patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": "test-queue"}))
         self.enterContext(patch.dict(os.environ, {"APP_ENV": "production"}))
         self.queue = self.enterContext(
             patch.object(jobs, "sqs_client", return_value=Mock())
         ).return_value
+        self.enterContext(patch.object(preparation_jobs, "sqs_client", return_value=self.queue))
         with self.sessions.begin() as session:
-            session.execute(farm_table.insert().values(id="farm", data={}))
+            session.execute(
+                farm_table.insert().values(
+                    id="farm",
+                    data={
+                        "id": "farm",
+                        "name": "Test",
+                        "owner_name": "Test owner",
+                    },
+                )
+            )
             session.execute(app_user_table.insert().values(email=EMAIL, password_hash="test"))
             session.execute(farm_member_table.insert().values(farm_id="farm", email=EMAIL))
+            read_model_store.initialize_farm(session, "farm")
         if not self.legacy:
-            metadata.create_all(self.engine, tables=[setups, results, caches, field_table])
+            metadata.create_all(
+                self.engine,
+                tables=[
+                    setups,
+                    results,
+                    caches,
+                    field_table,
+                    simulation_read_model_table,
+                    field_historical_detail_table,
+                ],
+            )
             simulation = Simulation(id="sim", farm_id="farm", name="test", created_at="2026-10-06")
             fields = [field(), field("field-a")]
             cached = {
@@ -183,6 +227,27 @@ class DatabaseTests(unittest.TestCase):
                 )
                 replace_cached_candidates(session, cached)
                 session.execute(results.insert().values(simulation_id="sim"))
+                prepared_fields = {
+                    f.id: [
+                        read_models.candidate_metadata(value)
+                        for value in (candidate(), candidate(200, "2"))
+                    ]
+                    for f in fields
+                }
+                data, contributions = read_models.simulation_data(fields, prepared_fields, {})
+                read_model_store.publish_simulation(
+                    session,
+                    "sim",
+                    0,
+                    data,
+                    {
+                        "fields": {
+                            key: {"base": values, "overlays": {}}
+                            for key, values in prepared_fields.items()
+                        },
+                        "contributions": contributions,
+                    },
+                )
 
     def cleanup_schema(self):
         self.engine.dispose()
@@ -1384,6 +1449,7 @@ class MigrationTests(DatabaseTests):
             if index.name != "ix_simulation_field_candidates_simulation_field"
         }
         tables.create_all(self.engine)
+        metadata.create_all(self.engine, tables=[simulation_read_model_table])
         # Current read APIs include creation summaries, even for legacy simulations.
         with self.engine.begin() as connection:
             connection.execute(text(

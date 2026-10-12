@@ -136,6 +136,7 @@ class Simulation(CamelModel):
     result: SimulationResultSummary = Field(default_factory=SimulationResultSummary)
     id: str
     farm_id: str
+    comparison_availability: dict | None = None
     name: str
     created_at: str
     constraints: OptimizationConstraints = Field(default_factory=OptimizationConstraints)

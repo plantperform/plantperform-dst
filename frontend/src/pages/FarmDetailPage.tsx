@@ -13,11 +13,13 @@ import {
 import { ApiError } from '@/api/client'
 import {
   useFarm,
+  useFarmView,
   useFarmFields,
   useSimulationFields,
   useSimulations,
 } from '@/api/hooks'
 import type { Simulation } from '@/api/types'
+import { retryFarmHistory } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
 import { DeleteSimulationDialog } from '@/components/farm/DeleteSimulationDialog'
 import { FarmInspector } from '@/components/farm/FarmInspector'
@@ -69,6 +71,8 @@ export const FarmDetailPage = () => {
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
+  const farmView = useFarmView(farmId)
+  const [retryingHistory, setRetryingHistory] = useState(false)
   const email = user?.email ?? ''
   const {
     data: farm,
@@ -235,6 +239,19 @@ export const FarmDetailPage = () => {
     }
   }
 
+  const recalculateHistory = async () => {
+    if (!farmId || retryingHistory) return
+    setRetryingHistory(true)
+    try {
+      const next = await retryFarmHistory(farmId)
+      await farmView.mutate(next, { revalidate: next.status === 'done' })
+    } catch {
+      showErrorToast('Kunne ikke starte beregningen.')
+    } finally {
+      setRetryingHistory(false)
+    }
+  }
+
   const changeMode = (next: FarmInspectorMode) => {
     setMode(next)
     if (next !== mode) setSelectedFieldId(null)
@@ -305,6 +322,31 @@ export const FarmDetailPage = () => {
 
   const loadedFarm = isReady ? farm : undefined
 
+  if (farmView.data && farmView.data.status !== 'done') {
+    const failed = farmView.data.status === 'failed'
+    return (
+      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
+        <Card className="mx-auto max-w-3xl">
+          <CardHeader>
+            <CardTitle>{failed ? 'Historikken kunne ikke beregnes' : 'Beregner markernes historik…'}</CardTitle>
+            <CardDescription>
+              {failed ? 'Prøv beregningen igen.' : 'Markernes tal vises, når beregningen er færdig.'}
+            </CardDescription>
+          </CardHeader>
+          {toast ? <p role="alert" className="px-6 text-destructive">{toast.message}</p> : null}
+          <CardContent className="flex gap-3">
+            {failed && farmId ? (
+              <Button loading={retryingHistory} onClick={() => void recalculateHistory()}>
+                Prøv igen
+              </Button>
+            ) : null}
+            <Button asChild variant="outline"><Link to="/">Alle bedrifter</Link></Button>
+          </CardContent>
+        </Card>
+      </main>
+    )
+  }
+
   return (
     <SidebarProvider
       className="h-svh overflow-hidden"
@@ -345,6 +387,8 @@ export const FarmDetailPage = () => {
           }
           onDeleteSimulation={setSimulationToDelete}
           onNewSimulation={() => openNewSimulation(null)}
+          onRecalculateHistory={() => void recalculateHistory()}
+          recalculatingHistory={retryingHistory}
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
         />

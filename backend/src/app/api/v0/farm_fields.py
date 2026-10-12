@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.simulations import YearlySummaryEntryResponse
@@ -10,11 +10,12 @@ from app.data.repository import (
     get_farm_historical_yearly_summary,
     get_field_historical_years,
     list_fields,
-    upsert_field,
 )
 from app.domain.field import CreateFieldRequest, FieldRecord
 from app.domain.rotation_candidate import RotationCandidateYearResult
 from app.domain.soil import MissingSoilDataError
+from app.services import preparation_jobs
+from app.services.optimization.jobs import QueueUnavailableError
 
 router = APIRouter(prefix="/farms/{farm_id}/fields", tags=["farm fields"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
@@ -33,26 +34,29 @@ def get_farm_fields(
     return fields
 
 
-@router.post("", response_model=FieldRecord | list[FieldRecord])
+@router.post("", response_model=FieldRecord | list[FieldRecord], status_code=202)
 def post_farm_fields(
     farm_id: str,
     request: CreateFieldRequest | list[CreateFieldRequest],
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> FieldRecord | list[FieldRecord]:
-    if isinstance(request, list):
-        fields = [upsert_field(farm_id, field_request, user.email) for field_request in request]
-
-        if any(field is None for field in fields):
-            raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
-
-        return [field for field in fields if field is not None]
-
-    field = upsert_field(farm_id, request, user.email)
-
-    if field is None:
+    try:
+        fields = preparation_jobs.register_fields(
+            farm_id,
+            request if isinstance(request, list) else [request],
+            user.email,
+            background_tasks,
+        )
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except MissingSoilDataError as error:
+        raise HTTPException(
+            status_code=422, detail="En eller flere marker mangler gyldige P/S/Nt-data"
+        ) from error
+    if fields is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
-
-    return field
+    return fields if isinstance(request, list) else fields[0]
 
 
 @router.get(
@@ -105,7 +109,12 @@ def detach_farm_field(
     farm_id: str,
     field_id: str,
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> None:
+    try:
+        preparation_jobs.require_transport(background_tasks)
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     detached = detach_field(farm_id, field_id, user.email)
 
     if detached is None:
@@ -113,3 +122,7 @@ def detach_farm_field(
 
     if not detached:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
+    try:
+        preparation_jobs.dispatch_current_history(farm_id, background_tasks)
+    except QueueUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error

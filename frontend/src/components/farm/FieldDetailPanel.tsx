@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 
 import type {
   FieldRecord,
-  RotationCandidateYearResult,
+  DisplayYearValue,
   Simulation,
 } from '@/api/types'
 import { FieldPanel } from '@/components/farm/FieldPanel'
@@ -19,7 +19,7 @@ type FieldDetailPanelProps = {
   simulation?: Simulation
   selectedYearIndex?: number | null
   onSelectedYearIndexChange?: (index: number | null) => void
-  yearValues?: RotationCandidateYearResult[]
+  yearValues?: DisplayYearValue[]
   yearValuesLoading?: boolean
   isDetaching: boolean
   onRequestDetach: () => void

@@ -114,10 +114,15 @@ def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=Tru
 
 
 def _model(session, simulation_id, row):
+    from app.data.db import simulation_read_model_table as views
+
     result = session.execute(
-        select(*[results.c[name] for name in SimulationResultSummary.model_fields]).where(
-            results.c.simulation_id == simulation_id
+        select(
+            *[results.c[name] for name in SimulationResultSummary.model_fields],
+            views.c.data["comparison_availability"].label("comparison_availability"),
         )
+        .select_from(results.outerjoin(views, views.c.simulation_id == results.c.simulation_id))
+        .where(results.c.simulation_id == simulation_id)
     ).first()
     summary = SimulationResultSummary.model_validate(dict(result._mapping)) if result else None
     return Simulation.model_validate(
@@ -126,6 +131,7 @@ def _model(session, simulation_id, row):
             "revision": row.revision,
             "result": summary or {},
             "creation_status": row.creation_status,
+            "comparison_availability": result.comparison_availability if result else None,
         }
     )
 
@@ -151,6 +157,9 @@ def invalidate(session, simulation_id):
         )
         .values(status="outdated", lease_token=None, lease_expires_at=None)
     )
+    from app.data.read_model_store import invalidate_simulation
+
+    invalidate_simulation(session, simulation_id)
 
 
 def get_simulation(farm_id, simulation_id, email):
@@ -159,6 +168,8 @@ def get_simulation(farm_id, simulation_id, email):
 
 
 def list_simulations(farm_id, email):
+    from app.data.db import simulation_read_model_table as views
+
     with _common().SessionLocal() as session:
         if not _common()._farm_exists(session, farm_id, email):
             return None
@@ -173,11 +184,23 @@ def list_simulations(farm_id, email):
                 select(
                     results.c.simulation_id,
                     *[results.c[name] for name in SimulationResultSummary.model_fields],
+                    views.c.data["comparison_availability"].label("comparison_availability"),
                 )
-                .join(setups)
+                .select_from(
+                    results.join(setups).outerjoin(
+                        views, views.c.simulation_id == results.c.simulation_id
+                    )
+                )
                 .where(setups.c.farm_id == farm_id)
             )
         }
+        availability = dict(
+            session.execute(
+                select(views.c.simulation_id, views.c.data["comparison_availability"])
+                .join(setups)
+                .where(setups.c.farm_id == farm_id)
+            ).all()
+        )
         return [
             Simulation.model_validate(
                 {
@@ -185,6 +208,7 @@ def list_simulations(farm_id, email):
                     "revision": row.revision,
                     "result": summaries.get(row.id, {}),
                     "creation_status": row.creation_status,
+                    "comparison_availability": availability.get(row.id),
                 }
             )
             for row in rows
@@ -227,9 +251,55 @@ def list_simulation_fields(farm_id, simulation_id, email):
         return _fields(session, simulation_id)
 
 
+def _field(session, simulation_id, field_id):
+    from sqlalchemy import cast, literal
+    from sqlalchemy.dialects.postgresql import JSONPATH
+
+    setup = setups.c.fields[field_id] - "fixed_candidate" - "manual_candidate"
+    previous = func.jsonb_path_query_first(
+        results.c.output,
+        cast(literal("$.response.fields[*] ? (@.id == $id)"), JSONPATH),
+        func.jsonb_build_object("id", field_id),
+    )
+    row = session.execute(
+        select(setup, previous, results.c.result_revision)
+        .select_from(setups.join(results))
+        .where(setups.c.id == simulation_id)
+    ).first()
+    if row is None or row[0] is None:
+        return None
+    fields = project_fields(
+        {field_id: row[0]},
+        [field_id],
+        {"response": {"fields": [row[1]] if row[1] else []}},
+        row.result_revision,
+    )
+    return fields[0]
+
+
 def get_simulation_field(farm_id, simulation_id, field_id, email):
-    fields = list_simulation_fields(farm_id, simulation_id, email)
-    return next((f for f in fields or [] if f.id == field_id), None)
+    with _common().SessionLocal() as session:
+        if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
+            return None
+        return _field(session, simulation_id, field_id)
+
+
+def get_simulation_field_context(farm_id, simulation_id, field_id, email):
+    from types import SimpleNamespace
+
+    with _common().SessionLocal() as session:
+        if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
+            return None
+        row = session.execute(
+            select(
+                cached_candidates.c.optimizer_input["jbnr"].as_integer(),
+                cached_candidates.c.optimizer_input["real_history"],
+            ).where(
+                cached_candidates.c.simulation_id == simulation_id,
+                cached_candidates.c.field_id == field_id,
+            )
+        ).first()
+        return SimpleNamespace(jbnr=row[0], real_history=row[1]) if row else None
 
 
 def merge_candidates(
@@ -387,18 +457,56 @@ def get_simulation_field_candidates(farm_id, simulation_id, field_id, email):
         return merge_setup_candidates(row[0], row[1], row[2] or {}) if row else None
 
 
-def get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, email):
-    field = get_simulation_field(farm_id, simulation_id, field_id, email)
-    if field is None:
-        return None
-    if field.rotation_id is None:
-        raise _common().FieldNotOptimizedError
-    row = get_simulation_field_candidates(farm_id, simulation_id, field_id, email)
-    return (
-        next((c for c in row.candidates if c.ref.to_id() == field.rotation_id), None)
-        if row
-        else None
+def _selected_candidate(session, simulation_id, field_id, rotation_id):
+    from sqlalchemy import case, cast, literal
+    from sqlalchemy.dialects.postgresql import JSONPATH
+
+    from app.data.read_model_store import insert_json
+
+    ref = RotationCandidateRef.from_id(rotation_id)
+    path = (
+        "$.candidates[*] ? (@.ref.saedskiftevariant == $s && "
+        "@.ref.variant == $v && @.ref.n_norm_pct == $n)"
     )
+    overlays = (
+        setups.c.fields[field_id]["fixed_candidate"],
+        results.c.output["selected_candidates"][field_id],
+        setups.c.fields[field_id]["manual_candidate"],
+    )
+    chosen = func.coalesce(
+        *[
+            case((value["ref"] == insert_json(ref.model_dump(mode="json")), value))
+            for value in overlays
+        ],
+        func.jsonb_path_query_first(
+            cached_candidates.c.data,
+            cast(literal(path), JSONPATH),
+            func.jsonb_build_object(
+                "s", ref.saedskiftevariant, "v", ref.variant, "n", ref.n_norm_pct
+            ),
+        ),
+    )
+    source = setups.join(results).outerjoin(
+        cached_candidates,
+        (cached_candidates.c.simulation_id == setups.c.id)
+        & (cached_candidates.c.field_id == field_id),
+    )
+    value = session.execute(
+        select(chosen).select_from(source).where(setups.c.id == simulation_id)
+    ).scalar_one_or_none()
+    return RotationCandidateEvaluation.model_validate(value) if value else None
+
+
+def get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, email):
+    with _common().SessionLocal() as session:
+        if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
+            return None
+        field = _field(session, simulation_id, field_id)
+        if field is None:
+            return None
+        if field.rotation_id is None:
+            raise _common().FieldNotOptimizedError
+        return _selected_candidate(session, simulation_id, field_id, field.rotation_id)
 
 
 def delete_simulation(farm_id, simulation_id, email):
@@ -468,18 +576,17 @@ def update_simulation_constraints(farm_id, simulation_id, constraints, email):
 
 
 def _save_field(session, simulation_id, field, candidate=None):
-    fields = session.execute(
-        select(setups.c.fields, setups.c.revision).where(setups.c.id == simulation_id)
+    row = session.execute(
+        select(setups.c.fields[field.id], setups.c.revision).where(setups.c.id == simulation_id)
     ).one()
-    revision = fields.revision
-    fields = fields.fields
-    previous = fields.get(field.id, {})
+    revision = row.revision
+    previous = row[0] or {}
     setup_field = split_field(_common()._dump(field))
     if previous.get("manual_candidate"):
         setup_field["manual_candidate"] = previous["manual_candidate"]
     if field.allowed_rotation_ids:
         selected = candidate
-        previous_candidate = previous.get("fixed_candidate") or previous.get("manual_candidate")
+        previous_candidate = previous.get("fixed_candidate")
         if (
             selected is None
             and previous_candidate
@@ -487,34 +594,31 @@ def _save_field(session, simulation_id, field, candidate=None):
             == field.rotation_id
         ):
             selected = previous_candidate
-        if selected is None:
-            data = _candidate_row(session, simulation_id, field.id)
-            if data:
-                selected = next(
-                    (
-                        c
-                        for c in merge_candidates(data[0], data[1]).candidates
-                        if c.ref.to_id() == field.rotation_id
-                    ),
-                    None,
-                )
+        if selected is None and field.rotation_id:
+            selected = _selected_candidate(session, simulation_id, field.id, field.rotation_id)
         if selected is not None:
             setup_field["fixed_candidate"] = (
                 _common()._dump(selected) if not isinstance(selected, dict) else selected
             )
-    elif previous.get("fixed"):
-        # Unlocking is an explicit edit; retain the manual choice until a successful replacement.
-        setup_field["baseline"] = previous["fixed"]
+    else:
+        # Keep edited values until a successful run at the new input revision replaces them.
+        setup_field["baseline"] = {key: _common()._dump(field)[key] for key in OUTPUT_KEYS}
         setup_field["baseline_revision"] = revision + 1
         if previous.get("fixed_candidate"):
             setup_field["manual_candidate"] = previous["fixed_candidate"]
-    elif previous.get("baseline"):
-        setup_field["baseline"] = previous["baseline"]
-        if "baseline_revision" in previous:
-            setup_field["baseline_revision"] = previous["baseline_revision"]
-    fields = {**fields, field.id: setup_field}
-    session.execute(update(setups).where(setups.c.id == simulation_id).values(fields=fields))
+    from app.data import read_model_store
+
+    session.execute(
+        update(setups)
+        .where(setups.c.id == simulation_id)
+        .values(
+            fields=func.jsonb_set(
+                setups.c.fields, [field.id], read_model_store.insert_json(setup_field)
+            )
+        )
+    )
     invalidate(session, simulation_id)
+    read_model_store.update_field_view(session, simulation_id, field, setup_field)
     return True
 
 
@@ -522,12 +626,12 @@ def update_simulation_field(farm_id, simulation_id, field_id, request, email):
     with _common().SessionLocal.begin() as session:
         if _row(session, farm_id, simulation_id, email, lock=True) is None:
             return None
-        existing = next((f for f in _fields(session, simulation_id) if f.id == field_id), None)
+        existing = _field(session, simulation_id, field_id)
         if existing is None:
             return None
         field = existing.model_copy(update=_common()._partial_update(request), deep=True)
         validate_measures_for_rotation(field.measures, field.crop_rotation)
-        if field.allowed_rotation_ids:
+        if field.rotation_id:
             if field.area_ha != existing.area_ha and existing.area_ha:
                 scale = field.area_ha / existing.area_ha
                 field = field.model_copy(
@@ -553,7 +657,7 @@ def save_manual_rotation(
             raise SetupRevisionConflictError(
                 "Scenariet blev ændret. Prøv den manuelle ændring igen."
             )
-        existing = next((f for f in _fields(session, simulation_id) if f.id == field_id), None)
+        existing = _field(session, simulation_id, field_id)
         if existing is None:
             return None
         field = existing.model_copy(update=_common()._partial_update(request), deep=True)
