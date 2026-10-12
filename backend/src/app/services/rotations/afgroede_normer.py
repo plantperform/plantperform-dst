@@ -131,6 +131,7 @@ def _load_nuar_koder() -> dict[int, dict]:
             "mellemafgroede_mulig": row.mellemafgroede_mulig,
             "tidlig_saaning_mulig": row.tidlig_saaning_mulig,
             "praecisionsgoedskning_mulig": row.praecisionsgoedskning_mulig,
+            "saamaaned": row.saamaaned,
         }
         for row in rows
         if row.has_nuar

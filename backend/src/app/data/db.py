@@ -131,6 +131,8 @@ afgroede_table = Table(
     # "Praec.goedsk.eff." 1 (korn) or 2 (raps): korn or raps i renbestand
     # (§ 57, stk. 1, nr. 1; PUMR, Tabel A, felt A37).
     Column("praecisionsgoedskning_mulig", Boolean, nullable=False, server_default=false()),
+    # "Normal såmåned": the month the crop is normally sown, 0 when it is not.
+    Column("saamaaned", SmallInteger, nullable=True),
     Column("m", SmallInteger, nullable=True),
     Column("w", SmallInteger, nullable=True),
     Column("wc", SmallInteger, nullable=True),

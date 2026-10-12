@@ -135,6 +135,10 @@ def parse_afgroede_normer(path: Path = CSV_PATH) -> tuple[list[tuple], list[tupl
                 mellemafgroede_mulig,
                 tidlig_saaning_mulig,
                 praecisionsgoedskning_mulig,
+                integer(
+                    row.get("Normal såmåned", ""), field="Normal såmåned",
+                    row_number=row_number, required=False,
+                ),
             )
         )
 

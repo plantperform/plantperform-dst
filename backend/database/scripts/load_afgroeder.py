@@ -29,6 +29,7 @@ AFGROEDE_COLUMNS = (
     "mellemafgroede_mulig",
     "tidlig_saaning_mulig",
     "praecisionsgoedskning_mulig",
+    "saamaaned",
     "m",
     "w",
     "wc",
@@ -207,6 +208,7 @@ def build_afgroede_rows(
         entry["w_efteraar"], entry["w_efteraar_efter_graes"], entry["w_omploejning"] = row[14:17]
         entry["mellemafgroede_mulig"], entry["tidlig_saaning_mulig"] = row[17:19]
         entry["praecisionsgoedskning_mulig"] = row[19]
+        entry["saamaaned"] = row[20]
         name_for(code, row[1], 4)
 
     afgroede_rows = [
