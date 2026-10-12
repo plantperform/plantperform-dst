@@ -25,6 +25,9 @@ calculate_db), with these differences:
     entire mark calculation.
   - Gødning tonnage is intentionally omitted because no n_indhold_kg_per_ton
     basis exists outside a scenarie, and is set to 0.0.
+  - The secondary crop of a year is the field's reported catch crop as
+    historical_secondary_crop interprets it (a catch crop, an intermediate
+    crop or early sowing, or none), not a rotation's undersown crop code.
 """
 from __future__ import annotations
 
@@ -37,6 +40,10 @@ from app.services.economics.db_calculator import calculate_db
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer
+from app.services.rotations.historical_secondary_crop import (
+    historical_secondary_crop,
+    secondary_crop_name,
+)
 from app.services.rotations.historisk_goedning import lookup_historisk_n_input
 
 # Latest year with actual crop_history. The eight positions are the eight years
@@ -75,10 +82,15 @@ def evaluate_real_history_for_field(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    secondary_crop_history: dict[str, int] | None = None,
 ) -> list[RotationCandidateYearResult]:
     def code_for(year: int) -> int | None:
         value = crop_history.get(str(year))
         return int(value) if value is not None else None
+
+    def secondary_for(year: int) -> int | None:
+        reported = (secondary_crop_history or {}).get(str(year))
+        return historical_secondary_crop(reported, code_for(year), code_for(year + 1))
 
     start_year = REAL_HISTORY_END_YEAR - 7  # 2019
     years: list[RotationCandidateYearResult] = []
@@ -89,6 +101,8 @@ def evaluate_real_history_for_field(
         this_code = code_for(this_year)
         prev_code = code_for(prev_year)
         prev2_code = code_for(prev2_year)
+        udlaeg_kode = secondary_for(this_year)
+        prev_udlaeg_kode = secondary_for(prev_year)
 
         n_input = _history_n_input(this_code, jbnr, goedningsregion, oeko, irrigated)
         n1 = _history_n_input(prev_code, jbnr, goedningsregion, oeko, irrigated)
@@ -120,7 +134,9 @@ def evaluate_real_history_for_field(
             if prev_code is not None
             else None
         )
-        fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        fv_forfrugt = (
+            prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        ) + afgroede_normer.catch_crop_preceding_crop_value(prev_udlaeg_kode)
         if not afgroede_normer.deducts_preceding_crop_value(norm):
             fv_forfrugt = 0.0
 
@@ -132,8 +148,8 @@ def evaluate_real_history_for_field(
                     next_afgrode_kode=code_for(this_year + 1),
                     prev_afgrode_kode=prev_code,
                     prev_prev_afgrode_kode=prev2_code,
-                    udlaeg_kode=None,
-                    prev_udlaeg_kode=None,
+                    udlaeg_kode=udlaeg_kode,
+                    prev_udlaeg_kode=prev_udlaeg_kode,
                     jbnr=jbnr,
                     mncs=n_input["mncs"], mnca=n_input["mnca"], g0=n_input["g0"],
                     m1=n1["mncs"] + n1["mnca"], m2=n2["mncs"] + n2["mnca"],
@@ -152,7 +168,7 @@ def evaluate_real_history_for_field(
                 this_code, "Økologisk" if oeko else "Konventionel", jbnr,
                 mncs=n_input["mncs"], mnca=n_input["mnca"], irrigated=irrigated,
                 org_mineral_n_applied=0.0,
-                udlaeg_kode=None, only_organic=oeko,
+                udlaeg_kode=udlaeg_kode, only_organic=oeko,
                 forfrugtsvaerdi=fv_forfrugt,
                 **({"economics_key": economics_key} if economics_key else {}),
             )
@@ -167,6 +183,8 @@ def evaluate_real_history_for_field(
                 afgrode_navn=(
                     crop_params.get("navn", "Ukendt") if this_code is not None else "Ukendt"
                 ),
+                udlaeg_kode=udlaeg_kode,
+                udlaeg_navn=secondary_crop_name(udlaeg_kode),
             ),
             leaching_kg_n_ha=leaching.get("L_nuar", 0.0),
             leaching_detail=leaching,
