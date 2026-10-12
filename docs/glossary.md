@@ -21,6 +21,7 @@ field" column is the name on the wire.
 | dyrkningssystem | `croppingSystem` | `dyrkningssystem` | |
 | landmand, konsulent | `farmer`, `advisor` | | `OnboardingRole`; old stored Danish values are still read |
 | Din konto | account, `AccountButton` | | The signed-in user's details in a panel opened from the bar |
+| fornavn, efternavn | `firstName`, `lastName` | | `UserName`; kept in the browser until the backend stores a name on the user |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
 | Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi and Om bedriften in the sidebar, which can be minimised |
 | adgang (til en bedrift) | farm access, `FarmMember` | | The users a farm is shared with |

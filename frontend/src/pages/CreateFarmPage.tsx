@@ -12,6 +12,7 @@ import {
 import { createFarm, createFieldsFromRegistry } from '@/api/mutations'
 import { waitForFarmHistory } from '@/api/views'
 import type { RegistryField } from '@/api/types'
+import { useAuth } from '@/auth/context'
 import { AppBar, AppBarCurrent } from '@/components/AppBar'
 import { BackLink } from '@/components/BackLink'
 import { RegistryFieldsMap } from '@/components/farm/RegistryFieldsMap'
@@ -31,6 +32,7 @@ import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import { usePacedStep } from '@/hooks/use-paced-step'
+import { useUserName } from '@/hooks/use-user-name'
 import {
   farmBasicsErrors,
   farmLookupErrors,
@@ -38,8 +40,9 @@ import {
   isCvrComplete,
   toCvrDigits,
 } from '@/lib/farm-form'
-import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
+import { getStoredRole, HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 import { summarizeLookup } from '@/lib/registry-lookup'
+import { formatFullName, welcomeGreeting } from '@/lib/user-name'
 import { cn } from '@/lib/utils'
 
 const STEPS = ['Bedrift', 'Marker', 'Første svar']
@@ -143,11 +146,20 @@ export const CreateFarmPage = () => {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { data: farms } = useFarms()
+  const { user } = useAuth()
+  const { name: userName } = useUserName()
+  const role = user ? getStoredRole(user.email) : null
   const paramCvr = searchParams.get('cvr') ?? ''
   const urlCvr = isCvrComplete(paramCvr) ? paramCvr : null
   const [initialForm] = useState(() => {
     const initial = readForm(location.state)
-    return { ...initial, cvr: initial.cvr || (urlCvr ?? '') }
+    return {
+      ...initial,
+      ownerName:
+        initial.ownerName ||
+        (role === 'farmer' && userName ? formatFullName(userName) : ''),
+      cvr: initial.cvr || (urlCvr ?? ''),
+    }
   })
   const [form, setForm] = useState(initialForm)
   const { showToast } = useToast()
@@ -346,7 +358,7 @@ export const CreateFarmPage = () => {
                 title={
                   farms && farms.length > 0
                     ? 'Lad os hente markerne.'
-                    : 'Velkommen. Lad os hente markerne.'
+                    : `${welcomeGreeting(userName)}. Lad os hente markerne.`
                 }
               >
                 Du skal kun bruge bedriftens CVR-nummer. Marker, areal,
@@ -371,6 +383,9 @@ export const CreateFarmPage = () => {
                   <FormField
                     id="farm-owner-name"
                     label="Ejer"
+                    placeholder={
+                      role === 'advisor' ? 'Landmandens navn' : undefined
+                    }
                     value={form.ownerName}
                     onChange={(event) =>
                       setForm({ ...form, ownerName: event.target.value })

@@ -9,6 +9,8 @@ import { AuthLayout } from '@/components/onboarding/AuthLayout'
 import { AuthNotice } from '@/components/onboarding/AuthNotice'
 import { FarmBasicsFields } from '@/components/onboarding/FarmBasicsFields'
 import { LoginForm } from '@/components/onboarding/LoginForm'
+import { useNameFields } from '@/components/onboarding/name-fields'
+import { NameFields } from '@/components/onboarding/NameFields'
 import { RoleCard } from '@/components/onboarding/RoleCard'
 import { Button } from '@/components/ui/button'
 import { validateFarmBasics } from '@/lib/farm-form'
@@ -18,15 +20,23 @@ import {
   setStoredRole,
   type OnboardingRole,
 } from '@/lib/onboarding'
+import {
+  formatFullName,
+  normalizeUserName,
+  storeUserName,
+} from '@/lib/user-name'
 
 type Mode = 'login' | 'register'
 
 const RegisterForm = () => {
   const navigate = useNavigate()
   const fields = useAuthFields('register')
+  const nameFields = useNameFields(null)
   const [role, setRole] = useState<OnboardingRole | null>(null)
   const [farmName, setFarmName] = useState('')
-  const [ownerName, setOwnerName] = useState('')
+  const [typedOwnerName, setTypedOwnerName] = useState<string | null>(null)
+  const ownerName =
+    typedOwnerName ?? formatFullName(normalizeUserName(nameFields.name))
   const [cvr, setCvr] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -38,7 +48,9 @@ const RegisterForm = () => {
       setError('Vælg, om du er landmand eller konsulent.')
       return
     }
-    if (!fields.validate()) return
+    const fieldsValid = fields.validate()
+    const name = nameFields.validate()
+    if (!name || !fieldsValid) return
     if (role === 'farmer') {
       const farmError = validateFarmBasics(farmName, ownerName, cvr)
       if (farmError) {
@@ -55,6 +67,7 @@ const RegisterForm = () => {
         { email, password: fields.password },
       )
       setStoredRole(email, role)
+      storeUserName(email, name)
       if (role === 'farmer') {
         setPendingFarm(email, {
           name: farmName.trim(),
@@ -106,6 +119,7 @@ const RegisterForm = () => {
           />
         </div>
       </div>
+      <NameFields fields={nameFields} />
       <AuthFields fields={fields} passwordAutoComplete="new-password" />
       {role === 'farmer' ? (
         <div className="space-y-5 rounded-md border bg-muted/30 p-4 motion-safe:animate-rise-in sm:p-5">
@@ -120,7 +134,7 @@ const RegisterForm = () => {
             ownerName={ownerName}
             cvr={cvr}
             onNameChange={setFarmName}
-            onOwnerNameChange={setOwnerName}
+            onOwnerNameChange={setTypedOwnerName}
             onCvrChange={setCvr}
           />
         </div>
