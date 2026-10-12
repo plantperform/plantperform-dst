@@ -7,6 +7,7 @@ from contextlib import closing
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import shapely
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,23 @@ def area_weighted(
     means = np.full(size, np.nan)
     np.divide(weighted, covered, out=means, where=covered > 0)
     return means
+
+
+def dominant(
+    field_index: np.ndarray, values: np.ndarray, area: np.ndarray, size: int
+) -> np.ndarray:
+    """Return each field's value that covers the largest part of it, summing
+    the overlaps of all polygons with that value. A tie goes to the higher
+    value. NaN values count as no value; a field without any value gets NaN."""
+    valued = ~np.isnan(values)
+    parts = pd.DataFrame(
+        {"field": field_index[valued], "value": values[valued], "area": area[valued]}
+    )
+    per_value = parts.groupby(["field", "value"], as_index=False)["area"].sum()
+    winners = per_value.sort_values(["area", "value"]).drop_duplicates("field", keep="last")
+    result = np.full(size, np.nan)
+    result[winners["field"].to_numpy()] = winners["value"].to_numpy()
+    return result
 
 
 def gpkg_is_empty(blob: bytes | None) -> int | None:

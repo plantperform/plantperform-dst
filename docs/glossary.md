@@ -120,6 +120,9 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | JB-nummer | `soilTypeNumber` | `jbnr` | JB kept in names like `JB_COLORS` |
+| lerprocent | clay percentage, `CLAY_PCT_BY_JB` | | Bilag 2, table 14; gives S in NLES5 |
+| perkolationsværdi | percolation value | | P in NLES5, one per runoff category |
+| organisk kvælstof i overjorden | organic N in the topsoil | | NT in NLES5 |
 | afstrømningskategori | `runoffCategory`, `runoffCategoryUnknown`, `runoffWinterCover` | `afstromningskategori`, `afstromningskategori_ukendt`, `afstromning_vinterdaekke` | |
 | efterafgrødens N-fiksering | `catchCropNFixation`, `catchCropNFixationBonus` | `efterafgroede_nfiks`, `efterafgroede_nfiks_bonus` | |
 | Fmajs-korrektion | `fmajsApplied`, `fmajsCorrectionFactor`, `fmajsMineralN` | `Fmajs_anvendt`, `Fmajs_korrektionsfaktor`, `Fmajs_mineralsk_n` | Maize after clover grass |
