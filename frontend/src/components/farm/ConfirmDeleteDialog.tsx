@@ -11,6 +11,7 @@ import {
 
 type ConfirmDeleteDialogProps = {
   name: string | null
+  title?: string
   description: string
   confirmLabel: string
   onOpenChange: (open: boolean) => void
@@ -19,6 +20,7 @@ type ConfirmDeleteDialogProps = {
 
 export const ConfirmDeleteDialog = ({
   name,
+  title,
   description,
   confirmLabel,
   onOpenChange,
@@ -27,7 +29,7 @@ export const ConfirmDeleteDialog = ({
   <Dialog open={name !== null} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Slet {name}?</DialogTitle>
+        <DialogTitle>{title ?? `Slet ${name}?`}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogFooter>
