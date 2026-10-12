@@ -37,17 +37,6 @@ from app.services.virkemidler import virkemiddel_tilladt
 # years. Position 1 = 2027, position 2 = 2028, etc.
 START_CALENDAR_YEAR = 2027
 
-# Forfrugtsværdi an efterafgrøde gives the following afgrøde, by udlægskode:
-# the N eftervirkning of SEGES/SKH's Faktaark om efterafgrøder (21 kg N/ha)
-# for every efterafgrøde, and the 50 kg N/ha of gødningsbekendtgørelsens
-# bilag 3, tabel 1 for kvælstoffikserende efterafgrøder. The bilag's "17/25"
-# for 968 is not used: its note is missing from the draft. Frøgræs continuing
-# after harvest (9680) is no efterafgrøde here; the frøgræs's own
-# forfrugtsværdi applies.
-_EFTERAFGROEDE_FORFRUGTSVAERDI_KGN_HA: dict[int, float] = {
-    **dict.fromkeys((950, 951, 954, 968, 970), 21.0),
-    **dict.fromkeys((952, 953), 50.0),
-}
 _MELLEMAFGROEDE_UDLAEG_KODER = frozenset({9682, 9684})
 _TIDLIG_SAANING_UDLAEG_KODER = frozenset({9683})
 
@@ -117,7 +106,7 @@ def compute_n_inputs(
         else None
     )
     fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
-    fv_forfrugt += _EFTERAFGROEDE_FORFRUGTSVAERDI_KGN_HA.get(prev_udlaeg_kode, 0.0)
+    fv_forfrugt += afgroede_normer.catch_crop_preceding_crop_value(prev_udlaeg_kode)
     if not afgroede_normer.deducts_preceding_crop_value(norm):
         fv_forfrugt = 0.0
 
