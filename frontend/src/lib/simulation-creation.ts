@@ -13,7 +13,7 @@ export function isSimulationCreating(simulation: CreationState) {
 export function creationStatusLabel(simulation: CreationState): string | null {
   if (simulation.creationStatus === 'failed') return 'Oprettelsen fejlede'
   if (!isSimulationCreating(simulation)) return null
-  return 'Opretter simulering…'
+  return 'Opretter simulering...'
 }
 
 export type CreationRequestIdentity = { requestId: string; input: string }

@@ -292,7 +292,7 @@ export const NewScenarioPanel = ({
     </p>
   ) : isCreating ? (
     <p className="text-muted-foreground">
-      Starter oprettelsen…
+      Starter oprettelsen...
     </p>
   ) : null
 

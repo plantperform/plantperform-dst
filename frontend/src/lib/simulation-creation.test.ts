@@ -26,8 +26,8 @@ describe('simulation creation', () => {
   })
 
   it('shows simple creation status labels', () => {
-    expect(creationStatusLabel(state('running'))).toBe('Opretter simulering…')
-    expect(creationStatusLabel(state('queued'))).toBe('Opretter simulering…')
+    expect(creationStatusLabel(state('running'))).toBe('Opretter simulering...')
+    expect(creationStatusLabel(state('queued'))).toBe('Opretter simulering...')
     expect(creationStatusLabel(state('failed'))).toBe('Oprettelsen fejlede')
     expect(creationStatusLabel(state('done'))).toBeNull()
   })

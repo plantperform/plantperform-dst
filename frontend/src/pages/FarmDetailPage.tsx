@@ -367,7 +367,7 @@ export const FarmDetailPage = () => {
               index
               element={selectedSimulation && !isSimulationReady(selectedSimulation) ? (
                 <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
-                  <h1 className="font-display text-3xl">{selectedSimulation.name}</h1>
+                  <h1 className="font-display text-4xl tracking-tight">{selectedSimulation.name}</h1>
                   <SimulationCreationStatus farmId={loadedFarm.id} simulation={selectedSimulation} />
                   <Button variant="outline" onClick={() => setSimulationToDelete(selectedSimulation)}>
                     Slet simulering

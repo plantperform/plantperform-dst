@@ -60,7 +60,7 @@ describe('SimulationCreationStatus', () => {
         }),
       )
       expect(html).toContain('role="status"')
-      expect(html).toContain('Opretter simulering…')
+      expect(html).toContain('Opretter simulering...')
       expect(html).toContain('Du kan lukke siden.')
       expect(html).not.toContain('Prøv igen')
     }
