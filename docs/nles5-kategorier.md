@@ -100,6 +100,9 @@ den separate faktor `(1 − EEA·Fdato − EMA − ETS)` i Bilag 2, ligning 1-2.
 
 921 kan vælges efter græs i tabel 8 for alle driftsformer (aftalt med Anders).
 
+Effekten for udlæg i majs er 10 % (§ 44, stk. 2) og ikke 0,15 fra
+"Parametre og konstanter".
+
 Målt mod reglen før den supplerende høring (begge på det opdaterede
 masterark) ændres W for 302 af 3.578 positioner i sædskiftebiblioteket, især:
 

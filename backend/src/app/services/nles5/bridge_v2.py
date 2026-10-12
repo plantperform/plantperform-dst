@@ -211,12 +211,14 @@ _UDL_VIRKEMIDDEL: dict[int, dict[str, bool]] = {
 _NO_VIRKEMIDDEL: dict[str, bool] = {"eea": False, "ema": False, "ets": False}
 
 # Fixed NUAR EEA strength when efterafgrøde/udlæg is present (streamlit_app.py:
-# `EEA = 0.45 if eea_on else 0.0`). The lower majs rate ("EffektUdlaegMajs",
-# Parametre og konstanter) applies to the same 6 majs-hovedafgrødekoder as
-# Fmajs (PUMR, Tabel A: "Majs" er her defineret ved værdien 3 i Afgrødetabel
-# 2027's kolonne "Praec.goedsk.eff.", som er nøjagtig samme 6 koder).
+# `EEA = 0.45 if eea_on else 0.0`). The lower majs rate applies to the same 6
+# majs-hovedafgrødekoder as Fmajs (PUMR, Tabel A: "Majs" er her defineret ved
+# værdien 3 i Afgrødetabel 2027's kolonne "Praec.goedsk.eff.", som er
+# nøjagtig samme 6 koder). It is the bekendtgørelse's 10 % (§ 44, stk. 2 in the
+# supplerende høring), not the 0.15 "EffektUdlaegMajs" in SGAV's Parametre og
+# konstanter.
 _EEA_STRENGTH = 0.45
-_EEA_STRENGTH_MAJS = 0.15
+_EEA_STRENGTH_MAJS = 0.10
 _EMA_STRENGTH = 0.20
 _ETS_STRENGTH = 0.20
 _PRAECISIONSJORDBRUG_EPJ = 0.04
@@ -475,8 +477,8 @@ def evaluate_leaching_position(
         # _UDL_VIRKEMIDDEL above), not freely selected. Fdato/precision_dagsbasis
         # is a scenarie-level Phase 8 setting applied equally to every year with
         # efterafgrøde. Efterafgrøde in maize has the lower statutory
-        # 15 % effect ("EffektUdlaegMajs", Parametre og konstanter); EMA and
-        # ETS each have a flat 20 % effect.
+        # 10 % effect (see _EEA_STRENGTH_MAJS); EMA and ETS each have a flat
+        # 20 % effect.
         "EEA": (
             (_EEA_STRENGTH_MAJS if afgrode_kode in _FMAJS_HOVEDAFGRODE_KODER else _EEA_STRENGTH)
             if vk["eea"]
