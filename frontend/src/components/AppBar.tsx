@@ -2,8 +2,8 @@ import { ChevronRight } from 'lucide-react'
 import { Children, Fragment, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
+import { AccountButton } from '@/components/AccountButton'
 import { BrandIcon } from '@/components/BrandMark'
-import { UserMenu } from '@/components/UserMenu'
 import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
 
@@ -83,6 +83,6 @@ export const AppBar = ({ children, steps, activeStep = 0 }: AppBarProps) => (
         })}
       </ol>
     ) : null}
-    <UserMenu variant="onDark" className="ml-auto shrink-0" />
+    <AccountButton />
   </header>
 )

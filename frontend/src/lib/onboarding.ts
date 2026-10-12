@@ -20,7 +20,6 @@ export const HOME_OVERVIEW_STATE: HomeOverviewState = { showOverview: true }
 const roleKey = (email: string) => `pp-rolle:${email}`
 const pendingFarmKey = (email: string) => `pp-ny-bedrift:${email}`
 const lastOpenedKey = (email: string) => `pp-sidst-åbnet:${email}`
-const autoOpenKey = (email: string) => `pp-auto-åbn:${email}`
 const homeVisitedKey = (email: string) => `pp-forside-set:${email}`
 
 const LAST_REGISTERED_EMAIL_KEY = 'pp-sidst-oprettet'
@@ -51,12 +50,8 @@ export const setStoredRole = (email: string, role: OnboardingRole) => {
   writeItem(roleKey(email), role)
 }
 
-export const getAutoOpenSingleFarm = (email: string): boolean =>
-  readItem(autoOpenKey(email)) !== '0'
-
-export const setAutoOpenSingleFarm = (email: string, value: boolean) => {
-  writeItem(autoOpenKey(email), value ? '1' : '0')
-}
+export const opensSingleFarmDirectly = (role: OnboardingRole | null) =>
+  role !== 'advisor'
 
 export const hasVisitedHomeThisSession = (email: string): boolean => {
   try {

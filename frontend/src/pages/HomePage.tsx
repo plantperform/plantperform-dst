@@ -28,12 +28,12 @@ import {
 } from '@/lib/farm-overview'
 import {
   clearPendingFarm,
-  getAutoOpenSingleFarm,
   getLastOpenedMap,
   getPendingFarm,
   getStoredRole,
   hasVisitedHomeThisSession,
   markHomeVisitedThisSession,
+  opensSingleFarmDirectly,
   setStoredRole,
   type OnboardingRole,
 } from '@/lib/onboarding'
@@ -87,12 +87,11 @@ export const HomePage = () => {
   const shouldOpenCreateFarm =
     isReady && farmList.length === 0 && pending !== null
   const singleFarmId = isReady && farmList.length === 1 ? farmList[0].id : null
-  const autoOpenSingleFarm = email ? getAutoOpenSingleFarm(email) : true
   const hasVisitedHome = email ? hasVisitedHomeThisSession(email) : false
   const shouldOpenSingleFarm =
     singleFarmId !== null &&
     !showOverview &&
-    autoOpenSingleFarm &&
+    opensSingleFarmDirectly(selectedRole) &&
     !hasVisitedHome
 
   useEffect(() => {
