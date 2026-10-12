@@ -1,12 +1,5 @@
-import { ChevronLeft } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent } from 'react'
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  useSearchParams,
-  type LinkProps,
-} from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import { ApiError } from '@/api/client'
@@ -20,6 +13,7 @@ import { createFarm, createFieldsFromRegistry } from '@/api/mutations'
 import { waitForFarmHistory } from '@/api/views'
 import type { RegistryField } from '@/api/types'
 import { AppBar, AppBarCurrent } from '@/components/AppBar'
+import { BackLink } from '@/components/BackLink'
 import { RegistryFieldsMap } from '@/components/farm/RegistryFieldsMap'
 import {
   CreateStatus,
@@ -28,11 +22,14 @@ import {
   LookupProgress,
   StepHeading,
 } from '@/components/farm/RegistryLookup'
+import { LeaveFlowDialog } from '@/components/LeaveFlowDialog'
+import { useToast } from '@/components/toast'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
+import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import { usePacedStep } from '@/hooks/use-paced-step'
 import {
   farmBasicsErrors,
@@ -94,6 +91,18 @@ const readForm = (state: unknown): FarmForm => {
   }
 }
 
+type Origin = {
+  farmId: string
+  name: string
+}
+
+const readOrigin = (state: unknown): Origin | null => {
+  const from = (state as { from?: Record<string, unknown> } | null)?.from
+  return typeof from?.farmId === 'string' && typeof from.name === 'string'
+    ? { farmId: from.farmId, name: from.name }
+    : null
+}
+
 type FormFieldProps = ComponentProps<'input'> & {
   id: string
   label: string
@@ -127,19 +136,6 @@ const FormField = ({
   </div>
 )
 
-const BackLink = ({ className, children, ...linkProps }: LinkProps) => (
-  <Link
-    {...linkProps}
-    className={cn(
-      'mb-5 flex w-fit items-center gap-1.5 rounded-md text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-      className,
-    )}
-  >
-    <ChevronLeft className="size-3.5" aria-hidden="true" />
-    {children}
-  </Link>
-)
-
 export const CreateFarmPage = () => {
   const historyWait = useRef<AbortController | null>(null)
   useEffect(() => () => historyWait.current?.abort(), [])
@@ -149,10 +145,18 @@ export const CreateFarmPage = () => {
   const { data: farms } = useFarms()
   const paramCvr = searchParams.get('cvr') ?? ''
   const urlCvr = isCvrComplete(paramCvr) ? paramCvr : null
-  const [form, setForm] = useState(() => {
+  const [initialForm] = useState(() => {
     const initial = readForm(location.state)
     return { ...initial, cvr: initial.cvr || (urlCvr ?? '') }
   })
+  const [form, setForm] = useState(initialForm)
+  const { showToast } = useToast()
+  const origin = readOrigin(location.state)
+  const leaveGuard = useLeaveGuard(
+    form.name !== initialForm.name ||
+      form.ownerName !== initialForm.ownerName ||
+      form.cvr !== initialForm.cvr,
+  )
   const [checked, setChecked] = useState<'lookup' | 'create' | null>(null)
   const [creating, setCreating] = useState(false)
   const [failedCreate, setFailedCreate] = useState<FailedCreate | null>(null)
@@ -214,6 +218,8 @@ export const CreateFarmPage = () => {
       }
       await mutate(farmsKey)
       await shown
+      leaveGuard.release()
+      showToast(`${farm.name.trim()} er oprettet`)
       navigate(`/farms/${farmId}`, { replace: true })
     } catch {
       setFailedCreate({ at: location.key, farmId })
@@ -226,7 +232,10 @@ export const CreateFarmPage = () => {
     setChecked('lookup')
     const invalid = farmLookupErrors(form.name, form.ownerName, form.cvr)
     if (Object.keys(invalid).length > 0) return
-    navigate({ search: `?cvr=${form.cvr}` }, { state: { prefill: form } })
+    navigate(
+      { search: `?cvr=${form.cvr}` },
+      { state: { prefill: form, from: origin } },
+    )
   }
 
   const createWithoutLookup = () => {
@@ -256,7 +265,7 @@ export const CreateFarmPage = () => {
           error={createError}
           onEditCvr={() =>
             navigate('/farms/new', {
-              state: { prefill: farm, focusCvr: true },
+              state: { prefill: farm, focusCvr: true, from: origin },
             })
           }
           onCreateEmpty={() => void create(farm, [])}
@@ -314,8 +323,11 @@ export const CreateFarmPage = () => {
             <>
               <BackLink
                 to="/farms/new"
-                state={{ prefill: { ...lookupForm, cvr: lookupCvr } }}
-                className={cn(creating && 'invisible')}
+                state={{
+                  prefill: { ...lookupForm, cvr: lookupCvr },
+                  from: origin,
+                }}
+                className={cn('mb-5', creating && 'invisible')}
               >
                 Tilbage
               </BackLink>
@@ -324,16 +336,16 @@ export const CreateFarmPage = () => {
           ) : (
             <>
               <BackLink
-                to="/"
-                state={HOME_OVERVIEW_STATE}
-                className={cn(creating && 'invisible')}
+                to={origin ? `/farms/${origin.farmId}` : '/'}
+                state={origin ? undefined : HOME_OVERVIEW_STATE}
+                className={cn('mb-5', creating && 'invisible')}
               >
-                Tilbage til bedrifter
+                Tilbage til {origin ? origin.name : 'Dine bedrifter'}
               </BackLink>
               <StepHeading
                 title={
                   farms && farms.length > 0
-                    ? 'Ny bedrift. Lad os hente markerne.'
+                    ? 'Lad os hente markerne.'
                     : 'Velkommen. Lad os hente markerne.'
                 }
               >
@@ -438,6 +450,11 @@ export const CreateFarmPage = () => {
           ) : null}
         </aside>
       </div>
+      <LeaveFlowDialog
+        blocker={leaveGuard.blocker}
+        title="Forlad Opret bedrift uden at gemme?"
+        description="Det, du har skrevet, gemmes ikke."
+      />
     </main>
   )
 }
