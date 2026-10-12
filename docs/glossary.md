@@ -20,6 +20,7 @@ field" column is the name on the wire.
 | driftsform | `farmingSystem` | `driftsform` | Values stay Konventionel and Økologisk |
 | dyrkningssystem | `croppingSystem` | `dyrkningssystem` | |
 | landmand, konsulent | `farmer`, `advisor` | | `OnboardingRole`; old stored Danish values are still read |
+| Din konto | account, `AccountButton` | | The signed-in user's details in a panel opened from the bar |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
 | Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi and Om bedriften in the sidebar, which can be minimised |
 | adgang (til en bedrift) | farm access, `FarmMember` | | The users a farm is shared with |
@@ -174,6 +175,6 @@ field" column is the name on the wire.
 
 - Units go at the end: `KgN`, `KgNHa`, `Ha`, `Pct`, `PerHa`, `Dkk`.
 - Percent values end in `Pct`. Ratios from 0 to 1 have no suffix.
-- Routes, DOM ids and anchors are English, for example `/profile` and `#settings`.
+- Routes, DOM ids and anchors are English, for example `/farms/:farmId/about` and `about-access`.
 - A new backend field with a Danish name gets an entry in `api/wire.ts` and in
   this glossary in the same commit.

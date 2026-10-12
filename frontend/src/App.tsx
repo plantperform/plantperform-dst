@@ -6,7 +6,6 @@ import { CreateFarmPage } from '@/pages/CreateFarmPage'
 import { FarmDetailPage } from '@/pages/FarmDetailPage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { HomePage } from '@/pages/HomePage'
-import { ProfilePage } from '@/pages/ProfilePage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { VerifyEmailPage } from '@/pages/VerifyEmailPage'
 
@@ -19,7 +18,6 @@ const App = () => (
     <Route path="/verify-email" element={<VerifyEmailPage />} />
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<HomePage />} />
-      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/farms/new" element={<CreateFarmPage />} />
       <Route path="/farms/:farmId/*" element={<FarmDetailPage />} />
     </Route>
