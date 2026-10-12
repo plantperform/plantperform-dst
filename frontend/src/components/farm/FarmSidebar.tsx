@@ -31,7 +31,6 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { CustomisedDot } from '@/components/farm/economics-ui'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
@@ -93,10 +92,7 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { optimizationRunName } from '@/lib/optimization-run'
-import {
-  describeFieldChanges,
-  formatCreatedAt,
-} from '@/lib/simulation-overview'
+import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type ViewKeyFigures = {
@@ -582,37 +578,6 @@ const describeSimulationChanges = (
     lockedCount > 0 ? `, ${lockedCount} er låst` : ''
   }`
 
-type SimulationDetailLineProps = {
-  changedCount: number
-  lockedCount: number
-  ownProfileName: string | null
-}
-
-const SimulationDetailLine = ({
-  changedCount,
-  lockedCount,
-  ownProfileName,
-}: SimulationDetailLineProps) => {
-  const changes =
-    changedCount === 0 && lockedCount === 0
-      ? null
-      : describeFieldChanges({
-          changed: changedCount,
-          locked: lockedCount,
-          uncalculated: 0,
-        })
-  if (changes === null && ownProfileName === null) return null
-
-  return (
-    <span className="flex min-w-0 items-center gap-1.5 pl-3 text-[11px] font-normal text-sidebar-foreground/70 tabular-nums">
-      <span className="truncate">
-        {[changes, ownProfileName].filter(Boolean).join(' · ')}
-      </span>
-      {ownProfileName === null ? null : <CustomisedDot />}
-    </span>
-  )
-}
-
 type SimulationMenuItemProps = {
   farmId: string
   simulation: Simulation
@@ -723,11 +688,9 @@ const SimulationMenuItem = ({
                     <OptimizationRunElapsed run={runningRun} />
                   </span>
                 ) : simulationFields ? (
-                  <SimulationDetailLine
-                    changedCount={changedCount}
-                    lockedCount={lockedCount}
-                    ownProfileName={ownProfileName}
-                  />
+                  <span className="truncate text-xs font-normal text-sidebar-foreground/70">
+                    Regner med {ownProfileName ?? 'Standard'}
+                  </span>
                 ) : null}
               </ViewMenuLabel>
             </SidebarMenuButton>
