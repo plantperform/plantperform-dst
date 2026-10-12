@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
-import {
-  Search,
-  Tractor,
-  Users,
-} from 'lucide-react'
+import { Tractor, Users } from 'lucide-react'
 
 import { useAuth } from '@/auth/context'
 import { useFarms, useFarmsFields } from '@/api/hooks'
 import { AppTopBar } from '@/components/AppTopBar'
+import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
 import { SproutMark } from '@/components/BrandMark'
 import {
   FARM_LIST_CLASS,
@@ -160,20 +157,11 @@ export const HomePage = () => {
           </div>
           {farmList.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="relative w-65 max-w-full">
-                <Search
-                  className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Søg bedrift, ejer eller CVR"
-                  aria-label="Søg i bedrifter"
-                  className="h-9 w-full rounded-md border bg-card pr-3 pl-8.5 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
-                />
-              </div>
+              <FarmSearchInput
+                className="w-65 max-w-full"
+                value={searchText}
+                onChange={setSearchText}
+              />
               <Button
                 asChild
                 size="sm"
