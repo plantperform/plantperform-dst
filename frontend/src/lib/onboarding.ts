@@ -1,3 +1,5 @@
+import { readItem, writeItem } from '@/lib/browser-storage'
+
 export type OnboardingRole = 'farmer' | 'advisor'
 
 export const ROLE_LABELS: Record<OnboardingRole, string> = {
@@ -20,26 +22,6 @@ const pendingFarmKey = (email: string) => `pp-ny-bedrift:${email}`
 const lastOpenedKey = (email: string) => `pp-sidst-åbnet:${email}`
 const autoOpenKey = (email: string) => `pp-auto-åbn:${email}`
 const homeVisitedKey = (email: string) => `pp-forside-set:${email}`
-
-const readItem = (key: string): string | null => {
-  try {
-    return window.localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const writeItem = (key: string, value: string | null) => {
-  try {
-    if (value === null) {
-      window.localStorage.removeItem(key)
-    } else {
-      window.localStorage.setItem(key, value)
-    }
-  } catch {
-    return
-  }
-}
 
 const LAST_REGISTERED_EMAIL_KEY = 'pp-sidst-oprettet'
 

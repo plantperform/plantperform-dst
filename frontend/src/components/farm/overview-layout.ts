@@ -5,6 +5,7 @@ import {
   snapToStops,
   splitSnapStops,
 } from '@/components/farm/split-layout'
+import { useStoredFlag } from '@/hooks/use-stored-flag'
 
 export type OverviewCardLayout = 'threeCards' | 'twoCards'
 
@@ -125,14 +126,6 @@ const readStoredFractions = (layout: OverviewCardLayout) => {
   }
 }
 
-const readStoredCollapsed = () => {
-  try {
-    return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
-
 export const useOverviewFractions = (layout: OverviewCardLayout) => {
   const [stored, setStored] = useState(() => ({
     layout,
@@ -169,16 +162,6 @@ export const useOverviewFractions = (layout: OverviewCardLayout) => {
 }
 
 export const useOverviewCollapsed = () => {
-  const [collapsed, setCollapsed] = useState(readStoredCollapsed)
-
-  const changeCollapsed = useCallback((next: boolean) => {
-    setCollapsed(next)
-    try {
-      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next))
-    } catch {
-      return
-    }
-  }, [])
-
+  const [collapsed, changeCollapsed] = useStoredFlag(COLLAPSED_STORAGE_KEY)
   return { collapsed, changeCollapsed }
 }
