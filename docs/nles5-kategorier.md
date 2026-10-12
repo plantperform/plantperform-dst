@@ -425,6 +425,32 @@ stedet for de korrekte `0,15`. Samtidig gjaldt reglen kun for afgrødekode
 (5, 19, 216, 218, 423, 425), ikke kun 216. Begge dele rettet i
 `bridge_v2.py`.
 
+### Historiske efterafgrøder (aftalt 2026-10-12)
+
+Registret ved fra GeoPackage’ens `SekAfg2024`–`SekAfg2026` kun, at marken
+havde en pligtig eller målrettet efterafgrøde (968, når efterafgrødemarker
+dækker mindst 90 % af marken). `historical_secondary_crop` afgør, hvad den
+står for i beregningen:
+
+1. Hovedafgrøden skal have afgrødetabellens `Grund6Procent` (afgrøder, en
+   efterafgrøde kan følge). Ellers har marken ingen sekundær afgrøde det år;
+   fx pil, poppel, brak og frøgræs, hvor kravet er opfyldt på anden vis.
+2. Er næste års afgrøde græs, kløvergræs eller frøgræs (afgrødetabellens
+   tabel 8, `W_omploejning`), er græsset etableret efter høst selve
+   vinterdækket og har opfyldt kravet, som græsudlægget gør i sædskifterne.
+   Marken har ingen sekundær afgrøde og dermed heller ingen
+   efterafgrøde-effekt; græsset giver W.
+3. Er næste års afgrøde efterårssået (`Normal såmåned` august–november,
+   DB-kolonnen `saamaaned`), kan efterafgrøden ikke have stået vinteren over.
+   Så er den mellemafgrøde (9682) eller tidlig såning (9683), den første som
+   `virkemiddel_tilladt` tillader, eller ingen (fx før vinterraps).
+4. Ellers står efterafgrøden (968). Er næste års afgrøde ukendt, som 2026 i
+   "Aktuel", tæller den også som efterafgrøde.
+
+Historikberegningen (`field_history_evaluator`) sender årets og forrige års
+sekundære afgrøde til NLES5 og dækningsbidraget og lægger efterafgrødens
+forfrugtsværdi til.
+
 ## WC — Responsfaktor (θ)
 
 **Kilde:** PUMR, felt A42 (henviser til afgrødetabellens WC-kolonne).
