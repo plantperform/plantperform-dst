@@ -53,6 +53,8 @@ field" column is the name on the wire.
 | afgrødearealkrav | `CropAreaLimit`, `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `CropAreaViolation`, `CropAreaRange` | `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `cropAreaViolations`, `crop-area-ranges` | Min. and/or max. hectares of one afgrødekode under Regler; percent is of the simulation's total area |
 | udlæg | `undersownCropCode`, `undersownCropName`, `undersownCropSet` | `udlaegKode`, `udlaegNavn`, `udlaegSet` | |
 | efterafgrøde | catch crop | | EEA in formula names |
+| pligtig, målrettet efterafgrøde | mandatory, targeted catch crop | | |
+| sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
 | vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `cropCover` (plantedække), `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing` |
 | stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
