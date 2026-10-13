@@ -5,15 +5,21 @@ import {
   type Cell,
   type Column,
   type OnChangeFn,
+  type Row,
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
+import {
+  defaultRangeExtractor,
+  useVirtualizer,
+  type Range,
+} from '@tanstack/react-virtual'
 import { Columns3 } from 'lucide-react'
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -75,6 +81,12 @@ import {
   totalsQuotaStatusLevel,
   type FieldTotals,
 } from '@/lib/field-domain'
+import {
+  fieldListItems,
+  widestItems,
+  withGaps,
+  withGroupRows,
+} from '@/lib/field-list-rows'
 import { cn } from '@/lib/utils'
 
 type ColumnToggle = {
@@ -85,6 +97,16 @@ type ColumnToggle = {
 
 const ROW_ACCENT_CLASS =
   'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5'
+
+const ROOT_FONT_SIZE = parseFloat(
+  getComputedStyle(document.documentElement).fontSize,
+)
+const remToPx = (rem: number) => Math.ceil(rem * ROOT_FONT_SIZE)
+
+const GROUP_ROW_HEIGHT = remToPx(1.75) + 1
+const FIELD_ROW_HEIGHT = { compact: remToPx(2.5), full: remToPx(3.25) }
+const ROW_OVERSCAN = 8
+const FOOTER_SCROLL_PADDING = remToPx(6)
 
 type CatchmentGroupRowProps = {
   catchmentId: number | null
@@ -110,7 +132,10 @@ const CatchmentGroupRow = memo(
   }: CatchmentGroupRowProps) => {
     const style = QUOTA_STATUS_STYLES[totalsQuotaStatusLevel(totals)]
     return (
-      <TableRow aria-label={`Kystvandopland ${label}`}>
+      <TableRow
+        aria-label={`Kystvandopland ${label}`}
+        style={{ height: GROUP_ROW_HEIGHT }}
+      >
         <TableCell
           colSpan={colSpan}
           className="sticky top-(--list-header-height) z-10 bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))] p-0 text-xs whitespace-nowrap"
@@ -159,10 +184,10 @@ type FieldRowProps = {
   isChanged: boolean
   isDimmed: boolean
   accentClassName?: string
+  height: number
   onSelect: (fieldId: string, isSelected: boolean) => void
   onZoom: (fieldId: string) => void
   onHover: (fieldId: string | null) => void
-  registerRow: (fieldId: string, element: HTMLTableRowElement | null) => void
 }
 
 const FieldRow = memo(
@@ -174,22 +199,15 @@ const FieldRow = memo(
     isChanged,
     isDimmed,
     accentClassName,
+    height,
     onSelect,
     onZoom,
     onHover,
-    registerRow,
   }: FieldRowProps) => {
-    const setRowElement = useCallback(
-      (element: HTMLTableRowElement | null) => {
-        registerRow(field.id, element)
-      },
-      [registerRow, field.id],
-    )
     const openPanel = () => onSelect(field.id, isSelected)
 
     return (
       <TableRow
-        ref={setRowElement}
         onClick={openPanel}
         onDoubleClick={() => onZoom(field.id)}
         onMouseEnter={() => onHover(field.id)}
@@ -202,8 +220,9 @@ const FieldRow = memo(
         tabIndex={0}
         aria-label={`Vis detaljer for mark ${fieldDisplayName(field)}`}
         data-selected={isSelected}
+        style={{ height }}
         className={cn(
-          'group h-10 cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset full:h-13',
+          'group cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
           isDimmed && 'opacity-50',
           isSelected
             ? 'bg-secondary hover:bg-secondary'
@@ -230,6 +249,25 @@ const FieldRow = memo(
   },
 )
 FieldRow.displayName = 'FieldRow'
+
+const SizerRow = memo(({ cells }: { cells: Cell<FieldRecord, unknown>[] }) => (
+  <tr>
+    {cells.map((cell) => (
+      <TableCell
+        key={cell.id}
+        className={cn(
+          cell.column.columnDef.meta?.cellClassName,
+          'py-0 full:py-0',
+        )}
+      >
+        <div className="h-0 overflow-hidden">
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </div>
+      </TableCell>
+    ))}
+  </tr>
+))
+SizerRow.displayName = 'SizerRow'
 
 type FarmFieldsListProps = {
   farmId: string
@@ -280,8 +318,6 @@ export const FarmFieldsList = ({
   onRequestDetach,
   search,
 }: FarmFieldsListProps) => {
-  const rowElements = useRef(new Map<string, HTMLTableRowElement>())
-  const scrolledFieldId = useRef<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
   const headerRef = useRef<HTMLTableSectionElement>(null)
@@ -359,13 +395,6 @@ export const FarmFieldsList = ({
     }
   })
 
-  const registerRow = useCallback(
-    (fieldId: string, element: HTMLTableRowElement | null) => {
-      if (element) rowElements.current.set(fieldId, element)
-      else rowElements.current.delete(fieldId)
-    },
-    [],
-  )
   const selectRow = useCallback((fieldId: string, isSelected: boolean) => {
     rowCallbacks.current.onSelectedFieldChange(isSelected ? null : fieldId)
   }, [])
@@ -379,15 +408,6 @@ export const FarmFieldsList = ({
   const hoverRow = useCallback((fieldId: string | null) => {
     rowCallbacks.current.onHoveredFieldChange(fieldId)
   }, [])
-
-  useEffect(() => {
-    if (scrolledFieldId.current === selectedFieldId) return
-    scrolledFieldId.current = selectedFieldId
-    if (selectedFieldId === null) return
-    rowElements.current.get(selectedFieldId)?.scrollIntoView({
-      block: 'nearest',
-    })
-  }, [selectedFieldId])
 
   useEffect(() => {
     if (highlightedCatchmentKey === null) return
@@ -470,6 +490,72 @@ export const FarmFieldsList = ({
     toggle.columns.some((column) => column.getIsVisible())
   const visibleOptionalCount = columnToggles.filter(isToggleVisible).length
 
+  const availableWidth = Math.min(
+    paneWidth ?? Number.POSITIVE_INFINITY,
+    rootWidth ?? Number.POSITIVE_INFINITY,
+  )
+  const density =
+    requiredWidth !== null && availableWidth >= requiredWidth
+      ? 'full'
+      : 'compact'
+
+  const stickyHeight = headerHeight + GROUP_ROW_HEIGHT
+  const rows = table.getRowModel().rows
+  const visibleColumns = table.getVisibleLeafColumns()
+  const items = useMemo(
+    () => fieldListItems(sortedFields, runStarts),
+    [sortedFields, runStarts],
+  )
+  const groupIndexes = useMemo(
+    () =>
+      items.flatMap((item, index) => (item.kind === 'group' ? [index] : [])),
+    [items],
+  )
+  const getItemKey = useCallback((index: number) => items[index].key, [items])
+  const extractRange = useCallback(
+    (range: Range) => withGroupRows(defaultRangeExtractor(range), groupIndexes),
+    [groupIndexes],
+  )
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => tableRef.current?.parentElement ?? null,
+    estimateSize: (index) =>
+      items[index].kind === 'group'
+        ? GROUP_ROW_HEIGHT
+        : FIELD_ROW_HEIGHT[density],
+    getItemKey,
+    rangeExtractor: extractRange,
+    overscan: ROW_OVERSCAN,
+    scrollMargin: headerHeight,
+    scrollPaddingStart: stickyHeight,
+    scrollPaddingEnd: FOOTER_SCROLL_PADDING,
+    initialRect: { width: 0, height: window.innerHeight },
+  })
+  const virtualRows = virtualizer.getVirtualItems()
+  const isWindowed = virtualRows.length < items.length
+  const sizerRows = useMemo(() => {
+    if (!isWindowed) return []
+    const hints = visibleColumns.flatMap(
+      (column) => column.columnDef.meta?.widthHints ?? [],
+    )
+    return widestItems(
+      rows,
+      hints.map((hint) => (row: Row<FieldRecord>) => hint(row.original)),
+    )
+  }, [isWindowed, visibleColumns, rows])
+
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [virtualizer, density])
+
+  const scrollToField = useEffectEvent((fieldId: string | null) => {
+    const index = items.findIndex((item) => item.key === fieldId)
+    if (index !== -1) virtualizer.scrollToIndex(index)
+  })
+  useEffect(() => {
+    scrollToField(selectedFieldId)
+  }, [selectedFieldId])
+
   const hasFields = sortedFields.length > 0
 
   useLayoutEffect(() => {
@@ -518,15 +604,6 @@ export const FarmFieldsList = ({
     return () => observer.disconnect()
   }, [hasFields])
 
-  const availableWidth = Math.min(
-    paneWidth ?? Number.POSITIVE_INFINITY,
-    rootWidth ?? Number.POSITIVE_INFINITY,
-  )
-  const density =
-    requiredWidth !== null && availableWidth >= requiredWidth
-      ? 'full'
-      : 'compact'
-
   if (sortedFields.length === 0) {
     return (
       <Card>
@@ -549,7 +626,13 @@ export const FarmFieldsList = ({
       <div
         ref={rootRef}
         data-density={density}
-        style={{ '--list-header-height': `${headerHeight}px` } as CSSProperties}
+        style={
+          {
+            '--list-header-height': `${headerHeight}px`,
+            '--list-scroll-top': `${stickyHeight}px`,
+            '--list-scroll-bottom': `${FOOTER_SCROLL_PADDING}px`,
+          } as CSSProperties
+        }
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-xs">
@@ -606,7 +689,7 @@ export const FarmFieldsList = ({
           </div>
           <Table
             ref={tableRef}
-            containerClassName="min-h-0 flex-1 scroll-pt-[calc(var(--list-header-height)_+_29px)] scroll-pb-24"
+            containerClassName="min-h-0 flex-1 scroll-pt-(--list-scroll-top) scroll-pb-(--list-scroll-bottom) [overflow-anchor:none]"
             className="h-full border-separate border-spacing-0 text-left"
           >
             <TableHeader
@@ -645,10 +728,52 @@ export const FarmFieldsList = ({
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody className="[&_td]:border-b [&_tr:nth-last-child(-n+2)_td]:border-b-0">
-              {table.getRowModel().rows.map((row) => {
+            {sizerRows.length > 0 ? (
+              <tbody className="invisible">
+                {sizerRows.map((row) => (
+                  <SizerRow key={row.id} cells={row.getVisibleCells()} />
+                ))}
+              </tbody>
+            ) : null}
+            <TableBody className="[&_td]:border-b [&_tr:nth-last-child(-n+2)_td]:border-b-0 [&_tr[aria-hidden]_td]:border-b-0">
+              {withGaps(
+                virtualRows,
+                headerHeight,
+                headerHeight + virtualizer.getTotalSize(),
+              ).map((slot) => {
+                if (slot.kind === 'gap') {
+                  return (
+                    <tr
+                      key={slot.key}
+                      aria-hidden="true"
+                      style={{ height: slot.height }}
+                    >
+                      <td colSpan={visibleColumns.length} className="p-0" />
+                    </tr>
+                  )
+                }
+                const item = items[slot.index]
+                if (item.kind === 'group') {
+                  const selected = fieldInCatchment(
+                    item.run,
+                    highlightedCatchmentKey,
+                  )
+                  return (
+                    <CatchmentGroupRow
+                      key={item.key}
+                      catchmentId={item.run.catchmentId}
+                      label={catchmentLabel(item.run.catchmentId)}
+                      totals={item.run.totals}
+                      colorClass={catchmentColor(item.run.catchmentId)}
+                      colSpan={visibleColumns.length}
+                      selected={selected}
+                      isDimmed={highlightedCatchmentKey !== null && !selected}
+                      onToggle={toggleCatchment}
+                    />
+                  )
+                }
+                const row = rows[item.rowIndex]
                 const field = row.original
-                const cells = row.getVisibleCells()
                 const isSelected = selectedFieldId === field.id
                 const isDimmed =
                   highlightedCatchmentKey !== null &&
@@ -658,44 +783,27 @@ export const FarmFieldsList = ({
                   : QUOTA_STATUS_STYLES[
                       getFieldQuotaStatus(field, isSimulationView).level
                     ].rowAccent
-                const run = runStarts.get(field.id)
                 return (
-                  <Fragment key={field.id}>
-                    {run ? (
-                      <CatchmentGroupRow
-                        catchmentId={run.catchmentId}
-                        label={catchmentLabel(run.catchmentId)}
-                        totals={run.totals}
-                        colorClass={catchmentColor(run.catchmentId)}
-                        colSpan={cells.length}
-                        selected={fieldInCatchment(run, highlightedCatchmentKey)}
-                        isDimmed={isDimmed}
-                        onToggle={toggleCatchment}
-                      />
-                    ) : null}
-                    <FieldRow
-                      field={field}
-                      cells={cells}
-                      isSelected={isSelected}
-                      accentClassName={
-                        rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined
-                      }
-                      isHovered={hoveredFieldId === field.id}
-                      isChanged={changedFields.has(field.id)}
-                      isDimmed={isDimmed}
-                      onSelect={selectRow}
-                      onZoom={zoomToRow}
-                      onHover={hoverRow}
-                      registerRow={registerRow}
-                    />
-                  </Fragment>
+                  <FieldRow
+                    key={item.key}
+                    field={field}
+                    cells={row.getVisibleCells()}
+                    isSelected={isSelected}
+                    accentClassName={
+                      rowAccent ? cn(ROW_ACCENT_CLASS, rowAccent) : undefined
+                    }
+                    isHovered={hoveredFieldId === field.id}
+                    isChanged={changedFields.has(field.id)}
+                    isDimmed={isDimmed}
+                    height={FIELD_ROW_HEIGHT[density]}
+                    onSelect={selectRow}
+                    onZoom={zoomToRow}
+                    onHover={hoverRow}
+                  />
                 )
               })}
               <tr aria-hidden="true" className="h-full">
-                <td
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="p-0"
-                />
+                <td colSpan={visibleColumns.length} className="p-0" />
               </tr>
             </TableBody>
             <TableFooter className="bg-transparent font-semibold [&_td]:sticky [&_td]:bottom-0 [&_td]:z-20 [&_td]:border-t [&_td]:bg-muted [&_td]:py-2">
