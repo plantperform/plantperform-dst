@@ -73,6 +73,10 @@ type Placement = 'cell' | 'footer'
 const secondaryLineClass = (placement: Placement) =>
   placement === 'footer' ? FOOTER_SECONDARY_LINE_CLASS : SECONDARY_LINE_CLASS
 
+const UNKNOWN_LABEL = 'Ukendt'
+
+type CellContent = PerHaFigure | string | null
+
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
   for (const year of rotation) {
@@ -174,7 +178,7 @@ type NumericMetricColumnConfig = {
   label: string
   heading: string
   emptyCell: (placement: Placement) => ReactNode
-  quotaGatedCell?: (placement: Placement) => ReactNode
+  quotaGated?: boolean
 }
 
 const renderMetricFigure = (
@@ -189,16 +193,27 @@ const renderMetricFigure = (
   </>
 )
 
-const notInUdledningCell = () => (
-  <span className="text-muted-foreground">{EXCLUDED_FROM_CALCULATION}</span>
-)
+const renderCellContent = (content: CellContent): ReactNode => {
+  if (content === null) return null
+  return typeof content === 'string' ? (
+    <span className="text-muted-foreground">{content}</span>
+  ) : (
+    renderMetricFigure(content, 'cell')
+  )
+}
 
 const numericMetricColumn = (
   config: NumericMetricColumnConfig,
   isSimulationView: boolean,
   totals: FieldTotals,
 ): ColumnDef<FieldRecord, unknown> => {
-  const { key, label, heading, emptyCell, quotaGatedCell } = config
+  const { key, label, heading, emptyCell, quotaGated } = config
+  const contentOf = (field: FieldRecord): CellContent => {
+    if (quotaGated && !field.quotaEligible) return EXCLUDED_FROM_CALCULATION
+    return isFieldCalculated(field, isSimulationView)
+      ? fieldFigure(field, key)
+      : null
+  }
   return {
     accessorKey: key,
     header: ({ column }) => (
@@ -209,16 +224,8 @@ const numericMetricColumn = (
         column={column}
       />
     ),
-    cell: ({ row }) => {
-      const field = row.original
-      if (quotaGatedCell && !field.quotaEligible) {
-        return quotaGatedCell('cell')
-      }
-      if (!isFieldCalculated(field, isSimulationView)) {
-        return emptyCell('cell')
-      }
-      return renderMetricFigure(fieldFigure(field, key), 'cell')
-    },
+    cell: ({ row }) =>
+      renderCellContent(contentOf(row.original)) ?? emptyCell('cell'),
     footer: () =>
       totals.calculatedCount === 0
         ? emptyCell('footer')
@@ -351,6 +358,29 @@ const detachColumn = (
   },
 })
 
+const nLoadQuotaContent = (field: FieldRecord): PerHaFigure | string => {
+  if (!field.quotaEligible) return 'Ikke kvotegivende areal'
+  if (field.nLoadQuotaKgN === 0) return 'Ingen data'
+  return {
+    value: `${formatNumber(field.nLoadQuotaKgN)} kg N`,
+    total:
+      field.areaHa > 0
+        ? `${formatNumber(field.nLoadQuotaKgN / field.areaHa)} kg N/ha`
+        : undefined,
+  }
+}
+
+const soilSummary = (field: FieldRecord): string | null =>
+  field.soilTypeNumber === null || field.retention === null
+    ? null
+    : `JB ${field.soilTypeNumber} - retention ${formatNumber(field.retention)}`
+
+const retentionText = (field: FieldRecord): string =>
+  field.retention === null ? UNKNOWN_LABEL : formatNumber(field.retention)
+
+const soilTypeText = (field: FieldRecord): string =>
+  String(field.soilTypeNumber ?? UNKNOWN_LABEL)
+
 type FertiliserColumnConfig = {
   id: string
   heading: string
@@ -454,6 +484,18 @@ const fertiliserColumn = (
   } = config
   const describeTotal = (amount: number) =>
     `${format(amount)} ${totalUnit} i alt`
+  const figureOf = (field: FieldRecord): PerHaFigure | null => {
+    const figures = fertiliser.get(field.id)
+    const value = figures ? pick(figures) : null
+    if (figures === undefined || value === null) return null
+    return {
+      value: `${format(value)} ${unit}`,
+      total:
+        (secondary
+          ? secondary(figures)
+          : describeTotal(value * field.areaHa)) ?? undefined,
+    }
+  }
   const label = (
     <div className="flex flex-col whitespace-nowrap">
       <span>{heading}</span>
@@ -464,25 +506,12 @@ const fertiliserColumn = (
     id,
     header: () =>
       tooltip ? <AppTooltip content={tooltip}>{label}</AppTooltip> : label,
-    cell: ({ row }) => {
-      if (loading) return loadingFigure
-      const field = row.original
-      const figures = fertiliser.get(field.id)
-      const value = figures ? pick(figures) : null
-      if (figures === undefined || value === null) {
-        return <span className="text-muted-foreground">-</span>
-      }
-      return renderMetricFigure(
-        {
-          value: `${format(value)} ${unit}`,
-          total:
-            (secondary
-              ? secondary(figures)
-              : describeTotal(value * field.areaHa)) ?? undefined,
-        },
-        'cell',
-      )
-    },
+    cell: ({ row }) =>
+      loading
+        ? loadingFigure
+        : (renderCellContent(figureOf(row.original)) ?? (
+            <span className="text-muted-foreground">-</span>
+          )),
     footer: () => {
       if (noFarmTotal) return null
       if (loading) return loadingFigure
@@ -745,7 +774,7 @@ export const buildFarmFieldsColumns = ({
         label: 'Kvælstofudledning (kg N/ha)',
         heading: 'Kvælstofudledning',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
-        quotaGatedCell: notInUdledningCell,
+        quotaGated: true,
       },
       isSimulationView,
       totals,
@@ -756,7 +785,7 @@ export const buildFarmFieldsColumns = ({
         label: 'Udvaskning (kg N/ha)',
         heading: 'Udvaskning',
         emptyCell: () => <span className="text-muted-foreground">-</span>,
-        quotaGatedCell: notInUdledningCell,
+        quotaGated: true,
       },
       isSimulationView,
       totals,
@@ -781,31 +810,7 @@ export const buildFarmFieldsColumns = ({
           column={column}
         />
       ),
-      cell: ({ row }) => {
-        const field = row.original
-        if (!field.quotaEligible) {
-          return (
-            <span className="text-muted-foreground">
-              Ikke kvotegivende areal
-            </span>
-          )
-        }
-        if (field.nLoadQuotaKgN === 0) {
-          return <span className="text-muted-foreground">Ingen data</span>
-        }
-        return (
-          <>
-            <div className="font-medium">
-              {formatNumber(field.nLoadQuotaKgN)} kg N
-            </div>
-            {field.areaHa > 0 ? (
-              <div className={SECONDARY_LINE_CLASS}>
-                {formatNumber(field.nLoadQuotaKgN / field.areaHa)} kg N/ha
-              </div>
-            ) : null}
-          </>
-        )
-      },
+      cell: ({ row }) => renderCellContent(nLoadQuotaContent(row.original)),
       footer: () =>
         quota.quotaKgN === null ? null : (
           <div>{formatNumber(totals.nLoadQuotaKgN)} kg N</div>
@@ -820,14 +825,11 @@ export const buildFarmFieldsColumns = ({
       id: 'soilSummary',
       header: () => 'Jord',
       cell: ({ row }) => {
-        const { soilTypeNumber, retention } = row.original
-        if (soilTypeNumber === null || retention === null) {
-          return <span className="text-muted-foreground">Ukendt</span>
-        }
-        return (
-          <span>
-            JB {soilTypeNumber} - retention {formatNumber(retention)}
-          </span>
+        const summary = soilSummary(row.original)
+        return summary === null ? (
+          <span className="text-muted-foreground">{UNKNOWN_LABEL}</span>
+        ) : (
+          <span>{summary}</span>
         )
       },
       enableSorting: false,
@@ -858,10 +860,7 @@ export const buildFarmFieldsColumns = ({
           column={column}
         />
       ),
-      cell: ({ row }) =>
-        row.original.retention === null
-          ? 'Ukendt'
-          : formatNumber(row.original.retention),
+      cell: ({ row }) => retentionText(row.original),
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
@@ -877,10 +876,7 @@ export const buildFarmFieldsColumns = ({
           column={column}
         />
       ),
-      cell: ({ row }) =>
-        row.original.soilTypeNumber === null
-          ? 'Ukendt'
-          : row.original.soilTypeNumber,
+      cell: ({ row }) => soilTypeText(row.original),
       meta: {
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
