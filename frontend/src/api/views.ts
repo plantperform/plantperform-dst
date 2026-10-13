@@ -138,6 +138,19 @@ export const fetchFarmView = async (farmId: string) => {
   return view
 }
 
+export const refreshFarmView = async (cache: Cache, farmId: string) => {
+  const key = farmViewKey(farmId)!
+  const cached = cache.get(key)?.data as FarmView | undefined
+  if (!cached) return fetchFarmView(farmId)
+  const status = await fetcher<FarmView>(`${key}?include_data=false`)
+  const latest = (cache.get(key)?.data as FarmView | undefined) ?? cached
+  const view = await mergeViewStatus(latest, status, () =>
+    loadView<FarmView>(key),
+  )
+  await mutate(key, view, { revalidate: false })
+  return view
+}
+
 export const fetchSimulationView = async (
   farmId: string,
   simulationId: string,

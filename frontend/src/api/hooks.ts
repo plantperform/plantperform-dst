@@ -1,15 +1,17 @@
-import { useEffect, useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
 import { useFieldAliases } from '@/api/field-aliases'
-import { JOB_POLL_INTERVAL_MS } from '@/api/result-tracking'
+import { createRequestQueue } from '@/api/request-queue'
+import { JOB_POLL_INTERVAL_MS, watchResultPolling } from '@/api/result-tracking'
 import { isViewPreparing } from '@/api/view-cache'
 import {
   useFarmView,
   useSimulationView,
-  fetchFarmView,
+  farmViewKey,
   fetchSimulationView,
+  refreshFarmView,
   simulationViewKey,
 } from '@/api/views'
 export {
@@ -39,6 +41,7 @@ import type {
   CropCodeOption,
   Farm,
   FarmMember,
+  FarmView,
   FieldRecord,
   FertiliserPresetOption,
   CatchmentEmissions,
@@ -85,36 +88,71 @@ export const useFarmFields = (farmId?: string) => {
   return { ...response, data: response.data?.data?.fields }
 }
 
-export type FieldsByFarmId = Record<string, FieldRecord[] | undefined>
+export type FieldsByFarmId = Partial<Record<string, FieldRecord[] | null>>
 
-const fetchFarmsFields = async (farmIds: string[]): Promise<FieldsByFarmId> => {
-  const entries = await Promise.all(
-    farmIds.map(async (farmId) => {
-      const fields = (await fetchFarmView(farmId)).data?.fields
-      return [farmId, fields] as const
-    }),
-  )
-  return Object.fromEntries(entries)
+const FARM_VIEWS_AT_A_TIME = 6
+
+const cachedFarmFields = (cache: Cache, farmId: string) => {
+  const view = cache.get(farmViewKey(farmId)!)?.data as FarmView | undefined
+  return view && (view.data?.fields ?? null)
 }
 
-export const useFarmsFields = (farms: Farm[] | undefined) => {
-  const farmIds = (farms ?? []).map((farm) => farm.id).sort()
-  const response = useSWR<FieldsByFarmId>(
-    farmIds.length > 0 ? ['farms-fields', farmIds.join(',')] : null,
-    ([, joinedIds]: string[]) => fetchFarmsFields(joinedIds.split(',')),
-    { revalidateOnFocus: false },
+export const useFarmsFields = (farms: Farm[]): FieldsByFarmId => {
+  const { cache } = useSWRConfig()
+  const [fieldsByFarmId, setFieldsByFarmId] = useState<FieldsByFarmId>(() =>
+    Object.fromEntries(
+      farms.map((farm) => [farm.id, cachedFarmFields(cache, farm.id)]),
+    ),
   )
+  const farmIds = farms.map((farm) => farm.id).join(',')
+  useEffect(() => {
+    if (!farmIds) return
+    let open = true
+    const queue = createRequestQueue(FARM_VIEWS_AT_A_TIME)
+    const failed = new Set<string>()
+    const load = (farmId: string) =>
+      void queue(async () => {
+        if (!open) return
+        const fields = await refreshFarmView(cache, farmId).then(
+          (view) => view.data?.fields ?? null,
+          () => {
+            failed.add(farmId)
+            return cachedFarmFields(cache, farmId) ?? null
+          },
+        )
+        if (!open) return
+        setFieldsByFarmId((current) =>
+          current[farmId] === fields
+            ? current
+            : { ...current, [farmId]: fields },
+        )
+      })
+    farmIds.split(',').forEach(load)
+    const stopRetrying = watchResultPolling(
+      (all) => {
+        if (!all) return
+        const farmsToRetry = [...failed]
+        failed.clear()
+        farmsToRetry.forEach(load)
+      },
+      { window, document, navigator },
+    )
+    return () => {
+      open = false
+      stopRetrying()
+    }
+  }, [cache, farmIds])
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => response.data
-      ? Object.fromEntries(Object.entries(response.data).map(([id, fields]) => [
+  return useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(fieldsByFarmId).map(([id, fields]) => [
           id,
-          fields ? applyFieldAliases(fields, aliases) : undefined,
-        ]))
-      : undefined,
-    [response.data, aliases],
+          fields ? applyFieldAliases(fields, aliases) : fields,
+        ]),
+      ),
+    [fieldsByFarmId, aliases],
   )
-  return { ...response, data }
 }
 
 export const farmEmissionsKey = (farmId?: string) => {

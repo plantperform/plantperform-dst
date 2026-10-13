@@ -30,6 +30,8 @@ const STACKED_CELL_CLASS = 'col-start-2 lg:col-start-auto'
 
 const STATUS_SKELETON_CLASS = 'h-6.5 w-52 rounded-full'
 
+const DOT_CLASS = 'size-2.5 rounded-full'
+
 export const FarmListHeader = () => (
   <div
     aria-hidden="true"
@@ -47,17 +49,21 @@ export const FarmListHeader = () => (
   </div>
 )
 
+const FieldCountSkeleton = () => (
+  <div className={cn(STACKED_CELL_CLASS, 'space-y-1.5')}>
+    <Skeleton className="h-3.5 w-16" />
+    <Skeleton className="h-3 w-12" />
+  </div>
+)
+
 export const FarmRowSkeleton = () => (
   <div className={cn(ROW_GRID_CLASS, 'py-4')}>
-    <Skeleton className="size-2.5 rounded-full" />
+    <Skeleton className={DOT_CLASS} />
     <div className="space-y-2">
       <Skeleton className="h-5 w-40" />
       <Skeleton className="h-3.5 w-48" />
     </div>
-    <div className={cn(STACKED_CELL_CLASS, 'space-y-1.5')}>
-      <Skeleton className="h-3.5 w-16" />
-      <Skeleton className="h-3 w-12" />
-    </div>
+    <FieldCountSkeleton />
     <Skeleton className={cn(STACKED_CELL_CLASS, STATUS_SKELETON_CLASS)} />
     <Skeleton className="hidden h-3.5 w-14 lg:block" />
   </div>
@@ -65,24 +71,26 @@ export const FarmRowSkeleton = () => (
 
 type FarmRowProps = {
   farm: Farm
-  overview: FarmOverview
+  overview: FarmOverview | undefined
   openedAt: number | undefined
 }
 
 export const FarmRow = ({ farm, overview, openedAt }: FarmRowProps) => {
-  const { totals, level } = overview
-  const namedCatchmentId = farmStatusCatchmentId(overview)
+  const totals = overview?.totals
+  const namedCatchmentId = overview ? farmStatusCatchmentId(overview) : null
   const emissions = useFarmEmissions(
     namedCatchmentId === null ? undefined : farm.id,
   )
-  const style = QUOTA_STATUS_STYLES[level ?? 'uncalculated']
-  const status = describeFarmQuotaStatus(overview, (catchmentId) =>
-    describeCatchment(
-      catchmentId,
-      emissions.data?.find((entry) => entry.catchmentId === catchmentId)
-        ?.catchmentName,
-    ),
-  )
+  const style = QUOTA_STATUS_STYLES[overview?.level ?? 'uncalculated']
+  const status = overview
+    ? describeFarmQuotaStatus(overview, (catchmentId) =>
+        describeCatchment(
+          catchmentId,
+          emissions.data?.find((entry) => entry.catchmentId === catchmentId)
+            ?.catchmentName,
+        ),
+      )
+    : null
   const owner = describeFarmOwner(farm)
 
   return (
@@ -94,10 +102,11 @@ export const FarmRow = ({ farm, overview, openedAt }: FarmRowProps) => {
           'py-4 transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
         )}
       >
-        <span
-          aria-hidden="true"
-          className={cn('size-2.5 rounded-full', style.dot)}
-        />
+        {overview ? (
+          <span aria-hidden="true" className={cn(DOT_CLASS, style.dot)} />
+        ) : (
+          <Skeleton className={DOT_CLASS} />
+        )}
         <div className="min-w-0">
           <TruncatedTooltip
             content={farm.name}
@@ -112,20 +121,25 @@ export const FarmRow = ({ farm, overview, openedAt }: FarmRowProps) => {
             {owner}
           </TruncatedTooltip>
         </div>
-        <div className={STACKED_CELL_CLASS}>
-          {totals ? (
-            <>
-              <p className="text-[13.5px]">
-                {formatFieldCount(totals.fieldCount)}
-              </p>
-              <p className="text-[12.5px] text-muted-foreground">
-                {formatHectares(totals.areaHa)} ha
-              </p>
-            </>
-          ) : null}
-        </div>
+        {overview ? (
+          <div className={STACKED_CELL_CLASS}>
+            {totals ? (
+              <>
+                <p className="text-[13.5px]">
+                  {formatFieldCount(totals.fieldCount)}
+                </p>
+                <p className="text-[12.5px] text-muted-foreground">
+                  {formatHectares(totals.areaHa)} ha
+                </p>
+              </>
+            ) : null}
+          </div>
+        ) : (
+          <FieldCountSkeleton />
+        )}
         <div className={cn(STACKED_CELL_CLASS, 'min-w-0')}>
-          {namedCatchmentId !== null && emissions.isLoading ? (
+          {status === null ||
+          (namedCatchmentId !== null && emissions.isLoading) ? (
             <Skeleton className={STATUS_SKELETON_CLASS} />
           ) : (
             <span
