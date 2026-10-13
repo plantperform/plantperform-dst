@@ -114,7 +114,7 @@ describe('describeFarmQuotaStatus', () => {
 
   it('says when the figures could not be fetched', () => {
     expect(
-      describeFarmQuotaStatus(summarizeFarmFields(undefined), catchmentLabel),
+      describeFarmQuotaStatus(summarizeFarmFields(null), catchmentLabel),
     ).toBe('Kunne ikke hente tal')
   })
 
@@ -163,6 +163,28 @@ describe('sortFarmsByQuotaPressure', () => {
         ({ name }) => name,
       ),
     ).toEqual(['Højgård', 'Østergård'])
+  })
+
+  it('lists the farms by name until every farm has its figures', () => {
+    const farms = [
+      farm({ id: 'over', name: 'Østergård' }),
+      farm({ id: 'under', name: 'Højgård' }),
+      farm({ id: 'waiting', name: 'Bakkegården' }),
+    ]
+    const overviews = {
+      under: summarizeFarmFields([inCatchment(1, 50, 100)]),
+      over: summarizeFarmFields([inCatchment(1, 110, 100)]),
+    }
+
+    expect(
+      sortFarmsByQuotaPressure(farms, overviews).map(({ id }) => id),
+    ).toEqual(['waiting', 'under', 'over'])
+    expect(
+      sortFarmsByQuotaPressure(farms, {
+        ...overviews,
+        waiting: summarizeFarmFields([]),
+      }).map(({ id }) => id),
+    ).toEqual(['over', 'under', 'waiting'])
   })
 })
 

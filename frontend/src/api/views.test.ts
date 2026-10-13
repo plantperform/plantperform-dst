@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fetcher } from '@/api/client'
-import { loadView, subscribeView, waitForFarmHistory } from '@/api/views'
+import {
+  loadView,
+  refreshFarmView,
+  subscribeView,
+  waitForFarmHistory,
+} from '@/api/views'
 
 vi.mock('@/api/client', () => ({ fetcher: vi.fn() }))
 
@@ -235,6 +240,48 @@ describe('shared compact view requests', () => {
       `${farmKey}?include_data=false`,
       `${farmKey}?include_data=false`,
       farmKey,
+    ])
+  })
+
+  it('loads the whole view of a farm that is not cached', async () => {
+    vi.mocked(fetcher).mockResolvedValue(ready)
+
+    expect(await refreshFarmView(new Map(), 'uncached')).toEqual(ready)
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith('/farms/uncached/view')
+  })
+
+  it('asks only for the status of a cached farm whose calculation failed', async () => {
+    const failed = { ...preparing, status: 'failed' as const }
+    const cache = new Map([['/farms/failed/view', { data: failed }]])
+    vi.mocked(fetcher).mockResolvedValue(failed)
+
+    expect(await refreshFarmView(cache, 'failed')).toEqual(failed)
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+      '/farms/failed/view?include_data=false',
+    )
+  })
+
+  it('asks only for the status of a cached farm that has not changed', async () => {
+    const cache = new Map([['/farms/unchanged/view', { data: ready }]])
+    vi.mocked(fetcher).mockResolvedValue({ ...ready, data: null })
+
+    expect((await refreshFarmView(cache, 'unchanged')).data).toBe(ready.data)
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+      '/farms/unchanged/view?include_data=false',
+    )
+  })
+
+  it('loads a cached farm again when the backend has a newer version', async () => {
+    const cache = new Map([['/farms/changed/view', { data: ready }]])
+    const newer = { ...ready, viewVersion: 3, data: { fields: ['other'] } }
+    vi.mocked(fetcher)
+      .mockResolvedValueOnce({ ...newer, data: null })
+      .mockResolvedValueOnce(newer)
+
+    expect(await refreshFarmView(cache, 'changed')).toEqual(newer)
+    expect(vi.mocked(fetcher).mock.calls.map(([url]) => url)).toEqual([
+      '/farms/changed/view?include_data=false',
+      '/farms/changed/view',
     ])
   })
 

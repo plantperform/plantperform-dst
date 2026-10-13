@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import {
   farmMatchesSearch,
   formatFarmCount,
+  sortFarmsByName,
   sortFarmsByQuotaPressure,
   summarizeFarmFields,
   type FarmOverview,
@@ -52,7 +53,6 @@ export const HomePage = () => {
     isValidating: farmsValidating,
     mutate: retryFarms,
   } = useFarms()
-  const { data: fieldsByFarm, isLoading: fieldsLoading } = useFarmsFields(farms)
   const email = user?.email ?? ''
   const showOverview = Boolean(
     (location.state as { showOverview?: boolean } | null)?.showOverview,
@@ -63,7 +63,8 @@ export const HomePage = () => {
   )
   const [searchText, setSearchText] = useState('')
 
-  const farmList = useMemo(() => farms ?? [], [farms])
+  const farmList = useMemo(() => sortFarmsByName(farms ?? []), [farms])
+  const fieldsByFarm = useFarmsFields(farmList)
   const lastOpenedMap = useMemo(
     () => (email ? getLastOpenedMap(email) : {}),
     [email],
@@ -71,13 +72,17 @@ export const HomePage = () => {
   const overviews = useMemo(
     () =>
       Object.fromEntries(
-        farmList.map((farm) => [
-          farm.id,
-          summarizeFarmFields(fieldsByFarm?.[farm.id]),
-        ]),
-      ) as Record<string, FarmOverview>,
+        farmList.map((farm) => {
+          const fields = fieldsByFarm[farm.id]
+          return [
+            farm.id,
+            fields === undefined ? undefined : summarizeFarmFields(fields),
+          ]
+        }),
+      ) as Partial<Record<string, FarmOverview>>,
     [farmList, fieldsByFarm],
   )
+  const figuresLoading = farmList.some((farm) => !overviews[farm.id])
   const sortedFarms = useMemo(
     () => sortFarmsByQuotaPressure(farmList, overviews),
     [farmList, overviews],
@@ -160,8 +165,11 @@ export const HomePage = () => {
               </h1>
               {farmList.length > 0 ? (
                 <p className="mt-1.5 text-[13px] text-muted-foreground">
-                  {formatFarmCount(farmList.length)}, sorteret efter hvor kvoten
-                  er under pres. Tal for gennemsnittet af afgrødehistorikken.
+                  {formatFarmCount(farmList.length)}
+                  {figuresLoading
+                    ? null
+                    : ', sorteret efter hvor kvoten er under pres'}
+                  . Tal for gennemsnittet af afgrødehistorikken.
                 </p>
               ) : null}
             </div>
@@ -214,12 +222,12 @@ export const HomePage = () => {
           </div>
         ) : null}
 
-        {isLoading || fieldsLoading ? (
+        {isLoading ? (
           <div role="status">
             <p className="sr-only">Indlæser bedrifter...</p>
             <div className={FARM_LIST_CLASS} aria-hidden="true">
               <FarmListHeader />
-              {Array.from({ length: farmList.length || 3 }, (_, index) => (
+              {Array.from({ length: 3 }, (_, index) => (
                 <FarmRowSkeleton key={index} />
               ))}
             </div>
@@ -290,7 +298,13 @@ export const HomePage = () => {
           </Card>
         ) : null}
 
-        {farmList.length > 0 && !fieldsLoading ? (
+        {figuresLoading ? (
+          <p role="status" className="sr-only">
+            Henter tal for bedrifterne...
+          </p>
+        ) : null}
+
+        {farmList.length > 0 ? (
           visibleFarms.length > 0 ? (
             <div className={cn(FARM_LIST_CLASS, 'motion-safe:animate-rise-in')}>
               <FarmListHeader />

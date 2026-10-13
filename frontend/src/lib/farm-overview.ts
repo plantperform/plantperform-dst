@@ -16,7 +16,7 @@ export type FarmOverview = {
 }
 
 export const summarizeFarmFields = (
-  fields: FieldRecord[] | undefined,
+  fields: FieldRecord[] | null,
 ): FarmOverview => {
   if (!fields) return { totals: null, level: null, quota: null }
   const quota = resolveFarmQuota(fields, false)
@@ -86,19 +86,30 @@ const highestQuotaShare = ({ quota }: FarmOverview): number => {
   )
 }
 
+const compareNames = (left: Farm, right: Farm): number =>
+  left.name.localeCompare(right.name, 'da-DK')
+
+export const sortFarmsByName = (farms: Farm[]): Farm[] =>
+  [...farms].sort(compareNames)
+
 export const sortFarmsByQuotaPressure = (
   farms: Farm[],
-  overviews: Record<string, FarmOverview>,
-): Farm[] =>
-  [...farms].sort((left, right) => {
-    const leftOverview = overviews[left.id]
-    const rightOverview = overviews[right.id]
-    return (
-      quotaPressureRank(leftOverview) - quotaPressureRank(rightOverview) ||
-      highestQuotaShare(rightOverview) - highestQuotaShare(leftOverview) ||
-      left.name.localeCompare(right.name, 'da-DK')
-    )
+  overviews: Partial<Record<string, FarmOverview>>,
+): Farm[] => {
+  const ranked = farms.flatMap((farm) => {
+    const overview = overviews[farm.id]
+    return overview ? [{ farm, overview }] : []
   })
+  if (ranked.length < farms.length) return sortFarmsByName(farms)
+  return ranked
+    .sort(
+      (left, right) =>
+        quotaPressureRank(left.overview) - quotaPressureRank(right.overview) ||
+        highestQuotaShare(right.overview) - highestQuotaShare(left.overview) ||
+        compareNames(left.farm, right.farm),
+    )
+    .map(({ farm }) => farm)
+}
 
 export const farmMatchesSearch = (farm: Farm, searchText: string): boolean => {
   const search = searchText.trim().toLowerCase()
