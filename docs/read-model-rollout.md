@@ -64,6 +64,26 @@ instance. Updating an ECR tag does not replace the deployed Lambda image.
   executions. Revision/generation checks reject stale writes, and deletion
   cascades to projections and stored historical details.
 
+## Shared simulation metadata
+
+Simulation `prepared` format version 2 stores ordered candidate IDs and active
+main-crop codes in shared candidate sets. Each field references a base set and
+retains its own manual, selected, and fixed overlays and crop-area contributions.
+Sets are shared only when their complete ordered IDs and code sequences match.
+Crop names, fertilizer values, and saved comparisons remain in the separate
+display snapshot; full calculation reports remain in the candidate caches.
+
+Creation and view preparation build these compact sets and contributions one
+field at a time. Projection edits read only the edited field's metadata, its
+referenced candidate set, and the existing display snapshot and contributions.
+They do not modify the shared sets or fetch full candidate-cache documents.
+
+Deploy the compatible API and optimizer together using the coordinated write
+pause. No additional schema migration is required. Legacy snapshots remain
+readable and editable in their existing format; a worker's next full preparation
+or successful optimization publication converts them to version 2. Ordinary view
+reads do not convert metadata, and no bulk rewrite is needed.
+
 ## Registry and reference-data imports
 
 Deploying changed code or importing reference data leaves existing snapshots in
@@ -77,8 +97,10 @@ Run the backend and optimizer suites against disposable PostgreSQL, the frontend
 suite, Python/TypeScript lint, and the frontend production build. Alembic has a
 single `20261012_0002` head; upgrade/downgrade is tested without changing source records.
 
-The representative projection has 244 fields and 44,164 candidate metadata
-entries. A simulation display read executes one SQL query and does not access
+The representative projection has 500 fields and 90,500 candidate choices.
+Size regressions require prepared JSON to be at least 90% smaller than the legacy
+format for both shared and differing candidate sets. A simulation display read
+executes one SQL query and does not access
 candidate-cache tables; status reads omit snapshot documents. Tests also cover
 yearly totals/FEN/quota eligibility, permanent crops, area bounds, manual edits,
 rollback, stale revisions/generations/tokens, retries, deletion, and preservation

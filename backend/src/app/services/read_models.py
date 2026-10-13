@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from app.domain.field import FieldRecord
 from app.domain.read_model import FieldYearValue
-from app.domain.rotation_candidate import RotationCandidateRef, RotationYear
+from app.domain.rotation_candidate import RotationCandidateRef
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
 
@@ -51,22 +51,102 @@ def candidate_metadata(candidate):
     }
 
 
+def compact_candidate_metadata(candidate):
+    """Only identity and active main-crop codes affect crop-area bounds."""
+    if isinstance(candidate, dict):
+        if "id" in candidate:
+            return {"id": candidate["id"], "codes": list(candidate["codes"])}
+        return {
+            "id": RotationCandidateRef.model_validate(candidate["ref"]).to_id(),
+            "codes": [
+                year["afgrode_kode"] for year in candidate["years"][: candidate["active_len"]]
+            ],
+        }
+    return {
+        "id": candidate.ref.to_id(),
+        "codes": [year.year.afgrode_kode for year in candidate.years[: candidate.active_len]],
+    }
+
+
+class PreparedMetadata:
+    """Intern ordered base sets; overlays and contributions remain field-specific."""
+
+    def __init__(self):
+        self.data = {"version": 2, "candidate_sets": [], "fields": {}, "contributions": {}}
+        self._sets = {}
+
+    def add_field(self, field_id, base, overlays):
+        compact = [compact_candidate_metadata(candidate) for candidate in base]
+        key = tuple((candidate["id"], tuple(candidate["codes"])) for candidate in compact)
+        index = self._sets.get(key)
+        if index is None:
+            index = len(self.data["candidate_sets"])
+            self._sets[key] = index
+            self.data["candidate_sets"].append(compact)
+        self.data["fields"][field_id] = {
+            "base_set": index,
+            "overlays": {
+                name: compact_candidate_metadata(value) if value else None
+                for name, value in overlays.items()
+            },
+        }
+
+
+def normalize_prepared(prepared):
+    """Convert legacy documents only on full publication, never on view reads."""
+    if prepared.get("version") == 2:
+        return prepared
+    builder = PreparedMetadata()
+    for field_id, entry in prepared.get("fields", {}).items():
+        builder.add_field(field_id, entry.get("base", []), entry.get("overlays", {}))
+    builder.data["contributions"] = prepared.get("contributions", {})
+    return builder.data
+
+
+def prepared_base(prepared, entry):
+    if "base_set" in entry:
+        return prepared["candidate_sets"][entry["base_set"]]
+    return entry.get("base", [])
+
+
+def ensure_prepared_field(prepared, field_id):
+    if field_id not in prepared["fields"]:
+        sets = prepared["candidate_sets"]
+        index = next((index for index, values in enumerate(sets) if not values), len(sets))
+        if index == len(sets):
+            sets.append([])
+        prepared["fields"][field_id] = {"base_set": index, "overlays": {}}
+    return prepared["fields"][field_id]
+
+
+def _metadata_id(candidate):
+    return (
+        candidate["id"]
+        if "id" in candidate
+        else RotationCandidateRef.model_validate(candidate["ref"]).to_id()
+    )
+
+
 def overlay_metadata(base, overlays):
-    values = {RotationCandidateRef.model_validate(c["ref"]).to_id(): c for c in base}
+    values = {_metadata_id(candidate): candidate for candidate in base}
     for overlay in overlays:
         if overlay:
-            values[RotationCandidateRef.model_validate(overlay["ref"]).to_id()] = overlay
+            values[_metadata_id(overlay)] = overlay
     return list(values.values())
 
 
 def field_contribution(field, candidates):
+    compact = [compact_candidate_metadata(candidate) for candidate in candidates]
     thin = [
         SimpleNamespace(
-            ref=RotationCandidateRef.model_validate(c["ref"]),
-            active_len=c["active_len"],
-            years=[SimpleNamespace(year=RotationYear.model_validate(y)) for y in c["years"]],
+            ref=RotationCandidateRef.from_id(candidate["id"]),
+            active_len=len(candidate["codes"]),
+            years=[
+                SimpleNamespace(year=SimpleNamespace(afgrode_kode=code))
+                for code in candidate["codes"]
+            ],
         )
-        for c in candidates
+        for candidate in compact
     ]
     return [vars(value) for value in crop_area_ranges([field], {field.id: thin})]
 
@@ -119,14 +199,31 @@ def yearly_totals(fields, field_years, *, history=False):
     return [totals[key] for key in sorted(totals)]
 
 
-def rotation_catalog(prepared_fields):
-    by_pair = {}
-    for candidates in prepared_fields.values():
+class RotationCatalog:
+    """Retain the first eligible display entry per pair while scanning fields."""
+
+    def __init__(self):
+        self._by_pair = {}
+
+    def add(self, candidates):
         for candidate in candidates:
             if candidate.get("base_ref") is not None:
                 continue
             ref = candidate["ref"]
-            by_pair.setdefault((ref["saedskiftevariant"], ref["variant"]), candidate)
+            self._by_pair.setdefault((ref["saedskiftevariant"], ref["variant"]), candidate)
+
+    def build(self):
+        return _rotation_catalog(self._by_pair)
+
+
+def rotation_catalog(prepared_fields):
+    catalog = RotationCatalog()
+    for candidates in prepared_fields.values():
+        catalog.add(candidates)
+    return catalog.build()
+
+
+def _rotation_catalog(by_pair):
     groups = {}
     seen_brak = set()
     for (variant, option_id), candidate in by_pair.items():
@@ -157,10 +254,14 @@ def rotation_catalog(prepared_fields):
     ]
 
 
-def simulation_data(fields, prepared_fields, field_years, saved_result=None, catalog=None):
-    contributions = {
-        field.id: field_contribution(field, prepared_fields.get(field.id, [])) for field in fields
-    }
+def simulation_data(
+    fields, prepared_fields, field_years, saved_result=None, catalog=None, *, contributions=None
+):
+    if contributions is None:
+        contributions = {
+            field.id: field_contribution(field, prepared_fields.get(field.id, []))
+            for field in fields
+        }
     data = {
         "fields": [field.model_dump(mode="json") for field in fields],
         "field_years": field_years,

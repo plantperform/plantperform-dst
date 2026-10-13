@@ -24,6 +24,7 @@ from app.auth import AuthenticatedUser, current_user
 from app.data import creation_store, repository, simulation_store
 from app.data.db import field_table
 from app.data.db import simulation_field_candidates_table as caches
+from app.data.db import simulation_read_model_table as views
 from app.data.db import simulation_table as setups
 from app.data.optimizer_inputs import optimizer_input, optimizer_input_json
 from app.domain.creation import CreationActiveError, CreationNotReadyError
@@ -499,6 +500,14 @@ class CreationLifecycleTests(DatabaseTests):
         row = self.job(simulation.id)
         self.assertEqual(row.status, "done")
         self.assertEqual(self.candidate_count(simulation.id), 2)
+        with self.sessions() as session:
+            view = session.execute(
+                select(views.c.data, views.c.prepared).where(views.c.simulation_id == simulation.id)
+            ).one()
+        self.assertEqual(view.prepared["version"], 2)
+        self.assertEqual(len(view.prepared["candidate_sets"]), 1)
+        self.assertTrue(all(entry["base_set"] == 0 for entry in view.prepared["fields"].values()))
+        self.assertEqual(len(view.data["fields"]), 2)
         self.execute(simulation)
         self.assertEqual(self.generated.call_count, 2)
         self.assertEqual(

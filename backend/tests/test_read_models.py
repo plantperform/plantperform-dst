@@ -5,6 +5,7 @@ import json
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 from threading import Barrier
 from types import SimpleNamespace
@@ -58,7 +59,170 @@ def rich_candidate(variant="1"):
     return value
 
 
+def large_metadata():
+    metadata = []
+    for variant in range(181):
+        value = read_models.candidate_metadata(rich_candidate())
+        value["ref"] = RotationCandidateRef(
+            saedskiftevariant="1", variant=str(variant + 1), n_norm_pct="100"
+        ).model_dump(mode="json")
+        metadata.append(value)
+    return metadata
+
+
 class ProjectionTests(unittest.TestCase):
+    def test_compact_metadata_matches_full_area_bounds_and_lock_fallbacks(self):
+        for active_len in (0, 1, 2, 3, 8):
+            first, second = rich_candidate(), rich_candidate("2")
+            first.active_len = active_len
+            second.years[0].year.afgrode_kode = 11
+            candidates = [first, second]
+            compact = [read_models.compact_candidate_metadata(value) for value in candidates]
+            for allowed in ([], [first.ref.to_id()], [second.ref.to_id()], ["1:missing:100"]):
+                for rotation_id in (None, first.ref.to_id(), second.ref.to_id()):
+                    with self.subTest(length=active_len, allowed=allowed, selected=rotation_id):
+                        value = field().model_copy(
+                            update={"allowed_rotation_ids": allowed, "rotation_id": rotation_id}
+                        )
+                        expected = crop_area_ranges([value], {value.id: candidates})
+                        self.assertEqual(
+                            read_models.field_contribution(value, compact),
+                            [vars(bounds) for bounds in expected],
+                        )
+            value = field().model_copy(
+                update={"allowed_rotation_ids": [second.ref.to_id(), first.ref.to_id()]}
+            )
+            self.assertEqual(
+                read_models.field_contribution(value, compact),
+                [vars(bounds) for bounds in crop_area_ranges([value], {value.id: candidates})],
+            )
+        self.assertEqual(read_models.field_contribution(field(), []), [])
+
+    def test_shared_sets_preserve_order_and_distinguish_different_sequences(self):
+        first, second = rich_candidate(), rich_candidate("2")
+        builder = read_models.PreparedMetadata()
+        builder.add_field("first", [first, second], {})
+        builder.add_field("same", [first, second], {})
+        changed = first.model_copy(deep=True)
+        changed.years[0].year.afgrode_kode = 11
+        builder.add_field("different", [changed, second], {})
+        builder.add_field("reordered", [second, first], {})
+        builder.add_field("empty", [], {})
+        builder.add_field("also-empty", [], {})
+        indices = {key: value["base_set"] for key, value in builder.data["fields"].items()}
+        self.assertEqual(
+            indices,
+            {"first": 0, "same": 0, "different": 1, "reordered": 2, "empty": 3, "also-empty": 3},
+        )
+        self.assertEqual(len(builder.data["candidate_sets"]), 4)
+
+        first.active_len = 1
+        changed = first.model_copy(deep=True)
+        changed.years[1].year.afgrode_kode = 11
+        builder.add_field("permanent", [first], {})
+        builder.add_field("same-active-cycle", [changed], {})
+        self.assertEqual(
+            builder.data["fields"]["permanent"]["base_set"],
+            builder.data["fields"]["same-active-cycle"]["base_set"],
+        )
+
+    def test_compact_overlays_preserve_precedence_without_mutating_base_sets(self):
+        original = rich_candidate()
+        overlays = {}
+        for name, code in (("manual", 11), ("selected", 3), ("fixed", 252)):
+            value = original.model_copy(deep=True)
+            value.years[0].year.afgrode_kode = code
+            overlays[name] = value
+        builder = read_models.PreparedMetadata()
+        builder.add_field("field", [original], overlays)
+        entry = builder.data["fields"]["field"]
+        before = deepcopy(builder.data["candidate_sets"])
+        effective = read_models.overlay_metadata(
+            read_models.prepared_base(builder.data, entry),
+            [entry["overlays"][name] for name in ("manual", "selected", "fixed")],
+        )
+        self.assertEqual(effective, [read_models.compact_candidate_metadata(overlays["fixed"])])
+        self.assertEqual(builder.data["candidate_sets"], before)
+
+    def test_incremental_catalog_preserves_names_first_match_and_modified_filtering(self):
+        first = rich_candidate()
+        for year in first.years:
+            year.year.afgrode_navn = "Græs" if year.year.afgrode_kode == 252 else "Byg"
+        duplicate = first.model_copy(deep=True)
+        duplicate.ref.n_norm_pct = "80"
+        duplicate.years[0].year.afgrode_navn = "Ignored duplicate"
+        modified = rich_candidate("manual").model_copy(update={"base_ref": first.ref})
+        catalog = read_models.RotationCatalog()
+        catalog.add(
+            [read_models.candidate_metadata(first), read_models.candidate_metadata(modified)]
+        )
+        catalog.add([read_models.candidate_metadata(duplicate)])
+        for variant in ("2", "3"):
+            brak = rich_candidate()
+            brak.ref.saedskiftevariant = variant
+            for year in brak.years:
+                year.year.afgrode_navn = "Brak"
+            catalog.add([read_models.candidate_metadata(brak)])
+        with (
+            patch.object(
+                read_models.saedskifte_kategorier, "list_kategorier", return_value=["Test"]
+            ),
+            patch.object(
+                read_models.saedskifte_kategorier,
+                "kategorier_for_saedskifte",
+                side_effect=lambda variant: ["Test"] if variant == "1" else ["A", "B"],
+            ),
+        ):
+            self.assertEqual(
+                catalog.build(),
+                [
+                    {
+                        "kategori": "Brak",
+                        "saedskifter": [
+                            {
+                                "saedskiftevariant": "2",
+                                "variant": "1",
+                                "crop_sequence": ["Brak"] * 8,
+                                "active_len": 8,
+                            }
+                        ],
+                    },
+                    {
+                        "kategori": "Test",
+                        "saedskifter": [
+                            {
+                                "saedskiftevariant": "1",
+                                "variant": "1",
+                                "crop_sequence": ["Græs", "Byg"] * 4,
+                                "active_len": 8,
+                            }
+                        ],
+                    },
+                ],
+            )
+
+    def test_prepared_size_reduction_with_500_shared_and_differing_field_sets(self):
+        metadata = large_metadata()
+        for differing in (False, True):
+            with self.subTest(differing=differing):
+                legacy = {"fields": {}, "contributions": {}}
+                builder = read_models.PreparedMetadata()
+                for index in range(500):
+                    base = metadata
+                    if differing:
+                        changed = deepcopy(metadata[0])
+                        changed["years"][0]["afgrode_kode"] = 1000 + index
+                        base = [changed, *metadata[1:]]
+                    value = field(f"large-{index}")
+                    legacy["fields"][value.id] = {"base": base, "overlays": {}}
+                    legacy["contributions"][value.id] = read_models.field_contribution(value, base)
+                    builder.add_field(value.id, base, {})
+                builder.data["contributions"] = legacy["contributions"]
+                old_bytes = len(json.dumps(legacy).encode())
+                new_bytes = len(json.dumps(builder.data).encode())
+                self.assertEqual(len(builder.data["candidate_sets"]), 500 if differing else 1)
+                self.assertLess(new_bytes, old_bytes / 10, (old_bytes, new_bytes))
+
     def test_permanent_crop_preserves_single_cycle_and_eight_year_area_bounds(self):
         value = rich_candidate()
         value.active_len = 1
@@ -133,7 +297,9 @@ class ReadModelTests(DatabaseTests):
             read_model_store.publish_simulation(session, "sim", 0, data, prepared)
         with self.sessions() as session:
             inserted = session.execute(select(views)).one()
-        self.assertEqual((inserted.data, inserted.prepared), (data, prepared))
+        self.assertEqual(
+            (inserted.data, inserted.prepared), (data, read_models.normalize_prepared(prepared))
+        )
         self.assertEqual(
             (inserted.input_revision, inserted.status, inserted.view_version, inserted.generation),
             (0, "done", 1, 0),
@@ -151,7 +317,9 @@ class ReadModelTests(DatabaseTests):
             read_model_store.publish_simulation(session, "sim", 1, data, prepared)
         with self.sessions() as session:
             replaced = session.execute(select(views)).one()
-        self.assertEqual((replaced.data, replaced.prepared), (data, prepared))
+        self.assertEqual(
+            (replaced.data, replaced.prepared), (data, read_models.normalize_prepared(prepared))
+        )
         self.assertEqual(
             (replaced.input_revision, replaced.status, replaced.view_version, replaced.generation),
             (1, "done", 2, 3),
@@ -190,6 +358,82 @@ class ReadModelTests(DatabaseTests):
         _, _, token = optimization_store.claim("sim", run.run_id)
         self.assertTrue(optimization_store.finish("sim", run.run_id, token, 0, output=output))
         return value, run, token, output
+
+    def test_edit_reads_one_shared_set_and_preserves_other_fields(self):
+        self.publish_result()
+        with self.sessions.begin() as session:
+            before = session.execute(select(views.c.prepared)).scalar_one()
+            session.execute(
+                update(caches).values(
+                    data={"candidates": "unreadable"}, optimizer_input={"candidates": "unreadable"}
+                )
+            )
+        self.assertEqual(
+            before["fields"]["field-a"]["base_set"], before["fields"]["field-b"]["base_set"]
+        )
+        queries = []
+
+        def record(conn, cursor, sql, params, context, many):
+            queries.append((sql, context.compiled_parameters[0]))
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            self.edit(area_ha=4)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        self.assertEqual(sum("candidate_sets" in params.values() for _, params in queries), 1)
+        self.assertFalse(any("simulation_field_candidates" in sql for sql, _ in queries))
+        self.assertFalse(any("SELECT simulation_read_model.prepared," in sql for sql, _ in queries))
+        with self.sessions() as session:
+            after = session.execute(select(views.c.prepared)).scalar_one()
+        self.assertEqual(after["candidate_sets"], before["candidate_sets"])
+        self.assertEqual(after["fields"]["field-a"], before["fields"]["field-a"])
+        self.assertEqual(after["contributions"]["field-a"], before["contributions"]["field-a"])
+        self.assertNotEqual(after["contributions"]["field-b"], before["contributions"]["field-b"])
+
+    def test_legacy_edits_keep_format_until_successful_publication(self):
+        _, _, _, output = self.publish_result()
+        base = [
+            read_models.candidate_metadata(candidate()),
+            read_models.candidate_metadata(candidate(200, "2")),
+        ]
+        selected = read_models.candidate_metadata(rich_candidate())
+        with self.sessions.begin() as session:
+            current = session.execute(select(views.c.prepared)).scalar_one()
+            legacy = {
+                "fields": {
+                    key: {"base": base, "overlays": {"selected": selected}}
+                    for key in current["fields"]
+                },
+                "contributions": current["contributions"],
+            }
+            session.execute(update(views).values(prepared=legacy))
+        before_view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
+        self.assertEqual(before_view["status"], "done")
+        with self.sessions() as session:
+            self.assertEqual(session.execute(select(views.c.prepared)).scalar_one(), legacy)
+        self.edit(area_ha=4)
+        with self.sessions() as session:
+            edited = session.execute(select(views.c.prepared)).scalar_one()
+        self.assertNotIn("version", edited)
+        self.assertEqual(edited["fields"]["field-b"]["base"], base)
+        self.assertEqual(edited["fields"]["field-a"], legacy["fields"]["field-a"])
+
+        run = self.submit(self.request(1))
+        _, _, token = optimization_store.claim("sim", run.run_id)
+        self.assertTrue(optimization_store.finish("sim", run.run_id, token, 1, output=output))
+        with self.sessions() as session:
+            published = session.execute(select(views.c.prepared)).scalar_one()
+        self.assertEqual(published["version"], 2)
+        self.assertEqual(len(published["candidate_sets"]), 1)
+        self.assertEqual(
+            published["candidate_sets"][0],
+            [read_models.compact_candidate_metadata(value) for value in base],
+        )
+        self.assertEqual(
+            published["fields"]["field-b"]["overlays"]["selected"],
+            read_models.compact_candidate_metadata(selected),
+        )
 
     def test_edit_projection_matches_fields_and_preserves_saved_comparison_after_failure(self):
         _, old_run, old_token, output = self.publish_result()
@@ -286,6 +530,21 @@ class ReadModelTests(DatabaseTests):
         after = read_model_store.get_simulation_view("farm", "sim", EMAIL)["data"]
         self.assertEqual(after["saved_result"], before["saved_result"])
         self.assertEqual(after["field_years"], before["field_years"])
+        # Optimization retains its creation catalog; backfill rebuilds it from
+        # effective candidates. The numerical/display projections still match.
+        for key in ("fields", "yearly_summary", "crop_area_ranges", "comparison_availability"):
+            self.assertEqual(after[key], before[key])
+        self.assertEqual(
+            after["yearly_optimization_candidates"],
+            read_models.rotation_catalog(
+                {
+                    "field": [
+                        read_models.candidate_metadata(rich_candidate()),
+                        read_models.candidate_metadata(candidate(200, "2")),
+                    ]
+                }
+            ),
+        )
         listed = simulation_store.list_simulations("farm", EMAIL)
         self.assertEqual(listed[0].comparison_availability, {"kind": "ready"})
         self.assertEqual(
@@ -481,26 +740,24 @@ class ReadModelTests(DatabaseTests):
         with self.assertRaises(ReadModelNotReadyError), self.sessions() as session:
             read_model_store.require_farm_ready(session, "farm")
 
-    def test_view_queries_are_constant_with_244_fields_and_44000_candidates(self):
+    def test_view_queries_are_constant_with_500_fields_and_90500_candidates(self):
         base = rich_candidate()
-        metadata = []
-        for variant in range(181):
-            value = read_models.candidate_metadata(base)
-            value["ref"] = RotationCandidateRef(
-                saedskiftevariant="1", variant=str(variant + 1), n_norm_pct="100"
-            ).model_dump(mode="json")
-            metadata.append(value)
+        metadata = large_metadata()
         fields = [
             field(f"large-{index}").model_copy(update={"rotation_id": "1:1:100"})
-            for index in range(244)
+            for index in range(500)
         ]
         prepared = {value.id: metadata for value in fields}
         years = {value.id: read_models.compact_years(base) for value in fields}
         data, contributions = read_models.simulation_data(fields, prepared, years)
-        view_prepared = {
-            "fields": {key: {"base": values, "overlays": {}} for key, values in prepared.items()},
-            "contributions": contributions,
-        }
+        view_prepared = read_models.normalize_prepared(
+            {
+                "fields": {
+                    key: {"base": values, "overlays": {}} for key, values in prepared.items()
+                },
+                "contributions": contributions,
+            }
+        )
         publication_bindings = []
 
         def record_publication(conn, cursor, sql, params, context, many):
@@ -538,8 +795,8 @@ class ReadModelTests(DatabaseTests):
                 view = SimulationView.model_validate(
                     read_model_store.get_simulation_view("farm", "sim", EMAIL)
                 )
-                self.assertEqual(len(view.data.fields), 244)
-                self.assertLess(len(view.model_dump_json()), 1_500_000)
+                self.assertEqual(len(view.data.fields), 500)
+                self.assertLess(len(view.model_dump_json()), 3_000_000)
                 self.assertEqual(len(queries), 1)
                 self.assertFalse(any("simulation_field_candidates" in sql for sql in queries))
                 queries.clear()
