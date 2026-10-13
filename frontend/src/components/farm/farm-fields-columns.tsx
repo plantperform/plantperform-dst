@@ -43,6 +43,7 @@ import {
   type QuotaStatus,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { textWidth } from '@/lib/text-width'
 import { cn } from '@/lib/utils'
 
 declare module '@tanstack/react-table' {
@@ -53,6 +54,7 @@ declare module '@tanstack/react-table' {
     toggleLabel?: string
     // Columns sharing a group are shown and hidden together.
     toggleGroup?: string
+    widthHints?: ((row: TData) => number)[]
   }
 }
 
@@ -76,6 +78,23 @@ const secondaryLineClass = (placement: Placement) =>
 const UNKNOWN_LABEL = 'Ukendt'
 
 type CellContent = PerHaFigure | string | null
+
+const contentWidthHints = (
+  contentOf: (field: FieldRecord) => CellContent,
+): ((field: FieldRecord) => number)[] => [
+  (field) => (contentOf(field) === null ? 1 : 0),
+  (field) => {
+    const content = contentOf(field)
+    if (content === null) return 0
+    return textWidth(typeof content === 'string' ? content : content.value)
+  },
+  (field) => {
+    const content = contentOf(field)
+    return content === null || typeof content === 'string' || !content.total
+      ? 0
+      : textWidth(content.total)
+  },
+]
 
 const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   const seenNames: string[] = []
@@ -119,11 +138,15 @@ const renderQuotaPlaceholder = (level: QuotaStatusLevel) => {
   )
 }
 
+const quotaStatusText = (status: QuotaStatus): string =>
+  QUOTA_PLACEHOLDER_LABELS[status.level] ??
+  formatQuotaAmount(status.nLoad, status.quotaKgn)
+
 const renderQuotaStatus = (status: QuotaStatus) => {
   const placeholder = renderQuotaPlaceholder(status.level)
   if (placeholder) return placeholder
 
-  const amountText = formatQuotaAmount(status.nLoad, status.quotaKgn)
+  const amountText = quotaStatusText(status)
 
   return (
     <QuotaStatusIndicator level={status.level} className="justify-end">
@@ -234,6 +257,7 @@ const numericMetricColumn = (
       headerClassName: NUMERIC_HEADER_CLASS,
       cellClassName: NUMERIC_CELL_CLASS,
       toggleLabel: label,
+      widthHints: contentWidthHints(contentOf),
     },
   }
 }
@@ -257,6 +281,9 @@ const renderRotationSwatches = (
     </AppTooltip>
   </div>
 )
+
+const nameWidth = (field: FieldRecord) =>
+  textWidth(fieldDisplayName(field), 'semibold')
 
 const nameColumn = (
   footer: () => ReactNode,
@@ -287,6 +314,10 @@ const nameColumn = (
   meta: {
     headerClassName: HEADER_CELL_CLASS,
     cellClassName: cn(BODY_CELL_CLASS, 'font-semibold'),
+    widthHints: [
+      (field) => (isFieldLocked(field) ? 0 : nameWidth(field)),
+      (field) => (isFieldLocked(field) ? nameWidth(field) : 0),
+    ],
   },
 })
 
@@ -302,6 +333,7 @@ const areaColumn = (
   meta: {
     headerClassName: HEADER_CELL_CLASS,
     cellClassName: BODY_CELL_CLASS,
+    widthHints: [(field) => textWidth(formatNumber(field.areaHa))],
   },
 })
 
@@ -532,6 +564,7 @@ const fertiliserColumn = (
       // One entry in the column menu, so the gødning reads as a whole.
       toggleLabel: 'Gødning',
       toggleGroup: 'fertiliser',
+      widthHints: loading ? undefined : contentWidthHints(figureOf),
     },
   }
 }
@@ -586,6 +619,8 @@ export const buildFarmFieldsColumns = ({
   const highlightIndex = selectedYearIndex
   const selectedCalendarYear =
     highlightIndex !== null ? rotationStartYear + highlightIndex : null
+  const selectedYearOf = (field: FieldRecord) =>
+    highlightIndex !== null ? field.cropRotation[highlightIndex] : undefined
 
   list.push({
     id: 'cropRotation',
@@ -630,6 +665,16 @@ export const buildFarmFieldsColumns = ({
       headerClassName: HEADER_CELL_CLASS,
       cellClassName: BODY_CELL_CLASS,
       toggleLabel: isSimulationView ? 'Sædskifte' : 'Afgrødehistorik',
+      widthHints: [
+        (field) => (field.cropRotation.length === 0 ? 1 : 0),
+        ...Array.from(
+          { length: maxYears },
+          (_, index) => (field: FieldRecord) =>
+            field.cropRotation.length === index + 1
+              ? 1 + textWidth(uniqueCropNamesLabel(field.cropRotation))
+              : 0,
+        ),
+      ],
     },
   })
 
@@ -644,10 +689,7 @@ export const buildFarmFieldsColumns = ({
       </div>
     ),
     cell: ({ row }) => {
-      const year =
-        highlightIndex !== null
-          ? row.original.cropRotation[highlightIndex]
-          : undefined
+      const year = selectedYearOf(row.original)
       if (!year) return <span className="text-muted-foreground">-</span>
       const label = formatRotationYear(year)
       return (
@@ -672,6 +714,12 @@ export const buildFarmFieldsColumns = ({
         'full:w-44',
         highlightIndex === null && 'hidden full:table-cell',
       ),
+      widthHints: [
+        (field) => {
+          const year = selectedYearOf(field)
+          return year ? textWidth(formatRotationYear(year)) : 0
+        },
+      ],
     },
   })
 
@@ -734,6 +782,12 @@ export const buildFarmFieldsColumns = ({
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Udledning mod kvote',
+        widthHints: [
+          (field) =>
+            textWidth(
+              quotaStatusText(getFieldQuotaStatus(field, isSimulationView)),
+            ),
+        ],
       },
     },
     // Per hectare for the selected year, or the average per year. Only in a
@@ -766,6 +820,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: HEADER_CELL_CLASS,
         cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Kystvandopland',
+        widthHints: [(field) => textWidth(catchmentLabel(field.catchmentId))],
       },
     },
     numericMetricColumn(
@@ -819,6 +874,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Kvote (kg N)',
+        widthHints: contentWidthHints(nLoadQuotaContent),
       },
     },
     {
@@ -837,6 +893,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: HEADER_CELL_CLASS,
         cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Jord',
+        widthHints: [(field) => textWidth(soilSummary(field) ?? UNKNOWN_LABEL)],
       },
     },
     {
@@ -849,6 +906,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: HEADER_CELL_CLASS,
         cellClassName: BODY_CELL_CLASS,
         toggleLabel: 'Omlægningsplan',
+        widthHints: [(field) => textWidth(field.inTakeoutPlan)],
       },
     },
     {
@@ -865,6 +923,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'Retention',
+        widthHints: [(field) => textWidth(retentionText(field))],
       },
     },
     {
@@ -881,6 +940,7 @@ export const buildFarmFieldsColumns = ({
         headerClassName: NUMERIC_HEADER_CLASS,
         cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'JB nr.',
+        widthHints: [(field) => textWidth(soilTypeText(field))],
       },
     },
   )
