@@ -17,6 +17,7 @@ import {
 import { Columns3 } from 'lucide-react'
 import {
   memo,
+  startTransition,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -403,7 +404,11 @@ export const FarmFieldsList = ({
     rowCallbacks.current.onZoomToField?.(fieldId)
   }, [])
   const toggleCatchment = useCallback((key: string, selected: boolean) => {
-    rowCallbacks.current.onHighlightedCatchmentKeyChange(selected ? null : key)
+    startTransition(() =>
+      rowCallbacks.current.onHighlightedCatchmentKeyChange(
+        selected ? null : key,
+      ),
+    )
   }, [])
   const hoverRow = useCallback((fieldId: string | null) => {
     rowCallbacks.current.onHoveredFieldChange(fieldId)
