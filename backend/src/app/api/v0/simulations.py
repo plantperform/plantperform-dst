@@ -6,6 +6,7 @@ from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
+from app.data import economics_recalculation_store
 from app.data.read_model_store import (
     require_simulation_view_ready,
     simulation_part,
@@ -31,6 +32,12 @@ from app.domain.creation import (
     CreationQueueUnavailableError,
     RetrySimulationCreationRequest,
 )
+from app.domain.economics import (
+    EconomicsConflictError,
+    EconomicsModuleNotFoundError,
+    RecalculateEconomicsRequest,
+    SelectEconomicsRequest,
+)
 from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import (
     OptimizeSimulationRequest,
@@ -50,6 +57,7 @@ from app.domain.simulation import (
 )
 from app.services.creation.jobs import retry as retry_creation
 from app.services.creation.jobs import submit as submit_creation
+from app.services.economics import jobs as economics_jobs
 from app.services.optimization.jobs import (
     QueueUnavailableError,
     SimulationNotFoundError,
@@ -79,6 +87,9 @@ def require_completed_creation(request: Request, user: CurrentUser):
         or (request.method in ("GET", "DELETE") and path.endswith("/{simulation_id}"))
         or path.endswith("/result")
         or path.endswith("/creation/retry")
+        or path.endswith("/economics")
+        or path.endswith("/economics/recalculate")
+        or path.endswith("/economics/recalculate/retry")
         or path.endswith("/view")
     ):
         return
@@ -132,6 +143,8 @@ def post_farm_simulation(
         simulation = submit_creation(
             farm_id, request, user.email, background_tasks=background_tasks
         )
+    except EconomicsModuleNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Economics module not found") from error
     except CreationConflictError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except CreationQueueUnavailableError as error:
@@ -498,6 +511,7 @@ def post_farm_simulation_field_preview_rotation(
         percolation_by_kategori=percolation,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        economics_key=simulation.economics_snapshot.overrides.cache_key(),
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
@@ -556,3 +570,57 @@ def get_farm_simulation_yearly_summary(
     if summary is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return [YearlySummaryEntryResponse.model_validate(value) for value in summary]
+
+
+def _economics_action(action, *args):
+    try:
+        simulation = action(*args)
+    except EconomicsModuleNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Economics module not found") from error
+    except (EconomicsConflictError, CreationNotReadyError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CreationQueueUnavailableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "QUEUE_UNAVAILABLE",
+                "message": str(error),
+                "simulationId": error.simulation_id,
+            },
+        ) from error
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    return simulation
+
+
+@router.patch("/{simulation_id}/economics", response_model=Simulation)
+def patch_simulation_economics(
+    farm_id: str, simulation_id: str, request: SelectEconomicsRequest, user: CurrentUser
+):
+    return _economics_action(
+        economics_recalculation_store.select_module, farm_id, simulation_id, request, user.email
+    )
+
+
+@router.post("/{simulation_id}/economics/recalculate", response_model=Simulation, status_code=202)
+def recalculate_simulation_economics(
+    farm_id: str,
+    simulation_id: str,
+    request: RecalculateEconomicsRequest,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+):
+    return _economics_action(
+        economics_jobs.submit, farm_id, simulation_id, request, user.email, background_tasks
+    )
+
+
+@router.post(
+    "/{simulation_id}/economics/recalculate/retry", response_model=Simulation, status_code=202
+)
+def retry_simulation_economics(
+    farm_id: str, simulation_id: str, user: CurrentUser, background_tasks: BackgroundTasks
+):
+    return _economics_action(
+        economics_jobs.retry, farm_id, simulation_id, user.email, background_tasks
+    )

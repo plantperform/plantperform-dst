@@ -88,6 +88,7 @@ def read_result(row) -> SimulationResult:
             "parameters": parameters,
             "response": output.get("response"),
             "fields_before": output.get("fields_before", []),
+            "economics_snapshot": output.get("economics_snapshot", {}),
             "selected_candidates": output.get("selected_candidates", {}),
         }
     )
@@ -320,6 +321,7 @@ def merge_candidates(
 def merge_setup_candidates(data, selected, setup):
     row = merge_candidates(data, setup.get("manual_candidate"))
     row = merge_candidates(row, selected)
+    row = merge_candidates(row, setup.get("economics_candidate"))
     return merge_candidates(row, setup.get("fixed_candidate"))
 
 
@@ -390,6 +392,7 @@ def selected_evaluations(farm_id, simulation_id, email):
             setup = row.fields.get(field.id, {})
             for overlay in (
                 setup.get("fixed_candidate"),
+                setup.get("economics_candidate"),
                 selected.get(field.id),
                 setup.get("manual_candidate"),
             ):
@@ -470,6 +473,7 @@ def _selected_candidate(session, simulation_id, field_id, rotation_id):
     )
     overlays = (
         setups.c.fields[field_id]["fixed_candidate"],
+        setups.c.fields[field_id]["economics_candidate"],
         results.c.output["selected_candidates"][field_id],
         setups.c.fields[field_id]["manual_candidate"],
     )
@@ -582,8 +586,9 @@ def _save_field(session, simulation_id, field, candidate=None):
     revision = row.revision
     previous = row[0] or {}
     setup_field = split_field(_common()._dump(field))
-    if previous.get("manual_candidate"):
-        setup_field["manual_candidate"] = previous["manual_candidate"]
+    for key in ("manual_candidate", "economics_candidate", "baseline_candidate"):
+        if previous.get(key):
+            setup_field[key] = previous[key]
     if field.allowed_rotation_ids:
         selected = candidate
         previous_candidate = previous.get("fixed_candidate")

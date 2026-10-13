@@ -6,6 +6,7 @@ from uuid import NAMESPACE_URL, uuid5
 from pydantic import Field, model_validator
 
 from app.domain.base import CamelModel
+from app.domain.economics import EconomicsSnapshot
 from app.domain.farm import Farm
 from app.domain.field import FieldRecord
 from app.domain.optimization import OptimizeSimulationResponse
@@ -58,6 +59,7 @@ class RotationChoiceCategory(CamelModel):
 
 
 class SavedResultView(CamelModel):
+    economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     run_id: str
     result_revision: int
     response: OptimizeSimulationResponse

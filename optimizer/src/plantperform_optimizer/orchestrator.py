@@ -340,6 +340,7 @@ def _expand_yearly_options(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> tuple[YearlyRotationOption, ...]:
     """Expand each stored candidate to one variant per distinct start year.
 
@@ -403,6 +404,7 @@ def _expand_yearly_options(
                     percolation_by_kategori=percolation_by_kategori,
                     org_n_topsoil=org_n_topsoil,
                     s_soil=s_soil,
+                    economics_key=economics_key,
                 )
             )
             if variant is None:
@@ -570,6 +572,7 @@ def run_yearly_optimization(
             percolation_by_kategori=percolation,
             org_n_topsoil=org_n_topsoil,
             s_soil=s_soil,
+            economics_key=simulation.economics_snapshot.overrides.cache_key(),
         )
         if not options:
             raise OptimizationInfeasibleError(

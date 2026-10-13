@@ -188,6 +188,7 @@ def evaluate_sequence_for_mark(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> RotationCandidateEvaluation:
     """Evaluate eight positions with udvaskning and DB plus cycle averages.
 
@@ -326,6 +327,7 @@ def evaluate_sequence_for_mark(
             udlaeg_kode=udl_code, only_organic=only_organic,
             praecisionsjordbrug=praecisionsjordbrug,
             forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
+            **({"economics_key": economics_key} if economics_key else {}),
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied is the utilized/mineral part of husdyrgødning,
@@ -413,6 +415,7 @@ def evaluate_candidate_for_mark(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a sædskifte candidate over eight yearly positions.
 
@@ -443,6 +446,7 @@ def evaluate_candidate_for_mark(
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        economics_key=economics_key,
     )
 
 
@@ -466,6 +470,7 @@ def evaluate_with_overrides(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a candidate after applying manual changes to the library result.
 
@@ -531,6 +536,7 @@ def evaluate_with_overrides(
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        economics_key=economics_key,
     )
 
 
@@ -584,6 +590,7 @@ def generate_candidates_for_field(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
     prepared: tuple[PreparedCandidate, ...] | None = None,
 ) -> list[RotationCandidateEvaluation]:
     """Evaluate prepared rotations using this field's soil and history."""
@@ -611,6 +618,7 @@ def generate_candidates_for_field(
             percolation_by_kategori=percolation_by_kategori,
             org_n_topsoil=org_n_topsoil,
             s_soil=s_soil,
+            economics_key=economics_key,
         )
         for item in prepared
     ]

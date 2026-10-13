@@ -151,3 +151,6 @@ these sets. The paths are used as they are; the app only sets colour and size.
 - [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft
   (pea pod), licensed
   [MIT](https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE).
+
+The [economics backend API](backend/ECONOMICS_API.md) documents shared modules,
+frozen simulation snapshots, and explicit manual recalculation.

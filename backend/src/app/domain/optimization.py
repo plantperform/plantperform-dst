@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.domain.base import CamelModel
+from app.domain.economics import EconomicsSnapshot
 from app.domain.field import FieldRecord
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 
@@ -82,6 +83,7 @@ class SimulationResultSummary(CamelModel):
 
 
 class SimulationResult(SimulationResultSummary):
+    economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     parameters: dict = Field(default_factory=dict)
     response: OptimizeSimulationResponse | None = None
     fields_before: list[FieldRecord] = Field(default_factory=list)

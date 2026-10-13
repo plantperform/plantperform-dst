@@ -85,6 +85,7 @@ def evaluate_real_history_for_field(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> list[RotationCandidateYearResult]:
     def code_for(year: int) -> int | None:
         value = crop_history.get(str(year))
@@ -162,6 +163,7 @@ def evaluate_real_history_for_field(
                 org_mineral_n_applied=0.0,
                 udlaeg_kode=None, only_organic=oeko,
                 forfrugtsvaerdi=fv_forfrugt,
+                **({"economics_key": economics_key} if economics_key else {}),
             )
             if this_code is not None
             else {"db": 0.0, "udbytte": 0.0, "udbytteenhed": ""}
@@ -204,6 +206,7 @@ def generate_permanent_crop_candidate(
     percolation_by_kategori: PercolationByKategori | None = None,
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
+    economics_key: str = "",
 ) -> RotationCandidateEvaluation:
     """Build the single "keep growing this permanent afgrøde" candidate for a mark.
 
@@ -293,6 +296,7 @@ def generate_permanent_crop_candidate(
             org_mineral_n_applied=0.0,
             udlaeg_kode=None, only_organic=oeko,
             forfrugtsvaerdi=fv_forfrugt,
+            **({"economics_key": economics_key} if economics_key else {}),
         )
         crop_params = afgroede_normer.lookup_crop_params(afgrode_kode)
 

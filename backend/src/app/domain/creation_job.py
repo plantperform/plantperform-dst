@@ -6,6 +6,7 @@ from uuid import NAMESPACE_URL, uuid5
 from pydantic import Field, field_validator
 
 from app.domain.base import CamelModel
+from app.domain.economics import EconomicsSnapshot
 from app.domain.simulation import CreateSimulationRequest
 
 
@@ -24,6 +25,7 @@ class CreationJob(CamelModel):
     job_id: str = Field(min_length=1)
     requested_by: str = Field(min_length=1)
     expected_revision: int = Field(ge=0, strict=True)
+    economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     parameters: CreateSimulationRequest
 
     @field_validator("farm_id", "simulation_id", "job_id", "requested_by")
@@ -34,4 +36,7 @@ class CreationJob(CamelModel):
         return value
 
     def envelope(self) -> dict:
-        return self.model_dump(mode="json", by_alias=True, exclude={"parameters": {"request_id"}})
+        exclude = {"parameters": {"request_id"}}
+        if self.economics_snapshot == EconomicsSnapshot():
+            exclude["economics_snapshot"] = True
+        return self.model_dump(mode="json", by_alias=True, exclude=exclude)

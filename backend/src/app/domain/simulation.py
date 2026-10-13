@@ -5,6 +5,7 @@ from pydantic import Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
 from app.domain.creation import CreationStatus
+from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
 from app.domain.optimization import SimulationResultSummary
 
@@ -131,6 +132,8 @@ class OptimizationConstraints(CamelModel):
 
 
 class Simulation(CamelModel):
+    economics_module_id: str = "standard"
+    economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     creation_status: CreationStatus = "done"
     revision: int = 0
     result: SimulationResultSummary = Field(default_factory=SimulationResultSummary)
@@ -163,6 +166,7 @@ class Simulation(CamelModel):
 
 
 class CreateSimulationRequest(CamelModel):
+    economics_module_id: str | None = None
     request_id: UUID | None = None
     optimize_on_create: bool = False
     name: str = Field(min_length=1)

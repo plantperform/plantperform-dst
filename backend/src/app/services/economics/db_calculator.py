@@ -4,8 +4,10 @@ Crop work costs are quantity multiplied by a shared or crop-specific rate.
 Yield is JB-, irrigation-, and driftsform-aware; prices are driftsform-aware.
 Dynamic fertilizer costs replace the static fertilizer rows from source data.
 """
+
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 
 from sqlalchemy import select
@@ -21,6 +23,7 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
+from app.services.economics.overrides import identifier, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
 from app.services.virkemidler import praecisionsgoedskning_tilladt
 
@@ -37,6 +40,7 @@ def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
     if jbnr <= 4:
         return ["JB1-4", "JB1-3", "JB5-6"] if irrigated else ["JB1-3", "JB1-4", "JB5-6"]
     return ["JB5-6", "JB1-4", "JB1-3"]
+
 
 # Subsidies automatically included in DB (DKK/ha). The remaining subsidies in
 # the price list are optional schemes; see the module docstring.
@@ -65,13 +69,20 @@ _KALKULE_KODE: dict[int, int] = {70: 1, 71: 2, 72: 3}
 # in the source data - see docs/nles5-kategorier.md) is not a sown afgrøde
 # and has no entry here.
 _UDL_KOSTKATEGORI: dict[int, str] = {
-    968: "Efterafgrøde", 970: "Efterafgrøde",
+    968: "Efterafgrøde",
+    970: "Efterafgrøde",
     9680: "Efterafgrøde, frøgræs",
     9682: "Mellemafgrøde",
     9684: "Mellemafgrøde, frøgræs",
     9683: "Tidlig såning",
-    960: "Udlæg", 961: "Udlæg", 962: "Udlæg", 963: "Udlæg",
-    964: "Udlæg", 965: "Udlæg", 966: "Udlæg", 2000: "Udlæg",
+    960: "Udlæg",
+    961: "Udlæg",
+    962: "Udlæg",
+    963: "Udlæg",
+    964: "Udlæg",
+    965: "Udlæg",
+    966: "Udlæg",
+    2000: "Udlæg",
 }
 
 
@@ -104,9 +115,14 @@ def _load_udbyttenormer() -> dict[tuple[int, int, str, str], dict]:
     """Index database-loaded crop norms by crop, JB, irrigation, and system."""
     rows = _fetch_rows(afgroede_norm_lookup_table, "load-afgroeder")
     with SessionLocal() as session:
-        units = dict(session.execute(select(
-            afgroede_table.c.afgroedekode, afgroede_table.c.udbytteenhed,
-        )).all())
+        units = dict(
+            session.execute(
+                select(
+                    afgroede_table.c.afgroedekode,
+                    afgroede_table.c.udbytteenhed,
+                )
+            ).all()
+        )
     lookup: dict[tuple[int, int, str, str], dict] = {}
     for row in rows:
         data = {
@@ -143,6 +159,8 @@ def _load_salgspriser() -> dict[tuple[int, str, str], dict]:
     lookup: dict[tuple[int, str, str], dict] = {}
     for row in rows:
         lookup[(row.afgroedekode, row.driftsform, row.kvalitet)] = {
+            "sale_id": identifier("sale", row.afgroedekode, row.driftsform, row.kvalitet),
+            "straw_id": identifier("straw", row.afgroedekode, row.driftsform, row.kvalitet),
             "salgspris": row.salgspris,
             "enhed": row.enhed,
             "halm_pris_kr_kg": row.halm_pris_kr_kg,
@@ -185,16 +203,25 @@ def _load_arbejdssatser() -> dict[tuple[str, str], list[dict]]:
     lookup: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
         key = (row.behandling, row.jordbonitet)
-        lookup.setdefault(key, []).append({
-            "afgrodekode": row.afgroedekode,
-            "driftsform": row.driftsform,
-            "pris": row.pris_kr_per_enhed,
-        })
+        lookup.setdefault(key, []).append(
+            {
+                "afgrodekode": row.afgroedekode,
+                "driftsform": row.driftsform,
+                "id": identifier(
+                    "rate", row.behandling, row.jordbonitet, row.afgroedekode, row.driftsform
+                ),
+                "pris": row.pris_kr_per_enhed,
+            }
+        )
     return lookup
 
 
 def _lookup_arbejdssats(
-    behandling: str, jordbonitet: str, afgrodekode: int, driftsform: str,
+    behandling: str,
+    jordbonitet: str,
+    afgrodekode: int,
+    driftsform: str,
+    prices: dict | None = None,
 ) -> float:
     rates = _load_arbejdssatser()
     for candidate_jordbonitet in (jordbonitet, ""):
@@ -204,9 +231,9 @@ def _lookup_arbejdssats(
                 driftsform,
                 "",
             ):
-                return rate["pris"]
+                return (prices or {}).get(rate.get("id"), rate["pris"])
             if rate["afgrodekode"] is None:
-                universal = rate["pris"]
+                universal = (prices or {}).get(rate.get("id"), rate["pris"])
         if universal is not None:
             return universal
     return 0.0
@@ -218,11 +245,13 @@ def _load_arbejdsmaengder() -> dict[tuple[int, str, str, str], list[dict]]:
     lookup: dict[tuple[int, str, str, str], list[dict]] = {}
     for row in rows:
         key = (row.afgroedekode, row.driftsform, row.jordbonitet, row.kvalitet)
-        lookup.setdefault(key, []).append({
-            "kategori": row.kategori,
-            "behandling": row.behandling,
-            "antal": row.antal,
-        })
+        lookup.setdefault(key, []).append(
+            {
+                "kategori": row.kategori,
+                "behandling": row.behandling,
+                "antal": row.antal,
+            }
+        )
     return lookup
 
 
@@ -240,11 +269,13 @@ def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
         if row.kategori == "Gødning":
             continue
         key = (row.afgroedekode, row.driftsform)
-        lookup.setdefault(key, []).append({
-            "kategori": row.kategori,
-            "behandling": row.behandling,
-            "udgift_kr_ha": row.udgift_kr_ha,
-        })
+        lookup.setdefault(key, []).append(
+            {
+                "kategori": row.kategori,
+                "behandling": row.behandling,
+                "udgift_kr_ha": row.udgift_kr_ha,
+            }
+        )
     return lookup
 
 
@@ -254,9 +285,28 @@ def _lookup_omkostningslinjer(
     jbnr: int,
     irrigated: bool,
     kvalitet: str = "",
+    economics: dict | None = None,
 ) -> list[dict]:
+    prices = (economics or {}).get("prices", {})
+    quantities = (economics or {}).get("quantities", {})
     if afgrodekode not in _migrerede_afgrodekoder():
-        return _load_dyrkningsomkostninger().get((afgrodekode, driftsform), [])
+        rows = _load_dyrkningsomkostninger().get((afgrodekode, driftsform), [])
+        return [
+            {
+                **row,
+                "udgift_kr_ha": prices.get(
+                    identifier("cost", afgrodekode, driftsform, row["kategori"], row["behandling"]),
+                    row["udgift_kr_ha"],
+                )
+                * quantities.get(
+                    quantity_id(
+                        afgrodekode, "cost", driftsform, row["kategori"], row["behandling"]
+                    ),
+                    1.0,
+                ),
+            }
+            for row in rows
+        ]
 
     maengder = _load_arbejdsmaengder()
     for jordbonitet in _jordbonitet_kandidater(jbnr, irrigated):
@@ -267,8 +317,24 @@ def _lookup_omkostningslinjer(
             {
                 "kategori": row["kategori"],
                 "behandling": row["behandling"],
-                "udgift_kr_ha": row["antal"] * _lookup_arbejdssats(
-                    row["behandling"], jordbonitet, afgrodekode, driftsform,
+                "udgift_kr_ha": quantities.get(
+                    quantity_id(
+                        afgrodekode,
+                        "work",
+                        driftsform,
+                        jordbonitet,
+                        kvalitet,
+                        row["kategori"],
+                        row["behandling"],
+                    ),
+                    row["antal"],
+                )
+                * _lookup_arbejdssats(
+                    row["behandling"],
+                    jordbonitet,
+                    afgrodekode,
+                    driftsform,
+                    prices,
                 ),
             }
             for row in rows
@@ -348,6 +414,7 @@ def calculate_db(
     kvalitet: str = "",
     praecisionsjordbrug: bool = False,
     forfrugtsvaerdi: float = 0.0,
+    economics_key: str = "",
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -379,15 +446,31 @@ def calculate_db(
     crops with a yield-response curve (see economics.udbytterespons). Below
     the N-norm their yield drops; every other crop keeps its full udbyttenorm.
     """
+    economics = json.loads(economics_key) if economics_key else {}
+    prices = economics.get("prices", {})
+    quantities = economics.get("quantities", {})
+    yield_factor = 1 + economics.get("yield_pct", {}).get(str(afgrodekode), 0) / 100
+
+    def list_amount(post, default, quantity=1.0, purpose=None):
+        key = (
+            quantity_id(afgrodekode, "fertiliser", purpose)
+            if purpose
+            else quantity_id(afgrodekode, "list", post)
+        )
+        return prices.get(identifier("list", post), default) * quantities.get(key, quantity)
+
     norm, er_reel_oeko_norm = _lookup_udbyttenorm(
-        afgrodekode, jbnr, irrigated, driftsform,
+        afgrodekode,
+        jbnr,
+        irrigated,
+        driftsform,
     )
     kalkule_kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
     pris = _lookup_salgspris(kalkule_kode, driftsform, kvalitet)
 
-    salgspris = pris["salgspris"] if pris else 0.0
-    halm_pris = pris["halm_pris_kr_kg"] if pris else 0.0
-    halm_indtaegt = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated) * halm_pris
+    salgspris = prices.get(pris.get("sale_id"), pris["salgspris"]) if pris else 0.0
+    halm_pris = prices.get(pris.get("straw_id"), pris["halm_pris_kr_kg"]) if pris else 0.0
+    halm_indtaegt = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated) * halm_pris * yield_factor
     if norm is not None:
         udbytte = norm["udbyttenorm"] or 0.0
         udbytteenhed = norm["udbytteenhed"]
@@ -415,6 +498,7 @@ def calculate_db(
         faktor = udbytte_faktor(afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"])
         udbytte *= faktor
 
+    udbytte *= yield_factor
     indtaegt = udbytte * salgspris + halm_indtaegt
 
     # Itemized rows behind each category total for the UI calculation
@@ -426,80 +510,143 @@ def calculate_db(
     goedning_linjer: list[dict] = []
     goedning = 0.0
     handelsgodning_n = 0.0 if only_organic else max(0.0, mncs - org_mineral_n_applied) + mnca
-    if handelsgodning_n > 0:
-        handelsgodning_kr = handelsgodning_n * _n_pris()
+    economic_n = quantities.get(
+        quantity_id(afgrodekode, "fertiliser", "mineralN"), handelsgodning_n
+    )
+    economic_spreading = quantities.get(
+        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"),
+        1.0 if handelsgodning_n > 0 else 0.0,
+    )
+    if handelsgodning_n > 0 or economic_n > 0 or economic_spreading > 0:
+        handelsgodning_kr = list_amount(
+            "Handelsgødning, kvælstof (N)", _n_pris(), handelsgodning_n, "mineralN"
+        )
         goedning += handelsgodning_kr
-        goedning_linjer.append({
-            "kategori": "Gødning",
-            "behandling": f"Handelsgødning, N ({handelsgodning_n:.0f} kg/ha)",
-            "udgift_kr_ha": handelsgodning_kr,
-        })
-        n_udb = _n_udbringning()
+        goedning_linjer.append(
+            {
+                "kategori": "Gødning",
+                "behandling": f"Handelsgødning, N ({economic_n:.0f} kg/ha)",
+                "udgift_kr_ha": handelsgodning_kr,
+            }
+        )
+        n_udb = list_amount(
+            "Handelsgødning, udbringning",
+            _n_udbringning(),
+            1.0 if handelsgodning_n > 0 else 0.0,
+            purpose="mineralSpreading",
+        )
         goedning += n_udb
-        goedning_linjer.append({
-            "kategori": "Gødning", "behandling": "Udbringning, handelsgødning",
-            "udgift_kr_ha": n_udb,
-        })
-    if org_mineral_n_applied > 0:
-        gylle_udb = _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"]
+        goedning_linjer.append(
+            {
+                "kategori": "Gødning",
+                "behandling": "Udbringning, handelsgødning",
+                "udgift_kr_ha": n_udb,
+            }
+        )
+    if (
+        org_mineral_n_applied > 0
+        or quantities.get(quantity_id(afgrodekode, "fertiliser", "manureSpreading"), 0.0) > 0
+    ):
+        gylle_udb = list_amount(
+            _GYLLE_UDBRINGNING_PLACEHOLDER_POST,
+            _load_prisliste()[_GYLLE_UDBRINGNING_PLACEHOLDER_POST]["pris"],
+            1.0 if org_mineral_n_applied > 0 else 0.0,
+            purpose="manureSpreading",
+        )
         goedning += gylle_udb
-        goedning_linjer.append({
-            "kategori": "Gødning", "behandling": "Udbringning, husdyrgødning",
-            "udgift_kr_ha": gylle_udb,
-        })
+        goedning_linjer.append(
+            {
+                "kategori": "Gødning",
+                "behandling": "Udbringning, husdyrgødning",
+                "udgift_kr_ha": gylle_udb,
+            }
+        )
 
     # Drying is priced per kg of the normudbytte, so it follows the yield
     # response. Copies, since the static cost rows are cached.
     linjer = [
-        {**line, "udgift_kr_ha": line["udgift_kr_ha"] * faktor}
+        {**line, "udgift_kr_ha": line["udgift_kr_ha"] * faktor * yield_factor}
         if line["kategori"] == "Tørring/lagring"
         else line
         for line in _lookup_omkostningslinjer(
-            kalkule_kode, driftsform, jbnr, irrigated, kvalitet,
+            kalkule_kode,
+            driftsform,
+            jbnr,
+            irrigated,
+            kvalitet,
+            **({"economics": economics} if economics_key else {}),
         )
     ]
     udlaeg_udsaed, udlaeg_etablering = _udlaeg_omkostning(udlaeg_kode, afgrodekode)
+    kategori = _UDL_KOSTKATEGORI.get(udlaeg_kode)
+    if kategori == "Efterafgrøde" and afgrodekode == _MAJSHELSAED_KODE:
+        kategori = "Efterafgrøde, majshelsæd"
+    if kategori:
+        udlaeg_udsaed = list_amount(f"{kategori}, udsæd", udlaeg_udsaed)
+        udlaeg_etablering = list_amount(f"{kategori}, etablering", udlaeg_etablering)
     if udlaeg_udsaed:
-        linjer.append({
-            "kategori": "Udsæd", "behandling": "Udlæg/efterafgrøde, udsæd",
-            "udgift_kr_ha": udlaeg_udsaed,
-        })
+        linjer.append(
+            {
+                "kategori": "Udsæd",
+                "behandling": "Udlæg/efterafgrøde, udsæd",
+                "udgift_kr_ha": udlaeg_udsaed,
+            }
+        )
     if udlaeg_etablering:
-        linjer.append({
-            "kategori": "Markarbejde", "behandling": "Udlæg/efterafgrøde, etablering",
-            "udgift_kr_ha": udlaeg_etablering,
-        })
+        linjer.append(
+            {
+                "kategori": "Markarbejde",
+                "behandling": "Udlæg/efterafgrøde, etablering",
+                "udgift_kr_ha": udlaeg_etablering,
+            }
+        )
     if praecisionsjordbrug and praecisionsgoedskning_tilladt(afgrodekode):
-        linjer.append({
-            "kategori": "Markarbejde",
-            "behandling": "Præcisionsjordbrug",
-            "udgift_kr_ha": _load_prisliste().get("Præcisionsjordbrug", {}).get("pris", 0.0),
-        })
+        linjer.append(
+            {
+                "kategori": "Markarbejde",
+                "behandling": "Præcisionsjordbrug",
+                "udgift_kr_ha": list_amount(
+                    "Præcisionsjordbrug",
+                    _load_prisliste().get("Præcisionsjordbrug", {}).get("pris", 0.0),
+                ),
+            }
+        )
     alle_linjer = goedning_linjer + linjer
 
     udsaed = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Udsæd")
-    plantevaern = sum(
-        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Planteværn"
-    )
-    markarbejde = sum(
-        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Markarbejde"
-    )
-    toerring = sum(
-        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Tørring/lagring"
-    )
+    plantevaern = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Planteværn")
+    markarbejde = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Markarbejde")
+    toerring = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Tørring/lagring")
     andre_goedningsstoffer = sum(
-        line["udgift_kr_ha"]
-        for line in linjer
-        if line["kategori"] == "Andre gødningsstoffer"
+        line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andre gødningsstoffer"
     )
 
     tilskud = _tilskud_kr_ha(afgrodekode, driftsform)
-    omkostninger = (
-        udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
-    )
+    if economics_key:
+        posts = [_GRUNDBETALING_POST]
+        if driftsform == OEKOLOGISK:
+            posts.append(_OEKO_AREALSTOETTE_POST)
+        if afgrodekode == _STIVELSESKARTOFLER_KODE:
+            posts.append(_STIVELSESKARTOFLER_POST)
+        tilskud = sum(list_amount(post, _load_prisliste()[post]["pris"]) for post in posts)
+    omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
     db = indtaegt + tilskud - omkostninger
 
     return {
+        "calculation_inputs": {
+            "afgrodekode": afgrodekode,
+            "driftsform": driftsform,
+            "jbnr": jbnr,
+            "mncs": mncs,
+            "mnca": mnca,
+            "irrigated": irrigated,
+            "org_mineral_n_applied": org_mineral_n_applied,
+            "udlaeg_kode": udlaeg_kode,
+            "only_organic": only_organic,
+            "kvalitet": kvalitet,
+            "praecisionsjordbrug": praecisionsjordbrug,
+            "forfrugtsvaerdi": forfrugtsvaerdi,
+        },
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,
         "jbnr": jbnr,

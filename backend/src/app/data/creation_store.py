@@ -30,7 +30,7 @@ def require_ready(session, simulation_id):
         raise CreationNotReadyError("Simuleringen er ikke færdig med at blive oprettet.")
 
 
-def job_for(farm_id, simulation_id, revision, request, email):
+def job_for(farm_id, simulation_id, revision, request, email, economics_snapshot=None):
     return CreationJob(
         farm_id=farm_id,
         simulation_id=simulation_id,
@@ -38,6 +38,7 @@ def job_for(farm_id, simulation_id, revision, request, email):
         requested_by=email,
         expected_revision=revision,
         parameters=request,
+        **({"economics_snapshot": economics_snapshot} if economics_snapshot else {}),
     )
 
 
@@ -58,7 +59,12 @@ def create(farm_id, request, email):
         if session.execute(select(setups.c.id).where(setups.c.id == simulation_id)).first():
             return simulation_id, None
         read_model_store.require_farm_ready(session, farm_id)
+        from app.data.economics_store import resolve_snapshot
+
+        snapshot = resolve_snapshot(session, request.economics_module_id, email)
         simulation = Simulation(
+            economics_module_id=snapshot.source_id,
+            economics_snapshot=snapshot,
             id=simulation_id,
             farm_id=farm_id,
             name=request.name,
@@ -85,7 +91,7 @@ def create(farm_id, request, email):
         )
         session.execute(insert(results).values(simulation_id=simulation_id))
         read_model_store.initialize_simulation(session, simulation_id)
-        return simulation_id, job_for(farm_id, simulation_id, 0, request, email)
+        return simulation_id, job_for(farm_id, simulation_id, 0, request, email, snapshot)
 
 
 def advisory_key(simulation_id):
@@ -302,6 +308,12 @@ def retry(farm_id, simulation_id, email, *, optimize_on_create=False):
                 .where(setups.c.id == simulation_id)
                 .with_for_update()
             ).one()
+            if (
+                session.execute(select(setups.c.data).where(setups.c.id == simulation_id))
+                .scalar_one()
+                .get("economics_recalculation")
+            ):
+                raise CreationConflictError("Use the economics recalculation retry endpoint.")
             if row.creation_status != "failed":
                 raise CreationConflictError("Kun mislykkede oprettelser kan prøves igen.")
             revision = row.revision + 1
@@ -320,7 +332,9 @@ def retry(farm_id, simulation_id, email, *, optimize_on_create=False):
                     "optimize_on_create": optimize_on_create,
                 }
             )
-            return job_for(farm_id, simulation_id, revision, request, email)
+            return job_for(
+                farm_id, simulation_id, revision, request, email, simulation.economics_snapshot
+            )
     except CreationActiveError as error:
         raise CreationConflictError("Oprettelsen er stadig i gang. Prøv igen senere.") from error
 

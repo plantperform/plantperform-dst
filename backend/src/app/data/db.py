@@ -434,6 +434,29 @@ farm_member_table = Table(
     PrimaryKeyConstraint("farm_id", "email"),
 )
 
+economics_module_table = Table(
+    "economics_module",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("overrides", JSONB, nullable=False),
+    Column("revision", Integer, nullable=False, server_default="0"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint("length(trim(name)) > 0", name="ck_economics_module_name"),
+)
+
+economics_module_member_table = Table(
+    "economics_module_member",
+    metadata,
+    Column(
+        "module_id", Text, ForeignKey("economics_module.id", ondelete="CASCADE"), nullable=False
+    ),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    PrimaryKeyConstraint("module_id", "email"),
+    Index("ix_economics_module_member_email", "email"),
+)
+
 email_verification_token_table = Table(
     "email_verification_token",
     metadata,

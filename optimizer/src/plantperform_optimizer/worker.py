@@ -158,6 +158,7 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
             row["input_revision"],
             output={
                 "response": response.model_dump(mode="json"),
+                "economics_snapshot": snapshot[0].economics_snapshot.model_dump(mode="json"),
                 "fields_before": [field.model_dump(mode="json") for field in snapshot[1]],
                 "selected_candidates": {
                     key: value.model_dump(mode="json") for key, value in selected.items()

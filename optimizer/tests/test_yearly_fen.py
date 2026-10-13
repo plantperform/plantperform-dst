@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
 from app.domain.optimization import NUM_YEARS
@@ -69,6 +70,16 @@ def _field(area_ha: float, locked_to: RotationCandidateEvaluation | None = None)
 
 
 class FenByYearTests(unittest.TestCase):
+    def setUp(self):
+        # These fixtures are one-year synthetic cycles, independent of loaded
+        # reference rotations. Keep the FEN unit tests database-free.
+        self.enterContext(
+            patch(
+                "plantperform_optimizer.orchestrator.saedskifte_library.get_raw_rotation",
+                return_value=((GRASS, None, None),) * NUM_YEARS,
+            )
+        )
+
     def test_locked_field_counts_foderenheder_only_in_fe_years(self) -> None:
         candidate = _candidate((GRASS, GRASS, BARLEY))
         fixed = _locked_yearly_field_contribution(_field(10, candidate), [candidate])

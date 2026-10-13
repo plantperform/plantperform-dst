@@ -506,7 +506,43 @@ def _locked_candidate_figures(
     }
 
 
-def prepare_simulation_field(copied_field, registry_row, request, *, prepared=None):
+def baseline_simulation_candidate(field, registry_row, *, economics_key=""):
+    """Capture economic inputs for an unoptimized simulation's historical baseline."""
+    if registry_row is None or not field.crop_rotation or len(field.crop_rotation) != 8:
+        return None
+    jbnr = registry_row.jbnr if registry_row.jbnr is not None else FALLBACK_JBNR
+    crop_history = dict(registry_row.crop_history or {})
+    for index, year in enumerate(field.crop_rotation):
+        crop_history[str(REAL_HISTORY_END_YEAR - 7 + index)] = year.afgrode_kode or None
+    soil = _soil_data_for_context(registry_row)
+    percolation, org_n_topsoil, s_soil = soil if soil is not None else (None, None, None)
+    years = evaluate_real_history_for_field(
+        crop_history,
+        jbnr,
+        registry_row.goedningsregion,
+        bool(registry_row.oeko),
+        percolation_by_kategori=percolation,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
+        economics_key=economics_key,
+    )
+    from app.domain.rotation_candidate import RotationCandidateRef
+
+    return RotationCandidateEvaluation(
+        ref=RotationCandidateRef(
+            saedskiftevariant="history", variant=str(field.imk_id), n_norm_pct="100"
+        ),
+        active_len=len(years),
+        years=years,
+        avg_leaching_kg_n_ha=sum(y.leaching_kg_n_ha for y in years) / len(years),
+        avg_db_kr_ha=sum(y.db_kr_ha for y in years) / len(years),
+        avg_fen=sum(y.fen_fe_ha for y in years) / len(years),
+    )
+
+
+def prepare_simulation_field(
+    copied_field, registry_row, request, *, prepared=None, economics_key=""
+):
     """Calculate one field, without opening a database transaction."""
     jbnr = (
         registry_row.jbnr
@@ -551,6 +587,7 @@ def prepare_simulation_field(copied_field, registry_row, request, *, prepared=No
                 percolation_by_kategori=percolation,
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
+                economics_key=economics_key,
             )
             candidates.append(permanent_candidate)
             locked_id = permanent_candidate.ref.to_id()
@@ -587,9 +624,20 @@ def prepare_simulation_field(copied_field, registry_row, request, *, prepared=No
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
                 prepared=prepared,
+                economics_key=economics_key,
             )
         )
     setup = split_field(_dump(copied_field))
+    if copied_field.rotation_id is None:
+        baseline = baseline_simulation_candidate(
+            copied_field, registry_row, economics_key=economics_key
+        )
+        if baseline is not None:
+            setup["baseline_candidate"] = _dump(baseline)
+            setup["baseline"].update(
+                db2=baseline.avg_db_kr_ha * copied_field.area_ha,
+                fen=baseline.avg_fen * copied_field.area_ha,
+            )
     field_candidates = SimulationFieldCandidates(
         field_id=copied_field.id,
         jbnr=jbnr,
@@ -612,9 +660,14 @@ def create_simulation(
         if not _farm_exists(session, farm_id, email):
             return None
 
+        from app.data.economics_store import resolve_snapshot
+
+        snapshot = resolve_snapshot(session, request.economics_module_id, email)
         setup_fields = {}
         field_order = []
         simulation = Simulation(
+            economics_module_id=snapshot.source_id,
+            economics_snapshot=snapshot,
             id=str(uuid4()),
             farm_id=farm_id,
             name=request.name,
@@ -662,6 +715,7 @@ def create_simulation(
                 copied_field,
                 registry_contexts.get(copied_field.imk_id),
                 request,
+                economics_key=snapshot.overrides.cache_key(),
             )
             setup_fields[copied_field.id] = setup
             field_order.append(copied_field.id)

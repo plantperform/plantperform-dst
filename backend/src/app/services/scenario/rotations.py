@@ -89,6 +89,7 @@ def apply_manual_rotation(
         percolation_by_kategori=percolation,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        economics_key=simulation.economics_snapshot.overrides.cache_key(),
     )
     if candidate is None:
         return None

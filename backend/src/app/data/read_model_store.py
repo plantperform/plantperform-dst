@@ -276,6 +276,7 @@ def publish_optimization(session, simulation_id, revision, run_id, output):
         "run_id": run_id,
         "result_revision": revision,
         "response": output["response"],
+        "economics_snapshot": output.get("economics_snapshot", {}),
         "fields_before": output["fields_before"],
         "field_years": field_years,
     }
@@ -293,7 +294,7 @@ def publish_optimization(session, simulation_id, revision, run_id, output):
         )
         effective = read_models.overlay_metadata(
             read_models.prepared_base(prepared, entry),
-            [entry["overlays"].get(key) for key in ("manual", "selected", "fixed")],
+            [entry["overlays"].get(key) for key in ("manual", "selected", "economics", "fixed")],
         )
         contributions[field.id] = read_models.field_contribution(field, effective)
     # Current fields retain explicit manual/fixed overlays; comparisons keep immutable output.
@@ -355,7 +356,7 @@ def update_field_view(session, simulation_id, field, setup):
             metadata(RotationCandidateEvaluation.model_validate(value)) if value else None
         )
     effective = read_models.overlay_metadata(
-        base, [entry["overlays"].get(key) for key in ("manual", "selected", "fixed")]
+        base, [entry["overlays"].get(key) for key in ("manual", "selected", "economics", "fixed")]
     )
     contributions = dict(row.contributions or {})
     contributions[field.id] = read_models.field_contribution(field, effective)
@@ -428,6 +429,7 @@ def build_simulation(session, simulation_id):
         for name, value in [
             ("manual", setup.fields.get(row.field_id, {}).get("manual_candidate")),
             ("selected", output.get("selected_candidates", {}).get(row.field_id)),
+            ("economics", setup.fields.get(row.field_id, {}).get("economics_candidate")),
             ("fixed", setup.fields.get(row.field_id, {}).get("fixed_candidate")),
         ]:
             overlays[name] = (
@@ -437,7 +439,7 @@ def build_simulation(session, simulation_id):
             )
         prepared.add_field(row.field_id, base, overlays)
         effective = read_models.overlay_metadata(
-            base, [overlays.get(key) for key in ("manual", "selected", "fixed")]
+            base, [overlays.get(key) for key in ("manual", "selected", "economics", "fixed")]
         )
         catalog.add(effective)
         if row.field_id in fields_by_id:
@@ -482,6 +484,7 @@ def build_simulation(session, simulation_id):
             "result_revision": result.result_revision,
             "response": output["response"],
             "fields_before": output.get("fields_before", []),
+            "economics_snapshot": output.get("economics_snapshot", {}),
             "field_years": {
                 key: read_models.compact_years(RotationCandidateEvaluation.model_validate(value))
                 for key, value in output.get("selected_candidates", {}).items()

@@ -13,6 +13,7 @@ from dotenv import dotenv_values
 
 from app.domain.creation import CreationActiveError
 from app.domain.creation_job import CreationJob
+from app.domain.economics import EconomicsRecalculationJob
 from app.domain.optimization import RETRY_DELAY_SECONDS, OptimizationLeaseActiveError
 from app.domain.read_model import PreparationJob
 from app.services.optimization.queue import sqs_client
@@ -25,9 +26,7 @@ def initialize_configuration():
     if not os.getenv("DATABASE_URL"):
         response = boto3.client(
             "s3",
-            config=Config(
-                connect_timeout=3, read_timeout=5, retries={"total_max_attempts": 2}
-            ),
+            config=Config(connect_timeout=3, read_timeout=5, retries={"total_max_attempts": 2}),
         ).get_object(
             Bucket=os.environ["APP_CONFIG_BUCKET"],
             Key=os.environ["APP_CONFIG_KEY"],
@@ -79,6 +78,7 @@ def parse_envelope(body):
     job_type = envelope.get("jobType")
     if job_type not in (
         "create_simulation",
+        "recalculate_simulation_economics",
         "optimization",
         "prepare_farm_history",
         "prepare_simulation_view",
@@ -93,6 +93,8 @@ def parse_envelope(body):
             raise ValueError(f"Missing or invalid {key}")
     if job_type == "create_simulation":
         CreationJob.model_validate(envelope)
+    elif job_type == "recalculate_simulation_economics":
+        EconomicsRecalculationJob.model_validate(envelope)
     elif job_type.startswith("prepare_"):
         PreparationJob.model_validate(envelope)
     return envelope, identifier_key
@@ -124,6 +126,10 @@ def handler(event, context):
                 job_type = envelope["jobType"]
                 if job_type == "create_simulation":
                     executor = initialize_creation()
+                elif job_type == "recalculate_simulation_economics":
+                    from plantperform_optimizer import economics_worker
+
+                    executor = economics_worker
                 elif job_type == "optimization":
                     executor = initialize()
                 elif job_type.startswith("prepare_"):
@@ -139,6 +145,15 @@ def handler(event, context):
             if job_type == "create_simulation":
                 executor.execute(
                     CreationJob.model_validate(envelope),
+                    context,
+                    sqs_delivery=True,
+                    receive_count=int(
+                        record.get("attributes", {}).get("ApproximateReceiveCount", "1")
+                    ),
+                )
+            elif job_type == "recalculate_simulation_economics":
+                executor.execute(
+                    EconomicsRecalculationJob.model_validate(envelope),
                     context,
                     sqs_delivery=True,
                     receive_count=int(
@@ -178,9 +193,7 @@ def handler(event, context):
             )
             _retry_message(record, visibility_timeout)
         except Exception:
-            logger.exception(
-                "optimizer_message_failed message_id=%s", record["messageId"]
-            )
+            logger.exception("optimizer_message_failed message_id=%s", record["messageId"])
             failures.append({"itemIdentifier": record["messageId"]})
             _retry_message(record, RETRY_DELAY_SECONDS)
     return {"batchItemFailures": failures}

@@ -168,7 +168,15 @@ def _generate(session, job, context, *, sqs_delivery, receive_count):
             _check_deadline(context)
             phase = time.monotonic()
             setup, candidates = repository.prepare_simulation_field(
-                field, contexts.get(field.imk_id), request, prepared=prepared
+                field,
+                contexts.get(field.imk_id),
+                request,
+                prepared=prepared,
+                **(
+                    {"economics_key": job.economics_snapshot.overrides.cache_key()}
+                    if job.economics_snapshot.overrides.cache_key()
+                    else {}
+                ),
             )
             generation = time.monotonic() - phase
             phase = time.monotonic()

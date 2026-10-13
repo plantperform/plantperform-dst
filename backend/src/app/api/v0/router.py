@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v0.auth import router as auth_router
+from app.api.v0.economics import router as economics_router
 from app.api.v0.farm_fields import router as farm_fields_router
 from app.api.v0.farms import router as farms_router
 from app.api.v0.healthz import router as healthz_router
@@ -11,6 +12,7 @@ from app.api.v0.simulations import router as simulations_router
 
 router = APIRouter()
 router.include_router(auth_router)
+router.include_router(economics_router)
 router.include_router(healthz_router)
 router.include_router(farms_router)
 router.include_router(farm_fields_router)
