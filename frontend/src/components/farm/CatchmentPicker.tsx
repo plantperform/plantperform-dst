@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { startTransition, useMemo, useOptimistic } from 'react'
 import { Check } from 'lucide-react'
 
 import type { FieldRecord } from '@/api/types'
@@ -87,6 +87,12 @@ export const CatchmentPicker = ({
   onHighlightedKeyChange,
 }: CatchmentPickerProps) => {
   const catchmentOptions = useCatchmentOptions(farmId, fields)
+  const [pickedKey, setPickedKey] = useOptimistic(highlightedKey)
+  const pick = (key: string | null) =>
+    startTransition(() => {
+      setPickedKey(key)
+      onHighlightedKeyChange(key)
+    })
 
   const catchments = useMemo(() => {
     const totalsByKey = new Map(
@@ -117,7 +123,7 @@ export const CatchmentPicker = ({
 
   if (catchments.length === 0) return null
 
-  const wholeFarmSelected = highlightedKey === null
+  const wholeFarmSelected = pickedKey === null
 
   return (
     <section
@@ -136,7 +142,7 @@ export const CatchmentPicker = ({
           <button
             type="button"
             aria-pressed={wholeFarmSelected}
-            onClick={() => onHighlightedKeyChange(null)}
+            onClick={() => pick(null)}
             className={cn(
               ROW_CLASS,
               'items-center py-2',
@@ -168,8 +174,8 @@ export const CatchmentPicker = ({
                 label={catchment.label}
                 totals={catchment.totals}
                 colorClass={catchment.colorClass}
-                selected={highlightedKey === catchment.key}
-                onSelect={() => onHighlightedKeyChange(catchment.key)}
+                selected={pickedKey === catchment.key}
+                onSelect={() => pick(catchment.key)}
               />
             ))}
           </div>
