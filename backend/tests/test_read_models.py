@@ -13,6 +13,7 @@ from unittest.mock import patch
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
 from sqlalchemy import delete, event, inspect, null, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests, candidate, field
 
@@ -123,6 +124,39 @@ class ReadModelTests(DatabaseTests):
         super().setUp()
         main.app.dependency_overrides[current_user] = lambda: AuthenticatedUser(email=EMAIL)
         self.addCleanup(main.app.dependency_overrides.clear)
+
+    def test_publish_simulation_inserts_and_replaces_snapshot(self):
+        data = {"fields": [{"id": "first"}]}
+        prepared = {"fields": {"first": {"base": [], "overlays": {}}}}
+        with self.sessions.begin() as session:
+            session.execute(delete(views))
+            read_model_store.publish_simulation(session, "sim", 0, data, prepared)
+        with self.sessions() as session:
+            inserted = session.execute(select(views)).one()
+        self.assertEqual((inserted.data, inserted.prepared), (data, prepared))
+        self.assertEqual(
+            (inserted.input_revision, inserted.status, inserted.view_version, inserted.generation),
+            (0, "done", 1, 0),
+        )
+        self.assertIsNone(inserted.error)
+
+        data = {"fields": [{"id": "replacement"}]}
+        prepared = {"fields": {"replacement": {"base": [], "overlays": {}}}}
+        with self.sessions.begin() as session:
+            session.execute(
+                update(views).values(
+                    status="failed", generation=3, error={"code": "PREPARATION_FAILED"}
+                )
+            )
+            read_model_store.publish_simulation(session, "sim", 1, data, prepared)
+        with self.sessions() as session:
+            replaced = session.execute(select(views)).one()
+        self.assertEqual((replaced.data, replaced.prepared), (data, prepared))
+        self.assertEqual(
+            (replaced.input_revision, replaced.status, replaced.view_version, replaced.generation),
+            (1, "done", 2, 3),
+        )
+        self.assertIsNone(replaced.error)
 
     def publish_result(self):
         value = rich_candidate()
@@ -463,26 +497,36 @@ class ReadModelTests(DatabaseTests):
         prepared = {value.id: metadata for value in fields}
         years = {value.id: read_models.compact_years(base) for value in fields}
         data, contributions = read_models.simulation_data(fields, prepared, years)
-        with self.sessions.begin() as session:
-            read_model_store.publish_simulation(
-                session,
-                "sim",
-                0,
-                data,
-                {
-                    "fields": {
-                        key: {"base": values, "overlays": {}} for key, values in prepared.items()
-                    },
-                    "contributions": contributions,
-                },
-            )
-            # Any accidental full or compact candidate read would be invalid.
-            session.execute(
-                update(caches).values(
-                    data={"candidates": "unreadable", "padding": "x" * 10000},
-                    optimizer_input={"candidates": "unreadable"},
+        view_prepared = {
+            "fields": {key: {"base": values, "overlays": {}} for key, values in prepared.items()},
+            "contributions": contributions,
+        }
+        publication_bindings = []
+
+        def record_publication(conn, cursor, sql, params, context, many):
+            if sql.startswith("INSERT INTO simulation_read_model"):
+                documents = [value.obj for value in params.values() if isinstance(value, Jsonb)]
+                publication_bindings.append(
+                    (
+                        sum(value is data for value in documents),
+                        sum(value is view_prepared for value in documents),
+                    )
                 )
-            )
+
+        event.listen(self.engine, "before_cursor_execute", record_publication)
+        try:
+            with self.sessions.begin() as session:
+                read_model_store.publish_simulation(session, "sim", 0, data, view_prepared)
+                # Any accidental full or compact candidate read would be invalid.
+                session.execute(
+                    update(caches).values(
+                        data={"candidates": "unreadable", "padding": "x" * 10000},
+                        optimizer_input={"candidates": "unreadable"},
+                    )
+                )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record_publication)
+        self.assertEqual(publication_bindings, [(1, 1)])
         queries = []
 
         def record(conn, cursor, sql, params, context, many):

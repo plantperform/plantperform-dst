@@ -230,23 +230,22 @@ def historical_detail(farm_id, field_id, email):
 
 
 def publish_simulation(session, simulation_id, revision, data, prepared):
+    statement = insert(simulation_views).values(
+        simulation_id=simulation_id,
+        input_revision=revision,
+        status="done",
+        view_version=1,
+        data=data,
+        prepared=prepared,
+    )
     session.execute(
-        insert(simulation_views)
-        .values(
-            simulation_id=simulation_id,
-            input_revision=revision,
-            status="done",
-            view_version=1,
-            data=data,
-            prepared=prepared,
-        )
-        .on_conflict_do_update(
+        statement.on_conflict_do_update(
             index_elements=[simulation_views.c.simulation_id],
             set_={
-                "input_revision": revision,
-                "status": "done",
-                "data": data,
-                "prepared": prepared,
+                "input_revision": statement.excluded.input_revision,
+                "status": statement.excluded.status,
+                "data": statement.excluded.data,
+                "prepared": statement.excluded.prepared,
                 "view_version": simulation_views.c.view_version + 1,
                 "error": None,
             },
