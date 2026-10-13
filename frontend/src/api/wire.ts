@@ -91,15 +91,21 @@ const REQUEST_NAMES: Record<string, string> = Object.fromEntries(
   Object.entries(SHARED_NAMES).map(([wire, domain]) => [domain, wire]),
 )
 
+const isLeaf = (value: unknown) => value === null || typeof value !== 'object'
+
 const renameKeys = (value: unknown, names: Record<string, string>): unknown => {
-  if (Array.isArray(value)) return value.map((item) => renameKeys(item, names))
-  if (value === null || typeof value !== 'object') return value
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      names[key] ?? key,
-      renameKeys(item, names),
-    ]),
-  )
+  if (isLeaf(value)) return value
+  if (Array.isArray(value)) {
+    return value.every(isLeaf)
+      ? value
+      : value.map((item) => renameKeys(item, names))
+  }
+  const source = value as Record<string, unknown>
+  const renamed: Record<string, unknown> = {}
+  for (const key of Object.keys(source)) {
+    renamed[names[key] ?? key] = renameKeys(source[key], names)
+  }
+  return renamed
 }
 
 export const fromWire = <T>(value: unknown): T =>
