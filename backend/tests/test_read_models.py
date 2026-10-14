@@ -41,6 +41,7 @@ from app.services import preparation_runner as read_model_worker
 from app.services.calculation import CalculationFailedError
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.scenario.rotations import compute_yearly_summary
+from plantperform_fargate import worker as optimizer_worker
 
 
 def rich_candidate(variant="1"):
@@ -821,24 +822,21 @@ class ReadModelTests(DatabaseTests):
             read_model_store.get_simulation_view("farm", "sim", EMAIL)["view_version"], before
         )
 
-    def test_active_view_load_conflicts_then_completes_reserved_preparation(self):
+    def test_missing_view_reads_ignore_active_preparation_lock(self):
         from app.data.creation_store import execution_session
 
         with self.sessions.begin() as session:
             session.execute(update(views).values(status="queued", data=None))
         with execution_session("sim"):
             response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
-        self.assertEqual(response.status_code, 409)
-        response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "done")
+        self.assertEqual(response.json()["status"], "missing")
         self.queue.send_message.assert_not_called()
         self.assertIsNone(read_model_store.get_simulation_view("farm", "sim", "other@example.com"))
 
     def test_full_views_prepare_missing_snapshots_and_migration_placeholders_once(self):
         for table, key, entity_id, path in (
             (farm_views, "farm_id", "farm", "/api/v0/farms/farm/view"),
-            (views, "simulation_id", "sim", "/api/v0/farms/farm/simulations/sim/view"),
         ):
             for state in ("missing", "placeholder", "sql_null", "json_null"):
                 with self.subTest(table=table.name, state=state):
@@ -875,7 +873,21 @@ class ReadModelTests(DatabaseTests):
                     self.assertEqual(job.entity_id, entity_id)
                     self.assertEqual(job.expected_revision, 0)
 
-    def test_ready_views_including_empty_history_do_not_queue_or_change_versions(self):
+    def test_ready_views_including_empty_data_do_not_queue_or_change_versions(self):
+        with self.sessions.begin() as session:
+            read_model_store.publish_simulation(
+                session,
+                "sim",
+                0,
+                {
+                    "fields": [],
+                    "field_years": {},
+                    "yearly_summary": [],
+                    "crop_area_ranges": [],
+                    "saved_result": None,
+                },
+                {},
+            )
         for path in ("/api/v0/farms/farm/view", "/api/v0/farms/farm/simulations/sim/view"):
             with self.subTest(path=path):
                 client = TestClient(main.app)
@@ -883,14 +895,12 @@ class ReadModelTests(DatabaseTests):
                 second = client.get(path)
                 self.assertEqual(first.json()["status"], "done")
                 self.assertIsNotNone(first.json()["data"])
+                self.assertEqual(first.json()["data"]["fields"], [])
                 self.assertEqual(first.json(), second.json())
         self.queue.send_message.assert_not_called()
 
     def test_revision_mismatches_prepare_the_current_inputs(self):
-        for owner, path in (
-            (farm_table, "/api/v0/farms/farm/view"),
-            (setups, "/api/v0/farms/farm/simulations/sim/view"),
-        ):
+        for owner, path in ((farm_table, "/api/v0/farms/farm/view"),):
             with self.subTest(owner=owner.name):
                 with self.sessions.begin() as session:
                     session.execute(update(owner).values(revision=1))
@@ -909,13 +919,6 @@ class ReadModelTests(DatabaseTests):
                 "farm",
                 "/api/v0/farms/farm/view",
                 "/api/v0/farms/farm/history/retry",
-            ),
-            (
-                views,
-                "prepare_simulation_view",
-                "sim",
-                "/api/v0/farms/farm/simulations/sim/view",
-                "/api/v0/farms/farm/simulations/sim/view/retry",
             ),
         ):
             with self.subTest(kind=kind):
@@ -962,10 +965,7 @@ class ReadModelTests(DatabaseTests):
             self.assertEqual(session.execute(select(views)).all(), [])
 
     def test_concurrent_full_loads_publish_one_job(self):
-        for table, path in (
-            (farm_views, "/api/v0/farms/farm/view"),
-            (views, "/api/v0/farms/farm/simulations/sim/view"),
-        ):
+        for table, path in ((farm_views, "/api/v0/farms/farm/view"),):
             with self.subTest(table=table.name):
                 with self.sessions.begin() as session:
                     session.execute(delete(table))
@@ -1019,24 +1019,166 @@ class ReadModelTests(DatabaseTests):
         self.assertEqual(read_model_store.get_farm_view("farm", EMAIL)["status"], "done")
         self.queue.send_message.assert_not_called()
 
-    def test_view_preparation_does_not_require_a_queue(self):
-        with self.sessions.begin() as session:
-            session.execute(delete(views))
-        with patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": ""}):
-            response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "done")
-        self.assertIsNotNone(response.json()["data"])
+    def test_missing_simulation_views_are_read_only_in_both_environments(self):
+        path = "/api/v0/farms/farm/simulations/sim/view"
+        with self.sessions() as session:
+            data = session.execute(select(views.c.data)).scalar_one()
+        for environment in ("development", "production"):
+            for state in (
+                "absent",
+                "sql_null",
+                "json_null",
+                "queued",
+                "running",
+                "failed",
+                "stale",
+            ):
+                with self.subTest(environment=environment, state=state):
+                    with self.sessions.begin() as session:
+                        session.execute(delete(views))
+                        if state != "absent":
+                            session.execute(
+                                views.insert().values(
+                                    simulation_id="sim",
+                                    input_revision=1 if state == "stale" else 0,
+                                    status=state
+                                    if state in ("queued", "running", "failed")
+                                    else "done",
+                                    data=null()
+                                    if state == "sql_null"
+                                    else None
+                                    if state == "json_null"
+                                    else data,
+                                    error={"code": "PREPARATION_FAILED"},
+                                )
+                            )
+                    with self.sessions() as session:
+                        before = session.execute(select(views)).all()
+                    queries = []
+
+                    def record(conn, cursor, sql, params, context, many, queries=queries):
+                        queries.append(sql)
+
+                    event.listen(self.engine, "before_cursor_execute", record)
+                    try:
+                        with (
+                            patch.dict(
+                                os.environ, {"APP_ENV": environment, "OPTIMIZER_QUEUE_URL": ""}
+                            ),
+                            patch.object(read_model_worker, "execute", side_effect=AssertionError),
+                            patch.object(
+                                read_model_store, "build_simulation", side_effect=AssertionError
+                            ),
+                            patch.object(
+                                read_model_store, "schedule_preparation", side_effect=AssertionError
+                            ),
+                        ):
+                            client = TestClient(main.app)
+                            for suffix in ("", "?include_data=false", ""):
+                                response = client.get(path + suffix)
+                                self.assertEqual(response.status_code, 200)
+                                self.assertEqual(response.json()["status"], "missing")
+                                self.assertIsNone(response.json()["data"])
+                                self.assertIsNone(response.json()["error"])
+                    finally:
+                        event.remove(self.engine, "before_cursor_execute", record)
+                    self.assertEqual(len(queries), 3)
+                    self.assertTrue(all(sql.lstrip().startswith("SELECT") for sql in queries))
+                    self.assertNotIn("simulation_read_model.data AS view_data", queries[1])
+                    with self.sessions() as session:
+                        self.assertEqual(session.execute(select(views)).all(), before)
         self.queue.send_message.assert_not_called()
 
-    def test_local_full_load_completes_preparation_during_request(self):
+    def test_missing_summary_reports_only_current_active_optimization(self):
         with self.sessions.begin() as session:
             session.execute(delete(views))
-        with patch.dict(os.environ, {"APP_ENV": "development"}):
-            response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
-        self.assertEqual(response.json()["status"], "done")
-        self.assertIsNotNone(response.json()["data"])
+        for result_status, revision, expected in (
+            ("queued", 0, "queued"),
+            ("in_progress", 0, "running"),
+            ("queued", 1, "missing"),
+            ("failed", 0, "missing"),
+            ("completed", 0, "missing"),
+        ):
+            with self.subTest(status=result_status, revision=revision):
+                with self.sessions.begin() as session:
+                    session.execute(
+                        update(results).values(status=result_status, input_revision=revision)
+                    )
+                for include_data in (True, False):
+                    view = read_model_store.get_simulation_view(
+                        "farm", "sim", EMAIL, include_data=include_data
+                    )
+                    self.assertEqual(view["status"], expected)
+                    self.assertIsNone(view["data"])
         self.queue.send_message.assert_not_called()
+
+    def test_concurrent_missing_summary_reads_do_not_prepare(self):
+        with self.sessions.begin() as session:
+            session.execute(delete(views))
+        barrier = Barrier(4)
+
+        def load(_):
+            barrier.wait(timeout=10)
+            return TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
+
+        with patch.object(read_model_worker, "execute", side_effect=AssertionError):
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                responses = list(executor.map(load, range(4)))
+        self.assertTrue(all(response.status_code == 200 for response in responses))
+        self.assertTrue(all(response.json()["status"] == "missing" for response in responses))
+        self.queue.send_message.assert_not_called()
+        with self.sessions() as session:
+            self.assertEqual(session.execute(select(views)).all(), [])
+
+    def test_fields_are_available_without_summary_and_retry_route_is_removed(self):
+        with self.sessions.begin() as session:
+            session.execute(delete(views))
+        client = TestClient(main.app)
+        path = "/api/v0/farms/farm/simulations/sim"
+        with patch.object(read_model_store, "build_simulation", side_effect=AssertionError):
+            response = client.get(path + "/fields")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([value["id"] for value in response.json()], ["field-b", "field-a"])
+        self.assertEqual(client.post(path + "/view/retry").status_code, 404)
+        self.assertEqual(client.get("/api/v0/farms/other/simulations/sim/fields").status_code, 404)
+        main.app.dependency_overrides[current_user] = lambda: AuthenticatedUser(
+            email="other@example.com"
+        )
+        self.assertEqual(client.get(path + "/fields").status_code, 404)
+        main.app.dependency_overrides[current_user] = lambda: AuthenticatedUser(email=EMAIL)
+        with self.sessions.begin() as session:
+            session.execute(update(setups).values(creation_status="running"))
+        self.assertEqual(client.get(path + "/fields").status_code, 409)
+        self.queue.send_message.assert_not_called()
+
+    def test_optimization_recreates_summary_and_failure_leaves_recovery_available(self):
+        for yearly in (False, True):
+            with self.subTest(yearly=yearly):
+                with self.sessions.begin() as session:
+                    session.execute(delete(views))
+                request = self.request(yearly=yearly)
+                kind = "yearly" if yearly else "optimize"
+                run = self.submit(request, kind)
+                optimizer_worker.execute("sim", run.run_id, CONTEXT)
+                self.assertEqual(self.result().status, "completed", self.result().error)
+                response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["status"], "done")
+                self.assertIsNotNone(response.json()["data"])
+                self.assertEqual(response.json()["data"]["savedResult"]["runId"], run.run_id)
+
+        with self.sessions.begin() as session:
+            session.execute(delete(views))
+        run = self.submit()
+        _, _, token = optimization_store.claim("sim", run.run_id)
+        optimization_store.finish(
+            "sim", run.run_id, token, 0, error={"code": "FAILED", "message": "Failed"}
+        )
+        self.assertEqual(
+            read_model_store.get_simulation_view("farm", "sim", EMAIL)["status"], "missing"
+        )
+        self.assertEqual(len(simulation_store.list_simulation_fields("farm", "sim", EMAIL)), 2)
+        self.assertEqual(self.submit().status, "queued")
 
     def test_manual_history_recalculation_completes_and_preserves_simulations(self):
         first = self.history_inputs()

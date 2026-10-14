@@ -7,6 +7,7 @@ import {
   simulationsKey,
   simulationViewKey,
   useFarmFields,
+  useStoredSimulationFields,
   useFertiliserPresets,
   useRotationCategories,
   useRotationNNormPercentages,
@@ -92,9 +93,28 @@ export const NewScenarioPanel = ({
   onError,
 }: NewScenarioPanelProps) => {
   const farmFields = useFarmFields(farmId)
-  const effectiveFields =
-    source?.fieldsInitialized === false || source === null
-      ? (farmFields.data ?? fields)
+  const needsStoredFields =
+    source !== null && source.fieldsInitialized !== false && fields.length === 0
+  const usesFarmFields = source === null || source.fieldsInitialized === false
+  const storedFields = useStoredSimulationFields(
+    open && needsStoredFields ? farmId : undefined,
+    source?.id,
+    source?.revision,
+  )
+  const fieldsLoading = needsStoredFields
+    ? storedFields.isLoading || storedFields.isValidating
+    : usesFarmFields
+      ? farmFields.isLoading
+      : false
+  const fieldsError = needsStoredFields
+    ? storedFields.error
+    : usesFarmFields
+      ? farmFields.error
+      : undefined
+  const effectiveFields = usesFarmFields
+    ? (farmFields.data ?? fields)
+    : needsStoredFields
+      ? (storedFields.data ?? [])
       : fields
   const { startRun } = useOptimizationRunActions()
   const run = useOptimizationRun(source?.id)
@@ -267,7 +287,7 @@ export const NewScenarioPanel = ({
   const presetModified = isPresetModified(values, fertiliserPresets)
 
   const createScenario = async (optimize = false) => {
-    if (optimize && !hasFields) return
+    if (optimize && (!hasFields || fieldsLoading || fieldsError)) return
     if (running) {
       if (!(await trigger('name'))) return
     } else
@@ -437,7 +457,9 @@ export const NewScenarioPanel = ({
               </Button>
               <Button
                 onClick={() => void createScenario(true)}
-                disabled={!hasFields || referenceBlocked || running}
+                disabled={
+                  !hasFields || fieldsLoading || Boolean(fieldsError) || referenceBlocked || running
+                }
                 loading={isCreating}
               >
                 Kør optimering
@@ -454,9 +476,20 @@ export const NewScenarioPanel = ({
         </>
       }
     >
+      {fieldsError ? (
+        <LoadError
+          message="Kunne ikke hente simuleringens marker."
+          onRetry={() =>
+            void (needsStoredFields ? storedFields.mutate() : farmFields.mutate())
+          }
+          retrying={fieldsLoading}
+        />
+      ) : fieldsLoading ? (
+        <LoadingSkeleton message="Henter simuleringens marker..." />
+      ) : null}
       {stepIndex === 0 ? (
         <div className="space-y-6">
-          {!hasFields ? (
+          {!hasFields && !fieldsLoading && !fieldsError ? (
             <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-strong">
               Vælg mindst én mark under Afgrødehistorik, før du kører
               optimeringen. Du kan stadig gemme indstillingerne.

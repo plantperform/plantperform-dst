@@ -51,6 +51,28 @@ describe('shared compact view requests', () => {
     expect(fetcher).toHaveBeenCalledExactlyOnceWith(key)
   })
 
+  it('does not poll missing summaries and loads a published view on focus', async () => {
+    vi.useFakeTimers()
+    const env = environment()
+    const missing = { ...preparing, status: 'missing' as const }
+    const cache = new Map<string, { data: typeof missing | typeof ready }>([[key, { data: missing }]])
+    const update = vi.fn((value) => {
+      cache.set(key, { data: value })
+    })
+    const stop = subscribeView(cache, key, update, env)
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(fetcher).not.toHaveBeenCalled()
+
+    vi.mocked(fetcher).mockResolvedValueOnce({ ...ready, data: null }).mockResolvedValueOnce(ready)
+    env.window.dispatchEvent(new Event('focus'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.mocked(fetcher).mock.calls.map(([url]) => url)).toEqual([
+      `${key}?include_data=false`, key,
+    ])
+    expect(cache.get(key)?.data).toEqual(ready)
+    stop()
+  })
+
   it('shares one metadata poll, loads one changed snapshot, and pauses hidden/offline', async () => {
     vi.useFakeTimers()
     const env = environment()

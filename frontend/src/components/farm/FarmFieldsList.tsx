@@ -530,10 +530,12 @@ export const FarmFieldsList = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Ingen marker endnu</CardTitle>
+          <CardTitle>
+            {isSimulationView ? 'Optimeringen er ikke kørt endnu' : 'Ingen marker endnu'}
+          </CardTitle>
           <CardDescription>
             {isSimulationView
-              ? 'Denne simulering blev oprettet, før der var tilknyttet aktuelle marker.'
+              ? 'Kør en optimering for at beregne simuleringens værdier.'
               : 'Slå Rediger marker til på kortet for at gennemgå registermarker, før du tilføjer dem.'}
           </CardDescription>
         </CardHeader>

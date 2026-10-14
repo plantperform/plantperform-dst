@@ -614,6 +614,7 @@ const SimulationMenuItem = ({
     data: simulationFields,
     error: fieldsError,
     isLoading: fieldsLoading,
+    summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const quota = useMemo(
     () => (simulationFields ? resolveFarmQuota(simulationFields, true) : null),
@@ -672,6 +673,8 @@ const SimulationMenuItem = ({
                   <span className="truncate text-xs">
                     {creationStatusLabel(simulation)}
                   </span>
+                ) : summaryMissing ? (
+                  <span className="truncate text-xs">Oversigt mangler</span>
                 ) : (
                   <KeyFiguresLine
                     figures={figures}

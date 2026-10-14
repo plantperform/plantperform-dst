@@ -10,6 +10,7 @@ import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
+import { SimulationSummaryMissing } from '@/components/farm/SimulationSummaryMissing'
 import { isSimulationReady } from '@/lib/simulation-creation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -392,6 +393,7 @@ export const SimulationCard = ({
     error,
     isValidating,
     mutate: retry,
+    summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
@@ -474,6 +476,8 @@ export const SimulationCard = ({
     >
       {!isSimulationReady(simulation) ? (
         <SimulationCreationStatus farmId={farmId} simulation={simulation} />
+      ) : summaryMissing ? (
+        <SimulationSummaryMissing />
       ) : summary ? (
         calculated ? (
           <SimulationFigures

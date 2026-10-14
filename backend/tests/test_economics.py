@@ -461,9 +461,9 @@ class EconomicsDatabaseTests(DatabaseTests):
             UpdateEconomicsModuleRequest(expectedRevision=0, prices=None, name="Changed"),
             EMAIL,
         )
-        from app.services.preparation_jobs import get_or_prepare_simulation_view
+        from app.data.read_model_store import get_simulation_view
 
-        view = get_or_prepare_simulation_view("farm", "sim", EMAIL)
+        view = get_simulation_view("farm", "sim", EMAIL)
         self.assertEqual(view["status"], "done")
         self.assertIsNotNone(view["data"])
         self.queue.send_message.assert_not_called()

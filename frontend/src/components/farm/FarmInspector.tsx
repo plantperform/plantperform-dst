@@ -35,6 +35,7 @@ import { FieldSearch } from '@/components/farm/FieldSearch'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { OptimizeDialog } from '@/components/farm/OptimizeDialog'
 import { SimulationRulesPanel } from '@/components/farm/SimulationRulesPanel'
+import { SimulationSummaryMissing } from '@/components/farm/SimulationSummaryMissing'
 import { RULES_PANEL_WIDTH } from '@/components/farm/split-layout'
 import type {
   FarmInspectorMode,
@@ -63,6 +64,7 @@ type FarmInspectorProps = {
   selection: FarmViewSelection
   selectedSimulation?: Simulation
   fieldsLoading?: boolean
+  summaryMissing?: boolean
   fieldsError?: boolean
   fieldsRetrying?: boolean
   onRetryFields?: () => void
@@ -92,6 +94,7 @@ export const FarmInspector = ({
   selection,
   selectedSimulation,
   fieldsLoading = false,
+  summaryMissing = false,
   fieldsError = false,
   fieldsRetrying = false,
   onRetryFields,
@@ -267,7 +270,7 @@ export const FarmInspector = ({
   }, [panelField, effectiveHighlightedCatchmentKey, onSelectedFieldChange])
   useEscapeKey(handleEscape)
 
-  const showYearWalkthrough = !fieldsError
+  const showYearWalkthrough = !fieldsError && !summaryMissing
   const {
     collapsed: overviewCollapsed,
     changeCollapsed: changeOverviewCollapsed,
@@ -471,6 +474,10 @@ export const FarmInspector = ({
           ) : null}
           {fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
+          ) : summaryMissing ? (
+            <SimulationSummaryMissing
+              onOpenSettings={() => onOptimizeDialogOpenChange(true)}
+            />
           ) : fieldsError ? (
             <LoadError
               message="Kunne ikke hente simuleringens marker."

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
-import { fetcher, postJson } from '@/api/client'
+import { fetcher } from '@/api/client'
 import { JOB_POLL_INTERVAL_MS } from '@/api/result-tracking'
 import { isViewPreparing } from '@/api/view-cache'
 import {
@@ -157,15 +157,7 @@ export const useSimulationFields = (
       (response.data?.status === 'failed'
         ? new Error('Simuleringens visning kunne ikke hentes.')
         : undefined),
-    mutate: async () => {
-      if (farmId && simulationId && response.data?.status === 'failed') {
-        await postJson(
-          `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/view/retry`,
-          {},
-        )
-      }
-      return response.mutate()
-    },
+    summaryMissing: response.data?.status === 'missing',
   }
 }
 
@@ -173,6 +165,22 @@ export const fetchSimulationFields = async (
   farmId: string,
   simulationId: string,
 ) => (await fetchSimulationView(farmId, simulationId)).data?.fields ?? []
+
+// Settings can be opened even when the simulation display has not been published.
+export const useStoredSimulationFields = (
+  farmId?: string,
+  simulationId?: string,
+  revision?: number,
+) =>
+  useSWR<FieldRecord[]>(
+    farmId && simulationId
+      ? [
+          `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/fields`,
+          revision,
+        ]
+      : null,
+    ([path]: [string, number | undefined]) => fetcher<FieldRecord[]>(path),
+  )
 
 export type FieldsBySimulationId = Record<string, FieldRecord[]>
 

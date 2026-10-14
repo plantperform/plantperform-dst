@@ -117,6 +117,7 @@ export const FarmDetailPage = () => {
     isLoading: simulationFieldsLoading,
     isValidating: simulationFieldsValidating,
     mutate: retrySimulationFields,
+    summaryMissing: simulationSummaryMissing,
   } = useSimulationFields(
     farmId,
     selectedSimulationId,
@@ -430,6 +431,7 @@ export const FarmDetailPage = () => {
                       : undefined
                   }
                   fieldsLoading={simulationFieldsLoading}
+                  summaryMissing={simulationSummaryMissing}
                   fieldsError={
                     Boolean(simulationFieldsError) &&
                     simulationFieldsData === undefined

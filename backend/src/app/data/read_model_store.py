@@ -144,6 +144,9 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
         simulation_views.c.view_version,
         simulation_views.c.error,
         simulation_views.c.data["comparison_availability"].label("availability"),
+        (
+            simulation_views.c.data.is_not(None) & (simulation_views.c.data != insert_json(None))
+        ).label("has_view_data"),
     ]
     columns.extend(
         results.c[name].label(f"result_{name}") for name in SimulationResultSummary.model_fields
@@ -179,9 +182,17 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
             "comparison_availability": row.availability,
         }
     )
-    status = row.view_status if row.input_revision == row.revision else "queued"
     if row.creation_status != "done":
         status = row.creation_status
+    elif row.view_status == "done" and row.input_revision == row.revision and row.has_view_data:
+        status = "done"
+    elif summary.get("input_revision") == row.revision and summary.get("status") in (
+        "queued",
+        "in_progress",
+    ):
+        status = "queued" if summary["status"] == "queued" else "running"
+    else:
+        status = "missing"
     view_data = row.view_data if include_data and status == "done" else None
     if view_data is not None:
         from app.services.scenario.options import catalog
@@ -191,8 +202,8 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
         "simulation": simulation,
         "input_revision": row.revision,
         "view_version": row.view_version or 0,
-        "status": status or "queued",
-        "error": row.error,
+        "status": status,
+        "error": None if status == "missing" else row.error,
         "data": view_data,
     }
 

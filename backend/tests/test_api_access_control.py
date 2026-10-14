@@ -160,7 +160,7 @@ class SimulationReadinessTests(unittest.TestCase):
         optimization = {"runId": str(uuid4()), "expectedRevision": 0}
         rotation = {"baseRef": {"saedskiftevariant": "1", "variant": "1", "nNormPct": "100"}}
         cases = (
-            ("GET", "/fields", "simulation_part", None),
+            ("GET", "/fields", "list_simulation_fields", None),
             ("GET", "/crop-area-ranges", "simulation_part", None),
             ("PATCH", "/constraints", "update_simulation_constraints", {}),
             ("POST", "/optimize", "submit", optimization),

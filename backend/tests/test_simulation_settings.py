@@ -5,7 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from legacy_candidates import caches
-from sqlalchemy import event, insert, inspect, select
+from sqlalchemy import delete, event, insert, inspect, select
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests, candidate, field
 
 from app.data import repository, simulation_store
@@ -142,6 +142,32 @@ class SimulationSettingsTests(DatabaseTests):
             settings.update_settings(
                 "farm", created.id, UpdateSimulationRequest(expected_revision=0, name="Lost"), EMAIL
             )
+
+    def test_settings_can_be_saved_without_summary_before_optimization(self):
+        from app.data import read_model_store
+
+        created = self.create(optimization_settings=OptimizationSettings(time_limit_seconds=1))
+        self.optimize(created)
+        with self.sessions.begin() as session:
+            session.execute(delete(views).where(views.c.simulation_id == created.id))
+        fields = repository.list_simulation_fields("farm", created.id, EMAIL)
+        edited = settings.update_settings(
+            "farm",
+            created.id,
+            UpdateSimulationRequest(
+                expected_revision=0, optimization_settings={"time_limit_seconds": 2}
+            ),
+            EMAIL,
+        )
+        self.assertEqual(edited.revision, 1)
+        self.assertEqual(edited.optimization_settings.time_limit_seconds, 2)
+        view = read_model_store.get_simulation_view("farm", created.id, EMAIL)
+        self.assertEqual(view["status"], "missing")
+        self.assertEqual(repository.list_simulation_fields("farm", created.id, EMAIL), fields)
+        self.optimize(edited)
+        self.assertEqual(
+            read_model_store.get_simulation_view("farm", created.id, EMAIL)["status"], "done"
+        )
 
     def test_partial_nested_settings_preserve_unsupplied_values(self):
         created = self.create(

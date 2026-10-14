@@ -39,7 +39,7 @@ describe('compact view refresh', () => {
   })
 
   it('does not load large snapshots while preparing or after failure', async () => {
-    for (const status of ['queued', 'running', 'failed'] as const) {
+    for (const status of ['queued', 'running', 'failed', 'missing'] as const) {
       const load = vi.fn()
       const next = await mergeViewStatus(
         ready,
@@ -48,7 +48,7 @@ describe('compact view refresh', () => {
       )
       expect(next.data).toBeNull()
       expect(load).not.toHaveBeenCalled()
-      expect(isViewPreparing(next)).toBe(status !== 'failed')
+      expect(isViewPreparing(next)).toBe(status === 'queued' || status === 'running')
     }
   })
 

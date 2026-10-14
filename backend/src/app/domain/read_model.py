@@ -82,7 +82,7 @@ class SimulationViewData(FarmViewData):
 class ViewState(CamelModel):
     input_revision: int
     view_version: int
-    status: Literal["queued", "running", "done", "failed"]
+    status: Literal["queued", "running", "done", "failed", "missing"]
     error: dict | None = None
 
 

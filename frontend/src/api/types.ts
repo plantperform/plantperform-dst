@@ -377,7 +377,7 @@ export type FieldYearValues = Record<string, DisplayYearValue[]>
 export type ViewState = {
   inputRevision: number
   viewVersion: number
-  status: 'queued' | 'running' | 'done' | 'failed'
+  status: 'queued' | 'running' | 'done' | 'failed' | 'missing'
   error: { code?: string; message?: string } | null
 }
 

@@ -8,6 +8,7 @@ from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data import economics_recalculation_store
 from app.data.read_model_store import (
+    get_simulation_view,
     require_simulation_view_ready,
     simulation_part,
 )
@@ -19,6 +20,7 @@ from app.data.repository import (
     get_simulation_field_candidate_detail,
     get_simulation_field_context,
     list_scenario_afgrodekoder,
+    list_simulation_fields,
     list_simulations,
     update_simulation_constraints,
     update_simulation_field,
@@ -64,7 +66,6 @@ from app.services.optimization.jobs import (
     SubmissionConflictError,
     submit,
 )
-from app.services.preparation_jobs import get_or_prepare_simulation_view, retry_simulation_view
 from app.services.rotations import afgroede_normer
 from app.services.scenario.candidate_evaluator import (
     evaluate_with_overrides,
@@ -103,7 +104,7 @@ def require_completed_creation(request: Request, user: CurrentUser):
         raise HTTPException(
             status_code=409, detail="Simuleringen er ikke færdig med at blive oprettet."
         )
-    if request.method not in ("GET", "DELETE") and not path.endswith("/view/retry"):
+    if request.method not in ("GET", "DELETE"):
         require_simulation_view_ready(simulation_id, simulation.revision)
 
 
@@ -235,9 +236,7 @@ def get_simulation_display(
     user: CurrentUser,
     include_data: bool = True,
 ):
-    view = get_or_prepare_simulation_view(
-        farm_id, simulation_id, user.email, include_data=include_data
-    )
+    view = get_simulation_view(farm_id, simulation_id, user.email, include_data=include_data)
     if view is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return view
@@ -256,14 +255,6 @@ def delete_farm_simulation(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-
-
-@router.post("/{simulation_id}/view/retry", response_model=SimulationView, status_code=200)
-def retry_simulation_display(farm_id: str, simulation_id: str, user: CurrentUser):
-    view = retry_simulation_view(farm_id, simulation_id, user.email)
-    if view is None:
-        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-    return view
 
 
 @router.patch("/{simulation_id}/constraints", response_model=Simulation)
@@ -409,10 +400,13 @@ def get_farm_simulation_fields(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[FieldRecord]:
-    fields = simulation_part(farm_id, simulation_id, user.email, "fields")
+    try:
+        fields = list_simulation_fields(farm_id, simulation_id, user.email)
+    except CreationNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     if fields is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-    return [FieldRecord.model_validate(field) for field in fields]
+    return fields
 
 
 @router.patch("/{simulation_id}/fields/{field_id}", response_model=FieldRecord)
