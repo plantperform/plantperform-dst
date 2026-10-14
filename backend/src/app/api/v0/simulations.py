@@ -14,7 +14,6 @@ from app.data.read_model_store import (
 from app.data.repository import (
     FieldNotOptimizedError,
     delete_simulation,
-    get_registry_soil_data,
     get_simulation,
     get_simulation_field,
     get_simulation_field_candidate_detail,
@@ -54,6 +53,7 @@ from app.domain.simulation import (
     CreateSimulationRequest,
     OptimizationConstraints,
     Simulation,
+    UpdateSimulationRequest,
 )
 from app.services.creation.jobs import retry as retry_creation
 from app.services.creation.jobs import submit as submit_creation
@@ -91,6 +91,9 @@ def require_completed_creation(request: Request, user: CurrentUser):
         or path.endswith("/economics/recalculate")
         or path.endswith("/economics/recalculate/retry")
         or path.endswith("/view")
+        or path.endswith("/optimize")
+        or path.endswith("/optimize-yearly")
+        or (request.method == "PATCH" and path.endswith("/{simulation_id}"))
     ):
         return
     simulation = get_simulation(request.path_params["farm_id"], simulation_id, user.email)
@@ -132,7 +135,7 @@ def get_farm_simulations(
     return simulations
 
 
-@router.post("", response_model=Simulation, status_code=202)
+@router.post("", response_model=Simulation, status_code=201)
 def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
@@ -162,6 +165,25 @@ def post_farm_simulation(
     if simulation is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
 
+    return simulation
+
+
+@router.patch("/{simulation_id}", response_model=Simulation)
+def patch_farm_simulation(
+    farm_id: str, simulation_id: str, request: UpdateSimulationRequest, user: CurrentUser
+):
+    from app.data.simulation_settings_store import update_settings
+
+    try:
+        simulation = update_settings(farm_id, simulation_id, request, user.email)
+    except (SetupRevisionConflictError, CreationNotReadyError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except EconomicsModuleNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Economics module not found") from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if simulation is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return simulation
 
 
@@ -264,7 +286,7 @@ def patch_farm_simulation_constraints(
 ) -> Simulation:
     try:
         simulation = update_simulation_constraints(farm_id, simulation_id, request, user.email)
-    except CreationNotReadyError as error:
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -384,10 +406,12 @@ def get_farm_simulation_yearly_optimization_candidates(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlyOptimizationKategoriOption]:
-    values = simulation_part(farm_id, simulation_id, user.email, "yearly_optimization_candidates")
-    if values is None:
+    from app.services.scenario.options import catalog
+
+    simulation = get_simulation(farm_id, simulation_id, user.email)
+    if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-    return [YearlyOptimizationKategoriOption.model_validate(value) for value in values]
+    return [YearlyOptimizationKategoriOption.model_validate(value) for value in catalog(simulation)]
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
@@ -412,7 +436,7 @@ def patch_farm_simulation_field(
 ) -> FieldRecord:
     try:
         field = update_simulation_field(farm_id, simulation_id, field_id, request, user.email)
-    except CreationNotReadyError as error:
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
 
     if field is None:
@@ -433,7 +457,7 @@ def get_farm_simulation_field_candidate_detail(
 ) -> RotationCandidateEvaluation:
     try:
         detail = get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, user.email)
-    except CreationNotReadyError as error:
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except FieldNotOptimizedError as error:
         raise HTTPException(
@@ -484,11 +508,11 @@ def post_farm_simulation_field_preview_rotation(
         if candidates_row is None:
             raise HTTPException(status_code=404, detail="Mark ikke fundet")
         field = get_simulation_field(farm_id, simulation_id, field_id, user.email)
-    except CreationNotReadyError as error:
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     if field is None:
         raise HTTPException(status_code=404, detail="Mark ikke fundet")
-    soil_data = get_registry_soil_data(field.imk_id)
+    soil_data = candidates_row.soil_data
     percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
 
     godning = simulation.godning

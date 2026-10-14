@@ -1,8 +1,9 @@
+import math
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.domain.base import CamelModel
 from app.domain.economics import EconomicsSnapshot
@@ -45,6 +46,23 @@ class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
     time_limit_seconds: float = Field(default=20, gt=0, le=600)
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
+
+
+class OptimizationSettings(CamelModel):
+    kind: OptimizationKind = "optimize"
+    time_limit_seconds: float = Field(default=90, gt=0, le=600, allow_inf_nan=False)
+    excluded_afgrodekoder: list[int] = Field(default_factory=list)
+    max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
+    db2_swing_pct: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_yearly_caps(self):
+        for cap in self.max_n_load_by_kystvandopland:
+            if any(
+                not math.isfinite(value) or value < 0 for value in cap.max_n_load_by_year.values()
+            ):
+                raise ValueError("Årlige udledningslofter skal være tal på mindst 0")
+        return self
 
 
 class RotationAssignmentResponse(CamelModel):

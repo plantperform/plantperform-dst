@@ -8,6 +8,8 @@ import {
 } from '@/api/hooks'
 import { createSimulation, deleteSimulation } from '@/api/mutations'
 import type { CreateSimulationInput, Simulation } from '@/api/types'
+import { useOptimizationRunActions } from '@/api/optimization-runs'
+import { DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/simulation-settings'
 import type { FarmViewSelection } from '@/components/farm/types'
 import {
   copiedNNormPercentages,
@@ -25,7 +27,7 @@ const buildCopyInput = (
 ): CreateSimulationInput => ({
   name: copiedSimulationName(simulation.name),
   constraints: simulation.constraints,
-  optimizeOnCreate: true,
+  optimizationSettings: simulation.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
   precisionFarming: simulation.precisionFarming,
   earlySowing: simulation.earlySowing,
   intermediateCrop: simulation.intermediateCrop,
@@ -53,6 +55,7 @@ export const useSimulationActions = ({
   onSelectionChange,
   onError,
 }: SimulationActionsOptions) => {
+  const { startRun } = useOptimizationRunActions()
   const [deletingSimulationId, setDeletingSimulationId] = useState<
     string | null
   >(null)
@@ -111,6 +114,9 @@ export const useSimulationActions = ({
       void mutate(simulationsKey(farmId))
       onError(null)
       onSelectionChange({ kind: 'simulation', id: created.id })
+      const settings = created.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS
+      const common = { farmId, simulationId: created.id, fieldsBefore: [], input: { ...settings, expectedRevision: created.revision } }
+      startRun(settings.kind === 'yearly' ? { ...common, kind: 'yearly' } : { ...common, kind: 'optimize' })
     } catch {
       void mutate(simulationsKey(farmId))
       onError('Kunne ikke starte kopieringen af simuleringen. Prøv igen.')

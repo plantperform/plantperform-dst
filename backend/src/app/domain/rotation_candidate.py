@@ -8,9 +8,10 @@ RotationCandidateRef is serialized as one composite ID ("11:1:100"), allowing
 the existing FieldRecord.allowed_rotation_ids: list[str] field to be reused
 unchanged (see the Phase 5 cutover plan).
 """
+
 from __future__ import annotations
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field
 
 from app.domain.base import CamelModel
 
@@ -106,8 +107,6 @@ class RotationPositionOverride(CamelModel):
 
 
 class RotationCandidateEvaluation(CamelModel):
-    # Internal provenance for hydrating a winning compact cache entry. Never serialized.
-    _cache_position: int | None = PrivateAttr(default=None)
     ref: RotationCandidateRef
     active_len: int
     years: list[RotationCandidateYearResult]
@@ -120,14 +119,12 @@ class RotationCandidateEvaluation(CamelModel):
 
 
 class SimulationFieldCandidates(CamelModel):
-    """The complete, invisibly calculated candidate set for a mark in a
-    simulering, stored by "Opret scenarie" and read later by the optimizer."""
+    """Transient alternatives for one field, generated in the optimization worker."""
 
     field_id: str
     jbnr: int
     candidates: list[RotationCandidateEvaluation]
     # The mark's own actual 2025/26 history (afgrøde + historical N input; see
-    # historisk_goedning.real_history_lookback), cached here by "Opret scenarie"
-    # so the optimizer/"Rediger manuelt" can later seed the 2027/2028 lookback
-    # without an additional DB lookup per mark per call.
+    # historisk_goedning.real_history_lookback), carried in memory to seed
+    # the future years' nitrogen lookback.
     real_history: dict[str, dict] | None = None

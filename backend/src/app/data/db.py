@@ -334,26 +334,6 @@ simulation_table = Table(
     Index("ix_simulation_farm_id", "farm_id"),
 )
 
-simulation_field_candidates_table = Table(
-    "simulation_field_candidates",
-    metadata,
-    Column("id", Text, primary_key=True),
-    Column("simulation_id", Text, ForeignKey("simulation.id", ondelete="CASCADE"), nullable=False),
-    Column("field_id", Text, nullable=False),
-    Column("data", JSONB, nullable=False),
-    Column("optimizer_input", JSONB, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    Index("ix_simulation_field_candidates_simulation_id", "simulation_id"),
-    Index("ix_simulation_field_candidates_field_id", "field_id"),
-    Index(
-        "ix_simulation_field_candidates_simulation_field",
-        "simulation_id",
-        "field_id",
-        unique=True,
-    ),
-)
-
 simulation_result_table = Table(
     "simulation_result",
     metadata,

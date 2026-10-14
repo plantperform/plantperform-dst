@@ -8,11 +8,10 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-from pyogrio import read_dataframe, write_dataframe
-from shapely import box
-
 from database.scripts.load_retentionskort import area_weighted_retention, load_retentionskort
 from database.scripts.merged_gpkg import LAYER, gpkg_is_empty
+from pyogrio import read_dataframe, write_dataframe
+from shapely import box
 
 MAP_VALUES = np.array([20.0, 60.0])
 MAP_POLYGONS = np.array([box(0, 0, 100, 100), box(100, 0, 200, 100)])

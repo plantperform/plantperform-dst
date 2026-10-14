@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from app.data import repository
+from app.data.optimizer_inputs import OptimizerCandidate, OptimizerYear
 from app.domain.field import FieldRecord
 from app.domain.optimization import NUM_YEARS
 from app.domain.rotation_candidate import RotationCandidateEvaluation
@@ -187,16 +188,9 @@ def run_optimization(
     time_limit_seconds: float,
     excluded_afgrodekoder: frozenset[int],
     email: str,
-    snapshot=None,
+    snapshot,
 ) -> OptimizationRunResult:
-    if snapshot is None:
-        simulation = repository.get_simulation(farm_id, simulation_id, email)
-        fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-        field_candidates = repository.list_simulation_field_candidates(
-            farm_id, simulation_id, email
-        )
-    else:
-        simulation, fields, field_candidates = snapshot
+    simulation, fields, field_candidates = snapshot
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -414,11 +408,31 @@ def _expand_yearly_options(
             leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in variant.years)
             n_load_by_year = tuple(leaching * retention_factor for leaching in leaching_by_year)
             ref_id = variant.ref.to_id()
+            # Expanded alternatives carry numbers in memory, not rich reports.
+            compact = OptimizerCandidate(
+                ref=variant.ref,
+                base_ref=variant.base_ref,
+                overrides=variant.overrides,
+                start_year=variant.start_year,
+                active_len=variant.active_len,
+                avg_db_kr_ha=variant.avg_db_kr_ha,
+                avg_leaching_kg_n_ha=variant.avg_leaching_kg_n_ha,
+                avg_fen=variant.avg_fen,
+                years=[
+                    OptimizerYear(
+                        year=y.year,
+                        db_kr_ha=y.db_kr_ha,
+                        leaching_kg_n_ha=y.leaching_kg_n_ha,
+                        fen_fe_ha=y.fen_fe_ha,
+                    )
+                    for y in variant.years
+                ],
+            )
             options.append(
                 YearlyRotationOption(
                     key=ref_id,
                     id=ref_id,
-                    candidate=variant,
+                    candidate=compact,
                     years=tuple(y.year for y in variant.years[: variant.active_len]),
                     db2_by_year=db2_by_year,
                     n_load_by_year=n_load_by_year,
@@ -500,7 +514,7 @@ def run_yearly_optimization(
     db2_swing_pct: float | None,
     excluded_afgrodekoder: frozenset[int],
     email: str,
-    snapshot=None,
+    snapshot,
 ) -> YearlyOptimizationRunResult:
     """Run Phase 11 "Års-optimering" with annual rotation shifting.
 
@@ -513,14 +527,7 @@ def run_yearly_optimization(
 
     Every remaining candidate can be shifted; see _expand_yearly_options.
     """
-    if snapshot is None:
-        simulation = repository.get_simulation(farm_id, simulation_id, email)
-        fields = repository.list_simulation_fields(farm_id, simulation_id, email)
-        field_candidates = repository.list_simulation_field_candidates(
-            farm_id, simulation_id, email
-        )
-    else:
-        simulation, fields, field_candidates = snapshot
+    simulation, fields, field_candidates = snapshot
 
     if simulation is None or fields is None or field_candidates is None:
         raise OptimizationNotFoundError
@@ -529,9 +536,18 @@ def run_yearly_optimization(
         raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc for fc in field_candidates}
-    soil_data_by_imk_id = repository.get_registry_soil_data_batch(
-        [field.imk_id for field in fields if field.imk_id is not None]
-    )
+    if hasattr(snapshot, "contexts"):
+        from types import SimpleNamespace
+
+        soil_data_by_imk_id = {
+            field.imk_id: repository._soil_data_for_context(SimpleNamespace(**context))
+            for field in fields
+            if (context := snapshot.contexts.get(field.id)) is not None
+        }
+    else:
+        soil_data_by_imk_id = repository.get_registry_soil_data_batch(
+            [field.imk_id for field in fields if field.imk_id is not None]
+        )
 
     field_inputs = []
     fixed_fields = []

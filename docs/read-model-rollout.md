@@ -1,7 +1,7 @@
 # Compact farm and simulation views
 
 The API serves stored display snapshots. Lambda prepares farm history, simulation
-creation projections, and successful optimization projections. The normal
+result projections, and successful optimization projections. The normal
 frontend views do not fetch candidate details for every field. Full breakdowns
 are loaded when the user opens a field's calculation panel.
 
@@ -10,9 +10,10 @@ are loaded when the user opens a field's calculation panel.
 Use a coordinated write pause while changing the schema and application versions.
 AWS changes require user approval. Terraform apply and destroy remain manual.
 
-1. Take the normal database backup and apply Alembic revision `20261012_0002`.
-   This creates read-model identities and queued state without calculating history
-   or scanning large candidate documents inside the migration.
+1. Drain legacy creation/optimization jobs, take the normal database backup,
+   and apply Alembic revision `20261014_0001`. Earlier revisions create read-model
+   identities and queued state; the final revision preserves selected legacy
+   reports and drops the candidate table without calculating new alternatives.
 2. Deploy the optimizer image containing `prepare_farm_history` and
    `prepare_simulation_view` handlers. Keep `APP_ENV=production` and the existing
    SQS transport on the deployed API.
@@ -37,7 +38,7 @@ instance. Updating an ECR tag does not replace the deployed Lambda image.
 - Full view GET requests verify access, then queue preparation if the current
   snapshot is missing. Migration-created queued rows prepare on first use.
   Ready snapshots, including empty farms, and active jobs are reused. Simulation
-  view preparation waits until simulation creation finishes.
+  view preparation waits until legacy recovery or economics recalculation finishes.
 - `include_data=false` selects metadata only and never publishes jobs. Missing
   or unfinished projections have `data: null`. Calculations run on workers.
 - Failed preparation retries with a new generation when the user reopens the
@@ -46,7 +47,7 @@ instance. Updating an ECR tag does not replace the deployed Lambda image.
 - Active jobs are polled every two seconds while the page is visible and online.
 - Field registration returns 202. A batch changes the farm revision once and
   submits one history job. The UI waits for ready history rather than displaying
-  uncalculated zero figures. Simulation creation requires ready farm history.
+  uncalculated zero figures. Saving simulation settings does not require history preparation; the first run requires ready farm history.
 - Retry endpoints are `POST /farms/{farm_id}/history/retry` and
   `POST /farms/{farm_id}/simulations/{simulation_id}/view/retry`.
   The history endpoint also recalculates ready history, advancing the farm
@@ -54,8 +55,8 @@ instance. Updating an ECR tag does not replace the deployed Lambda image.
   preparations are reused; existing simulation inputs and saved results remain.
 - Edits update the small current projection in the same transaction as the setup
   revision. Last successful comparison snapshots remain immutable during edits,
-  failed runs, or new optimization runs. Detail selection retains fixed → saved
-  optimization → manual → original-cache precedence.
+  failed runs, or new optimization runs. Detail selection retains fixed → economics valuation → saved
+  optimization → manual precedence.
 - New successful outputs retain their run token for subsequent view preparation.
   Older records whose token was replaced by a later submission retain their numerical
   comparison data with a legacy snapshot identity when no original token exists.
@@ -64,25 +65,27 @@ instance. Updating an ECR tag does not replace the deployed Lambda image.
   executions. Revision/generation checks reject stale writes, and deletion
   cascades to projections and stored historical details.
 
-## Shared simulation metadata
+## Simulation metadata without candidate storage
 
-Simulation `prepared` format version 2 stores ordered candidate IDs and active
-main-crop codes in shared candidate sets. Each field references a base set and
-retains its own manual, selected, and fixed overlays and crop-area contributions.
-Sets are shared only when their complete ordered IDs and code sequences match.
-Crop names, fertilizer values, and saved comparisons remain in the separate
-display snapshot; full calculation reports remain in the candidate caches.
+New publications use `prepared` version 3: per-field aggregate crop-area bounds
+and selected result values only. Alternative candidates, compact solver inputs,
+and candidate reference/code arrays are never persisted. Rotation choices come
+from the library and saved parameters; worker preparation keeps numerical
+alternatives in memory and publishes only the chosen result.
 
-Creation and view preparation build these compact sets and contributions one
-field at a time. Projection edits read only the edited field's metadata, its
-referenced candidate set, and the existing display snapshot and contributions.
-They do not modify the shared sets or fetch full candidate-cache documents.
+Field edits rebuild aggregate summaries from cheap sequences and preserve the
+last successful comparison. Migration `20261014_0001` preserves selected legacy
+reports in setup/result JSONB and drops the candidate table. Legacy display
+snapshots remain readable; their next publication drops candidate metadata.
+DB2 recalculation uses physical calculation inputs from chosen reports and
+updates current valuation overlays without solving or altering nitrogen results.
 
-Deploy the compatible API and optimizer together using the coordinated write
-pause. No additional schema migration is required. Legacy snapshots remain
-readable and editable in their existing format; a worker's next full preparation
-or successful optimization publication converts them to version 2. Ordinary view
-reads do not convert metadata, and no bulk rewrite is needed.
+Use the coordinated worker/API/frontend rollout after draining old jobs. No
+candidate calculation or solver backfill is required. Apply `20261014_0001`
+with simulation writes paused; it copies only selected reports before dropping
+`simulation_field_candidates`. Downgrade recreates the empty table and retains
+those selected reports; discarded alternatives require a backup to restore.
+See the optimizer README for current workflow, checks and the representative storage benchmark.
 
 ## Registry and reference-data imports
 
@@ -95,7 +98,8 @@ Adding or removing fields still automatically prepares updated history.
 
 Run the backend and optimizer suites against disposable PostgreSQL, the frontend
 suite, Python/TypeScript lint, and the frontend production build. Alembic has a
-single `20261012_0002` head; upgrade/downgrade is tested without changing source records.
+single `20261014_0001` head; selected-report promotion, table removal, rollback,
+and downgrade are tested in isolated schemas.
 
 The representative projection has 500 fields and 90,500 candidate choices.
 Size regressions require prepared JSON to be at least 90% smaller than the legacy

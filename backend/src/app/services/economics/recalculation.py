@@ -1,5 +1,6 @@
 """Reprice existing evaluations without changing rotations or agronomic outputs."""
 
+from app.domain.economics import EconomicsCalculationInputs
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.services.economics.db_calculator import calculate_db
 
@@ -35,6 +36,7 @@ def recalculate_candidate(candidate, simulation, snapshot, jbnr):
                 praecisionsjordbrug=simulation.praecisionsjordbrug,
                 forfrugtsvaerdi=year.forfrugtsvaerdi_kgn_ha,
             )
+        inputs = EconomicsCalculationInputs.model_validate(inputs).model_dump()
         year.db_detail = calculate_db(**inputs, economics_key=snapshot.overrides.cache_key())
         year.db_kr_ha = year.db_detail["db"]
     cycle = candidate.years[: candidate.active_len]

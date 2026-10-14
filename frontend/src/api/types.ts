@@ -204,6 +204,8 @@ export type FertiliserPresetOption = {
 }
 
 export type Simulation = {
+  fieldsInitialized?: boolean
+  optimizationSettings?: OptimizationSettings
   creationStatus?: CreationStatus
   revision: number
   result: SimulationResultSummary
@@ -225,6 +227,7 @@ export type Simulation = {
 }
 
 export type CreateSimulationInput = {
+  optimizationSettings?: OptimizationSettings
   requestId?: string
   optimizeOnCreate?: boolean
   constraints?: OptimizationConstraints
@@ -237,6 +240,18 @@ export type CreateSimulationInput = {
   precisionFarming?: boolean
   earlySowing?: boolean
   intermediateCrop?: boolean
+}
+
+export type OptimizationSettings = {
+  kind: 'optimize' | 'yearly'
+  timeLimitSeconds: number
+  excludedCropCodes: number[]
+  maxNLoadByCatchment: CatchmentYearlyNLoadCaps[]
+  db2SwingPct: number | null
+}
+
+export type UpdateSimulationInput = Partial<CreateSimulationInput> & {
+  expectedRevision: number
 }
 
 export type CreationStatus = 'queued' | 'running' | 'done' | 'failed'

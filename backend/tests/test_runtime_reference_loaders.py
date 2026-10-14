@@ -4,7 +4,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.services.rotations import afgroede_normer
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
@@ -13,6 +12,8 @@ from database.scripts.load_oekonomital_generelle_satser import (
     parse_oekonomital_generelle_satser,
 )
 from database.scripts.load_permanente_afgrodekoder import parse_permanente_afgrodekoder
+
+from app.services.rotations import afgroede_normer
 
 
 def write_csv(

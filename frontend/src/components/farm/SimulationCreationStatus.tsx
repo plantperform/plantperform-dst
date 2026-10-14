@@ -20,12 +20,11 @@ export const SimulationCreationStatus = ({
 }) => {
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [optimizeOnCreate, setOptimizeOnCreate] = useState(true)
   const retry = async () => {
     setRetrying(true)
     setError(null)
     try {
-      const accepted = await retrySimulationCreation(farmId, simulation.id, optimizeOnCreate)
+      const accepted = await retrySimulationCreation(farmId, simulation.id)
       await mutate(
         simulationsKey(farmId),
         (current: Simulation[] = []) =>
@@ -46,17 +45,9 @@ export const SimulationCreationStatus = ({
           <p role="alert" className="text-sm text-destructive">
             {error ?? 'Kunne ikke oprette simuleringen.'}
           </p>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={optimizeOnCreate}
-              disabled={retrying}
-              onChange={(event) => setOptimizeOnCreate(event.target.checked)}
-            />
-            Optimér, når simuleringen er klar
-          </label>
+
           <Button size="sm" loading={retrying} onClick={() => void retry()}>
-            Prøv igen
+            Åbn indstillinger
           </Button>
         </>
       ) : (

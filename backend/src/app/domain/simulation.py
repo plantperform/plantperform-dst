@@ -7,7 +7,7 @@ from app.domain.base import CamelModel
 from app.domain.creation import CreationStatus
 from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
-from app.domain.optimization import SimulationResultSummary
+from app.domain.optimization import OptimizationSettings, SimulationResultSummary
 
 
 class GodningSettings(CamelModel):
@@ -132,6 +132,8 @@ class OptimizationConstraints(CamelModel):
 
 
 class Simulation(CamelModel):
+    fields_initialized: bool = True  # Legacy simulations already have their field snapshot.
+    optimization_settings: OptimizationSettings = Field(default_factory=OptimizationSettings)
     economics_module_id: str = "standard"
     economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     creation_status: CreationStatus = "done"
@@ -143,9 +145,8 @@ class Simulation(CamelModel):
     name: str
     created_at: str
     constraints: OptimizationConstraints = Field(default_factory=OptimizationConstraints)
-    # The sædskifte variants + N-norm% used by "Opret scenarie" to generate the
-    # stored candidate set (simulation_field_candidates). Informational/audit
-    # only; the solver reads this indirectly through the stored candidates.
+    # Editable library variants and N-norm levels used to generate alternatives
+    # in memory on each optimization run.
     rotation_saedskiftevarianter: list[str] = Field(default_factory=list)
     rotation_n_norm_procenter: list[str] = Field(default_factory=list)
     # Gødning selection (Phase 13), independent of rotation_saedskiftevarianter.
@@ -166,6 +167,7 @@ class Simulation(CamelModel):
 
 
 class CreateSimulationRequest(CamelModel):
+    optimization_settings: OptimizationSettings = Field(default_factory=OptimizationSettings)
     economics_module_id: str | None = None
     request_id: UUID | None = None
     optimize_on_create: bool = False
@@ -182,3 +184,38 @@ class CreateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Give the simulation a name")
+        return value
+
+
+class UpdateSimulationRequest(CamelModel):
+    expected_revision: int = Field(ge=0)
+    name: str | None = Field(default=None, min_length=1)
+    economics_module_id: str | None = None
+    constraints: OptimizationConstraints | None = None
+    saedskiftevarianter: list[str] | None = None
+    n_norm_procenter: list[str] | None = None
+    godning: GodningSettings | None = None
+    eea_fdato: str | None = None
+    eea_precision_dagsbasis: bool | None = None
+    praecisionsjordbrug: bool | None = None
+    tidlig_saaning: bool | None = None
+    mellemafgrode: bool | None = None
+    optimization_settings: OptimizationSettings | None = None
+
+    @model_validator(mode="after")
+    def validate_nonnull_settings(self):
+        for key in self.model_fields_set - {"economics_module_id"}:
+            if getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        if self.name is not None:
+            self.name = self.name.strip()
+            if not self.name:
+                raise ValueError("Give the simulation a name")
+        return self

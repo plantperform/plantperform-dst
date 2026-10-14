@@ -221,8 +221,9 @@ export const OptimizationRunsProvider = ({
           const input = {
             ...request.input,
             runId: id,
-            expectedRevision: simulation.revision,
-            timeLimitSeconds: OPTIMIZATION_TIME_LIMIT_SECONDS,
+            expectedRevision: request.input.expectedRevision ?? simulation.revision,
+            timeLimitSeconds: request.input.timeLimitSeconds ??
+              simulation.optimizationSettings?.timeLimitSeconds ?? OPTIMIZATION_TIME_LIMIT_SECONDS,
           }
           const result =
             request.kind === 'optimize'

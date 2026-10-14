@@ -15,6 +15,7 @@ from app.domain.optimization import (
     OptimizeSimulationResponse,
     YearlyOptimizeSimulationRequest,
 )
+from app.domain.soil import MissingSoilDataError
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
 from plantperform_optimizer.deadline import (
     OptimizationDeadlineError,
@@ -27,6 +28,7 @@ from plantperform_optimizer.orchestrator import (
     run_optimization,
     run_yearly_optimization,
 )
+from plantperform_optimizer.preparation import hydrate, prepare
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,8 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
             outcome = "stale"
             return
         check_deadline()
+        with _timed_phase("prepare_candidates", simulation_id, run_id):
+            snapshot = prepare(*snapshot)
         request_type = (
             YearlyOptimizeSimulationRequest
             if row["kind"] == "yearly"
@@ -124,9 +128,7 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
             field_count=len(snapshot[1]),
             candidate_count=len(solved.selected_candidates),
         ):
-            selected = optimization_store.hydrate_winners(
-                simulation_id, run_id, token, row["input_revision"], solved.selected_candidates
-            )
+            selected = hydrate(snapshot, solved.selected_candidates)
         if selected is None:
             outcome = "stale"
             return
@@ -151,20 +153,25 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
                 for i, v in enumerate(getattr(solved.output, "total_n_load_by_year", ()))
             },
         )
-        saved = optimization_store.finish(
-            simulation_id,
-            run_id,
-            token,
-            row["input_revision"],
-            output={
-                "response": response.model_dump(mode="json"),
-                "economics_snapshot": snapshot[0].economics_snapshot.model_dump(mode="json"),
-                "fields_before": [field.model_dump(mode="json") for field in snapshot[1]],
-                "selected_candidates": {
-                    key: value.model_dump(mode="json") for key, value in selected.items()
+        with _timed_phase("persist_result", simulation_id, run_id, field_count=len(snapshot[1])):
+            saved = optimization_store.finish(
+                simulation_id,
+                run_id,
+                token,
+                row["input_revision"],
+                setup_fields=snapshot.setup_fields,
+                output={
+                    "response": response.model_dump(mode="json"),
+                    "economics_snapshot": snapshot[0].economics_snapshot.model_dump(mode="json"),
+                    "fields_before": [
+                        field.model_dump(mode="json")
+                        for field in (snapshot.fields_before or snapshot[1])
+                    ],
+                    "selected_candidates": {
+                        key: value.model_dump(mode="json") for key, value in selected.items()
+                    },
                 },
-            },
-        )
+            )
         outcome = "completed" if saved else "stale"
     except (
         OptimizationInfeasibleError,
@@ -178,6 +185,15 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
             token,
             row["input_revision"],
             error={"code": code, "message": str(error)},
+        )
+        outcome = "failed" if saved else "stale"
+    except (MissingSoilDataError, ValueError) as error:
+        saved = optimization_store.finish(
+            simulation_id,
+            run_id,
+            token,
+            row["input_revision"],
+            error={"code": "INVALID_INPUT", "message": str(error)},
         )
         outcome = "failed" if saved else "stale"
     except Exception:

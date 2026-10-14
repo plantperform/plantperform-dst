@@ -68,7 +68,7 @@ def apply_manual_rotation(
         raise ManualRotationNotFoundError
 
     godning = simulation.godning
-    soil_data = repository.get_registry_soil_data(field.imk_id)
+    soil_data = candidates_row.soil_data
     percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
     candidate = candidate_evaluator.evaluate_with_overrides(
         base_ref,

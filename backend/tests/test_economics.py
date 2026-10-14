@@ -12,14 +12,15 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi import BackgroundTasks, FastAPI
 from fastapi.testclient import TestClient
+from legacy_candidates import caches
 from pydantic import ValidationError
 from sqlalchemy import insert, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
 
 from app.api.v0 import economics as api
 from app.auth import AuthenticatedUser, current_user
-from app.data import creation_store, economics_store, read_model_store, repository
 from app.data import economics_recalculation_store as recalc_store
+from app.data import economics_store, read_model_store, repository
 from app.data.db import (
     afgroede_norm_lookup_table,
     afgroede_table,
@@ -34,9 +35,6 @@ from app.data.db import (
     metadata,
     prisliste_table,
     salgspris_table,
-)
-from app.data.db import (
-    simulation_field_candidates_table as caches,
 )
 from app.data.db import (
     simulation_table as setups,
@@ -422,25 +420,40 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertIsNotNone(view["data"])
         self.queue.send_message.assert_not_called()
 
-    def test_creation_freezes_at_submission_and_retry_keeps_snapshot(self):
+    def test_creation_and_optimization_keep_captured_economics_snapshot(self):
+        from app.data.simulation_settings_store import create
+        from app.domain.optimization import OptimizeSimulationRequest
+        from app.services.optimization import jobs as optimization_jobs
+
         module = self.module(prices={SALE: 150})
-        simulation_id, job = creation_store.create(
-            "farm", CreateSimulationRequest(name="New", economicsModuleId=module.id), EMAIL
+        created = create(
+            "farm", CreateSimulationRequest(name="frozen", economics_module_id=module.id), EMAIL
         )
         economics_store.update_module(
             module.id,
-            UpdateEconomicsModuleRequest(
-                expectedRevision=0, overrides=EconomicsOverrides(prices={SALE: 250})
-            ),
+            UpdateEconomicsModuleRequest(expected_revision=0, overrides={"prices": {SALE: 200}}),
             EMAIL,
         )
-        self.assertEqual(job.economics_snapshot.overrides.prices[SALE], 150)
-        with self.sessions.begin() as session:
-            session.execute(
-                update(setups).where(setups.c.id == simulation_id).values(creation_status="failed")
-            )
-        retry = creation_store.retry("farm", simulation_id, EMAIL)
-        self.assertEqual(retry.economics_snapshot, job.economics_snapshot)
+        self.assertEqual(created.economics_snapshot.overrides.prices[SALE], 150)
+        accepted = optimization_jobs.submit(
+            "farm",
+            created.id,
+            EMAIL,
+            "optimize",
+            OptimizeSimulationRequest(expected_revision=0, run_id=uuid4()),
+        )
+        with self.sessions() as session:
+            from app.data.db import simulation_result_table
+
+            parameters = session.execute(
+                select(simulation_result_table.c.parameters).where(
+                    simulation_result_table.c.run_id == accepted.run_id
+                )
+            ).scalar_one()
+        self.assertEqual(
+            parameters["simulation_settings"]["economics_snapshot"]["overrides"]["prices"][SALE],
+            150,
+        )
 
     def test_manual_recalculation_preserves_choices_and_freezes_inputs(self):
         self.install_calculation_inputs()
@@ -534,6 +547,8 @@ class EconomicsDatabaseTests(DatabaseTests):
 
     def test_partial_attempt_hidden_and_retry_does_not_compound_yield(self):
         self.install_calculation_inputs()
+        optimization = self.submit()
+        optimizer_worker.execute("sim", optimization.run_id, CONTEXT)
         module = self.module(yieldPct={"1": 20})
         selected = self.select_module(module)
         _, _, envelope = self.submit_recalculation(selected.revision)
@@ -543,7 +558,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         def fail_after_first_field(*args):
             nonlocal calls
             calls += 1
-            if calls == 3:
+            if calls == 2:
                 raise RuntimeError("partial failure")
             return original(*args)
 
@@ -559,7 +574,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             rows = session.execute(select(caches.c.data)).scalars().all()
         for row in rows:
             for candidate in row["candidates"]:
-                self.assertEqual(candidate["years"][0]["db_detail"]["udbytte"], 72)
+                self.assertEqual(candidate["years"][0]["db_detail"]["udbytte"], 60)
 
     def test_cached_baseline_and_locked_fields_recalculate_fen(self):
         from app.domain.rotation_candidate import RotationCandidateEvaluation

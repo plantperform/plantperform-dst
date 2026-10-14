@@ -1,8 +1,6 @@
 """Persist small views; read paths never build them or load candidate documents."""
 
-from copy import deepcopy
-
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.data.db import farm_read_model_table as farm_views
@@ -184,13 +182,18 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
     status = row.view_status if row.input_revision == row.revision else "queued"
     if row.creation_status != "done":
         status = row.creation_status
+    view_data = row.view_data if include_data and status == "done" else None
+    if view_data is not None:
+        from app.services.scenario.options import catalog
+
+        view_data = {**view_data, "yearly_optimization_candidates": catalog(simulation)}
     return {
         "simulation": simulation,
         "input_revision": row.revision,
         "view_version": row.view_version or 0,
         "status": status or "queued",
         "error": row.error,
-        "data": row.view_data if include_data and status == "done" else None,
+        "data": view_data,
     }
 
 
@@ -230,7 +233,8 @@ def historical_detail(farm_id, field_id, email):
 
 
 def publish_simulation(session, simulation_id, revision, data, prepared):
-    prepared = read_models.normalize_prepared(prepared)
+    prepared = {"version": 3, "contributions": prepared.get("contributions", {})}
+    data = {key: value for key, value in data.items() if key != "yearly_optimization_candidates"}
     statement = insert(simulation_views).values(
         simulation_id=simulation_id,
         input_revision=revision,
@@ -255,66 +259,8 @@ def publish_simulation(session, simulation_id, revision, data, prepared):
 
 
 def publish_optimization(session, simulation_id, revision, run_id, output):
-    from app.data import simulation_store
-
-    row = session.execute(
-        select(simulation_views.c.data, simulation_views.c.prepared).where(
-            simulation_views.c.simulation_id == simulation_id
-        )
-    ).first()
-    if row is None or row.data is None:
-        # Backfill is performed on the worker, never on an API read.
-        data, prepared = build_simulation(session, simulation_id)
-    else:
-        data, prepared = row.data, row.prepared
-    prepared = read_models.normalize_prepared(prepared)
-    field_years = {
-        key: read_models.compact_years(RotationCandidateEvaluation.model_validate(value))
-        for key, value in output["selected_candidates"].items()
-    }
-    saved = {
-        "run_id": run_id,
-        "result_revision": revision,
-        "response": output["response"],
-        "economics_snapshot": output.get("economics_snapshot", {}),
-        "fields_before": output["fields_before"],
-        "field_years": field_years,
-    }
-    fields = simulation_store._fields(session, simulation_id)
-    contributions = {}
-    for field in fields:
-        entry = read_models.ensure_prepared_field(prepared, field.id)
-        chosen = output["selected_candidates"].get(field.id)
-        entry["overlays"]["selected"] = (
-            read_models.compact_candidate_metadata(
-                RotationCandidateEvaluation.model_validate(chosen)
-            )
-            if chosen
-            else None
-        )
-        effective = read_models.overlay_metadata(
-            read_models.prepared_base(prepared, entry),
-            [entry["overlays"].get(key) for key in ("manual", "selected", "economics", "fixed")],
-        )
-        contributions[field.id] = read_models.field_contribution(field, effective)
-    # Current fields retain explicit manual/fixed overlays; comparisons keep immutable output.
-    current_years = dict(field_years)
-    setup_fields = session.execute(select(setups.c.fields).where(setups.c.id == simulation_id))
-    for field_id, setup in setup_fields.scalar_one().items():
-        if setup.get("fixed_candidate"):
-            current_years[field_id] = read_models.compact_years(
-                RotationCandidateEvaluation.model_validate(setup["fixed_candidate"])
-            )
-    new_data, contributions = read_models.simulation_data(
-        fields,
-        {},
-        current_years,
-        saved,
-        catalog=data["yearly_optimization_candidates"],
-        contributions=contributions,
-    )
-    prepared["contributions"] = contributions
-    publish_simulation(session, simulation_id, revision, new_data, prepared)
+    data, prepared = build_simulation(session, simulation_id)
+    publish_simulation(session, simulation_id, revision, data, prepared)
 
 
 def invalidate_simulation(session, simulation_id):
@@ -329,69 +275,11 @@ def invalidate_simulation(session, simulation_id):
 
 
 def update_field_view(session, simulation_id, field, setup):
-    row = session.execute(
-        select(
-            simulation_views.c.data,
-            simulation_views.c.prepared["fields"][field.id].label("field_prepared"),
-            simulation_views.c.prepared["contributions"].label("contributions"),
-        ).where(simulation_views.c.simulation_id == simulation_id)
-    ).first()
-    if row is None or row.data is None:
-        return
-    data = deepcopy(row.data)
-    entry = deepcopy(row.field_prepared or {"base": [], "overlays": {}})
-    if "base_set" in entry:
-        base = session.execute(
-            select(simulation_views.c.prepared["candidate_sets"][entry["base_set"]]).where(
-                simulation_views.c.simulation_id == simulation_id
-            )
-        ).scalar_one()
-        metadata = read_models.compact_candidate_metadata
-    else:
-        base = entry["base"]
-        metadata = read_models.candidate_metadata
-    for key in ("manual", "fixed"):
-        value = setup.get(f"{key}_candidate")
-        entry["overlays"][key] = (
-            metadata(RotationCandidateEvaluation.model_validate(value)) if value else None
-        )
-    effective = read_models.overlay_metadata(
-        base, [entry["overlays"].get(key) for key in ("manual", "selected", "economics", "fixed")]
-    )
-    contributions = dict(row.contributions or {})
-    contributions[field.id] = read_models.field_contribution(field, effective)
-    data["fields"] = [
-        field.model_dump(mode="json") if value["id"] == field.id else value
-        for value in data["fields"]
-    ]
-    chosen = setup.get("fixed_candidate") or setup.get("manual_candidate")
-    if (
-        chosen
-        and RotationCandidateEvaluation.model_validate(chosen).ref.to_id() == field.rotation_id
-    ):
-        data["field_years"][field.id] = read_models.compact_years(
-            RotationCandidateEvaluation.model_validate(chosen)
-        )
-    if field.rotation_id is None:
-        data["field_years"].pop(field.id, None)
-    data["yearly_summary"] = read_models.yearly_totals(
-        read_models.parsed_fields(data), data["field_years"]
-    )
-    data["crop_area_ranges"] = read_models.combine_contributions(contributions)
-    session.execute(
-        update(simulation_views)
-        .where(simulation_views.c.simulation_id == simulation_id)
-        .values(
-            data=data,
-            prepared=func.jsonb_set(
-                func.jsonb_set(
-                    simulation_views.c.prepared, ["fields", field.id], insert_json(entry)
-                ),
-                ["contributions"],
-                insert_json(contributions),
-            ),
-        )
-    )
+    revision = session.execute(
+        select(setups.c.revision).where(setups.c.id == simulation_id)
+    ).scalar_one()
+    data, prepared = build_simulation(session, simulation_id)
+    publish_simulation(session, simulation_id, revision, data, prepared)
 
 
 def insert_json(value):
@@ -402,86 +290,56 @@ def insert_json(value):
 
 
 def build_simulation(session, simulation_id):
-    """Worker-only backfill: compact caches, with only selected rich evaluations."""
+    """Build displays from selected results and cheap library sequences only."""
     from app.data import simulation_store
-    from app.data.db import simulation_field_candidates_table as caches
     from app.data.db import simulation_result_table as results
+    from app.domain.simulation import Simulation
+    from app.services.scenario.options import contributions as area_contributions
 
     fields = simulation_store._fields(session, simulation_id)
     setup = session.execute(
-        select(setups.c.fields, results.c.output).join(results).where(setups.c.id == simulation_id)
+        select(setups.c.data, setups.c.fields, results.c.output)
+        .join(results)
+        .where(setups.c.id == simulation_id)
     ).one()
+    simulation = Simulation.model_validate(setup.data)
     output = setup.output or {}
-    prepared = read_models.PreparedMetadata()
-    catalog = read_models.RotationCatalog()
-    fields_by_id = {field.id: field for field in fields}
-    contributions, years = {}, {}
-    for row in session.execute(
-        select(caches.c.field_id, caches.c.optimizer_input)
-        .where(caches.c.simulation_id == simulation_id)
-        .execution_options(yield_per=1)
-    ):
-        from app.data.optimizer_inputs import parse_optimizer_input
-
-        candidates = parse_optimizer_input(row.optimizer_input)
-        base = [read_models.candidate_metadata(candidate) for candidate in candidates.candidates]
-        overlays = {}
-        for name, value in [
-            ("manual", setup.fields.get(row.field_id, {}).get("manual_candidate")),
-            ("selected", output.get("selected_candidates", {}).get(row.field_id)),
-            ("economics", setup.fields.get(row.field_id, {}).get("economics_candidate")),
-            ("fixed", setup.fields.get(row.field_id, {}).get("fixed_candidate")),
-        ]:
-            overlays[name] = (
-                read_models.candidate_metadata(RotationCandidateEvaluation.model_validate(value))
-                if value
-                else None
-            )
-        prepared.add_field(row.field_id, base, overlays)
-        effective = read_models.overlay_metadata(
-            base, [overlays.get(key) for key in ("manual", "selected", "economics", "fixed")]
-        )
-        catalog.add(effective)
-        if row.field_id in fields_by_id:
-            contributions[row.field_id] = read_models.field_contribution(
-                fields_by_id[row.field_id], effective
-            )
-        del candidates, base, overlays, effective, row
+    contributions = area_contributions(simulation, fields, setup.fields)
+    years = {}
     for field in fields:
-        read_models.ensure_prepared_field(prepared.data, field.id)
-        contributions.setdefault(field.id, [])
         if field.rotation_id:
-            value = simulation_store._selected_candidate(
-                session, simulation_id, field.id, field.rotation_id
+            candidates = (
+                setup.fields.get(field.id, {}).get("fixed_candidate"),
+                setup.fields.get(field.id, {}).get("economics_candidate"),
+                output.get("selected_candidates", {}).get(field.id),
+                setup.fields.get(field.id, {}).get("manual_candidate"),
             )
+            value = next(
+                (
+                    RotationCandidateEvaluation.model_validate(value)
+                    for value in candidates
+                    if value
+                    and RotationCandidateEvaluation.model_validate(value).ref.to_id()
+                    == field.rotation_id
+                ),
+                None,
+            )
+            if value is None:
+                value = simulation_store._selected_candidate(
+                    session, simulation_id, field.id, field.rotation_id
+                )
             if value:
                 years[field.id] = read_models.compact_years(value)
-    result = session.execute(
-        select(
-            results.c.run_id,
-            results.c.result_revision,
-            results.c.input_revision,
-            results.c.status,
-            simulation_views.c.data["saved_result"].label("saved_result"),
+    previous = session.execute(
+        select(simulation_views.c.data["saved_result"]).where(
+            simulation_views.c.simulation_id == simulation_id
         )
-        .select_from(
-            results.outerjoin(
-                simulation_views, simulation_views.c.simulation_id == results.c.simulation_id
-            )
-        )
-        .where(results.c.simulation_id == simulation_id)
-    ).one()
-    saved = result.saved_result
-    if output.get("response") is not None and (saved is None or output.get("run_id")):
-        # Older records cannot recover a successful token once a newer run replaced it.
-        run_id = output.get("run_id") or (
-            result.run_id
-            if result.status == "completed"
-            else f"legacy:{simulation_id}:{result.result_revision}"
-        )
+    ).scalar_one_or_none()
+    saved = previous
+    if output.get("response") is not None:
         saved = {
-            "run_id": run_id,
-            "result_revision": result.result_revision,
+            "run_id": output.get("run_id") or f"legacy:{simulation_id}",
+            "result_revision": output.get("result_revision", 0),
             "response": output["response"],
             "fields_before": output.get("fields_before", []),
             "economics_snapshot": output.get("economics_snapshot", {}),
@@ -491,10 +349,9 @@ def build_simulation(session, simulation_id):
             },
         }
     data, contributions = read_models.simulation_data(
-        fields, {}, years, saved, catalog=catalog.build(), contributions=contributions
+        fields, {}, years, saved, catalog=[], contributions=contributions
     )
-    prepared.data["contributions"] = contributions
-    return data, prepared.data
+    return data, {"version": 3, "contributions": contributions}
 
 
 def schedule_preparation(session, kind, entity_id, *, refresh=False):

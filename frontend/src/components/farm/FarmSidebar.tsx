@@ -731,6 +731,12 @@ const SimulationMenuItem = ({
             </SidebarMenuAction>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
+            <DropdownMenuItem disabled={!isSimulationReady(simulation)} onSelect={() => {
+              onSelect()
+              onOptimize()
+            }}>
+              Indstillinger og navn
+            </DropdownMenuItem>
             <AppTooltip content="Opretter en ny simulering med samme indstillinger og regler. Kører Optimér på kopien med det samme. Markernes låse følger ikke med.">
               <DropdownMenuItem disabled={copying || !isSimulationReady(simulation)} onSelect={onCopy}>
                 <Copy className="mr-2 size-4" aria-hidden="true" />

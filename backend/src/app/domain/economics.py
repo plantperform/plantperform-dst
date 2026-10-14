@@ -14,6 +14,23 @@ STANDARD_ID = "standard"
 STANDARD_NAME = "Standard (SEGES 2026)"
 
 
+class EconomicsCalculationInputs(CamelModel):
+    """Physical inputs captured on a chosen year, independent of economic prices."""
+
+    afgrodekode: int
+    driftsform: str
+    jbnr: int
+    mncs: float | None = None
+    mnca: float = 0
+    irrigated: bool = False
+    org_mineral_n_applied: float = 0
+    udlaeg_kode: int | None = None
+    only_organic: bool = False
+    kvalitet: str = ""
+    praecisionsjordbrug: bool = False
+    forfrugtsvaerdi: float = 0
+
+
 class EconomicsOverrides(CamelModel):
     model_config = ConfigDict(extra="forbid")
     prices: dict[str, Nonnegative] = Field(default_factory=dict)

@@ -3,12 +3,12 @@
 import importlib.util
 import json
 import unittest
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from legacy_candidates import _candidates as fixture_candidates
 from sqlalchemy import event, inspect, null, select, text, update
 from sqlalchemy.exc import DataError, IntegrityError
 from test_optimizer_lifecycle import (
@@ -24,7 +24,6 @@ from test_optimizer_lifecycle import (
 )
 
 from app.data import optimization_store
-from app.data import simulation_store as store
 from app.data.optimizer_inputs import optimizer_input, optimizer_input_json, parse_optimizer_input
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import OptimizationConstraints
@@ -96,9 +95,11 @@ class CompactExecutionTests(DatabaseTests):
         self.prepare()
         run = self.submit()
         _, _, token = optimization_store.claim("sim", run.run_id)
-        compact = optimization_store.load_snapshot("sim", run.run_id, token, 0)
+        captured = optimization_store.load_snapshot("sim", run.run_id, token, 0)
         with self.sessions() as session:
-            full = (*compact[:2], store._candidates(session, "sim"))
+            compact = (captured[0], captured[1], fixture_candidates(session, "sim", compact=True))
+        with self.sessions() as session:
+            full = (*compact[:2], fixture_candidates(session, "sim"))
         for yearly in (False, True):
             for excluded in (frozenset(), frozenset({1})):
                 for constrained in (False, True):
@@ -146,21 +147,20 @@ class CompactExecutionTests(DatabaseTests):
                         expected, actual = solve(full), solve(compact)
                         self.assertEqual(actual.output, expected.output)
                         self.assertEqual(actual.fields, expected.fields)
-                        hydrated = optimization_store.hydrate_winners(
-                            "sim", run.run_id, token, 0, actual.selected_candidates
-                        )
-                        self.assertEqual(
-                            {k: v.model_dump() for k, v in hydrated.items()},
-                            {k: v.model_dump() for k, v in expected.selected_candidates.items()},
-                        )
-                        self.assertTrue(
-                            all(
-                                c._cache_position is not None
-                                for c in actual.selected_candidates.values()
-                            )
-                        )
 
-    def test_overlay_precedence_preserves_full_details_and_clears_cache_provenance(self):
+                        def selected_inputs(solved):
+                            return {
+                                field_id: optimizer_input(
+                                    SimulationFieldCandidates(
+                                        field_id=field_id, jbnr=5, candidates=[evaluation]
+                                    )
+                                )
+                                for field_id, evaluation in solved.selected_candidates.items()
+                            }
+
+                        self.assertEqual(selected_inputs(actual), selected_inputs(expected))
+
+    def test_overlay_precedence_preserves_full_details(self):
         self.prepare()
         with self.sessions.begin() as session:
             fields = session.execute(select(setups.c.fields)).scalar_one()
@@ -180,22 +180,21 @@ class CompactExecutionTests(DatabaseTests):
                     }
                 )
             )
-            full = store._candidates(session, "sim")
-            compact = store._candidates(session, "sim", compact=True)
+            full = fixture_candidates(session, "sim")
+            compact = fixture_candidates(session, "sim", compact=True)
         self.assertEqual(
             [c.ref for c in compact[0].candidates], [c.ref for c in full[0].candidates]
         )
         winner = compact[0].candidates[-1]
         self.assertEqual(winner.model_dump(), full[0].candidates[-1].model_dump())
         self.assertEqual(winner.avg_db_kr_ha, 300)
-        self.assertIsNone(winner._cache_position)
         run = self.submit()
         worker.execute("sim", run.run_id, CONTEXT)
         self.assertEqual(
             self.result().selected_candidates["field-b"].model_dump(), winner.model_dump()
         )
 
-    def test_cached_and_shifted_winners_save_rich_details_without_internal_positions(self):
+    def test_selected_and_shifted_winners_save_rich_details(self):
         self.prepare()
         run = self.submit()
         worker.execute("sim", run.run_id, CONTEXT)
@@ -221,8 +220,11 @@ class CompactExecutionTests(DatabaseTests):
                     for f in ("field-b", "field-a")
                 },
             )
-        with patch.object(
-            orchestrator.candidate_evaluator, "evaluate_with_overrides", return_value=shifted
+        with (
+            patch.object(
+                orchestrator.candidate_evaluator, "evaluate_with_overrides", return_value=shifted
+            ),
+            patch.object(worker, "hydrate", return_value={"field-b": shifted, "field-a": shifted}),
         ):
             run = self.submit(self.request(yearly=True), "yearly")
             worker.execute("sim", run.run_id, CONTEXT)
@@ -230,38 +232,13 @@ class CompactExecutionTests(DatabaseTests):
             self.result().selected_candidates["field-b"].model_dump(), shifted.model_dump()
         )
 
-    def test_hydration_rechecks_revision_lease_run_and_deletion(self):
-        self.prepare()
-        run = self.submit()
-        _, _, token = optimization_store.claim("sim", run.run_id)
-        snapshot = optimization_store.load_snapshot("sim", run.run_id, token, 0)
-        selected = {row.field_id: row.candidates[1] for row in snapshot[2]}
-        self.assertIsNone(
-            optimization_store.hydrate_winners("sim", run.run_id, "wrong", 0, selected)
-        )
-        self.assertIsNone(
-            optimization_store.hydrate_winners("sim", "wrong-run", token, 0, selected)
-        )
-        with self.sessions.begin() as session:
-            session.execute(
-                update(results).values(lease_expires_at=datetime.now(UTC) - timedelta(seconds=1))
-            )
-        self.assertIsNone(optimization_store.hydrate_winners("sim", run.run_id, token, 0, selected))
-        with self.sessions.begin() as session:
-            session.execute(
-                update(results).values(lease_expires_at=datetime.now(UTC) + timedelta(seconds=900))
-            )
-        self.edit(name="edited during solve")
-        self.assertIsNone(optimization_store.hydrate_winners("sim", run.run_id, token, 0, selected))
-        store.delete_simulation("farm", "sim", EMAIL)
-        self.assertIsNone(optimization_store.hydrate_winners("sim", run.run_id, token, 0, selected))
-
     def test_yearly_summary_reads_only_chosen_evaluations_and_preserves_fodder(self):
         self.prepare()
         with self.sessions.begin() as session:
             fields = session.execute(select(setups.c.fields)).scalar_one()
             for setup in fields.values():
                 setup["baseline"]["rotation_id"] = "1:2:100"
+                setup["manual_candidate"] = rich_candidate().model_dump(mode="json")
             # Only kvotegivende marker count toward udledning; DB2 and FEN count both.
             fields["field-b"]["kvotegivende"] = True
             session.execute(update(setups).values(fields=fields))
@@ -272,8 +249,7 @@ class CompactExecutionTests(DatabaseTests):
 
         event.listen(self.engine, "before_cursor_execute", record)
         try:
-            with patch.object(store, "_candidates", side_effect=AssertionError("full cache read")):
-                summary = compute_yearly_summary("farm", "sim", EMAIL)
+            summary = compute_yearly_summary("farm", "sim", EMAIL)
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
         self.assertEqual(len(summary), 1)
@@ -370,7 +346,9 @@ class CompactMigrationTests(DatabaseTests):
     def test_backfill_uses_one_update_for_many_candidate_caches(self):
         data = {
             f"field-{i}": SimulationFieldCandidates(
-                field_id=f"field-{i}", jbnr=5, candidates=[rich_candidate()],
+                field_id=f"field-{i}",
+                jbnr=5,
+                candidates=[rich_candidate()],
             ).model_dump(mode="json")
             for i in range(32)
         }
@@ -391,8 +369,7 @@ class CompactMigrationTests(DatabaseTests):
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
         updates = [
-            sql for sql in queries
-            if sql.lstrip().startswith("UPDATE simulation_field_candidates")
+            sql for sql in queries if sql.lstrip().startswith("UPDATE simulation_field_candidates")
         ]
         self.assertEqual(len(updates), 1)
         self.assertFalse(
@@ -413,12 +390,17 @@ class CompactMigrationTests(DatabaseTests):
         with self.engine.begin() as connection:
             self.migrate(connection, "downgrade")
             connection.execute(
-                update(caches).where(caches.c.field_id == "field-a").values(
+                update(caches)
+                .where(caches.c.field_id == "field-a")
+                .values(
                     data={"field_id": "field-a", "candidates": "invalid-array"},
                 )
             )
             preserved_query = select(
-                caches.c.id, caches.c.data, caches.c.created_at, caches.c.updated_at,
+                caches.c.id,
+                caches.c.data,
+                caches.c.created_at,
+                caches.c.updated_at,
             ).order_by(caches.c.id)
             preserved = connection.execute(preserved_query).all()
         with self.assertRaises(DataError), self.engine.begin() as connection:

@@ -9,9 +9,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-from pyogrio import read_dataframe, write_dataframe
-from shapely import box
-
 from database.scripts.load_nles5_soil_inputs import (
     N_COLUMN,
     P_COLUMNS,
@@ -21,6 +18,8 @@ from database.scripts.load_nles5_soil_inputs import (
     soil_effect,
 )
 from database.scripts.merged_gpkg import LAYER
+from pyogrio import read_dataframe, write_dataframe
+from shapely import box
 
 # Two polygons with data side by side, then one without data (0).
 MAP_POLYGONS = np.array([box(0, 0, 100, 100), box(100, 0, 200, 100), box(200, 0, 300, 100)])

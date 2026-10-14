@@ -87,7 +87,6 @@ export type SimulationFormValues = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
-  optimizeOnCreate: boolean
 }
 
 export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
@@ -106,7 +105,6 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   precisionFarming: false,
   earlySowing: true,
   intermediateCrop: true,
-  optimizeOnCreate: true,
 }
 
 // Checks a number field kept as text. The first failing message is the one
@@ -214,9 +212,8 @@ export const SIMULATION_FORM_STEPS = [
   {
     id: 'confirm',
     label: 'Bekræft',
-    // Reviews the earlier steps, which are validated again on create, and
-    // holds the choice to run Optimér as soon as the simulation exists.
-    schema: z.object({ optimizeOnCreate: z.boolean() }),
+    // Reviews the saved settings; Save and Run are separate actions.
+    schema: z.object({}),
   },
 ] as const
 
@@ -456,7 +453,6 @@ export const toCreateSimulationInput = (
   const withoutFertiliser = values.fertiliserChoice === NO_FERTILISER
   return {
     name: values.name.trim(),
-    optimizeOnCreate: values.optimizeOnCreate,
     allowedRotationVariants: values.rotationVariants,
     allowedNNormPercentages: nNormPercentagesFor(
       values.nNormPercentages,

@@ -45,7 +45,9 @@ class ProductionBoundaryTests(unittest.TestCase):
                     id='sim', farm_id='farm', name='test', created_at='2026-10-09'
                 )),
                 patch.object(jobs, 'SessionLocal') as sessions,
-                patch.object(jobs, '_row', return_value=SimpleNamespace(revision=0)),
+                patch.object(jobs, '_row', return_value=SimpleNamespace(revision=0,
+                    data={"id":"sim", "farm_id":"farm", "name":"test",
+                          "created_at":"2026-10-14"})),
                 patch.object(jobs, 'get_result', return_value=queued),
                 patch.object(jobs, 'sqs_client', return_value=queue),
             ):
@@ -70,26 +72,15 @@ class ProductionBoundaryTests(unittest.TestCase):
                     'simulationId': 'sim', 'runId': str(request.run_id),
                 }
             creation_request = CreateSimulationRequest(name='new')
-            creation_job = creation_jobs.creation_store.job_for(
-                'farm', 'new', 0, creation_request, 'member@example.com'
-            )
             queue.reset_mock()
-            with (
-                patch.object(creation_jobs.creation_store, 'create',
-                    return_value=('new', creation_job)),
-                patch.object(creation_jobs.repository, 'get_simulation',
-                    return_value=Simulation(
-                        id='new', farm_id='farm', name='new', created_at='2026-10-12',
-                        creation_status='queued',
-                    )),
-                patch.object(creation_jobs, 'sqs_client', return_value=queue),
-            ):
+            with patch('app.data.simulation_settings_store.create', return_value=Simulation(
+                id='new', farm_id='farm', name='new', created_at='2026-10-14',
+                fields_initialized=False,
+            )):
                 created = creation_jobs.submit('farm', creation_request, 'member@example.com')
-            assert created.creation_status == 'queued'
-            queue.send_message.assert_called_once()
-            assert json.loads(queue.send_message.call_args.kwargs['MessageBody']) == (
-                creation_job.envelope()
-            )
+            assert created.creation_status == 'done'
+            assert not created.fields_initialized
+            queue.send_message.assert_not_called()
             assert not any(
                 name.split('.')[0] in {'plantperform_optimizer', 'ortools'}
                 for name in sys.modules

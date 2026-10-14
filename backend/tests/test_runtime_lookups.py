@@ -11,8 +11,9 @@ os.environ.setdefault(
     "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
 )
 
-from app.services.rotations import historisk_goedning, saedskifte_library
 from database.scripts import load_saedskifte_lookup
+
+from app.services.rotations import historisk_goedning, saedskifte_library
 
 
 def source_row(

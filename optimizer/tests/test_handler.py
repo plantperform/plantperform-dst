@@ -275,7 +275,8 @@ class HandlerTests(unittest.TestCase):
             patch.object(worker, "initialize", return_value=executor),
             patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": "queue"}),
             patch.object(optimization_store, "claim", side_effect=claims),
-            patch.object(optimization_store, "load_snapshot", return_value=(None, [], {})),
+            patch.object(optimization_store, "load_snapshot", return_value=(None, [], {}, {})),
+            patch.object(executor, "prepare", return_value=(None, [], [])),
             patch.object(
                 executor, "run_optimization", side_effect=RuntimeError("temporary")
             ) as solve,

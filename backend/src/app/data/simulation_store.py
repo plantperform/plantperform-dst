@@ -1,14 +1,11 @@
 """Simulation aggregates. Always lock setup before result when changing either."""
 
 from copy import deepcopy
-from time import monotonic
 
 from sqlalchemy import delete, func, select, update
 
-from app.data.db import simulation_field_candidates_table as cached_candidates
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
-from app.data.optimizer_inputs import parse_optimizer_input
 from app.domain.field import FieldRecord, validate_measures_for_rotation
 from app.domain.optimization import (
     OptimizeSimulationRequest,
@@ -94,7 +91,17 @@ def read_result(row) -> SimulationResult:
     )
 
 
-def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=True, ready=False):
+def _row(
+    session,
+    farm_id,
+    simulation_id,
+    email,
+    *,
+    lock=False,
+    include_data=True,
+    ready=False,
+    editable=False,
+):
     columns = [setups.c.revision, setups.c.creation_status]
     if include_data:
         columns.append(setups.c.data)
@@ -111,6 +118,10 @@ def _row(session, farm_id, simulation_id, email, *, lock=False, include_data=Tru
         from app.data.creation_store import require_ready
 
         require_ready(session, simulation_id)
+        if editable:
+            from app.data.simulation_settings_store import require_idle
+
+            require_idle(session, simulation_id)
     return row
 
 
@@ -291,16 +302,30 @@ def get_simulation_field_context(farm_id, simulation_id, field_id, email):
     with _common().SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
-        row = session.execute(
-            select(
-                cached_candidates.c.optimizer_input["jbnr"].as_integer(),
-                cached_candidates.c.optimizer_input["real_history"],
-            ).where(
-                cached_candidates.c.simulation_id == simulation_id,
-                cached_candidates.c.field_id == field_id,
+        setup = session.execute(
+            select(setups.c.fields[field_id]).where(setups.c.id == simulation_id)
+        ).scalar_one_or_none()
+        if setup is None:
+            return None
+        if "calculation_context" in setup:
+            value = setup["calculation_context"]
+            registry = SimpleNamespace(**value) if value else None
+        else:
+            registry = _common()._registry_context_for_imk_id(session, setup.get("imk_id"))
+        from app.services.rotations.historisk_goedning import real_history_lookback
+        from app.services.soil.jbnr import FALLBACK_JBNR
+
+        jbnr = registry.jbnr if registry and registry.jbnr is not None else FALLBACK_JBNR
+        history = (
+            real_history_lookback(
+                registry.crop_history or {}, jbnr, registry.goedningsregion, bool(registry.oeko)
             )
-        ).first()
-        return SimpleNamespace(jbnr=row[0], real_history=row[1]) if row else None
+            if registry
+            else None
+        )
+        return SimpleNamespace(
+            jbnr=jbnr, real_history=history, soil_data=_common()._soil_data_for_context(registry)
+        )
 
 
 def merge_candidates(
@@ -318,52 +343,8 @@ def merge_candidates(
     return row
 
 
-def merge_setup_candidates(data, selected, setup):
-    row = merge_candidates(data, setup.get("manual_candidate"))
-    row = merge_candidates(row, selected)
-    row = merge_candidates(row, setup.get("economics_candidate"))
-    return merge_candidates(row, setup.get("fixed_candidate"))
-
-
-def _candidates(session, simulation_id, *, compact=False, timings=None):
-    started = monotonic()
-    row = session.execute(
-        select(setups.c.fields, setups.c.field_order, results.c.output["selected_candidates"])
-        .join(results)
-        .where(setups.c.id == simulation_id)
-    ).one()
-    selected = row[2] or {}
-    column = cached_candidates.c.optimizer_input if compact else cached_candidates.c.data
-    query = select(cached_candidates.c.field_id, column).where(
-        cached_candidates.c.simulation_id == simulation_id
-    )
-    reads = monotonic() - started
-    validation = 0.0
-    candidates = []
-    started = monotonic()
-    rows = iter(session.execute(query.execution_options(yield_per=1)))
-    while True:
-        cached = next(rows, None)
-        reads += monotonic() - started
-        if cached is None:
-            break
-        started = monotonic()
-        data = parse_optimizer_input(cached[1]) if compact else cached[1]
-        candidates.append(
-            merge_setup_candidates(
-                data, selected.get(cached.field_id), row.fields.get(cached.field_id, {})
-            )
-        )
-        validation += monotonic() - started
-        started = monotonic()
-    if timings is not None:
-        timings.update(compact_candidate_reads=reads, candidate_validation=validation)
-    positions = {field_id: i for i, field_id in enumerate(row.field_order)}
-    return sorted(candidates, key=lambda c: (positions.get(c.field_id, len(positions)), c.field_id))
-
-
 def selected_evaluations(farm_id, simulation_id, email):
-    """Read only the chosen evaluations, with the same overlay precedence as _candidates."""
+    """Read only the chosen evaluations, from selected reports and current field overlays."""
     with _common().SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
@@ -378,17 +359,7 @@ def selected_evaluations(farm_id, simulation_id, email):
         ).one()
         selected = row[1] or {}
         chosen = {}
-        cached_fields = set(
-            session.execute(
-                select(cached_candidates.c.field_id).where(
-                    cached_candidates.c.simulation_id == simulation_id,
-                    cached_candidates.c.field_id.in_([field.id for field in chosen_fields]),
-                )
-            ).scalars()
-        )
         for field in chosen_fields:
-            if field.id not in cached_fields:
-                continue
             setup = row.fields.get(field.id, {})
             for overlay in (
                 setup.get("fixed_candidate"),
@@ -401,76 +372,15 @@ def selected_evaluations(farm_id, simulation_id, email):
                 ):
                     chosen[field.id] = RotationCandidateEvaluation.model_validate(overlay)
                     break
-            else:
-                compact = session.execute(
-                    select(cached_candidates.c.optimizer_input).where(
-                        cached_candidates.c.simulation_id == simulation_id,
-                        cached_candidates.c.field_id == field.id,
-                    )
-                ).scalar_one()
-                position = next(
-                    (
-                        i
-                        for i, c in enumerate(compact["candidates"])
-                        if RotationCandidateRef.model_validate(c["ref"]).to_id()
-                        == field.rotation_id
-                    ),
-                    None,
-                )
-                if position is not None:
-                    data = session.execute(
-                        select(cached_candidates.c.data["candidates"][position]).where(
-                            cached_candidates.c.simulation_id == simulation_id,
-                            cached_candidates.c.field_id == field.id,
-                        )
-                    ).scalar_one()
-                    chosen[field.id] = RotationCandidateEvaluation.model_validate(data)
         return fields, chosen
 
 
-def _candidate_row(session, simulation_id, field_id):
-    return session.execute(
-        select(
-            cached_candidates.c.data,
-            results.c.output["selected_candidates"][field_id],
-            setups.c.fields[field_id],
-        )
-        .select_from(
-            cached_candidates.join(setups).join(results, results.c.simulation_id == setups.c.id)
-        )
-        .where(
-            cached_candidates.c.simulation_id == simulation_id,
-            cached_candidates.c.field_id == field_id,
-        )
-    ).first()
-
-
-def list_simulation_field_candidates(farm_id, simulation_id, email):
-    with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email, ready=True) is None:
-            return None
-        return _candidates(session, simulation_id)
-
-
-def get_simulation_field_candidates(farm_id, simulation_id, field_id, email):
-    with _common().SessionLocal() as session:
-        if _row(session, farm_id, simulation_id, email, ready=True) is None:
-            return None
-        row = _candidate_row(session, simulation_id, field_id)
-        return merge_setup_candidates(row[0], row[1], row[2] or {}) if row else None
-
-
 def _selected_candidate(session, simulation_id, field_id, rotation_id):
-    from sqlalchemy import case, cast, literal
-    from sqlalchemy.dialects.postgresql import JSONPATH
+    from sqlalchemy import case
 
     from app.data.read_model_store import insert_json
 
     ref = RotationCandidateRef.from_id(rotation_id)
-    path = (
-        "$.candidates[*] ? (@.ref.saedskiftevariant == $s && "
-        "@.ref.variant == $v && @.ref.n_norm_pct == $n)"
-    )
     overlays = (
         setups.c.fields[field_id]["fixed_candidate"],
         setups.c.fields[field_id]["economics_candidate"],
@@ -481,22 +391,10 @@ def _selected_candidate(session, simulation_id, field_id, rotation_id):
         *[
             case((value["ref"] == insert_json(ref.model_dump(mode="json")), value))
             for value in overlays
-        ],
-        func.jsonb_path_query_first(
-            cached_candidates.c.data,
-            cast(literal(path), JSONPATH),
-            func.jsonb_build_object(
-                "s", ref.saedskiftevariant, "v", ref.variant, "n", ref.n_norm_pct
-            ),
-        ),
-    )
-    source = setups.join(results).outerjoin(
-        cached_candidates,
-        (cached_candidates.c.simulation_id == setups.c.id)
-        & (cached_candidates.c.field_id == field_id),
+        ]
     )
     value = session.execute(
-        select(chosen).select_from(source).where(setups.c.id == simulation_id)
+        select(chosen).select_from(setups.join(results)).where(setups.c.id == simulation_id)
     ).scalar_one_or_none()
     return RotationCandidateEvaluation.model_validate(value) if value else None
 
@@ -548,7 +446,7 @@ def merge_constraints(saved, patch, field_count):
 
 def update_simulation_constraints(farm_id, simulation_id, constraints, email):
     with _common().SessionLocal.begin() as session:
-        row = _row(session, farm_id, simulation_id, email, lock=True)
+        row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
         if row is None:
             return None
         simulation = _model(session, simulation_id, row)
@@ -586,8 +484,13 @@ def _save_field(session, simulation_id, field, candidate=None):
     revision = row.revision
     previous = row[0] or {}
     setup_field = split_field(_common()._dump(field))
-    for key in ("manual_candidate", "economics_candidate", "baseline_candidate"):
-        if previous.get(key):
+    for key in (
+        "manual_candidate",
+        "economics_candidate",
+        "baseline_candidate",
+        "calculation_context",
+    ):
+        if key in previous:
             setup_field[key] = previous[key]
     if field.allowed_rotation_ids:
         selected = candidate
@@ -629,7 +532,7 @@ def _save_field(session, simulation_id, field, candidate=None):
 
 def update_simulation_field(farm_id, simulation_id, field_id, request, email):
     with _common().SessionLocal.begin() as session:
-        if _row(session, farm_id, simulation_id, email, lock=True) is None:
+        if _row(session, farm_id, simulation_id, email, lock=True, editable=True) is None:
             return None
         existing = _field(session, simulation_id, field_id)
         if existing is None:
@@ -655,7 +558,7 @@ def save_manual_rotation(
     farm_id, simulation_id, field_id, candidate, request, email, expected_revision
 ):
     with _common().SessionLocal.begin() as session:
-        row = _row(session, farm_id, simulation_id, email, lock=True)
+        row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
         if row is None:
             return None
         if row.revision != expected_revision:

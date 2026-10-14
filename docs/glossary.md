@@ -133,7 +133,7 @@ field" column is the name on the wire.
 | simulering | `Simulation`, simulation | | |
 | scenarie | scenario | | |
 | regler | rules, `SimulationRulesPanel`, `FieldRulesCard` | | Limits and locked fields a simulation's optimization must keep |
-| simuleringens grundlag | basis, `SimulationBasisCard` | | The settings a simulation's candidates were generated from, locked once created |
+| simuleringens grundlag | basis, `SimulationBasisCard` | | Editable saved settings used to calculate candidates during optimization |
 | beregning | calculation | | |
 | årsgennemgang | `YearWalkthrough` | | |
 

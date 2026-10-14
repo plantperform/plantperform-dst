@@ -112,8 +112,14 @@ class CropAreaPersistenceTests(unittest.TestCase):
         ):
             session = factory.begin.return_value.__enter__.return_value
             session.execute.return_value.scalars.return_value.all.return_value = []
-            created = repository.create_simulation("farm", request, "member@example.com")
-            inserted = session.execute.call_args_list[0].args[0].compile().params["data"]
+            with patch("app.data.simulation_store._get_simulation", return_value=None):
+                created = repository.create_simulation("farm", request, "member@example.com")
+            inserted = next(
+                call.args[0].compile().params["data"]
+                for call in session.execute.call_args_list
+                if call.args[0].__visit_name__ == "insert"
+                and call.args[0].table.name == "simulation"
+            )
         self.assertEqual(created.constraints.crop_area_limits[0].min_area_ha, 3)
         self.assertEqual(inserted["constraints"]["crop_area_limits"][0]["afgrode_kode"], 1)
 

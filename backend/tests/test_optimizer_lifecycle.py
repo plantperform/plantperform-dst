@@ -22,6 +22,14 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
+from legacy_candidates import (
+    _candidates as fixture_candidates,
+)
+from legacy_candidates import (
+    caches,
+    get_simulation_field_candidates,
+    list_simulation_field_candidates,
+)
 from sqlalchemy import (
     Column,
     DateTime,
@@ -54,7 +62,6 @@ from app.data.db import (
     metadata,
     simulation_read_model_table,
 )
-from app.data.db import simulation_field_candidates_table as caches
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.data.optimizer_inputs import optimizer_input
@@ -220,7 +227,7 @@ class DatabaseTests(unittest.TestCase):
                     setups.insert().values(
                         id="sim",
                         farm_id="farm",
-                        data=simulation.model_dump(mode="json"),
+                        data=simulation.model_dump(mode="json", exclude={"optimization_settings"}),
                         fields={f.id: store.split_field(f.model_dump(mode="json")) for f in fields},
                         field_order=[f.id for f in fields],
                     )
@@ -249,6 +256,53 @@ class DatabaseTests(unittest.TestCase):
                     },
                 )
 
+        # Legacy solver fixtures supply synthetic evaluations in memory.
+        # Actual generation and persistence are covered by the settings integration tests.
+        from plantperform_optimizer.preparation import PreparedSnapshot
+
+        def prepare_fixture(simulation, fields, setup_fields, contexts):
+            with self.sessions() as session:
+                candidates = fixture_candidates(session, simulation.id)
+            return PreparedSnapshot(simulation, fields, candidates, contexts, setup_fields)
+
+        def hydrate_fixture(snapshot, selected):
+            full = {
+                row.field_id: {c.ref.to_id(): c for c in row.candidates}
+                for row in snapshot.candidates
+            }
+            hydrated = {}
+            for field_id, value in selected.items():
+                original = full.get(field_id, {}).get(value.ref.to_id())
+                if original is not None:
+                    hydrated[field_id] = original
+                else:
+                    hydrated[field_id] = RotationCandidateEvaluation.model_validate(
+                        {
+                            **value.model_dump(mode="json"),
+                            "years": [
+                                {
+                                    **year.model_dump(mode="json"),
+                                    "leaching_detail": {},
+                                    "db_detail": {
+                                        "udbytteenhed": "FE/ha",
+                                        "udbytte": year.fen_fe_ha,
+                                    },
+                                }
+                                for year in value.years
+                            ],
+                        }
+                    )
+            return hydrated
+
+        self.enterContext(
+            patch(
+                "app.services.scenario.options.sequences",
+                return_value=[candidate(), candidate(200, "2")],
+            )
+        )
+        self.enterContext(patch.object(worker, "prepare", side_effect=prepare_fixture))
+        self.enterContext(patch.object(worker, "hydrate", side_effect=hydrate_fixture))
+
     def cleanup_schema(self):
         self.engine.dispose()
         with self.admin.begin() as connection:
@@ -266,6 +320,13 @@ class DatabaseTests(unittest.TestCase):
         return store.get_result("farm", "sim", EMAIL)
 
     def edit(self, **values):
+        # Simulate an out-of-band revision change for worker fencing tests.
+        # Normal user edits during active runs are tested by SimulationSettingsTests.
+        if self.result().status in ("queued", "in_progress"):
+            with patch("app.data.simulation_settings_store.require_idle"):
+                return store.update_simulation_field(
+                    "farm", "sim", "field-b", UpdateFieldRequest(**values), EMAIL
+                )
         return store.update_simulation_field(
             "farm", "sim", "field-b", UpdateFieldRequest(**values), EMAIL
         )
@@ -292,16 +353,16 @@ class CandidateStorageTests(DatabaseTests):
         )
 
     def test_bulk_candidates_follow_field_order_and_missing_sets_are_empty(self):
-        rows = store.list_simulation_field_candidates("farm", "sim", EMAIL)
+        rows = list_simulation_field_candidates("farm", "sim", EMAIL)
         self.assertEqual([row.field_id for row in rows], ["field-b", "field-a"])
-        self.assertIsNone(store.get_simulation_field_candidates("farm", "sim", "missing", EMAIL))
+        self.assertIsNone(get_simulation_field_candidates("farm", "sim", "missing", EMAIL))
         self.assertIsNone(
-            store.get_simulation_field_candidates("farm", "sim", "field-b", "outsider@example.com")
+            get_simulation_field_candidates("farm", "sim", "field-b", "outsider@example.com")
         )
         with self.sessions.begin() as session:
             replace_cached_candidates(session, {})
-        self.assertEqual(store.list_simulation_field_candidates("farm", "sim", EMAIL), [])
-        self.assertIsNone(store.get_simulation_field_candidates("farm", "sim", "field-b", EMAIL))
+        self.assertEqual(list_simulation_field_candidates("farm", "sim", EMAIL), [])
+        self.assertIsNone(get_simulation_field_candidates("farm", "sim", "field-b", EMAIL))
 
     def test_single_field_does_not_load_other_fields_or_simulations(self):
         other = Simulation(id="other", farm_id="farm", name="other", created_at="2026-10-06")
@@ -325,12 +386,10 @@ class CandidateStorageTests(DatabaseTests):
                 },
                 "other",
             )
-        requested = store.get_simulation_field_candidates("farm", "sim", "field-b", EMAIL)
+        requested = get_simulation_field_candidates("farm", "sim", "field-b", EMAIL)
         self.assertEqual(requested.jbnr, 5)
         self.assertEqual([c.avg_db_kr_ha for c in requested.candidates], [100, 200])
-        self.assertEqual(
-            store.get_simulation_field_candidates("farm", "other", "field-b", EMAIL).jbnr, 7
-        )
+        self.assertEqual(get_simulation_field_candidates("farm", "other", "field-b", EMAIL).jbnr, 7)
 
     def test_candidate_sets_are_unique_per_simulation_and_field(self):
         with self.assertRaises(IntegrityError), self.sessions.begin() as session:
@@ -352,71 +411,28 @@ class CandidateStorageTests(DatabaseTests):
             self.assertEqual(cached_data(session), {})
             self.assertEqual(session.execute(select(results)).all(), [])
 
-    def test_failed_creation_rolls_back_already_inserted_candidate_rows(self):
-        self.attach_farm_fields(2)
-        inserts = []
-
-        def record_insert(connection, cursor, statement, parameters, context, executemany):
-            if statement.startswith("INSERT INTO simulation_field_candidates"):
-                inserts.append(statement)
-
-        event.listen(self.engine, "after_cursor_execute", record_insert)
-        try:
-            with (
-                patch.object(repository, "_registry_contexts_for_imk_ids", return_value={}),
-                patch.object(
-                    repository,
-                    "generate_candidates_for_field",
-                    side_effect=[[candidate()], RuntimeError("generation failed")],
-                ),
-                self.assertRaisesRegex(RuntimeError, "generation failed"),
-            ):
-                repository.create_simulation("farm", self.create_request(), EMAIL)
-        finally:
-            event.remove(self.engine, "after_cursor_execute", record_insert)
-        self.assertEqual(len(inserts), 1)
-        with self.sessions() as session:
-            self.assertEqual(session.execute(select(setups.c.id)).scalars().all(), ["sim"])
-            self.assertEqual(
-                session.execute(select(results.c.simulation_id)).scalars().all(), ["sim"]
-            )
-            self.assertEqual(
-                session.execute(select(func.count()).select_from(caches)).scalar_one(), 2
-            )
-
-    def test_creation_stores_more_than_jsonb_limit_in_separate_field_rows(self):
+    def test_creation_never_generates_or_persists_candidates(self):
         self.attach_farm_fields(17)
-        with (
-            patch.object(repository, "_registry_contexts_for_imk_ids", return_value={}),
-            patch.object(
-                repository, "generate_candidates_for_field", return_value=large_candidates()
-            ),
+        with patch.object(
+            repository, "generate_candidates_for_field", side_effect=AssertionError("No generation")
         ):
             simulation = repository.create_simulation("farm", self.create_request(), EMAIL)
         with self.sessions() as session:
-            count, size = session.execute(
-                select(func.count(), func.sum(func.octet_length(caches.c.data.cast(Text)))).where(
-                    caches.c.simulation_id == simulation.id
-                )
-            ).one()
-            order = session.execute(
-                select(setups.c.field_order).where(setups.c.id == simulation.id)
-            ).scalar_one()
-            compact_size = session.execute(
-                select(func.sum(func.octet_length(caches.c.optimizer_input.cast(Text)))).where(
-                    caches.c.simulation_id == simulation.id
-                )
-            ).scalar_one()
-        self.assertEqual(count, 17)
-        self.assertGreater(size, 268_435_455)
-        self.assertLess(compact_size, 1_000_000)
-        self.assertEqual(len(order), 17)
-        self.assertEqual(store.get_result("farm", simulation.id, EMAIL).status, "not_started")
-        row = store.get_simulation_field_candidates("farm", simulation.id, order[0], EMAIL)
-        self.assertEqual(len(row.candidates), 2)
-        self.assertEqual(
-            len(row.candidates[1].years[0].leaching_detail["calculation"]), 16 * 1024 * 1024
-        )
+            self.assertEqual(
+                session.execute(
+                    select(func.count())
+                    .select_from(caches)
+                    .where(caches.c.simulation_id == simulation.id)
+                ).scalar_one(),
+                0,
+            )
+            self.assertEqual(
+                session.execute(
+                    select(setups.c.field_order).where(setups.c.id == simulation.id)
+                ).scalar_one(),
+                [],
+            )
+        self.assertEqual(simulation.result.status, "not_started")
 
 
 class LifecycleTests(DatabaseTests):
@@ -425,10 +441,14 @@ class LifecycleTests(DatabaseTests):
             "Records": [
                 {
                     "messageId": "job",
-                    "body": json.dumps({
-                        "jobType": "optimization", "farmId": "farm",
-                        "simulationId": "sim", "runId": run_id,
-                    }),
+                    "body": json.dumps(
+                        {
+                            "jobType": "optimization",
+                            "farmId": "farm",
+                            "simulationId": "sim",
+                            "runId": run_id,
+                        }
+                    ),
                     "receiptHandle": "receipt",
                 }
             ]
@@ -643,10 +663,15 @@ class LifecycleTests(DatabaseTests):
         accepted = self.submit(request)
         self.assertEqual((accepted.status, accepted.run_id), ("queued", str(request.run_id)))
         envelope = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
-        self.assertEqual(envelope, {
-            "jobType": "optimization", "farmId": "farm",
-            "simulationId": "sim", "runId": accepted.run_id,
-        })
+        self.assertEqual(
+            envelope,
+            {
+                "jobType": "optimization",
+                "farmId": "farm",
+                "simulationId": "sim",
+                "runId": accepted.run_id,
+            },
+        )
         self.assertEqual(self.queue.send_message.call_args.kwargs["DelaySeconds"], 0)
         self.assertEqual(accepted.parameters["timeLimitSeconds"], 1)
 
@@ -661,7 +686,7 @@ class LifecycleTests(DatabaseTests):
             reads = [query for query in queries if query.startswith("SELECT")]
             self.assertTrue(reads)
             self.assertFalse(any("simulation_result.output" in query for query in reads))
-            self.assertFalse(any("simulation.data" in query for query in reads))
+            self.assertFalse(any("simulation_field_candidates" in query for query in reads))
             with self.sessions() as session:
                 row = session.execute(select(results.c.status, results.c.run_id)).one()
             self.assertEqual(row.status, "queued")
@@ -680,7 +705,7 @@ class LifecycleTests(DatabaseTests):
     def test_poll_sees_in_progress_while_candidates_are_loading(self):
         run = self.submit()
         loading, release = Event(), Event()
-        original = optimization_store._candidates
+        original = worker.prepare
 
         def blocked_load(*args, **kwargs):
             loading.set()
@@ -689,7 +714,7 @@ class LifecycleTests(DatabaseTests):
             return original(*args, **kwargs)
 
         with (
-            patch.object(optimization_store, "_candidates", side_effect=blocked_load),
+            patch.object(worker, "prepare", side_effect=blocked_load),
             ThreadPoolExecutor(max_workers=1) as executor,
         ):
             execution = executor.submit(worker.execute, "sim", run.run_id, CONTEXT)
@@ -763,7 +788,7 @@ class LifecycleTests(DatabaseTests):
         before = self.row().output
         run = self.submit()
         with (
-            patch.object(optimization_store, "_candidates", side_effect=RuntimeError("temporary")),
+            patch.object(worker, "prepare", side_effect=RuntimeError("temporary")),
             patch.object(worker, "run_optimization") as solve,
             self.assertLogs(worker.logger, level="ERROR"),
         ):
@@ -935,7 +960,15 @@ class LifecycleTests(DatabaseTests):
         )
         with self.sessions() as session:
             self.assertEqual(
-                (session.execute(select(setups.c.fields)).scalar_one(), cached_data(session)),
+                (
+                    {
+                        key: {k: v for k, v in value.items() if k != "calculation_context"}
+                        for key, value in session.execute(select(setups.c.fields))
+                        .scalar_one()
+                        .items()
+                    },
+                    cached_data(session),
+                ),
                 before,
             )
 
@@ -956,8 +989,15 @@ class LifecycleTests(DatabaseTests):
         self.assertEqual(locked["fixed_candidate"]["avg_db_kr_ha"], 50)
         run = self.submit(self.request(1, yearly=True), "yearly")
         envelope = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
-        self.assertEqual(envelope, {"jobType": "optimization", "farmId": "farm",
-                                   "simulationId": "sim", "runId": run.run_id})
+        self.assertEqual(
+            envelope,
+            {
+                "jobType": "optimization",
+                "farmId": "farm",
+                "simulationId": "sim",
+                "runId": run.run_id,
+            },
+        )
         self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
         result = self.result()
         self.assertEqual(result.status, "completed")
@@ -972,7 +1012,14 @@ class LifecycleTests(DatabaseTests):
         )
         with self.sessions() as session:
             self.assertEqual(
-                session.execute(select(setups.c.fields)).scalar_one()["field-b"], locked
+                {
+                    k: v
+                    for k, v in session.execute(select(setups.c.fields))
+                    .scalar_one()["field-b"]
+                    .items()
+                    if k != "calculation_context"
+                },
+                locked,
             )
         self.edit(area_ha=4, retention=25)
         self.assertEqual((self.edit(name="renamed").db2, self.result().status), (200, "outdated"))
@@ -987,10 +1034,11 @@ class LifecycleTests(DatabaseTests):
         self.assertEqual((updated.name, updated.retention), ("concurrent", 75))
         self.assertEqual(store.get_simulation("farm", "sim", EMAIL).revision, 2)
         self.submit(self.request(2))
-        store.update_simulation_constraints(
-            "farm", "sim", OptimizationConstraints(min_fen=1), EMAIL
-        )
-        self.assertEqual(self.result().status, "outdated")
+        with self.assertRaises(store.SetupRevisionConflictError):
+            store.update_simulation_constraints(
+                "farm", "sim", OptimizationConstraints(min_fen=1), EMAIL
+            )
+        self.assertEqual(self.result().status, "queued")
 
     def test_yearly_shift_is_saved_only_in_result(self):
         base = candidate().model_copy(update={"active_len": 2})
@@ -1452,9 +1500,11 @@ class MigrationTests(DatabaseTests):
         metadata.create_all(self.engine, tables=[simulation_read_model_table])
         # Current read APIs include creation summaries, even for legacy simulations.
         with self.engine.begin() as connection:
-            connection.execute(text(
-                "ALTER TABLE simulation ADD COLUMN creation_status TEXT NOT NULL DEFAULT 'done'"
-            ))
+            connection.execute(
+                text(
+                    "ALTER TABLE simulation ADD COLUMN creation_status TEXT NOT NULL DEFAULT 'done'"
+                )
+            )
         path = (
             Path(__file__).parents[1]
             / "database/migrations/versions/20261005_0001_simulation_aggregates.py"
@@ -1499,30 +1549,40 @@ class MigrationTests(DatabaseTests):
             self.insert_setup(connection)
             self.insert_setup(connection, "other")
             for field_id in ("unoptimized", "no-match", "no-cache", "empty-cache", "duplicate"):
-                original = field(field_id).model_copy(
-                    update={
-                        "rotation_id": None if field_id == "unoptimized" else "1:1:100",
-                        "allowed_rotation_ids": ["1:1:100"] if field_id == "duplicate" else [],
-                    }
-                ).model_dump(mode="json")
+                original = (
+                    field(field_id)
+                    .model_copy(
+                        update={
+                            "rotation_id": None if field_id == "unoptimized" else "1:1:100",
+                            "allowed_rotation_ids": ["1:1:100"] if field_id == "duplicate" else [],
+                        }
+                    )
+                    .model_dump(mode="json")
+                )
                 originals[field_id] = original
                 connection.execute(
                     self.old_fields.insert().values(
-                        id=field_id, simulation_id="sim", data=original,
+                        id=field_id,
+                        simulation_id="sim",
+                        data=original,
                         created_at=datetime(2026, 1, 1, tzinfo=UTC),
                     )
                 )
                 if field_id in payloads:
                     connection.execute(
                         self.old_candidates.insert().values(
-                            id=f"cache-{field_id}", simulation_id="sim", field_id=field_id,
+                            id=f"cache-{field_id}",
+                            simulation_id="sim",
+                            field_id=field_id,
                             data=payloads[field_id],
                         )
                     )
             # A cache with the same field ID in a different simulation must not match.
             connection.execute(
                 self.old_candidates.insert().values(
-                    id="other-cache", simulation_id="other", field_id="no-cache",
+                    id="other-cache",
+                    simulation_id="other",
+                    field_id="no-cache",
                     data={"candidates": [candidate().model_dump(mode="json")]},
                 )
             )
@@ -1559,7 +1619,8 @@ class MigrationTests(DatabaseTests):
                 preserved,
             )
         field_reads = [
-            query for query in queries
+            query
+            for query in queries
             if query.lstrip().startswith("SELECT") and "FROM simulation_field AS" in query
         ]
         self.assertEqual(len(field_reads), 2)  # One read per simulation, including an empty one.
@@ -1574,30 +1635,43 @@ class MigrationTests(DatabaseTests):
             for field_id in ("chain-b", "chain-a"):
                 evaluations = [candidate(110), candidate(220, "2")]
                 evaluations[1].years[0].db_detail = {"costs": [1, 2, 3]}
-                original = field(field_id).model_copy(
-                    update={
-                        "rotation_id": evaluations[1].ref.to_id(),
-                        "allowed_rotation_ids": [evaluations[1].ref.to_id()],
-                        "crop_rotation": [evaluation.year for evaluation in evaluations[1].years],
-                        "db2": 220,
-                    }
-                ).model_dump(mode="json")
+                original = (
+                    field(field_id)
+                    .model_copy(
+                        update={
+                            "rotation_id": evaluations[1].ref.to_id(),
+                            "allowed_rotation_ids": [evaluations[1].ref.to_id()],
+                            "crop_rotation": [
+                                evaluation.year for evaluation in evaluations[1].years
+                            ],
+                            "db2": 220,
+                        }
+                    )
+                    .model_dump(mode="json")
+                )
                 original_fields[field_id] = original
                 data = SimulationFieldCandidates(
-                    field_id=field_id, jbnr=5, candidates=evaluations,
+                    field_id=field_id,
+                    jbnr=5,
+                    candidates=evaluations,
                     real_history={"2025": {"afgrode_kode": 1, "n_input": 120}},
                 ).model_dump(mode="json")
                 for key in ("base_ref", "overrides", "start_year"):
                     data["candidates"][0].pop(key)
                 connection.execute(
                     self.old_fields.insert().values(
-                        id=field_id, simulation_id="sim", data=original,
+                        id=field_id,
+                        simulation_id="sim",
+                        data=original,
                         created_at=datetime(2026, 1, 1, tzinfo=UTC),
                     )
                 )
                 connection.execute(
                     self.old_candidates.insert().values(
-                        id=f"cache-{field_id}", simulation_id="sim", field_id=field_id, data=data,
+                        id=f"cache-{field_id}",
+                        simulation_id="sim",
+                        field_id=field_id,
+                        data=data,
                         created_at=datetime(2026, 1, 1, tzinfo=UTC),
                         updated_at=datetime(2026, 2, 1, tzinfo=UTC),
                     )
@@ -1796,11 +1870,11 @@ class MigrationTests(DatabaseTests):
         with self.engine.begin() as connection:
             self.migrate(connection)
         self.assertEqual(store.list_simulation_fields("farm", "empty", EMAIL), [])
-        self.assertEqual(store.list_simulation_field_candidates("farm", "empty", EMAIL), [])
+        self.assertEqual(list_simulation_field_candidates("farm", "empty", EMAIL), [])
         self.assertEqual(store.get_result("farm", "empty", EMAIL).status, "not_started")
         self.assertEqual(self.result().status, "not_started")
         self.assertEqual(
-            store.get_simulation_field_candidates("farm", "sim", "field-b", EMAIL).candidates, []
+            get_simulation_field_candidates("farm", "sim", "field-b", EMAIL).candidates, []
         )
         with self.engine.begin() as connection:
             self.migrate(connection, "downgrade")
@@ -1851,7 +1925,7 @@ class MigrationTests(DatabaseTests):
                     }
                 )
             )
-        projected = store.list_simulation_field_candidates("farm", "sim", EMAIL)
+        projected = list_simulation_field_candidates("farm", "sim", EMAIL)
         with self.engine.begin() as connection:
             self.migrate(connection, "downgrade")
             self.assertEqual(

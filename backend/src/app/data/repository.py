@@ -1,9 +1,8 @@
 from copy import deepcopy
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel
-from sqlalchemy import delete, func, insert, select, text, update
+from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.orm import Session
 
 from app.data.db import (
@@ -13,11 +12,7 @@ from app.data.db import (
     farm_table,
     field_table,
     registry_field_table,
-    simulation_field_candidates_table,
-    simulation_result_table,
-    simulation_table,
 )
-from app.data.optimizer_inputs import optimizer_input
 from app.data.simulation_store import (
     _get_simulation as _get_simulation,
 )
@@ -34,13 +29,7 @@ from app.data.simulation_store import (
     get_simulation_field_candidate_detail as get_simulation_field_candidate_detail,
 )
 from app.data.simulation_store import (
-    get_simulation_field_candidates as get_simulation_field_candidates,
-)
-from app.data.simulation_store import (
     get_simulation_field_context as get_simulation_field_context,
-)
-from app.data.simulation_store import (
-    list_simulation_field_candidates as list_simulation_field_candidates,
 )
 from app.data.simulation_store import (
     list_simulation_fields as list_simulation_fields,
@@ -656,87 +645,9 @@ def create_simulation(
     request: CreateSimulationRequest,
     email: str,
 ) -> Simulation | None:
-    with SessionLocal.begin() as session:
-        if not _farm_exists(session, farm_id, email):
-            return None
+    from app.data.simulation_settings_store import create
 
-        from app.data.economics_store import resolve_snapshot
-
-        snapshot = resolve_snapshot(session, request.economics_module_id, email)
-        setup_fields = {}
-        field_order = []
-        simulation = Simulation(
-            economics_module_id=snapshot.source_id,
-            economics_snapshot=snapshot,
-            id=str(uuid4()),
-            farm_id=farm_id,
-            name=request.name,
-            created_at=datetime.now(UTC).isoformat(),
-            constraints=request.constraints,
-            rotation_saedskiftevarianter=request.saedskiftevarianter,
-            rotation_n_norm_procenter=request.n_norm_procenter,
-            godning=request.godning,
-            eea_fdato=request.eea_fdato,
-            eea_precision_dagsbasis=request.eea_precision_dagsbasis,
-            praecisionsjordbrug=request.praecisionsjordbrug,
-            tidlig_saaning=request.tidlig_saaning,
-            mellemafgrode=request.mellemafgrode,
-        )
-        session.execute(
-            insert(simulation_table).values(
-                id=simulation.id,
-                farm_id=farm_id,
-                data=_dump(simulation),
-            ),
-        )
-
-        field_rows = (
-            session.execute(
-                select(field_table.c.data)
-                .where(field_table.c.farm_id == farm_id)
-                .order_by(field_table.c.created_at),
-            )
-            .scalars()
-            .all()
-        )
-        current_fields = [_load(FieldRecord, data) for data in field_rows]
-        registry_contexts = _registry_contexts_for_imk_ids(
-            session,
-            [field.imk_id for field in current_fields if field.imk_id is not None],
-        )
-        for current_field in current_fields:
-            field_id = str(uuid4())
-            copied_field = current_field.model_copy(
-                update={"id": field_id, "geometry": deepcopy(current_field.geometry)},
-                deep=True,
-            )
-
-            setup, field_candidates = prepare_simulation_field(
-                copied_field,
-                registry_contexts.get(copied_field.imk_id),
-                request,
-                economics_key=snapshot.overrides.cache_key(),
-            )
-            setup_fields[copied_field.id] = setup
-            field_order.append(copied_field.id)
-            if field_candidates.candidates:
-                session.execute(
-                    insert(simulation_field_candidates_table).values(
-                        id=str(uuid4()),
-                        simulation_id=simulation.id,
-                        field_id=copied_field.id,
-                        data=_dump(field_candidates),
-                        optimizer_input=optimizer_input(field_candidates),
-                    )
-                )
-
-        session.execute(
-            update(simulation_table)
-            .where(simulation_table.c.id == simulation.id)
-            .values(fields=setup_fields, field_order=field_order)
-        )
-        session.execute(insert(simulation_result_table).values(simulation_id=simulation.id))
-        return simulation
+    return create(farm_id, request, email)
 
 
 def list_scenario_afgrodekoder(
@@ -754,7 +665,7 @@ def list_scenario_afgrodekoder(
     udlæg_kode/udlæg_navn). The set is therefore identical for every mark in
     the simulering and derivable straight from
     simulation.rotation_saedskiftevarianter, without touching
-    simulation_field_candidates at all - no per-mark ~1.6 MB candidate set
+    calculated alternatives at all - no per-mark candidate set
     (db/leaching breakdown included) needs to be loaded just to read off one
     integer per position.
 

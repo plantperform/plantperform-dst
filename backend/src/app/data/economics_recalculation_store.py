@@ -47,6 +47,12 @@ def _setup(session, farm_id, simulation_id, email):
 
 
 def _require_editable(session, simulation_id, row):
+    from app.data.simulation_settings_store import require_idle
+
+    try:
+        require_idle(session, simulation_id)
+    except simulation_store.SetupRevisionConflictError as error:
+        raise EconomicsConflictError(str(error)) from error
     # A fresh explicit request can replace failed economics work. Replaying its
     # old captured inputs remains a separate retry action.
     if row.creation_status == "failed" and row.data.get("economics_recalculation"):

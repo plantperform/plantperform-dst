@@ -72,20 +72,15 @@ class SimulationAccessControlTests(unittest.TestCase):
             )
         self.assertEqual(submit.call_args.args[2], MEMBER.email)
 
-    def test_yearly_candidates_forwards_member_email(self) -> None:
-        with patch.object(
-            simulations,
-            "simulation_part",
-            return_value=None,
-        ) as list_candidates:
+    def test_yearly_candidates_forwards_member_email(self):
+        with patch.object(simulations, "get_simulation", return_value=None) as lookup:
             self.assert_not_found(
                 simulations.get_farm_simulation_yearly_optimization_candidates,
                 "farm-1",
                 "simulation-1",
                 MEMBER,
             )
-
-        self.assertEqual(list_candidates.call_args.args[-2], MEMBER.email)
+        lookup.assert_called_once_with("farm-1", "simulation-1", MEMBER.email)
 
     def test_candidate_detail_forwards_member_email(self) -> None:
         with patch.object(
@@ -170,12 +165,6 @@ class SimulationReadinessTests(unittest.TestCase):
             ("PATCH", "/constraints", "update_simulation_constraints", {}),
             ("POST", "/optimize", "submit", optimization),
             ("POST", "/optimize-yearly", "submit", optimization),
-            (
-                "GET",
-                "/yearly-optimization-candidates",
-                "simulation_part",
-                None,
-            ),
             ("PATCH", "/fields/field-1", "update_simulation_field", {}),
             (
                 "GET",
@@ -203,7 +192,9 @@ class SimulationReadinessTests(unittest.TestCase):
             patch.object(simulations, "simulation_part", return_value=[]),
             patch.object(simulations, "require_simulation_view_ready"),
             patch.object(
-                simulations, "get_simulation_field_context", return_value=SimpleNamespace()
+                simulations,
+                "get_simulation_field_context",
+                return_value=SimpleNamespace(soil_data=None),
             ),
             TestClient(app) as client,
         ):
@@ -231,7 +222,8 @@ class SimulationReadinessTests(unittest.TestCase):
                         if operation == "simulation_part"
                         else {"detail": detail},
                     )
-                    get_simulation.assert_called_with("farm-1", "simulation-1", MEMBER.email)
+                    if operation != "submit":
+                        get_simulation.assert_called_with("farm-1", "simulation-1", MEMBER.email)
                     guarded_operation.assert_called_once()
 
 

@@ -153,7 +153,7 @@ class FieldRecord(CamelModel):
     crop_rotation: list[RotationYear] = Field(default_factory=list)
     # Set by the optimizer (candidate reference ID, e.g. "315:4:100") and used
     # to look up the full calculation detail (leaching_detail/db_detail) in
-    # simulation_field_candidates. None until the mark has been optimized.
+    # the chosen result. None until the mark has been optimized.
     rotation_id: str | None = None
     measures: FieldMeasures = Field(default_factory=FieldMeasures)
     allowed_rotation_ids: list[str] = Field(default_factory=default_allowed_rotation_ids)

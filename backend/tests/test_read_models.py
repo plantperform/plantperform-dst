@@ -14,6 +14,7 @@ from unittest.mock import patch
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
+from legacy_candidates import caches
 from psycopg.types.json import Jsonb
 from sqlalchemy import delete, event, inspect, null, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests, candidate, field
@@ -24,7 +25,6 @@ from app.data import optimization_store, read_model_store, repository, simulatio
 from app.data.db import farm_read_model_table as farm_views
 from app.data.db import farm_table, field_table
 from app.data.db import field_historical_detail_table as details
-from app.data.db import simulation_field_candidates_table as caches
 from app.data.db import simulation_read_model_table as views
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
@@ -298,7 +298,7 @@ class ReadModelTests(DatabaseTests):
         with self.sessions() as session:
             inserted = session.execute(select(views)).one()
         self.assertEqual(
-            (inserted.data, inserted.prepared), (data, read_models.normalize_prepared(prepared))
+            (inserted.data, inserted.prepared), (data, {"version": 3, "contributions": {}})
         )
         self.assertEqual(
             (inserted.input_revision, inserted.status, inserted.view_version, inserted.generation),
@@ -318,7 +318,7 @@ class ReadModelTests(DatabaseTests):
         with self.sessions() as session:
             replaced = session.execute(select(views)).one()
         self.assertEqual(
-            (replaced.data, replaced.prepared), (data, read_models.normalize_prepared(prepared))
+            (replaced.data, replaced.prepared), (data, {"version": 3, "contributions": {}})
         )
         self.assertEqual(
             (replaced.input_revision, replaced.status, replaced.view_version, replaced.generation),
@@ -359,7 +359,7 @@ class ReadModelTests(DatabaseTests):
         self.assertTrue(optimization_store.finish("sim", run.run_id, token, 0, output=output))
         return value, run, token, output
 
-    def test_edit_reads_one_shared_set_and_preserves_other_fields(self):
+    def test_edit_uses_aggregate_summaries_without_candidate_metadata(self):
         self.publish_result()
         with self.sessions.begin() as session:
             before = session.execute(select(views.c.prepared)).scalar_one()
@@ -368,72 +368,46 @@ class ReadModelTests(DatabaseTests):
                     data={"candidates": "unreadable"}, optimizer_input={"candidates": "unreadable"}
                 )
             )
-        self.assertEqual(
-            before["fields"]["field-a"]["base_set"], before["fields"]["field-b"]["base_set"]
-        )
+        self.assertEqual(before["version"], 3)
+        self.assertNotIn("candidate_sets", before)
         queries = []
 
         def record(conn, cursor, sql, params, context, many):
-            queries.append((sql, context.compiled_parameters[0]))
+            queries.append(sql)
 
         event.listen(self.engine, "before_cursor_execute", record)
         try:
             self.edit(area_ha=4)
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
-        self.assertEqual(sum("candidate_sets" in params.values() for _, params in queries), 1)
-        self.assertFalse(any("simulation_field_candidates" in sql for sql, _ in queries))
-        self.assertFalse(any("SELECT simulation_read_model.prepared," in sql for sql, _ in queries))
+        self.assertFalse(any("simulation_field_candidates" in sql for sql in queries))
         with self.sessions() as session:
             after = session.execute(select(views.c.prepared)).scalar_one()
-        self.assertEqual(after["candidate_sets"], before["candidate_sets"])
-        self.assertEqual(after["fields"]["field-a"], before["fields"]["field-a"])
+        self.assertNotIn("candidate_sets", after)
         self.assertEqual(after["contributions"]["field-a"], before["contributions"]["field-a"])
         self.assertNotEqual(after["contributions"]["field-b"], before["contributions"]["field-b"])
 
-    def test_legacy_edits_keep_format_until_successful_publication(self):
-        _, _, _, output = self.publish_result()
-        base = [
-            read_models.candidate_metadata(candidate()),
-            read_models.candidate_metadata(candidate(200, "2")),
-        ]
-        selected = read_models.candidate_metadata(rich_candidate())
+    def test_legacy_edits_discard_candidate_metadata_without_rewriting_caches(self):
+        self.publish_result()
         with self.sessions.begin() as session:
-            current = session.execute(select(views.c.prepared)).scalar_one()
             legacy = {
                 "fields": {
-                    key: {"base": base, "overlays": {"selected": selected}}
-                    for key in current["fields"]
+                    "field-b": {
+                        "base": [read_models.candidate_metadata(candidate())],
+                        "overlays": {},
+                    }
                 },
-                "contributions": current["contributions"],
+                "contributions": {},
             }
             session.execute(update(views).values(prepared=legacy))
-        before_view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
-        self.assertEqual(before_view["status"], "done")
-        with self.sessions() as session:
-            self.assertEqual(session.execute(select(views.c.prepared)).scalar_one(), legacy)
+            cached_before = session.execute(select(caches.c.data)).scalars().all()
         self.edit(area_ha=4)
         with self.sessions() as session:
-            edited = session.execute(select(views.c.prepared)).scalar_one()
-        self.assertNotIn("version", edited)
-        self.assertEqual(edited["fields"]["field-b"]["base"], base)
-        self.assertEqual(edited["fields"]["field-a"], legacy["fields"]["field-a"])
-
-        run = self.submit(self.request(1))
-        _, _, token = optimization_store.claim("sim", run.run_id)
-        self.assertTrue(optimization_store.finish("sim", run.run_id, token, 1, output=output))
-        with self.sessions() as session:
-            published = session.execute(select(views.c.prepared)).scalar_one()
-        self.assertEqual(published["version"], 2)
-        self.assertEqual(len(published["candidate_sets"]), 1)
-        self.assertEqual(
-            published["candidate_sets"][0],
-            [read_models.compact_candidate_metadata(value) for value in base],
-        )
-        self.assertEqual(
-            published["fields"]["field-b"]["overlays"]["selected"],
-            read_models.compact_candidate_metadata(selected),
-        )
+            prepared = session.execute(select(views.c.prepared)).scalar_one()
+            self.assertEqual(session.execute(select(caches.c.data)).scalars().all(), cached_before)
+        self.assertEqual(prepared["version"], 3)
+        self.assertNotIn("fields", prepared)
+        self.assertNotIn("candidate_sets", prepared)
 
     def test_edit_projection_matches_fields_and_preserves_saved_comparison_after_failure(self):
         _, old_run, old_token, output = self.publish_result()
@@ -445,10 +419,10 @@ class ReadModelTests(DatabaseTests):
                     data={"candidates": "unreadable"}, optimizer_input={"candidates": "unreadable"}
                 )
             )
-        with patch.object(simulation_store, "_candidates", side_effect=AssertionError):
-            self.edit(area_ha=4, retention=75)
-            self.edit(allowed_rotation_ids=["1:1:100"])
-            self.edit(allowed_rotation_ids=[])
+        caches.drop(self.engine)
+        self.edit(area_ha=4, retention=75)
+        self.edit(allowed_rotation_ids=["1:1:100"])
+        self.edit(allowed_rotation_ids=[])
         after = read_model_store.get_simulation_view("farm", "sim", EMAIL)
         current = SimulationView.model_validate(after)
         edited = next(f for f in current.data.fields if f.id == "field-b")
@@ -494,10 +468,10 @@ class ReadModelTests(DatabaseTests):
                     data={"candidates": "unreadable"}, optimizer_input={"candidates": "unreadable"}
                 )
             )
-        with patch.object(simulation_store, "_candidates", side_effect=AssertionError):
-            edited = simulation_store.save_manual_rotation(
-                "farm", "sim", "field-b", value, request, EMAIL, 0
-            )
+        caches.drop(self.engine)
+        edited = simulation_store.save_manual_rotation(
+            "farm", "sim", "field-b", value, request, EMAIL, 0
+        )
         after = read_model_store.get_simulation_view("farm", "sim", EMAIL)
         self.assertEqual(after["data"]["field_years"]["field-b"][0]["db_kr_ha"], 500)
         self.assertEqual(after["data"]["saved_result"], before["data"]["saved_result"])
@@ -525,8 +499,8 @@ class ReadModelTests(DatabaseTests):
         with self.sessions.begin() as session:
             session.execute(delete(views))
             job = read_model_store.schedule_preparation(session, "prepare_simulation_view", "sim")
-        with patch.object(simulation_store, "_candidates", side_effect=AssertionError):
-            read_model_worker.execute(job, CONTEXT)
+        caches.drop(self.engine)
+        read_model_worker.execute(job, CONTEXT)
         after = read_model_store.get_simulation_view("farm", "sim", EMAIL)["data"]
         self.assertEqual(after["saved_result"], before["saved_result"])
         self.assertEqual(after["field_years"], before["field_years"])
@@ -535,15 +509,7 @@ class ReadModelTests(DatabaseTests):
         for key in ("fields", "yearly_summary", "crop_area_ranges", "comparison_availability"):
             self.assertEqual(after[key], before[key])
         self.assertEqual(
-            after["yearly_optimization_candidates"],
-            read_models.rotation_catalog(
-                {
-                    "field": [
-                        read_models.candidate_metadata(rich_candidate()),
-                        read_models.candidate_metadata(candidate(200, "2")),
-                    ]
-                }
-            ),
+            after["yearly_optimization_candidates"], before["yearly_optimization_candidates"]
         )
         listed = simulation_store.list_simulations("farm", EMAIL)
         self.assertEqual(listed[0].comparison_availability, {"kind": "ready"})
@@ -783,30 +749,28 @@ class ReadModelTests(DatabaseTests):
                 )
         finally:
             event.remove(self.engine, "before_cursor_execute", record_publication)
-        self.assertEqual(publication_bindings, [(1, 1)])
+        self.assertEqual(publication_bindings, [(0, 0)])
         queries = []
 
         def record(conn, cursor, sql, params, context, many):
             queries.append(sql)
 
+        caches.drop(self.engine)
         event.listen(self.engine, "before_cursor_execute", record)
         try:
-            with patch.object(simulation_store, "_candidates", side_effect=AssertionError):
-                view = SimulationView.model_validate(
-                    read_model_store.get_simulation_view("farm", "sim", EMAIL)
-                )
-                self.assertEqual(len(view.data.fields), 500)
-                self.assertLess(len(view.model_dump_json()), 3_000_000)
-                self.assertEqual(len(queries), 1)
-                self.assertFalse(any("simulation_field_candidates" in sql for sql in queries))
-                queries.clear()
-                metadata_view = read_model_store.get_simulation_view(
-                    "farm", "sim", EMAIL, include_data=False
-                )
-                self.assertIsNone(metadata_view["data"])
-                self.assertFalse(
-                    any("SELECT simulation_read_model.data," in sql for sql in queries)
-                )
+            view = SimulationView.model_validate(
+                read_model_store.get_simulation_view("farm", "sim", EMAIL)
+            )
+            self.assertEqual(len(view.data.fields), 500)
+            self.assertLess(len(view.model_dump_json()), 3_000_000)
+            self.assertEqual(len(queries), 1)
+            self.assertFalse(any("simulation_field_candidates" in sql for sql in queries))
+            queries.clear()
+            metadata_view = read_model_store.get_simulation_view(
+                "farm", "sim", EMAIL, include_data=False
+            )
+            self.assertIsNone(metadata_view["data"])
+            self.assertFalse(any("SELECT simulation_read_model.data," in sql for sql in queries))
         finally:
             event.remove(self.engine, "before_cursor_execute", record)
 
@@ -819,21 +783,19 @@ class ReadModelTests(DatabaseTests):
             fields["field-b"]["fixed_candidate"] = value
             session.execute(update(setups).values(fields=fields))
             session.execute(update(caches).values(data={"candidates": "unreadable"}))
-        with patch.object(
-            simulation_store, "get_simulation_field_candidates", side_effect=AssertionError
-        ):
-            detail = simulation_store.get_simulation_field_candidate_detail(
-                "farm", "sim", "field-b", EMAIL
-            )
+        caches.drop(self.engine)
+        detail = simulation_store.get_simulation_field_candidate_detail(
+            "farm", "sim", "field-b", EMAIL
+        )
         self.assertEqual(detail.model_dump(mode="json"), value)
 
-    def test_detail_sql_selects_fixed_saved_manual_then_original(self):
+    def test_detail_sql_selects_fixed_saved_manual_and_missing_report(self):
         self.publish_result()
         for fixed, saved, manual, expected in (
             (500, 400, 300, 500),
             (None, 400, 300, 400),
             (None, None, 300, 300),
-            (None, None, None, 100),
+            (None, None, None, None),
         ):
             with self.subTest(expected=expected), self.sessions.begin() as session:
                 setup = session.execute(select(setups.c.fields)).scalar_one()
@@ -855,7 +817,7 @@ class ReadModelTests(DatabaseTests):
                 session.execute(update(results).values(output=output))
             with self.sessions() as session:
                 value = simulation_store._selected_candidate(session, "sim", "field-b", "1:1:100")
-                self.assertEqual(value.avg_db_kr_ha, expected)
+                self.assertEqual(value.avg_db_kr_ha if value else None, expected)
 
     def test_result_and_view_publish_roll_back_together(self):
         run = self.submit()

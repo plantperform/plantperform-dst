@@ -14,6 +14,8 @@ from sqlalchemy import select, update
 from app.data.db import SessionLocal
 from app.data.db import simulation_result_table as results
 from app.data.simulation_store import _row, get_result, read_result
+from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
+from app.domain.simulation import Simulation
 from app.services.optimization.local import execute_local_when_ready
 from app.services.optimization.queue import sqs_client
 
@@ -58,7 +60,7 @@ def submit(
         raise QueueUnavailableError("Den lokale optimering er ikke konfigureret.")
     run_id = str(request.run_id)
     with SessionLocal.begin() as session:
-        setup = _row(session, farm_id, simulation_id, email, lock=True, include_data=False)
+        setup = _row(session, farm_id, simulation_id, email, lock=True)
         if setup is None:
             raise SimulationNotFoundError
         result = session.execute(
@@ -68,10 +70,40 @@ def submit(
         ).one()
         if setup.revision != request.expected_revision:
             raise SubmissionConflictError("Scenariet er ændret. Genindlæs før en ny optimering.")
+        simulation = Simulation.model_validate(setup.data)
+        # Saved settings are authoritative. Legacy clients may still supply run options.
+        if "optimization_settings" in setup.data:
+            settings = simulation.optimization_settings
+            if settings.kind != kind:
+                raise SubmissionConflictError(
+                    "Optimeringstypen er ændret. Genindlæs indstillingerne."
+                )
+            request_type = (
+                YearlyOptimizeSimulationRequest if kind == "yearly" else OptimizeSimulationRequest
+            )
+            request = request_type.model_validate(
+                {
+                    **settings.model_dump(mode="json"),
+                    "run_id": run_id,
+                    "expected_revision": setup.revision,
+                }
+            )
+        parameters = {
+            **request.model_dump(mode="json"),
+            "simulation_settings": simulation.model_dump(
+                mode="json",
+                exclude={"name", "result", "revision", "comparison_availability"},
+            ),
+        }
         if result.run_id == run_id:
             if result.input_revision != setup.revision:
                 raise SubmissionConflictError("Denne kørsel er forældet. Start en ny optimering.")
-            if result.parameters != request.model_dump(mode="json") or result.kind != kind:
+            saved_parameters = {
+                key: value
+                for key, value in result.parameters.items()
+                if key != "simulation_settings"
+            }
+            if saved_parameters != request.model_dump(mode="json") or result.kind != kind:
                 raise SubmissionConflictError(
                     "Kørsels-id er allerede brugt med andre indstillinger."
                 )
@@ -93,7 +125,7 @@ def submit(
                     run_id=run_id,
                     kind=kind,
                     requested_by=email,
-                    parameters=request.model_dump(mode="json"),
+                    parameters=parameters,
                     input_revision=setup.revision,
                     queued_at=datetime.now(UTC),
                     published_at=None,

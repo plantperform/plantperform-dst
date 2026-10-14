@@ -1,4 +1,4 @@
-import { Lock, Pencil } from 'lucide-react'
+import { SlidersHorizontal, Pencil } from 'lucide-react'
 import { useId } from 'react'
 
 import type { Simulation } from '@/api/types'
@@ -75,7 +75,7 @@ export const SimulationBasisCard = ({
       aria-labelledby={`${id}-title`}
     >
       <div className="flex items-center gap-3 px-5 py-2.5">
-        <Lock
+        <SlidersHorizontal
           className="size-3.5 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
@@ -83,7 +83,7 @@ export const SimulationBasisCard = ({
           <h3 id={`${id}-title`} className="text-sm font-semibold">
             Simuleringens grundlag
           </h3>
-          <p className="text-xs text-muted-foreground">Låst ved oprettelse</p>
+          <p className="text-xs text-muted-foreground">Gemte indstillinger</p>
         </div>
         <Button
           type="button"
@@ -98,11 +98,8 @@ export const SimulationBasisCard = ({
       </div>
       <div className="border-t">
         <p className="px-5 pt-3 pl-11.5 text-xs text-muted-foreground">
-          Kandidaterne blev genereret ud fra dette og kan ikke ændres på
-          simuleringen.{' '}
-          <b className="font-semibold text-foreground">Ret grundlag</b> åbner Ny
-          simulering med værdierne udfyldt, så du kan rette dem og oprette en ny
-          simulering - grænserne følger med.
+          Ret indstillingerne og kør optimeringen igen. Markernes regler og
+          manuelle valg bevares.
         </p>
         <dl className="grid grid-cols-3 gap-x-4 gap-y-3 px-5 pt-3 pb-4 pl-11.5">
           {basisValues(simulation).map((value) => (

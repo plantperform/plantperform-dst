@@ -72,7 +72,7 @@ class PermanentFieldLockTests(unittest.TestCase):
             jbnr=4, crop_history={"2026": PERMANENT_GRASS}, goedningsregion=None, oeko=False
         )
         with (
-            patch.object(repository, "SessionLocal") as factory,
+            patch.object(repository, "SessionLocal"),
             patch.object(repository, "_farm_exists", return_value=True),
             patch.object(
                 repository, "_registry_contexts_for_imk_ids", return_value={1: registry_row}
@@ -86,12 +86,14 @@ class PermanentFieldLockTests(unittest.TestCase):
                 return_value=_permanent_candidate(),
             ),
         ):
-            session = factory.begin.return_value.__enter__.return_value
-            session.execute.return_value.scalars.return_value.all.return_value = [farm_field]
-            repository.create_simulation(
-                "farm", CreateSimulationRequest(name="Locked"), "member@example.com"
+            from app.domain.field import FieldRecord
+
+            setup_field, _ = repository.prepare_simulation_field(
+                FieldRecord.model_validate(farm_field),
+                registry_row,
+                CreateSimulationRequest(name="Locked"),
             )
-            setup = _stored_setup(session)
+            setup = {"fields": {"farm-field": setup_field}, "field_order": ["farm-field"]}
 
         # Read back the way the field list and Optimér see a locked mark.
         [field] = project_fields(setup["fields"], setup["field_order"], None)

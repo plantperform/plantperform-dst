@@ -2,16 +2,14 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
-from time import monotonic
 from uuid import uuid4
 
 from sqlalchemy import select, update
 
 from app.data.db import SessionLocal
-from app.data.db import simulation_field_candidates_table as caches
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
-from app.data.simulation_store import _candidates, _fields, _model
+from app.data.simulation_store import _fields
 from app.domain.optimization import (
     LEASE_DURATION_SECONDS,
     MAX_JOB_ATTEMPTS,
@@ -19,7 +17,6 @@ from app.domain.optimization import (
     OptimizationAttemptsExhaustedError,
     OptimizationLeaseActiveError,
 )
-from app.domain.rotation_candidate import RotationCandidateEvaluation
 
 logger = logging.getLogger(__name__)
 
@@ -190,57 +187,98 @@ def _execution_setup(session, simulation_id, run_id, token, revision, *, include
 
 
 def load_snapshot(simulation_id, run_id, token, revision):
-    """Load compact inputs after the claim has committed and is visible to polling."""
-    timings = {}
-    started = monotonic()
+    """Capture stable fields and small registry context, never read candidate caches."""
+    from copy import deepcopy
+
+    from app.data import read_model_store, repository
+    from app.data.db import field_table
+    from app.data.simulation_store import split_field
+    from app.domain.field import FieldRecord
+    from app.domain.simulation import Simulation
+
     with SessionLocal.begin() as session:
         setup = _execution_setup(session, simulation_id, run_id, token, revision, include_data=True)
         if setup is None:
             return None
-        simulation = _model(session, simulation_id, setup)
-        timings["setup"] = monotonic() - started
-        started = monotonic()
-        fields = _fields(session, simulation_id)
-        timings["fields"] = monotonic() - started
-        candidates = _candidates(session, simulation_id, compact=True, timings=timings)
-    for phase, duration in timings.items():
-        logger.info(
-            "optimizer_phase simulation_id=%s run_id=%s phase=%s duration_seconds=%.3f "
-            "field_count=%s candidate_count=%s",
-            simulation_id,
-            run_id,
-            phase,
-            duration,
-            len(fields),
-            sum(len(row.candidates) for row in candidates),
+        state = session.execute(
+            select(setups.c.fields, setups.c.field_order, results.c.parameters)
+            .join(results)
+            .where(setups.c.id == simulation_id)
+        ).one()
+        data = dict(setup.data)
+        captured = state.parameters.get("simulation_settings", data)
+        simulation = Simulation.model_validate(
+            {**captured, "name": data["name"], "revision": revision}
         )
-    return simulation, fields, candidates
-
-
-def hydrate_winners(simulation_id, run_id, token, revision, selected):
-    """Extract only winning cached evaluations; overlays and computed shifts are already full."""
-    with SessionLocal.begin() as session:
-        if _execution_setup(session, simulation_id, run_id, token, revision) is None:
-            return None
-        hydrated = {}
-        for field_id, candidate in selected.items():
-            if candidate._cache_position is None:
-                hydrated[field_id] = candidate
-                continue
-            data = session.execute(
-                select(caches.c.data["candidates"][candidate._cache_position]).where(
-                    caches.c.simulation_id == simulation_id,
-                    caches.c.field_id == field_id,
+        setup_fields = deepcopy(state.fields)
+        order = list(state.field_order)
+        if not data.get("fields_initialized", True):
+            read_model_store.require_farm_ready(session, simulation.farm_id)
+            original = (
+                session.execute(
+                    select(field_table.c.data)
+                    .where(field_table.c.farm_id == simulation.farm_id)
+                    .order_by(field_table.c.created_at, field_table.c.id)
                 )
-            ).scalar_one()
-            full = RotationCandidateEvaluation.model_validate(data)
-            if full.ref != candidate.ref:
-                raise ValueError("Winning candidate no longer matches its cache position")
-            hydrated[field_id] = full
-        return hydrated
+                .scalars()
+                .all()
+            )
+            fields = [
+                FieldRecord.model_validate(value).model_copy(update={"id": str(uuid4())})
+                for value in original
+            ]
+            setup_fields = {
+                field.id: split_field(field.model_dump(mode="json")) for field in fields
+            }
+            order = [field.id for field in fields]
+            data["fields_initialized"] = True
+        else:
+            fields = _fields(session, simulation_id)
+        missing = [field for field in fields if "calculation_context" not in setup_fields[field.id]]
+        registry = repository._registry_contexts_for_imk_ids(
+            session, list({field.imk_id for field in missing if field.imk_id is not None})
+        )
+        for field in missing:
+            context = registry.get(field.imk_id)
+            setup_fields[field.id]["calculation_context"] = (
+                dict(context._mapping) if context else None
+            )
+        session.execute(
+            update(setups)
+            .where(setups.c.id == simulation_id)
+            .values(fields=setup_fields, field_order=order, data=data)
+        )
+        if not simulation.fields_initialized:
+            # Failures on the first attempt still leave the fields available for correction.
+            read_model_store.publish_simulation(
+                session,
+                simulation_id,
+                revision,
+                {
+                    "fields": [f.model_dump(mode="json") for f in fields],
+                    "field_years": {},
+                    "yearly_summary": [],
+                    "crop_area_ranges": [],
+                    "saved_result": None,
+                    "comparison_availability": {"kind": "uncalculated"},
+                },
+                {"version": 3, "contributions": {}},
+            )
+        contexts = {field.id: setup_fields[field.id].get("calculation_context") for field in fields}
+        return simulation, fields, setup_fields, contexts
 
 
-def finish(simulation_id, run_id, token, revision, *, output=None, error=None, retry=False):
+def finish(
+    simulation_id,
+    run_id,
+    token,
+    revision,
+    *,
+    output=None,
+    error=None,
+    retry=False,
+    setup_fields=None,
+):
     with SessionLocal.begin() as session:
         setup = session.execute(
             select(setups.c.revision).where(setups.c.id == simulation_id).with_for_update()
@@ -273,6 +311,10 @@ def finish(simulation_id, run_id, token, revision, *, output=None, error=None, r
             update(results).where(results.c.simulation_id == simulation_id).values(**values)
         )
         if output is not None:
+            if setup_fields is not None:
+                session.execute(
+                    update(setups).where(setups.c.id == simulation_id).values(fields=setup_fields)
+                )
             from app.data.read_model_store import publish_optimization
 
             publish_optimization(session, simulation_id, revision, run_id, output)

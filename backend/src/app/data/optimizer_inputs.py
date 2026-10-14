@@ -1,4 +1,4 @@
-"""Derived solver inputs; full calculation details remain in the candidate cache."""
+"""Compact solver inputs kept in memory; winning reports are reconstructed."""
 
 from typing import Annotated
 
@@ -73,7 +73,4 @@ def optimizer_input_json(data: SimulationFieldCandidates) -> str:
 
 def parse_optimizer_input(data: dict) -> SimulationFieldCandidates:
     # Validate only solver inputs. Full reporting models are restored for winners.
-    row = OptimizerFieldCandidates.model_validate(data)
-    for position, candidate in enumerate(row.candidates):
-        candidate._cache_position = position
-    return row
+    return OptimizerFieldCandidates.model_validate(data)

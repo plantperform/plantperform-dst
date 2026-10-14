@@ -18,6 +18,7 @@ import type {
   RotationCandidateEvaluation,
   Simulation,
   UpdateFieldInput,
+  UpdateSimulationInput,
   YearlyOptimizeSimulationInput,
 } from '@/api/types'
 
@@ -87,6 +88,9 @@ export const deleteSimulation = (farmId: string, simulationId: string) =>
       }),
     )
   })
+
+export const updateSimulation = (farmId: string, simulationId: string, input: UpdateSimulationInput) =>
+  patchJson<Simulation, UpdateSimulationInput>(`/farms/${farmId}/simulations/${simulationId}`, input)
 
 export const retrySimulationCreation = (
   farmId: string,

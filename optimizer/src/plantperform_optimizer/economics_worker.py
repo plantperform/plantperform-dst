@@ -5,14 +5,11 @@ import time
 from copy import deepcopy
 from types import SimpleNamespace
 
-from sqlalchemy import select, update
+from sqlalchemy import update
 
-from app.data import creation_store, read_model_store, repository, simulation_store
+from app.data import creation_store, read_model_store, simulation_store
 from app.data import economics_recalculation_store as store
-from app.data.db import simulation_field_candidates_table as caches
-from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
-from app.data.optimizer_inputs import optimizer_input
 from app.domain.economics import EconomicsRecalculationJob
 from app.domain.optimization import (
     EXECUTION_TIMEOUT_SECONDS,
@@ -20,7 +17,6 @@ from app.domain.optimization import (
     RETRY_DELAY_SECONDS,
     OptimizationAttemptsExhaustedError,
 )
-from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import Simulation
 from app.services.economics.db_calculator import clear_lookup_cache
 from app.services.economics.recalculation import recalculate_candidate, recalculate_document
@@ -34,104 +30,54 @@ def _deadline(context):
 
 
 def _execute(session, job, context):
+    """Reprice only saved chosen/manual results; alternative candidates do not exist here."""
     with session.begin():
         row = store.locked_setup(session, job)
         if row is None or row.creation_status != "running":
             return False
         simulation = Simulation.model_validate(row.data)
-        output = (
-            session.execute(
-                select(results.c.output).where(results.c.simulation_id == job.simulation_id)
-            ).scalar_one()
-            or {}
-        )
         original_fields = simulation_store._fields(session, job.simulation_id)
         setup_fields = deepcopy(row.fields)
-        field_ids = list(row.field_order)
-    field_map = {f.id: f for f in original_fields}
-    selected = deepcopy(output.get("selected_candidates", {}))
-    for field_id in field_ids:
+        chosen = {
+            field.id: simulation_store._selected_candidate(
+                session, job.simulation_id, field.id, field.rotation_id
+            )
+            for field in original_fields
+            if field.rotation_id
+        }
+    for field in original_fields:
         _deadline(context)
-        with session.begin():
-            if store.locked_setup(session, job) is None:
-                return False
-            cached = session.execute(
-                select(caches.c.data).where(
-                    caches.c.simulation_id == job.simulation_id, caches.c.field_id == field_id
-                )
-            ).scalar_one_or_none()
-        field = field_map[field_id]
-        setup = setup_fields[field_id]
-        baseline = setup.get("baseline_candidate")
-        if field.rotation_id is None and baseline is None and field.crop_rotation:
-            with session.begin():
-                if store.locked_setup(session, job) is None:
-                    return False
-                registry = repository._registry_context_for_imk_id(session, field.imk_id)
-            value = repository.baseline_simulation_candidate(field, registry)
-            baseline = value.model_dump(mode="json") if value else None
-        if baseline is not None:
-            baseline = recalculate_document(
-                baseline, simulation, job.snapshot, baseline["years"][0]["db_detail"].get("jbnr", 4)
-            )
-            setup["baseline_candidate"] = baseline
-            if field.rotation_id is None:
-                field_map[field_id] = field.model_copy(
-                    update=dict(
-                        db2=baseline["avg_db_kr_ha"] * field.area_ha,
-                        fen=baseline["avg_fen"] * field.area_ha,
-                    )
-                )
-                setup["baseline"].update(db2=field_map[field_id].db2, fen=field_map[field_id].fen)
-                setup["baseline_revision"] = job.expected_revision
-        if cached is None:
-            continue
-        data = SimulationFieldCandidates.model_validate(cached)
-        recalculated = []
-        for candidate in data.candidates:
-            _deadline(context)
-            recalculated.append(
-                recalculate_candidate(candidate, simulation, job.snapshot, data.jbnr)
-            )
-        data.candidates = recalculated
-        setup = setup_fields[field_id]
-        for name in ("fixed_candidate", "manual_candidate", "economics_candidate"):
+        setup = setup_fields[field.id]
+        # Existing detail inputs also support old results without another optimization.
+        jbnr = (setup.get("calculation_context") or {}).get("jbnr") or 4
+        for name in ("baseline_candidate", "fixed_candidate", "manual_candidate"):
             if setup.get(name):
-                setup[name] = recalculate_document(setup[name], simulation, job.snapshot, data.jbnr)
-        if field_id in selected:
-            selected[field_id] = recalculate_document(
-                selected[field_id], simulation, job.snapshot, data.jbnr
-            )
-        if field_id in selected:
-            setup["economics_candidate"] = selected[field_id]
-        field = field_map[field_id]
-        merged = simulation_store.merge_setup_candidates(data, selected.get(field_id), setup)
-        chosen = next((c for c in merged.candidates if c.ref.to_id() == field.rotation_id), None)
-        if chosen:
-            field = field.model_copy(
-                update=dict(
-                    db2=chosen.avg_db_kr_ha * field.area_ha, fen=chosen.avg_fen * field.area_ha
-                )
-            )
-            field_map[field_id] = field
-            if field.allowed_rotation_ids:
-                setup["fixed"] = {
-                    k: field.model_dump(mode="json")[k] for k in simulation_store.OUTPUT_KEYS
-                }
-            else:
-                setup["baseline"] = {
-                    k: field.model_dump(mode="json")[k] for k in simulation_store.OUTPUT_KEYS
-                }
-                setup["baseline_revision"] = job.expected_revision
-        _deadline(context)
-        with session.begin():
-            if store.locked_setup(session, job) is None:
-                return False
-            session.execute(
-                update(caches)
-                .where(caches.c.simulation_id == job.simulation_id, caches.c.field_id == field_id)
-                .values(data=data.model_dump(mode="json"), optimizer_input=optimizer_input(data))
-            )
+                setup[name] = recalculate_document(setup[name], simulation, job.snapshot, jbnr)
+        candidate = chosen.get(field.id)
+        if candidate is not None:
+            value = recalculate_candidate(candidate, simulation, job.snapshot, jbnr)
+            setup["economics_candidate"] = value.model_dump(mode="json")
+        elif setup.get("baseline_candidate"):
+            from app.domain.rotation_candidate import RotationCandidateEvaluation
+
+            value = RotationCandidateEvaluation.model_validate(setup["baseline_candidate"])
+        else:
+            continue
+        valued_field = field.model_copy(
+            update={
+                "db2": value.avg_db_kr_ha * field.area_ha,
+                "fen": value.avg_fen * field.area_ha,
+            }
+        )
+        values = {
+            key: valued_field.model_dump(mode="json")[key] for key in simulation_store.OUTPUT_KEYS
+        }
+        if field.allowed_rotation_ids:
+            setup["fixed_candidate"] = value.model_dump(mode="json")
+            setup["fixed"] = values
+        else:
+            setup["baseline"] = values
+            setup["baseline_revision"] = job.expected_revision
     _deadline(context)
     with session.begin():
         row = store.locked_setup(session, job)
