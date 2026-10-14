@@ -1,4 +1,6 @@
 import { type OptimizationRun } from '@/api/optimization-runs'
+import { useFieldAliases } from '@/api/field-aliases'
+import { applyFieldAliases, EMPTY_FIELD_ALIASES } from '@/lib/field-aliases'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
@@ -127,6 +129,8 @@ const SucceededDetails = ({
   run: Extract<OptimizationRun, { status: 'succeeded' }>
 }) => {
   const { changes } = run
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const changedFields = applyFieldAliases(changes.changedFields, aliases)
   const changedCount = changes.changedFields.length
 
   return (
@@ -148,7 +152,7 @@ const SucceededDetails = ({
           <p className="mx-auto max-w-sm pt-2 text-sm">
             {changedCount} {changedCount === 1 ? 'mark' : 'marker'} fik ændret
             sædskifte:{' '}
-            {formatFieldNameList(changes.changedFields.map(fieldTitle))}.
+            {formatFieldNameList(changedFields.map(fieldTitle))}.
           </p>
           <dl className="mx-auto grid w-fit grid-cols-[auto_auto_auto] gap-x-4 gap-y-1 pt-2 text-left text-sm tabular-nums">
             <ChangeRow

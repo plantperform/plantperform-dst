@@ -21,6 +21,7 @@ import {
   describeUncalculatedCount,
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
+  fieldDisplayName,
   fieldNNormPct,
   formatLockTooltip,
   formatNumber,
@@ -253,7 +254,8 @@ const renderRotationSwatches = (
 const nameColumn = (
   footer: () => ReactNode,
 ): ColumnDef<FieldRecord, unknown> => ({
-  accessorKey: 'name',
+  id: 'name',
+  accessorFn: fieldDisplayName,
   header: ({ column }) => (
     <SortableColumnHeaderContent label="Mark" column={column} />
   ),
@@ -261,7 +263,7 @@ const nameColumn = (
     const rowField = row.original
     return (
       <span className="flex items-center gap-1.5">
-        <span>{rowField.name}</span>
+        <span>{fieldDisplayName(rowField)}</span>
         {isFieldLocked(rowField) ? (
           <AppTooltip content={formatLockTooltip(rowField)}>
             <Lock
@@ -328,7 +330,7 @@ const detachColumn = (
             size="xs"
             className="size-7 p-0 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 pointer-coarse:opacity-100"
             disabled={detachingFieldIds.includes(rowField.id)}
-            aria-label={`Fjern mark ${rowField.name} fra bedriften`}
+            aria-label={`Fjern mark ${fieldDisplayName(rowField)} fra bedriften`}
             onClick={(event) => {
               event.stopPropagation()
               onRequestDetach(rowField)

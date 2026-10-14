@@ -405,6 +405,17 @@ app_user_table = Table(
     CheckConstraint("email = lower(email)", name="ck_app_user_email_lowercase"),
 )
 
+user_field_alias_table = Table(
+    "user_field_alias",
+    metadata,
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    # Registry identity survives farm removal and simulation field UUID changes.
+    Column("field_key", Text, nullable=False),
+    Column("alias", Text, nullable=False),
+    PrimaryKeyConstraint("email", "field_key"),
+    CheckConstraint("length(trim(alias)) > 0", name="ck_user_field_alias_nonempty"),
+)
+
 farm_member_table = Table(
     "farm_member",
     metadata,

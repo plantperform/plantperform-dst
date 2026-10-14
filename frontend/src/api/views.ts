@@ -1,10 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import useSWR, { mutate, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
+import { useFieldAliases } from '@/api/field-aliases'
 import { JOB_POLL_INTERVAL_MS, watchResultPolling } from '@/api/result-tracking'
 import type { FarmView, SimulationView, ViewState } from '@/api/types'
 import { isViewPreparing, mergeViewStatus } from '@/api/view-cache'
+import {
+  applyFarmViewAliases,
+  applySimulationViewAliases,
+  EMPTY_FIELD_ALIASES,
+} from '@/lib/field-aliases'
 
 export const farmViewKey = (farmId?: string) =>
   farmId ? `/farms/${encodeURIComponent(farmId)}/view` : null
@@ -104,10 +110,26 @@ const useView = <T extends View>(key: string | null) => {
   return response
 }
 
-export const useFarmView = (farmId?: string) =>
-  useView<FarmView>(farmViewKey(farmId))
-export const useSimulationView = (farmId?: string, simulationId?: string) =>
-  useView<SimulationView>(simulationViewKey(farmId, simulationId))
+// Keep persisted view caches canonical; personal labels are reactive projections.
+export const useFarmView = (farmId?: string) => {
+  const response = useView<FarmView>(farmViewKey(farmId))
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => applyFarmViewAliases(response.data, aliases),
+    [response.data, aliases],
+  )
+  return { ...response, data }
+}
+
+export const useSimulationView = (farmId?: string, simulationId?: string) => {
+  const response = useView<SimulationView>(simulationViewKey(farmId, simulationId))
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => applySimulationViewAliases(response.data, aliases),
+    [response.data, aliases],
+  )
+  return { ...response, data }
+}
 
 export const fetchFarmView = async (farmId: string) => {
   const key = farmViewKey(farmId)!

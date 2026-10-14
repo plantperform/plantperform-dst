@@ -3,7 +3,7 @@ import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import { Input } from '@/components/ui/input'
-import { formatNumber } from '@/lib/field-domain'
+import { fieldDisplayName, formatNumber } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
 const MAX_RESULTS = 8
@@ -12,9 +12,11 @@ const matchFields = (fields: FieldRecord[], query: string): FieldRecord[] => {
   const needle = query.trim().toLowerCase()
   if (needle === '') return []
   const ranked = fields.flatMap((field) => {
-    const name = field.name.toLowerCase()
-    if (name.startsWith(needle)) return [{ field, rank: 0 }]
-    if (name.includes(needle)) return [{ field, rank: 1 }]
+    const names = [fieldDisplayName(field), field.name].map((name) =>
+      name.toLowerCase(),
+    )
+    if (names.some((name) => name.startsWith(needle))) return [{ field, rank: 0 }]
+    if (names.some((name) => name.includes(needle))) return [{ field, rank: 1 }]
     return []
   })
   return ranked
@@ -138,7 +140,7 @@ export const FieldSearch = ({
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => choose(field)}
                   >
-                    <span className="truncate">{field.name}</span>
+                    <span className="truncate">{fieldDisplayName(field)}</span>
                     <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
                       {formatNumber(field.areaHa)} ha
                     </span>

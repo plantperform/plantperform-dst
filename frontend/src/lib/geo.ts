@@ -3,6 +3,7 @@ import type { Feature, FeatureCollection } from 'geojson'
 import type { FieldRecord, GeoJSONMultiPolygon, GeoJSONPolygon } from '@/api/types'
 import { classifyCrop, CROP_GROUP_INDEX } from '@/lib/crop-groups'
 import {
+  fieldDisplayName,
   isFieldCalculated,
   isFieldLocked,
   quotaStatusLevel,
@@ -248,7 +249,7 @@ export const fieldsToFeatureCollection = (
           fieldId: field.id,
           imkId: field.imkId,
           catchmentId: field.catchmentId,
-          name: field.name,
+          name: fieldDisplayName(field),
           retention: field.retention,
           soilTypeNumber: field.soilTypeNumber,
           nLoadLimitKgNHa: field.nLoadLimitKgNHa,

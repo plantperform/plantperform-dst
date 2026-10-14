@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  fieldDisplayName,
   formatNumber,
   isFieldLocked,
   ROTATION_START_CALENDAR_YEAR,
@@ -85,10 +86,10 @@ export const MapRuleCard = ({
     >
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
         <TruncatedTooltip
-          content={field.name}
+          content={fieldDisplayName(field)}
           className="min-w-0 truncate text-sm font-semibold"
         >
-          {field.name}
+          {fieldDisplayName(field)}
         </TruncatedTooltip>
         {locked ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-locked/15 px-1.5 py-0.5 font-medium text-locked-strong">

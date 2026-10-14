@@ -3,7 +3,7 @@ import type {
   FieldsSortDirection,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
-import { fieldNNormPct, perHa } from '@/lib/field-domain'
+import { fieldDisplayName, fieldNNormPct, perHa } from '@/lib/field-domain'
 
 const nameCollator = new Intl.Collator('da-DK', {
   numeric: true,
@@ -60,7 +60,7 @@ const comparePrimary = (
 ) => {
   switch (sort.key) {
     case 'name':
-      return compareName(left.name, right.name, sort.direction)
+      return compareName(fieldDisplayName(left), fieldDisplayName(right), sort.direction)
     case 'areaHa':
       return compareNumber(left.areaHa, right.areaHa, sort.direction)
     case 'catchment':

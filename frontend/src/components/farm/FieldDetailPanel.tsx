@@ -9,6 +9,7 @@ import type {
 import { FieldPanel } from '@/components/farm/FieldPanel'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
+import { fieldDisplayName } from '@/lib/field-domain'
 
 type FieldDetailPanelProps = {
   farmId: string
@@ -89,7 +90,7 @@ export const FieldDetailPanel = ({
     <div
       className="@container flex h-full min-h-0 flex-col bg-card"
       role="complementary"
-      aria-label={`Markdetaljer: ${field.name}`}
+      aria-label={`Markdetaljer: ${fieldDisplayName(field)}`}
     >
       <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4 @2xl:px-6">
         {listBehind ? (

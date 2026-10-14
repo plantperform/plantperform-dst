@@ -74,6 +74,7 @@ export type FieldMeasures = {
 }
 
 export type FieldRecord = {
+  alias?: string | null
   id: string
   farmId: string
   imkId: number | null
@@ -96,6 +97,10 @@ export type FieldRecord = {
   quotaEligible: boolean
   geometry: GeoJSONPolygon | GeoJSONMultiPolygon | null
 }
+
+export type FieldAliases = Record<string, string>
+
+export type FieldAlias = { fieldKey: string; alias: string | null }
 
 export type RegistryField = {
   imkId: number

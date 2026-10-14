@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
+import { useFieldAliases } from '@/api/field-aliases'
 import { JOB_POLL_INTERVAL_MS } from '@/api/result-tracking'
 import { isViewPreparing } from '@/api/view-cache'
 import {
@@ -23,6 +24,11 @@ import {
   isSimulationCreating,
   isSimulationReady,
 } from '@/lib/simulation-creation'
+import {
+  applyFieldAliases,
+  applySavedResultAliases,
+  EMPTY_FIELD_ALIASES,
+} from '@/lib/field-aliases'
 import { useOptimizationRunsContext } from '@/api/optimization-runs'
 import type { RequestProgress } from '@/api/request-progress'
 import type {
@@ -93,11 +99,22 @@ const fetchFarmsFields = async (farmIds: string[]): Promise<FieldsByFarmId> => {
 
 export const useFarmsFields = (farms: Farm[] | undefined) => {
   const farmIds = (farms ?? []).map((farm) => farm.id).sort()
-  return useSWR<FieldsByFarmId>(
+  const response = useSWR<FieldsByFarmId>(
     farmIds.length > 0 ? ['farms-fields', farmIds.join(',')] : null,
     ([, joinedIds]: string[]) => fetchFarmsFields(joinedIds.split(',')),
     { revalidateOnFocus: false },
   )
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => response.data
+      ? Object.fromEntries(Object.entries(response.data).map(([id, fields]) => [
+          id,
+          fields ? applyFieldAliases(fields, aliases) : undefined,
+        ]))
+      : undefined,
+    [response.data, aliases],
+  )
+  return { ...response, data }
 }
 
 export const farmEmissionsKey = (farmId?: string) => {
@@ -171,8 +188,8 @@ export const useStoredSimulationFields = (
   farmId?: string,
   simulationId?: string,
   revision?: number,
-) =>
-  useSWR<FieldRecord[]>(
+) => {
+  const response = useSWR<FieldRecord[]>(
     farmId && simulationId
       ? [
           `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/fields`,
@@ -181,6 +198,13 @@ export const useStoredSimulationFields = (
       : null,
     ([path]: [string, number | undefined]) => fetcher<FieldRecord[]>(path),
   )
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => response.data ? applyFieldAliases(response.data, aliases) : undefined,
+    [response.data, aliases],
+  )
+  return { ...response, data }
+}
 
 export type FieldsBySimulationId = Record<string, FieldRecord[]>
 
@@ -239,13 +263,24 @@ export const useSimulationsFields = (
       { revalidate: false },
     )
   }, [farmId, visitId])
-  return useSWR<FieldsBySimulationId>(
+  const response = useSWR<FieldsBySimulationId>(
     farmId && simulationIds.length > 0
       ? [SIMULATIONS_FIELDS_KEY, farmId, simulationIds.join(','), visitId]
       : null,
     ([, keyFarmId, joinedIds]: string[]) =>
       fetchSimulationsFields(cache, keyFarmId, joinedIds.split(',')),
   )
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => response.data
+      ? Object.fromEntries(Object.entries(response.data).map(([id, fields]) => [
+          id,
+          applyFieldAliases(fields, aliases),
+        ]))
+      : undefined,
+    [response.data, aliases],
+  )
+  return { ...response, data }
 }
 
 // Comparisons use the latest saved output, including its original field inputs.
@@ -257,7 +292,7 @@ export const useSimulationResults = (
   simulations: Simulation[],
 ) => {
   const { cache } = useSWRConfig()
-  return useSWR<Record<string, SavedResultView | null>>(
+  const response = useSWR<Record<string, SavedResultView | null>>(
     simulations.length
       ? [
           'simulation-results',
@@ -290,6 +325,17 @@ export const useSimulationResults = (
         ),
       ),
   )
+  const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
+  const data = useMemo(
+    () => response.data
+      ? Object.fromEntries(Object.entries(response.data).map(([id, saved]) => [
+          id,
+          saved ? applySavedResultAliases(saved, aliases) : null,
+        ]))
+      : undefined,
+    [response.data, aliases],
+  )
+  return { ...response, data }
 }
 
 export const scenarioCropCodesKey = (

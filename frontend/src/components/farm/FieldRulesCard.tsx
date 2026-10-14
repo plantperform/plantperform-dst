@@ -16,6 +16,8 @@ import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  fieldDisplayName,
+  fieldMatchesQuery,
   formatNumber,
   isFieldLocked,
   ROTATION_CALENDAR_YEARS,
@@ -78,7 +80,7 @@ const FieldRuleRow = ({
       onMouseLeave={() => onHoveredFieldChange(null)}
     >
       <span className="min-w-0">
-        <span className="block truncate font-semibold">{field.name}</span>
+        <span className="block truncate font-semibold">{fieldDisplayName(field)}</span>
         <span className="block text-xs text-muted-foreground">
           {formatNumber(field.areaHa)} ha
         </span>
@@ -143,7 +145,7 @@ const FieldRuleRow = ({
               )}
               disabled={noRotation || actionsDisabled}
               loading={locking}
-              aria-label={`${locked ? 'Lås op' : 'Lås'} ${field.name}`}
+              aria-label={`${locked ? 'Lås op' : 'Lås'} ${fieldDisplayName(field)}`}
               onClick={() => onToggleLock(field)}
             >
               {locked || locking ? null : (
@@ -203,7 +205,7 @@ export const FieldRulesCard = ({
   const hasRun = fields.some((field) => field.rotationId !== null)
   const normalizedQuery = query.trim().toLowerCase()
   const shown = fields
-    .filter((field) => field.name.toLowerCase().includes(normalizedQuery))
+    .filter((field) => fieldMatchesQuery(field, normalizedQuery))
     .sort((left, right) => compareFields(left, right, sort))
   const lockedFields = shown.filter(isFieldLocked)
   const freeFields = shown.filter((field) => !isFieldLocked(field))

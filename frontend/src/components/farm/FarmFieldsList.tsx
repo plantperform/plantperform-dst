@@ -65,6 +65,7 @@ import { fertiliserByFieldId, usesManure } from '@/lib/fertiliser-overview'
 import {
   catchmentRuns,
   changedFieldIds,
+  fieldDisplayName,
   formatCatchmentAmount,
   formatFieldCount,
   formatNumber,
@@ -199,7 +200,7 @@ const FieldRow = memo(
           openPanel()
         }}
         tabIndex={0}
-        aria-label={`Vis detaljer for mark ${field.name}`}
+        aria-label={`Vis detaljer for mark ${fieldDisplayName(field)}`}
         data-selected={isSelected}
         className={cn(
           'group h-10 cursor-pointer hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset full:h-13',

@@ -56,6 +56,7 @@ import {
 import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
+  fieldDisplayName,
   fieldTitle,
   formatFieldCount,
   isFieldLocked,
@@ -537,7 +538,7 @@ export const FarmFieldsMap = ({
               ? `${first.name} · ${formatFieldCount(count)}`
               : formatFieldCount(count),
         title: cluster.items
-          .map((label) => `${label.field.name}: ${label.fullName}`)
+          .map((label) => `${fieldDisplayName(label.field)}: ${label.fullName}`)
           .join(', '),
         color,
         textColor: color ? readableTextColor(color) : null,
@@ -1637,7 +1638,7 @@ export const FarmFieldsMap = ({
                   >
                     <span
                       role="img"
-                      aria-label={`Låst mark ${field.name}`}
+                      aria-label={`Låst mark ${fieldDisplayName(field)}`}
                       className="flex h-7 w-7 items-center justify-center rounded-full border border-locked/50 bg-white/95 shadow-md"
                     >
                       <Lock

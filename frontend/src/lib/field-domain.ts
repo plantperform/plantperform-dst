@@ -152,8 +152,22 @@ export const formatShare = (share: number) => {
 export const formatFieldCount = (count: number) =>
   `${count} ${count === 1 ? 'mark' : 'marker'}`
 
-export const fieldTitle = (field: Pick<FieldRecord, 'name'>): string =>
-  field.name.startsWith('Mark ') ? field.name : `Mark ${field.name}`
+export const fieldDisplayName = (field: Pick<FieldRecord, 'name' | 'alias'>): string =>
+  field.alias ?? field.name
+
+export const fieldMatchesQuery = (
+  field: Pick<FieldRecord, 'name' | 'alias'>,
+  query: string,
+): boolean => {
+  const needle = query.trim().toLocaleLowerCase('da')
+  return [fieldDisplayName(field), field.name].some((name) =>
+    name.toLocaleLowerCase('da').includes(needle),
+  )
+}
+
+export const fieldTitle = (field: Pick<FieldRecord, 'name' | 'alias'>): string =>
+  field.alias ??
+  (field.name.startsWith('Mark ') ? field.name : `Mark ${field.name}`)
 
 const compactMillionFormat = new Intl.NumberFormat('da-DK', {
   minimumFractionDigits: 1,
@@ -179,7 +193,7 @@ export const formatSigned = (
 }
 
 export const formatLockTooltip = (field: FieldRecord): string => {
-  const lines = [`${field.name} - låst sædskifte`]
+  const lines = [`${fieldDisplayName(field)} - låst sædskifte`]
 
   if (field.cropRotation.length > 0) {
     lines.push(field.cropRotation.map(formatRotationYear).join(' - '))

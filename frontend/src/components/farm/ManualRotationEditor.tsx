@@ -41,6 +41,7 @@ import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import {
   compactCropSequenceLabel,
+  fieldDisplayName,
   formatRotationYear,
   ROTATION_START_CALENDAR_YEAR,
 } from '@/lib/field-domain'
@@ -504,7 +505,7 @@ export const ManualRotationEditor = ({
         <DialogHeader>
           <DialogTitle>
             {intent === 'lock' ? 'Lås sædskifte' : 'Rediger sædskifte'} -{' '}
-            {field.name}
+            {fieldDisplayName(field)}
           </DialogTitle>
           <DialogDescription>
             {intent === 'lock'

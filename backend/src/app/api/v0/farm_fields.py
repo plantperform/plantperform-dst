@@ -5,18 +5,36 @@ from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.simulations import YearlySummaryEntryResponse
 from app.auth import AuthenticatedUser, current_user
+from app.data.field_alias_store import update_alias
 from app.data.repository import (
     get_farm_historical_yearly_summary,
     get_field_historical_years,
     list_fields,
 )
 from app.domain.field import CreateFieldRequest, FieldRecord
+from app.domain.field_alias import FieldAlias, UpdateFieldAliasRequest
 from app.domain.rotation_candidate import RotationCandidateYearResult
 from app.domain.soil import MissingSoilDataError
 from app.services import preparation_jobs
 
 router = APIRouter(prefix="/farms/{farm_id}/fields", tags=["farm fields"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
+
+
+@router.patch("/{field_id}/alias", response_model=FieldAlias)
+def patch_field_alias(
+    farm_id: str,
+    field_id: str,
+    request: UpdateFieldAliasRequest,
+    user: CurrentUser,
+    simulation_id: str | None = None,
+) -> FieldAlias:
+    result = update_alias(
+        farm_id, field_id, user.email, request.alias, simulation_id=simulation_id
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Bedrift eller mark ikke fundet")
+    return result
 
 
 @router.get("", response_model=list[FieldRecord])

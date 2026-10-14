@@ -9,6 +9,7 @@ import type {
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { FieldYearStrip } from '@/components/farm/FieldYearStrip'
+import { FieldNameEditor } from '@/components/farm/FieldNameEditor'
 import { HistoricalDetailPanel } from '@/components/farm/HistoricalDetailPanel'
 import { ManualRotationEditor } from '@/components/farm/ManualRotationEditor'
 import { QuotaStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
@@ -20,7 +21,6 @@ import { cropGroupFor } from '@/lib/crop-groups'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
-  fieldTitle,
   formatNumber,
   formatQuotaAmount,
   getFieldQuotaStatus,
@@ -214,9 +214,11 @@ export const FieldPanel = ({
       <div className="flex-1 space-y-4 overflow-y-auto p-4 @2xl:space-y-5 @2xl:p-6">
         <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between @2xl:gap-4 @2xl:border-b @2xl:pb-3">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-2xl tracking-tight @2xl:text-3xl">
-              {fieldTitle(field)}
-            </h2>
+            <FieldNameEditor
+              farmId={farmId}
+              field={field}
+              simulationId={isSimulationView ? simulationId : undefined}
+            />
             <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {metaParts.map((part, index) => (
                 <span key={index} className="flex items-center gap-x-2">
