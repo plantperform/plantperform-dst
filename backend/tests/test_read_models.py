@@ -31,16 +31,16 @@ from app.data.db import simulation_table as setups
 from app.domain.field import CreateFieldRequest, UpdateFieldRequest
 from app.domain.read_model import (
     FarmView,
-    PreparationJob,
     ReadModelNotReadyError,
     SimulationView,
     preparation_job,
 )
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.services import preparation_jobs, read_models
+from app.services import preparation_runner as read_model_worker
+from app.services.calculation import CalculationFailedError
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.scenario.rotations import compute_yearly_summary
-from plantperform_optimizer import read_model_worker
 
 
 def rich_candidate(variant="1"):
@@ -555,37 +555,26 @@ class ReadModelTests(DatabaseTests):
             read_model_worker.execute(job, CONTEXT)
         self.assertIsNone(read_model_store.get_simulation_view("farm", "sim", EMAIL)["data"])
 
-    def test_exhausted_delivery_invalid_input_and_deletion_do_not_publish(self):
+    def test_invalid_input_is_failed_and_deleted_jobs_do_not_publish(self):
         job = self.history_inputs()
-        from app.domain.optimization import OptimizationAttemptsExhaustedError
-
-        with self.assertRaises(OptimizationAttemptsExhaustedError):
-            read_model_worker.execute(job, CONTEXT, sqs_delivery=True, receive_count=4)
-        self.years.assert_not_called()
-        self.assertEqual(read_model_store.get_farm_view("farm", EMAIL)["status"], "failed")
-        with self.sessions.begin() as session:
-            retry = read_model_store.schedule_preparation(session, "prepare_farm_history", "farm")
         self.years.side_effect = ValueError("Invalid input")
-        read_model_worker.execute(retry, CONTEXT, sqs_delivery=True)
+        with self.assertRaises(CalculationFailedError):
+            read_model_worker.execute(job, CONTEXT)
         self.assertEqual(
             read_model_store.get_farm_view("farm", EMAIL)["error"]["code"], "INVALID_INPUT"
         )
         with self.sessions.begin() as session:
             session.execute(delete(farm_table).where(farm_table.c.id == "farm"))
-        read_model_worker.execute(retry, CONTEXT)
+        read_model_worker.execute(job, CONTEXT)
         with self.sessions() as session:
-            self.assertEqual(session.execute(select(views)).all(), [])
             self.assertEqual(session.execute(select(details)).all(), [])
 
-    def test_ambiguous_queue_failure_cannot_fail_new_retry_generation(self):
+    def test_stale_execution_cannot_fail_new_retry_generation(self):
         job = self.history_inputs()
         with self.sessions.begin() as session:
             session.execute(update(farm_views).values(status="failed"))
             newer = read_model_store.schedule_preparation(session, "prepare_farm_history", "farm")
-        self.queue.send_message.side_effect = RuntimeError("Lost acknowledgement")
-        from app.services.optimization.jobs import QueueUnavailableError
-
-        with self.assertRaises(QueueUnavailableError):
+        with patch.object(read_model_worker, "_history", side_effect=AssertionError):
             preparation_jobs.dispatch(job)
         with self.sessions() as session:
             row = session.execute(select(farm_views)).one()
@@ -629,7 +618,7 @@ class ReadModelTests(DatabaseTests):
         self.assertEqual(len(view.data.fields), 2)
         self.assertEqual(view.data.yearly_summary[0].total_fen, 500)
         with patch.object(repository, "_historical_years_for_context", side_effect=AssertionError):
-            read_model_worker.execute(job, CONTEXT, sqs_delivery=True)
+            read_model_worker.execute(job, CONTEXT)
             stored = repository.get_field_historical_years("farm", "history-0", EMAIL)
             response = TestClient(main.app).get("/api/v0/farms/farm/view")
             self.assertEqual(response.status_code, 200)
@@ -652,18 +641,17 @@ class ReadModelTests(DatabaseTests):
             self.assertEqual(session.execute(select(details.c.field_id)).all(), [])
         self.assertIsNone(read_model_store.get_farm_view("farm", EMAIL)["data"])
 
-    def test_transient_attempt_limit_and_fresh_retry_generation(self):
+    def test_one_failed_attempt_and_explicit_retry_generation(self):
         job = self.history_inputs()
         self.years.side_effect = RuntimeError("transient")
-        for attempt in range(1, 4):
-            with self.assertRaises(RuntimeError):
-                read_model_worker.execute(job, CONTEXT, sqs_delivery=True, receive_count=attempt)
-        with self.sessions() as session:
-            self.assertEqual(session.execute(select(farm_views.c.status)).scalar_one(), "failed")
+        with self.assertRaises(CalculationFailedError):
+            read_model_worker.execute(job, CONTEXT)
+        self.assertEqual(self.years.call_count, 1)
+        self.assertEqual(read_model_store.get_farm_view("farm", EMAIL)["status"], "failed")
         with self.sessions.begin() as session:
             retry = read_model_store.schedule_preparation(session, "prepare_farm_history", "farm")
         self.assertEqual(retry.generation, 1)
-        read_model_worker.execute(job, CONTEXT, sqs_delivery=True, receive_count=4)
+        read_model_worker.execute(job, CONTEXT)
         self.years.side_effect = None
         read_model_worker.execute(retry, CONTEXT)
         self.assertEqual(read_model_store.get_farm_view("farm", EMAIL)["status"], "done")
@@ -676,7 +664,7 @@ class ReadModelTests(DatabaseTests):
 
         def duplicate(session, job, context):
             with self.assertRaises(CreationActiveError):
-                read_model_worker.execute(job, context, sqs_delivery=True)
+                read_model_worker.execute(job, context)
             return original(session, job, context)
 
         with patch.object(read_model_worker, "_history", side_effect=duplicate):
@@ -833,14 +821,17 @@ class ReadModelTests(DatabaseTests):
             read_model_store.get_simulation_view("farm", "sim", EMAIL)["view_version"], before
         )
 
-    def test_active_view_loads_reuse_preparation(self):
+    def test_active_view_load_conflicts_then_completes_reserved_preparation(self):
+        from app.data.creation_store import execution_session
+
         with self.sessions.begin() as session:
             session.execute(update(views).values(status="queued", data=None))
-        with patch.object(read_model_worker, "execute", side_effect=AssertionError):
+        with execution_session("sim"):
             response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
+        self.assertEqual(response.status_code, 409)
+        response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "queued")
-        self.assertIsNone(response.json()["data"])
+        self.assertEqual(response.json()["status"], "done")
         self.queue.send_message.assert_not_called()
         self.assertIsNone(read_model_store.get_simulation_view("farm", "sim", "other@example.com"))
 
@@ -868,18 +859,19 @@ class ReadModelTests(DatabaseTests):
                     self.assertEqual(before.status_code, 200)
                     self.assertIsNone(before.json()["data"])
                     self.queue.send_message.assert_not_called()
-                    with patch.object(read_model_worker, "execute", side_effect=AssertionError):
+                    with patch.object(
+                        read_model_worker, "execute", wraps=read_model_worker.execute
+                    ) as execute:
                         response = client.get(path)
                         again = client.get(path)
                     self.assertEqual(response.status_code, 200)
-                    self.assertEqual(response.json()["status"], "queued")
+                    self.assertEqual(response.json()["status"], "done")
                     self.assertGreater(response.json()["viewVersion"], before.json()["viewVersion"])
-                    self.assertIsNone(response.json()["data"])
+                    self.assertIsNotNone(response.json()["data"])
                     self.assertEqual(again.json(), response.json())
-                    self.queue.send_message.assert_called_once()
-                    job = PreparationJob.model_validate_json(
-                        self.queue.send_message.call_args.kwargs["MessageBody"]
-                    )
+                    self.queue.send_message.assert_not_called()
+                    execute.assert_called_once()
+                    job = execute.call_args.args[0]
                     self.assertEqual(job.entity_id, entity_id)
                     self.assertEqual(job.expected_revision, 0)
 
@@ -904,44 +896,42 @@ class ReadModelTests(DatabaseTests):
                     session.execute(update(owner).values(revision=1))
                 self.queue.send_message.reset_mock()
                 response = TestClient(main.app).get(path)
-                self.assertEqual(response.json()["status"], "queued")
+                self.assertEqual(response.json()["status"], "done")
                 self.assertEqual(response.json()["inputRevision"], 1)
-                self.queue.send_message.assert_called_once()
-                job = PreparationJob.model_validate_json(
-                    self.queue.send_message.call_args.kwargs["MessageBody"]
-                )
-                self.assertEqual(job.expected_revision, 1)
+                self.queue.send_message.assert_not_called()
+                self.assertIsNotNone(response.json()["data"])
 
-    def test_failed_views_retry_on_full_load_and_reject_the_old_generation(self):
-        for table, kind, entity_id, path in (
-            (farm_views, "prepare_farm_history", "farm", "/api/v0/farms/farm/view"),
-            (views, "prepare_simulation_view", "sim", "/api/v0/farms/farm/simulations/sim/view"),
+    def test_failed_views_require_explicit_retry_and_reject_old_generation(self):
+        for table, kind, _entity_id, path, retry_path in (
+            (
+                farm_views,
+                "prepare_farm_history",
+                "farm",
+                "/api/v0/farms/farm/view",
+                "/api/v0/farms/farm/history/retry",
+            ),
+            (
+                views,
+                "prepare_simulation_view",
+                "sim",
+                "/api/v0/farms/farm/simulations/sim/view",
+                "/api/v0/farms/farm/simulations/sim/view/retry",
+            ),
         ):
             with self.subTest(kind=kind):
                 with self.sessions.begin() as session:
                     session.execute(update(table).values(status="failed", generation=3))
-                self.queue.send_message.reset_mock()
                 client = TestClient(main.app)
-                self.assertEqual(
-                    client.get(path + "?include_data=false").json()["status"], "failed"
-                )
-                self.queue.send_message.assert_not_called()
-                response = client.get(path)
-                self.assertEqual(response.json()["status"], "queued")
-                self.queue.send_message.assert_called_once()
-                job = PreparationJob.model_validate_json(
-                    self.queue.send_message.call_args.kwargs["MessageBody"]
-                )
-                self.assertEqual((job.entity_id, job.generation), (entity_id, 4))
+                self.assertEqual(client.get(path).json()["status"], "failed")
+                response = client.post(retry_path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["status"], "done")
                 old = preparation_job(kind, "farm", 0, "sim" if table is views else None, 3)
                 with patch.object(read_model_worker, "_history", side_effect=AssertionError):
                     with patch.object(read_model_worker, "_simulation", side_effect=AssertionError):
-                        read_model_worker.execute(old, CONTEXT, sqs_delivery=True, receive_count=4)
-                self.assertEqual(
-                    client.get(path + "?include_data=false").json()["status"], "queued"
-                )
-                client.get(path)
-                self.queue.send_message.assert_called_once()
+                        read_model_worker.execute(old, CONTEXT)
+                self.assertEqual(client.get(path).json(), response.json())
+                self.queue.send_message.assert_not_called()
 
     def test_simulation_view_preparation_waits_for_creation(self):
         for status in ("queued", "running", "failed"):
@@ -988,58 +978,67 @@ class ReadModelTests(DatabaseTests):
 
                 with ThreadPoolExecutor(max_workers=4) as executor:
                     responses = list(executor.map(load, range(4)))
-                self.assertTrue(all(response.status_code == 200 for response in responses))
+                self.assertTrue(all(response.status_code in (200, 409) for response in responses))
                 self.assertTrue(
-                    all(response.json()["status"] == "queued" for response in responses)
+                    all(
+                        response.json()["status"] == "done"
+                        for response in responses
+                        if response.status_code == 200
+                    )
                 )
-                self.queue.send_message.assert_called_once()
+                self.queue.send_message.assert_not_called()
 
-    def test_automatic_queue_failure_returns_failed_view_and_only_retries_on_reopening(self):
-        with self.sessions.begin() as session:
-            session.execute(delete(farm_views))
-        self.queue.send_message.side_effect = RuntimeError("Queue unavailable")
+    def test_calculation_failure_is_persisted_and_requires_explicit_retry(self):
+        self.history_inputs()
+        self.years.side_effect = RuntimeError("Calculation unavailable")
         client = TestClient(main.app)
         path = "/api/v0/farms/farm/view"
         response = client.get(path)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "failed")
-        self.assertEqual(response.json()["error"]["code"], "QUEUE_UNAVAILABLE")
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"]["code"], "CALCULATION_FAILED")
+        failed = client.get(path).json()
+        self.assertEqual(failed["status"], "failed")
         for _ in range(3):
-            self.assertEqual(client.get(path + "?include_data=false").json(), response.json())
-        self.queue.send_message.assert_called_once()
-        self.queue.send_message.side_effect = None
-        self.assertEqual(client.get(path).json()["status"], "queued")
-        job = PreparationJob.model_validate_json(
-            self.queue.send_message.call_args.kwargs["MessageBody"]
-        )
-        self.assertEqual(job.generation, 1)
-        with self.sessions.begin() as session:
-            session.execute(update(farm_views).values(status="failed"))
-        self.queue.send_message.side_effect = RuntimeError("Queue unavailable")
-        self.assertEqual(client.post("/api/v0/farms/farm/history/retry").status_code, 503)
+            self.assertEqual(client.get(path).json(), failed)
+        self.years.side_effect = None
+        response = client.post("/api/v0/farms/farm/history/retry")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "done")
+        self.queue.send_message.assert_not_called()
 
-    def test_missing_transport_becomes_failed_view_without_calling_sqs(self):
+    def test_field_registration_returns_calculated_fields_without_sqs(self):
+        self.history_inputs(count=1)
+        with patch.object(repository, "_soil_data_for_context", return_value=((), 3, 1)):
+            response = TestClient(main.app).post(
+                "/api/v0/farms/farm/fields",
+                json={"imkId": 1, "name": "registered", "areaHa": 2},
+            )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertGreater(response.json()["db2"], 0)
+        self.assertGreater(response.json()["fen"], 0)
+        self.assertEqual(read_model_store.get_farm_view("farm", EMAIL)["status"], "done")
+        self.queue.send_message.assert_not_called()
+
+    def test_view_preparation_does_not_require_a_queue(self):
         with self.sessions.begin() as session:
             session.execute(delete(views))
         with patch.dict(os.environ, {"OPTIMIZER_QUEUE_URL": ""}):
             response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "failed")
-        self.assertEqual(response.json()["error"]["code"], "QUEUE_UNAVAILABLE")
+        self.assertEqual(response.json()["status"], "done")
+        self.assertIsNotNone(response.json()["data"])
         self.queue.send_message.assert_not_called()
 
-    def test_local_full_load_adds_a_background_preparation(self):
+    def test_local_full_load_completes_preparation_during_request(self):
         with self.sessions.begin() as session:
             session.execute(delete(views))
         with patch.dict(os.environ, {"APP_ENV": "development"}):
-            with patch.object(read_model_worker, "execute_local") as execute:
-                response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
-        self.assertEqual(response.json()["status"], "queued")
-        execute.assert_called_once()
-        self.assertEqual(execute.call_args.args[0].job_type, "prepare_simulation_view")
+            response = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view")
+        self.assertEqual(response.json()["status"], "done")
+        self.assertIsNotNone(response.json()["data"])
         self.queue.send_message.assert_not_called()
 
-    def test_manual_history_recalculation_reuses_active_job_and_preserves_simulations(self):
+    def test_manual_history_recalculation_completes_and_preserves_simulations(self):
         first = self.history_inputs()
         read_model_worker.execute(first, CONTEXT)
         self.publish_result()
@@ -1048,28 +1047,13 @@ class ReadModelTests(DatabaseTests):
         for year in newer:
             year.db_kr_ha = 500
         self.years.return_value = newer
-        self.queue.send_message.reset_mock()
-        client = TestClient(main.app)
-        path = "/api/v0/farms/farm/history/retry"
-        response = client.post(path)
-        self.assertEqual(response.status_code, 202)
-        self.assertEqual(response.json()["status"], "queued")
+        self.queue.reset_mock()
+        response = TestClient(main.app).post("/api/v0/farms/farm/history/retry")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "done")
         self.assertEqual(response.json()["inputRevision"], first.expected_revision + 1)
-        self.queue.send_message.assert_called_once()
-        job = PreparationJob.model_validate_json(
-            self.queue.send_message.call_args.kwargs["MessageBody"]
-        )
-        for status in ("queued", "running"):
-            with self.sessions.begin() as session:
-                session.execute(update(farm_views).values(status=status))
-            again = client.post(path)
-            self.assertEqual(again.json()["inputRevision"], job.expected_revision)
-            self.queue.send_message.assert_called_once()
-        with self.sessions.begin() as session:
-            session.execute(update(farm_views).values(status="queued"))
-        read_model_worker.execute(job, CONTEXT)
+        self.queue.send_message.assert_not_called()
         after = read_model_store.get_farm_view("farm", EMAIL)
-        self.assertEqual(after["status"], "done")
         self.assertEqual(after["data"]["field_years"]["history-0"][0]["db_kr_ha"], 500)
         self.assertEqual(read_model_store.get_simulation_view("farm", "sim", EMAIL), before)
 

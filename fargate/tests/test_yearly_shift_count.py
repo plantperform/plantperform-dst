@@ -14,7 +14,7 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
     RotationYear,
 )
-from plantperform_optimizer import orchestrator
+from plantperform_fargate import orchestrator
 
 EMPTY = (None, None, None)
 
@@ -38,7 +38,9 @@ def _candidate(
 ) -> RotationCandidateEvaluation:
     return RotationCandidateEvaluation(
         ref=RotationCandidateRef(
-            saedskiftevariant=saedskiftevariant, variant="1", n_norm_pct="100",
+            saedskiftevariant=saedskiftevariant,
+            variant="1",
+            n_norm_pct="100",
         ),
         base_ref=base_ref,
         overrides=overrides or [],
@@ -47,7 +49,10 @@ def _candidate(
         years=[
             RotationCandidateYearResult(
                 year=RotationYear(afgrode_kode=1, afgrode_navn="1"),
-                leaching_kg_n_ha=0, leaching_detail={}, db_kr_ha=0, db_detail={},
+                leaching_kg_n_ha=0,
+                leaching_detail={},
+                db_kr_ha=0,
+                db_detail={},
             )
             for _ in range(8)
         ],
@@ -60,7 +65,9 @@ def _candidate(
 class ShiftCountTests(unittest.TestCase):
     def setUp(self) -> None:
         patcher = patch.object(
-            orchestrator.saedskifte_library, "get_raw_rotation", fake_get_raw_rotation,
+            orchestrator.saedskifte_library,
+            "get_raw_rotation",
+            fake_get_raw_rotation,
         )
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -77,7 +84,8 @@ class ShiftCountTests(unittest.TestCase):
     def test_shifted_candidate_uses_its_base_rotation(self) -> None:
         base_ref = RotationCandidateRef(saedskiftevariant="3aar", variant="1", n_norm_pct="100")
         self.assertEqual(
-            orchestrator._shift_count(_candidate("3aar+manuel-x", base_ref=base_ref)), 3,
+            orchestrator._shift_count(_candidate("3aar+manuel-x", base_ref=base_ref)),
+            3,
         )
 
     def test_manual_overrides_keep_all_eight_start_years(self) -> None:

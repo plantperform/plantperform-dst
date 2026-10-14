@@ -69,12 +69,12 @@ from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
 from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints, Simulation
-from app.services import preparation_jobs, read_models
+from app.services import read_models
 from app.services.optimization import jobs
 from app.services.rotations import saedskifte_kategorier, saedskifte_library
-from plantperform_optimizer import handler as lambda_handler
-from plantperform_optimizer import worker
-from plantperform_optimizer.deadline import remaining_time
+from plantperform_fargate import consumer as fargate_consumer
+from plantperform_fargate import worker
+from plantperform_fargate.deadline import remaining_time
 
 DATABASE = os.getenv("OPTIMIZER_TEST_DATABASE_URL")
 EMAIL = "member@example.com"
@@ -187,7 +187,7 @@ class DatabaseTests(unittest.TestCase):
         self.queue = self.enterContext(
             patch.object(jobs, "sqs_client", return_value=Mock())
         ).return_value
-        self.enterContext(patch.object(preparation_jobs, "sqs_client", return_value=self.queue))
+        self.enterContext(patch.object(jobs, "wake_worker"))
         with self.sessions.begin() as session:
             session.execute(
                 farm_table.insert().values(
@@ -258,7 +258,7 @@ class DatabaseTests(unittest.TestCase):
 
         # Legacy solver fixtures supply synthetic evaluations in memory.
         # Actual generation and persistence are covered by the settings integration tests.
-        from plantperform_optimizer.preparation import PreparedSnapshot
+        from plantperform_fargate.preparation import PreparedSnapshot
 
         def prepare_fixture(simulation, fields, setup_fields, contexts):
             with self.sessions() as session:
@@ -436,28 +436,30 @@ class CandidateStorageTests(DatabaseTests):
 
 
 class LifecycleTests(DatabaseTests):
+    def test_database_publication_clock_detects_queued_jobs_then_completion(self):
+        since = optimization_store.publication_clock()
+        run = self.submit()
+        self.assertGreaterEqual(self.row().published_at, since)
+        self.assertTrue(optimization_store.queued_publication_since(since))
+        worker.execute("sim", run.run_id, CONTEXT)
+        self.assertFalse(optimization_store.queued_publication_since(since))
+
     def deliver(self, run_id):
-        event = {
-            "Records": [
-                {
-                    "messageId": "job",
-                    "body": json.dumps(
-                        {
-                            "jobType": "optimization",
-                            "farmId": "farm",
-                            "simulationId": "sim",
-                            "runId": run_id,
-                        }
-                    ),
-                    "receiptHandle": "receipt",
-                }
-            ]
+        connection = Mock()
+        envelope = {
+            "jobType": "optimization",
+            "farmId": "farm",
+            "simulationId": "sim",
+            "runId": run_id,
         }
-        with (
-            patch.object(lambda_handler, "initialize", return_value=worker),
-            patch.object(lambda_handler, "sqs_client", return_value=self.queue),
-        ):
-            return lambda_handler.handler(event, CONTEXT)
+        with patch.object(fargate_consumer, "initialize_configuration"):
+            fargate_consumer._child_execute(envelope, time.monotonic() + 3600, connection)
+        kind, value = connection.send.call_args.args[0]
+        if kind == "retry":
+            self.queue.change_message_visibility(
+                QueueUrl="test-queue", ReceiptHandle="receipt", VisibilityTimeout=value
+            )
+        return kind == "ack"
 
     def test_sqs_retries_all_errors_and_preserves_exhausted_failure(self):
         self.submit_and_execute()
@@ -470,21 +472,17 @@ class LifecycleTests(DatabaseTests):
             self.assertLogs(level="ERROR"),
         ):
             for attempt in range(1, 4):
-                self.assertEqual(
-                    self.deliver(run.run_id), {"batchItemFailures": [{"itemIdentifier": "job"}]}
-                )
+                self.assertEqual(self.deliver(run.run_id), False)
                 row = self.row()
                 self.assertEqual(row.attempts, attempt)
                 self.assertEqual(row.status, "queued" if attempt < 3 else "failed")
                 self.assertIsNone(row.lease_token)
                 self.assertEqual(row.output, before)
-            self.assertEqual(
-                self.deliver(run.run_id), {"batchItemFailures": [{"itemIdentifier": "job"}]}
-            )
+            self.assertEqual(self.deliver(run.run_id), False)
         self.assertEqual(solve.call_count, 3)
         self.assertIsNotNone(self.row().finished_at)
         replacement = self.submit()
-        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+        self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().run_id, self.row().status), (replacement.run_id, "queued"))
 
     def test_sqs_redelivery_reclaims_expired_lease_and_fences_old_worker(self):
@@ -509,7 +507,7 @@ class LifecycleTests(DatabaseTests):
             return solve(*args, **kwargs)
 
         with patch.object(worker, "run_optimization", side_effect=assert_old_worker_cannot_finish):
-            self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+            self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().status, self.row().attempts), ("completed", 2))
 
     def test_sqs_active_lease_defers_delivery_until_expiry_without_solving(self):
@@ -517,12 +515,10 @@ class LifecycleTests(DatabaseTests):
         optimization_store.claim("sim", run.run_id)
         before = self.row()
         with patch.object(worker, "run_optimization") as solve:
-            self.assertEqual(
-                self.deliver(run.run_id), {"batchItemFailures": [{"itemIdentifier": "job"}]}
-            )
+            self.assertEqual(self.deliver(run.run_id), False)
         solve.assert_not_called()
         delay = self.queue.change_message_visibility.call_args.kwargs["VisibilityTimeout"]
-        self.assertGreater(delay, 900)
+        self.assertGreater(delay, 3600)
         self.assertGreater(datetime.now(UTC) + timedelta(seconds=delay), before.lease_expires_at)
         self.assertEqual(self.row(), before)
 
@@ -538,9 +534,7 @@ class LifecycleTests(DatabaseTests):
                 )
             )
         with patch.object(worker, "run_optimization") as solve, self.assertLogs(level="ERROR"):
-            self.assertEqual(
-                self.deliver(run.run_id), {"batchItemFailures": [{"itemIdentifier": "job"}]}
-            )
+            self.assertEqual(self.deliver(run.run_id), False)
         solve.assert_not_called()
         row = self.row()
         self.assertEqual(
@@ -567,14 +561,12 @@ class LifecycleTests(DatabaseTests):
             patch.object(optimization_store, "load_snapshot", side_effect=expire_then_load),
             patch.object(worker, "run_optimization") as solve,
         ):
-            self.assertEqual(
-                self.deliver(run.run_id), {"batchItemFailures": [{"itemIdentifier": "job"}]}
-            )
+            self.assertEqual(self.deliver(run.run_id), False)
         solve.assert_not_called()
         self.queue.change_message_visibility.assert_called_with(
             QueueUrl="test-queue", ReceiptHandle="receipt", VisibilityTimeout=60
         )
-        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+        self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().status, self.row().attempts), ("completed", 2))
 
     def test_sqs_solver_failures_and_completed_results_are_acknowledged(self):
@@ -584,13 +576,13 @@ class LifecycleTests(DatabaseTests):
                 with patch.object(
                     worker, "run_optimization", side_effect=error("terminal")
                 ) as solve:
-                    self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
-                    self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+                    self.assertEqual(self.deliver(run.run_id), True)
+                    self.assertEqual(self.deliver(run.run_id), True)
                 self.assertEqual((self.row().status, self.row().attempts), ("failed", 1))
                 self.assertEqual(solve.call_count, 1)
         run = self.submit()
-        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
-        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+        self.assertEqual(self.deliver(run.run_id), True)
+        self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().status, self.row().attempts), ("completed", 1))
         self.queue.change_message_visibility.assert_not_called()
 
@@ -598,12 +590,12 @@ class LifecycleTests(DatabaseTests):
         old = self.submit()
         self.edit(name="changed")
         with patch.object(worker, "run_optimization") as solve:
-            self.assertEqual(self.deliver(old.run_id), {"batchItemFailures": []})
+            self.assertEqual(self.deliver(old.run_id), True)
             new = self.submit(self.request(1))
-            self.assertEqual(self.deliver(old.run_id), {"batchItemFailures": []})
+            self.assertEqual(self.deliver(old.run_id), True)
             self.assertEqual((self.row().run_id, self.row().status), (new.run_id, "queued"))
             store.delete_simulation("farm", "sim", EMAIL)
-            self.assertEqual(self.deliver(new.run_id), {"batchItemFailures": []})
+            self.assertEqual(self.deliver(new.run_id), True)
         solve.assert_not_called()
         self.queue.change_message_visibility.assert_not_called()
 
@@ -998,7 +990,7 @@ class LifecycleTests(DatabaseTests):
                 "runId": run.run_id,
             },
         )
-        self.assertEqual(self.deliver(run.run_id), {"batchItemFailures": []})
+        self.assertEqual(self.deliver(run.run_id), True)
         result = self.result()
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.response.fields[0].db2, 100)
@@ -1051,7 +1043,7 @@ class LifecycleTests(DatabaseTests):
                 row["candidates"] = [base.model_dump(mode="json")]
             replace_cached_candidates(session, data)
         with patch(
-            "plantperform_optimizer.orchestrator.candidate_evaluator.evaluate_with_overrides",
+            "plantperform_fargate.orchestrator.candidate_evaluator.evaluate_with_overrides",
             return_value=shifted,
         ):
             self.submit_and_execute(yearly=True)

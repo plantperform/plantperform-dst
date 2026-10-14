@@ -12,8 +12,11 @@ from app.auth import configured_origins, validate_aws_region
 from app.data.creation_store import recover_local_simulation_creations
 from app.data.optimization_store import recover_local_optimization_runs
 from app.data.read_model_store import recover_local_preparations
+from app.domain.creation import CreationActiveError
 from app.domain.read_model import ReadModelNotReadyError
+from app.domain.soil import MissingSoilDataError
 from app.request_metrics import RequestMetrics
+from app.services.calculation import CalculationFailedError
 from app.services.optimization.jobs import is_production
 from app.services.optimization.local import start_local_optimizer
 
@@ -23,6 +26,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logging.basicConfig(level=logging.INFO)
     if is_production():
         validate_aws_region()
+        await run_in_threadpool(recover_local_simulation_creations)
+        await run_in_threadpool(recover_local_preparations)
         yield
     else:
         optimizer = start_local_optimizer()
@@ -37,6 +42,29 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="DST API", lifespan=lifespan)
 app.add_middleware(RequestMetrics)
+
+
+@app.exception_handler(CreationActiveError)
+async def calculation_active(_, error):
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(CalculationFailedError)
+async def calculation_failed(_, error):
+    return JSONResponse(
+        status_code=504 if error.timeout else 500,
+        content={
+            "detail": {
+                "code": "CALCULATION_TIMEOUT" if error.timeout else "CALCULATION_FAILED",
+                "message": str(error),
+            }
+        },
+    )
+
+
+@app.exception_handler(MissingSoilDataError)
+async def missing_soil(_, error):
+    return JSONResponse(status_code=422, content={"detail": str(error)})
 
 
 @app.exception_handler(ReadModelNotReadyError)

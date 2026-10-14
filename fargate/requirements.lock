@@ -1,4 +1,4 @@
-# Runtime versions from backend/pixi.lock environment; build for linux/amd64.
+# Runtime versions from backend/pixi.lock environment; build for linux/arm64.
 absl-py==2.5.0
 annotated-types==0.8.0
 boto3==1.43.82

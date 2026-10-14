@@ -2,6 +2,7 @@
 
 import logging
 import time
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 from sqlalchemy import select, update
@@ -14,14 +15,9 @@ from app.data.db import field_historical_detail_table as details
 from app.data.db import simulation_read_model_table as simulation_views
 from app.data.db import simulation_table as setups
 from app.domain.field import FieldRecord
-from app.domain.optimization import (
-    EXECUTION_TIMEOUT_SECONDS,
-    MAX_JOB_ATTEMPTS,
-    RETRY_DELAY_SECONDS,
-    OptimizationAttemptsExhaustedError,
-)
 from app.domain.read_model import PreparationJob
 from app.domain.soil import MissingSoilDataError
+from app.services.calculation import CalculationContext, CalculationFailedError
 from app.services.read_models import compact_years, yearly_totals
 
 logger = logging.getLogger(__name__)
@@ -62,7 +58,7 @@ def _locked(session, job):
 
 
 def _check_deadline(context):
-    if context.get_remaining_time_in_millis() < 10_000:
+    if context.get_remaining_time_in_millis() <= 0:
         raise TimeoutError("Preparation deadline reached")
 
 
@@ -72,7 +68,7 @@ def _history(session, job, context):
     from app.services.rotations import afgroede_normer, afstromning, historisk_goedning
     from app.services.scenario.candidate_evaluator import compute_n_inputs
 
-    # Lambda processes may outlive registry/reference-data imports.
+    # Backend processes may outlive registry/reference-data imports.
     db_calculator.clear_lookup_cache()
     afgroede_normer.clear_lookup_cache()
     afstromning.clear_lookup_cache()
@@ -148,6 +144,7 @@ def _history(session, job, context):
                     },
                 )
             )
+        _check_deadline(context)
         session.execute(
             update(farm_views)
             .where(farm_views.c.farm_id == job.farm_id)
@@ -210,60 +207,48 @@ def _fail(session, job, error, retry):
             )
 
 
-def execute(job, context, *, sqs_delivery=False, receive_count=1):
+def execute(job, context=None, *, execution_session=None):
     job = PreparationJob.model_validate(job)
+    context = context or CalculationContext()
     scope = (
         f"farm-history:{job.farm_id}"
         if job.job_type == "prepare_farm_history"
         else job.simulation_id
     )
+    owner = (
+        creation_store.execution_session(scope)
+        if execution_session is None
+        else nullcontext(execution_session)
+    )
     started = time.monotonic()
     try:
-        with creation_store.execution_session(scope) as session:
+        with owner as session:
             with session.begin():
                 state = _locked(session, job)
-                if state is None or state.status == "done":
-                    return
-                if state.status == "failed":
-                    if sqs_delivery and (state.error or {}).get("code") != "INVALID_INPUT":
-                        raise OptimizationAttemptsExhaustedError("Preparation attempts exhausted")
+                if state is None or state.status in ("done", "failed"):
                     return
                 _, table, key = _tables(job)
-                exhausted = receive_count > MAX_JOB_ATTEMPTS
                 session.execute(
                     update(table)
                     .where(key == job.entity_id)
-                    .values(
-                        status="failed" if exhausted else "running",
-                        view_version=table.c.view_version + 1,
-                        error={
-                            "code": "PREPARATION_FAILED",
-                            "message": "Beregningsdata kunne ikke forberedes.",
-                        }
-                        if exhausted
-                        else None,
-                    )
+                    .values(status="running", error=None, view_version=table.c.view_version + 1)
                 )
-            if exhausted:
-                if sqs_delivery:
-                    raise OptimizationAttemptsExhaustedError("Preparation attempts exhausted")
-                return
             try:
+                _check_deadline(context)
                 if job.job_type == "prepare_farm_history":
                     _history(session, job, context)
                 else:
                     _simulation(session, job, context)
-            except (MissingSoilDataError, ValueError) as error:
-                _fail(session, job, error, False)
-                logger.exception("preparation_invalid_inputs entity_id=%s", job.entity_id)
             except Exception as error:
-                retry = receive_count < MAX_JOB_ATTEMPTS
-                if session.get_bind().invalidated:
-                    raise
+                logger.exception("preparation_failed entity_id=%s", job.entity_id)
                 session.rollback()
-                _fail(session, job, error, retry)
-                if retry or sqs_delivery:
+                _fail(session, job, error, False)
+                if isinstance(error, MissingSoilDataError):
                     raise
+                raise CalculationFailedError(
+                    "Beregningsdata kunne ikke forberedes. Prøv igen.",
+                    timeout=isinstance(error, TimeoutError),
+                ) from error
     finally:
         logger.info(
             "preparation_finished job_type=%s entity_id=%s revision=%s duration_seconds=%.3f",
@@ -272,20 +257,3 @@ def execute(job, context, *, sqs_delivery=False, receive_count=1):
             job.expected_revision,
             time.monotonic() - started,
         )
-
-
-def execute_local(job):
-    for attempt in range(MAX_JOB_ATTEMPTS):
-        deadline = time.monotonic() + EXECUTION_TIMEOUT_SECONDS
-        context = SimpleNamespace(
-            get_remaining_time_in_millis=lambda deadline=deadline: max(
-                0, int((deadline - time.monotonic()) * 1000)
-            )
-        )
-        try:
-            execute(job, context, receive_count=attempt + 1)
-            return
-        except Exception:
-            logger.exception("local_preparation_attempt_failed entity_id=%s", job.entity_id)
-            if attempt + 1 < MAX_JOB_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)

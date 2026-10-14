@@ -9,13 +9,14 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.data.db import SessionLocal
 from app.data.db import simulation_result_table as results
 from app.data.simulation_store import _row, get_result, read_result
 from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
 from app.domain.simulation import Simulation
+from app.services.fargate_control import wake_worker
 from app.services.optimization.local import execute_local_when_ready
 from app.services.optimization.queue import sqs_client
 
@@ -176,8 +177,9 @@ def submit(
                         results.c.simulation_id == simulation_id,
                         results.c.run_id == run_id,
                     )
-                    .values(published_at=datetime.now(UTC))
+                    .values(published_at=func.clock_timestamp())
                 )
+            wake_worker()
         else:
             background_tasks.add_task(execute_local_when_ready, simulation_id, run_id)
             logger.info(

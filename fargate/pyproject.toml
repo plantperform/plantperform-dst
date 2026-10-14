@@ -1,8 +1,8 @@
 [project]
-name = "plantperform-optimizer"
+name = "plantperform-fargate"
 version = "0.1.0"
 requires-python = ">=3.13"
-description = "SQS Lambda worker for PlantPerform optimization"
+description = "ARM64 ECS Fargate worker for PlantPerform optimization"
 
 [build-system]
 requires = ["setuptools>=77"]

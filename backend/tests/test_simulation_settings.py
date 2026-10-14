@@ -16,8 +16,9 @@ from app.data.db import simulation_result_table as results
 from app.domain.optimization import OptimizationSettings, OptimizeSimulationRequest
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, UpdateSimulationRequest
+from app.services.economics import runner as economics_worker
 from app.services.optimization import jobs
-from plantperform_optimizer import economics_worker, preparation, worker
+from plantperform_fargate import preparation, worker
 
 
 class SimulationSettingsTests(DatabaseTests):

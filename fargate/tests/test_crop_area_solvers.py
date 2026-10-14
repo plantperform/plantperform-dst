@@ -10,8 +10,8 @@ from app.domain.rotation_candidate import (
 )
 from app.domain.simulation import CropAreaLimit
 from app.services.scenario.rotations import selected_locked_candidate
-from plantperform_optimizer.engine import solve
-from plantperform_optimizer.models import (
+from plantperform_fargate.engine import solve
+from plantperform_fargate.models import (
     ConstraintsInput,
     FieldInput,
     FixedFieldContribution,
@@ -23,11 +23,11 @@ from plantperform_optimizer.models import (
     YearlyOptimizationInput,
     YearlyRotationOption,
 )
-from plantperform_optimizer.orchestrator import (
+from plantperform_fargate.orchestrator import (
     _locked_field_contribution,
     _locked_yearly_field_contribution,
 )
-from plantperform_optimizer.yearly_engine import solve_yearly
+from plantperform_fargate.yearly_engine import solve_yearly
 
 
 def _year(code: int) -> RotationYear:

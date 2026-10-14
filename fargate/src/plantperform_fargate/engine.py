@@ -4,7 +4,7 @@ from collections import defaultdict
 from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS
-from plantperform_optimizer.models import (
+from plantperform_fargate.models import (
     RELATIVE_GAP_LIMIT,
     AssignedRotation,
     OptimizationInput,

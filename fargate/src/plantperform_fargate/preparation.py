@@ -8,8 +8,8 @@ from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints
 from app.services.scenario import candidate_evaluator
-from plantperform_optimizer.deadline import check_deadline
-from plantperform_optimizer.orchestrator import OptimizationInfeasibleError
+from plantperform_fargate.deadline import check_deadline
+from plantperform_fargate.orchestrator import OptimizationInfeasibleError
 
 
 @dataclass

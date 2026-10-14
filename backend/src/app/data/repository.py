@@ -394,13 +394,18 @@ def get_farm_historical_yearly_summary(farm_id: str, email: str):
     return farm_part(farm_id, email, "yearly_summary")
 
 
-def register_fields(farm_id: str, requests: list[CreateFieldRequest], email: str):
-    """Register a batch without calculating history; prepare it once on the queue."""
+def register_fields(
+    farm_id: str, requests: list[CreateFieldRequest], email: str, *, execution_session=None
+):
+    """Register a batch; the caller prepares its history after the reservation commits."""
+    from contextlib import nullcontext
+
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     from app.data import read_model_store
 
-    with SessionLocal.begin() as session:
+    owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
+    with owner as session, session.begin():
         if _get_farm(session, farm_id, email) is None:
             return None
         session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
@@ -455,8 +460,11 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str):
     return registered[0][0] if registered is not None else None
 
 
-def detach_field(farm_id: str, field_id: str, email: str) -> bool | None:
-    with SessionLocal.begin() as session:
+def detach_field(farm_id: str, field_id: str, email: str, *, execution_session=None) -> bool | None:
+    from contextlib import nullcontext
+
+    owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
+    with owner as session, session.begin():
         if not _farm_exists(session, farm_id, email):
             return None
 

@@ -28,7 +28,7 @@ from app.data.optimizer_inputs import optimizer_input, optimizer_input_json, par
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import OptimizationConstraints
 from app.services.scenario.rotations import compute_yearly_summary
-from plantperform_optimizer import orchestrator, worker
+from plantperform_fargate import orchestrator, worker
 
 
 def rich_candidate(value=200, variant="2"):

@@ -12,9 +12,9 @@ from app.domain.soil import PercolationByKategori
 from app.services.rotations import saedskifte_library
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
-from plantperform_optimizer.deadline import check_deadline, solver_time_limit
-from plantperform_optimizer.engine import solve
-from plantperform_optimizer.models import (
+from plantperform_fargate.deadline import check_deadline, solver_time_limit
+from plantperform_fargate.engine import solve
+from plantperform_fargate.models import (
     ConstraintsInput,
     FieldInput,
     FixedFieldContribution,
@@ -28,7 +28,7 @@ from plantperform_optimizer.models import (
     YearlyOptimizationOutput,
     YearlyRotationOption,
 )
-from plantperform_optimizer.yearly_engine import solve_yearly
+from plantperform_fargate.yearly_engine import solve_yearly
 
 
 class OptimizationNotFoundError(Exception):

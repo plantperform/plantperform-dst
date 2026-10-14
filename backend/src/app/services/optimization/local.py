@@ -16,7 +16,7 @@ def _initialize():
     started = time.monotonic()
     outcome = "failed"
     try:
-        from plantperform_optimizer.worker import execute_local
+        from plantperform_fargate.worker import execute_local
 
         outcome = "ready"
         return execute_local

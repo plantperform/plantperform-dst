@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import call, patch
 
 from app.data import optimization_store
-from plantperform_optimizer import worker
-from plantperform_optimizer.deadline import (
+from plantperform_fargate import worker
+from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
@@ -28,8 +28,8 @@ class LocalExecutionTests(unittest.TestCase):
         contexts = [args.args[2] for args in execute.call_args_list]
         self.assertEqual(len({id(context) for context in contexts}), 3)
         for context in contexts:
-            self.assertGreater(context.get_remaining_time_in_millis(), 890_000)
-            self.assertLessEqual(context.get_remaining_time_in_millis(), 900_000)
+            self.assertGreater(context.get_remaining_time_in_millis(), 3_590_000)
+            self.assertLessEqual(context.get_remaining_time_in_millis(), 3_600_000)
 
     def test_error_before_claim_does_not_leave_run_active_after_retry_limit(self):
         with (
@@ -50,13 +50,13 @@ class LocalExecutionTests(unittest.TestCase):
             context = worker._LocalExecutionContext()
             token = remaining_time.set(context.get_remaining_time_in_millis)
             try:
-                self.assertEqual(context.get_remaining_time_in_millis(), 900_000)
-                clock.return_value = 940
+                self.assertEqual(context.get_remaining_time_in_millis(), 3_600_000)
+                clock.return_value = 3640
                 self.assertEqual(solver_time_limit(100), 45)
-                clock.return_value = 982
+                clock.return_value = 3682
                 with self.assertRaises(OptimizationDeadlineError):
                     check_deadline()
-                clock.return_value = 1001
+                clock.return_value = 3701
                 self.assertEqual(context.get_remaining_time_in_millis(), 0)
             finally:
                 remaining_time.reset(token)

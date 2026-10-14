@@ -1,5 +1,7 @@
 """Only explicit recalculation reserves work; selection edits are metadata-only."""
 
+from contextlib import nullcontext
+
 from sqlalchemy import func, select, update
 
 from app.data import creation_store, economics_store, read_model_store, repository, simulation_store
@@ -71,8 +73,11 @@ def _job(farm_id, simulation_id, revision, operation):
     )
 
 
-def submit(farm_id, simulation_id, request, email):
-    with repository.SessionLocal.begin() as session:
+def submit(farm_id, simulation_id, request, email, *, execution_session=None):
+    owner = (
+        repository.SessionLocal() if execution_session is None else nullcontext(execution_session)
+    )
+    with owner as session, session.begin():
         row = _setup(session, farm_id, simulation_id, email)
         if row is None:
             return None, None
@@ -81,8 +86,7 @@ def submit(farm_id, simulation_id, request, email):
         if previous.get("request_id") == str(request.request_id):
             if previous["parameters"] != parameters:
                 raise EconomicsConflictError("Recalculation request ID already used")
-            # Dispatch belongs to the first reservation, including the interval
-            # before publication. Concurrent HTTP retries must not enqueue twice.
+            # The caller retains the advisory lock through reservation and execution.
             return simulation_id, None
         if row.revision != request.expected_revision:
             raise EconomicsConflictError("Simulation changed; reload before recalculating")
@@ -121,8 +125,13 @@ def submit(farm_id, simulation_id, request, email):
         return simulation_id, _job(farm_id, simulation_id, revision, operation)
 
 
-def retry(farm_id, simulation_id, email):
-    with creation_store.execution_session(simulation_id) as session, session.begin():
+def retry(farm_id, simulation_id, email, *, execution_session=None):
+    owner = (
+        creation_store.execution_session(simulation_id)
+        if execution_session is None
+        else nullcontext(execution_session)
+    )
+    with owner as session, session.begin():
         row = _setup(session, farm_id, simulation_id, email)
         if row is None:
             return None, None

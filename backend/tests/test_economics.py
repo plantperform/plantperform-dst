@@ -1,22 +1,23 @@
 """Economics calculations, access and explicit job lifecycle in disposable schemas."""
 
 import importlib.util
-import json
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from legacy_candidates import caches
 from pydantic import ValidationError
 from sqlalchemy import insert, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
 
+from app import main
 from app.api.v0 import economics as api
 from app.auth import AuthenticatedUser, current_user
 from app.data import economics_recalculation_store as recalc_store
@@ -49,10 +50,11 @@ from app.domain.economics import (
     UpdateEconomicsModuleRequest,
 )
 from app.domain.simulation import CreateSimulationRequest
+from app.services.calculation import CalculationFailedError
 from app.services.economics import db_calculator as calculator
 from app.services.economics import jobs, overrides
-from plantperform_optimizer import economics_worker
-from plantperform_optimizer import worker as optimizer_worker
+from app.services.economics import runner as economics_worker
+from plantperform_fargate import worker as optimizer_worker
 
 OTHER = "other@example.com"
 SALE = overrides.identifier("sale", 1, "Konventionel", "")
@@ -108,7 +110,6 @@ class EconomicsDatabaseTests(DatabaseTests):
         metadata.create_all(self.engine, tables=tables)
         self.enterContext(patch.object(calculator, "SessionLocal", self.sessions))
         self.enterContext(patch.object(overrides, "SessionLocal", self.sessions))
-        self.enterContext(patch.object(jobs, "sqs_client", return_value=self.queue))
         calculator.clear_lookup_cache()
         self.addCleanup(calculator.clear_lookup_cache)
         with self.sessions.begin() as session:
@@ -240,9 +241,56 @@ class EconomicsDatabaseTests(DatabaseTests):
         request = RecalculateEconomicsRequest(
             expectedRevision=revision, requestId=uuid4(), **values
         )
-        simulation = jobs.submit("farm", "sim", request, EMAIL, None)
-        envelope = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
+        _, job = recalc_store.submit("farm", "sim", request, EMAIL)
+        simulation = repository.get_simulation("farm", "sim", EMAIL)
+        envelope = job.envelope()
         return simulation, request, envelope
+
+    def test_http_recalculation_returns_completed_values_and_never_queues(self):
+        self.install_calculation_inputs()
+        run = self.submit()
+        optimizer_worker.execute("sim", run.run_id, CONTEXT)
+        selected = self.select_module(self.module(prices={SALE: 150}))
+        request = RecalculateEconomicsRequest(expectedRevision=selected.revision, requestId=uuid4())
+        self.queue.reset_mock()
+        with patch.dict(
+            main.app.dependency_overrides, {current_user: lambda: AuthenticatedUser(email=EMAIL)}
+        ):
+            client = TestClient(main.app)
+            response = client.post(
+                "/api/v0/farms/farm/simulations/sim/economics/recalculate",
+                json=request.model_dump(mode="json", by_alias=True),
+            )
+            repeated = client.post(
+                "/api/v0/farms/farm/simulations/sim/economics/recalculate",
+                json=request.model_dump(mode="json", by_alias=True),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["creationStatus"], "done")
+        self.assertEqual(response.json()["economicsSnapshot"]["overrides"]["prices"][SALE], 150)
+        self.assertEqual(repeated.json(), response.json())
+        self.queue.send_message.assert_not_called()
+
+    def test_http_timeout_is_persisted_and_explicit_retry_completes(self):
+        request = RecalculateEconomicsRequest(expectedRevision=0, requestId=uuid4())
+        expired = SimpleNamespace(get_remaining_time_in_millis=lambda: 0)
+        with patch.dict(
+            main.app.dependency_overrides, {current_user: lambda: AuthenticatedUser(email=EMAIL)}
+        ):
+            client = TestClient(main.app)
+            with patch.object(jobs, "CalculationContext", return_value=expired):
+                response = client.post(
+                    "/api/v0/farms/farm/simulations/sim/economics/recalculate",
+                    json=request.model_dump(mode="json", by_alias=True),
+                )
+            self.assertEqual(response.status_code, 504)
+            self.assertEqual(
+                repository.get_simulation("farm", "sim", EMAIL).creation_status, "failed"
+            )
+            retried = client.post("/api/v0/farms/farm/simulations/sim/economics/recalculate/retry")
+        self.assertEqual(retried.status_code, 200, retried.text)
+        self.assertEqual(retried.json()["creationStatus"], "done")
+        self.queue.send_message.assert_not_called()
 
     def install_calculation_inputs(self):
         with self.sessions.begin() as session:
@@ -415,7 +463,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         from app.services.preparation_jobs import get_or_prepare_simulation_view
 
-        view = get_or_prepare_simulation_view("farm", "sim", EMAIL, BackgroundTasks())
+        view = get_or_prepare_simulation_view("farm", "sim", EMAIL)
         self.assertEqual(view["status"], "done")
         self.assertIsNotNone(view["data"])
         self.queue.send_message.assert_not_called()
@@ -463,9 +511,9 @@ class EconomicsDatabaseTests(DatabaseTests):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         queued, request, envelope = self.submit_recalculation(selected.revision)
-        repeated = jobs.submit("farm", "sim", request, EMAIL, None)
+        repeated = jobs.submit("farm", "sim", request, EMAIL)
         self.assertEqual(repeated.revision, queued.revision)
-        self.assertEqual(self.queue.send_message.call_count, 2)  # optimization and manual recalc
+        self.assertEqual(self.queue.send_message.call_count, 1)  # optimization only
         economics_store.update_module(
             module.id,
             UpdateEconomicsModuleRequest(
@@ -499,15 +547,13 @@ class EconomicsDatabaseTests(DatabaseTests):
         selected = self.select_module(module)
         queued, _, envelope = self.submit_recalculation(selected.revision)
         with patch.object(economics_worker, "_execute", side_effect=ValueError("failed")):
-            with self.assertRaises(ValueError):
-                economics_worker.execute(envelope, CONTEXT, receive_count=1)
-            economics_worker.execute(envelope, CONTEXT, receive_count=3)
+            with self.assertRaises(CalculationFailedError):
+                economics_worker.execute(envelope, CONTEXT)
+            economics_worker.execute(envelope, CONTEXT)
         economics_store.delete_module(module.id, EMAIL)
-        retried = jobs.retry("farm", "sim", EMAIL, None)
-        retry = json.loads(self.queue.send_message.call_args.kwargs["MessageBody"])
+        retried = jobs.retry("farm", "sim", EMAIL)
         self.assertGreater(retried.revision, queued.revision)
         economics_worker.execute(envelope, CONTEXT)  # stale delivery cannot publish
-        economics_worker.execute(retry, CONTEXT)
         simulation = repository.get_simulation("farm", "sim", EMAIL)
         self.assertEqual(simulation.creation_status, "done")
         self.assertEqual(simulation.economics_snapshot.source_id, module.id)
@@ -524,16 +570,13 @@ class EconomicsDatabaseTests(DatabaseTests):
         request = RecalculateEconomicsRequest(
             expectedRevision=simulation.revision, requestId=uuid4(), refreshFromModule=False
         )
-        jobs.submit("farm", "sim", request, OTHER, None)
-        economics_worker.execute(
-            json.loads(self.queue.send_message.call_args.kwargs["MessageBody"]), CONTEXT
-        )
+        jobs.submit("farm", "sim", request, OTHER)
         request = RecalculateEconomicsRequest(
             expectedRevision=repository.get_simulation("farm", "sim", OTHER).revision,
             requestId=uuid4(),
         )
         with self.assertRaises(EconomicsModuleNotFoundError):
-            jobs.submit("farm", "sim", request, OTHER, None)
+            jobs.submit("farm", "sim", request, OTHER)
 
     def test_duplicate_reservations_before_publication_dispatch_once(self):
         module = self.module()
@@ -565,11 +608,11 @@ class EconomicsDatabaseTests(DatabaseTests):
         with patch.object(
             economics_worker, "recalculate_candidate", side_effect=fail_after_first_field
         ):
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(CalculationFailedError):
                 economics_worker.execute(envelope, CONTEXT)
         view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
         self.assertIsNone(view["data"])
-        economics_worker.execute(envelope, CONTEXT, receive_count=2)
+        jobs.retry("farm", "sim", EMAIL)
         with self.sessions() as session:
             rows = session.execute(select(caches.c.data)).scalars().all()
         for row in rows:
@@ -622,7 +665,8 @@ class EconomicsDatabaseTests(DatabaseTests):
         selected = self.select_module(module)
         queued, _, envelope = self.submit_recalculation(selected.revision)
         with patch.object(economics_worker, "_execute", side_effect=ValueError("bad inputs")):
-            economics_worker.execute(envelope, CONTEXT, receive_count=3)
+            with self.assertRaises(CalculationFailedError):
+                economics_worker.execute(envelope, CONTEXT)
         economics_store.update_module(
             module.id,
             UpdateEconomicsModuleRequest(

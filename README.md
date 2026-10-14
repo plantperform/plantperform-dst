@@ -5,8 +5,8 @@ planning. This repository contains the application implementation:
 
 - `frontend/`: React, Vite, and TypeScript web application.
 - `backend/`: FastAPI service, shared domain models, calculations, and persistence.
-- `optimizer/`: solvers and job execution for local runs and Lambda
-  ([setup and checks](optimizer/README.md)).
+- `fargate/`: solvers and job execution for local runs and ARM64 ECS Fargate
+  ([setup and checks](fargate/README.md)).
 - `backend/database/`: local PostGIS setup, migrations, and registry loader.
 
 Deployment infrastructure and environment-specific configuration are
@@ -49,15 +49,17 @@ pixi run db-migrate
 pixi run dev
 ```
 
-Pixi installs the backend and sibling optimizer packages in editable mode.
+Pixi installs the backend and sibling Fargate solver packages in editable mode.
 Keep both directories together; changes to either package are available in the
-same development environment.
+same development environment. Production uses a separate `production` Pixi environment
+without the solver package or OR-Tools. Economics and view calculations run
+synchronously in the backend with a 45-second cooperative budget.
 
 With `APP_ENV=development` (the default), optimization runs in the backend's
 background thread pool without AWS credentials, SQS, or a separate worker.
 
-Set `APP_ENV=production` to use SQS and the separate Lambda worker; see
-[optimizer setup](optimizer/README.md).
+Set `APP_ENV=production` to use SQS and the separate ARM64 Fargate worker; see
+[Fargate setup](fargate/README.md).
 
 The API listens on `http://localhost:8000`; its health endpoint is
 `http://localhost:8000/api/v0/healthz`.
@@ -121,7 +123,7 @@ Existing snapshots survive code and reference-data changes; users can choose
 "Genberegn historik" to refresh farm history.
 
 ```bash
-cd backend && pixi run test && pixi run test-optimizer && pixi run lint && pixi run lint-optimizer
+cd backend && pixi run test && pixi run test-fargate && pixi run lint && pixi run lint-fargate
 cd frontend && npm run lint && npm run build
 ```
 

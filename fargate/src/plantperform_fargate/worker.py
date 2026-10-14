@@ -1,4 +1,4 @@
-"""Execute queued optimization jobs locally or in Lambda."""
+"""Execute revision-bound optimization jobs locally or in Fargate."""
 
 import logging
 import time
@@ -17,18 +17,18 @@ from app.domain.optimization import (
 )
 from app.domain.soil import MissingSoilDataError
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
-from plantperform_optimizer.deadline import (
+from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
 )
-from plantperform_optimizer.orchestrator import (
+from plantperform_fargate.orchestrator import (
     OptimizationInfeasibleError,
     OptimizationUnknownError,
     run_optimization,
     run_yearly_optimization,
 )
-from plantperform_optimizer.preparation import hydrate, prepare
+from plantperform_fargate.preparation import hydrate, prepare
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class _LocalExecutionContext:
         return max(0, int((self.deadline - time.monotonic()) * 1000))
 
 
-def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None):
+def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None, on_claim=None):
     started = time.monotonic()
     received_at = datetime.now(UTC)
     with _timed_phase("claim", simulation_id, run_id):
@@ -70,6 +70,8 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None)
         logger.info("optimizer_skipped simulation_id=%s run_id=%s", simulation_id, run_id)
         return
     row, farm_id, token = claimed
+    if on_claim is not None:
+        on_claim(simulation_id, run_id, token, row["input_revision"])
     deadline_token = remaining_time.set(context.get_remaining_time_in_millis)
     outcome = "failed"
     saved = False

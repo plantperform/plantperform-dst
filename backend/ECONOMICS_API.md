@@ -143,9 +143,11 @@ an unchanged selection is a no-op.
 }
 ```
 
-The response is HTTP 202 with the simulation. Keep the same `requestId` and
-request body when retrying an ambiguous HTTP response: this reserves one job,
-including concurrent retries before queue publication. Reusing an ID with a
+The response is HTTP 200 with the completed simulation. Calculation runs in
+the backend during the request, with a cooperative 45-second budget and one
+attempt. Keep the same `requestId` and body when retrying an ambiguous HTTP
+response: the reservation remains idempotent. Concurrent active calculations
+return 409. Reusing an ID with a
 different body returns 409. A genuinely new request needs a new UUID and the
 current simulation revision.
 
@@ -156,14 +158,14 @@ loss, and does not change the selected ID. Underlying reference defaults are
 not frozen and are reloaded when calculation starts.
 
 Recalculation preserves field IDs, rotations, locks, manual edits, constraints,
-and agronomic outputs. It updates economic details, candidate averages,
-optimizer inputs, field values, and display projections. Expected-yield edits
+and agronomic outputs. It updates chosen economic evaluations, field values and display projections. Expected-yield edits
 scale crop and straw income, yield-dependent drying costs, and FEN. Cost-quantity
 edits change expenses without changing physical fertilizer allocations, nitrogen
 norms, or leaching. Missing historical crop positions remain empty.
 
 The existing `creationStatus` lifecycle (`queued`, `running`, `done`, `failed`)
-also represents explicit economics recalculation. Poll the simulation or `/view`.
+also represents explicit economics recalculation. The POST returns after
+publication; concurrent reads can still observe these intermediate states.
 Calculated view data is hidden during queued/running/failed work; the applied
 snapshot and refreshed view are published together. While recalculation is not
 done, field edits and optimization are rejected with 409. Failed economics work
@@ -174,8 +176,10 @@ prevents submission of a new recalculation.
 
 `POST .../economics/recalculate/retry`, with no body, retries failed work using
 its captured snapshot. It does not reread the original module. Ordinary creation
-retry cannot restart failed economics work. Queue publication failures return
-503 with `code: QUEUE_UNAVAILABLE` and `simulationId`.
+retry cannot restart failed economics work. Retry also completes synchronously
+with HTTP 200. Calculation failures return 500 with `code: CALCULATION_FAILED`;
+budget expiry returns 504 with `code: CALCULATION_TIMEOUT`. Failed state is
+persisted for explicit retry, without automatic retry sleeps or SQS dispatch.
 
 Recalculation does not optimize or pick new rotations. Existing optimizer output
 remains a historical result marked `outdated`; result responses and saved-result
@@ -194,7 +198,8 @@ farm, automatically propagate edits, or revert simulations to standard on deleti
 Label pending selection versus applied snapshot, and distinguish current values
 from the previous optimization's saved snapshot.
 
-Apply migration `20261013_0001` using the normal database migration process and
-release backend and optimizer worker code together. Existing simulations read
-as standard without a bulk recalculation or migration of browser-only profiles.
-The queue and infrastructure configuration stay the same.
+Economics modules require schema migration `20261013_0001`, introduced with
+the original economics release. Existing simulations read as standard without
+bulk recalculation or migration of browser-only profiles. The Fargate compute
+change adds no schema migration: economics executes in the backend, while the
+queue carries only optimization jobs. See [Fargate deployment](../fargate/README.md).

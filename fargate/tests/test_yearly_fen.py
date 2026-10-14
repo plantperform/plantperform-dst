@@ -12,18 +12,18 @@ from app.domain.rotation_candidate import (
     SimulationFieldCandidates,
 )
 from app.domain.simulation import GodningSettings
-from plantperform_optimizer.models import (
+from plantperform_fargate.models import (
     FixedYearlyFieldContribution,
     YearlyConstraintsInput,
     YearlyFieldInput,
     YearlyOptimizationInput,
     YearlyRotationOption,
 )
-from plantperform_optimizer.orchestrator import (
+from plantperform_fargate.orchestrator import (
     _expand_yearly_options,
     _locked_yearly_field_contribution,
 )
-from plantperform_optimizer.yearly_engine import solve_yearly
+from plantperform_fargate.yearly_engine import solve_yearly
 
 GRASS, BARLEY = 252, 1
 GRASS_FE_HA, BARLEY_HKG_HA = 6000.0, 60.0
@@ -75,7 +75,7 @@ class FenByYearTests(unittest.TestCase):
         # reference rotations. Keep the FEN unit tests database-free.
         self.enterContext(
             patch(
-                "plantperform_optimizer.orchestrator.saedskifte_library.get_raw_rotation",
+                "plantperform_fargate.orchestrator.saedskifte_library.get_raw_rotation",
                 return_value=((GRASS, None, None),) * NUM_YEARS,
             )
         )

@@ -11,7 +11,7 @@ describe('creation retry', () => {
       const fetch = vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({ id: 'simulation', creationStatus: 'queued', revision: 1 }),
-          { status: 202, headers: { 'Content-Type': 'application/json' } },
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
       )
       vi.stubGlobal('fetch', fetch)
@@ -25,7 +25,7 @@ describe('creation retry', () => {
   )
 
   it('defaults to creation without optimization', async () => {
-    const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 202 }))
+    const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetch)
     await retrySimulationCreation('farm', 'simulation')
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ optimizeOnCreate: false })

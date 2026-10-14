@@ -17,7 +17,7 @@ class ProductionBoundaryTests(unittest.TestCase):
 
             class BlockSolverImports(importlib.abc.MetaPathFinder):
                 def find_spec(self, fullname, path=None, target=None):
-                    if fullname.split('.')[0] in {'plantperform_optimizer', 'ortools'}:
+                    if fullname.split('.')[0] in {'plantperform_fargate', 'ortools'}:
                         raise AssertionError('Production imported solver code: ' + fullname)
 
             sys.meta_path.insert(0, BlockSolverImports())
@@ -40,6 +40,8 @@ class ProductionBoundaryTests(unittest.TestCase):
                 patch.object(main, 'validate_aws_region') as validate,
                 patch.object(main, 'recover_local_optimization_runs') as recover,
                 patch.object(main, 'recover_local_simulation_creations') as recover_creations,
+                patch.object(main, 'recover_local_preparations') as recover_views,
+                patch.object(jobs, 'wake_worker') as wake,
                 patch.object(simulations, 'require_simulation_view_ready'),
                 patch.object(simulations, 'get_simulation', return_value=Simulation(
                     id='sim', farm_id='farm', name='test', created_at='2026-10-09'
@@ -64,7 +66,9 @@ class ProductionBoundaryTests(unittest.TestCase):
                 assert response.json()['runId'] == str(request.run_id)
                 validate.assert_called_once_with()
                 recover.assert_not_called()
-                recover_creations.assert_not_called()
+                recover_creations.assert_called_once_with()
+                recover_views.assert_called_once_with()
+                wake.assert_called_once_with()
                 queue.send_message.assert_called_once()
                 assert queue.send_message.call_args.kwargs['DelaySeconds'] == 0
                 assert json.loads(queue.send_message.call_args.kwargs['MessageBody']) == {
@@ -82,7 +86,7 @@ class ProductionBoundaryTests(unittest.TestCase):
             assert not created.fields_initialized
             queue.send_message.assert_not_called()
             assert not any(
-                name.split('.')[0] in {'plantperform_optimizer', 'ortools'}
+                name.split('.')[0] in {'plantperform_fargate', 'ortools'}
                 for name in sys.modules
             )
         """)

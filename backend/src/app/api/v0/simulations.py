@@ -140,12 +140,9 @@ def post_farm_simulation(
     farm_id: str,
     request: CreateSimulationRequest,
     user: CurrentUser,
-    background_tasks: BackgroundTasks,
 ) -> Simulation:
     try:
-        simulation = submit_creation(
-            farm_id, request, user.email, background_tasks=background_tasks
-        )
+        simulation = submit_creation(farm_id, request, user.email)
     except EconomicsModuleNotFoundError as error:
         raise HTTPException(status_code=404, detail="Economics module not found") from error
     except CreationConflictError as error:
@@ -187,12 +184,11 @@ def patch_farm_simulation(
     return simulation
 
 
-@router.post("/{simulation_id}/creation/retry", response_model=Simulation, status_code=202)
+@router.post("/{simulation_id}/creation/retry", response_model=Simulation, status_code=200)
 def post_farm_simulation_creation_retry(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
-    background_tasks: BackgroundTasks,
     request: RetrySimulationCreationRequest | None = None,
 ) -> Simulation:
     try:
@@ -201,7 +197,6 @@ def post_farm_simulation_creation_retry(
             simulation_id,
             user.email,
             optimize_on_create=request.optimize_on_create if request is not None else False,
-            background_tasks=background_tasks,
         )
     except CreationConflictError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -238,11 +233,10 @@ def get_simulation_display(
     farm_id: str,
     simulation_id: str,
     user: CurrentUser,
-    background_tasks: BackgroundTasks,
     include_data: bool = True,
 ):
     view = get_or_prepare_simulation_view(
-        farm_id, simulation_id, user.email, background_tasks, include_data=include_data
+        farm_id, simulation_id, user.email, include_data=include_data
     )
     if view is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
@@ -264,14 +258,9 @@ def delete_farm_simulation(
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
 
 
-@router.post("/{simulation_id}/view/retry", response_model=SimulationView, status_code=202)
-def retry_simulation_display(
-    farm_id: str, simulation_id: str, user: CurrentUser, background_tasks: BackgroundTasks
-):
-    try:
-        view = retry_simulation_view(farm_id, simulation_id, user.email, background_tasks)
-    except QueueUnavailableError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+@router.post("/{simulation_id}/view/retry", response_model=SimulationView, status_code=200)
+def retry_simulation_display(farm_id: str, simulation_id: str, user: CurrentUser):
+    view = retry_simulation_view(farm_id, simulation_id, user.email)
     if view is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return view
@@ -626,25 +615,18 @@ def patch_simulation_economics(
     )
 
 
-@router.post("/{simulation_id}/economics/recalculate", response_model=Simulation, status_code=202)
+@router.post("/{simulation_id}/economics/recalculate", response_model=Simulation, status_code=200)
 def recalculate_simulation_economics(
     farm_id: str,
     simulation_id: str,
     request: RecalculateEconomicsRequest,
     user: CurrentUser,
-    background_tasks: BackgroundTasks,
 ):
-    return _economics_action(
-        economics_jobs.submit, farm_id, simulation_id, request, user.email, background_tasks
-    )
+    return _economics_action(economics_jobs.submit, farm_id, simulation_id, request, user.email)
 
 
 @router.post(
-    "/{simulation_id}/economics/recalculate/retry", response_model=Simulation, status_code=202
+    "/{simulation_id}/economics/recalculate/retry", response_model=Simulation, status_code=200
 )
-def retry_simulation_economics(
-    farm_id: str, simulation_id: str, user: CurrentUser, background_tasks: BackgroundTasks
-):
-    return _economics_action(
-        economics_jobs.retry, farm_id, simulation_id, user.email, background_tasks
-    )
+def retry_simulation_economics(farm_id: str, simulation_id: str, user: CurrentUser):
+    return _economics_action(economics_jobs.retry, farm_id, simulation_id, user.email)

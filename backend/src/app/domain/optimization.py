@@ -13,8 +13,8 @@ from app.domain.rotation_candidate import RotationCandidateEvaluation
 NUM_YEARS = 8
 MAX_JOB_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 60
-EXECUTION_TIMEOUT_SECONDS = 900
-LEASE_DURATION_SECONDS = 960
+EXECUTION_TIMEOUT_SECONDS = 3600
+LEASE_DURATION_SECONDS = 3660
 
 ResultStatus = Literal["not_started", "queued", "in_progress", "completed", "failed", "outdated"]
 OptimizationKind = Literal["optimize", "yearly"]

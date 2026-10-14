@@ -51,6 +51,6 @@ class StartupTests(unittest.TestCase):
                 self.startup()
                 validate.assert_called_once_with()
                 recover.assert_not_called()
-                recover_creations.assert_not_called()
-                recover_views.assert_not_called()
+                recover_creations.assert_called_once_with()
+                recover_views.assert_called_once_with()
                 warmup.assert_not_called()

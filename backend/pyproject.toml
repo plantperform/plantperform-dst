@@ -12,7 +12,7 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "plantperform_optimizer"]
+known-first-party = ["app", "plantperform_fargate"]
 
 [build-system]
 requires = ["setuptools>=77"]
