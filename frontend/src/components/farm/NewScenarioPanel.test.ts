@@ -442,6 +442,57 @@ describe('simulation wizard steps', () => {
     expect(currentStep()).toBe('Grundlag')
   })
 
+  it.each(['optimize', 'yearly'] as const)(
+    'allows an unoptimized %s copy to be edited and saved before explicitly running',
+    async (kind) => {
+      const copy = {
+        ...source,
+        id: 'copy',
+        name: `${source.name} (kopi)`,
+        revision: 0,
+        fieldsInitialized: false,
+        optimizationSettings: { ...DEFAULT_OPTIMIZATION_SETTINGS, kind },
+      }
+      const edited = {
+        ...copy,
+        revision: 1,
+        constraints: { ...copy.constraints, minFeedUnits: 20 },
+      }
+      queries.update.mockResolvedValue(edited)
+      await mount(copy)
+      await click('Grænser')
+      await change('Min. foderenheder', '20')
+      await click('Bekræft')
+      await click('Gem')
+
+      expect(queries.update).toHaveBeenCalledOnce()
+      expect(queries.update.mock.calls[0]).toEqual([
+        'farm',
+        copy.id,
+        expect.objectContaining({
+          expectedRevision: 0,
+          constraints: expect.objectContaining({ minFeedUnits: 20 }),
+        }),
+      ])
+      expect(queries.create).not.toHaveBeenCalled()
+      expect(queries.startRun).not.toHaveBeenCalled()
+
+      await mount(edited, false)
+      await mount(edited)
+      await click('Bekræft')
+      await click('Kør optimering')
+
+      expect(queries.update.mock.calls[1][2].expectedRevision).toBe(1)
+      expect(queries.startRun).toHaveBeenCalledExactlyOnceWith({
+        farmId: 'farm',
+        simulationId: copy.id,
+        fieldsBefore: [field],
+        input: { ...edited.optimizationSettings, expectedRevision: 1 },
+        kind,
+      })
+    },
+  )
+
   it('does not send saved legacy durations when editing and starting a run', async () => {
     const legacy = { ...DEFAULT_OPTIMIZATION_SETTINGS, timeLimitSeconds: 1 }
     const simulation = { ...source, optimizationSettings: legacy }
