@@ -29,20 +29,13 @@ export const RUN_STATUS_LABELS: Record<OptimizationStatus, string> = {
 
 const OUT_OF_TIME_STATUS = 503
 
-const formatDuration = (seconds: number) => {
-  if (seconds % 60 !== 0) return `${seconds} sekunder`
-  const minutes = seconds / 60
-  return minutes === 1 ? '1 minut' : `${minutes} minutter`
-}
-
-export const optimizationFailureMessage = (
-  failure: { status?: number; message: string },
-  timeLimitSeconds: number,
-) =>
+export const optimizationFailureMessage = (failure: {
+  status?: number
+  message: string
+}) =>
   failure.status === OUT_OF_TIME_STATUS
-    ? `Optimeringen fandt ikke en løsning inden for ${formatDuration(
-        timeLimitSeconds,
-      )}. Prøv at lempe reglerne, fx en højere maks. udledning, ` +
+    ? 'Optimeringen fandt ikke en løsning inden for tidsgrænsen. ' +
+      'Prøv at lempe reglerne, fx en højere maks. udledning, ' +
       'eller udeluk nogle afgrøder, så der er færre muligheder at gennemgå.'
     : failure.message
 

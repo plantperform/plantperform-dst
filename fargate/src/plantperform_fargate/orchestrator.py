@@ -266,7 +266,7 @@ def run_optimization(
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv en længere tidsgrænse."
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv at lempe kravene."
         )
 
     updated_by_id = {
@@ -633,7 +633,7 @@ def run_yearly_optimization(
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv en længere tidsgrænse."
+            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv at lempe kravene."
         )
 
     updated_by_id = {}

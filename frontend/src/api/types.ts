@@ -244,7 +244,6 @@ export type CreateSimulationInput = {
 
 export type OptimizationSettings = {
   kind: 'optimize' | 'yearly'
-  timeLimitSeconds: number
   excludedCropCodes: number[]
   maxNLoadByCatchment: CatchmentYearlyNLoadCaps[]
   db2SwingPct: number | null
@@ -261,7 +260,6 @@ export type OptimizationStatus = 'OPTIMAL' | 'FEASIBLE'
 export type OptimizeSimulationInput = {
   expectedRevision?: number
   runId?: string
-  timeLimitSeconds?: number
   excludedCropCodes?: number[]
 }
 
@@ -288,7 +286,6 @@ export type CatchmentYearlyNLoadCaps = {
 export type YearlyOptimizeSimulationInput = {
   expectedRevision?: number
   runId?: string
-  timeLimitSeconds?: number
   maxNLoadByCatchment?: CatchmentYearlyNLoadCaps[]
   db2SwingPct?: number | null
   excludedCropCodes?: number[]

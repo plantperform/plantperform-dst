@@ -21,9 +21,12 @@ import { ApiError } from '@/api/client'
 import {
   DEFAULT_OPTIMIZATION_SETTINGS,
   DEFAULT_SIMULATION_CONSTRAINTS,
-  optimizationSettingsError,
+  optimizationSettingsInput,
+  simulationLimitsError,
 } from '@/lib/simulation-settings'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
+import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
+import { initializeYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type { FieldRecord, FertiliserSettings, Simulation } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
@@ -76,6 +79,9 @@ type NewScenarioPanelProps = {
 }
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
+const LIMITS_STEP_INDEX = SIMULATION_FORM_STEPS.findIndex(
+  (step) => step.id === 'limits',
+)
 
 const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'orgMineralN',
@@ -123,7 +129,9 @@ export const NewScenarioPanel = ({
     source?.result.status === 'queued' ||
     source?.result.status === 'in_progress'
   const [optimizationSettings, setOptimizationSettings] = useState(
-    source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+    optimizationSettingsInput(
+      source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+    ),
   )
   const [constraints, setConstraints] = useState(
     source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS,
@@ -171,6 +179,7 @@ export const NewScenarioPanel = ({
   const [furthestStepIndex, setFurthestStepIndex] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [limitsTouched, setLimitsTouched] = useState(false)
   const creationRequest = useRef<CreationRequestIdentity | null>(null)
 
   const hasFields = effectiveFields.length > 0
@@ -187,7 +196,9 @@ export const NewScenarioPanel = ({
   }>({ key: 'blank', values: null })
   if (prefillKey !== null && prefillKey !== prefilled.key) {
     setOptimizationSettings(
-      source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+      optimizationSettingsInput(
+        source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+      ),
     )
     setConstraints(source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS)
     setPrefilled({
@@ -204,7 +215,23 @@ export const NewScenarioPanel = ({
     setStepIndex(0)
     setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)
     setCreateError(null)
+    setLimitsTouched(false)
   }
+  if (
+    open &&
+    prefillKey === prefilled.key &&
+    !fieldsLoading &&
+    !fieldsError &&
+    optimizationSettings.kind === 'yearly'
+  ) {
+    const initialized = initializeYearlyNLoadCaps(
+      optimizationSettings,
+      effectiveFields,
+    )
+    if (initialized !== optimizationSettings)
+      setOptimizationSettings(initialized)
+  }
+  const limitsError = simulationLimitsError(optimizationSettings, constraints)
   useEffect(() => {
     if (prefilled.values) {
       reset(prefilled.values)
@@ -226,7 +253,12 @@ export const NewScenarioPanel = ({
   // Validates one step and shows its errors. Its fields are marked touched,
   // so the errors clear as soon as the input is corrected.
   const validateStep = async (index: number) => {
+    if (index === LIMITS_STEP_INDEX) {
+      setLimitsTouched(true)
+      return limitsError === null
+    }
     const names = stepFields(index)
+    if (names.length === 0) return true
     const valid = await trigger(names, { shouldFocus: true })
     if (!valid) {
       for (const name of names) {
@@ -256,13 +288,16 @@ export const NewScenarioPanel = ({
     creationRequest.current = null
     savedSimulation.current = source
     setOptimizationSettings(
-      source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+      optimizationSettingsInput(
+        source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+      ),
     )
     setConstraints(source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS)
     reset(DEFAULT_SIMULATION_FORM_VALUES)
     setStepIndex(0)
     setFurthestStepIndex(0)
     setCreateError(null)
+    setLimitsTouched(false)
     setPrefilled({ key: 'blank', values: null })
   }
 
@@ -298,18 +333,13 @@ export const NewScenarioPanel = ({
         }
       }
 
-    const optionsError = optimizationSettingsError(optimizationSettings)
-    if (optionsError && !running) {
-      setCreateError(optionsError)
-      return
-    }
     setIsCreating(true)
     setCreateError(null)
     try {
       const input = {
         ...toCreateSimulationInput(getValues()),
         constraints,
-        optimizationSettings,
+        optimizationSettings: optimizationSettingsInput(optimizationSettings),
       }
       const existing = savedSimulation.current ?? source
       const simulation = existing
@@ -347,7 +377,10 @@ export const NewScenarioPanel = ({
           farmId,
           simulationId: simulation.id,
           fieldsBefore: effectiveFields,
-          input: { ...settings, expectedRevision: simulation.revision },
+          input: {
+            ...optimizationSettingsInput(settings),
+            expectedRevision: simulation.revision,
+          },
         }
         const started = startRun(
           settings.kind === 'yearly'
@@ -378,7 +411,11 @@ export const NewScenarioPanel = ({
     status:
       index > furthestStepIndex
         ? 'upcoming'
-        : isStepValid(index, values)
+        : (
+              index === LIMITS_STEP_INDEX
+                ? limitsError === null
+                : isStepValid(index, values)
+            )
           ? 'complete'
           : 'invalid',
   }))
@@ -428,7 +465,18 @@ export const NewScenarioPanel = ({
           >
             Gem navn
           </Button>
-        ) : stepIndex === 0 && isDirty ? (
+        ) : stepIndex === 0 &&
+          (isDirty ||
+            JSON.stringify(optimizationSettings) !==
+              JSON.stringify(
+                optimizationSettingsInput(
+                  source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,
+                ),
+              ) ||
+            JSON.stringify(constraints) !==
+              JSON.stringify(
+                source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS,
+              )) ? (
           <Button variant="ghost" size="sm" onClick={startOver}>
             Start forfra
           </Button>
@@ -458,7 +506,11 @@ export const NewScenarioPanel = ({
               <Button
                 onClick={() => void createScenario(true)}
                 disabled={
-                  !hasFields || fieldsLoading || Boolean(fieldsError) || referenceBlocked || running
+                  !hasFields ||
+                  fieldsLoading ||
+                  Boolean(fieldsError) ||
+                  referenceBlocked ||
+                  running
                 }
                 loading={isCreating}
               >
@@ -480,7 +532,9 @@ export const NewScenarioPanel = ({
         <LoadError
           message="Kunne ikke hente simuleringens marker."
           onRetry={() =>
-            void (needsStoredFields ? storedFields.mutate() : farmFields.mutate())
+            void (needsStoredFields
+              ? storedFields.mutate()
+              : farmFields.mutate())
           }
           retrying={fieldsLoading}
         />
@@ -538,6 +592,13 @@ export const NewScenarioPanel = ({
               <option value="Økologisk">Økologisk</option>
             </select>
           </div>
+          <SimulationQuotaChoice
+            kind={optimizationSettings.kind}
+            disabled={running || isCreating}
+            onChange={(kind) =>
+              setOptimizationSettings((current) => ({ ...current, kind }))
+            }
+          />
         </div>
       ) : null}
 
@@ -924,14 +985,11 @@ export const NewScenarioPanel = ({
           </div>
         ) : null}
 
-        {!referenceBlocked && stepIndex === 4 ? (
+        {!referenceBlocked && stepIndex === LIMITS_STEP_INDEX ? (
           <div className="space-y-4">
-            <SimulationSummary
-              values={values}
-              categories={categories}
-              fertiliserPresets={fertiliserPresets}
-              fieldCount={effectiveFields.length}
-              onEditStep={(index) => void goToStep(index)}
+            <FieldError
+              id="simulation-limits-error"
+              message={limitsTouched ? limitsError : null}
             />
             <SimulationOptimizationOptions
               farmId={farmId}
@@ -943,6 +1001,18 @@ export const NewScenarioPanel = ({
               onConstraintsChange={setConstraints}
             />
           </div>
+        ) : null}
+        {!referenceBlocked && isLastStep ? (
+          <SimulationSummary
+            farmId={farmId}
+            fields={effectiveFields}
+            values={values}
+            categories={categories}
+            fertiliserPresets={fertiliserPresets}
+            settings={optimizationSettings}
+            constraints={constraints}
+            onEditStep={(index) => void goToStep(index)}
+          />
         ) : null}
       </fieldset>
     </StepDialog>

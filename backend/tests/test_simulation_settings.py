@@ -5,7 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from legacy_candidates import caches
-from sqlalchemy import delete, event, insert, inspect, select
+from sqlalchemy import delete, event, insert, inspect, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests, candidate, field
 
 from app.data import repository, simulation_store
@@ -146,7 +146,7 @@ class SimulationSettingsTests(DatabaseTests):
     def test_settings_can_be_saved_without_summary_before_optimization(self):
         from app.data import read_model_store
 
-        created = self.create(optimization_settings=OptimizationSettings(time_limit_seconds=1))
+        created = self.create(optimization_settings=OptimizationSettings(db2_swing_pct=10))
         self.optimize(created)
         with self.sessions.begin() as session:
             session.execute(delete(views).where(views.c.simulation_id == created.id))
@@ -155,12 +155,12 @@ class SimulationSettingsTests(DatabaseTests):
             "farm",
             created.id,
             UpdateSimulationRequest(
-                expected_revision=0, optimization_settings={"time_limit_seconds": 2}
+                expected_revision=0, optimization_settings={"db2_swing_pct": 20}
             ),
             EMAIL,
         )
         self.assertEqual(edited.revision, 1)
-        self.assertEqual(edited.optimization_settings.time_limit_seconds, 2)
+        self.assertEqual(edited.optimization_settings.db2_swing_pct, 20)
         view = read_model_store.get_simulation_view("farm", created.id, EMAIL)
         self.assertEqual(view["status"], "missing")
         self.assertEqual(repository.list_simulation_fields("farm", created.id, EMAIL), fields)
@@ -182,13 +182,37 @@ class SimulationSettingsTests(DatabaseTests):
                 expected_revision=0,
                 godning={"org_mineral_n": 10},
                 constraints={"min_fen": 5},
-                optimization_settings={"time_limit_seconds": 30},
+                optimization_settings={"db2_swing_pct": 30},
             ),
             EMAIL,
         )
         self.assertEqual(changed.godning.mineralsk_andel_pct, 50)
         self.assertEqual(changed.constraints.max_fen, 100)
         self.assertEqual(changed.optimization_settings.excluded_afgrodekoder, [11])
+
+    def test_legacy_saved_duration_is_ignored_without_invalidating_the_result(self):
+        from app.data.db import simulation_table as setups
+
+        created = self.create()
+        self.optimize(created)
+        with self.sessions.begin() as session:
+            data = session.execute(
+                select(setups.c.data).where(setups.c.id == created.id)
+            ).scalar_one()
+            data["optimization_settings"].update(time_limit_seconds=1, timeLimitSeconds=7200)
+            session.execute(update(setups).where(setups.c.id == created.id).values(data=data))
+        current = repository.get_simulation("farm", created.id, EMAIL)
+        self.assertNotIn("time_limit_seconds", current.optimization_settings.model_dump())
+        edited = settings.update_settings(
+            "farm",
+            created.id,
+            UpdateSimulationRequest(
+                expected_revision=0, optimization_settings={"timeLimitSeconds": 2}
+            ),
+            EMAIL,
+        )
+        self.assertEqual(edited.revision, 0)
+        self.assertEqual(edited.result.status, "completed")
 
     def test_active_run_allows_rename_and_rejects_calculation_and_field_edits(self):
         created = self.create()

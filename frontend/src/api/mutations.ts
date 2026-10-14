@@ -1,5 +1,10 @@
 import { deleteJson, fetcher, patchJson, postJson } from '@/api/client'
 import { registryFieldsBulkKey } from '@/api/hooks'
+import {
+  optimizeSimulationInput,
+  yearlyOptimizeSimulationInput,
+} from '@/api/optimization-input'
+import { optimizationSettingsInput } from '@/lib/simulation-settings'
 import type {
   CreateFarmInput,
   CreateFieldInput,
@@ -26,7 +31,10 @@ export const createFarm = (input: CreateFarmInput) =>
   postJson<Farm, CreateFarmInput>('/farms', input)
 
 export const retryFarmHistory = (farmId: string) =>
-  postJson<FarmView, Record<string, never>>(`/farms/${farmId}/history/retry`, {})
+  postJson<FarmView, Record<string, never>>(
+    `/farms/${farmId}/history/retry`,
+    {},
+  )
 
 export const deleteFarm = (farmId: string) => deleteJson(`/farms/${farmId}`)
 
@@ -75,10 +83,16 @@ export const createSimulation = (
   farmId: string,
   input: CreateSimulationInput,
 ) =>
-  postJson<Simulation, CreateSimulationInput>(
-    `/farms/${farmId}/simulations`,
-    input,
-  )
+  postJson<Simulation, CreateSimulationInput>(`/farms/${farmId}/simulations`, {
+    ...input,
+    ...(input.optimizationSettings
+      ? {
+          optimizationSettings: optimizationSettingsInput(
+            input.optimizationSettings,
+          ),
+        }
+      : {}),
+  })
 
 export const deleteSimulation = (farmId: string, simulationId: string) =>
   deleteJson(`/farms/${farmId}/simulations/${simulationId}`).then(() => {
@@ -89,8 +103,24 @@ export const deleteSimulation = (farmId: string, simulationId: string) =>
     )
   })
 
-export const updateSimulation = (farmId: string, simulationId: string, input: UpdateSimulationInput) =>
-  patchJson<Simulation, UpdateSimulationInput>(`/farms/${farmId}/simulations/${simulationId}`, input)
+export const updateSimulation = (
+  farmId: string,
+  simulationId: string,
+  input: UpdateSimulationInput,
+) =>
+  patchJson<Simulation, UpdateSimulationInput>(
+    `/farms/${farmId}/simulations/${simulationId}`,
+    {
+      ...input,
+      ...(input.optimizationSettings
+        ? {
+            optimizationSettings: optimizationSettingsInput(
+              input.optimizationSettings,
+            ),
+          }
+        : {}),
+    },
+  )
 
 export const retrySimulationCreation = (
   farmId: string,
@@ -144,7 +174,7 @@ export const runSimulationOptimization = (
 ) =>
   postJson<SimulationResult, OptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize`,
-    input,
+    optimizeSimulationInput(input),
   )
 
 export const runYearlySimulationOptimization = (
@@ -154,7 +184,7 @@ export const runYearlySimulationOptimization = (
 ) =>
   postJson<SimulationResult, YearlyOptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize-yearly`,
-    input,
+    yearlyOptimizeSimulationInput(input),
   )
 
 export const evaluateRotationCandidates = (

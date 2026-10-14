@@ -101,7 +101,8 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
             else OptimizeSimulationRequest
         )
         request = request_type.model_validate(row["parameters"])
-        args = (farm_id, simulation_id, request.time_limit_seconds)
+        # Duration belongs to the execution context, never saved client settings.
+        args = (farm_id, simulation_id, EXECUTION_TIMEOUT_SECONDS)
         excluded = frozenset(request.excluded_afgrodekoder)
         with _timed_phase("solve", simulation_id, run_id):
             if row["kind"] == "yearly":

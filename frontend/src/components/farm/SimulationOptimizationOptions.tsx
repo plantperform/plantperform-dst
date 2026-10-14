@@ -7,13 +7,11 @@ import type {
 import {
   useCatchmentOptions,
   catchmentKey,
-  effectiveMaxNLoadByCatchment,
 } from '@/components/farm/catchment-options'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
-import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 
 type Props = {
   farmId: string
@@ -46,70 +44,6 @@ export function SimulationOptimizationOptions({
     onSettingsChange({ ...settings, ...value })
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="simulation-optimization-kind">Optimeringstype</Label>
-        <select
-          id="simulation-optimization-kind"
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          value={settings.kind}
-          onChange={(event) => {
-            const kind = event.target.value as OptimizationSettings['kind']
-            const quotas = effectiveMaxNLoadByCatchment(fields, [])
-            patch({
-              kind,
-              ...(kind === 'yearly' && settings.maxNLoadByCatchment.length === 0
-                ? {
-                    maxNLoadByCatchment: catchments.map((catchment) => {
-                      const quota = quotas.get(
-                        catchmentKey(catchment.catchmentId),
-                      )
-                      return {
-                        catchmentId: catchment.catchmentId,
-                        maxNLoadByYear:
-                          quota === undefined
-                            ? {}
-                            : Object.fromEntries(
-                                ROTATION_CALENDAR_YEARS.map((year) => [
-                                  year,
-                                  quota,
-                                ]),
-                              ),
-                      }
-                    }),
-                  }
-                : {}),
-            })
-          }}
-        >
-          {Object.entries(OPTIMIZATION_KIND_LABELS).map(([kind, label]) => (
-            <option key={kind} value={kind}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="simulation-time-limit">
-          Solverens tidsgrænse (sekunder)
-        </Label>
-        <Input
-          id="simulation-time-limit"
-          type="number"
-          min="1"
-          max="600"
-          value={
-            Number.isFinite(settings.timeLimitSeconds)
-              ? settings.timeLimitSeconds
-              : ''
-          }
-          onChange={(event) =>
-            patch({
-              timeLimitSeconds:
-                event.target.value === '' ? NaN : Number(event.target.value),
-            })
-          }
-        />
-      </div>
       {settings.kind === 'yearly' ? (
         <>
           <div className="space-y-2">
@@ -189,7 +123,13 @@ export function SimulationOptimizationOptions({
             <Input
               type="number"
               min="0"
-              placeholder="Bedriftens kvote"
+              placeholder={
+                constraints.maxNLoadByCatchment.some(
+                  (cap) => cap.catchmentId === catchment.catchmentId,
+                )
+                  ? 'Ingen grænse'
+                  : 'Bedriftens kvote'
+              }
               value={
                 constraints.maxNLoadByCatchment.find(
                   (cap) => cap.catchmentId === catchment.catchmentId,

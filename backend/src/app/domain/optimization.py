@@ -33,7 +33,6 @@ class OptimizationAttemptsExhaustedError(RuntimeError):
 class OptimizeSimulationRequest(CamelModel):
     expected_revision: int = Field(ge=0)
     run_id: UUID
-    time_limit_seconds: float = Field(default=15, gt=0, le=600)
     excluded_afgrodekoder: list[int] = Field(default_factory=list)
 
 
@@ -43,14 +42,12 @@ class KystvandoplandYearlyNLoadCaps(CamelModel):
 
 
 class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
-    time_limit_seconds: float = Field(default=20, gt=0, le=600)
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
 
 
 class OptimizationSettings(CamelModel):
     kind: OptimizationKind = "optimize"
-    time_limit_seconds: float = Field(default=90, gt=0, le=600, allow_inf_nan=False)
     excluded_afgrodekoder: list[int] = Field(default_factory=list)
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0, allow_inf_nan=False)

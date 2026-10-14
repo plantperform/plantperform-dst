@@ -7,26 +7,20 @@ import {
 
 describe('optimizationFailureMessage', () => {
   it('replaces the out-of-time message with one the user can act on', () => {
-    const message = optimizationFailureMessage(
-      { status: 503, message: 'prøv en længere tidsgrænse.' },
-      600,
-    )
-    expect(message).toContain('inden for 10 minutter')
-    expect(message).not.toContain('tidsgrænse')
-  })
-
-  it('states a limit that is not whole minutes in seconds', () => {
-    expect(
-      optimizationFailureMessage({ status: 503, message: '' }, 90),
-    ).toContain('inden for 90 sekunder')
+    const message = optimizationFailureMessage({
+      status: 503,
+      message: 'prøv en længere tidsgrænse.',
+    })
+    expect(message).toContain('inden for tidsgrænsen')
+    expect(message).toContain('Prøv at lempe reglerne')
+    expect(message).not.toContain('længere tidsgrænse')
+    expect(message).not.toContain('90 sekunder')
   })
 
   it('keeps the backend message for other failures', () => {
     const message = 'Ingen sædskifte-fordeling kan opfylde de gemte krav'
-    expect(optimizationFailureMessage({ status: 422, message }, 600)).toBe(
-      message,
-    )
-    expect(optimizationFailureMessage({ message }, 600)).toBe(message)
+    expect(optimizationFailureMessage({ status: 422, message })).toBe(message)
+    expect(optimizationFailureMessage({ message })).toBe(message)
   })
 })
 

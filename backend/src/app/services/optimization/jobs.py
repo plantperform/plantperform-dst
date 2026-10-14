@@ -99,11 +99,16 @@ def submit(
         if result.run_id == run_id:
             if result.input_revision != setup.revision:
                 raise SubmissionConflictError("Denne kørsel er forældet. Start en ny optimering.")
-            saved_parameters = {
-                key: value
-                for key, value in result.parameters.items()
-                if key != "simulation_settings"
-            }
+            # Validate through today's request model so obsolete client options
+            # (including durations in queued legacy jobs) do not break retries.
+            saved_request_type = (
+                YearlyOptimizeSimulationRequest
+                if result.kind == "yearly"
+                else OptimizeSimulationRequest
+            )
+            saved_parameters = saved_request_type.model_validate(result.parameters).model_dump(
+                mode="json"
+            )
             if saved_parameters != request.model_dump(mode="json") or result.kind != kind:
                 raise SubmissionConflictError(
                     "Kørsels-id er allerede brugt med andre indstillinger."

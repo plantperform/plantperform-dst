@@ -210,6 +210,12 @@ export const SIMULATION_FORM_STEPS = [
     }),
   },
   {
+    id: 'limits',
+    label: 'Grænser',
+    // Constraints and optimization settings are validated by the panel.
+    schema: z.object({}),
+  },
+  {
     id: 'confirm',
     label: 'Bekræft',
     // Reviews the saved settings; Save and Run are separate actions.

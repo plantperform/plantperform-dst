@@ -9,6 +9,10 @@ import type {
 } from '@/api/types'
 import type { CropAreaViolation } from '@/lib/crop-area-limits'
 import type { OptimizationChanges } from '@/lib/optimization-run'
+import {
+  optimizeSimulationInput,
+  yearlyOptimizeSimulationInput,
+} from '@/api/optimization-input'
 
 export type OptimizationRunRequest =
   | { kind: 'optimize'; input: OptimizeSimulationInput }
@@ -87,8 +91,6 @@ export const useOptimizationRunActions = () => {
   return { startRun, dismissRun, markStale }
 }
 
-export const OPTIMIZATION_TIME_LIMIT_SECONDS = 90
-
 const DEFAULT_OPTIMIZATION_REQUEST: OptimizationRunRequest = {
   kind: 'optimize',
   input: {},
@@ -113,5 +115,5 @@ export const optimizationRunRequest = (
   run: OptimizationRun,
 ): OptimizationRunRequest =>
   run.kind === 'optimize'
-    ? { kind: 'optimize', input: run.input }
-    : { kind: 'yearly', input: run.input }
+    ? { kind: 'optimize', input: optimizeSimulationInput(run.input) }
+    : { kind: 'yearly', input: yearlyOptimizeSimulationInput(run.input) }

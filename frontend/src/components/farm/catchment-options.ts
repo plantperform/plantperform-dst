@@ -1,7 +1,12 @@
 import { useMemo } from 'react'
 
 import { useFarmEmissions } from '@/api/hooks'
-import type { CatchmentNLoadCap, FieldRecord } from '@/api/types'
+import type {
+  CatchmentNLoadCap,
+  FieldRecord,
+  OptimizationSettings,
+} from '@/api/types'
+import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 
 export const numberToInput = (value: number | null) =>
   value === null ? '' : String(value)
@@ -116,6 +121,39 @@ export const effectiveMaxNLoadByCatchment = (
     if (quota > 0) resolved.set(key, Math.round(quota))
   }
   return resolved
+}
+
+// Initialize only missing catchments, never saved caps or explicitly blank
+// years. Called after fields load, including when yearly was chosen beforehand.
+export const initializeYearlyNLoadCaps = (
+  settings: OptimizationSettings,
+  fields: FieldRecord[],
+): OptimizationSettings => {
+  const catchmentIds = new Set(fields.map((field) => field.catchmentId))
+  const existing = new Set(
+    settings.maxNLoadByCatchment.map((cap) => cap.catchmentId),
+  )
+  const missing = [...catchmentIds].filter((id) => !existing.has(id))
+  if (missing.length === 0) return settings
+  const quotas = effectiveMaxNLoadByCatchment(fields, [])
+  return {
+    ...settings,
+    maxNLoadByCatchment: [
+      ...settings.maxNLoadByCatchment,
+      ...missing.map((catchmentId) => {
+        const quota = quotas.get(catchmentKey(catchmentId))
+        return {
+          catchmentId,
+          maxNLoadByYear:
+            quota === undefined
+              ? {}
+              : Object.fromEntries(
+                  ROTATION_CALENDAR_YEARS.map((year) => [year, quota]),
+                ),
+        }
+      }),
+    ],
+  }
 }
 
 export const useCatchmentColor = (farmId: string, fields: FieldRecord[]) => {

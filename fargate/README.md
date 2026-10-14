@@ -43,9 +43,11 @@ task at most and wait for the protected worker to drain before replacement.
 Simulation creation saves settings and an economics snapshot synchronously with
 HTTP 201. It does not generate candidates. Both optimization endpoints return
 HTTP 202, taking `expectedRevision` and UUID `runId`; saved optimization options
-remain authoritative. Solver defaults remain 90 seconds for saved settings and
-user-selected limits remain capped at 600 seconds, within the one-hour total
-budget for preparation, solving and publication.
+remain authoritative. Run duration is controlled by the worker: preparation,
+solving and publication share the existing one-hour total execution deadline.
+The solver uses the remaining execution time with a 30-second reserve for
+completing and publishing results. Legacy client-supplied or saved durations
+are ignored; neither optimization endpoint accepts a duration setting.
 
 The first execution captures farm fields and registry/soil context. Subsequent
 runs retain field IDs, constraints, manual choices and captured context.

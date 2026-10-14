@@ -20,7 +20,6 @@ import {
   runYearlySimulationOptimization,
 } from '@/api/mutations'
 import {
-  OPTIMIZATION_TIME_LIMIT_SECONDS,
   OptimizationRunsContext,
   type OptimizationRun,
   type StartOptimizationRun,
@@ -115,8 +114,6 @@ export const OptimizationRunsProvider = ({
               status: result.error?.code === 'TIMEOUT' ? 503 : undefined,
               message: result.error?.message ?? 'Optimeringen fejlede.',
             },
-            result.parameters.timeLimitSeconds ??
-              OPTIMIZATION_TIME_LIMIT_SECONDS,
           ),
           cropAreaViolations: cropAreaViolationsFromDetail(
             result.error?.detail,
@@ -222,8 +219,6 @@ export const OptimizationRunsProvider = ({
             ...request.input,
             runId: id,
             expectedRevision: request.input.expectedRevision ?? simulation.revision,
-            timeLimitSeconds: request.input.timeLimitSeconds ??
-              simulation.optimizationSettings?.timeLimitSeconds ?? OPTIMIZATION_TIME_LIMIT_SECONDS,
           }
           const result =
             request.kind === 'optimize'

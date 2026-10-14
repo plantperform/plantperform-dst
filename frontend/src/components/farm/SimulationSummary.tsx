@@ -3,10 +3,24 @@ import type { ReactNode } from 'react'
 
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import type {
+  FieldRecord,
   FertiliserPresetOption,
+  OptimizationConstraints,
+  OptimizationSettings,
   RotationCategoryOption,
 } from '@/api/types'
-import { formatFieldCount, formatNumber } from '@/lib/field-domain'
+import { useCropCodes } from '@/api/hooks'
+import {
+  catchmentKey,
+  effectiveMaxNLoadByCatchment,
+  useCatchmentOptions,
+} from '@/components/farm/catchment-options'
+import {
+  formatFieldCount,
+  formatNumber,
+  ROTATION_CALENDAR_YEARS,
+} from '@/lib/field-domain'
+import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
   CUSTOM_FERTILISER,
@@ -25,10 +39,13 @@ import {
 } from '@/lib/simulation-form'
 
 type SimulationSummaryProps = {
+  farmId: string
+  fields: FieldRecord[]
   values: SimulationFormValues
   categories: RotationCategoryOption[]
   fertiliserPresets: FertiliserPresetOption[]
-  fieldCount: number
+  settings: OptimizationSettings
+  constraints: OptimizationConstraints
   // Indexes of the steps each section links back to.
   onEditStep: (stepIndex: number) => void
 }
@@ -66,12 +83,29 @@ const Section = ({
 )
 
 export const SimulationSummary = ({
+  farmId,
+  fields,
   values,
   categories,
   fertiliserPresets,
-  fieldCount,
+  settings,
+  constraints,
   onEditStep,
 }: SimulationSummaryProps) => {
+  const fieldCount = fields.length
+  const catchments = useCatchmentOptions(farmId, fields)
+  const crops = useCropCodes(farmId)
+  const cropName = (code: number) =>
+    crops.data?.find((crop) => crop.code === code)?.name ?? `Afgrøde ${code}`
+  const quotas = effectiveMaxNLoadByCatchment(fields, [])
+  const averageCaps = effectiveMaxNLoadByCatchment(
+    fields,
+    constraints.maxNLoadByCatchment,
+  )
+  const capLabel = (cap: number | null | undefined, unit: string) =>
+    cap === null || cap === undefined
+      ? 'Ingen grænse'
+      : `${formatNumber(cap)} ${unit}`
   // Summarise what will be sent, not the raw draft, so the two cannot differ.
   const input = toCreateSimulationInput(values)
   const fertiliser = input.fertiliser!
@@ -104,6 +138,7 @@ export const SimulationSummary = ({
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
+          <p>Udledningskvote: {OPTIMIZATION_KIND_LABELS[settings.kind]}</p>
         </Section>
 
         <Section
@@ -189,6 +224,57 @@ export const SimulationSummary = ({
             {yesNo(Boolean(input.intermediateCrop))}
           </p>
         </Section>
+        <Section title="Grænser" stepIndex={4} onEditStep={onEditStep}>
+          {catchments.map((catchment) => {
+            const cap = settings.maxNLoadByCatchment.find(
+              (entry) => entry.catchmentId === catchment.catchmentId,
+            )
+            return settings.kind === 'yearly' ? (
+              <p key={catchmentKey(catchment.catchmentId)}>
+                {catchment.label} · Loft hvert år:{' '}
+                {ROTATION_CALENDAR_YEARS.map(
+                  (year) =>
+                    `${year}: ${capLabel(cap ? cap.maxNLoadByYear[year] : quotas.get(catchmentKey(catchment.catchmentId)), 'kg N')}`,
+                ).join(' · ')}
+              </p>
+            ) : (
+              <p key={catchmentKey(catchment.catchmentId)}>
+                {catchment.label} · Maks. gennemsnitlig udledning:{' '}
+                {capLabel(
+                  averageCaps.get(catchmentKey(catchment.catchmentId)),
+                  'kg N',
+                )}
+              </p>
+            )
+          })}
+          {settings.kind === 'yearly' ? (
+            <p>
+              Maks. udsving i DB2 mellem år:{' '}
+              {capLabel(settings.db2SwingPct, '%')}
+            </p>
+          ) : null}
+          <p>
+            Min. foderenheder: {capLabel(constraints.minFeedUnits, 'FE')} ·
+            Maks. foderenheder: {capLabel(constraints.maxFeedUnits, 'FE')}
+          </p>
+          {constraints.cropAreaLimits.length === 0 ? (
+            <p>Arealgrænser for afgrøder: Ingen grænser</p>
+          ) : (
+            constraints.cropAreaLimits.map((limit) => (
+              <p key={limit.cropCode}>
+                {cropName(limit.cropCode)} · Min.:{' '}
+                {capLabel(limit.minAreaHa, 'ha')} · Maks.:{' '}
+                {capLabel(limit.maxAreaHa, 'ha')}
+              </p>
+            ))
+          )}
+          <p>
+            Udelukkede afgrøder:{' '}
+            {settings.excludedCropCodes.length > 0
+              ? settings.excludedCropCodes.map(cropName).join(' · ')
+              : 'Ingen'}
+          </p>
+        </Section>
       </div>
 
       <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
@@ -199,7 +285,7 @@ export const SimulationSummary = ({
           {combinations.toLocaleString('da-DK')} kombinationer
         </span>
         . Sædskifter med flere varianter giver flere kandidater. Alle beregnes i
-        baggrunden, når simuleringen oprettes - det kan tage et øjeblik.
+        baggrunden, når du kører optimeringen - det kan tage et øjeblik.
       </p>
     </div>
   )

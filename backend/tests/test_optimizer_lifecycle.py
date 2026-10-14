@@ -311,7 +311,7 @@ class DatabaseTests(unittest.TestCase):
 
     def request(self, revision=0, yearly=False, **values):
         cls = YearlyOptimizeSimulationRequest if yearly else OptimizeSimulationRequest
-        return cls(expected_revision=revision, run_id=uuid4(), time_limit_seconds=1, **values)
+        return cls(expected_revision=revision, run_id=uuid4(), **values)
 
     def submit(self, request=None, kind="optimize"):
         return jobs.submit("farm", "sim", EMAIL, kind, request or self.request())
@@ -665,7 +665,7 @@ class LifecycleTests(DatabaseTests):
             },
         )
         self.assertEqual(self.queue.send_message.call_args.kwargs["DelaySeconds"], 0)
-        self.assertEqual(accepted.parameters["timeLimitSeconds"], 1)
+        self.assertNotIn("timeLimitSeconds", accepted.parameters)
 
     def test_publication_uses_metadata_and_commits_queued_before_sending(self):
         self.submit_and_execute()
@@ -812,9 +812,23 @@ class LifecycleTests(DatabaseTests):
         self.submit(request)
         self.assertEqual(self.queue.send_message.call_count, 1)
         with self.assertRaises(jobs.SubmissionConflictError):
-            self.submit(request.model_copy(update={"time_limit_seconds": 2}))
+            self.submit(request.model_copy(update={"excluded_afgrodekoder": [11]}))
         with self.assertRaises(jobs.SubmissionConflictError):
             self.submit()
+
+    def test_legacy_queued_duration_does_not_break_idempotent_submission(self):
+        request = self.request()
+        accepted = self.submit(request)
+        with self.sessions.begin() as session:
+            parameters = session.execute(select(results.c.parameters)).scalar_one()
+            parameters.update(time_limit_seconds=1, timeLimitSeconds=7200)
+            session.execute(update(results).values(parameters=parameters))
+        legacy_request = OptimizeSimulationRequest.model_validate(
+            {**request.model_dump(), "time_limit_seconds": 90, "timeLimitSeconds": 600}
+        )
+        retried = self.submit(legacy_request)
+        self.assertEqual(retried.run_id, accepted.run_id)
+        self.assertEqual(self.queue.send_message.call_count, 1)
 
     def test_concurrent_submissions_only_one_wins(self):
         def send():
@@ -1309,7 +1323,7 @@ class LocalLifecycleTests(DatabaseTests):
         self.assertEqual([run.status for run in accepted], ["queued", "queued"])
         self.assertEqual(len(self.background_tasks.tasks), 1)
         with self.assertRaises(jobs.SubmissionConflictError):
-            self.submit(request.model_copy(update={"time_limit_seconds": 2}))
+            self.submit(request.model_copy(update={"excluded_afgrodekoder": [11]}))
         with self.assertRaises(jobs.SubmissionConflictError):
             self.submit()
         self.run_background()

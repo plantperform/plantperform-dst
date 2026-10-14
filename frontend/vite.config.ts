@@ -18,7 +18,7 @@ export default defineConfig({
     },
   },
   test: {
-    // Only pure logic is tested for now, so no DOM environment is needed.
+    // Pure logic runs in Node; wizard interaction tests opt into jsdom.
     environment: 'node',
     include: ['src/**/*.test.ts'],
   },
