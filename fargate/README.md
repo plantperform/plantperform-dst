@@ -10,9 +10,11 @@ not include this package or OR-Tools.
 
 The backend commits the queued run, sends its message, records `published_at`
 using PostgreSQL's clock, then wakes the service with `desiredCount=1`. Wakeup
-failures leave the accepted message in SQS; a visible-message CloudWatch alarm
-provides recovery. The queue accepts only `optimization` envelopes with
-`farmId`, `simulationId` and `runId`.
+failures are logged and leave the accepted message in SQS. A later submission
+for another simulation or a manual service startup must wake the worker to
+drain the queue. Resubmitting an already-published run returns its status without
+waking the worker; the current UI offers retry only for failed runs. The queue
+accepts only `optimization` envelopes with `farmId`, `simulationId` and `runId`.
 
 The task enables ECS task protection and receives one message using a 20-second
 long poll. Every job runs in a fresh spawned process, with a 60-minute total
@@ -28,10 +30,10 @@ sets service desired count to zero while still protected. It checks for queued
 publications recorded since that poll began and restores desired count to one
 if a new submission raced with shutdown. Otherwise it releases protection and
 exits. Later submissions wake a replacement. ECS/DB verification failures
-restore desired count and retry. The fallback alarm considers visible messages
-only; it does not keep starting tasks for invisible retries. Delayed messages
-wake a task once visible. CloudWatch metrics are approximate and may briefly
-cause an unnecessary replacement; each empty worker follows the same shutdown.
+restore desired count and retry. Queue metrics do not wake workers. If the worker
+has shut down before a delayed retry or an interrupted delivery becomes visible,
+that message needs a later backend wakeup or manual service startup. Queue-age,
+DLQ and worker-error alarms remain available for monitoring.
 
 SIGTERM stops consumption and terminates any unfinished child without deleting
 its message. Task protection guards normal scale-in and deployments, but cannot

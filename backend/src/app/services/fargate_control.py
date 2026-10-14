@@ -30,5 +30,6 @@ def wake_worker():
             raise ValueError("Fargate wakeup configuration is missing")
         set_worker_count(ecs_client(), 1)
     except Exception:
-        # SQS owns the accepted job. Its visible-message alarm recovers a missed wakeup.
+        # SQS owns the accepted job. A later backend submission or manual
+        # service startup must recover a missed wakeup.
         logger.exception("fargate_wakeup_failed")
