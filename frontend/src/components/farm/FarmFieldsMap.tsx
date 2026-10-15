@@ -502,7 +502,8 @@ export const FarmFieldsMap = ({
     [fields],
   )
   const cropLabelMarkers = useMemo(() => {
-    if (yearIndex === null) return []
+    if (!showCropLabels || yearIndex === null || mapZoom < CROP_LABEL_MIN_ZOOM)
+      return []
     const labels = fields.flatMap((field) => {
       const year = field.cropRotation[yearIndex]
       const point = fieldLabelPoint(field)
@@ -544,9 +545,7 @@ export const FarmFieldsMap = ({
         textColor: color ? readableTextColor(color) : null,
       }
     })
-  }, [fields, yearIndex, mapZoom])
-  const cropLabelsVisible =
-    showCropLabels && yearIndex !== null && mapZoom >= CROP_LABEL_MIN_ZOOM
+  }, [showCropLabels, fields, yearIndex, mapZoom])
   const selectedFarmField = selectedFieldId
     ? fields.find((field) => field.id === selectedFieldId)
     : undefined
@@ -1671,37 +1670,35 @@ export const FarmFieldsMap = ({
               </div>
             </Marker>
           ) : null}
-          {cropLabelsVisible
-            ? cropLabelMarkers.map((marker) => (
-                <Marker
-                  key={`crop-${marker.key}`}
-                  longitude={marker.point[0]}
-                  latitude={marker.point[1]}
-                  anchor="top"
-                  offset={[0, 4]}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  <span
-                    role="img"
-                    aria-label={marker.title}
-                    className={cn(
-                      'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
-                      marker.color === null && 'bg-background text-foreground',
-                    )}
-                    style={
-                      marker.color !== null
-                        ? {
-                            backgroundColor: marker.color,
-                            color: marker.textColor ?? undefined,
-                          }
-                        : undefined
-                    }
-                  >
-                    {marker.label}
-                  </span>
-                </Marker>
-              ))
-            : null}
+          {cropLabelMarkers.map((marker) => (
+            <Marker
+              key={`crop-${marker.key}`}
+              longitude={marker.point[0]}
+              latitude={marker.point[1]}
+              anchor="top"
+              offset={[0, 4]}
+              style={{ pointerEvents: 'none' }}
+            >
+              <span
+                role="img"
+                aria-label={marker.title}
+                className={cn(
+                  'block max-w-40 truncate rounded-full px-2 py-0.5 text-xs font-medium shadow-md outline-1 -outline-offset-1 outline-black/10',
+                  marker.color === null && 'bg-background text-foreground',
+                )}
+                style={
+                  marker.color !== null
+                    ? {
+                        backgroundColor: marker.color,
+                        color: marker.textColor ?? undefined,
+                      }
+                    : undefined
+                }
+              >
+                {marker.label}
+              </span>
+            </Marker>
+          ))}
 
           {hoveredField && !hoveringActiveRuleField && !actionPopupField ? (
             <Popup

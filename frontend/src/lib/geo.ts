@@ -197,17 +197,34 @@ const largestPolygonRings = (
   return largest
 }
 
-export const fieldLabelPoint = (
-  field: FieldRecord,
+const labelPoints = new WeakMap<
+  GeoJSONPolygon | GeoJSONMultiPolygon,
+  [number, number] | null
+>()
+
+const geometryLabelPoint = (
+  geometry: GeoJSONPolygon | GeoJSONMultiPolygon,
 ): [number, number] | null => {
-  const bounds = getFieldsBounds([field])
+  const bounds = getFieldsBounds([{ geometry }])
   if (!bounds) return null
   const fallback: [number, number] = [
     (bounds[0] + bounds[2]) / 2,
     (bounds[1] + bounds[3]) / 2,
   ]
-  if (!field.geometry) return fallback
-  return polygonLabelPoint(largestPolygonRings(field.geometry)) ?? fallback
+  return polygonLabelPoint(largestPolygonRings(geometry)) ?? fallback
+}
+
+export const fieldLabelPoint = (
+  field: Pick<FieldRecord, 'geometry'>,
+): [number, number] | null => {
+  const { geometry } = field
+  if (!geometry) return null
+  let point = labelPoints.get(geometry)
+  if (point === undefined) {
+    point = geometryLabelPoint(geometry)
+    labelPoints.set(geometry, point)
+  }
+  return point
 }
 
 export const fieldsToFeatureCollection = (
