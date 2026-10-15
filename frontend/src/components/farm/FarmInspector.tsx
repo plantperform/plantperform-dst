@@ -500,6 +500,7 @@ export const FarmInspector = ({
               listRequiredWidth={
                 isRules ? RULES_PANEL_WIDTH : listRequiredWidth
               }
+              listMinWidth={isRules ? RULES_PANEL_WIDTH : undefined}
               onSplitAvailableChange={onSplitAvailableChange}
               list={({ width }) =>
                 rulesPanel ?? (
