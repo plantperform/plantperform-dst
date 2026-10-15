@@ -23,6 +23,16 @@ describe('persisted result tracking', () => {
     expect(shouldAcceptResult(running, result('completed'), 'new')).toBe(true)
   })
 
+  it('skips polls that bring no news about a running run', () => {
+    expect(shouldAcceptResult(running, result('in_progress'))).toBe(false)
+    expect(
+      shouldAcceptResult(
+        { ...running, phase: 'queued' } as OptimizationRun,
+        result('in_progress'),
+      ),
+    ).toBe(true)
+  })
+
   it('ignores responses from superseded runs', () => {
     expect(shouldAcceptResult(running, result('completed', 'old'), 'new')).toBe(
       false,
