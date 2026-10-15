@@ -6,7 +6,7 @@ import type { Farm } from '@/api/types'
 import { describeCatchment } from '@/components/farm/catchment-options'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatCvr } from '@/lib/farm-form'
+import { describeFarmOwner } from '@/lib/farm-form'
 import {
   describeFarmQuotaStatus,
   describeLastOpened,
@@ -83,7 +83,7 @@ export const FarmRow = ({ farm, overview, openedAt }: FarmRowProps) => {
         ?.catchmentName,
     ),
   )
-  const owner = `${farm.ownerName} · ${farm.cvr ? `CVR ${formatCvr(farm.cvr)}` : 'Intet CVR'}`
+  const owner = describeFarmOwner(farm)
 
   return (
     <li>

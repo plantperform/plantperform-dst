@@ -17,7 +17,7 @@ const PopoverContent = ({
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 rounded-md border bg-card p-2 text-card-foreground shadow-md',
+        'z-50 rounded-md border bg-card p-2 text-card-foreground shadow-md outline-none',
         className,
       )}
       {...props}

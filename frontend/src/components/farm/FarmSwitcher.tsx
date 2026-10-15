@@ -11,12 +11,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { describeFarmOwner } from '@/lib/farm-form'
 import { switcherFarms } from '@/lib/farm-switcher'
 import { getLastOpenedMap, HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
 
 const MENU_ROW_CLASS =
-  'flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:outline-none'
+  'flex w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none'
 
 type FarmSwitcherProps = {
   farm: Farm
@@ -57,7 +58,7 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
       <PopoverContent
         align="start"
         sideOffset={8}
-        className="w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0"
+        className="w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0 shadow-lg"
       >
         {list.searchable ? (
           <FarmSearchInput
@@ -67,7 +68,7 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
             onChange={setSearchText}
           />
         ) : null}
-        <p className="px-4 pt-2 pb-1 text-xs text-muted-foreground">
+        <p className="px-4.5 pt-2.5 pb-1 text-xs font-medium text-muted-foreground">
           {list.heading}
         </p>
         <ul className="max-h-[360px] overflow-y-auto px-2 pb-2">
@@ -78,18 +79,18 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
                 <Link
                   to={`/farms/${candidate.id}${samePage}`}
                   aria-current={current ? 'page' : undefined}
-                  className={cn(
-                    MENU_ROW_CLASS,
-                    'h-10',
-                    current && 'bg-sidebar',
-                  )}
+                  className={cn(MENU_ROW_CLASS, 'py-1.5')}
                   onClick={() => changeOpen(false)}
                 >
-                  <span className="min-w-0 flex-1 truncate">
-                    {candidate.name}
-                  </span>
-                  <span className="shrink-0 text-[13px] text-muted-foreground">
-                    {candidate.ownerName}
+                  <span className="grid min-w-0 flex-1 gap-0.5 leading-tight">
+                    <span
+                      className={cn('truncate', current && 'font-semibold')}
+                    >
+                      {candidate.name}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {describeFarmOwner(candidate)}
+                    </span>
                   </span>
                   {current ? (
                     <Check
@@ -107,11 +108,11 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
             </li>
           ) : null}
         </ul>
-        <div className="flex flex-col gap-0.5 border-t p-2">
+        <div className="flex flex-col border-t p-2">
           <Link
             to="/"
             state={HOME_OVERVIEW_STATE}
-            className={cn(MENU_ROW_CLASS, 'h-[38px]')}
+            className={cn(MENU_ROW_CLASS, 'h-9')}
             onClick={() => changeOpen(false)}
           >
             <Home
@@ -122,7 +123,7 @@ export const FarmSwitcher = ({ farm, samePage }: FarmSwitcherProps) => {
           </Link>
           <Link
             to="/farms/new"
-            className={cn(MENU_ROW_CLASS, 'h-[38px]')}
+            className={cn(MENU_ROW_CLASS, 'h-9')}
             onClick={() => changeOpen(false)}
           >
             <Plus

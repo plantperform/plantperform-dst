@@ -11,6 +11,12 @@ export const toCvrDigits = (value: string) =>
 export const formatCvr = (cvr: string) =>
   toCvrDigits(cvr).replace(/(\d{2})(?=\d)/g, '$1 ')
 
+export const describeFarmOwner = (farm: {
+  ownerName: string
+  cvr: string | null
+}) =>
+  `${farm.ownerName} · ${farm.cvr ? `CVR ${formatCvr(farm.cvr)}` : 'Intet CVR'}`
+
 export const validateFarmBasics = (
   name: string,
   ownerName: string,

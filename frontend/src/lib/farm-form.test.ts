@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { farmLookupErrors, formatCvr, toCvrDigits } from '@/lib/farm-form'
+import {
+  describeFarmOwner,
+  farmLookupErrors,
+  formatCvr,
+  toCvrDigits,
+} from '@/lib/farm-form'
 
 describe('CVR', () => {
   it('keeps at most eight digits of what is typed', () => {
@@ -10,6 +15,12 @@ describe('CVR', () => {
   it('shows the digits in pairs', () => {
     expect(formatCvr('12345678')).toBe('12 34 56 78')
     expect(formatCvr('123')).toBe('12 3')
+    expect(describeFarmOwner({ ownerName: 'Anton', cvr: '12345678' })).toBe(
+      'Anton · CVR 12 34 56 78',
+    )
+    expect(describeFarmOwner({ ownerName: 'Anton', cvr: null })).toBe(
+      'Anton · Intet CVR',
+    )
   })
 })
 
