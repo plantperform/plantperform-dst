@@ -12,13 +12,17 @@ import {
   useSharedPriceConfirm,
   type SharedPrice,
 } from '@/components/farm/shared-price-confirm'
-import { SharedPriceConfirm } from '@/components/farm/SharedPriceConfirm'
+import {
+  DbEffectsConfirm,
+  SharedPriceConfirm,
+} from '@/components/farm/SharedPriceConfirm'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
   COST_CATEGORIES,
   cropDbChange,
+  cropRestoreEffect,
   cropSources,
   cropTotals,
   cropYieldPct,
@@ -31,6 +35,7 @@ import {
   formatSignedDkk,
   isCropCustomised,
   isLineCustomised,
+  isPriceCustomised,
   isYieldCustomised,
   lineAmountDkkHa,
   lineGroupId,
@@ -38,8 +43,8 @@ import {
   priceCrops,
   priceValue,
   quantityUnitLabel,
+  sharedCustomisedPrices,
   withoutCropChanges,
-  withPriceOverride,
   withQuantityOverride,
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
@@ -133,16 +138,15 @@ const LineRow = ({
         {onChange && isLineCustomised(overrides, crop, line) ? (
           <RestoreButton
             label={line.label}
-            onRestore={() =>
-              onChange((current) =>
-                withPriceOverride(
-                  assumptions,
-                  withQuantityOverride(current, crop, line.id, null),
-                  line.priceId,
-                  null,
-                ),
-              )
-            }
+            onRestore={() => {
+              const restoreQuantity: OverridesChange = (current) =>
+                withQuantityOverride(current, crop, line.id, null)
+              if (isPriceCustomised(overrides, line.priceId)) {
+                sharedPrice.restorePrice(line.priceId, restoreQuantity)
+              } else {
+                onChange(restoreQuantity)
+              }
+            }}
           />
         ) : null}
       </div>
@@ -300,6 +304,18 @@ export const EconomicsCropDetail = ({
   )
   const totals = cropTotals(assumptions, overrides, crop)
   const dbChange = cropDbChange(assumptions, overrides, crop)
+  const sharedPrices = sharedCustomisedPrices(assumptions, overrides, crop)
+  const [confirmingRestore, setConfirmingRestore] = useState(false)
+  const restoreEffects =
+    confirmingRestore && sharedPrices.length > 0
+      ? cropRestoreEffect(assumptions, overrides, crop)
+      : []
+  const restoreCrop = () => {
+    setConfirmingRestore(false)
+    onOverridesChange?.((current) =>
+      withoutCropChanges(assumptions, current, crop),
+    )
+  }
   const [openGroups, setOpenGroups] = useState<ReadonlySet<EconomicsGroupId>>(
     () => {
       const focused = focusLineId ? lineGroupId(crop, focusLineId) : null
@@ -367,17 +383,30 @@ export const EconomicsCropDetail = ({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() =>
-              onOverridesChange((current) =>
-                withoutCropChanges(assumptions, current, crop),
-              )
-            }
+            onClick={() => {
+              if (sharedPrices.length > 0) {
+                setConfirmingRestore(true)
+              } else {
+                restoreCrop()
+              }
+            }}
           >
             <Undo2 className="size-3.5" aria-hidden="true" />
             Gendan standard
           </Button>
         ) : null}
       </div>
+      {restoreEffects.length > 0 ? (
+        <DbEffectsConfirm
+          title={`Gendan standard for ${crop.cropName}`}
+          description={`${formatNameList(sharedPrices.map((price) => price.label))} ${sharedPrices.length === 1 ? 'er en fælles pris' : 'er fælles priser'} og går også tilbage for de andre afgrøder. Dækningsbidraget ændres pr. ha:`}
+          effects={restoreEffects}
+          confirmLabel={`Gendan for alle ${restoreEffects.length}`}
+          onConfirm={restoreCrop}
+          onCancel={() => setConfirmingRestore(false)}
+          className="px-5 pb-3"
+        />
+      ) : null}
 
       <div className="grid grid-cols-2 gap-4 px-5 pb-1 @xl:grid-cols-4">
         <KeyFigure
