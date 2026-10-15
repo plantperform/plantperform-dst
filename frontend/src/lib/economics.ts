@@ -269,6 +269,7 @@ export const withQuantityOverride = (
   lineId: string,
   value: number | null,
 ): EconomicsOverrides => {
+  if (isRevenueLine(crop, lineId)) return overrides
   const key = quantityKey(crop, lineId)
   const rest = withoutKey(overrides.quantities, key)
   const standard = cropLines(crop).find((line) => line.id === lineId)?.quantity
