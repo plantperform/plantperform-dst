@@ -378,6 +378,7 @@ describe('yield percentage', () => {
     expect(parseYieldPctInput('-15')).toEqual({ value: -15 })
     expect(parseYieldPctInput('−15')).toEqual({ value: -15 })
     expect(parseYieldPctInput('+10')).toEqual({ value: 10 })
+    expect(parseYieldPctInput('-0,145')).toEqual({ value: -0.15 })
     expect(parseYieldPctInput('-100')).toEqual({
       error: 'Skriv et tal over −100.',
     })
@@ -749,6 +750,9 @@ describe('parseEconomicsInput', () => {
 
   it('keeps the two decimals the fields show', () => {
     expect(parseEconomicsInput('0,055')).toEqual({ value: 0.06 })
+    expect(parseEconomicsInput('0,145')).toEqual({ value: 0.15 })
+    expect(parseEconomicsInput('1,005')).toEqual({ value: 1.01 })
+    expect(parseEconomicsInput('2,135')).toEqual({ value: 2.14 })
   })
 
   it('asks for a number that is not negative', () => {

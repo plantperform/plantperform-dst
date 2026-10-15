@@ -391,13 +391,18 @@ export const withoutCropChanges = (
 
 const GROUPED_THOUSANDS = /^[+-]?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/
 
+const roundToHundredths = (plain: string): number => {
+  const rounded = Math.round(Number(`${plain.replace(/^[+-]/, '')}e2`)) / 100
+  return plain.startsWith('-') ? -rounded : rounded
+}
+
 const parseEconomicsNumber = (text: string): number => {
   const compact = text.replace(/\s/g, '').replace(/−/g, '-')
   const plain = (
     GROUPED_THOUSANDS.test(compact) ? compact.replace(/\./g, '') : compact
   ).replace(',', '.')
   return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(plain)
-    ? Math.round(Number(plain) * 100) / 100
+    ? roundToHundredths(plain)
     : Number.NaN
 }
 
