@@ -75,6 +75,7 @@ import {
 } from '@/components/ui/card'
 import { LoadError } from '@/components/ui/load-error'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import {
   deleteProfileMessage,
   type EconomicsProfile,
@@ -337,26 +338,63 @@ const FarmDetail = () => {
 
   const loadedFarm = isReady ? farm : undefined
 
+  const appBar = (
+    <AppBar>
+      {farm ? (
+        <FarmSwitcher
+          farm={farm}
+          samePage={
+            onEconomicsPage ? '/economics' : onAboutPage ? '/about' : ''
+          }
+        />
+      ) : (
+        <Skeleton className="h-8 w-40 rounded-lg bg-brand-foreground/20" />
+      )}
+    </AppBar>
+  )
+
   if (farmView.data && farmView.data.status !== 'done') {
     const failed = farmView.data.status === 'failed'
     return (
-      <main className="min-h-screen bg-background px-6 py-10 sm:px-10">
-        <Card className="mx-auto max-w-3xl">
-          <CardHeader>
-            <CardTitle>{failed ? 'Historikken kunne ikke beregnes' : 'Beregner markernes historik…'}</CardTitle>
-            <CardDescription>
-              {failed ? 'Prøv beregningen igen.' : 'Markernes tal vises, når beregningen er færdig.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            {failed && farmId ? (
-              <Button loading={retryingHistory} onClick={() => void recalculateHistory()}>
-                Prøv igen
-              </Button>
-            ) : null}
-            <Button asChild variant="outline"><Link to="/">Alle bedrifter</Link></Button>
-          </CardContent>
-        </Card>
+      <main className="min-h-screen bg-background">
+        {appBar}
+        <div className="mx-auto max-w-3xl space-y-4 px-6 py-10 sm:px-10">
+          <h1 className="font-display text-4xl tracking-tight break-words">
+            {farm?.name}
+          </h1>
+          <div className="space-y-3 rounded-lg border border-dashed p-4">
+            {failed ? (
+              <>
+                <p role="alert" className="text-sm text-destructive">
+                  Markernes historik kunne ikke beregnes.
+                </p>
+                {farmId ? (
+                  <Button
+                    size="sm"
+                    loading={retryingHistory}
+                    onClick={() => void recalculateHistory()}
+                  >
+                    Prøv igen
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p
+                  role="status"
+                  className="flex items-center gap-2 font-medium"
+                >
+                  <Spinner />
+                  Beregner markernes historik...
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Du kan lukke siden. Beregningen fortsætter, og markernes tal
+                  vises her, når den er færdig.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
       </main>
     )
   }
@@ -366,18 +404,7 @@ const FarmDetail = () => {
       className="h-svh flex-col overflow-hidden"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
-      <AppBar>
-        {farm ? (
-          <FarmSwitcher
-            farm={farm}
-            samePage={
-              onEconomicsPage ? '/economics' : onAboutPage ? '/about' : ''
-            }
-          />
-        ) : (
-          <Skeleton className="h-8 w-40 rounded-lg bg-brand-foreground/20" />
-        )}
-      </AppBar>
+      {appBar}
       <div className="flex min-h-0 flex-1">
         {loadedFarm ? (
           <FarmSidebar
