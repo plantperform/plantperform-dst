@@ -27,12 +27,19 @@ export const clampListSlack = (slack: number) =>
 export const splitPaneSpace = (innerWidth: number) =>
   Math.max(0, innerWidth - SPLIT_DIVIDER_WIDTH)
 
-export const clampListPaneWidth = (width: number, innerWidth: number) =>
-  Math.max(
-    MIN_LIST_PANE_WIDTH,
-    Math.min(
-      splitPaneSpace(innerWidth) - MIN_MAP_PANE_WIDTH,
-      Math.round(width),
+export const clampListPaneWidth = (
+  width: number,
+  innerWidth: number,
+  minWidth = MIN_LIST_PANE_WIDTH,
+) =>
+  Math.min(
+    splitPaneSpace(innerWidth),
+    Math.max(
+      minWidth,
+      Math.min(
+        splitPaneSpace(innerWidth) - MIN_MAP_PANE_WIDTH,
+        Math.round(width),
+      ),
     ),
   )
 
@@ -47,10 +54,15 @@ export const snapToStops = (position: number, stops: number[]) => {
 export const splitSnapStops = (space: number) =>
   SPLIT_SNAP_FRACTIONS.map((fraction) => Math.round(fraction * space))
 
-export const snapListPaneWidth = (width: number, innerWidth: number) =>
+export const snapListPaneWidth = (
+  width: number,
+  innerWidth: number,
+  minWidth = MIN_LIST_PANE_WIDTH,
+) =>
   clampListPaneWidth(
     snapToStops(width, splitSnapStops(splitPaneSpace(innerWidth))),
     innerWidth,
+    minWidth,
   )
 
 export const resolveEffectiveView = (
@@ -62,10 +74,12 @@ export const resolveListPaneWidth = (
   requiredWidth: number,
   slack: number,
   innerWidth: number,
+  minWidth = MIN_LIST_PANE_WIDTH,
 ) =>
   clampListPaneWidth(
     requiredWidth + clampListSlack(slack) * splitPaneSpace(innerWidth),
     innerWidth,
+    minWidth,
   )
 
 const readStoredView = (): FarmView => {

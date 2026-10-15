@@ -31,6 +31,7 @@ type FarmSplitViewProps = {
   listSlack: number
   onListSlackChange: (slack: number) => void
   listRequiredWidth: number | null
+  listMinWidth?: number
   list: (options: { width: number }) => ReactNode
   map: ReactNode
   renderPanel?: (options: {
@@ -47,6 +48,7 @@ export const FarmSplitView = ({
   listSlack,
   onListSlackChange,
   listRequiredWidth,
+  listMinWidth = MIN_LIST_PANE_WIDTH,
   list,
   map,
   renderPanel,
@@ -91,10 +93,15 @@ export const FarmSplitView = ({
     MIN_LIST_PANE_WIDTH,
     space - MIN_MAP_PANE_WIDTH,
   )
+  const maxListWidth = Math.max(
+    maxSplitListWidth,
+    Math.min(space, listMinWidth),
+  )
   const requiredWidth = listRequiredWidth ?? maxSplitListWidth
   const listWidth =
     effectiveView === 'split'
-      ? (dragWidth ?? resolveListPaneWidth(requiredWidth, listSlack, width))
+      ? (dragWidth ??
+        resolveListPaneWidth(requiredWidth, listSlack, width, listMinWidth))
       : effectiveView === 'list'
         ? space
         : 0
@@ -116,12 +123,12 @@ export const FarmSplitView = ({
       changeView('map')
       return null
     }
-    if (next > maxSplitListWidth + SPLIT_SNAP_TOLERANCE) {
+    if (next > maxListWidth + SPLIT_SNAP_TOLERANCE) {
       changeView('list')
       return null
     }
     changeView('split')
-    return snapListPaneWidth(next, width)
+    return snapListPaneWidth(next, width, listMinWidth)
   }
 
   const dragListWidth = (next: number) => setDragWidth(placeDivider(next))
@@ -150,8 +157,8 @@ export const FarmSplitView = ({
     let next = listWidth + delta
     while (
       next >= MIN_LIST_PANE_WIDTH &&
-      next <= maxSplitListWidth &&
-      snapListPaneWidth(next, width) === listWidth
+      next <= maxListWidth &&
+      snapListPaneWidth(next, width, listMinWidth) === listWidth
     ) {
       next += delta
     }
