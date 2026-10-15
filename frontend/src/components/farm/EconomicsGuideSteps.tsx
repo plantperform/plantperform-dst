@@ -316,16 +316,7 @@ export const GuideMachinesStep = ({
                     {isPriceCustomised(overrides, price.id) ? (
                       <RestoreButton
                         label={line.label}
-                        onRestore={() =>
-                          onChange((current) =>
-                            withPriceOverride(
-                              assumptions,
-                              current,
-                              price.id,
-                              null,
-                            ),
-                          )
-                        }
+                        onRestore={() => sharedPrice.restorePrice(price.id)}
                       />
                     ) : null}
                   </span>

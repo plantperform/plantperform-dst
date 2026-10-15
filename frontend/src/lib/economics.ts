@@ -503,19 +503,66 @@ export const categoryPrices = (
   return assumptions.prices.filter((price) => priceIds.has(price.id))
 }
 
+export type CropDbDelta = { cropName: string; deltaDkkHa: number }
+
+const dbDeltas = (
+  assumptions: EconomicsAssumptions,
+  before: EconomicsOverrides,
+  after: EconomicsOverrides,
+  crops: CropEconomics[],
+): CropDbDelta[] =>
+  crops.map((crop) => ({
+    cropName: crop.cropName,
+    deltaDkkHa:
+      wholeDbDkkHa(assumptions, after, crop) -
+      wholeDbDkkHa(assumptions, before, crop),
+  }))
+
 export const sharedPriceEffect = (
   assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
   priceId: string,
   value: number,
-): { cropName: string; deltaDkkHa: number }[] => {
-  const changed = withPriceOverride(assumptions, overrides, priceId, value)
-  return priceCrops(assumptions, priceId).map((crop) => ({
-    cropName: crop.cropName,
-    deltaDkkHa:
-      wholeDbDkkHa(assumptions, changed, crop) -
-      wholeDbDkkHa(assumptions, overrides, crop),
-  }))
+): CropDbDelta[] =>
+  dbDeltas(
+    assumptions,
+    overrides,
+    withPriceOverride(assumptions, overrides, priceId, value),
+    priceCrops(assumptions, priceId),
+  )
+
+export const sharedCustomisedPrices = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): UnitPrice[] =>
+  assumptions.prices.filter(
+    (price) =>
+      isPriceCustomised(overrides, price.id) &&
+      cropLines(crop).some((line) => line.priceId === price.id) &&
+      priceCrops(assumptions, price.id).length > 1,
+  )
+
+export const cropRestoreEffect = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): CropDbDelta[] => {
+  const shared = new Set(
+    sharedCustomisedPrices(assumptions, overrides, crop).map(
+      (price) => price.id,
+    ),
+  )
+  return dbDeltas(
+    assumptions,
+    overrides,
+    withoutCropChanges(assumptions, overrides, crop),
+    assumptions.crops.filter(
+      (entry) =>
+        entry === crop ||
+        cropLines(entry).some((line) => shared.has(line.priceId)),
+    ),
+  )
 }
 
 const STRAW_LINE_LABEL = 'Halm'

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   categoryPrices,
   compareProfileChanges,
+  cropRestoreEffect,
   cropSources,
   cropTotals,
   cropYieldPct,
@@ -32,6 +33,7 @@ import {
   profileDbEffect,
   quantityUnitLabel,
   sameOverrides,
+  sharedCustomisedPrices,
   sharedPriceEffect,
   stepYieldPct,
   withFertiliserPlan,
@@ -656,6 +658,37 @@ describe('shared prices', () => {
     ).toEqual([
       { cropName: 'Vinterraps', deltaDkkHa: 70 },
       { cropName: 'Ærter', deltaDkkHa: 20 },
+    ])
+  })
+
+  it('tells which crops a crop takes back with it when it is restored', () => {
+    const ploughing = withPriceOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'ploughing',
+      1000,
+    )
+    expect(
+      sharedCustomisedPrices(ASSUMPTIONS, ploughing, RAPESEED).map(
+        (price) => price.id,
+      ),
+    ).toEqual(['ploughing'])
+    expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toEqual([
+      { cropName: 'Vinterraps', deltaDkkHa: 175 },
+      { cropName: 'Ærter', deltaDkkHa: 175 },
+    ])
+
+    const moreSpraying = withQuantityOverride(
+      NO_OVERRIDES,
+      RAPESEED,
+      'spraying',
+      8,
+    )
+    expect(sharedCustomisedPrices(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual(
+      [],
+    )
+    expect(cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual([
+      { cropName: 'Vinterraps', deltaDkkHa: 160 },
     ])
   })
 
