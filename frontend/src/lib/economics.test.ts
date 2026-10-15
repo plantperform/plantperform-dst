@@ -355,6 +355,13 @@ describe('yield percentage', () => {
     expect(isCropCustomised(moreYield, PEAS)).toBe(false)
   })
 
+  it('leaves the sale quantity to the percentage', () => {
+    const [grain] = RAPESEED.revenue
+    const overrides = withQuantityOverride(NO_OVERRIDES, RAPESEED, grain.id, 42)
+    expect(overrides).toEqual(NO_OVERRIDES)
+    expect(lineQuantity(overrides, RAPESEED, grain)).toBe(44)
+  })
+
   it('goes back to the standard when the percentage is cleared or set to 0', () => {
     const moreYield = withYieldPct(NO_OVERRIDES, RAPESEED, 10)
     expect(cropYieldPct(moreYield, RAPESEED)).toBe(10)
