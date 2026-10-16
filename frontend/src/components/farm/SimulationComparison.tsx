@@ -426,6 +426,11 @@ export const SimulationComparison = ({
                 <ComparisonEconomics
                   columns={ordered}
                   profiles={profiles}
+                  farmingSystems={ordered.map(
+                    (column) =>
+                      simulations.find((entry) => entry.id === column.key)
+                        ?.fertiliser.farmingSystem ?? 'Konventionel',
+                  )}
                   highlightedKey={highlightedKey}
                   onHighlight={setHighlightedKey}
                 />
