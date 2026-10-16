@@ -643,8 +643,11 @@ const FarmDetail = () => {
             }}
             onConfirm={() => {
               if (!profileToDelete) return
-              economics.deleteProfile(profileToDelete.id)
-              showToast(`${profileToDelete.name} er slettet`)
+              void economics
+                .deleteProfile(profileToDelete.id)
+                .then((deleted) => {
+                  if (deleted) showToast(`${profileToDelete.name} er slettet`)
+                })
             }}
           />
         </>

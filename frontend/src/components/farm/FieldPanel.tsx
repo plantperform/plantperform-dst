@@ -9,10 +9,7 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
-import {
-  NotInCalculationNote,
-  TEXT_LINK_CLASS,
-} from '@/components/farm/economics-ui'
+import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import {
   FieldEconomicsContext,
   useFieldEconomics,
@@ -27,7 +24,6 @@ import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
-import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
@@ -299,9 +295,6 @@ export const FieldPanel = ({
             >
               {fieldEconomics.profile.name}
             </Link>
-            {fieldEconomics.profile.id === STANDARD_PROFILE_ID ? null : (
-              <NotInCalculationNote />
-            )}
           </p>
         ) : null}
 

@@ -298,10 +298,13 @@ export const SimulationComparison = ({
     history,
     ...sortComparison(candidates, sort).map(({ column }) => column),
   ]
-  const profiles = ordered.map((column) =>
+  const columnSimulations = ordered.map((column) =>
     column.history
-      ? STANDARD_PROFILE
-      : economics.profileForSimulation(column.key),
+      ? undefined
+      : simulations.find((entry) => entry.id === column.key),
+  )
+  const profiles = columnSimulations.map((simulation) =>
+    simulation ? economics.appliedProfile(simulation) : STANDARD_PROFILE,
   )
   const economicsVerdict = describeEconomicsVerdict(
     ordered
@@ -426,10 +429,9 @@ export const SimulationComparison = ({
                 <ComparisonEconomics
                   columns={ordered}
                   profiles={profiles}
-                  farmingSystems={ordered.map(
-                    (column) =>
-                      simulations.find((entry) => entry.id === column.key)
-                        ?.fertiliser.farmingSystem ?? 'Konventionel',
+                  farmingSystems={columnSimulations.map(
+                    (simulation) =>
+                      simulation?.fertiliser.farmingSystem ?? 'Konventionel',
                   )}
                   highlightedKey={highlightedKey}
                   onHighlight={setHighlightedKey}

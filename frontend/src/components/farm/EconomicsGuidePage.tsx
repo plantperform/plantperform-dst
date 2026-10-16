@@ -20,6 +20,7 @@ import {
   BudgetsGate,
   CustomisedDot,
   DbDelta,
+  ProfilesStatus,
 } from '@/components/farm/economics-ui'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
@@ -211,7 +212,8 @@ const Guide = ({
   )
   const users = economics.simulationsUsingProfile(simulations, profile.id)
   const sharedNote = sharedProfileNote(users.length)
-  const nameError = economics.nameError(name, profile.id)
+  const [saving, setSaving] = useState(false)
+  const nameError = saving ? null : economics.nameError(name, profile.id)
   const sheetCrop = assumptions.crops.find(
     (crop) => crop.cropCode === sheet.cropCode,
   )
@@ -219,7 +221,7 @@ const Guide = ({
   const useOptions: GuideUseOption[] = simulations.map((simulation) => ({
     id: simulation.id,
     label: simulation.name,
-    note: `Regner med ${economics.profileForSimulation(simulation.id).name}`,
+    note: `Valgt profil: ${economics.profileForSimulation(simulation).name}`,
     checked:
       (simulation === originSimulation || users.includes(simulation)) !==
       toggledUses.includes(simulation.id),
@@ -243,28 +245,36 @@ const Guide = ({
     else navigate(origin?.returnTo ?? economics.profilePath(profile.id))
   }
 
-  const finish = () => {
-    if (nameError) return
-    leaveGuard.release()
-    economics.ensureProfile(profile.id, name)
-    economics.renameProfile(profile.id, name)
-    economics.changeOverrides(profile.id, () => overrides)
-    for (const option of useOptions) {
-      const uses = users.some((simulation) => simulation.id === option.id)
-      if (option.checked !== uses) {
-        economics.assignProfile(
-          option.id,
-          option.checked ? profile.id : STANDARD_PROFILE_ID,
-        )
-      }
+  const finish = async () => {
+    if (nameError || saving) return
+    setSaving(true)
+    const profileId = await economics.saveProfile(profile.id, name, overrides)
+    if (profileId === null) {
+      setSaving(false)
+      return
     }
+    leaveGuard.release()
+    await Promise.all(
+      simulations.flatMap((simulation) => {
+        const option = useOptions.find((entry) => entry.id === simulation.id)
+        const uses = users.includes(simulation)
+        return option && option.checked !== uses
+          ? [
+              economics.assignProfile(
+                simulation,
+                option.checked ? profileId : STANDARD_PROFILE_ID,
+              ),
+            ]
+          : []
+      }),
+    )
     setToggledUses([])
     const chosen = useOptions.filter((option) => option.checked)
     const opened =
       chosen.find((option) => option.id === originSimulation?.id) ??
       (chosen.length === 1 ? chosen[0] : undefined)
     if (opened) onOpenSimulation(opened.id)
-    else navigate(economics.profilePath(profile.id))
+    else navigate(economics.profilePath(profileId))
   }
 
   return (
@@ -382,8 +392,9 @@ const Guide = ({
                 </Button>
               ) : (
                 <Button
+                  loading={saving}
                   onClick={(event) => {
-                    if (event.detail < 2) finish()
+                    if (event.detail < 2) void finish()
                   }}
                 >
                   <Check aria-hidden="true" />
@@ -489,9 +500,13 @@ export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
             `${props.farmName} ${ROTATION_START_CALENDAR_YEAR}`,
           ),
           overrides: NO_OVERRIDES,
+          revision: 0,
         }
       : undefined)
 
+  if (!economics.ready) {
+    return <ProfilesStatus className="mx-6 mt-10 sm:mx-10" />
+  }
   if (!profile || profile.id === STANDARD_PROFILE_ID) {
     return <Navigate to={economics.overviewPath} replace />
   }

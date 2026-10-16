@@ -214,9 +214,8 @@ export const NewScenarioPanel = ({
             ...simulationToFormValues(source, fertiliserPresets, nNormOptions),
             name: source.name,
             nNormPercentages: source.nNormPercentages,
-            economicsProfileId: economicsProfiles.profileForSimulation(
-              source.id,
-            ).id,
+            economicsProfileId:
+              economicsProfiles.profileForSimulation(source).id,
           }
         : DEFAULT_SIMULATION_FORM_VALUES,
     })
@@ -344,12 +343,18 @@ export const NewScenarioPanel = ({
     setIsCreating(true)
     setCreateError(null)
     try {
+      const existing = savedSimulation.current ?? source
+      const economicsModuleId = getValues().economicsProfileId
       const input = {
         ...toCreateSimulationInput(getValues()),
         constraints,
         optimizationSettings: optimizationSettingsInput(optimizationSettings),
+        ...(existing &&
+        economicsProfiles.profileForSimulation(existing).id ===
+          economicsModuleId
+          ? {}
+          : { economicsModuleId }),
       }
-      const existing = savedSimulation.current ?? source
       const simulation = existing
         ? await updateSimulation(
             farmId,
@@ -369,10 +374,6 @@ export const NewScenarioPanel = ({
             )).requestId,
           })
       savedSimulation.current = simulation
-      economicsProfiles.assignProfile(
-        simulation.id,
-        getValues().economicsProfileId,
-      )
       await mutate(
         simulationsKey(farmId),
         (current: Simulation[] = []) => [
@@ -384,14 +385,18 @@ export const NewScenarioPanel = ({
       void mutate(simulationViewKey(farmId, simulation.id))
       onSimulationCreated(simulation)
       if (optimize) {
-        const settings = simulation.optimizationSettings ?? optimizationSettings
+        const current = economicsProfiles.isEconomicsCurrent(simulation)
+          ? simulation
+          : await economicsProfiles.recalculate(simulation)
+        if (current === null) return
+        const settings = current.optimizationSettings ?? optimizationSettings
         const common = {
           farmId,
-          simulationId: simulation.id,
+          simulationId: current.id,
           fieldsBefore: effectiveFields,
           input: {
             ...optimizationSettingsInput(settings),
-            expectedRevision: simulation.revision,
+            expectedRevision: current.revision,
           },
         }
         const started = startRun(
@@ -617,6 +622,7 @@ export const NewScenarioPanel = ({
             <select
               id="scenario-economics-profile"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              disabled={running || isCreating}
               {...register('economicsProfileId')}
             >
               {economicsProfiles.profiles.map((profile) => (

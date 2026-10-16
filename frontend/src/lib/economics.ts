@@ -1,4 +1,4 @@
-import type { FarmingSystem } from '@/api/types'
+import type { EconomicsOverrides, FarmingSystem } from '@/api/types'
 import { formatWholeNumber } from '@/lib/field-domain'
 
 export type CostCategory =
@@ -52,11 +52,7 @@ export type EconomicsAssumptions = {
   crops: CropEconomics[]
 }
 
-export type EconomicsOverrides = {
-  prices: Readonly<Record<string, number>>
-  quantities: Readonly<Record<string, number>>
-  yieldPct: Readonly<Record<string, number>>
-}
+export type { EconomicsOverrides }
 
 export type OverridesChange = (
   current: EconomicsOverrides,

@@ -178,7 +178,7 @@ export const SimulationRulesPanel = ({
     ),
     basis: 'Låst ved oprettelse',
     fields: `${lockedCount} af ${fields.length} låst`,
-    economics: economics.profileForSimulation(simulation.id).name,
+    economics: economics.profileForSimulation(simulation).name,
   }
 
   const panelProps = (panel: RulesTab) => ({

@@ -230,10 +230,33 @@ export type Simulation = {
   comparisonAvailability?: { kind: 'ready' | 'uncalculated' } |
     { kind: 'partial'; missingCount: number } | null
   includePrecedingCropValue?: boolean
+  economicsModuleId?: string
+  economicsSnapshot?: EconomicsSnapshot
+}
+
+export type EconomicsOverrides = {
+  prices: Readonly<Record<string, number>>
+  quantities: Readonly<Record<string, number>>
+  yieldPct: Readonly<Record<string, number>>
+}
+
+export type EconomicsSnapshot = {
+  sourceId: string
+  name: string
+  revision: number
+  overrides: EconomicsOverrides
+}
+
+export type EconomicsModule = {
+  id: string
+  name: string
+  revision: number
+  overrides: EconomicsOverrides
 }
 
 export type CreateSimulationInput = {
   optimizationSettings?: OptimizationSettings
+  economicsModuleId?: string
   requestId?: string
   optimizeOnCreate?: boolean
   constraints?: OptimizationConstraints
