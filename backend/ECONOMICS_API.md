@@ -86,11 +86,49 @@ flat costs apply only where the existing calculator uses the legacy cost budget.
 General price-list entries affect calculations only when their scheme or cost is
 already included; setting a price does not enable an optional subsidy scheme.
 
-The current importers do not retain work-rate or work-quantity units. These
-entries therefore explicitly use generic `kr/enhed` and `enheder/ha`; their
-numeric defaults are still the real database values. Existing manure-spreading
-costs retain the calculator's flat application-rate placeholder. Recalculation
-does not introduce a new manure purchase or transport model.
+Prices carry the unit and `source` from the økonomi CSVs. A work quantity's
+unit follows the rate that prices it, which depends on the soil group, so the
+catalogue keeps `enheder/ha` for quantities; crop budgets carry the resolved
+unit. Existing manure-spreading costs retain the calculator's flat
+application-rate placeholder. Recalculation does not introduce a new manure
+purchase or transport model.
+
+## Crop budgets
+
+`GET /farms/{farmId}/economics/budgets?farmingSystem=Konventionel` returns the
+standard budget of each crop in the farm's field history, largest area first,
+and then each crop the simulations' sædskifter can choose. Every budget is for
+the soil type covering most of the farm's area, unirrigated, at the N-norm with
+handelsgødning (none when `farmingSystem` is `Økologisk`), row by row as the
+calculator prices it. With `simulationId`, the simulation's farming system and
+gødning apply instead, so husdyrgødning covers up to its `orgMineralN` of the
+norm. `jbNr` is null and `crops` empty when no field has a soil type.
+
+```json
+{
+  "jbNr": 5,
+  "irrigated": false,
+  "farmingSystem": "Konventionel",
+  "prices": [{"id": "rate:[...]", "label": "Pløjning", "unit": "kr/gang", "value": 825, "source": "SEGES"}],
+  "crops": [{
+    "cropCode": 1,
+    "cropName": "Vårbyg",
+    "precedingCropValueKgNHa": 0,
+    "missingYieldNorm": false,
+    "revenue": [{"label": "Udbytte", "category": "Indtægt", "quantity": 66,
+                 "quantityUnit": "hkg/ha", "quantityId": null, "priceId": "sale:[...]",
+                 "followsYield": true}],
+    "subsidies": [],
+    "costs": []
+  }]
+}
+```
+
+A row's amount is `quantity × price`. With a module, replace the price by
+`prices[priceId]` and the quantity by `quantities[quantityId]`, and scale rows
+with `followsYield` by `1 + yieldPct[cropCode] / 100`. Revenue, subsidies minus
+costs then give the dækningsbidrag `calculate_db` returns for the same inputs.
+Cost rows keep their Danish category.
 
 ## Simulation selection and applied snapshots
 
@@ -190,8 +228,8 @@ explicitly to calculate a new optimum. Farm history uses standard economics.
 ## Frontend integration and rollout
 
 The frontend branch is unchanged. Replace browser profile storage with the
-module APIs and read actual assumptions from the catalogue. Adapt profile IDs,
-quantity line IDs, and context-variant selection to the emitted identifiers.
+module APIs and read actual assumptions from the crop budgets. Adapt profile
+IDs and quantity line IDs to the emitted identifiers.
 Pass `economicsModuleId` during creation, save selection separately, and offer
 an explicit recalculation action. Remove assumptions that profiles belong to one
 farm, automatically propagate edits, or revert simulations to standard on deletion.
