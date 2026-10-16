@@ -1,6 +1,9 @@
 import type { Simulation } from '@/api/types'
 
-type CreationState = Pick<Simulation, 'creationStatus'>
+type CreationState = Pick<
+  Simulation,
+  'creationStatus' | 'economicsRecalculationFailed'
+>
 
 export function isSimulationReady(simulation: CreationState) {
   return !simulation.creationStatus || simulation.creationStatus === 'done'
@@ -11,7 +14,11 @@ export function isSimulationCreating(simulation: CreationState) {
 }
 
 export function creationStatusLabel(simulation: CreationState): string | null {
-  if (simulation.creationStatus === 'failed') return 'Oprettelsen fejlede'
+  if (simulation.creationStatus === 'failed') {
+    return simulation.economicsRecalculationFailed
+      ? 'Genberegningen fejlede'
+      : 'Oprettelsen fejlede'
+  }
   if (!isSimulationCreating(simulation)) return null
   return 'Opretter simulering...'
 }

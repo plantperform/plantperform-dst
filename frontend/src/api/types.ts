@@ -212,6 +212,7 @@ export type Simulation = {
   fieldsInitialized?: boolean
   optimizationSettings?: OptimizationSettings
   creationStatus?: CreationStatus
+  economicsRecalculationFailed?: boolean
   revision: number
   result: SimulationResultSummary
   id: string
