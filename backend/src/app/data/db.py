@@ -204,6 +204,8 @@ salgspris_table = Table(
     Column("salgspris", Float, nullable=False),
     Column("enhed", Text, nullable=False),
     Column("halm_pris_kr_kg", Float, nullable=False),
+    Column("kilde", Text, nullable=True),
+    Column("halm_kilde", Text, nullable=True),
     Index("ix_salgspris_lookup", "afgroedekode", "driftsform", "kvalitet"),
 )
 
@@ -226,6 +228,8 @@ arbejdssats_table = Table(
     Column("afgroedekode", Integer, nullable=True),
     Column("driftsform", Text, nullable=False),
     Column("pris_kr_per_enhed", Float, nullable=False),
+    Column("enhed", Text, nullable=True),
+    Column("kilde", Text, nullable=True),
     Index("ix_arbejdssats_lookup", "behandling", "jordbonitet"),
 )
 
@@ -258,6 +262,7 @@ dyrkningsomkostning_table = Table(
     Column("kategori", Text, nullable=False),
     Column("behandling", Text, nullable=False),
     Column("udgift_kr_ha", Float, nullable=False),
+    Column("kilde", Text, nullable=True),
     Index("ix_dyrkningsomkostning_lookup", "afgroedekode", "driftsform"),
 )
 
@@ -270,6 +275,7 @@ prisliste_table = Table(
     Column("type", Text, nullable=False),
     Column("pris", Float, nullable=False),
     Column("enhed", Text, nullable=False),
+    Column("kilde", Text, nullable=True),
     Index("ix_prisliste_lookup", "post"),
 )
 

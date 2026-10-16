@@ -2,9 +2,10 @@
 the consolidated, afgrødekode-bundne økonomi-CSV.
 
 Splits rows by the CSV's own "kilde_tabel" column and writes each group to
-its original table, unchanged from the six old per-file loaders this
-replaces (Salgspriser_afgroedekoder.csv, Halmudbytte_afgroedekoder.csv,
-Arbejdsmaengder_afgroedekoder.csv, Dyrkningsomkostninger_afgroedekoder.csv).
+its original table, as the six old per-file loaders this replaces did
+(Salgspriser_afgroedekoder.csv, Halmudbytte_afgroedekoder.csv,
+Arbejdsmaengder_afgroedekoder.csv, Dyrkningsomkostninger_afgroedekoder.csv),
+plus the source of each price.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ def parse_oekonomital_afgroedebundet(
         delimiter=",",
         required_columns={
             "kilde_tabel", "afgroedekode", "driftsform", "jordbonitet", "kvalitet",
-            "kategori", "behandling", "antal", "enhed", "beloeb", "beloeb_type",
+            "kategori", "behandling", "antal", "enhed", "beloeb", "beloeb_type", "kilde",
         },
     )
 
@@ -48,6 +49,7 @@ def parse_oekonomital_afgroedebundet(
         driftsform = text(
             row["driftsform"], field="driftsform", row_number=row_number, required=False,
         )
+        kilde = text(row["kilde"], field="kilde", row_number=row_number, required=False) or None
 
         if kilde_tabel == "arbejdsmaengde":
             arbejdsmaengde_rows.append((
@@ -64,6 +66,7 @@ def parse_oekonomital_afgroedebundet(
                 text(row["kategori"], field="kategori", row_number=row_number),
                 text(row["behandling"], field="behandling", row_number=row_number),
                 number(row["beloeb"], field="beloeb", row_number=row_number),
+                kilde,
             ))
         elif kilde_tabel == "halmudbytte":
             halmudbytte_rows.append((
@@ -78,7 +81,10 @@ def parse_oekonomital_afgroedebundet(
             key = (afgroedekode, driftsform, kvalitet)
             entry = salgspris_by_key.setdefault(
                 key,
-                {"row_number": row_number, "enhed": "", "salgspris": 0.0, "halm_pris_kr_kg": 0.0},
+                {
+                    "row_number": row_number, "enhed": "", "salgspris": 0.0,
+                    "halm_pris_kr_kg": 0.0, "kilde": None, "halm_kilde": None,
+                },
             )
             beloeb = (
                 number(row["beloeb"], field="beloeb", row_number=row_number, required=False)
@@ -89,13 +95,16 @@ def parse_oekonomital_afgroedebundet(
                 entry["enhed"] = text(
                     row["enhed"], field="enhed", row_number=row_number, required=False,
                 )
+                entry["kilde"] = kilde
             elif row["beloeb_type"] == "halm_pris_kr_kg":
                 entry["halm_pris_kr_kg"] = beloeb
+                entry["halm_kilde"] = kilde
 
     salgspris_rows = [
         (
             entry["row_number"], afgroedekode, driftsform, kvalitet,
             entry["salgspris"], entry["enhed"], entry["halm_pris_kr_kg"],
+            entry["kilde"], entry["halm_kilde"],
         )
         for (afgroedekode, driftsform, kvalitet), entry in salgspris_by_key.items()
     ]
@@ -123,7 +132,7 @@ def load_oekonomital_afgroedebundet(
                 "dyrkningsomkostning",
                 (
                     "source_order", "afgroedekode", "driftsform", "kategori", "behandling",
-                    "udgift_kr_ha",
+                    "udgift_kr_ha", "kilde",
                 ),
                 dyrkningsomkostning_rows,
             ),
@@ -136,7 +145,7 @@ def load_oekonomital_afgroedebundet(
                 "salgspris",
                 (
                     "source_order", "afgroedekode", "driftsform", "kvalitet", "salgspris",
-                    "enhed", "halm_pris_kr_kg",
+                    "enhed", "halm_pris_kr_kg", "kilde", "halm_kilde",
                 ),
                 salgspris_rows,
             ),
