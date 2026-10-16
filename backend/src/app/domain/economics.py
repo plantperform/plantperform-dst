@@ -1,4 +1,4 @@
-"""Shared economics modules and simulation-owned, frozen override snapshots."""
+"""Farm economics modules and simulation-owned, frozen override snapshots."""
 
 from datetime import datetime
 from typing import Annotated, Literal

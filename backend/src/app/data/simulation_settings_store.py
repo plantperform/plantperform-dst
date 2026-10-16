@@ -39,7 +39,7 @@ def create(farm_id, request, email):
             return existing
         from app.data.economics_store import resolve_snapshot
 
-        snapshot = resolve_snapshot(session, request.economics_module_id, email)
+        snapshot = resolve_snapshot(session, farm_id, request.economics_module_id, email)
         settings = request.model_dump(
             mode="json",
             exclude={
@@ -122,6 +122,7 @@ def update_settings(farm_id, simulation_id, request, email):
 
             patch["economics_module_id"] = resolve_snapshot(
                 session,
+                farm_id,
                 patch["economics_module_id"],
                 email,
             ).source_id

@@ -25,7 +25,7 @@ def select_module(farm_id, simulation_id, request, email):
             raise EconomicsConflictError("Simulation changed; reload before saving")
         _require_editable(session, simulation_id, row)
         selected = request.economics_module_id or STANDARD_ID
-        economics_store.resolve_snapshot(session, selected, email)
+        economics_store.resolve_snapshot(session, farm_id, selected, email)
         if selected != row.data.get("economics_module_id", STANDARD_ID):
             session.execute(
                 update(setups)
@@ -100,7 +100,7 @@ def submit(farm_id, simulation_id, request, email, *, execution_session=None):
             raise EconomicsConflictError("Simulation already has active optimization")
         snapshot = (
             economics_store.resolve_snapshot(
-                session, row.data.get("economics_module_id", STANDARD_ID), email
+                session, farm_id, row.data.get("economics_module_id", STANDARD_ID), email
             )
             if request.refresh_from_module
             else EconomicsSnapshot.model_validate(row.data.get("economics_snapshot", {}))
