@@ -33,7 +33,7 @@ export const useFieldEconomics = (
   const economics = useEconomicsProfiles()
   const [openAtYearIndex, onOpenedAtYear] = useCalculationReturn(field.id)
   const profile = simulation
-    ? economics.profileForSimulation(simulation.id)
+    ? economics.appliedProfile(simulation)
     : STANDARD_PROFILE
   const { data: assumptions } = useFarmBudgets(
     simulation && profile.id !== STANDARD_PROFILE_ID

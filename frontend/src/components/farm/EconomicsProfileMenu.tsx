@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom'
 import type { Simulation } from '@/api/types'
 import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { NotInCalculationDot } from '@/components/farm/economics-ui'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -32,7 +31,7 @@ export const EconomicsProfileMenu = ({
 }: EconomicsProfileMenuProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
-  const profile = economics.profileForSimulation(simulation.id)
+  const profile = economics.profileForSimulation(simulation)
   const isStandard = profile.id === STANDARD_PROFILE_ID
 
   return (
@@ -40,7 +39,6 @@ export const EconomicsProfileMenu = ({
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="max-w-full">
           <span className="truncate">{profile.name}</span>
-          {isStandard ? null : <NotInCalculationDot />}
           <ChevronDown aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
@@ -49,7 +47,7 @@ export const EconomicsProfileMenu = ({
           <DropdownMenuItem
             key={option.id}
             aria-current={option.id === profile.id ? 'true' : undefined}
-            onSelect={() => economics.assignProfile(simulation.id, option.id)}
+            onSelect={() => void economics.assignProfile(simulation, option.id)}
           >
             {option.id === profile.id ? (
               <Check className="mr-2 size-4 shrink-0" aria-hidden="true" />

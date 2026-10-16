@@ -3,11 +3,7 @@ import { Link } from 'react-router-dom'
 
 import type { ReturnTarget } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { NotInCalculationDot } from '@/components/farm/economics-ui'
-import {
-  STANDARD_PROFILE_ID,
-  type EconomicsProfile,
-} from '@/lib/economics-profiles'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 import { cn } from '@/lib/utils'
 
 type EconomicsChipProps = {
@@ -34,7 +30,6 @@ export const EconomicsChip = ({
     >
       <Coins className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">{profile.name}</span>
-      {profile.id === STANDARD_PROFILE_ID ? null : <NotInCalculationDot />}
     </Link>
   )
 }

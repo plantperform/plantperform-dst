@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { mutate } from 'swr'
 
+import { retrySimulationEconomics } from '@/api/economics'
 import { simulationsKey } from '@/api/hooks'
 import { retrySimulationCreation } from '@/api/mutations'
 import type { Simulation } from '@/api/types'
@@ -20,11 +21,14 @@ export const SimulationCreationStatus = ({
 }) => {
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const economics = simulation.economicsRecalculationFailed === true
   const retry = async () => {
     setRetrying(true)
     setError(null)
     try {
-      const accepted = await retrySimulationCreation(farmId, simulation.id)
+      const accepted = economics
+        ? await retrySimulationEconomics(farmId, simulation.id)
+        : await retrySimulationCreation(farmId, simulation.id)
       await mutate(
         simulationsKey(farmId),
         (current: Simulation[] = []) =>
@@ -32,7 +36,11 @@ export const SimulationCreationStatus = ({
         { revalidate: false },
       )
     } catch {
-      setError('Kunne ikke starte oprettelsen igen. Prøv igen.')
+      setError(
+        economics
+          ? 'Kunne ikke genberegne økonomien. Prøv igen.'
+          : 'Kunne ikke starte oprettelsen igen. Prøv igen.',
+      )
     } finally {
       void mutate(simulationsKey(farmId))
       setRetrying(false)
@@ -43,11 +51,14 @@ export const SimulationCreationStatus = ({
       {simulation.creationStatus === 'failed' ? (
         <>
           <p role="alert" className="text-sm text-destructive">
-            {error ?? 'Kunne ikke oprette simuleringen.'}
+            {error ??
+              (economics
+                ? 'Kunne ikke genberegne økonomien.'
+                : 'Kunne ikke oprette simuleringen.')}
           </p>
 
           <Button size="sm" loading={retrying} onClick={() => void retry()}>
-            Åbn indstillinger
+            {economics ? 'Genberegn igen' : 'Åbn indstillinger'}
           </Button>
         </>
       ) : (

@@ -13,6 +13,7 @@ import {
   DbDelta,
   DbDeltaBar,
   FarmingSystemSwitch,
+  ProfilesStatus,
 } from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
@@ -37,7 +38,6 @@ import {
   describeProfileUsers,
   describeStandard,
   ECONOMICS_INVITATION,
-  PROFILES_NOT_IN_CALCULATION,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
@@ -279,9 +279,6 @@ export const EconomicsOverview = (props: EconomicsOverviewProps) => {
               udbytter, som beregningen bygger på.
               {budgets.data ? ` ${describeBudgetSoil(budgets.data)}` : null}
             </p>
-            <p className="mt-1 text-sm text-warning-strong">
-              {PROFILES_NOT_IN_CALCULATION}
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FarmingSystemSwitch />
@@ -297,11 +294,15 @@ export const EconomicsOverview = (props: EconomicsOverviewProps) => {
             ) : null}
           </div>
         </header>
-        <BudgetsGate budgets={budgets}>
-          {(assumptions) => (
-            <ProfileCards {...props} assumptions={assumptions} />
-          )}
-        </BudgetsGate>
+        {economics.ready ? (
+          <BudgetsGate budgets={budgets}>
+            {(assumptions) => (
+              <ProfileCards {...props} assumptions={assumptions} />
+            )}
+          </BudgetsGate>
+        ) : (
+          <ProfilesStatus />
+        )}
       </div>
     </div>
   )

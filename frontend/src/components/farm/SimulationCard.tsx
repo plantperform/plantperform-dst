@@ -128,7 +128,7 @@ const CatchmentStatusList = ({
 
 type SimulationFiguresProps = {
   farmId: string
-  simulationId: string
+  simulation: Simulation
   fields: FieldRecord[]
   totals: FieldTotals
   history: FarmQuota
@@ -136,7 +136,7 @@ type SimulationFiguresProps = {
 
 const SimulationFigures = ({
   farmId,
-  simulationId,
+  simulation,
   fields,
   totals,
   history,
@@ -147,7 +147,7 @@ const SimulationFigures = ({
   const historyDb2PerHa = totalsPerHa(history.totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
-  const profile = useEconomicsProfiles().profileForSimulation(simulationId)
+  const profile = useEconomicsProfiles().appliedProfile(simulation)
 
   return (
     <>
@@ -183,7 +183,7 @@ const SimulationFigures = ({
       </div>
       <CatchmentStatusList
         farmId={farmId}
-        simulationId={simulationId}
+        simulationId={simulation.id}
         fields={fields}
       />
     </>
@@ -337,7 +337,7 @@ export const SimulationCard = ({
         calculated ? (
           <SimulationFigures
             farmId={farmId}
-            simulationId={simulation.id}
+            simulation={simulation}
             fields={summary.fields}
             totals={summary.totals}
             history={history}

@@ -4,7 +4,6 @@ import type {
   OptimizationConstraints,
   Simulation,
 } from '@/api/types'
-import { formatNameList } from '@/lib/economics'
 import {
   formatFieldCount,
   formatPerHa,
@@ -552,12 +551,8 @@ export const describeEconomicsVerdict = (
           haveSameFieldPlans(left.fields, right.fields),
       )
     if (twin) {
-      return `${left.title} og ${twin.title} har samme sædskifter på alle marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.`
+      return `${left.title} og ${twin.title} har samme sædskifter på alle marker, men regner med hver sin økonomiprofil, så forskellen i dækningsbidrag kommer fra profilerne.`
     }
   }
-  const own = columns.filter((column) => column.ownProfileName !== null)
-  if (own.length === 0) return null
-  return own.length === 1
-    ? `${own[0].title} regner med ${own[0].ownProfileName}, som ikke indgår i beregningen endnu.`
-    : `${formatNameList(own.map((column) => column.title))} regner med økonomiprofiler, som ikke indgår i beregningen endnu.`
+  return null
 }

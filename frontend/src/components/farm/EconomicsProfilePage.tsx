@@ -18,6 +18,7 @@ import {
 import {
   BudgetsGate,
   FarmingSystemSwitch,
+  ProfilesStatus,
   TEXT_LINK_CLASS,
 } from '@/components/farm/economics-ui'
 import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
@@ -37,7 +38,6 @@ import {
 } from '@/lib/economics'
 import {
   describeProfileUsers,
-  PROFILES_NOT_IN_CALCULATION,
   sharedProfileNote,
   STANDARD_PROFILE_ID,
   STANDARD_SOURCE,
@@ -171,7 +171,6 @@ const ProfileBody = ({
         <p className="text-muted-foreground">
           {describeBudgetSoil(assumptions)}
         </p>
-        <p className="text-warning-strong">{PROFILES_NOT_IN_CALCULATION}</p>
       </div>
 
       {changesOpen && changes.length > 0 ? (
@@ -256,7 +255,7 @@ const ProfileView = ({
               {farmName} ·{' '}
               {isStandard
                 ? `${STANDARD_SOURCE}. Standard kan ikke rettes.`
-                : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Rettelser gemmes med det samme.`}
+                : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Rettelser gemmes med det samme og bruges, når en simulering genberegnes.`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -305,6 +304,9 @@ export const EconomicsProfilePage = (props: EconomicsProfilePageProps) => {
   const economics = useEconomicsProfiles()
   const profile = economics.findProfile(profileId)
 
+  if (!economics.ready) {
+    return <ProfilesStatus className="mx-6 mt-7 sm:mx-10" />
+  }
   if (!profile) {
     return <Navigate to={economics.overviewPath} replace />
   }

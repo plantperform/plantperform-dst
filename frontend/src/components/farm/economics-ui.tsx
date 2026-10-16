@@ -16,6 +16,42 @@ import {
 } from '@/lib/economics'
 import { cn } from '@/lib/utils'
 
+type PendingProps = {
+  failed: boolean
+  failure: string
+  loading: string
+  retrying?: boolean
+  onRetry: () => void
+  className?: string
+}
+
+const Pending = ({
+  failed,
+  failure,
+  loading,
+  retrying,
+  onRetry,
+  className,
+}: PendingProps) =>
+  failed ? (
+    <LoadError
+      className={className}
+      message={failure}
+      retrying={retrying}
+      onRetry={onRetry}
+    />
+  ) : (
+    <p
+      className={cn(
+        'flex items-center gap-2 text-sm text-muted-foreground',
+        className,
+      )}
+    >
+      <Spinner />
+      {loading}
+    </p>
+  )
+
 type BudgetsGateProps = {
   budgets: ReturnType<typeof useFarmBudgets>
   className?: string
@@ -26,28 +62,31 @@ export const BudgetsGate = ({
   budgets,
   className,
   children,
-}: BudgetsGateProps) => {
-  if (budgets.data) return children(budgets.data)
-  if (budgets.error) {
-    return (
-      <LoadError
-        className={className}
-        message="Bedriftens økonomital kunne ikke hentes."
-        retrying={budgets.isValidating}
-        onRetry={() => void budgets.mutate()}
-      />
-    )
-  }
+}: BudgetsGateProps) =>
+  budgets.data ? (
+    children(budgets.data)
+  ) : (
+    <Pending
+      failed={budgets.error !== undefined}
+      failure="Bedriftens økonomital kunne ikke hentes."
+      loading="Henter bedriftens økonomital"
+      retrying={budgets.isValidating}
+      onRetry={() => void budgets.mutate()}
+      className={className}
+    />
+  )
+
+export const ProfilesStatus = ({ className }: { className?: string }) => {
+  const economics = useEconomicsProfiles()
   return (
-    <p
-      className={cn(
-        'flex items-center gap-2 text-sm text-muted-foreground',
-        className,
-      )}
-    >
-      <Spinner />
-      Henter bedriftens økonomital
-    </p>
+    <Pending
+      failed={economics.loadError !== undefined}
+      failure="Profilerne kunne ikke hentes."
+      loading="Henter profilerne"
+      retrying={economics.reloading}
+      onRetry={() => void economics.reload()}
+      className={className}
+    />
   )
 }
 
@@ -75,22 +114,10 @@ export const TEXT_LINK_CLASS =
 export const GRID_HEAD_CLASS =
   'border-y bg-muted/30 py-2 text-xs font-semibold text-muted-foreground'
 
-const NOT_IN_CALCULATION = 'Indgår ikke i beregningen endnu'
-
-const DOT_CLASS = 'inline-block size-1.5 shrink-0 rounded-full bg-warning'
-
 export const CustomisedDot = () => (
-  <span className={DOT_CLASS}>
+  <span className="inline-block size-1.5 shrink-0 rounded-full bg-warning">
     <span className="sr-only">(tilpasset)</span>
   </span>
-)
-
-export const NotInCalculationDot = () => (
-  <AppTooltip content={NOT_IN_CALCULATION}>
-    <span className={DOT_CLASS}>
-      <span className="sr-only">{NOT_IN_CALCULATION}</span>
-    </span>
-  </AppTooltip>
 )
 
 export const NotInCalculationNote = () => (
