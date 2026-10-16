@@ -11,8 +11,15 @@ import {
   useStartGuide,
   type ReturnTarget,
 } from '@/components/farm/economics-navigation'
-import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import {
+  useEconomicsAssumptions,
+  useEconomicsProfiles,
+} from '@/components/farm/economics-profiles-state'
+import {
+  BudgetsGate,
+  FarmingSystemSwitch,
+  TEXT_LINK_CLASS,
+} from '@/components/farm/economics-ui'
 import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
@@ -20,18 +27,20 @@ import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import {
+  describeBudgetSoil,
   nameListFormat,
   NO_OVERRIDES,
   profileChanges,
   profileChangesTitle,
   withoutProfileChange,
+  type EconomicsAssumptions,
 } from '@/lib/economics'
-import { STANDARD_SOURCE } from '@/lib/economics-example'
 import {
   describeProfileUsers,
   PROFILES_NOT_IN_CALCULATION,
   sharedProfileNote,
   STANDARD_PROFILE_ID,
+  STANDARD_SOURCE,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { cn } from '@/lib/utils'
@@ -88,6 +97,113 @@ const ProfileNameInput = ({ profile, onDone }: ProfileNameInputProps) => {
   )
 }
 
+type ProfileBodyProps = {
+  assumptions: EconomicsAssumptions
+  profile: EconomicsProfile
+  simulations: Simulation[]
+  onOpenSimulation: (simulationId: string) => void
+}
+
+const ProfileBody = ({
+  assumptions,
+  profile,
+  simulations,
+  onOpenSimulation,
+}: ProfileBodyProps) => {
+  const location = useLocation()
+  const economics = useEconomicsProfiles()
+  const isStandard = profile.id === STANDARD_PROFILE_ID
+  const [changesOpen, setChangesOpen] = useState(false)
+  const users = economics.simulationsUsingProfile(simulations, profile.id)
+  const userNames = new Map(
+    users.map((simulation) => [simulation.id, simulation.name]),
+  )
+  const sharedNote = isStandard ? null : sharedProfileNote(users.length)
+  const changes = profileChanges(assumptions, profile.overrides)
+  const focus = focusSchema.safeParse(location.state)
+
+  return (
+    <>
+      <div className="space-y-1.5 text-sm">
+        <p className="text-muted-foreground">
+          {users.length === 0 ? (
+            `${describeProfileUsers([])}.`
+          ) : (
+            <>
+              Bruges af{' '}
+              {nameListFormat
+                .formatToParts(users.map((simulation) => simulation.id))
+                .map((part, index) =>
+                  part.type === 'element' ? (
+                    <button
+                      key={index}
+                      type="button"
+                      className={TEXT_LINK_CLASS}
+                      onClick={() => onOpenSimulation(part.value)}
+                    >
+                      {userNames.get(part.value)}
+                    </button>
+                  ) : (
+                    <Fragment key={index}>{part.value}</Fragment>
+                  ),
+                )}
+              .{sharedNote ? ` ${sharedNote}` : null}
+            </>
+          )}
+        </p>
+        {isStandard ? null : (
+          <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {changesOpen ? null : (
+              <span>{profileChangesTitle(changes.length)}</span>
+            )}
+            {changes.length > 0 ? (
+              <button
+                type="button"
+                aria-expanded={changesOpen}
+                className={TEXT_LINK_CLASS}
+                onClick={() => setChangesOpen((open) => !open)}
+              >
+                {changesOpen ? 'Skjul ændringer' : 'Vis ændringer'}
+              </button>
+            ) : null}
+          </p>
+        )}
+        <p className="text-muted-foreground">
+          {describeBudgetSoil(assumptions)}
+        </p>
+        <p className="text-warning-strong">{PROFILES_NOT_IN_CALCULATION}</p>
+      </div>
+
+      {changesOpen && changes.length > 0 ? (
+        <EconomicsProfileChanges
+          className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
+          changes={changes}
+          onRestore={(change) =>
+            economics.changeOverrides(profile.id, (current) =>
+              withoutProfileChange(current, change),
+            )
+          }
+          onRestoreAll={() =>
+            economics.changeOverrides(profile.id, () => NO_OVERRIDES)
+          }
+        />
+      ) : null}
+
+      <EconomicsAssumptionsEditor
+        key={location.key}
+        assumptions={assumptions}
+        overrides={profile.overrides}
+        onOverridesChange={
+          isStandard
+            ? undefined
+            : (change) => economics.changeOverrides(profile.id, change)
+        }
+        focus={focus.success ? focus.data : undefined}
+      />
+    </>
+  )
+}
+
 type ProfileViewProps = {
   profile: EconomicsProfile
   farmName: string
@@ -110,17 +226,9 @@ const ProfileView = ({
   const startGuide = useStartGuide()
   const isStandard = profile.id === STANDARD_PROFILE_ID
   const [editingName, setEditingName] = useState(false)
-  const [changesOpen, setChangesOpen] = useState(false)
   const returnState = returnStateSchema.safeParse(location.state)
   const returnTo = returnState.success ? returnState.data.returnTo : null
-
-  const users = economics.simulationsUsingProfile(simulations, profile.id)
-  const userNames = new Map(
-    users.map((simulation) => [simulation.id, simulation.name]),
-  )
-  const sharedNote = isStandard ? null : sharedProfileNote(users.length)
-  const changes = profileChanges(economics.assumptions, profile.overrides)
-  const focus = focusSchema.safeParse(location.state)
+  const budgets = useEconomicsAssumptions()
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -151,7 +259,8 @@ const ProfileView = ({
                 : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Rettelser gemmes med det samme.`}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <FarmingSystemSwitch />
             <Button onClick={() => startGuide({ fromProfileId: profile.id })}>
               <Pencil aria-hidden="true" />
               {isStandard ? 'Lav en profil ud fra Standard' : 'Tilpas i guiden'}
@@ -174,79 +283,16 @@ const ProfileView = ({
           </div>
         </header>
 
-        <div className="space-y-1.5 text-sm">
-          <p className="text-muted-foreground">
-            {users.length === 0 ? (
-              `${describeProfileUsers([])}.`
-            ) : (
-              <>
-                Bruges af{' '}
-                {nameListFormat
-                  .formatToParts(users.map((simulation) => simulation.id))
-                  .map((part, index) =>
-                    part.type === 'element' ? (
-                      <button
-                        key={index}
-                        type="button"
-                        className={TEXT_LINK_CLASS}
-                        onClick={() => onOpenSimulation(part.value)}
-                      >
-                        {userNames.get(part.value)}
-                      </button>
-                    ) : (
-                      <Fragment key={index}>{part.value}</Fragment>
-                    ),
-                  )}
-                .{sharedNote ? ` ${sharedNote}` : null}
-              </>
-            )}
-          </p>
-          {isStandard ? null : (
-            <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              {changesOpen ? null : (
-                <span>{profileChangesTitle(changes.length)}</span>
-              )}
-              {changes.length > 0 ? (
-                <button
-                  type="button"
-                  aria-expanded={changesOpen}
-                  className={TEXT_LINK_CLASS}
-                  onClick={() => setChangesOpen((open) => !open)}
-                >
-                  {changesOpen ? 'Skjul ændringer' : 'Vis ændringer'}
-                </button>
-              ) : null}
-            </p>
+        <BudgetsGate budgets={budgets}>
+          {(assumptions) => (
+            <ProfileBody
+              assumptions={assumptions}
+              profile={profile}
+              simulations={simulations}
+              onOpenSimulation={onOpenSimulation}
+            />
           )}
-          <p className="text-warning-strong">{PROFILES_NOT_IN_CALCULATION}</p>
-        </div>
-
-        {changesOpen && changes.length > 0 ? (
-          <EconomicsProfileChanges
-            className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
-            changes={changes}
-            onRestore={(change) =>
-              economics.changeOverrides(profile.id, (current) =>
-                withoutProfileChange(current, change),
-              )
-            }
-            onRestoreAll={() =>
-              economics.changeOverrides(profile.id, () => NO_OVERRIDES)
-            }
-          />
-        ) : null}
-
-        <EconomicsAssumptionsEditor
-          key={location.key}
-          assumptions={economics.assumptions}
-          overrides={profile.overrides}
-          onOverridesChange={
-            isStandard
-              ? undefined
-              : (change) => economics.changeOverrides(profile.id, change)
-          }
-          focus={focus.success ? focus.data : undefined}
-        />
+        </BudgetsGate>
       </div>
     </div>
   )

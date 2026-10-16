@@ -6,12 +6,57 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { NO_OVERRIDES, withPriceOverride } from '@/lib/economics'
-import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
+import {
+  NO_OVERRIDES,
+  withPriceOverride,
+  type CropEconomics,
+  type EconomicsAssumptions,
+} from '@/lib/economics'
 
-const springBarley = EXAMPLE_ECONOMICS.crops.find(
-  (crop) => crop.cropName === 'Vårbyg',
-)!
+const ploughed = (cropCode: number, cropName: string): CropEconomics => ({
+  cropCode,
+  cropName,
+  precedingCropValueKgNHa: 0,
+  revenue: [],
+  subsidies: [],
+  costs: {
+    fertiliser: [],
+    otherFertilisers: [],
+    seed: [],
+    cropProtection: [],
+    fieldWork: [
+      {
+        id: `${cropCode}/ploughing`,
+        label: 'Pløjning med pakning',
+        quantity: 1,
+        quantityUnit: 'gange',
+        quantityId: `${cropCode}/ploughing`,
+        priceId: 'ploughing',
+        followsYield: false,
+      },
+    ],
+    drying: [],
+  },
+})
+
+const ASSUMPTIONS: EconomicsAssumptions = {
+  soilTypeNumber: 6,
+  farmingSystem: 'Konventionel',
+  prices: [
+    {
+      id: 'ploughing',
+      label: 'Pløjning med pakning',
+      unit: 'kr/gang',
+      valueDkk: 825,
+      source: 'SEGES Budgetkalkuler 2026 (standardsats)',
+    },
+  ],
+  crops: [
+    ploughed(1, 'Vårbyg'),
+    ploughed(10, 'Vinterbyg'),
+    ploughed(11, 'Vinterhvede'),
+  ],
+}
 const RESTORE_PLOUGHING = 'Gendan standard for Pløjning med pakning'
 
 let container: HTMLDivElement
@@ -19,17 +64,12 @@ let root: Root
 
 const Detail = () => {
   const [overrides, setOverrides] = useState(
-    withPriceOverride(
-      EXAMPLE_ECONOMICS,
-      NO_OVERRIDES,
-      'rate:Pløjning med pakning',
-      1000,
-    ),
+    withPriceOverride(ASSUMPTIONS, NO_OVERRIDES, 'ploughing', 1000),
   )
   return createElement(EconomicsCropDetail, {
-    assumptions: EXAMPLE_ECONOMICS,
+    assumptions: ASSUMPTIONS,
     overrides,
-    crop: springBarley,
+    crop: ASSUMPTIONS.crops[0],
     onOverridesChange: setOverrides,
   })
 }

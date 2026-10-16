@@ -12,7 +12,6 @@ import {
   dbDeltaScale,
   describePriceCrops,
   describeProfileChanges,
-  FERTILISER_PRICE_IDS,
   formatChangeCount,
   formatDbDkk,
   formatEconomicsNumber,
@@ -35,12 +34,13 @@ import {
   sameOverrides,
   sharedCustomisedPrices,
   sharedPriceEffect,
+  standardLineQuantity,
   stepYieldPct,
-  withFertiliserPlan,
   withoutCropChanges,
   withoutProfileChange,
   withPriceOverride,
   withQuantityOverride,
+  withShownQuantity,
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
@@ -49,35 +49,57 @@ import {
   type EconomicsLine,
   type ProfileChange,
 } from '@/lib/economics'
-import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
 
 const line = (
   id: string,
   quantity: number,
   quantityUnit: string,
   priceId: string,
-): EconomicsLine => ({ id, label: id, quantity, quantityUnit, priceId })
+): EconomicsLine => ({
+  id,
+  label: id,
+  quantity,
+  quantityUnit,
+  quantityId: null,
+  priceId,
+  followsYield: false,
+})
 
 const crop = (
   cropCode: number,
   cropName: string,
   parts: Partial<Pick<CropEconomics, 'revenue' | 'subsidies'>> & {
+    fertiliser?: EconomicsLine[]
     fieldWork?: EconomicsLine[]
+    drying?: EconomicsLine[]
   },
-): CropEconomics => ({
-  cropCode,
-  cropName,
-  precedingCropValueKgNHa: 0,
-  revenue: parts.revenue ?? [],
-  subsidies: parts.subsidies ?? [],
-  costs: {
-    fertiliser: [],
-    seed: [],
-    cropProtection: [],
-    fieldWork: parts.fieldWork ?? [],
-    drying: [],
-  },
-})
+): CropEconomics => {
+  const ownQuantity = (entry: EconomicsLine) => ({
+    ...entry,
+    quantityId: `${cropCode}/${entry.id}`,
+  })
+  return {
+    cropCode,
+    cropName,
+    precedingCropValueKgNHa: 0,
+    revenue: (parts.revenue ?? []).map((entry) => ({
+      ...entry,
+      followsYield: true,
+    })),
+    subsidies: (parts.subsidies ?? []).map(ownQuantity),
+    costs: {
+      fertiliser: (parts.fertiliser ?? []).map(ownQuantity),
+      otherFertilisers: [],
+      seed: [],
+      cropProtection: [],
+      fieldWork: (parts.fieldWork ?? []).map(ownQuantity),
+      drying: (parts.drying ?? []).map((entry) => ({
+        ...ownQuantity(entry),
+        followsYield: true,
+      })),
+    },
+  }
+}
 
 const RAPESEED = crop(22, 'Vinterraps', {
   revenue: [line('grain', 44, 'hkg/ha', 'rapeseedPrice')],
@@ -96,6 +118,8 @@ const PEAS = crop(30, 'Ærter', {
 })
 
 const ASSUMPTIONS: EconomicsAssumptions = {
+  soilTypeNumber: 6,
+  farmingSystem: 'Konventionel',
   prices: [
     {
       id: 'rapeseedPrice',
@@ -136,6 +160,7 @@ const BARLEY = crop(1, 'Vårbyg', {
   ],
 })
 const WITH_BARLEY: EconomicsAssumptions = {
+  ...ASSUMPTIONS,
   prices: [
     ...ASSUMPTIONS.prices,
     {
@@ -154,6 +179,50 @@ const WITH_BARLEY: EconomicsAssumptions = {
     },
   ],
   crops: [...ASSUMPTIONS.crops, BARLEY],
+}
+
+const WHEAT = crop(11, 'Vinterhvede', {
+  revenue: [line('Udbytte', 84, 'hkg/ha', 'wheatPrice')],
+  fertiliser: [
+    line('Handelsgødning, N', 206, 'kg N/ha', 'nitrogen'),
+    line('Udbringning, handelsgødning', 1, 'ha', 'spreading'),
+  ],
+  drying: [line('Tørring, korn', 8400, 'kg/ha', 'drying')],
+})
+const WITH_WHEAT: EconomicsAssumptions = {
+  ...ASSUMPTIONS,
+  prices: [
+    ...ASSUMPTIONS.prices,
+    {
+      id: 'wheatPrice',
+      label: 'Salgspris',
+      unit: 'kr/hkg',
+      valueDkk: 145,
+      source: 'SEGES',
+    },
+    {
+      id: 'nitrogen',
+      label: 'Handelsgødning, kvælstof (N)',
+      unit: 'kr/kg N',
+      valueDkk: 12.5,
+      source: 'SEGES',
+    },
+    {
+      id: 'spreading',
+      label: 'Handelsgødning, udbringning',
+      unit: 'kr/ha',
+      valueDkk: 115,
+      source: 'SEGES',
+    },
+    {
+      id: 'drying',
+      label: 'Tørring, korn',
+      unit: 'kr/kg',
+      valueDkk: 0.1,
+      source: 'SEGES',
+    },
+  ],
+  crops: [...ASSUMPTIONS.crops, WHEAT],
 }
 
 describe('cropTotals', () => {
@@ -500,13 +569,8 @@ describe('profileChanges', () => {
   it('sends a changed gødning price to the Gødning step', () => {
     expect(
       profileChanges(
-        EXAMPLE_ECONOMICS,
-        withPriceOverride(
-          EXAMPLE_ECONOMICS,
-          NO_OVERRIDES,
-          FERTILISER_PRICE_IDS.mineralN,
-          14,
-        ),
+        WITH_WHEAT,
+        withPriceOverride(WITH_WHEAT, NO_OVERRIDES, 'nitrogen', 14),
       ),
     ).toMatchObject([
       {
@@ -690,105 +754,80 @@ describe('shared prices', () => {
   })
 })
 
-describe('EXAMPLE_ECONOMICS', () => {
-  it('has a price for every line and no two lines with the same id in a crop', () => {
-    const priceIds = new Set(EXAMPLE_ECONOMICS.prices.map((price) => price.id))
-    for (const example of EXAMPLE_ECONOMICS.crops) {
-      const lines = [
-        ...example.revenue,
-        ...example.subsidies,
-        ...Object.values(example.costs).flat(),
-      ]
-      expect(lines.filter((entry) => !priceIds.has(entry.priceId))).toEqual([])
-      expect(new Set(lines.map((entry) => entry.id)).size).toBe(lines.length)
-    }
-  })
-})
-
 describe('gødning', () => {
-  const WHEAT = 11
-  const exampleCrop = (assumptions: EconomicsAssumptions, cropCode: number) => {
-    const found = assumptions.crops.find((entry) => entry.cropCode === cropCode)
-    if (!found) throw new Error(`No crop ${cropCode} in the example`)
-    return found
-  }
-  const wheatQuantities = (plan: Parameters<typeof withFertiliserPlan>[1]) =>
-    exampleCrop(
-      withFertiliserPlan(EXAMPLE_ECONOMICS, plan),
-      WHEAT,
-    ).costs.fertiliser.map((entry) => entry.quantity)
-
   it('prices the kvælstofnorm as handelsgødning in the standard', () => {
     expect(
-      cropTotals(
-        EXAMPLE_ECONOMICS,
-        NO_OVERRIDES,
-        exampleCrop(EXAMPLE_ECONOMICS, WHEAT),
-      ).costsDkkHa.fertiliser,
+      cropTotals(WITH_WHEAT, NO_OVERRIDES, WHEAT).costsDkkHa.fertiliser,
     ).toBe(206 * 12.5 + 115)
-    expect(exampleCrop(EXAMPLE_ECONOMICS, 30).costs.fertiliser).toEqual([])
+    expect(PEAS.costs.fertiliser).toEqual([])
   })
 
-  it('lists the four prices of the Gødning step', () => {
+  it('lists the prices of the Gødning step', () => {
     expect(
-      categoryPrices(EXAMPLE_ECONOMICS, 'fertiliser').map((price) => price.id),
-    ).toEqual(Object.values(FERTILISER_PRICE_IDS))
-  })
-
-  it('keeps the standard quantities in a simulation without husdyrgødning', () => {
-    expect(
-      wheatQuantities({
-        orgMineralN: 0,
-        onlyOrganic: false,
-        nContentKgPerTon: 0,
-      }),
-    ).toEqual([206, 1, 0, 0])
-  })
-
-  it('lets the husdyrgødning of a simulation replace handelsgødning', () => {
-    expect(
-      wheatQuantities({
-        orgMineralN: 100,
-        onlyOrganic: false,
-        nContentKgPerTon: 5,
-      }),
-    ).toEqual([106, 1, 100, 20])
-  })
-
-  it('spreads no handelsgødning when the husdyrgødning covers the norm', () => {
-    expect(
-      wheatQuantities({
-        orgMineralN: 250,
-        onlyOrganic: false,
-        nContentKgPerTon: 5,
-      }),
-    ).toEqual([0, 0, 206, 41.2])
-  })
-
-  it('tops nothing up with handelsgødning when only organic gødning is used', () => {
-    expect(
-      wheatQuantities({
-        orgMineralN: 100,
-        onlyOrganic: true,
-        nContentKgPerTon: 5,
-      }),
-    ).toEqual([0, 0, 100, 20])
+      categoryPrices(WITH_WHEAT, 'fertiliser').map((price) => price.id),
+    ).toEqual(['nitrogen', 'spreading'])
   })
 
   it('finds the handelsgødning line although the backend adds the amount to its name', () => {
     const dearerNitrogen = withPriceOverride(
-      EXAMPLE_ECONOMICS,
+      WITH_WHEAT,
       NO_OVERRIDES,
-      FERTILISER_PRICE_IDS.mineralN,
+      'nitrogen',
       14,
     )
     expect(
-      customisedBreakdownLine(EXAMPLE_ECONOMICS, dearerNitrogen, WHEAT, {
+      customisedBreakdownLine(WITH_WHEAT, dearerNitrogen, 11, {
         kind: 'cost',
         category: 'Gødning',
         treatment: 'Handelsgødning, N (206 kg/ha)',
       })?.id,
     ).toBe('Handelsgødning, N')
+  })
+})
+
+describe('tørring', () => {
+  it('follows the yield percentage like the backend', () => {
+    const moreYield = withYieldPct(NO_OVERRIDES, WHEAT, 10)
+    expect(
+      cropTotals(WITH_WHEAT, moreYield, WHEAT).costsDkkHa.drying,
+    ).toBeCloseTo(924)
+    expect(cropTotals(WITH_WHEAT, moreYield, WHEAT).costsDkkHa.fertiliser).toBe(
+      206 * 12.5 + 115,
+    )
+  })
+
+  it('scales a changed drying quantity with the yield percentage too', () => {
+    const [drying] = WHEAT.costs.drying
+    const changed = withYieldPct(
+      withQuantityOverride(NO_OVERRIDES, WHEAT, drying.id, 9000),
+      WHEAT,
+      10,
+    )
+    expect(lineQuantity(changed, WHEAT, drying)).toBeCloseTo(9900)
+    expect(profileChanges(WITH_WHEAT, changed)).toMatchObject([
+      { kind: 'yield' },
+      { kind: 'quantity', from: '8.400 kg/ha', to: '9.000 kg/ha' },
+    ])
+  })
+
+  it('keeps a typed drying quantity as typed when the yield is changed', () => {
+    const [drying] = WHEAT.costs.drying
+    const moreYield = withYieldPct(NO_OVERRIDES, WHEAT, 10)
+    expect(standardLineQuantity(moreYield, WHEAT, drying)).toBeCloseTo(9240)
+    const typed = withShownQuantity(moreYield, WHEAT, drying, 11000)
+    expect(lineQuantity(typed, WHEAT, drying)).toBeCloseTo(11000)
+    expect(
+      withShownQuantity(moreYield, WHEAT, drying, 9240).quantities,
+    ).toEqual({})
+  })
+
+  it('tells that the drying follows the yield', () => {
+    expect(yieldHint(NO_OVERRIDES, WHEAT)).toBe(
+      'Normen er 84 hkg pr. ha. Procenten ændrer mængden og tørringen, men ikke de andre omkostninger.',
+    )
+    expect(yieldHint(withYieldPct(NO_OVERRIDES, WHEAT, 10), WHEAT)).toBe(
+      '+10 % giver 92,4 hkg pr. ha. Tørringen følger med, de andre omkostninger ændrer sig ikke.',
+    )
   })
 })
 

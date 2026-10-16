@@ -932,7 +932,7 @@ type CostLine = { category: string; treatment: string; costDkkHa: number }
 const useCustomisedLine = (cropCode: number) => {
   const fieldEconomics = useContext(FieldEconomicsContext)
   return (row: BreakdownRow) =>
-    fieldEconomics
+    fieldEconomics?.assumptions
       ? customisedBreakdownLine(
           fieldEconomics.assumptions,
           fieldEconomics.profile.overrides,

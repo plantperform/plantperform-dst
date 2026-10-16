@@ -4,7 +4,7 @@ import { useId } from 'react'
 import { ChangedValue, RestoreButton } from '@/components/farm/economics-ui'
 import { Button } from '@/components/ui/button'
 import {
-  formatNameList,
+  formatCropNames,
   profileChangesTitle,
   type ProfileChange,
 } from '@/lib/economics'
@@ -44,7 +44,7 @@ export const EconomicsProfileChanges = ({
       </div>
       <ul>
         {changes.map((change) => {
-          const crops = formatNameList(change.cropNames)
+          const crops = formatCropNames(change.cropNames)
           return (
             <li
               key={change.key}

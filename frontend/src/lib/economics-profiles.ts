@@ -7,7 +7,8 @@ import {
   NO_OVERRIDES,
   type EconomicsOverrides,
 } from '@/lib/economics'
-import { STANDARD_SOURCE } from '@/lib/economics-example'
+
+export const STANDARD_SOURCE = 'SEGES Budgetkalkuler 2026'
 
 export type EconomicsProfile = {
   id: string
@@ -119,16 +120,19 @@ export const describeOwnProfiles = (names: string[]): string => {
 
 export const describeProfileOption = (
   profileId: string,
-  changeCount: number,
+  changeCount: number | null,
   simulationNames: string[],
 ): string => {
   if (profileId === STANDARD_PROFILE_ID) {
     return `${STANDARD_SOURCE} · kan ikke rettes`
   }
-  const changes = formatChangeCount(changeCount)
-  return simulationNames.length > 0
-    ? `${changes} · bruges af ${formatNameList(simulationNames)}`
-    : changes
+  const users =
+    simulationNames.length > 0
+      ? `bruges af ${formatNameList(simulationNames)}`
+      : null
+  return [changeCount === null ? null : formatChangeCount(changeCount), users]
+    .filter((part) => part !== null)
+    .join(' · ')
 }
 
 export const describeStandard = (

@@ -24,12 +24,15 @@ const crop = (
       label: 'Kerne',
       quantity: yieldHkgHa,
       quantityUnit: 'hkg/ha',
+      quantityId: null,
       priceId: `sale:${cropCode}`,
+      followsYield: true,
     },
   ],
   subsidies: [],
   costs: {
     fertiliser: [],
+    otherFertilisers: [],
     seed: [],
     cropProtection: [],
     fieldWork: ploughed
@@ -39,7 +42,9 @@ const crop = (
             label: 'Pløjning',
             quantity: 1,
             quantityUnit: 'gange',
+            quantityId: `${cropCode}/ploughing`,
             priceId: 'rate:Pløjning',
+            followsYield: false,
           },
         ]
       : [],
@@ -56,6 +61,8 @@ const price = (id: string, label: string, unit: string, valueDkk: number) => ({
 })
 
 const ASSUMPTIONS: EconomicsAssumptions = {
+  soilTypeNumber: 6,
+  farmingSystem: 'Konventionel',
   prices: [
     price('sale:1', 'Salgspris', 'kr/hkg', 100),
     price('sale:11', 'Salgspris', 'kr/hkg', 120),

@@ -272,6 +272,7 @@ export const SimulationRulesPanel = ({
             simulation={simulation}
             simulations={simulations}
             fields={fields}
+            active={tab === 'economics'}
           />
         </div>
       </div>

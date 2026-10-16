@@ -1,10 +1,12 @@
 import { useId } from 'react'
 
+import { useFarmBudgets } from '@/api/economics'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import {
+  BudgetsGate,
   DbDelta,
   DbDeltaBar,
   GRID_HEAD_CLASS,
@@ -19,18 +21,21 @@ import {
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { cropGroupFor, shortCropName } from '@/lib/crop-groups'
 import {
+  budgetSoilType,
   dbDeltaScale,
   describeProfileChanges,
+  formatCropNames,
   formatNameList,
   formatSignedDkk,
+  NO_SOIL_TYPE_NOTE,
   profileChanges,
-  withFertiliserPlan,
+  type EconomicsAssumptions,
 } from '@/lib/economics'
-import { STANDARD_SOURCE } from '@/lib/economics-example'
 import {
   ECONOMICS_INVITATION,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
+  STANDARD_SOURCE,
 } from '@/lib/economics-profiles'
 import { formatNumber } from '@/lib/field-domain'
 import {
@@ -139,20 +144,20 @@ type SimulationEconomicsCardProps = {
   simulation: Simulation
   simulations: Simulation[]
   fields: FieldRecord[]
+  active: boolean
 }
 
-export const SimulationEconomicsCard = ({
-  simulation,
-  simulations,
-  fields,
-}: SimulationEconomicsCardProps) => {
-  const id = useId()
+type CardBodyProps = SimulationEconomicsCardProps & {
+  assumptions: EconomicsAssumptions
+}
+
+const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
   const profile = economics.profileForSimulation(simulation.id)
-  const changes = profileChanges(economics.assumptions, profile.overrides)
+  const changes = profileChanges(assumptions, profile.overrides)
   const effect = simulationEconomicsEffect(
-    withFertiliserPlan(economics.assumptions, simulation.fertiliser),
+    assumptions,
     profile.overrides,
     fields,
   )
@@ -160,6 +165,101 @@ export const SimulationEconomicsCard = ({
   const movedCropCount = effect.crops.filter(
     (crop) => crop.deltaDkkHa !== 0,
   ).length
+
+  if (profile.id === STANDARD_PROFILE_ID) {
+    return (
+      <p className={NOTE_CLASS}>
+        <b className="font-semibold text-foreground">{simulation.name}</b>{' '}
+        regner med priser og mængder fra {STANDARD_SOURCE} uden ændringer.{' '}
+        {economics.ownProfiles.length > 0 ? (
+          'Vælg en af bedriftens egne profiler for at se, hvad den betyder for simuleringen.'
+        ) : (
+          <>
+            {ECONOMICS_INVITATION}{' '}
+            <button
+              type="button"
+              className={TEXT_LINK_CLASS}
+              onClick={() =>
+                startGuide({
+                  fromProfileId: STANDARD_PROFILE_ID,
+                  simulationId: simulation.id,
+                })
+              }
+            >
+              Tilpas økonomien til bedriften
+            </button>
+          </>
+        )}
+      </p>
+    )
+  }
+
+  if (cropCount === 0) {
+    return (
+      <p className={NOTE_CLASS}>
+        Markerne i simuleringen har ingen sædskifter endnu. Når de har det, står
+        her, hvad profilen betyder for hver afgrøde.
+      </p>
+    )
+  }
+
+  const unused = effect.unusedCropNames
+
+  return (
+    <>
+      <div className="grid gap-4 border-t px-5 py-4 @xl:grid-cols-3">
+        <KeyFigure
+          label="Ændringer i profilen"
+          figure={{
+            value: String(changes.length),
+            total: describeProfileChanges(changes),
+          }}
+        />
+        <KeyFigure
+          label="Afgrøder i simuleringen"
+          figure={{
+            value: `${movedCropCount} af ${cropCount}`,
+            total: 'med ændret dækningsbidrag',
+          }}
+        />
+        <KeyFigure
+          label="Anslået pr. år"
+          figure={{
+            value: `${formatSignedDkk(effect.deltaDkk)} kr`,
+            total: `i forhold til ${STANDARD_PROFILE.name}`,
+          }}
+        />
+      </div>
+      <EffectTable effect={effect} />
+      <div className="space-y-1 px-5 py-3 text-xs text-muted-foreground">
+        <p>
+          {assumptions.soilTypeNumber === null
+            ? NO_SOIL_TYPE_NOTE
+            : `Arealet er gennemsnittet pr. år over markernes sædskifter, og ændringen pr. ha er regnet for ${budgetSoilType(assumptions)}, bedriftens mest udbredte jordtype, med simuleringens driftsform og gødningsvalg.`}
+        </p>
+        {unused.length > 0 ? (
+          <p>
+            Profilen ændrer også {formatCropNames(unused)}, som simuleringen
+            ikke dyrker.
+          </p>
+        ) : null}
+        <p className="text-warning-strong">
+          Profilen indgår ikke i beregningen endnu, så simuleringens tal er
+          regnet med {STANDARD_PROFILE.name}.
+        </p>
+      </div>
+    </>
+  )
+}
+
+export const SimulationEconomicsCard = (
+  props: SimulationEconomicsCardProps,
+) => {
+  const id = useId()
+  const { farmId } = useEconomicsProfiles()
+  const budgets = useFarmBudgets(props.active ? farmId : undefined, {
+    simulationId: props.simulation.id,
+  })
 
   return (
     <section
@@ -177,85 +277,14 @@ export const SimulationEconomicsCard = ({
           </p>
         </div>
         <EconomicsProfileMenu
-          simulation={simulation}
-          simulations={simulations}
+          assumptions={budgets.data}
+          simulation={props.simulation}
+          simulations={props.simulations}
         />
       </div>
-
-      {profile.id === STANDARD_PROFILE_ID ? (
-        <p className={NOTE_CLASS}>
-          <b className="font-semibold text-foreground">{simulation.name}</b>{' '}
-          regner med priser og mængder fra {STANDARD_SOURCE} uden ændringer.{' '}
-          {economics.ownProfiles.length > 0 ? (
-            'Vælg en af bedriftens egne profiler for at se, hvad den betyder for simuleringen.'
-          ) : (
-            <>
-              {ECONOMICS_INVITATION}{' '}
-              <button
-                type="button"
-                className={TEXT_LINK_CLASS}
-                onClick={() =>
-                  startGuide({
-                    fromProfileId: STANDARD_PROFILE_ID,
-                    simulationId: simulation.id,
-                  })
-                }
-              >
-                Tilpas økonomien til bedriften
-              </button>
-            </>
-          )}
-        </p>
-      ) : cropCount === 0 ? (
-        <p className={NOTE_CLASS}>
-          Markerne i simuleringen har ingen sædskifter endnu. Når de har det,
-          står her, hvad profilen betyder for hver afgrøde.
-        </p>
-      ) : (
-        <>
-          <div className="grid gap-4 border-t px-5 py-4 @xl:grid-cols-3">
-            <KeyFigure
-              label="Ændringer i profilen"
-              figure={{
-                value: String(changes.length),
-                total: describeProfileChanges(changes),
-              }}
-            />
-            <KeyFigure
-              label="Afgrøder i simuleringen"
-              figure={{
-                value: `${movedCropCount} af ${cropCount}`,
-                total: 'med ændret dækningsbidrag',
-              }}
-            />
-            <KeyFigure
-              label="Anslået pr. år"
-              figure={{
-                value: `${formatSignedDkk(effect.deltaDkk)} kr`,
-                total: `i forhold til ${STANDARD_PROFILE.name}`,
-              }}
-            />
-          </div>
-          <EffectTable effect={effect} />
-          <div className="space-y-1 px-5 py-3 text-xs text-muted-foreground">
-            <p>
-              Arealet er gennemsnittet pr. år over markernes sædskifter, og
-              ændringen pr. ha er regnet med tallene for JB 5-6 og simuleringens
-              gødningsvalg.
-            </p>
-            {effect.unusedCropNames.length > 0 ? (
-              <p>
-                Profilen ændrer også {formatNameList(effect.unusedCropNames)},
-                som simuleringen ikke dyrker.
-              </p>
-            ) : null}
-            <p className="text-warning-strong">
-              Profilen indgår ikke i beregningen endnu, så simuleringens tal er
-              regnet med {STANDARD_PROFILE.name}.
-            </p>
-          </div>
-        </>
-      )}
+      <BudgetsGate budgets={budgets} className="border-t px-5 py-4">
+        {(assumptions) => <CardBody {...props} assumptions={assumptions} />}
+      </BudgetsGate>
     </section>
   )
 }

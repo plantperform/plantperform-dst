@@ -12,8 +12,15 @@ import {
   guideOriginSchema,
   type GuideOrigin,
 } from '@/components/farm/economics-navigation'
-import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { CustomisedDot, DbDelta } from '@/components/farm/economics-ui'
+import {
+  useEconomicsAssumptions,
+  useEconomicsProfiles,
+} from '@/components/farm/economics-profiles-state'
+import {
+  BudgetsGate,
+  CustomisedDot,
+  DbDelta,
+} from '@/components/farm/economics-ui'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
   GuideFertiliserStep,
@@ -37,6 +44,7 @@ import {
 import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import {
   FERTILISER_NOTE,
+  formatCropCount,
   formatDbDkk,
   NO_OVERRIDES,
   profileChanges,
@@ -46,10 +54,10 @@ import {
   type EconomicsAssumptions,
   type EconomicsOverrides,
 } from '@/lib/economics'
-import { STANDARD_SOURCE } from '@/lib/economics-example'
 import {
   sharedProfileNote,
   STANDARD_PROFILE_ID,
+  STANDARD_SOURCE,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
@@ -66,7 +74,7 @@ const STEPS = [
     id: 2,
     label: 'Gødning',
     intro:
-      'Skriv bedriftens priser på handelsgødning og husdyrgødning, hvis de afviger fra standarden.',
+      'Skriv bedriftens priser på handelsgødning og udbringning, hvis de afviger fra standarden.',
   },
   {
     id: 3,
@@ -97,53 +105,73 @@ type GuideEffectProps = {
   overrides: EconomicsOverrides
 }
 
-const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => (
-  <section className={cn(RULES_CARD_CLASS, 'overflow-hidden')}>
-    <h2 className="px-4 pt-3.5 text-[13px] font-semibold">
-      Sådan påvirker det dækningsbidraget
-    </h2>
-    <div
-      className={cn(
-        EFFECT_GRID_CLASS,
-        'pt-1 pb-2 text-xs text-muted-foreground',
-      )}
-    >
-      <span>kr/ha</span>
-      <span className="text-right">Standard</span>
-      <span className="text-right">Profil</span>
-      <span className="text-right">Forskel</span>
-    </div>
-    <ul>
-      {profileDbEffect(assumptions, overrides).map((effect) => (
-        <li
-          key={effect.cropCode}
-          className={cn(
-            EFFECT_GRID_CLASS,
-            'border-t py-2 text-[13px] tabular-nums',
-          )}
-        >
-          <TruncatedTooltip content={effect.cropName} className="truncate">
-            {effect.cropName}
-          </TruncatedTooltip>
-          <span className="text-right text-muted-foreground">
-            {formatDbDkk(effect.dbDkkHa - effect.deltaDkkHa)}
-          </span>
-          <span
+const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
+  const effects = profileDbEffect(assumptions, overrides)
+  const moved = effects.filter((effect) => effect.deltaDkkHa !== 0)
+  const unchanged = effects.length - moved.length
+
+  return (
+    <section className={cn(RULES_CARD_CLASS, 'overflow-hidden')}>
+      <h2 className="px-4 pt-3.5 text-[13px] font-semibold">
+        Sådan påvirker det dækningsbidraget
+      </h2>
+      {moved.length > 0 ? (
+        <>
+          <div
             className={cn(
-              'text-right',
-              effect.deltaDkkHa !== 0 && 'font-semibold',
+              EFFECT_GRID_CLASS,
+              'pt-1 pb-2 text-xs text-muted-foreground',
             )}
           >
-            {formatDbDkk(effect.dbDkkHa)}
-          </span>
-          <span className="text-right">
-            <DbDelta change={effect.deltaDkkHa} />
-          </span>
-        </li>
-      ))}
-    </ul>
-  </section>
-)
+            <span>kr/ha</span>
+            <span className="text-right">Standard</span>
+            <span className="text-right">Profil</span>
+            <span className="text-right">Forskel</span>
+          </div>
+          <ul>
+            {moved.map((effect) => (
+              <li
+                key={effect.cropCode}
+                className={cn(
+                  EFFECT_GRID_CLASS,
+                  'border-t py-2 text-[13px] tabular-nums',
+                )}
+              >
+                <TruncatedTooltip
+                  content={effect.cropName}
+                  className="truncate"
+                >
+                  {effect.cropName}
+                </TruncatedTooltip>
+                <span className="text-right text-muted-foreground">
+                  {formatDbDkk(effect.dbDkkHa - effect.deltaDkkHa)}
+                </span>
+                <span className="text-right font-semibold">
+                  {formatDbDkk(effect.dbDkkHa)}
+                </span>
+                <span className="text-right">
+                  <DbDelta change={effect.deltaDkkHa} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <p
+        className={cn(
+          'px-4 pt-1 pb-3.5 text-xs text-muted-foreground',
+          moved.length > 0 && 'border-t pt-2.5',
+        )}
+      >
+        {moved.length === 0
+          ? `Samme dækningsbidrag som Standard for alle ${formatCropCount(effects.length)}.`
+          : unchanged > 0
+            ? `${formatCropCount(unchanged)} uden ændring.`
+            : null}
+      </p>
+    </section>
+  )
+}
 
 type EconomicsGuidePageProps = {
   farmName: string
@@ -152,11 +180,13 @@ type EconomicsGuidePageProps = {
 }
 
 type GuideProps = EconomicsGuidePageProps & {
+  assumptions: EconomicsAssumptions
   profile: EconomicsProfile
   origin: GuideOrigin | null
 }
 
 const Guide = ({
+  assumptions,
   profile,
   origin,
   farmName,
@@ -166,7 +196,6 @@ const Guide = ({
   const titleId = useId()
   const navigate = useNavigate()
   const economics = useEconomicsProfiles()
-  const { assumptions } = economics
   const originSimulation = simulations.find(
     (simulation) => simulation.id === origin?.simulationId,
   )
@@ -449,6 +478,7 @@ export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
   const { profileId } = useParams()
   const { state } = useLocation()
   const economics = useEconomicsProfiles()
+  const budgets = useEconomicsAssumptions()
   const origin = guideOriginSchema.safeParse(state)
   const profile =
     (profileId ? economics.findProfile(profileId) : undefined) ??
@@ -467,11 +497,16 @@ export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
   }
 
   return (
-    <Guide
-      key={profile.id}
-      profile={profile}
-      origin={origin.success ? origin.data.guide : null}
-      {...props}
-    />
+    <BudgetsGate budgets={budgets} className="mx-6 mt-10 sm:mx-10">
+      {(assumptions) => (
+        <Guide
+          key={profile.id}
+          assumptions={assumptions}
+          profile={profile}
+          origin={origin.success ? origin.data.guide : null}
+          {...props}
+        />
+      )}
+    </BudgetsGate>
   )
 }
