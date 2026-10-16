@@ -41,6 +41,11 @@ its farm. Duplication copies the current overrides, not simulation assignments.
 `Standard (SEGES 2026)`. It can be read and duplicated but cannot be changed
 or deleted. An omitted/null module selection means `standard`.
 
+Deleting a module moves every simulation on the farm that selects it back to
+`standard` and marks its results outdated. The applied snapshot and its figures
+stay until the economics are recalculated. While such a simulation is being
+created, recalculated or optimized, deletion returns 409.
+
 Unknown farms and modules from another farm return 404. Stale revisions return
 409. Invalid input and attempts to mutate standard return 422.
 

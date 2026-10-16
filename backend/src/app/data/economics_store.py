@@ -4,8 +4,10 @@ from uuid import uuid4
 
 from sqlalchemy import delete, func, insert, select, update
 
-from app.data import repository
+from app.data import repository, simulation_store
 from app.data.db import economics_module_table as modules
+from app.data.db import simulation_table as setups
+from app.domain.creation import CreationNotReadyError
 from app.domain.economics import (
     STANDARD_ID,
     STANDARD_NAME,
@@ -117,6 +119,30 @@ def duplicate_module(farm_id, module_id, email, name=None):
 
 
 def delete_module(farm_id, module_id, email):
+    from app.data.economics_recalculation_store import _require_editable
+
     with repository.SessionLocal.begin() as session:
         _row(session, farm_id, module_id, email, lock=True)
+        selecting = session.execute(
+            select(setups.c.id, setups.c.data, setups.c.creation_status)
+            .where(
+                setups.c.farm_id == farm_id,
+                setups.c.data["economics_module_id"].astext == module_id,
+            )
+            .with_for_update()
+        ).all()
+        for row in selecting:
+            try:
+                _require_editable(session, row.id, row)
+            except CreationNotReadyError as error:
+                raise EconomicsConflictError(
+                    "A simulation using this module is being calculated"
+                ) from error
         session.execute(delete(modules).where(modules.c.id == module_id))
+        for row in selecting:
+            session.execute(
+                update(setups)
+                .where(setups.c.id == row.id)
+                .values(data={**row.data, "economics_module_id": STANDARD_ID})
+            )
+            simulation_store.invalidate(session, row.id)

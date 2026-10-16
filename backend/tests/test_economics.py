@@ -666,6 +666,29 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(simulation.creation_status, "done")
         self.assertEqual(simulation.economics_snapshot.source_id, module.id)
 
+    def test_deleting_a_module_selects_standard_and_keeps_the_applied_figures(self):
+        module = self.module(prices={SALE: 150})
+        selected = self.select_module(module)
+        _, _, envelope = self.submit_recalculation(selected.revision)
+        economics_worker.execute(envelope, CONTEXT)
+        before = repository.get_simulation("farm", "sim", EMAIL)
+        economics_store.delete_module("farm", module.id, EMAIL)
+        after = repository.get_simulation("farm", "sim", EMAIL)
+        self.assertEqual(after.economics_module_id, "standard")
+        self.assertEqual(after.economics_snapshot, before.economics_snapshot)
+        self.assertGreater(after.revision, before.revision)
+
+    def test_deleting_a_module_waits_for_simulations_being_calculated(self):
+        module = self.module()
+        self.select_module(module)
+        with self.sessions.begin() as session:
+            session.execute(
+                update(setups).where(setups.c.id == "sim").values(creation_status="running")
+            )
+        with self.assertRaises(EconomicsConflictError):
+            economics_store.delete_module("farm", module.id, EMAIL)
+        self.assertEqual(economics_store.get_module("farm", module.id, EMAIL).id, module.id)
+
     def test_farm_members_recalculate_with_the_farm_module(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
