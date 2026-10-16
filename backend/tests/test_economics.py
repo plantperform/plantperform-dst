@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from legacy_candidates import caches
 from pydantic import ValidationError
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select, text, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
 
 from app import main
@@ -29,9 +29,9 @@ from app.data.db import (
     arbejdsmaengde_table,
     arbejdssats_table,
     dyrkningsomkostning_table,
-    economics_module_member_table,
     economics_module_table,
     farm_member_table,
+    farm_table,
     halmudbytte_table,
     metadata,
     prisliste_table,
@@ -51,8 +51,8 @@ from app.domain.economics import (
 )
 from app.domain.simulation import CreateSimulationRequest
 from app.services.calculation import CalculationFailedError
+from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
-from app.services.economics import jobs, overrides
 from app.services.economics import runner as economics_worker
 from plantperform_fargate import worker as optimizer_worker
 
@@ -97,7 +97,6 @@ class EconomicsDatabaseTests(DatabaseTests):
         super().setUp()
         tables = [
             economics_module_table,
-            economics_module_member_table,
             afgroede_table,
             afgroede_norm_lookup_table,
             salgspris_table,
@@ -110,6 +109,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         metadata.create_all(self.engine, tables=tables)
         self.enterContext(patch.object(calculator, "SessionLocal", self.sessions))
         self.enterContext(patch.object(overrides, "SessionLocal", self.sessions))
+        self.enterContext(patch.object(budget, "SessionLocal", self.sessions))
         calculator.clear_lookup_cache()
         self.addCleanup(calculator.clear_lookup_cache)
         with self.sessions.begin() as session:
@@ -187,6 +187,8 @@ class EconomicsDatabaseTests(DatabaseTests):
                     afgroedekode=None,
                     driftsform="",
                     pris_kr_per_enhed=100,
+                    enhed="kr/gang",
+                    kilde="SEGES",
                 )
             )
             session.execute(
@@ -226,8 +228,20 @@ class EconomicsDatabaseTests(DatabaseTests):
 
     def module(self, **values):
         return economics_store.create_module(
-            CreateEconomicsModuleRequest(name="Mine", overrides=EconomicsOverrides(**values)), EMAIL
+            "farm",
+            CreateEconomicsModuleRequest(name="Mine", overrides=EconomicsOverrides(**values)),
+            EMAIL,
         )
+
+    def other_farm(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(farm_table).values(
+                    id="other-farm",
+                    data={"id": "other-farm", "name": "Anden", "owner_name": "Anden ejer"},
+                )
+            )
+            session.execute(insert(farm_member_table).values(farm_id="other-farm", email=EMAIL))
 
     def select_module(self, module, revision=0):
         return recalc_store.select_module(
@@ -284,12 +298,13 @@ class EconomicsDatabaseTests(DatabaseTests):
                     json=request.model_dump(mode="json", by_alias=True),
                 )
             self.assertEqual(response.status_code, 504)
-            self.assertEqual(
-                repository.get_simulation("farm", "sim", EMAIL).creation_status, "failed"
-            )
+            failed = repository.get_simulation("farm", "sim", EMAIL)
+            self.assertEqual(failed.creation_status, "failed")
+            self.assertTrue(failed.economics_recalculation_failed)
             retried = client.post("/api/v0/farms/farm/simulations/sim/economics/recalculate/retry")
         self.assertEqual(retried.status_code, 200, retried.text)
         self.assertEqual(retried.json()["creationStatus"], "done")
+        self.assertFalse(retried.json()["economicsRecalculationFailed"])
         self.queue.send_message.assert_not_called()
 
     def install_calculation_inputs(self):
@@ -316,52 +331,67 @@ class EconomicsDatabaseTests(DatabaseTests):
                     )
                 )
 
-    def test_crud_duplicate_and_membership(self):
+    def test_farm_members_share_the_farm_modules(self):
         module = self.module(prices={SALE: 150})
-        self.assertEqual(economics_store.list_modules(OTHER)[0].id, "standard")
         with self.assertRaises(EconomicsModuleNotFoundError):
-            economics_store.get_module(module.id, OTHER)
-        self.assertEqual(economics_store.add_member(module.id, EMAIL, OTHER), "added")
+            economics_store.list_modules("farm", OTHER)
+        with self.assertRaises(EconomicsModuleNotFoundError):
+            economics_store.get_module("farm", module.id, OTHER)
+        with self.sessions.begin() as session:
+            session.execute(insert(farm_member_table).values(farm_id="farm", email=OTHER))
+        self.assertEqual(
+            [entry.id for entry in economics_store.list_modules("farm", OTHER)],
+            ["standard", module.id],
+        )
         updated = economics_store.update_module(
-            module.id, UpdateEconomicsModuleRequest(expectedRevision=0, name="Renamed"), OTHER
+            "farm",
+            module.id,
+            UpdateEconomicsModuleRequest(expectedRevision=0, name="Renamed"),
+            OTHER,
         )
         self.assertEqual(updated.revision, 1)
         self.assertEqual(updated.overrides.prices[SALE], 150)
-        copied = economics_store.duplicate_module(module.id, OTHER)
+        copied = economics_store.duplicate_module("farm", module.id, OTHER)
         self.assertNotEqual(copied.id, module.id)
-        self.assertEqual(economics_store.list_members(copied.id, OTHER), [OTHER])
-        self.assertEqual(economics_store.remove_member(module.id, OTHER, EMAIL), "removed")
-        self.assertEqual(economics_store.remove_member(module.id, OTHER, OTHER), "last_member")
-        economics_store.delete_module(module.id, OTHER)
-        self.assertEqual(economics_store.get_module(copied.id, OTHER).overrides.prices[SALE], 150)
+        economics_store.delete_module("farm", module.id, OTHER)
+        self.assertEqual(
+            economics_store.get_module("farm", copied.id, OTHER).overrides.prices[SALE], 150
+        )
 
-    def test_members_require_verified_users_and_normalize_email(self):
-        module = self.module()
-        self.assertEqual(
-            economics_store.add_member(module.id, EMAIL, "missing@example.com"), "user_not_found"
+    def test_modules_stay_on_their_own_farm(self):
+        self.other_farm()
+        foreign = economics_store.create_module(
+            "other-farm", CreateEconomicsModuleRequest(name="Anden bedrift"), EMAIL
         )
-        response = self.client.post(
-            f"/api/v0/economics-modules/{module.id}/members", json={"email": " OTHER@example.com "}
-        )
-        self.assertEqual(response.status_code, 201, response.text)
-        self.assertEqual(response.json()["email"], OTHER)
         self.assertEqual(
-            self.client.post(
-                f"/api/v0/economics-modules/{module.id}/members", json={"email": OTHER}
-            ).status_code,
-            409,
+            [entry.id for entry in economics_store.list_modules("farm", EMAIL)], ["standard"]
+        )
+        with self.assertRaises(EconomicsModuleNotFoundError):
+            economics_store.get_module("farm", foreign.id, EMAIL)
+        with self.assertRaises(EconomicsModuleNotFoundError):
+            self.select_module(foreign)
+        path = f"/api/v0/farms/farm/economics-modules/{foreign.id}"
+        self.assertEqual(self.client.get(path).status_code, 404)
+        self.assertEqual(
+            self.client.patch(path, json={"expectedRevision": 0, "name": "Min"}).status_code, 404
+        )
+        self.assertEqual(self.client.delete(path).status_code, 404)
+        self.assertEqual(
+            economics_store.get_module("other-farm", foreign.id, EMAIL).name, "Anden bedrift"
         )
 
     def test_api_standard_immutable_and_copyable(self):
         self.assertEqual(
             self.client.patch(
-                "/api/v0/economics-modules/standard",
+                "/api/v0/farms/farm/economics-modules/standard",
                 json={"expectedRevision": 0, "name": "Changed"},
             ).status_code,
             422,
         )
-        self.assertEqual(self.client.delete("/api/v0/economics-modules/standard").status_code, 422)
-        response = self.client.post("/api/v0/economics-modules/standard/duplicate")
+        self.assertEqual(
+            self.client.delete("/api/v0/farms/farm/economics-modules/standard").status_code, 422
+        )
+        response = self.client.post("/api/v0/farms/farm/economics-modules/standard/duplicate")
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(
             response.json()["overrides"], {"prices": {}, "quantities": {}, "yieldPct": {}}
@@ -378,11 +408,14 @@ class EconomicsDatabaseTests(DatabaseTests):
         module = self.module()
         with self.assertRaises(EconomicsConflictError):
             economics_store.update_module(
-                module.id, UpdateEconomicsModuleRequest(expectedRevision=99, name="Changed"), EMAIL
+                "farm",
+                module.id,
+                UpdateEconomicsModuleRequest(expectedRevision=99, name="Changed"),
+                EMAIL,
             )
         self.assertEqual(
             self.client.patch(
-                f"/api/v0/economics-modules/{module.id}",
+                f"/api/v0/farms/farm/economics-modules/{module.id}",
                 json={"expectedRevision": 0, "overrides": None},
             ).status_code,
             422,
@@ -451,12 +484,85 @@ class EconomicsDatabaseTests(DatabaseTests):
             )
         self.assertEqual(overrides.assumptions(), catalog)
 
+    def test_farm_budgets_price_out_to_the_calculated_db(self):
+        fields = [
+            SimpleNamespace(
+                jbnr=5,
+                area_ha=10,
+                crop_rotation=[SimpleNamespace(afgrode_kode=1), SimpleNamespace(afgrode_kode=11)],
+            ),
+            SimpleNamespace(jbnr=3, area_ha=8, crop_rotation=[SimpleNamespace(afgrode_kode=999)]),
+        ]
+        godning = SimpleNamespace(driftsform="Konventionel", only_organic=False, org_mineral_n=50)
+        simulation = SimpleNamespace(id="sim", godning=godning)
+        url = "/api/v0/farms/farm/economics/budgets"
+        with (
+            patch.object(budget, "list_fields", return_value=fields),
+            patch.object(budget, "list_simulations", return_value=[simulation]),
+            patch.object(budget, "scenario_afgrodekoder", return_value={216, 11}),
+        ):
+            budgets = self.client.get(url).json()
+            manured = self.client.get(url, params={"simulationId": "sim"}).json()
+            self.assertEqual(self.client.get(url, params={"simulationId": "x"}).status_code, 404)
+        self.assertEqual(budgets["jbNr"], 5)
+        self.assertEqual([crop["cropCode"] for crop in budgets["crops"]], [1, 11, 216])
+        mineral_n = overrides.quantity_id(1, "fertiliser", "mineralN")
+        self.assertEqual(
+            [
+                line["quantity"]
+                for line in manured["crops"][0]["costs"]
+                if line["quantityId"] == mineral_n
+            ],
+            [125],
+        )
+        defaults = {price["id"]: price["value"] for price in budgets["prices"]}
+        plowing = next(line for line in budgets["crops"][0]["costs"] if line["quantityId"] == WORK)
+        self.assertEqual(
+            (plowing["quantity"], plowing["quantityUnit"], plowing["priceId"]),
+            (2, "gange", RATE),
+        )
+        self.assertEqual(
+            next(price for price in budgets["prices"] if price["id"] == RATE)["source"], "SEGES"
+        )
+
+        def priced_db(crop, changes):
+            yield_factor = 1 + changes.yield_pct.get(str(crop["cropCode"]), 0) / 100
+            total = 0.0
+            for section, sign in (("revenue", 1), ("subsidies", 1), ("costs", -1)):
+                for line in crop[section]:
+                    quantity = changes.quantities.get(line["quantityId"], line["quantity"])
+                    if line["followsYield"]:
+                        quantity *= yield_factor
+                    price = changes.prices.get(line["priceId"], defaults[line["priceId"]])
+                    total += sign * quantity * price
+            return round(total)
+
+        for changes in (
+            EconomicsOverrides(),
+            EconomicsOverrides(prices={SALE: 150, RATE: 200}, quantities={WORK: 3}),
+            EconomicsOverrides(yieldPct={"1": 10, "11": -20}),
+        ):
+            for crop in budgets["crops"]:
+                with self.subTest(crop=crop["cropCode"], changes=changes):
+                    self.assertEqual(
+                        priced_db(crop, changes),
+                        calculator.calculate_db(
+                            crop["cropCode"], "Konventionel", 5, economics_key=changes.cache_key()
+                        )["db"],
+                    )
+        defaults.update({price["id"]: price["value"] for price in manured["prices"]})
+        self.assertEqual(
+            priced_db(manured["crops"][0], EconomicsOverrides()),
+            calculator.calculate_db(1, "Konventionel", 5, org_mineral_n_applied=50)["db"],
+        )
+
     def test_module_edits_and_selection_never_dispatch(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         self.assertEqual(selected.revision, 1)
         self.assertEqual(selected.economics_snapshot.source_id, "standard")
         economics_store.update_module(
+            "farm",
             module.id,
             UpdateEconomicsModuleRequest(expectedRevision=0, prices=None, name="Changed"),
             EMAIL,
@@ -478,6 +584,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             "farm", CreateSimulationRequest(name="frozen", economics_module_id=module.id), EMAIL
         )
         economics_store.update_module(
+            "farm",
             module.id,
             UpdateEconomicsModuleRequest(expected_revision=0, overrides={"prices": {SALE: 200}}),
             EMAIL,
@@ -515,6 +622,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(repeated.revision, queued.revision)
         self.assertEqual(self.queue.send_message.call_count, 1)  # optimization only
         economics_store.update_module(
+            "farm",
             module.id,
             UpdateEconomicsModuleRequest(
                 expectedRevision=0, overrides=EconomicsOverrides(prices={SALE: 200})
@@ -550,7 +658,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             with self.assertRaises(CalculationFailedError):
                 economics_worker.execute(envelope, CONTEXT)
             economics_worker.execute(envelope, CONTEXT)
-        economics_store.delete_module(module.id, EMAIL)
+        economics_store.delete_module("farm", module.id, EMAIL)
         retried = jobs.retry("farm", "sim", EMAIL)
         self.assertGreater(retried.revision, queued.revision)
         economics_worker.execute(envelope, CONTEXT)  # stale delivery cannot publish
@@ -558,7 +666,30 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(simulation.creation_status, "done")
         self.assertEqual(simulation.economics_snapshot.source_id, module.id)
 
-    def test_farm_members_can_use_snapshot_without_original_module(self):
+    def test_deleting_a_module_selects_standard_and_keeps_the_applied_figures(self):
+        module = self.module(prices={SALE: 150})
+        selected = self.select_module(module)
+        _, _, envelope = self.submit_recalculation(selected.revision)
+        economics_worker.execute(envelope, CONTEXT)
+        before = repository.get_simulation("farm", "sim", EMAIL)
+        economics_store.delete_module("farm", module.id, EMAIL)
+        after = repository.get_simulation("farm", "sim", EMAIL)
+        self.assertEqual(after.economics_module_id, "standard")
+        self.assertEqual(after.economics_snapshot, before.economics_snapshot)
+        self.assertGreater(after.revision, before.revision)
+
+    def test_deleting_a_module_waits_for_simulations_being_calculated(self):
+        module = self.module()
+        self.select_module(module)
+        with self.sessions.begin() as session:
+            session.execute(
+                update(setups).where(setups.c.id == "sim").values(creation_status="running")
+            )
+        with self.assertRaises(EconomicsConflictError):
+            economics_store.delete_module("farm", module.id, EMAIL)
+        self.assertEqual(economics_store.get_module("farm", module.id, EMAIL).id, module.id)
+
+    def test_farm_members_recalculate_with_the_farm_module(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         _, _, envelope = self.submit_recalculation(selected.revision)
@@ -568,15 +699,10 @@ class EconomicsDatabaseTests(DatabaseTests):
         simulation = repository.get_simulation("farm", "sim", OTHER)
         self.assertEqual(simulation.economics_snapshot.overrides.prices[SALE], 150)
         request = RecalculateEconomicsRequest(
-            expectedRevision=simulation.revision, requestId=uuid4(), refreshFromModule=False
+            expectedRevision=simulation.revision, requestId=uuid4()
         )
-        jobs.submit("farm", "sim", request, OTHER)
-        request = RecalculateEconomicsRequest(
-            expectedRevision=repository.get_simulation("farm", "sim", OTHER).revision,
-            requestId=uuid4(),
-        )
-        with self.assertRaises(EconomicsModuleNotFoundError):
-            jobs.submit("farm", "sim", request, OTHER)
+        queued = jobs.submit("farm", "sim", request, OTHER)
+        self.assertEqual(queued.economics_snapshot.overrides.prices[SALE], 150)
 
     def test_duplicate_reservations_before_publication_dispatch_once(self):
         module = self.module()
@@ -668,6 +794,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             with self.assertRaises(CalculationFailedError):
                 economics_worker.execute(envelope, CONTEXT)
         economics_store.update_module(
+            "farm",
             module.id,
             UpdateEconomicsModuleRequest(
                 expectedRevision=0, overrides=EconomicsOverrides(prices={SALE: 200})
@@ -702,21 +829,60 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(result["goedning"], 100)
         self.assertEqual(result["mncs"], 0)
 
-    def test_migration_round_trip(self):
+    def migration(self, name):
+        path = Path(__file__).parents[1] / "database/migrations/versions" / name
+        spec = importlib.util.spec_from_file_location(name.removesuffix(".py"), path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_migration_moves_used_modules_to_their_farm(self):
+        created = self.migration("20261013_0001_economics_modules.py")
+        per_farm = self.migration("20261015_0002_economics_modules_per_farm.py")
+        self.other_farm()
+        used = {"source_id": "used", "name": "Brugt", "revision": 0, "overrides": {}}
         with self.engine.begin() as connection:
-            connection.execute(economics_module_member_table.delete())
             connection.execute(economics_module_table.delete())
-            economics_module_member_table.drop(connection)
             economics_module_table.drop(connection)
-            path = (
-                Path(__file__).parents[1]
-                / "database/migrations/versions/20261013_0001_economics_modules.py"
-            )
-            spec = importlib.util.spec_from_file_location("economics_migration", path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
             with Operations.context(MigrationContext.configure(connection)):
-                module.upgrade()
-                module.downgrade()
-                module.upgrade()
+                created.upgrade()
+                connection.execute(
+                    text(
+                        "INSERT INTO economics_module (id, name, overrides) VALUES "
+                        "('used', 'Brugt', '{}'), ('unused', 'Ubrugt', '{}')"
+                    )
+                )
+                data = connection.execute(
+                    select(setups.c.data).where(setups.c.id == "sim")
+                ).scalar_one()
+                connection.execute(
+                    update(setups)
+                    .where(setups.c.id == "sim")
+                    .values(data={**data, "economics_module_id": "used"})
+                )
+                connection.execute(
+                    insert(setups).values(
+                        id="other-sim",
+                        farm_id="other-farm",
+                        data={"economics_module_id": "used", "economics_snapshot": used},
+                    )
+                )
+                per_farm.upgrade()
+                moved = dict(
+                    connection.execute(text("SELECT farm_id, id FROM economics_module")).all()
+                )
+                copied = connection.execute(
+                    select(setups.c.data).where(setups.c.id == "other-sim")
+                ).scalar_one()
+                per_farm.downgrade()
+                members = connection.execute(
+                    text("SELECT email FROM economics_module_member WHERE module_id = 'used'")
+                ).scalars()
+                self.assertEqual(list(members), [EMAIL])
+                per_farm.upgrade()
+        self.assertEqual(moved["farm"], "used")
+        self.assertNotIn("unused", moved.values())
+        self.assertEqual(copied["economics_module_id"], moved["other-farm"])
+        self.assertEqual(copied["economics_snapshot"]["source_id"], moved["other-farm"])
+        self.assertEqual(economics_store.get_module("farm", "used", EMAIL).name, "Brugt")
         self.assertEqual(self.module().revision, 0)

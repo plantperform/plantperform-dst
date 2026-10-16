@@ -204,6 +204,8 @@ salgspris_table = Table(
     Column("salgspris", Float, nullable=False),
     Column("enhed", Text, nullable=False),
     Column("halm_pris_kr_kg", Float, nullable=False),
+    Column("kilde", Text, nullable=True),
+    Column("halm_kilde", Text, nullable=True),
     Index("ix_salgspris_lookup", "afgroedekode", "driftsform", "kvalitet"),
 )
 
@@ -226,6 +228,8 @@ arbejdssats_table = Table(
     Column("afgroedekode", Integer, nullable=True),
     Column("driftsform", Text, nullable=False),
     Column("pris_kr_per_enhed", Float, nullable=False),
+    Column("enhed", Text, nullable=True),
+    Column("kilde", Text, nullable=True),
     Index("ix_arbejdssats_lookup", "behandling", "jordbonitet"),
 )
 
@@ -258,6 +262,7 @@ dyrkningsomkostning_table = Table(
     Column("kategori", Text, nullable=False),
     Column("behandling", Text, nullable=False),
     Column("udgift_kr_ha", Float, nullable=False),
+    Column("kilde", Text, nullable=True),
     Index("ix_dyrkningsomkostning_lookup", "afgroedekode", "driftsform"),
 )
 
@@ -270,6 +275,7 @@ prisliste_table = Table(
     Column("type", Text, nullable=False),
     Column("pris", Float, nullable=False),
     Column("enhed", Text, nullable=False),
+    Column("kilde", Text, nullable=True),
     Index("ix_prisliste_lookup", "post"),
 )
 
@@ -429,23 +435,14 @@ economics_module_table = Table(
     "economics_module",
     metadata,
     Column("id", Text, primary_key=True),
+    Column("farm_id", Text, ForeignKey("farm.id", ondelete="CASCADE"), nullable=False),
     Column("name", Text, nullable=False),
     Column("overrides", JSONB, nullable=False),
     Column("revision", Integer, nullable=False, server_default="0"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     CheckConstraint("length(trim(name)) > 0", name="ck_economics_module_name"),
-)
-
-economics_module_member_table = Table(
-    "economics_module_member",
-    metadata,
-    Column(
-        "module_id", Text, ForeignKey("economics_module.id", ondelete="CASCADE"), nullable=False
-    ),
-    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
-    PrimaryKeyConstraint("module_id", "email"),
-    Index("ix_economics_module_member_email", "email"),
+    Index("ix_economics_module_farm_id", "farm_id"),
 )
 
 email_verification_token_table = Table(

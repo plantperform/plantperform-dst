@@ -1,21 +1,19 @@
 # Economics modules and simulation recalculation
 
 All endpoints are authenticated and live under `/api/v0`. JSON property names
-are camelCase. Modules are independent of farms and can be reused across farms.
+are camelCase. Modules belong to a farm, and every member of the farm can use
+them.
 
 ## Modules
 
 | Method | Path | Request / response |
 | --- | --- | --- |
-| GET | `/economics-modules` | Standard plus modules the current user belongs to |
-| POST | `/economics-modules` | `{name, overrides?}`; returns module, HTTP 201 |
-| GET | `/economics-modules/{id}` | Returns module |
-| PATCH | `/economics-modules/{id}` | `{expectedRevision, name?, overrides?}`; returns module |
-| DELETE | `/economics-modules/{id}` | HTTP 204; existing simulation snapshots survive |
-| POST | `/economics-modules/{id}/duplicate` | Optional `{name}`; returns independent copy, HTTP 201 |
-| GET | `/economics-modules/{id}/members` | `[{email}]` |
-| POST | `/economics-modules/{id}/members` | `{email}`; verified existing user required, HTTP 201 |
-| DELETE | `/economics-modules/{id}/members/{email}` | HTTP 204 |
+| GET | `/farms/{farmId}/economics-modules` | Standard plus the farm's modules |
+| POST | `/farms/{farmId}/economics-modules` | `{name, overrides?}`; returns module, HTTP 201 |
+| GET | `/farms/{farmId}/economics-modules/{id}` | Returns module |
+| PATCH | `/farms/{farmId}/economics-modules/{id}` | `{expectedRevision, name?, overrides?}`; returns module |
+| DELETE | `/farms/{farmId}/economics-modules/{id}` | HTTP 204; existing simulation snapshots survive |
+| POST | `/farms/{farmId}/economics-modules/{id}/duplicate` | Optional `{name}`; returns an independent copy on the same farm, HTTP 201 |
 
 A module has `id`, `name`, `revision`, `createdAt`, `updatedAt`, and `overrides`.
 The overrides column stores only this structure, never a copy of reference data:
@@ -35,18 +33,21 @@ nonnegative numbers; yield percentages must be finite and greater than -100.
 Unknown identifiers are rejected when saving overrides. Names are trimmed,
 nonempty, and need not be unique.
 
-Every member has equal read, edit, share, duplicate, and delete rights. Email
-addresses are normalized. The last member cannot be removed. Duplication gives
-membership only to its requester and copies the current overrides. It does not
-copy membership or simulation assignments.
+Every farm member has equal read, edit, duplicate, and delete rights. A module
+is only visible on its own farm, and a simulation can only select modules from
+its farm. Duplication copies the current overrides, not simulation assignments.
 
 `standard` is a virtual immutable module with empty overrides, named
-`Standard (SEGES 2026)`. It can be read and duplicated but cannot be changed,
-deleted, or shared. An omitted/null module selection means `standard`.
+`Standard (SEGES 2026)`. It can be read and duplicated but cannot be changed
+or deleted. An omitted/null module selection means `standard`.
 
-Inaccessible modules return 404. Stale revisions, duplicate members, and
-last-member removal return 409. Invalid input and attempts to mutate standard
-return 422.
+Deleting a module moves every simulation on the farm that selects it back to
+`standard` and marks its results outdated. The applied snapshot and its figures
+stay until the economics are recalculated. While such a simulation is being
+created, recalculated or optimized, deletion returns 409.
+
+Unknown farms and modules from another farm return 404. Stale revisions return
+409. Invalid input and attempts to mutate standard return 422.
 
 ## Reference assumptions and identifiers
 
@@ -86,18 +87,60 @@ flat costs apply only where the existing calculator uses the legacy cost budget.
 General price-list entries affect calculations only when their scheme or cost is
 already included; setting a price does not enable an optional subsidy scheme.
 
-The current importers do not retain work-rate or work-quantity units. These
-entries therefore explicitly use generic `kr/enhed` and `enheder/ha`; their
-numeric defaults are still the real database values. Existing manure-spreading
-costs retain the calculator's flat application-rate placeholder. Recalculation
-does not introduce a new manure purchase or transport model.
+Prices carry the unit and `source` from the økonomi CSVs. A work quantity's
+unit follows the rate that prices it, which depends on the soil group, so the
+catalogue keeps `enheder/ha` for quantities; crop budgets carry the resolved
+unit. Existing manure-spreading costs retain the calculator's flat
+application-rate placeholder. Recalculation does not introduce a new manure
+purchase or transport model.
+
+## Crop budgets
+
+`GET /farms/{farmId}/economics/budgets?farmingSystem=Konventionel` returns the
+standard budget of each crop in the farm's field history, largest area first,
+and then each crop the simulations' sædskifter can choose. Every budget is for
+the soil type covering most of the farm's area, unirrigated, at the N-norm with
+handelsgødning (none when `farmingSystem` is `Økologisk`), row by row as the
+calculator prices it. With `simulationId`, the simulation's farming system and
+gødning apply instead, so husdyrgødning covers up to its `orgMineralN` of the
+norm. `jbNr` is null and `crops` empty when no field has a soil type.
+
+```json
+{
+  "jbNr": 5,
+  "irrigated": false,
+  "farmingSystem": "Konventionel",
+  "prices": [{"id": "rate:[...]", "label": "Pløjning", "unit": "kr/gang", "value": 825, "source": "SEGES"}],
+  "crops": [{
+    "cropCode": 1,
+    "cropName": "Vårbyg",
+    "precedingCropValueKgNHa": 0,
+    "missingYieldNorm": false,
+    "revenue": [{"label": "Udbytte", "category": "Indtægt", "quantity": 66,
+                 "quantityUnit": "hkg/ha", "quantityId": null, "priceId": "sale:[...]",
+                 "followsYield": true}],
+    "subsidies": [],
+    "costs": []
+  }]
+}
+```
+
+A row's amount is `quantity × price`. With a module, replace the price by
+`prices[priceId]` and the quantity by `quantities[quantityId]`, and scale rows
+with `followsYield` by `1 + yieldPct[cropCode] / 100`. Revenue, subsidies minus
+costs then give the dækningsbidrag `calculate_db` returns for the same inputs.
+A gødning row is only listed when the standard budget uses it, so a quantity
+override for a missing row, such as handelsgødning on an organic budget, has
+no row to apply to.
+Cost rows keep their Danish category.
 
 ## Simulation selection and applied snapshots
 
 Creation accepts `economicsModuleId` alongside the existing simulation inputs.
-The server checks module membership and captures a snapshot before submitting
-the existing creation job. Initial generation and creation retries use that
-captured snapshot, even if the module subsequently changes or disappears.
+The server checks that the module belongs to the farm and captures a snapshot
+before submitting the existing creation job. Initial generation and creation
+retries use that captured snapshot, even if the module subsequently changes or
+disappears.
 
 Simulation responses add:
 
@@ -116,9 +159,8 @@ Simulation responses add:
 The selected ID expresses the user's requested module. The snapshot describes
 **the overrides actually applied to the displayed calculations**. These can
 intentionally differ until the user recalculates. Snapshots belong to their
-simulation: every farm member can inspect and use them without original-module
-membership. Renaming, editing, deleting, or revoking access to a module does not
-change snapshots or dispatch any simulation jobs.
+simulation and stay after the module is deleted. Renaming, editing, or deleting
+a module does not change snapshots or dispatch any simulation jobs.
 
 `PATCH /farms/{farmId}/simulations/{simulationId}/economics` accepts:
 
@@ -126,10 +168,10 @@ change snapshots or dispatch any simulation jobs.
 {"expectedRevision": 5, "economicsModuleId": "module-uuid"}
 ```
 
-This checks membership, changes the selected ID, advances the simulation revision,
-and marks optimization results outdated. It retains the last calculated values
-and display data. It submits no job, including on subsequent view reads. Saving
-an unchanged selection is a no-op.
+This checks that the module belongs to the farm, changes the selected ID,
+advances the simulation revision, and marks optimization results outdated. It
+retains the last calculated values and display data. It submits no job,
+including on subsequent view reads. Saving an unchanged selection is a no-op.
 
 ## Explicit manual recalculation
 
@@ -152,9 +194,9 @@ different body returns 409. A genuinely new request needs a new UUID and the
 current simulation revision.
 
 `refreshFromModule` defaults to true. It captures the latest selected module's
-overrides at submission, requiring membership in that module. False instead
-uses the already-applied snapshot, including after source deletion or access
-loss, and does not change the selected ID. Underlying reference defaults are
+overrides at submission, requiring that the module still exists on the farm.
+False instead uses the already-applied snapshot, including after source
+deletion, and does not change the selected ID. Underlying reference defaults are
 not frozen and are reloaded when calculation starts.
 
 Recalculation preserves field IDs, rotations, locks, manual edits, constraints,
@@ -180,6 +222,8 @@ retry cannot restart failed economics work. Retry also completes synchronously
 with HTTP 200. Calculation failures return 500 with `code: CALCULATION_FAILED`;
 budget expiry returns 504 with `code: CALCULATION_TIMEOUT`. Failed state is
 persisted for explicit retry, without automatic retry sleeps or SQS dispatch.
+Simulations report `economicsRecalculationFailed: true` while failed economics
+work waits for this retry, so clients can tell it apart from a failed creation.
 
 Recalculation does not optimize or pick new rotations. Existing optimizer output
 remains a historical result marked `outdated`; result responses and saved-result
@@ -189,17 +233,18 @@ explicitly to calculate a new optimum. Farm history uses standard economics.
 
 ## Frontend integration and rollout
 
-The frontend branch is unchanged. Replace browser profile storage with the
-module APIs and read actual assumptions from the catalogue. Adapt profile IDs,
-quantity line IDs, and context-variant selection to the emitted identifiers.
-Pass `economicsModuleId` during creation, save selection separately, and offer
-an explicit recalculation action. Remove assumptions that profiles belong to one
-farm, automatically propagate edits, or revert simulations to standard on deletion.
-Label pending selection versus applied snapshot, and distinguish current values
-from the previous optimization's saved snapshot.
+The frontend reads the farm's crop budgets, keeps profiles as modules, passes
+`economicsModuleId` when a simulation is created or copied, saves a changed
+selection separately and offers an explicit recalculation while the selected
+module differs from the applied snapshot. Figures, the comparison and a field's
+calculation name the applied snapshot.
 
 Economics modules require schema migration `20261013_0001`, introduced with
-the original economics release. Existing simulations read as standard without
-bulk recalculation or migration of browser-only profiles. The Fargate compute
+the original economics release, and `20261015_0002`, which moves each module to
+the farm of the first simulation that uses it, copies it for other farms that
+use it and removes modules no simulation uses. Units and sources need
+`20261015_0001` and a new run of the two økonomi loaders; until then work rates
+show `kr/enhed` and prices have no source. Existing simulations read as
+standard without bulk recalculation or migration of browser-only profiles. The Fargate compute
 change adds no schema migration: economics executes in the backend, while the
 queue carries only optimization jobs. See [Fargate deployment](../fargate/README.md).

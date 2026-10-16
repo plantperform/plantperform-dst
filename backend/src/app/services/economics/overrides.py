@@ -25,11 +25,18 @@ def quantity_id(crop, namespace, *parts):
     return f"{crop}/{identifier(namespace, *parts)}"
 
 
+def price_unit(unit):
+    if not unit:
+        return "kr/enhed"
+    return unit if "/" in unit else f"kr/{unit}"
+
+
 def assumptions():
     """Raw context variants, rather than a fictitious uniform farm budget.
 
-    Work rate/quantity units were not retained by the existing importers;
-    generic units are intentional. Reference row ordering is never an identity.
+    A work quantity's unit follows the rate that prices it, which depends on
+    the soil group, so quantities keep a generic unit here. Reference row
+    ordering is never an identity.
     """
     prices, quantities = {}, {}
     yields, straw_yields = [], []
@@ -67,12 +74,12 @@ def assumptions():
             context = dict(
                 cropCode=row.afgroedekode, farmingSystem=row.driftsform, quality=row.kvalitet
             )
-            for namespace, value, unit in (
-                ("sale", row.salgspris, row.enhed),
-                ("straw", row.halm_pris_kr_kg, "kr/kg"),
+            for namespace, value, unit, source in (
+                ("sale", row.salgspris, row.enhed, row.kilde),
+                ("straw", row.halm_pris_kr_kg, "kr/kg", row.halm_kilde),
             ):
                 key = identifier(namespace, row.afgroedekode, row.driftsform, row.kvalitet)
-                prices[key] = dict(id=key, value=value, unit=unit, context=context)
+                prices[key] = dict(id=key, value=value, unit=unit, source=source, context=context)
         for row in session.execute(select(arbejdssats_table)):
             key = identifier(
                 "rate", row.behandling, row.jordbonitet, row.afgroedekode, row.driftsform
@@ -81,7 +88,8 @@ def assumptions():
                 id=key,
                 label=row.behandling,
                 value=row.pris_kr_per_enhed,
-                unit="kr/enhed",
+                unit=price_unit(row.enhed),
+                source=row.kilde,
                 context=dict(
                     cropCode=row.afgroedekode,
                     farmingSystem=row.driftsform,
@@ -120,7 +128,12 @@ def assumptions():
                 cropCode=row.afgroedekode, farmingSystem=row.driftsform, category=row.kategori
             )
             prices[key] = dict(
-                id=key, label=row.behandling, value=row.udgift_kr_ha, unit="kr/ha", context=context
+                id=key,
+                label=row.behandling,
+                value=row.udgift_kr_ha,
+                unit="kr/ha",
+                source=row.kilde,
+                context=context,
             )
             qty = quantity_id(
                 row.afgroedekode, "cost", row.driftsform, row.kategori, row.behandling
@@ -135,7 +148,8 @@ def assumptions():
                 id=key,
                 label=row.post,
                 value=row.pris,
-                unit=row.enhed,
+                unit=price_unit(row.enhed),
+                source=row.kilde,
                 context=dict(category=row.kategori, type=row.type),
             )
             for crop in crops:
