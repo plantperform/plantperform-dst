@@ -218,6 +218,8 @@ retry cannot restart failed economics work. Retry also completes synchronously
 with HTTP 200. Calculation failures return 500 with `code: CALCULATION_FAILED`;
 budget expiry returns 504 with `code: CALCULATION_TIMEOUT`. Failed state is
 persisted for explicit retry, without automatic retry sleeps or SQS dispatch.
+Simulations report `economicsRecalculationFailed: true` while failed economics
+work waits for this retry, so clients can tell it apart from a failed creation.
 
 Recalculation does not optimize or pick new rotations. Existing optimizer output
 remains a historical result marked `outdated`; result responses and saved-result

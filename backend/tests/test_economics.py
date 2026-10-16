@@ -287,12 +287,13 @@ class EconomicsDatabaseTests(DatabaseTests):
                     json=request.model_dump(mode="json", by_alias=True),
                 )
             self.assertEqual(response.status_code, 504)
-            self.assertEqual(
-                repository.get_simulation("farm", "sim", EMAIL).creation_status, "failed"
-            )
+            failed = repository.get_simulation("farm", "sim", EMAIL)
+            self.assertEqual(failed.creation_status, "failed")
+            self.assertTrue(failed.economics_recalculation_failed)
             retried = client.post("/api/v0/farms/farm/simulations/sim/economics/recalculate/retry")
         self.assertEqual(retried.status_code, 200, retried.text)
         self.assertEqual(retried.json()["creationStatus"], "done")
+        self.assertFalse(retried.json()["economicsRecalculationFailed"])
         self.queue.send_message.assert_not_called()
 
     def install_calculation_inputs(self):
