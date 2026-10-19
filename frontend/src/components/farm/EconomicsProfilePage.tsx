@@ -23,6 +23,7 @@ import {
 } from '@/components/farm/economics-ui'
 import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
+import { EconomicsProfileShareButton } from '@/components/farm/EconomicsProfileShareButton'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
 import { NameList } from '@/components/NameList'
 import { Button } from '@/components/ui/button'
@@ -273,6 +274,7 @@ const ProfileView = ({
                   <TextCursorInput aria-hidden="true" />
                   Omdøb
                 </Button>
+                <EconomicsProfileShareButton profile={profile} />
                 <Button
                   variant="outline"
                   onClick={() => onDeleteProfile(profile)}

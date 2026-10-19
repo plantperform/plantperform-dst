@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,35 +11,43 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-type ConfirmDeleteDialogProps = {
+type ConfirmDialogProps = {
   name: string | null
   title?: string
   description: string
   confirmLabel: string
+  destructive?: boolean
+  children?: ReactNode
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
 }
 
-export const ConfirmDeleteDialog = ({
+export const ConfirmDialog = ({
   name,
   title,
   description,
   confirmLabel,
+  destructive = true,
+  children,
   onOpenChange,
   onConfirm,
-}: ConfirmDeleteDialogProps) => (
+}: ConfirmDialogProps) => (
   <Dialog open={name !== null} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>{title ?? `Slet ${name}?`}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
+      {children}
       <DialogFooter>
         <DialogClose asChild>
           <Button variant="outline">Annuller</Button>
         </DialogClose>
         <DialogClose asChild>
-          <Button variant="destructive" onClick={onConfirm}>
+          <Button
+            variant={destructive ? 'destructive' : 'default'}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </DialogClose>

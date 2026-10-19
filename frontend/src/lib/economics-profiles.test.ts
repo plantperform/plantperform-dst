@@ -19,6 +19,7 @@ import {
   isEconomicsCurrent,
   profileForSimulation,
   profileNameError,
+  profilesInUse,
   sharedProfileNote,
   simulationsUsingProfile,
 } from '@/lib/economics-profiles'
@@ -159,6 +160,18 @@ describe('economics profiles', () => {
       simulations[1],
     ])
     expect(simulationsUsingProfile(simulations, 'machines')).toEqual([])
+  })
+
+  it('finds the profiles that simulations on the farm use', () => {
+    const simulations = [
+      { economicsModuleId: 'careful' },
+      { economicsModuleId: 'careful' },
+      {},
+    ]
+    expect(
+      profilesInUse(PROFILES.slice(1), simulations).map((entry) => entry.id),
+    ).toEqual(['careful'])
+    expect(profilesInUse(PROFILES.slice(1), [])).toEqual([])
   })
 
   it('suggests the first free name for a new profile', () => {

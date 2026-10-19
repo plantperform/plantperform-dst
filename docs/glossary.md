@@ -24,7 +24,7 @@ field" column is the name on the wire.
 | fornavn, efternavn | `firstName`, `lastName` | | `UserName`; kept in the browser until the backend stores a name on the user |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
 | Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi and Om bedriften in the sidebar, which can be minimised |
-| adgang (til en bedrift) | farm access, `FarmMember` | | The users a farm is shared with |
+| adgang (til en bedrift eller profil) | access, `FarmMember`, `MemberList`, `useMemberAccess` | | The users a farm or a profile is shared with |
 | kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota
@@ -137,6 +137,9 @@ field" column is the name on the wire.
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
+| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
+| forlade en profil | `describeLeaveProfile`, `onLeave` | | Removes yourself from a profile shared with you; the others keep it |
+| har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |
 | genberegn økonomi | `recalculate`, `isEconomicsCurrent` | | Prices a simulation with its chosen profile without optimizing again |
 | genberegningen fejlede | `economicsRecalculationFailed` | `economicsRecalculationFailed` | A failed recalculation that can be retried |

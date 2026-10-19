@@ -16,6 +16,7 @@ import {
   ProfilesStatus,
 } from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
+import { EconomicsProfileShareButton } from '@/components/farm/EconomicsProfileShareButton'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
@@ -151,6 +152,7 @@ const ProfileCard = ({
           >
             Tilpas i guiden
           </Button>
+          <EconomicsProfileShareButton profile={profile} size="xs" />
           <Button
             size="xs"
             variant="outline"
