@@ -624,3 +624,48 @@ def generate_candidates_for_field(
         )
         for item in prepared
     ]
+
+
+def generate_permanent_crop_candidate(
+    afgrode_kode: int,
+    jbnr: int,
+    godning: GodningSettings,
+    fdato: str = "20/8",
+    precision_dagsbasis: bool = False,
+    real_history: dict[str, dict] | None = None,
+    percolation_by_kategori: PercolationByKategori | None = None,
+    org_n_topsoil: float | None = None,
+    s_soil: float | None = None,
+    economics_key: str = "",
+) -> RotationCandidateEvaluation:
+    """Evaluate the "keep growing this permanent crop" candidate for a field.
+
+    A field whose latest real crop is permanent (see
+    afgroede_normer.is_permanent_afgrode) has no rotation to pick from, so it
+    is locked to this crop in all eight positions. The crop is fertilised like
+    every other candidate, from the simulation's fertiliser settings at 100 %
+    N-norm, so an Økologisk simulation gives it no mineral fertiliser either.
+    Only the lookback to 2025/26 comes from the field's real history (Bilag 3).
+    """
+    return evaluate_sequence_for_mark(
+        RotationCandidateRef(
+            saedskiftevariant="permanent", variant=str(afgrode_kode), n_norm_pct="100",
+        ),
+        [afgrode_kode] * 8,
+        [None] * 8,
+        [None] * 8,
+        8,
+        jbnr,
+        godning.driftsform,
+        godning.org_mineral_n,
+        godning.mineralsk_andel_pct,
+        godning.only_organic,
+        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+        fdato=fdato,
+        precision_dagsbasis=precision_dagsbasis,
+        real_history=real_history,
+        percolation_by_kategori=percolation_by_kategori,
+        org_n_topsoil=org_n_topsoil,
+        s_soil=s_soil,
+        economics_key=economics_key,
+    )

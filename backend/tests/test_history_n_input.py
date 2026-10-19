@@ -70,13 +70,6 @@ class HistoryNInputTests(unittest.TestCase):
             self.history_n_input(None), {"mncs": 0.0, "mnca": 0.0, "g0": 0.0},
         )
 
-    def test_simulation_lookup_keeps_historical_allocation(self) -> None:
-        # _n_input feeds generate_permanent_crop_candidate, which must not apply the rule.
-        self.assertEqual(
-            field_history_evaluator._n_input(BRAK, 4, "Fyn", False),
-            {"mncs": 20.0, "mnca": 0.0, "g0": 70.0},
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

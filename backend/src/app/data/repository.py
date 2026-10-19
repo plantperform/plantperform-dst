@@ -71,11 +71,13 @@ from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soi
 from app.services.rotations import saedskifte_library
 from app.services.rotations.afgroede_normer import is_permanent_afgrode
 from app.services.rotations.historisk_goedning import real_history_lookback
-from app.services.scenario.candidate_evaluator import generate_candidates_for_field
+from app.services.scenario.candidate_evaluator import (
+    generate_candidates_for_field,
+    generate_permanent_crop_candidate,
+)
 from app.services.scenario.field_history_evaluator import (
     REAL_HISTORY_END_YEAR,
     evaluate_real_history_for_field,
-    generate_permanent_crop_candidate,
 )
 from app.services.soil.jbnr import FALLBACK_JBNR
 
@@ -575,12 +577,11 @@ def prepare_simulation_field(
         if is_permanent_afgrode(latest_crop_code):
             permanent_candidate = generate_permanent_crop_candidate(
                 latest_crop_code,
-                registry_row.crop_history or {},
                 jbnr,
-                registry_row.goedningsregion,
-                bool(registry_row.oeko),
+                request.godning,
                 fdato=request.eea_fdato,
                 precision_dagsbasis=request.eea_precision_dagsbasis,
+                real_history=real_history,
                 percolation_by_kategori=percolation,
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
