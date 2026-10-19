@@ -1,42 +1,58 @@
-import { LogOut, Trash2, UserPlus, X } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mutate } from 'swr'
 
+import { ApiError } from '@/api/client'
+import {
+  addEconomicsModuleMember,
+  useEconomicsModulesMembers,
+} from '@/api/economics'
 import { farmMembersKey, farmsKey, useFarmMembers } from '@/api/hooks'
 import { addFarmMember, removeFarmMember } from '@/api/mutations'
-import type { Farm } from '@/api/types'
+import type { Farm, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
-import { ConfirmDeleteDialog } from '@/components/farm/ConfirmDeleteDialog'
+import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { DeleteFarmDialog } from '@/components/farm/DeleteFarmDialog'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useMemberAccess } from '@/components/farm/member-access-state'
+import { MemberList, ShareByEmailForm } from '@/components/farm/MemberAccess'
+import { NameList } from '@/components/NameList'
 import { useToast } from '@/components/toast'
-import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { FieldError } from '@/components/ui/field-error'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { LoadError } from '@/components/ui/load-error'
-import { Spinner } from '@/components/ui/spinner'
-import { validateEmail } from '@/lib/auth-form'
-import { describeLeaveFarm, otherMemberEmails } from '@/lib/farm-access'
+import { formatNameList } from '@/lib/economics'
+import { profilesInUse } from '@/lib/economics-profiles'
+import {
+  describeLeaveFarm,
+  describeShareFarm,
+  memberProfileNames,
+  memberProfilesLabel,
+  otherMemberEmails,
+} from '@/lib/farm-access'
 import { formatCvr } from '@/lib/farm-form'
 import { HOME_OVERVIEW_STATE } from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
 
 const CARD_TITLE_CLASS = 'text-[15px] font-semibold'
 
-const ROW_ACTION_CLASS =
-  'shrink-0 gap-1.5 text-muted-foreground hover:text-destructive'
-
 type FarmAboutPageProps = {
   farm: Farm
+  simulations: Simulation[]
 }
 
-export const FarmAboutPage = ({ farm }: FarmAboutPageProps) => {
+export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { showToast } = useToast()
+  const { showToast, showError } = useToast()
+  const economics = useEconomicsProfiles()
+  const farmProfiles = profilesInUse(economics.ownProfiles ?? [], simulations)
+  const { data: profileMembers, mutate: refreshProfileMembers } =
+    useEconomicsModulesMembers(farmProfiles.map((profile) => profile.id))
+  const sharedProfiles = farmProfiles.map((profile) => ({
+    name: profile.name,
+    members: profileMembers?.[profile.id] ?? [],
+  }))
   const {
     data: members = [],
     error: membersError,
@@ -44,15 +60,27 @@ export const FarmAboutPage = ({ farm }: FarmAboutPageProps) => {
     isValidating: membersValidating,
     mutate: retryMembers,
   } = useFarmMembers(farm.id)
-  const [shareEmail, setShareEmail] = useState('')
-  const [shareError, setShareError] = useState<string | null>(null)
-  const [sharing, setSharing] = useState(false)
-  const [removingEmail, setRemovingEmail] = useState<string | null>(null)
-  const [removeError, setRemoveError] = useState<string | null>(null)
-  const [leaveOpen, setLeaveOpen] = useState(false)
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null)
+  const [profileIds, setProfileIds] = useState<string[]>([])
   const [deleteOpen, setDeleteOpen] = useState(false)
   const ownEmail = user?.email ?? ''
   const otherEmails = otherMemberEmails(members, ownEmail)
+  const access = useMemberAccess({
+    name: farm.name,
+    members,
+    ownEmail,
+    removeMember: (email) => removeFarmMember(farm.id, email),
+    onRemoved: async (email) => {
+      await mutate(farmMembersKey(farm.id))
+      showToast(`${email} har ikke længere adgang`)
+    },
+    onLeft: async () => {
+      await mutate(farmsKey)
+      showToast(`Du har forladt ${farm.name}`)
+      navigate('/', { state: HOME_OVERVIEW_STATE })
+    },
+    leaveFailure: 'Kunne ikke forlade bedriften.',
+  })
   const details = [
     { label: 'Bedriftens navn', value: farm.name },
     { label: 'Ejer', value: farm.ownerName },
@@ -62,56 +90,76 @@ export const FarmAboutPage = ({ farm }: FarmAboutPageProps) => {
     },
   ]
 
-  const share = async (event: FormEvent) => {
+  const confirmShare = (event: FormEvent) => {
     event.preventDefault()
-    const email = shareEmail.trim().toLowerCase()
-    if (validateEmail(email)) {
-      setShareError('Skriv en e-mailadresse.')
-      return
-    }
-    if (members.some((member) => member.email === email)) {
-      setShareError('Har allerede adgang.')
-      return
-    }
-    setSharing(true)
-    setShareError(null)
-    try {
-      await addFarmMember(farm.id, email)
-      await mutate(farmMembersKey(farm.id))
-      setShareEmail('')
-      showToast(`${email} har nu adgang til ${farm.name}`)
-    } catch {
-      setShareError(
-        'Kunne ikke dele bedriften. Personen skal have en bekræftet konto i PlantPerform.',
-      )
-    } finally {
-      setSharing(false)
-    }
+    const email = access.validEmail()
+    if (!email) return
+    setProfileIds([])
+    setConfirmEmail(email)
   }
 
-  const removeMember = async (email: string) => {
-    const leaving = email === ownEmail
-    setRemovingEmail(email)
-    setRemoveError(null)
-    try {
-      await removeFarmMember(farm.id, email)
-      if (leaving) {
-        await mutate(farmsKey)
-        showToast(`Du har forladt ${farm.name}`)
-        navigate('/', { state: HOME_OVERVIEW_STATE })
-        return
-      }
-      await mutate(farmMembersKey(farm.id))
-      showToast(`${email} har ikke længere adgang`)
-    } catch {
-      setRemoveError(
-        leaving
-          ? 'Kunne ikke forlade bedriften.'
-          : `Kunne ikke fjerne ${email}.`,
-      )
-    } finally {
-      setRemovingEmail(null)
-    }
+  const toggleProfile = (profileId: string) =>
+    setProfileIds((current) =>
+      current.includes(profileId)
+        ? current.filter((id) => id !== profileId)
+        : [...current, profileId],
+    )
+
+  const shareProfiles = (email: string, ids: string[]) =>
+    Promise.all(
+      farmProfiles
+        .filter((profile) => ids.includes(profile.id))
+        .map((profile) =>
+          addEconomicsModuleMember(profile.id, email).then(
+            () => ({ name: profile.name, shared: true }),
+            (error: unknown) => ({
+              name: profile.name,
+              shared: error instanceof ApiError && error.status === 409,
+            }),
+          ),
+        ),
+    )
+
+  const share = (email: string, ids: string[]) =>
+    access.share(
+      async () => {
+        await addFarmMember(farm.id, email)
+        const profiles = await shareProfiles(email, ids)
+        await Promise.all([
+          mutate(farmMembersKey(farm.id)),
+          refreshProfileMembers(),
+        ])
+        const names = (shared: boolean) =>
+          profiles
+            .filter((profile) => profile.shared === shared)
+            .map((profile) => profile.name)
+        showToast(
+          `${email} har nu adgang til ${formatNameList([farm.name, ...names(true)])}`,
+        )
+        if (names(false).length > 0) {
+          showError(
+            `${formatNameList(names(false))} kunne ikke deles med ${email}. Del dem fra Økonomi.`,
+          )
+        }
+      },
+      () =>
+        'Kunne ikke dele bedriften. Personen skal have en bekræftet konto i PlantPerform.',
+    )
+
+  const describeMember = (email: string) => {
+    const names =
+      email === ownEmail ? [] : memberProfileNames(email, sharedProfiles)
+    return names.length > 0 ? (
+      <>
+        {memberProfilesLabel(names.length)}{' '}
+        <NameList
+          items={names}
+          renderItem={(name) => (
+            <b className="font-semibold text-foreground">{name}</b>
+          )}
+        />
+      </>
+    ) : null
   }
 
   return (
@@ -157,128 +205,19 @@ export const FarmAboutPage = ({ farm }: FarmAboutPageProps) => {
               dele bedriften videre.
             </p>
           </div>
-          {membersLoading ? (
-            <p className="flex items-center gap-2 border-b px-6 py-4 text-sm text-muted-foreground">
-              <Spinner />
-              Henter, hvem der har adgang...
-            </p>
-          ) : membersError ? (
-            <div className="border-b px-6 py-4">
-              <LoadError
-                message="Kunne ikke hente, hvem der har adgang."
-                onRetry={() => void retryMembers()}
-                retrying={membersValidating}
-              />
-            </div>
-          ) : (
-            <ul>
-              {members.map((member) => {
-                const isSelf = member.email === ownEmail
-                const removing = removingEmail === member.email
-                return (
-                  <li
-                    key={member.email}
-                    className="flex items-center gap-3.5 border-b border-border/60 px-6 py-3"
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-[15px]">
-                      <TruncatedTooltip
-                        content={member.email}
-                        className="truncate"
-                      >
-                        {member.email}
-                      </TruncatedTooltip>
-                      {isSelf ? (
-                        <span className="shrink-0 text-[13px] text-muted-foreground">
-                          (dig)
-                        </span>
-                      ) : null}
-                    </span>
-                    {isSelf ? (
-                      members.length > 1 ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={ROW_ACTION_CLASS}
-                          loading={removing}
-                          onClick={() => setLeaveOpen(true)}
-                        >
-                          {removing ? null : (
-                            <LogOut className="size-4" aria-hidden="true" />
-                          )}
-                          Forlad
-                        </Button>
-                      ) : null
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={ROW_ACTION_CLASS}
-                        loading={removing}
-                        aria-label={`Fjern ${member.email}`}
-                        onClick={() => void removeMember(member.email)}
-                      >
-                        {removing ? null : (
-                          <X className="size-4" aria-hidden="true" />
-                        )}
-                        Fjern
-                      </Button>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {removeError ? (
-            <p
-              role="alert"
-              className="border-b px-6 py-3 text-[13px] text-destructive"
-            >
-              {removeError}
-            </p>
-          ) : null}
-          <form
-            className="bg-background/50 px-6 pt-[18px] pb-5"
-            onSubmit={(event) => void share(event)}
-            noValidate
-          >
-            <Label
-              htmlFor="share-farm-email"
-              className="text-[13px] font-normal"
-            >
-              Del med
-            </Label>
-            <div className="mt-1.5 flex gap-2.5">
-              <Input
-                id="share-farm-email"
-                type="email"
-                autoComplete="off"
-                placeholder="navn@eksempel.dk"
-                value={shareEmail}
-                aria-invalid={shareError ? true : undefined}
-                aria-describedby="share-farm-help share-farm-error"
-                className="min-w-0 flex-1 bg-card"
-                onChange={(event) => {
-                  setShareEmail(event.target.value)
-                  setShareError(null)
-                }}
-              />
-              <Button type="submit" className="shrink-0" loading={sharing}>
-                {sharing ? null : (
-                  <UserPlus className="size-4" aria-hidden="true" />
-                )}
-                {sharing ? 'Deler...' : 'Del'}
-              </Button>
-            </div>
-            <div className="mt-2">
-              <FieldError id="share-farm-error" message={shareError} />
-            </div>
-            <p
-              id="share-farm-help"
-              className="mt-2 text-[13px] leading-normal text-muted-foreground"
-            >
-              Personen skal have en bekræftet konto i PlantPerform.
-            </p>
-          </form>
+          <MemberList
+            {...access.list}
+            loading={membersLoading}
+            loadError={membersError}
+            retrying={membersValidating}
+            onRetry={() => void retryMembers()}
+            describeMember={describeMember}
+          />
+          <ShareByEmailForm
+            {...access.form}
+            className="bg-background/50"
+            onSubmit={confirmShare}
+          />
         </Card>
 
         <Card
@@ -306,15 +245,49 @@ export const FarmAboutPage = ({ farm }: FarmAboutPageProps) => {
         </Card>
       </div>
 
-      <ConfirmDeleteDialog
-        name={leaveOpen ? farm.name : null}
-        title={`Forlad ${farm.name}?`}
+      <ConfirmDialog
+        name={confirmEmail}
+        title={`Del ${farm.name} med ${confirmEmail}?`}
+        description={describeShareFarm(confirmEmail ?? '')}
+        confirmLabel="Del bedrift"
+        destructive={false}
+        onOpenChange={(open) => {
+          if (!open) setConfirmEmail(null)
+        }}
+        onConfirm={() => {
+          if (confirmEmail) void share(confirmEmail, profileIds)
+        }}
+      >
+        {farmProfiles.length > 0 ? (
+          <fieldset className="grid gap-2">
+            <legend className="mb-2 text-sm font-medium">
+              Del også økonomiprofiler, bedriften bruger
+            </legend>
+            {farmProfiles.map((profile) => (
+              <label
+                key={profile.id}
+                className="flex items-center gap-2.5 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  checked={profileIds.includes(profile.id)}
+                  onChange={() => toggleProfile(profile.id)}
+                />
+                {profile.name}
+              </label>
+            ))}
+            <p className="text-[13px] text-muted-foreground">
+              Den, du deler med, kan også rette, dele og slette de profiler, du
+              vælger.
+            </p>
+          </fieldset>
+        ) : null}
+      </ConfirmDialog>
+      <ConfirmDialog
+        {...access.leave}
         description={describeLeaveFarm(otherEmails)}
         confirmLabel="Forlad bedrift"
-        onOpenChange={(open) => {
-          if (!open) setLeaveOpen(false)
-        }}
-        onConfirm={() => void removeMember(ownEmail)}
       />
       <DeleteFarmDialog
         farm={farm}

@@ -92,6 +92,14 @@ export const simulationsUsingProfile = <T extends ProfiledSimulation>(
       (simulation.economicsModuleId ?? STANDARD_PROFILE_ID) === profileId,
   )
 
+export const profilesInUse = (
+  profiles: EconomicsProfile[],
+  simulations: ProfiledSimulation[],
+): EconomicsProfile[] =>
+  profiles.filter(
+    (profile) => simulationsUsingProfile(simulations, profile.id).length > 0,
+  )
+
 const comparableName = (name: string) => name.trim().toLocaleLowerCase('da-DK')
 
 export const profileNameError = (

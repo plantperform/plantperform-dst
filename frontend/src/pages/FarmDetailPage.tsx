@@ -22,7 +22,7 @@ import type { Simulation } from '@/api/types'
 import { retryFarmHistory } from '@/api/mutations'
 import { useAuth } from '@/auth/context'
 import { AppBar } from '@/components/AppBar'
-import { ConfirmDeleteDialog } from '@/components/farm/ConfirmDeleteDialog'
+import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { useToast } from '@/components/toast'
 import {
   calculationReturnState,
@@ -587,7 +587,11 @@ const FarmDetail = () => {
               <Route
                 path="about"
                 element={
-                  <FarmAboutPage key={loadedFarm.id} farm={loadedFarm} />
+                  <FarmAboutPage
+                    key={loadedFarm.id}
+                    farm={loadedFarm}
+                    simulations={simulations}
+                  />
                 }
               />
               <Route path="*" element={<Navigate to={farmPath} replace />} />
@@ -615,7 +619,7 @@ const FarmDetail = () => {
             }
             onError={showError}
           />
-          <ConfirmDeleteDialog
+          <ConfirmDialog
             name={simulationToDelete?.name ?? null}
             description="Simuleringen og dens ændringer på markerne slettes. Afgrødehistorikken og økonomiprofilerne berøres ikke."
             confirmLabel="Slet simulering"
@@ -628,7 +632,7 @@ const FarmDetail = () => {
               }
             }}
           />
-          <ConfirmDeleteDialog
+          <ConfirmDialog
             name={profileToDelete?.name ?? null}
             description={deleteProfileMessage(
               profileToDelete

@@ -288,6 +288,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
         void mutate(isSimulationKey)
         return true
       },
+      forgetProfile,
       assignProfile: async (simulation: Simulation, profileId: string) => {
         if (
           (simulation.economicsModuleId ?? STANDARD_PROFILE_ID) === profileId

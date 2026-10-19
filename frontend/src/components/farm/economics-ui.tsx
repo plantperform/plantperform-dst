@@ -5,9 +5,8 @@ import type { useFarmBudgets } from '@/api/economics'
 import type { FarmingSystem } from '@/api/types'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { AppTooltip } from '@/components/ui/app-tooltip'
-import { LoadError } from '@/components/ui/load-error'
+import { Pending } from '@/components/ui/pending'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import { Spinner } from '@/components/ui/spinner'
 import {
   dbDeltaBar,
   formatSignedDkk,
@@ -15,39 +14,6 @@ import {
   type EconomicsAssumptions,
 } from '@/lib/economics'
 import { cn } from '@/lib/utils'
-
-type PendingProps = {
-  failed: boolean
-  failure: string
-  loading: string
-  retrying?: boolean
-  onRetry: () => void
-  className?: string
-}
-
-const Pending = ({
-  failed,
-  failure,
-  loading,
-  retrying,
-  onRetry,
-  className,
-}: PendingProps) =>
-  failed ? (
-    <div className={className}>
-      <LoadError message={failure} retrying={retrying} onRetry={onRetry} />
-    </div>
-  ) : (
-    <p
-      className={cn(
-        'flex items-center gap-2 text-sm text-muted-foreground',
-        className,
-      )}
-    >
-      <Spinner />
-      {loading}
-    </p>
-  )
 
 type BudgetsGateProps = {
   budgets: ReturnType<typeof useFarmBudgets>
