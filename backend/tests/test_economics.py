@@ -51,8 +51,8 @@ from app.domain.economics import (
 )
 from app.domain.simulation import CreateSimulationRequest
 from app.services.calculation import CalculationFailedError
+from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
-from app.services.economics import jobs, overrides
 from app.services.economics import runner as economics_worker
 from plantperform_fargate import worker as optimizer_worker
 
@@ -110,6 +110,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         metadata.create_all(self.engine, tables=tables)
         self.enterContext(patch.object(calculator, "SessionLocal", self.sessions))
         self.enterContext(patch.object(overrides, "SessionLocal", self.sessions))
+        self.enterContext(patch.object(budget, "SessionLocal", self.sessions))
         calculator.clear_lookup_cache()
         self.addCleanup(calculator.clear_lookup_cache)
         with self.sessions.begin() as session:
@@ -187,6 +188,8 @@ class EconomicsDatabaseTests(DatabaseTests):
                     afgroedekode=None,
                     driftsform="",
                     pris_kr_per_enhed=100,
+                    enhed="kr/gang",
+                    kilde="SEGES",
                 )
             )
             session.execute(
@@ -450,6 +453,136 @@ class EconomicsDatabaseTests(DatabaseTests):
                 update(salgspris_table).values(source_order=salgspris_table.c.source_order + 10)
             )
         self.assertEqual(overrides.assumptions(), catalog)
+
+    def test_farm_budgets_price_out_to_the_calculated_db(self):
+        fields = [
+            SimpleNamespace(
+                jbnr=5,
+                area_ha=10,
+                crop_rotation=[SimpleNamespace(afgrode_kode=1), SimpleNamespace(afgrode_kode=11)],
+            ),
+            SimpleNamespace(jbnr=3, area_ha=8, crop_rotation=[SimpleNamespace(afgrode_kode=999)]),
+        ]
+        godning = SimpleNamespace(driftsform="Konventionel", only_organic=False, org_mineral_n=50)
+        simulation = SimpleNamespace(id="sim", godning=godning)
+        url = "/api/v0/farms/farm/economics/budgets"
+        with (
+            patch.object(budget, "list_fields", return_value=fields),
+            patch.object(budget, "list_simulations", return_value=[simulation]),
+            patch.object(budget, "scenario_afgrodekoder", return_value={216, 11}),
+        ):
+            budgets = self.client.get(url).json()
+            manured = self.client.get(url, params={"simulationId": "sim"}).json()
+            organic = self.client.get(url, params={"farmingSystem": "Økologisk"}).json()
+            self.assertEqual(self.client.get(url, params={"simulationId": "x"}).status_code, 404)
+        self.assertEqual(budgets["jbNr"], 5)
+        self.assertEqual([crop["cropCode"] for crop in budgets["crops"]], [1, 11, 216])
+        mineral_n = overrides.quantity_id(1, "fertiliser", "mineralN")
+        self.assertEqual(
+            [
+                line["quantity"]
+                for line in manured["crops"][0]["costs"]
+                if line["quantityId"] == mineral_n
+            ],
+            [125],
+        )
+        defaults = {price["id"]: price["value"] for price in budgets["prices"]}
+        plowing = next(line for line in budgets["crops"][0]["costs"] if line["quantityId"] == WORK)
+        self.assertEqual(
+            (plowing["quantity"], plowing["quantityUnit"], plowing["priceId"]),
+            (2, "gange", RATE),
+        )
+        self.assertEqual(
+            next(price for price in budgets["prices"] if price["id"] == RATE)["source"], "SEGES"
+        )
+
+        def priced_db(crop, changes):
+            yield_factor = 1 + changes.yield_pct.get(str(crop["cropCode"]), 0) / 100
+            total = 0.0
+            for section, sign in (("revenue", 1), ("subsidies", 1), ("costs", -1)):
+                for line in crop[section]:
+                    quantity = changes.quantities.get(line["quantityId"], line["quantity"])
+                    if line["followsYield"]:
+                        quantity *= yield_factor
+                    price = changes.prices.get(line["priceId"], defaults[line["priceId"]])
+                    total += sign * quantity * price
+            return round(total)
+
+        for changes in (
+            EconomicsOverrides(),
+            EconomicsOverrides(prices={SALE: 150, RATE: 200}, quantities={WORK: 3}),
+            EconomicsOverrides(yieldPct={"1": 10, "11": -20}),
+        ):
+            for crop in budgets["crops"]:
+                with self.subTest(crop=crop["cropCode"], changes=changes):
+                    self.assertEqual(
+                        priced_db(crop, changes),
+                        calculator.calculate_db(
+                            crop["cropCode"], "Konventionel", 5, economics_key=changes.cache_key()
+                        )["db"],
+                    )
+        defaults.update({price["id"]: price["value"] for price in manured["prices"]})
+        self.assertEqual(
+            priced_db(manured["crops"][0], EconomicsOverrides()),
+            calculator.calculate_db(1, "Konventionel", 5, org_mineral_n_applied=50)["db"],
+        )
+        self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
+        defaults.update({price["id"]: price["value"] for price in organic["prices"]})
+        self.assertEqual(
+            priced_db(organic["crops"][0], EconomicsOverrides()),
+            calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["db"],
+        )
+
+    def test_farm_budgets_require_membership_and_a_soil_type(self):
+        self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))
+        self.assertEqual(
+            budget.farm_budgets("farm", EMAIL, "Økologisk"),
+            dict(jbNr=None, farmingSystem="Økologisk", prices=[], crops=[], soilVariants={}),
+        )
+
+    def test_crop_budgets_name_each_work_rate_and_quantity_on_every_soil_group(self):
+        sand_rate = overrides.identifier("rate", "Pløjning", "JB1-3", None, "")
+        sand_work = overrides.quantity_id(
+            1, "work", "Konventionel", "JB1-3", "", "Markarbejde", "Pløjning"
+        )
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(arbejdssats_table).values(
+                    source_order=2,
+                    behandling="Pløjning",
+                    jordbonitet="JB1-3",
+                    afgroedekode=None,
+                    driftsform="",
+                    pris_kr_per_enhed=80,
+                    enhed="kr/gang",
+                )
+            )
+            session.execute(
+                insert(arbejdsmaengde_table).values(
+                    source_order=4,
+                    afgroedekode=1,
+                    driftsform="Konventionel",
+                    jordbonitet="JB1-3",
+                    kvalitet="",
+                    kategori="Markarbejde",
+                    behandling="Pløjning",
+                    antal=3,
+                )
+            )
+        rates = [dict(id=sand_rate, value=80), dict(id=RATE, value=100)]
+        variants = budget.crop_budgets([1, 11], 5, "Konventionel", False)["soilVariants"]
+        self.assertEqual(variants[RATE], rates)
+        self.assertEqual(variants[WORK], [dict(id=sand_work, value=3), dict(id=WORK, value=2)])
+        self.assertNotIn(SALE, variants)
+        self.assertNotIn(sand_rate, variants)
+        work_11 = overrides.quantity_id(
+            11, "work", "Konventionel", "JB5-6", "", "Markarbejde", "Pløjning"
+        )
+        self.assertNotIn(work_11, variants)
+        self.assertEqual(
+            budget.crop_budgets([1], 3, "Konventionel", False)["soilVariants"][sand_rate],
+            rates,
+        )
 
     def test_module_edits_and_selection_never_dispatch(self):
         module = self.module(prices={SALE: 150})

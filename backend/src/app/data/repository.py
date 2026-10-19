@@ -694,7 +694,10 @@ def list_scenario_afgrodekoder(
         simulation = _get_simulation(session, farm_id, simulation_id, email)
     if simulation is None:
         return None
+    return scenario_afgrodekoder(simulation)
 
+
+def scenario_afgrodekoder(simulation) -> set[int]:
     codes: set[int] = set()
     for saedskiftevariant in simulation.rotation_saedskiftevarianter:
         for variant in saedskifte_library.list_variants(saedskiftevariant):
