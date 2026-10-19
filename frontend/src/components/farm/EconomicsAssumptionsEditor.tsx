@@ -138,7 +138,7 @@ export const EconomicsAssumptionsEditor = ({
   const openCrop = (cropCode: number | null) => setOpened({ cropCode })
 
   return (
-    <div className="grid gap-4 @3xl:grid-cols-[12rem_minmax(0,1fr)] @3xl:items-start">
+    <div className="grid gap-4 @3xl:grid-cols-[20rem_minmax(0,1fr)] @3xl:items-start">
       <nav aria-label="Afgrøder" className={cn(RULES_CARD_CLASS, 'p-2')}>
         <ul className="space-y-0.5">
           <li>
@@ -166,7 +166,7 @@ export const EconomicsAssumptionsEditor = ({
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
-                <span className="min-w-0 flex-1 truncate">{crop.cropName}</span>
+                <span className="min-w-0 flex-1">{crop.cropName}</span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
               </button>
             </li>
