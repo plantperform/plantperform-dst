@@ -139,6 +139,7 @@ field" column is the name on the wire.
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |
 | genberegn økonomi | `recalculate`, `isEconomicsCurrent` | | Prices a simulation with its chosen profile without optimizing again |
+| genberegningen fejlede | `economicsRecalculationFailed` | `economicsRecalculationFailed` | A failed recalculation that can be retried |
 | Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
 | tilpasset | customised, `EconomicsOverrides` | | The profile's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
