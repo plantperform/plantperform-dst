@@ -13,18 +13,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { profileChanges } from '@/lib/economics'
+import { profileChanges, type EconomicsAssumptions } from '@/lib/economics'
 import {
   describeProfileOption,
   STANDARD_PROFILE_ID,
 } from '@/lib/economics-profiles'
 
 type EconomicsProfileMenuProps = {
+  assumptions: EconomicsAssumptions | undefined
   simulation: Simulation
   simulations: Simulation[]
 }
 
 export const EconomicsProfileMenu = ({
+  assumptions,
   simulation,
   simulations,
 }: EconomicsProfileMenuProps) => {
@@ -59,8 +61,9 @@ export const EconomicsProfileMenu = ({
               <span className="block text-xs text-muted-foreground">
                 {describeProfileOption(
                   option.id,
-                  profileChanges(economics.assumptions, option.overrides)
-                    .length,
+                  assumptions
+                    ? profileChanges(assumptions, option.overrides).length
+                    : null,
                   economics
                     .simulationsUsingProfile(simulations, option.id)
                     .map((entry) => entry.name),
@@ -91,6 +94,9 @@ export const EconomicsProfileMenu = ({
                 name: simulation.name,
               },
             }}
+            onClick={() =>
+              economics.setFarmingSystem(simulation.fertiliser.farmingSystem)
+            }
           >
             <List className="mr-2 size-4 shrink-0" aria-hidden="true" />
             Se alle poster i {profile.name}

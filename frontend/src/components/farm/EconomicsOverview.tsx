@@ -4,8 +4,16 @@ import { Link } from 'react-router-dom'
 import type { Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { useStartGuide } from '@/components/farm/economics-navigation'
-import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
-import { DbDelta, DbDeltaBar } from '@/components/farm/economics-ui'
+import {
+  useEconomicsAssumptions,
+  useEconomicsProfiles,
+} from '@/components/farm/economics-profiles-state'
+import {
+  BudgetsGate,
+  DbDelta,
+  DbDeltaBar,
+  FarmingSystemSwitch,
+} from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
@@ -15,11 +23,14 @@ import { cropGroupFor } from '@/lib/crop-groups'
 import {
   dbDeltaScale,
   describeProfileChanges,
+  describeBudgetSoil,
+  formatCropCount,
   formatDbDkk,
   profileChanges,
   profileDbEffect,
   type CropDbEffect,
   type DbDeltaScale,
+  type EconomicsAssumptions,
 } from '@/lib/economics'
 import {
   describeOwnProfileCount,
@@ -31,60 +42,69 @@ import {
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
-import { cn } from '@/lib/utils'
+
+const SHOWN_EFFECTS = 8
 
 type DbEffectListProps = {
   effects: CropDbEffect[]
   scale: DbDeltaScale
 }
 
-const DbEffectList = ({ effects, scale }: DbEffectListProps) => (
-  <div>
-    <p className="flex justify-between gap-3 text-xs text-muted-foreground">
-      <span>Dækningsbidrag, kr/ha</span>
-      <span>I forhold til Standard</span>
-    </p>
-    <ul
-      aria-label="Dækningsbidrag pr. ha for hver afgrøde"
-      className="mt-1.5 grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto_3.5rem] gap-x-3 text-[13px] tabular-nums"
-    >
-      {effects.map((effect) => {
-        const moved = effect.deltaDkkHa !== 0
-        return (
+const DbEffectList = ({ effects, scale }: DbEffectListProps) => {
+  const moved = effects
+    .filter((effect) => effect.deltaDkkHa !== 0)
+    .sort(
+      (left, right) => Math.abs(right.deltaDkkHa) - Math.abs(left.deltaDkkHa),
+    )
+  const hidden = moved.length - SHOWN_EFFECTS
+
+  if (moved.length === 0) return null
+
+  return (
+    <div>
+      <p className="flex justify-between gap-3 text-xs text-muted-foreground">
+        <span>Dækningsbidrag, kr/ha</span>
+        <span>I forhold til Standard</span>
+      </p>
+      <ul
+        aria-label="Dækningsbidrag pr. ha for de afgrøder, profilen ændrer"
+        className="mt-1.5 grid grid-cols-[minmax(0,10rem)_minmax(2rem,1fr)_auto_3.5rem] gap-x-3 text-[13px] tabular-nums"
+      >
+        {moved.slice(0, SHOWN_EFFECTS).map((effect) => (
           <li
             key={effect.cropCode}
-            className={cn(
-              'col-span-4 grid h-7 grid-cols-subgrid items-center',
-              !moved && 'text-muted-foreground',
-            )}
+            className="col-span-4 grid h-7 grid-cols-subgrid items-center"
           >
             <span className="flex min-w-0 items-center gap-2">
               <CropGroupTile
                 group={cropGroupFor(effect.cropCode, effect.cropName)}
-                className={moved ? undefined : 'opacity-50'}
               />
               <TruncatedTooltip content={effect.cropName} className="truncate">
                 {effect.cropName}
               </TruncatedTooltip>
             </span>
             <DbDeltaBar delta={effect.deltaDkkHa} scale={scale} />
-            <span className={cn('text-right', moved && 'font-semibold')}>
+            <span className="text-right font-semibold">
               {formatDbDkk(effect.dbDkkHa)}
             </span>
             <span className="text-right">
               <DbDelta change={effect.deltaDkkHa} />
-              {moved ? (
-                <span className="sr-only"> i forhold til Standard</span>
-              ) : null}
+              <span className="sr-only"> i forhold til Standard</span>
             </span>
           </li>
-        )
-      })}
-    </ul>
-  </div>
-)
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Og {formatCropCount(hidden)} mere.
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 type ProfileCardProps = {
+  assumptions: EconomicsAssumptions
   profile: EconomicsProfile
   effects: CropDbEffect[]
   scale: DbDeltaScale
@@ -93,6 +113,7 @@ type ProfileCardProps = {
 }
 
 const ProfileCard = ({
+  assumptions,
   profile,
   effects,
   scale,
@@ -101,7 +122,7 @@ const ProfileCard = ({
 }: ProfileCardProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
-  const changes = profileChanges(economics.assumptions, profile.overrides)
+  const changes = profileChanges(assumptions, profile.overrides)
   const movedCrops = effects.filter((effect) => effect.deltaDkkHa !== 0).length
 
   return (
@@ -170,22 +191,81 @@ type EconomicsOverviewProps = {
   onDeleteProfile: (profile: EconomicsProfile) => void
 }
 
-export const EconomicsOverview = ({
-  farmName,
+type ProfileCardsProps = EconomicsOverviewProps & {
+  assumptions: EconomicsAssumptions
+}
+
+const ProfileCards = ({
+  assumptions,
   simulations,
   onDeleteProfile,
-}: EconomicsOverviewProps) => {
+}: ProfileCardsProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
   const cards = economics.ownProfiles.map((profile) => ({
     profile,
-    effects: profileDbEffect(economics.assumptions, profile.overrides),
+    effects: profileDbEffect(assumptions, profile.overrides),
   }))
   const scale = dbDeltaScale(
     cards.flatMap((card) => card.effects.map((effect) => effect.deltaDkkHa)),
   )
-  const startFromStandard = () =>
-    startGuide({ fromProfileId: STANDARD_PROFILE_ID })
+
+  return (
+    <>
+      <EconomicsBanner
+        label="Standard"
+        title={STANDARD_PROFILE.name}
+        text={describeStandard(
+          assumptions.crops.length,
+          economics
+            .simulationsUsingProfile(simulations, STANDARD_PROFILE_ID)
+            .map((simulation) => simulation.name),
+        )}
+      >
+        <Button variant="outline" size="sm" asChild>
+          <Link to={economics.profilePath(STANDARD_PROFILE_ID)}>
+            Se Standard
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </EconomicsBanner>
+      <div className="grid auto-rows-fr gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
+        {cards.map(({ profile, effects }) => (
+          <ProfileCard
+            key={profile.id}
+            assumptions={assumptions}
+            profile={profile}
+            effects={effects}
+            scale={scale}
+            simulations={simulations}
+            onDelete={() => onDeleteProfile(profile)}
+          />
+        ))}
+        {cards.length === 0 ? (
+          <Card className="col-span-full flex flex-col items-center gap-3 border-dashed px-6 py-11 text-center">
+            <h2 className="text-[17px] font-semibold">
+              Ingen egne profiler endnu
+            </h2>
+            <p className="max-w-[460px] text-sm text-muted-foreground">
+              {ECONOMICS_INVITATION}
+            </p>
+            <Button
+              onClick={() => startGuide({ fromProfileId: STANDARD_PROFILE_ID })}
+            >
+              Tilpas økonomien til bedriften
+            </Button>
+          </Card>
+        ) : null}
+      </div>
+    </>
+  )
+}
+
+export const EconomicsOverview = (props: EconomicsOverviewProps) => {
+  const economics = useEconomicsProfiles()
+  const budgets = useEconomicsAssumptions()
+  const startGuide = useStartGuide()
+  const profileCount = economics.ownProfiles.length
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -194,63 +274,34 @@ export const EconomicsOverview = ({
           <div>
             <h1 className="font-display text-4xl tracking-tight">Økonomi</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              <b className="font-semibold text-foreground">{farmName}</b>.{' '}
-              {describeOwnProfileCount(cards.length)} Priser, mængder og
+              <b className="font-semibold text-foreground">{props.farmName}</b>.{' '}
+              {describeOwnProfileCount(profileCount)} Priser, mængder og
               udbytter, som beregningen bygger på.
+              {budgets.data ? ` ${describeBudgetSoil(budgets.data)}` : null}
             </p>
             <p className="mt-1 text-sm text-warning-strong">
               {PROFILES_NOT_IN_CALCULATION}
             </p>
           </div>
-          {cards.length > 0 ? (
-            <Button onClick={startFromStandard}>
-              <Plus aria-hidden="true" />
-              Ny økonomiprofil
-            </Button>
-          ) : null}
-        </header>
-        <EconomicsBanner
-          label="Standard"
-          title={STANDARD_PROFILE.name}
-          text={describeStandard(
-            economics.assumptions.crops.length,
-            economics
-              .simulationsUsingProfile(simulations, STANDARD_PROFILE_ID)
-              .map((simulation) => simulation.name),
-          )}
-        >
-          <Button variant="outline" size="sm" asChild>
-            <Link to={economics.profilePath(STANDARD_PROFILE_ID)}>
-              Se Standard
-              <ArrowRight aria-hidden="true" />
-            </Link>
-          </Button>
-        </EconomicsBanner>
-        <div className="grid auto-rows-fr gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
-          {cards.map(({ profile, effects }) => (
-            <ProfileCard
-              key={profile.id}
-              profile={profile}
-              effects={effects}
-              scale={scale}
-              simulations={simulations}
-              onDelete={() => onDeleteProfile(profile)}
-            />
-          ))}
-          {cards.length === 0 ? (
-            <Card className="col-span-full flex flex-col items-center gap-3 border-dashed px-6 py-11 text-center">
-              <h2 className="text-[17px] font-semibold">
-                Ingen egne profiler endnu
-              </h2>
-              <p className="max-w-[460px] text-sm text-muted-foreground">
-                {ECONOMICS_INVITATION}
-              </p>
-              <Button onClick={startFromStandard}>
-                Tilpas økonomien til bedriften
+          <div className="flex flex-wrap items-center gap-2">
+            <FarmingSystemSwitch />
+            {profileCount > 0 ? (
+              <Button
+                onClick={() =>
+                  startGuide({ fromProfileId: STANDARD_PROFILE_ID })
+                }
+              >
+                <Plus aria-hidden="true" />
+                Ny økonomiprofil
               </Button>
-            </Card>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        </header>
+        <BudgetsGate budgets={budgets}>
+          {(assumptions) => (
+            <ProfileCards {...props} assumptions={assumptions} />
+          )}
+        </BudgetsGate>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { Coins } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import type { FarmingSystem } from '@/api/types'
 import type { ReturnTarget } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { NotInCalculationDot } from '@/components/farm/economics-ui'
@@ -12,21 +13,24 @@ import { cn } from '@/lib/utils'
 
 type EconomicsChipProps = {
   profile: EconomicsProfile
+  farmingSystem: FarmingSystem
   returnTo: ReturnTarget
   className?: string
 }
 
 export const EconomicsChip = ({
   profile,
+  farmingSystem,
   returnTo,
   className,
 }: EconomicsChipProps) => {
-  const { profilePath } = useEconomicsProfiles()
+  const { profilePath, setFarmingSystem } = useEconomicsProfiles()
 
   return (
     <Link
       to={profilePath(profile.id)}
       state={{ returnTo }}
+      onClick={() => setFarmingSystem(farmingSystem)}
       className={cn(
         'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border bg-card pr-2.5 pl-2 text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         className,

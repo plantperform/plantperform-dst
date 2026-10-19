@@ -1,9 +1,73 @@
 import { Undo2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import type { useFarmBudgets } from '@/api/economics'
+import type { FarmingSystem } from '@/api/types'
+import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { AppTooltip } from '@/components/ui/app-tooltip'
-import { dbDeltaBar, formatSignedDkk, type DbDeltaScale } from '@/lib/economics'
+import { LoadError } from '@/components/ui/load-error'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  dbDeltaBar,
+  formatSignedDkk,
+  type DbDeltaScale,
+  type EconomicsAssumptions,
+} from '@/lib/economics'
 import { cn } from '@/lib/utils'
+
+type BudgetsGateProps = {
+  budgets: ReturnType<typeof useFarmBudgets>
+  className?: string
+  children: (assumptions: EconomicsAssumptions) => ReactNode
+}
+
+export const BudgetsGate = ({
+  budgets,
+  className,
+  children,
+}: BudgetsGateProps) => {
+  if (budgets.data) return children(budgets.data)
+  if (budgets.error) {
+    return (
+      <LoadError
+        className={className}
+        message="Bedriftens økonomital kunne ikke hentes."
+        retrying={budgets.isValidating}
+        onRetry={() => void budgets.mutate()}
+      />
+    )
+  }
+  return (
+    <p
+      className={cn(
+        'flex items-center gap-2 text-sm text-muted-foreground',
+        className,
+      )}
+    >
+      <Spinner />
+      Henter bedriftens økonomital
+    </p>
+  )
+}
+
+const FARMING_SYSTEMS: { value: FarmingSystem; label: string }[] = [
+  { value: 'Konventionel', label: 'Konventionel' },
+  { value: 'Økologisk', label: 'Økologisk' },
+]
+
+export const FarmingSystemSwitch = () => {
+  const economics = useEconomicsProfiles()
+  return (
+    <SegmentedControl
+      aria-label="Driftsform for tallene"
+      value={economics.farmingSystem}
+      options={FARMING_SYSTEMS}
+      labelClassName=""
+      onValueChange={economics.setFarmingSystem}
+    />
+  )
+}
 
 export const TEXT_LINK_CLASS =
   'rounded-sm font-medium text-primary underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'

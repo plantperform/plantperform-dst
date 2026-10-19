@@ -26,6 +26,7 @@ import {
   cropSources,
   cropTotals,
   cropYieldPct,
+  describeBudgetBasis,
   FERTILISER_NOTE,
   findPrice,
   formatCropCount,
@@ -44,8 +45,10 @@ import {
   priceValue,
   quantityUnitLabel,
   sharedCustomisedPrices,
+  standardLineQuantity,
   withoutCropChanges,
   withQuantityOverride,
+  withShownQuantity,
   withYieldPct,
   YIELD_ADJUSTMENT_ID,
   YIELD_ADJUSTMENT_LABEL,
@@ -156,11 +159,11 @@ const LineRow = ({
             {onChange && quantityMode === 'editable' ? (
               <EconomicsNumberField
                 value={quantity}
-                standard={line.quantity}
+                standard={standardLineQuantity(overrides, crop, line)}
                 label={`Mængden for ${line.label} i ${quantityUnit}`}
                 onCommit={(value) =>
                   onChange((current) =>
-                    withQuantityOverride(current, crop, line.id, value),
+                    withShownQuantity(current, crop, line, value),
                   )
                 }
               />
@@ -304,6 +307,7 @@ export const EconomicsCropDetail = ({
   )
   const totals = cropTotals(assumptions, overrides, crop)
   const dbChange = cropDbChange(assumptions, overrides, crop)
+  const sources = cropSources(assumptions, crop)
   const sharedPrices = sharedCustomisedPrices(assumptions, overrides, crop)
   const [confirmingRestore, setConfirmingRestore] = useState(false)
   const restoreEffects =
@@ -375,7 +379,7 @@ export const EconomicsCropDetail = ({
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Forfrugtsværdi {formatNumber(crop.precedingCropValueKgNHa)} kg N/ha
-            · tal i kr/ha for JB 5-6
+            · tal i kr/ha for {describeBudgetBasis(assumptions)}
           </p>
         </div>
         {onOverridesChange && isCropCustomised(overrides, crop) ? (
@@ -482,10 +486,19 @@ export const EconomicsCropDetail = ({
         ))}
       </div>
 
-      <p className="border-t px-5 py-2.5 text-[11px] text-muted-foreground">
-        Kilde: {formatNameList(cropSources(assumptions, crop))}.{' '}
-        {FERTILISER_NOTE}
-      </p>
+      <div className="space-y-1 border-t px-5 py-2.5 text-[11px] text-muted-foreground">
+        <p>{FERTILISER_NOTE}</p>
+        {sources.length > 0 ? (
+          <>
+            <p>Kilder:</p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              {sources.map((source) => (
+                <li key={source}>{source}</li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
     </div>
   )
 }

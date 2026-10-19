@@ -932,7 +932,7 @@ type CostLine = { category: string; treatment: string; costDkkHa: number }
 const useCustomisedLine = (cropCode: number) => {
   const fieldEconomics = useContext(FieldEconomicsContext)
   return (row: BreakdownRow) =>
-    fieldEconomics
+    fieldEconomics?.assumptions
       ? customisedBreakdownLine(
           fieldEconomics.assumptions,
           fieldEconomics.profile.overrides,
@@ -966,6 +966,7 @@ const CustomisedLabel = ({
           lineId: line.id,
           returnTo: fieldEconomics.returnTo,
         }}
+        onClick={fieldEconomics.onOpenProfile}
         className={`${TEXT_LINK_CLASS} block w-fit text-[11px]`}
       >
         Se posten i profilen
