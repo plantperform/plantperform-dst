@@ -57,7 +57,7 @@ def _require_editable(session, simulation_id, row):
         raise EconomicsConflictError(str(error)) from error
     # A fresh explicit request can replace failed economics work. Replaying its
     # old captured inputs remains a separate retry action.
-    if row.creation_status == "failed" and row.data.get("economics_recalculation"):
+    if simulation_store.economics_recalculation_failed(row):
         return
     creation_store.require_ready(session, simulation_id)
 
@@ -135,10 +135,9 @@ def retry(farm_id, simulation_id, email, *, execution_session=None):
         row = _setup(session, farm_id, simulation_id, email)
         if row is None:
             return None, None
-        operation = row.data.get("economics_recalculation")
-        if row.creation_status != "failed" or operation is None:
+        if not simulation_store.economics_recalculation_failed(row):
             raise EconomicsConflictError("Only failed economics recalculations can be retried")
-        operation = {**operation, "published": False}
+        operation = {**row.data["economics_recalculation"], "published": False}
         revision = row.revision + 1
         session.execute(
             update(setups)

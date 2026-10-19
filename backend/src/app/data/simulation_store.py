@@ -91,6 +91,10 @@ def read_result(row) -> SimulationResult:
     )
 
 
+def economics_recalculation_failed(row):
+    return row.creation_status == "failed" and "economics_recalculation" in row.data
+
+
 def _row(
     session,
     farm_id,
@@ -143,6 +147,7 @@ def _model(session, simulation_id, row):
             "revision": row.revision,
             "result": summary or {},
             "creation_status": row.creation_status,
+            "economics_recalculation_failed": economics_recalculation_failed(row),
             "comparison_availability": result.comparison_availability if result else None,
         }
     )
@@ -220,6 +225,7 @@ def list_simulations(farm_id, email):
                     "revision": row.revision,
                     "result": summaries.get(row.id, {}),
                     "creation_status": row.creation_status,
+                    "economics_recalculation_failed": economics_recalculation_failed(row),
                     "comparison_availability": availability.get(row.id),
                 }
             )

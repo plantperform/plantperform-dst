@@ -63,7 +63,13 @@ def create(farm_id, request, email):
                 id=simulation_id,
                 farm_id=farm_id,
                 data=simulation.model_dump(
-                    mode="json", exclude={"creation_status", "result", "revision"}
+                    mode="json",
+                    exclude={
+                        "creation_status",
+                        "economics_recalculation_failed",
+                        "result",
+                        "revision",
+                    },
                 ),
                 creation_status="done",
                 fields={},

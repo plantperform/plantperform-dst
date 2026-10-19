@@ -137,6 +137,7 @@ class Simulation(CamelModel):
     economics_module_id: str = "standard"
     economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     creation_status: CreationStatus = "done"
+    economics_recalculation_failed: bool = False
     revision: int = 0
     result: SimulationResultSummary = Field(default_factory=SimulationResultSummary)
     id: str
