@@ -93,6 +93,56 @@ unit. Existing manure-spreading costs retain the calculator's flat
 application-rate placeholder. Recalculation does not introduce a new manure
 purchase or transport model.
 
+## Crop budgets
+
+`GET /farms/{farmId}/economics/budgets?farmingSystem=Konventionel` returns the
+standard budget of each crop in the farm's field history, largest area first,
+and then each crop the simulations' sædskifter can choose. Every budget is for
+the soil type covering most of the farm's area, unirrigated, at the N-norm with
+handelsgødning (none when `farmingSystem` is `Økologisk`), row by row as the
+calculator prices it. With `simulationId`, the simulation's farming system and
+gødning apply instead, so husdyrgødning covers up to its `orgMineralN` of the
+norm. `jbNr` is null and `crops` empty when no field has a soil type. A farm
+the user is not a member of and an unknown `simulationId` return 404.
+
+```json
+{
+  "jbNr": 5,
+  "farmingSystem": "Konventionel",
+  "prices": [{"id": "rate:[...]", "label": "Pløjning", "unit": "kr/gang", "value": 825, "source": "SEGES"}],
+  "crops": [{
+    "cropCode": 1,
+    "cropName": "Vårbyg",
+    "precedingCropValueKgNHa": 0,
+    "revenue": [{"label": "Udbytte", "category": "Indtægt", "quantity": 66,
+                 "quantityUnit": "hkg/ha", "quantityId": null, "priceId": "sale:[...]",
+                 "followsYield": true}],
+    "subsidies": [],
+    "costs": []
+  }],
+  "soilVariants": {"rate:[...JB5-6...]": [{"id": "rate:[...JB1-3...]", "value": 248},
+                                          {"id": "rate:[...JB5-6...]", "value": 275}]}
+}
+```
+
+A row's amount is `quantity × price`. With a module, replace the price by
+`prices[priceId]` and the quantity by `quantities[quantityId]`, and scale rows
+with `followsYield` by `1 + yieldPct[cropCode] / 100`. Revenue, subsidies minus
+costs then give the dækningsbidrag `calculate_db` returns for the same inputs.
+Cost rows keep their Danish category. A gødning row is only there when the
+standard budget uses it, so a module's `fertiliser` quantity for a missing row,
+such as handelsgødning on an organic budget, has no row to replace. A row with
+`priceId: null` has no rate in the reference data and costs 0.
+
+Work rates and work quantities differ by soil group, and a row carries the
+identifier of the variant for the budget's soil type. `soilVariants` maps each
+such identifier in the response to the same rate or quantity on the other soil
+groups where it exists, itself included, each with its standard `value`. A
+client sets one value for all of them by overriding the variants whose standard
+differs from it. A crop's own rate and the shared rate are different
+identities, so the calculator's fallback from one to the other on another soil
+group is not a variant. Identifiers without variants are absent.
+
 ## Simulation selection and applied snapshots
 
 Creation accepts `economicsModuleId` alongside the existing simulation inputs.

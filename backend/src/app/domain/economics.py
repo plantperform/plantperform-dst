@@ -90,6 +90,46 @@ class RecalculateEconomicsRequest(CamelModel):
     refresh_from_module: bool = True
 
 
+class BudgetPrice(CamelModel):
+    id: str
+    label: str
+    unit: str
+    value: float
+    source: str | None = None
+
+
+class BudgetLine(CamelModel):
+    label: str
+    category: str
+    quantity: float
+    quantity_unit: str
+    quantity_id: str | None = None
+    price_id: str | None = None
+    follows_yield: bool = False
+
+
+class CropBudget(CamelModel):
+    crop_code: int
+    crop_name: str
+    preceding_crop_value_kg_n_ha: float
+    revenue: list[BudgetLine]
+    subsidies: list[BudgetLine]
+    costs: list[BudgetLine]
+
+
+class SoilVariant(CamelModel):
+    id: str
+    value: float
+
+
+class CropBudgets(CamelModel):
+    jb_nr: int | None
+    farming_system: str
+    prices: list[BudgetPrice]
+    crops: list[CropBudget]
+    soil_variants: dict[str, list[SoilVariant]]
+
+
 class EconomicsRecalculationJob(CamelModel):
     job_type: Literal["recalculate_simulation_economics"] = "recalculate_simulation_economics"
     farm_id: str = Field(min_length=1)

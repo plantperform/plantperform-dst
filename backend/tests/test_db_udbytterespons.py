@@ -31,7 +31,7 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
             "_lookup_halm_udbytte": lambda *args, **kwargs: 0.0,
             "_lookup_omkostningslinjer": lambda *args, **kwargs: [],
             "_load_prisliste": lambda: PRISLISTE,
-            "_tilskud_kr_ha": lambda *args, **kwargs: 0.0,
+            "_tilskud_poster": lambda *args, **kwargs: [],
         }.items():
             patcher = patch.object(db_calculator, name, value)
             patcher.start()
@@ -52,7 +52,12 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
 
     def test_drying_follows_the_yield(self) -> None:
         lines = [
-            {"kategori": "Tørring/lagring", "behandling": "Tørring, korn", "udgift_kr_ha": 1000.0},
+            {
+                "kategori": "Tørring/lagring",
+                "behandling": "Tørring, korn",
+                "udgift_kr_ha": 1000.0,
+                "maengde": 5000.0,
+            },
             {"kategori": "Markarbejde", "behandling": "Høst", "udgift_kr_ha": 500.0},
         ]
         with patch.object(db_calculator, "_lookup_omkostningslinjer", lambda *a, **k: lines):

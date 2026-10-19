@@ -1,8 +1,8 @@
-"""Authenticated module lifecycle and the real reference assumption catalogue."""
+"""Authenticated module lifecycle, the real reference assumption catalogue and crop budgets."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, field_validator
 
 from app.api.v0.farms import FarmMemberRequest, FarmMemberResponse
@@ -12,11 +12,13 @@ from app.domain.base import CamelModel
 from app.domain.economics import (
     STANDARD_ID,
     CreateEconomicsModuleRequest,
+    CropBudgets,
     EconomicsConflictError,
     EconomicsModule,
     EconomicsModuleNotFoundError,
     UpdateEconomicsModuleRequest,
 )
+from app.services.economics.budget import farm_budgets
 from app.services.economics.overrides import assumptions
 
 router = APIRouter(tags=["economics"])
@@ -39,6 +41,21 @@ def _call(action, *args, module_id=None):
 @router.get("/economics/assumptions")
 def get_assumptions(user: CurrentUser):
     return assumptions()
+
+
+@router.get("/farms/{farm_id}/economics/budgets", response_model=CropBudgets)
+def get_farm_budgets(
+    farm_id: str,
+    user: CurrentUser,
+    farming_system: Annotated[
+        Literal["Konventionel", "Økologisk"], Query(alias="farmingSystem")
+    ] = "Konventionel",
+    simulation_id: Annotated[str | None, Query(alias="simulationId")] = None,
+):
+    budgets = farm_budgets(farm_id, user.email, farming_system, simulation_id)
+    if budgets is None:
+        raise HTTPException(status_code=404, detail="Bedrift eller simulering ikke fundet")
+    return budgets
 
 
 @router.get("/economics-modules", response_model=list[EconomicsModule])
