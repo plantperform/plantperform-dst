@@ -32,10 +32,14 @@ from app.data.db import (
     economics_module_member_table,
     economics_module_table,
     farm_member_table,
+    farm_table,
     halmudbytte_table,
     metadata,
     prisliste_table,
     salgspris_table,
+)
+from app.data.db import (
+    simulation_result_table as results,
 )
 from app.data.db import (
     simulation_table as setups,
@@ -49,7 +53,7 @@ from app.domain.economics import (
     SelectEconomicsRequest,
     UpdateEconomicsModuleRequest,
 )
-from app.domain.simulation import CreateSimulationRequest
+from app.domain.simulation import CreateSimulationRequest, Simulation
 from app.services.calculation import CalculationFailedError
 from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
@@ -711,6 +715,88 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         with self.assertRaises(EconomicsModuleNotFoundError):
             jobs.submit("farm", "sim", request, OTHER)
+
+    def test_deleting_a_module_selects_standard_on_every_farm_and_keeps_the_applied_figures(self):
+        module = self.module(prices={SALE: 150})
+        selected = self.select_module(module)
+        _, _, envelope = self.submit_recalculation(selected.revision)
+        economics_worker.execute(envelope, CONTEXT)
+        economics_store.add_member(module.id, EMAIL, OTHER)
+        kept = self.module()
+        other = Simulation(
+            id="other-sim",
+            farm_id="other-farm",
+            name="other",
+            created_at="2026-10-06",
+            economics_module_id=module.id,
+        )
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(farm_table).values(
+                    id="other-farm",
+                    data={"id": "other-farm", "name": "Other", "owner_name": "Other owner"},
+                )
+            )
+            session.execute(insert(farm_member_table).values(farm_id="other-farm", email=OTHER))
+            for simulation in (
+                other,
+                other.model_copy(update={"id": "kept-sim", "economics_module_id": kept.id}),
+            ):
+                session.execute(
+                    insert(setups).values(
+                        id=simulation.id,
+                        farm_id="other-farm",
+                        data=simulation.model_dump(mode="json", exclude={"optimization_settings"}),
+                    )
+                )
+        before = repository.get_simulation("farm", "sim", EMAIL)
+        economics_store.delete_module(module.id, OTHER)
+        after = repository.get_simulation("farm", "sim", EMAIL)
+        self.assertEqual(after.economics_module_id, "standard")
+        self.assertEqual(after.economics_snapshot, before.economics_snapshot)
+        self.assertGreater(after.revision, before.revision)
+        self.assertEqual(self.result().status, "outdated")
+        with self.sessions() as session:
+            stored = {
+                row.id: (row.data["economics_module_id"], row.revision)
+                for row in session.execute(
+                    select(setups.c.id, setups.c.data, setups.c.revision).where(
+                        setups.c.farm_id == "other-farm"
+                    )
+                )
+            }
+        self.assertEqual(stored, {"other-sim": ("standard", 1), "kept-sim": (kept.id, 0)})
+
+    def test_deleting_a_module_waits_for_simulations_being_calculated(self):
+        for table, column, busy, idle in (
+            (setups, "creation_status", "queued", "done"),
+            (setups, "creation_status", "running", "done"),
+            (results, "status", "queued", "not_started"),
+            (results, "status", "in_progress", "not_started"),
+        ):
+            with self.subTest(column=column, busy=busy):
+                module = self.module()
+                self.select_module(module, repository.get_simulation("farm", "sim", EMAIL).revision)
+                key = setups.c.id if table is setups else results.c.simulation_id
+                with self.sessions.begin() as session:
+                    session.execute(update(table).where(key == "sim").values({column: busy}))
+                with self.assertRaises(EconomicsConflictError):
+                    economics_store.delete_module(module.id, EMAIL)
+                self.assertEqual(economics_store.get_module(module.id, EMAIL).id, module.id)
+                with self.sessions.begin() as session:
+                    session.execute(update(table).where(key == "sim").values({column: idle}))
+
+    def test_a_failed_creation_does_not_block_deleting_its_module(self):
+        module = self.module()
+        self.select_module(module)
+        with self.sessions.begin() as session:
+            session.execute(
+                update(setups).where(setups.c.id == "sim").values(creation_status="failed")
+            )
+        economics_store.delete_module(module.id, EMAIL)
+        self.assertEqual(
+            repository.get_simulation("farm", "sim", EMAIL).economics_module_id, "standard"
+        )
 
     def test_duplicate_reservations_before_publication_dispatch_once(self):
         module = self.module()
