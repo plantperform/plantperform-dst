@@ -86,11 +86,12 @@ flat costs apply only where the existing calculator uses the legacy cost budget.
 General price-list entries affect calculations only when their scheme or cost is
 already included; setting a price does not enable an optional subsidy scheme.
 
-The current importers do not retain work-rate or work-quantity units. These
-entries therefore explicitly use generic `kr/enhed` and `enheder/ha`; their
-numeric defaults are still the real database values. Existing manure-spreading
-costs retain the calculator's flat application-rate placeholder. Recalculation
-does not introduce a new manure purchase or transport model.
+Prices carry the unit and `source` from the økonomi CSVs. A work quantity's
+unit follows the rate that prices it, which depends on the soil group, so the
+catalogue keeps `enheder/ha` for quantities; crop budgets carry the resolved
+unit. Existing manure-spreading costs retain the calculator's flat
+application-rate placeholder. Recalculation does not introduce a new manure
+purchase or transport model.
 
 ## Simulation selection and applied snapshots
 
@@ -200,6 +201,14 @@ from the previous optimization's saved snapshot.
 
 Economics modules require schema migration `20261013_0001`, introduced with
 the original economics release. Existing simulations read as standard without
-bulk recalculation or migration of browser-only profiles. The Fargate compute
-change adds no schema migration: economics executes in the backend, while the
-queue carries only optimization jobs. See [Fargate deployment](../fargate/README.md).
+bulk recalculation or migration of browser-only profiles.
+
+Units and sources require migration `20261015_0001`. After it, run
+`pixi run load-oekonomital-afgroedebundet` and
+`pixi run load-oekonomital-generelle-satser`, then restart the API, which
+caches the reference lookups per process. Until then the new columns are
+empty: every `source` is null and work rates fall back to `kr/enhed`.
+
+The Fargate compute change adds no schema migration: economics executes in the
+backend, while the queue carries only optimization jobs. See
+[Fargate deployment](../fargate/README.md).

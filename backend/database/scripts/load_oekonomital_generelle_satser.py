@@ -2,8 +2,9 @@
 bundne økonomi-CSV.
 
 Splits rows by the CSV's own "kilde_tabel" column and writes each group to
-its original table, unchanged from the two old per-file loaders this
-replaces (Arbejdssatser.csv, Prisliste_2026.csv).
+its original table, as the two old per-file loaders this replaces did
+(Arbejdssatser.csv, Prisliste_2026.csv), plus each row's source and the
+work rate's unit.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ def parse_oekonomital_generelle_satser(path: Path = CSV_PATH) -> tuple[list[tupl
         delimiter=",",
         required_columns={
             "kilde_tabel", "afgroedekode", "driftsform", "jordbonitet", "kategori", "post",
-            "pris", "enhed", "type",
+            "pris", "enhed", "type", "kilde",
         },
     )
 
@@ -37,6 +38,7 @@ def parse_oekonomital_generelle_satser(path: Path = CSV_PATH) -> tuple[list[tupl
 
     for row_number, row in enumerate(rows, start=2):
         kilde_tabel = row["kilde_tabel"]
+        kilde = text(row["kilde"], field="kilde", row_number=row_number, required=False) or None
         if kilde_tabel == "arbejdssats":
             arbejdssats_rows.append((
                 row_number,
@@ -52,6 +54,8 @@ def parse_oekonomital_generelle_satser(path: Path = CSV_PATH) -> tuple[list[tupl
                     row["driftsform"], field="driftsform", row_number=row_number, required=False,
                 ),
                 number(row["pris"], field="pris", row_number=row_number),
+                text(row["enhed"], field="enhed", row_number=row_number, required=False) or None,
+                kilde,
             ))
         elif kilde_tabel == "prisliste_2026":
             prisliste_rows.append((
@@ -61,6 +65,7 @@ def parse_oekonomital_generelle_satser(path: Path = CSV_PATH) -> tuple[list[tupl
                 text(row["type"], field="type", row_number=row_number),
                 number(row["pris"], field="pris", row_number=row_number),
                 text(row["enhed"], field="enhed", row_number=row_number),
+                kilde,
             ))
 
     return arbejdssats_rows, prisliste_rows
@@ -76,13 +81,13 @@ def load_oekonomital_generelle_satser(
                 "arbejdssats",
                 (
                     "source_order", "behandling", "jordbonitet", "afgroedekode", "driftsform",
-                    "pris_kr_per_enhed",
+                    "pris_kr_per_enhed", "enhed", "kilde",
                 ),
                 arbejdssats_rows,
             ),
             (
                 "prisliste",
-                ("source_order", "post", "kategori", "type", "pris", "enhed"),
+                ("source_order", "post", "kategori", "type", "pris", "enhed", "kilde"),
                 prisliste_rows,
             ),
         ],

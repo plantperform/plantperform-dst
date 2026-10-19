@@ -720,3 +720,21 @@ class EconomicsDatabaseTests(DatabaseTests):
                 module.downgrade()
                 module.upgrade()
         self.assertEqual(self.module().revision, 0)
+
+    def test_units_and_sources_migration_round_trip(self):
+        path = (
+            Path(__file__).parents[1]
+            / "database/migrations/versions/20261015_0001_economics_units_and_sources.py"
+        )
+        spec = importlib.util.spec_from_file_location("units_migration", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)) as operations:
+                for table, column in module.COLUMNS:
+                    operations.drop_column(table, column)
+                module.upgrade()
+                module.downgrade()
+                module.upgrade()
+        rate = next(price for price in overrides.assumptions()["prices"] if price["id"] == RATE)
+        self.assertEqual((rate["unit"], rate["source"]), ("kr/enhed", None))

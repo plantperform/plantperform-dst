@@ -127,7 +127,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
     def test_oekonomital_loaders_split_on_kilde_tabel(self) -> None:
         afgroedebundet_headers = [
             "kilde_tabel", "afgroedekode", "driftsform", "jordbonitet", "kvalitet",
-            "kategori", "behandling", "antal", "enhed", "beloeb", "beloeb_type",
+            "kategori", "behandling", "antal", "enhed", "beloeb", "beloeb_type", "kilde",
         ]
 
         def afgroedebundet_row(**overrides: str) -> list[str]:
@@ -137,7 +137,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
 
         generelle_satser_headers = [
             "kilde_tabel", "aar", "type", "afgroedekode", "driftsform", "jordbonitet",
-            "kategori", "post", "pris", "enhed",
+            "kategori", "post", "pris", "enhed", "kilde",
         ]
 
         def generelle_satser_row(**overrides: str) -> list[str]:
@@ -167,7 +167,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
                     afgroedebundet_row(
                         kilde_tabel="salgspris", afgroedekode="1", driftsform="Konventionel",
                         kategori="Salg", behandling="Salg af afgrøde", enhed="kg", beloeb="1.5",
-                        beloeb_type="salgspris",
+                        beloeb_type="salgspris", kilde="SEGES Budgetkalkuler 2026",
                     ),
                 ],
             )
@@ -178,7 +178,8 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
                 [
                     generelle_satser_row(
                         kilde_tabel="arbejdssats", aar="2026", type="Omkostning",
-                        jordbonitet="JB1-3", post="Såning", pris="3",
+                        jordbonitet="JB1-3", post="Såning", pris="3", enhed="kr/gang",
+                        kilde="SEGES",
                     ),
                     generelle_satser_row(
                         kilde_tabel="prisliste_2026", aar="2026", type="Omkostning",
@@ -193,11 +194,13 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             arbejdssats, prisliste = parse_oekonomital_generelle_satser(generelle_satser)
 
         self.assertEqual(arbejdsmaengde[0][-1], 2.0)
-        self.assertEqual(dyrkningsomkostning[0][-1], 12.0)
+        self.assertEqual(dyrkningsomkostning[0][-2:], (12.0, None))
         self.assertEqual(halmudbytte[0][-1], 2.0)
-        self.assertEqual(salgspris[0][-2:], ("kg", 0.0))  # halm price absent -> 0.0
+        self.assertEqual(salgspris[0][-4:-2], ("kg", 0.0))  # halm price absent -> 0.0
+        self.assertEqual(salgspris[0][-2:], ("SEGES Budgetkalkuler 2026", None))
         self.assertIsNone(arbejdssats[0][3])  # afgroedekode blank -> universal rate
-        self.assertEqual(prisliste[0][-1], "kr/kg")
+        self.assertEqual(arbejdssats[0][-2:], ("kr/gang", "SEGES"))
+        self.assertEqual(prisliste[0][-2:], ("kr/kg", None))
 
     def test_empty_replacement_never_opens_a_database_connection(self) -> None:
         with patch.object(runtime_lookup_loader.psycopg, "connect") as connect:
