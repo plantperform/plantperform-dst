@@ -29,6 +29,12 @@ describe('simulation creation', () => {
     expect(creationStatusLabel(state('running'))).toBe('Opretter simulering...')
     expect(creationStatusLabel(state('queued'))).toBe('Opretter simulering...')
     expect(creationStatusLabel(state('failed'))).toBe('Oprettelsen fejlede')
+    expect(
+      creationStatusLabel({
+        creationStatus: 'failed',
+        economicsRecalculationFailed: true,
+      }),
+    ).toBe('Genberegningen fejlede')
     expect(creationStatusLabel(state('done'))).toBeNull()
   })
 

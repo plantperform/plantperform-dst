@@ -153,6 +153,15 @@ export const recalculateSimulationEconomics = (
     { expectedRevision: simulation.revision, requestId },
   )
 
+export const retrySimulationEconomics = (
+  farmId: string,
+  simulationId: string,
+) =>
+  postJson<Simulation, Record<string, never>>(
+    `${simulationEconomicsPath(farmId, simulationId)}/recalculate/retry`,
+    {},
+  )
+
 export const useFarmBudgets = (
   farmId: string | undefined,
   scope: BudgetScope,
