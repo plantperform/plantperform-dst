@@ -17,7 +17,7 @@ field" column is the name on the wire.
 | marknr | `fieldNumber` | `marknr` | The registry's number, e.g. "1-0" |
 | IMK | `imkId` | `imkId` | Internet Markkort, kept as an acronym |
 | areal | `areaHa` | `areaHa` | |
-| driftsform | `farmingSystem` | `driftsform` | Values stay Konventionel and Økologisk |
+| driftsform | `farmingSystem`, `FarmingSystemSwitch` | `driftsform`, `farmingSystem` | Values stay Konventionel and Økologisk |
 | dyrkningssystem | `croppingSystem` | `dyrkningssystem` | |
 | landmand, konsulent | `farmer`, `advisor` | | `OnboardingRole`; old stored Danish values are still read |
 | Din konto | account, `AccountButton` | | The signed-in user's details in a panel opened from the bar |
@@ -127,11 +127,12 @@ field" column is the name on the wire.
 | omkostninger i alt | `totalCosts` | `omkostninger_total` | |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
-| gødning, udsæd, planteværn, markarbejde, tørring/lagring | `fertiliser`, `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | | The cost groups of a crop |
-| handelsgødning, husdyrgødning, udbringning | `mineralN`, `manureN`, `mineralSpreading`, `manureSpreading` (`FERTILISER_PRICE_IDS`) | | The four gødning prices: per kg N and for spreading |
-| gødningsvalg | `FertiliserPlan`, `withFertiliserPlan` | | How much of a crop's kvælstofnorm a simulation covers with husdyrgødning; it sets the quantities of the gødning lines |
-| stykpris | `UnitPrice`, `priceId` | | Price per unit, e.g. kr/gang or kr/kg |
-| mængde | `quantity`, `quantityUnit` | | Per hectare, e.g. 3 sprøjtninger |
+| bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |
+| gødning, andre gødningsstoffer, udsæd, planteværn, markarbejde, tørring/lagring | `fertiliser`, `otherFertilisers`, `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | `category` | The cost groups of a crop |
+| stykpris | `UnitPrice`, `priceId` | `priceId` | Price per unit, e.g. kr/gang or kr/kg |
+| kilde | `source`, `cropSources` | `source` | Where a price comes from, e.g. SEGES Budgetkalkuler 2026 |
+| mængde | `quantity`, `quantityUnit`, `quantityId` | `quantityId` | Per hectare, e.g. 3 sprøjtninger |
+| følger udbyttet | `followsYield` | `followsYield` | Revenue and drying, which the yield percentage scales |
 | salgspris | `saleLine` | | The first revenue line of a crop |
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId` | | A farm's named set of changes on top of Standard, kept in the browser until the backend can store it |

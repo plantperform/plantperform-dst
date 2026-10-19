@@ -295,6 +295,7 @@ export const FieldPanel = ({
             <Link
               to={fieldEconomics.profilePath}
               state={{ returnTo: fieldEconomics.returnTo }}
+              onClick={fieldEconomics.onOpenProfile}
               className={TEXT_LINK_CLASS}
             >
               {fieldEconomics.profile.name}

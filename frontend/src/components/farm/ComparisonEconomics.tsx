@@ -1,5 +1,7 @@
 import { useLocation } from 'react-router-dom'
 
+import { useFarmBudgets } from '@/api/economics'
+import type { FarmingSystem } from '@/api/types'
 import {
   ComparisonColumnsTable,
   ComparisonFigureRow,
@@ -8,30 +10,44 @@ import {
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { ChangedValue } from '@/components/farm/economics-ui'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
-import { TableCell, TableRow } from '@/components/ui/table'
 import {
   compareProfileChanges,
-  formatNameList,
-  profileChanges,
+  formatCropNames,
+  type EconomicsAssumptions,
 } from '@/lib/economics'
-import {
-  STANDARD_PROFILE,
-  type EconomicsProfile,
-} from '@/lib/economics-profiles'
+import type { EconomicsProfile } from '@/lib/economics-profiles'
 
 type ComparisonEconomicsProps = ComparedColumnsProps & {
   profiles: EconomicsProfile[]
+  farmingSystems: FarmingSystem[]
 }
 
 export const ComparisonEconomics = ({
   profiles,
+  farmingSystems,
   ...table
 }: ComparisonEconomicsProps) => {
-  const { assumptions } = useEconomicsProfiles()
+  const { farmId } = useEconomicsProfiles()
   const { search } = useLocation()
-  const rows = compareProfileChanges(
-    profiles.map((profile) => profileChanges(assumptions, profile.overrides)),
-  )
+  const budgetsFor = (farmingSystem: FarmingSystem) =>
+    farmingSystems.includes(farmingSystem) ? farmId : undefined
+  const budgets: Record<FarmingSystem, EconomicsAssumptions | undefined> = {
+    Konventionel: useFarmBudgets(budgetsFor('Konventionel'), {
+      farmingSystem: 'Konventionel',
+    }).data,
+    Økologisk: useFarmBudgets(budgetsFor('Økologisk'), {
+      farmingSystem: 'Økologisk',
+    }).data,
+  }
+  const columnBudgets = farmingSystems.map((system) => budgets[system])
+  const rows = columnBudgets.every((assumptions) => assumptions !== undefined)
+    ? compareProfileChanges(
+        profiles.map((profile, index) => ({
+          assumptions: columnBudgets[index]!,
+          overrides: profile.overrides,
+        })),
+      )
+    : []
 
   return (
     <ComparisonColumnsTable {...table}>
@@ -39,6 +55,7 @@ export const ComparisonEconomics = ({
         {(_, index) => (
           <EconomicsChip
             profile={profiles[index]}
+            farmingSystem={farmingSystems[index]}
             returnTo={{ kind: 'compare', search }}
           />
         )}
@@ -47,7 +64,7 @@ export const ComparisonEconomics = ({
         <ComparisonFigureRow
           key={row.key}
           label={row.label}
-          note={formatNameList(row.cropNames)}
+          note={formatCropNames(row.cropNames)}
           {...table}
         >
           {(_, index) => (
@@ -61,15 +78,6 @@ export const ComparisonEconomics = ({
           )}
         </ComparisonFigureRow>
       ))}
-      <TableRow className="hover:bg-transparent">
-        <TableCell
-          colSpan={profiles.length + 1}
-          className="bg-muted/30 px-4.5 py-2.5 text-xs whitespace-normal text-warning-strong"
-        >
-          Profilerne indgår ikke i beregningen endnu, så alle dækningsbidrag er
-          regnet med {STANDARD_PROFILE.name}.
-        </TableCell>
-      </TableRow>
     </ComparisonColumnsTable>
   )
 }

@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
+import { useFarmBudgets } from '@/api/economics'
+import type { FarmingSystem } from '@/api/types'
 import { NO_OVERRIDES, type OverridesChange } from '@/lib/economics'
-import { EXAMPLE_ECONOMICS } from '@/lib/economics-example'
 import {
   NO_PROFILES,
   allProfiles,
@@ -49,6 +50,8 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
     state: readStoredProfiles(farmId),
     changed: false,
   }))
+  const [farmingSystem, setFarmingSystem] =
+    useState<FarmingSystem>('Konventionel')
   if (stored.farmId !== farmId) {
     setStored({ farmId, state: readStoredProfiles(farmId), changed: false })
   }
@@ -69,7 +72,9 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       }))
 
     return {
-      assumptions: EXAMPLE_ECONOMICS,
+      farmId: stored.farmId,
+      farmingSystem,
+      setFarmingSystem,
       profiles: allProfiles(state),
       ownProfiles: state.profiles,
       overviewPath: `/farms/${stored.farmId}/economics`,
@@ -106,7 +111,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
           withSimulationProfile(current, simulationId, profileId),
         ),
     }
-  }, [stored])
+  }, [stored, farmingSystem])
 }
 
 export type EconomicsProfilesStore = ReturnType<
@@ -124,4 +129,11 @@ export const useEconomicsProfiles = () => {
     )
   }
   return context
+}
+
+export const useEconomicsAssumptions = (farmingSystem?: FarmingSystem) => {
+  const economics = useEconomicsProfiles()
+  return useFarmBudgets(economics.farmId, {
+    farmingSystem: farmingSystem ?? economics.farmingSystem,
+  })
 }

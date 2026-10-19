@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 
+import { useFarmBudgets } from '@/api/economics'
 import type { FieldRecord, Simulation } from '@/api/types'
 import {
   useCalculationReturn,
@@ -9,17 +10,19 @@ import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state
 import type { EconomicsAssumptions } from '@/lib/economics'
 import {
   STANDARD_PROFILE,
+  STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
 import { fieldTitle } from '@/lib/field-domain'
 
 type FieldEconomics = {
-  assumptions: EconomicsAssumptions
+  assumptions: EconomicsAssumptions | undefined
   profile: EconomicsProfile
   profilePath: string
   returnTo: FieldReturnTarget
   openAtYearIndex: number | undefined
   onOpenedAtYear: () => void
+  onOpenProfile: () => void
 }
 
 export const FieldEconomicsContext = createContext<FieldEconomics | null>(null)
@@ -33,8 +36,14 @@ export const useFieldEconomics = (
   const profile = simulation
     ? economics.profileForSimulation(simulation.id)
     : STANDARD_PROFILE
+  const { data: assumptions } = useFarmBudgets(
+    simulation && profile.id !== STANDARD_PROFILE_ID
+      ? economics.farmId
+      : undefined,
+    { simulationId: simulation?.id ?? '' },
+  )
   return {
-    assumptions: economics.assumptions,
+    assumptions,
     profile,
     profilePath: economics.profilePath(profile.id),
     returnTo: {
@@ -46,5 +55,10 @@ export const useFieldEconomics = (
     },
     openAtYearIndex,
     onOpenedAtYear,
+    onOpenProfile: () => {
+      if (simulation) {
+        economics.setFarmingSystem(simulation.fertiliser.farmingSystem)
+      }
+    },
   }
 }

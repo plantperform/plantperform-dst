@@ -1,11 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 
-import {
-  CHOICE_SELECTED_CLASS,
-  CHOICE_TAB_ACTIVE_CLASS,
-  CHOICE_TAB_CLASS,
-  CHOICE_TAB_IDLE_CLASS,
-} from '@/components/farm/choice-styles'
+import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import {
   GRID_HEAD_CLASS,
@@ -24,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
+  budgetSoilType,
   categoryPrices,
   cropYieldPct,
   describePriceCrops,
@@ -197,9 +193,9 @@ export const GuideFertiliserStep = ({
         </div>
       ))}
       <p className={FOOT_CLASS}>
-        Handelsgødningen følger afgrødens kvælstofnorm. Husdyrgødning regnes med
-        i de simuleringer, der bruger den, efter simuleringens gødningsvalg.
-        Prisen pr. kg N er 0, når gødningen er bedriftens egen.
+        Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
+        husdyrgødning dækker den en del af normen. Husdyrgødningen har endnu
+        ingen pris, og udbringningen af den regnes med handelsgødningens pris.
       </p>
     </div>
   </div>
@@ -231,8 +227,8 @@ export const GuideYieldStep = ({
           >
             <CropName crop={crop} />
             <span className="text-right text-muted-foreground tabular-nums">
-              {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på JB
-              5-6
+              {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på{' '}
+              {budgetSoilType(assumptions)}
             </span>
             <YieldPctField
               pct={pct}
@@ -251,8 +247,8 @@ export const GuideYieldStep = ({
       })}
       <p className={FOOT_CLASS}>
         Procenten lægges oven på hver marks eget udbytte, som afhænger af
-        jordtype og vanding. Den ændrer mængden af kerne og halm, ikke
-        omkostningerne.
+        jordtype og vanding. Den ændrer mængden af kerne og halm og tørringen,
+        men ikke de andre omkostninger.
       </p>
     </div>
   </div>
@@ -267,6 +263,7 @@ export const GuideMachinesStep = ({
   onChange,
 }: StepProps) => {
   const sharedPrice = useSharedPriceConfirm(assumptions, onChange)
+  const selectId = useId()
   const crops = assumptions.crops.filter(
     (entry) => entry.costs.fieldWork.length > 0,
   )
@@ -277,24 +274,25 @@ export const GuideMachinesStep = ({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-1.5 px-5 pb-3">
-        <span className="mr-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+        <Label
+          htmlFor={selectId}
+          className="text-xs font-normal text-muted-foreground"
+        >
           Markarbejdet for
-        </span>
-        {crops.map((entry) => (
-          <button
-            key={entry.cropCode}
-            type="button"
-            aria-pressed={entry === crop}
-            className={cn(
-              CHOICE_TAB_CLASS,
-              entry === crop ? CHOICE_TAB_ACTIVE_CLASS : CHOICE_TAB_IDLE_CLASS,
-            )}
-            onClick={() => setCropCode(entry.cropCode)}
-          >
-            {entry.cropName}
-          </button>
-        ))}
+        </Label>
+        <select
+          id={selectId}
+          className="rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          value={crop.cropCode}
+          onChange={(event) => setCropCode(Number(event.target.value))}
+        >
+          {crops.map((entry) => (
+            <option key={entry.cropCode} value={entry.cropCode}>
+              {entry.cropName}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="overflow-x-auto">
         <div className="min-w-166">
