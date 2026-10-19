@@ -22,12 +22,12 @@ type GuideStart = {
 export const useStartGuide = () => {
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
-  const { guidePath } = useEconomicsProfiles()
+  const { guidePath, findProfile } = useEconomicsProfiles()
 
   return ({ fromProfileId, simulationId }: GuideStart) =>
     navigate(
       guidePath(
-        fromProfileId === STANDARD_PROFILE_ID
+        fromProfileId === STANDARD_PROFILE_ID || !findProfile(fromProfileId)
           ? crypto.randomUUID()
           : fromProfileId,
       ),

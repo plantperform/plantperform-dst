@@ -1,13 +1,19 @@
 import { useMemo } from 'react'
 import useSWR from 'swr'
 
-import { fetcher } from '@/api/client'
-import type { FarmingSystem } from '@/api/types'
+import { deleteJson, fetcher, patchJson, postJson } from '@/api/client'
+import type {
+  EconomicsModule,
+  EconomicsOverrides,
+  FarmingSystem,
+  Simulation,
+} from '@/api/types'
 import {
   COST_CATEGORIES,
   type CostCategory,
   type EconomicsAssumptions,
   type EconomicsLine,
+  type SoilVariant,
 } from '@/lib/economics'
 
 type BudgetLine = Omit<EconomicsLine, 'id' | 'priceId'> & {
@@ -35,6 +41,7 @@ type CropBudgets = {
     source: string | null
   }[]
   crops: CropBudget[]
+  soilVariants: Record<string, SoilVariant[]>
 }
 
 type BudgetScope = { farmingSystem: FarmingSystem } | { simulationId: string }
@@ -85,7 +92,66 @@ const toAssumptions = (budgets: CropBudgets): EconomicsAssumptions => ({
       ]),
     ) as Record<CostCategory, EconomicsLine[]>,
   })),
+  soilVariants: budgets.soilVariants,
 })
+
+export const economicsModulesKey = '/economics-modules'
+
+const modulePath = (moduleId: string) =>
+  `${economicsModulesKey}/${encodeURIComponent(moduleId)}`
+
+export const useEconomicsModules = () =>
+  useSWR<EconomicsModule[]>(economicsModulesKey, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  })
+
+export const createEconomicsModule = (
+  name: string,
+  overrides: EconomicsOverrides,
+) =>
+  postJson<EconomicsModule, { name: string; overrides: EconomicsOverrides }>(
+    economicsModulesKey,
+    { name, overrides },
+  )
+
+export const updateEconomicsModule = (
+  moduleId: string,
+  input: {
+    expectedRevision: number
+    name?: string
+    overrides?: EconomicsOverrides
+  },
+) => patchJson<EconomicsModule, typeof input>(modulePath(moduleId), input)
+
+export const deleteEconomicsModule = (moduleId: string) =>
+  deleteJson(modulePath(moduleId))
+
+const simulationEconomicsPath = (farmId: string, simulationId: string) =>
+  `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/economics`
+
+export const selectSimulationEconomics = (
+  farmId: string,
+  simulation: Pick<Simulation, 'id' | 'revision'>,
+  economicsModuleId: string,
+) =>
+  patchJson<
+    Simulation,
+    { expectedRevision: number; economicsModuleId: string }
+  >(simulationEconomicsPath(farmId, simulation.id), {
+    expectedRevision: simulation.revision,
+    economicsModuleId,
+  })
+
+export const recalculateSimulationEconomics = (
+  farmId: string,
+  simulation: Pick<Simulation, 'id' | 'revision'>,
+  requestId: string,
+) =>
+  postJson<Simulation, { expectedRevision: number; requestId: string }>(
+    `${simulationEconomicsPath(farmId, simulation.id)}/recalculate`,
+    { expectedRevision: simulation.revision, requestId },
+  )
 
 export const useFarmBudgets = (
   farmId: string | undefined,

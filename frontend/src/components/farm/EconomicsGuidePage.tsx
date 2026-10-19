@@ -20,6 +20,7 @@ import {
   BudgetsGate,
   CustomisedDot,
   DbDelta,
+  ProfilesStatus,
 } from '@/components/farm/economics-ui'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
@@ -43,6 +44,7 @@ import {
 } from '@/components/ui/sheet'
 import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import {
+  applyOverrideEdits,
   FERTILISER_NOTE,
   formatCropCount,
   formatDbDkk,
@@ -51,6 +53,7 @@ import {
   profileDbEffect,
   sameOverrides,
   withoutProfileChange,
+  withoutProfileChanges,
   type EconomicsAssumptions,
   type EconomicsOverrides,
 } from '@/lib/economics'
@@ -67,20 +70,19 @@ const STEPS = [
   {
     id: 1,
     label: 'Salgspriser',
-    intro:
-      'Skriv bedriftens salgspris pr. afgrøde, hvis den afviger fra standarden.',
+    intro: 'Skriv din salgspris pr. afgrøde, hvis den afviger fra standarden.',
   },
   {
     id: 2,
     label: 'Gødning',
     intro:
-      'Skriv bedriftens priser på handelsgødning og udbringning, hvis de afviger fra standarden.',
+      'Skriv dine priser på handelsgødning og udbringning, hvis de afviger fra standarden.',
   },
   {
     id: 3,
     label: 'Udbytte',
     intro:
-      'Sæt procenten pr. afgrøde, hvis bedriften høster mere eller mindre end normen.',
+      'Sæt procenten pr. afgrøde, hvis du høster mere eller mindre end normen.',
   },
   {
     id: 4,
@@ -109,6 +111,12 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
   const effects = profileDbEffect(assumptions, overrides)
   const moved = effects.filter((effect) => effect.deltaDkkHa !== 0)
   const unchanged = effects.length - moved.length
+  const note =
+    moved.length === 0
+      ? `Samme dækningsbidrag som Standard for alle ${formatCropCount(effects.length)}.`
+      : unchanged > 0
+        ? `${formatCropCount(unchanged)} uden ændring.`
+        : null
 
   return (
     <section className={cn(RULES_CARD_CLASS, 'overflow-hidden')}>
@@ -157,18 +165,16 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
           </ul>
         </>
       ) : null}
-      <p
-        className={cn(
-          'px-4 pt-1 pb-3.5 text-xs text-muted-foreground',
-          moved.length > 0 && 'border-t pt-2.5',
-        )}
-      >
-        {moved.length === 0
-          ? `Samme dækningsbidrag som Standard for alle ${formatCropCount(effects.length)}.`
-          : unchanged > 0
-            ? `${formatCropCount(unchanged)} uden ændring.`
-            : null}
-      </p>
+      {note ? (
+        <p
+          className={cn(
+            'px-4 pt-1 pb-3.5 text-xs text-muted-foreground',
+            moved.length > 0 && 'border-t pt-2.5',
+          )}
+        >
+          {note}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -201,6 +207,7 @@ const Guide = ({
   const [step, setStep] = useState(1)
   const [sheet, setSheet] = useState({ cropCode: 0, open: false })
   const [name, setName] = useState(profile.name)
+  const [startOverrides] = useState(profile.overrides)
   const [overrides, setOverrides] = useState(profile.overrides)
   const [toggledUses, setToggledUses] = useState<string[]>([])
 
@@ -208,9 +215,12 @@ const Guide = ({
   const changedSteps = new Set<number | null>(
     changes.map((entry) => entry.guideStep),
   )
-  const users = economics.simulationsUsingProfile(simulations, profile.id)
+  const users = economics.findProfile(profile.id)
+    ? economics.simulationsUsingProfile(simulations, profile.id)
+    : []
   const sharedNote = sharedProfileNote(users.length)
-  const nameError = economics.nameError(name, profile.id)
+  const [saving, setSaving] = useState(false)
+  const nameError = saving ? null : economics.nameError(name, profile.id)
   const sheetCrop = assumptions.crops.find(
     (crop) => crop.cropCode === sheet.cropCode,
   )
@@ -218,7 +228,7 @@ const Guide = ({
   const useOptions: GuideUseOption[] = simulations.map((simulation) => ({
     id: simulation.id,
     label: simulation.name,
-    note: `Regner med ${economics.profileForSimulation(simulation.id).name}`,
+    note: `Valgt profil: ${economics.profileForSimulation(simulation).name}`,
     checked:
       (simulation === originSimulation || users.includes(simulation)) !==
       toggledUses.includes(simulation.id),
@@ -242,28 +252,38 @@ const Guide = ({
     else navigate(origin?.returnTo ?? economics.profilePath(profile.id))
   }
 
-  const finish = () => {
-    if (nameError) return
-    leaveGuard.release()
-    economics.ensureProfile(profile.id, name)
-    economics.renameProfile(profile.id, name)
-    economics.changeOverrides(profile.id, () => overrides)
-    for (const option of useOptions) {
-      const uses = users.some((simulation) => simulation.id === option.id)
-      if (option.checked !== uses) {
-        economics.assignProfile(
-          option.id,
-          option.checked ? profile.id : STANDARD_PROFILE_ID,
-        )
-      }
+  const finish = async () => {
+    if (nameError || saving) return
+    setSaving(true)
+    const profileId = await economics.saveProfile(profile.id, name, (current) =>
+      applyOverrideEdits(current, startOverrides, overrides),
+    )
+    if (profileId === null) {
+      setSaving(false)
+      return
     }
+    leaveGuard.release()
+    await Promise.all(
+      simulations.flatMap((simulation) => {
+        const option = useOptions.find((entry) => entry.id === simulation.id)
+        const uses = users.includes(simulation)
+        return option && option.checked !== uses
+          ? [
+              economics.assignProfile(
+                simulation,
+                option.checked ? profileId : STANDARD_PROFILE_ID,
+              ),
+            ]
+          : []
+      }),
+    )
     setToggledUses([])
     const chosen = useOptions.filter((option) => option.checked)
     const opened =
       chosen.find((option) => option.id === originSimulation?.id) ??
       (chosen.length === 1 ? chosen[0] : undefined)
     if (opened) onOpenSimulation(opened.id)
-    else navigate(economics.profilePath(profile.id))
+    else navigate(economics.profilePath(profileId))
   }
 
   return (
@@ -359,9 +379,15 @@ const Guide = ({
                 useOptions={useOptions}
                 onNameChange={setName}
                 onRestore={(entry) =>
-                  setOverrides((draft) => withoutProfileChange(draft, entry))
+                  setOverrides((draft) =>
+                    withoutProfileChange(assumptions, draft, entry),
+                  )
                 }
-                onRestoreAll={() => setOverrides(NO_OVERRIDES)}
+                onRestoreAll={() =>
+                  setOverrides((draft) =>
+                    withoutProfileChanges(assumptions, draft),
+                  )
+                }
                 onToggleUse={toggleUse}
               />
             ) : null}
@@ -381,8 +407,9 @@ const Guide = ({
                 </Button>
               ) : (
                 <Button
+                  loading={saving}
                   onClick={(event) => {
-                    if (event.detail < 2) finish()
+                    if (event.detail < 2) void finish()
                   }}
                 >
                   <Check aria-hidden="true" />
@@ -494,9 +521,13 @@ export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
             `${props.farmName} ${ROTATION_START_CALENDAR_YEAR}`,
           ),
           overrides: NO_OVERRIDES,
+          revision: 0,
         }
       : undefined)
 
+  if (!economics.ready) {
+    return <ProfilesStatus className="mx-6 mt-10 sm:mx-10" />
+  }
   if (!profile || profile.id === STANDARD_PROFILE_ID) {
     return <Navigate to={economics.overviewPath} replace />
   }

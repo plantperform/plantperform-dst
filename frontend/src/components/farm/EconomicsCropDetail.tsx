@@ -143,7 +143,7 @@ const LineRow = ({
             label={line.label}
             onRestore={() => {
               const restoreQuantity: OverridesChange = (current) =>
-                withQuantityOverride(current, crop, line.id, null)
+                withQuantityOverride(assumptions, current, crop, line.id, null)
               if (isPriceCustomised(overrides, line.priceId)) {
                 sharedPrice.restorePrice(line.priceId, restoreQuantity)
               } else {
@@ -163,7 +163,7 @@ const LineRow = ({
                 label={`Mængden for ${line.label} i ${quantityUnit}`}
                 onCommit={(value) =>
                   onChange((current) =>
-                    withShownQuantity(current, crop, line, value),
+                    withShownQuantity(assumptions, current, crop, line, value),
                   )
                 }
               />
@@ -490,7 +490,7 @@ export const EconomicsCropDetail = ({
         <p>{FERTILISER_NOTE}</p>
         {sources.length > 0 ? (
           <>
-            <p>Kilder:</p>
+            <p>{sources.length === 1 ? 'Kilde:' : 'Kilder:'}</p>
             <ul className="list-disc space-y-0.5 pl-4">
               {sources.map((source) => (
                 <li key={source}>{source}</li>

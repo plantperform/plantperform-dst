@@ -135,9 +135,12 @@ field" column is the name on the wire.
 | følger udbyttet | `followsYield` | `followsYield` | Revenue and drying, which the yield percentage scales |
 | salgspris | `saleLine` | | The first revenue line of a crop |
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
-| økonomiprofil | `EconomicsProfile`, `economicsProfileId` | | A farm's named set of changes on top of Standard, kept in the browser until the backend can store it |
+| pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
+| økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
+| profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |
+| genberegn økonomi | `recalculate`, `isEconomicsCurrent` | | Prices a simulation with its chosen profile without optimizing again |
 | Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
-| tilpasset | customised, `EconomicsOverrides` | | The farm's own value instead of the standard |
+| tilpasset | customised, `EconomicsOverrides` | | The profile's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
 | ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
 | profilens virkning i en simulering | `SimulationEconomicsEffect`, `simulationEconomicsEffect` | | A profile's change in dækningsbidrag for the crops a simulation grows, weighted by each crop's average area per year |
@@ -148,7 +151,7 @@ field" column is the name on the wire.
 
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
-| JB-nummer | `soilTypeNumber` | `jbnr` | JB kept in names like `JB_COLORS` |
+| JB-nummer | `soilTypeNumber` | `jbnr`, `jbNr` | JB kept in names like `JB_COLORS` |
 | lerprocent | clay percentage, `CLAY_PCT_BY_JB` | | Bilag 2, table 14; gives S in NLES5 |
 | perkolationsværdi | percolation value | | P in NLES5, one per runoff category |
 | organisk kvælstof i overjorden | organic N in the topsoil | | NT in NLES5 |

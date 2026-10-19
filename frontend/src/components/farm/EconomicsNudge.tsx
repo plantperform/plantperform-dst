@@ -16,7 +16,7 @@ export const EconomicsNudge = ({ farmId }: { farmId: string }) => {
     `plantperform.economicsNudgeDismissed.${farmId}`,
   )
 
-  if (dismissed || economics.ownProfiles.length > 0) return null
+  if (dismissed || economics.ownProfiles?.length !== 0) return null
 
   return (
     <EconomicsBanner

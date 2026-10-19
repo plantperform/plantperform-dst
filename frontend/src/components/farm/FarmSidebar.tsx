@@ -72,6 +72,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useStoredFlag } from '@/hooks/use-stored-flag'
 import {
+  describeAppliedProfile,
   describeOwnProfiles,
   STANDARD_PROFILE_ID,
 } from '@/lib/economics-profiles'
@@ -411,9 +412,11 @@ export const FarmSidebar = ({
                   name="Økonomi"
                   icon={<Coins />}
                 >
-                  {describeOwnProfiles(
-                    economics.ownProfiles.map((profile) => profile.name),
-                  )}
+                  {economics.ownProfiles
+                    ? describeOwnProfiles(
+                        economics.ownProfiles.map((profile) => profile.name),
+                      )
+                    : null}
                 </PageMenuItem>
               ) : null}
               {showAbout ? (
@@ -611,9 +614,14 @@ const SimulationMenuItem = ({
   onCopy,
   onDelete,
 }: SimulationMenuItemProps) => {
-  const profile = useEconomicsProfiles().profileForSimulation(simulation.id)
+  const economics = useEconomicsProfiles()
+  const profile = economics.appliedProfile(simulation)
   const ownProfileName =
     profile.id === STANDARD_PROFILE_ID ? null : profile.name
+  const economicsNote =
+    economics.ready && !economics.isEconomicsCurrent(simulation)
+      ? describeAppliedProfile(economics.profiles, simulation)
+      : null
   const createdLabel = formatCreatedAt(simulation.createdAt)
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
@@ -700,12 +708,7 @@ const SimulationMenuItem = ({
               <span>{createdLabel}</span>
               {figures ? <span>{figures.title}</span> : null}
               {changesTitle ? <span>{changesTitle}</span> : null}
-              {ownProfileName ? (
-                <span>
-                  Regner med {ownProfileName}, som ikke indgår i beregningen
-                  endnu
-                </span>
-              ) : null}
+              {economicsNote ? <span>{economicsNote}</span> : null}
             </div>
           </TooltipContent>
         </Tooltip>
