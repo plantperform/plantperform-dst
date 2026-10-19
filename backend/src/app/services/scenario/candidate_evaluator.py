@@ -118,6 +118,8 @@ def compute_n_inputs(
     )
     fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
     fv_forfrugt += _EFTERAFGROEDE_FORFRUGTSVAERDI_KGN_HA.get(prev_udlaeg_kode, 0.0)
+    if not afgroede_normer.deducts_preceding_crop_value(norm):
+        fv_forfrugt = 0.0
 
     if not norm or norm["n_norm"] is None:
         return {

@@ -176,6 +176,18 @@ def lookup_norm(crop_code, jb_nr, irrigated: bool = False, only_organic: bool = 
     return None
 
 
+def deducts_preceding_crop_value(norm: dict | None) -> bool:
+    """Return whether the crop of ``norm`` has the preceding crop value deducted.
+
+    This is the master table's indregn_ffv. It is Nej for grass, seed grass,
+    clover, lucerne and the other perennial crops: a stand that stands on is
+    not ploughed, so its value is only deducted from the crop after it once it
+    is ploughed, and only when that crop has Ja. A crop without a norm row or
+    a value keeps the deduction.
+    """
+    return norm is None or norm["indregn_ffv"] is not False
+
+
 def lookup_nfix(crop_code, jb_nr, irrigated: bool = False) -> float:
     """Return biological N fixation for a crop/JB/irrigation combination."""
     if crop_code is None or jb_nr is None:

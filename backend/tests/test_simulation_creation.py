@@ -73,6 +73,7 @@ class CreationUnitTests(unittest.TestCase):
                 return_value={
                     "n_norm": 175,
                     "forfrugtsvaerdi": 18,
+                    "indregn_ffv": True,
                 },
             ),
             patch.object(candidate_evaluator.afgroede_normer, "lookup_nfix", return_value=2.5),

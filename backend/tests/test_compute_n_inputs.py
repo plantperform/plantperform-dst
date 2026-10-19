@@ -16,11 +16,11 @@ VINTERRAPS = 22
 KLOEVERGRAES = 260
 
 NORMS = {
-    VINTERHVEDE: {"n_norm": 175.0, "forfrugtsvaerdi": 0.0},
-    VAARBYG: {"n_norm": 136.0, "forfrugtsvaerdi": 0.0},
-    VAARHVEDE: {"n_norm": 165.0, "forfrugtsvaerdi": 0.0},
-    VINTERRAPS: {"n_norm": 159.0, "forfrugtsvaerdi": 18.0},
-    KLOEVERGRAES: {"n_norm": 286.0, "forfrugtsvaerdi": 115.0},
+    VINTERHVEDE: {"n_norm": 175.0, "forfrugtsvaerdi": 0.0, "indregn_ffv": True},
+    VAARBYG: {"n_norm": 136.0, "forfrugtsvaerdi": 0.0, "indregn_ffv": True},
+    VAARHVEDE: {"n_norm": 165.0, "forfrugtsvaerdi": 0.0, "indregn_ffv": True},
+    VINTERRAPS: {"n_norm": 159.0, "forfrugtsvaerdi": 18.0, "indregn_ffv": True},
+    KLOEVERGRAES: {"n_norm": 286.0, "forfrugtsvaerdi": 115.0, "indregn_ffv": False},
 }
 
 
@@ -63,9 +63,16 @@ class ComputeNInputsTests(unittest.TestCase):
     def test_oekologisk_is_fertilized_at_full_norm(self) -> None:
         self.assertEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 175.0 - 18.0)
 
-    def fv(self, prev_udlaeg: int | None) -> float:
+    def test_kloevergraes_standing_on_gets_no_forfrugtsvaerdi(self) -> None:
+        # indregn_ffv Nej: the stand is not ploughed, so the full norm is fertilized.
+        self.assertEqual(self.mncs(KLOEVERGRAES, KLOEVERGRAES, 100), 286.0)
+
+    def test_indregn_ffv_nej_gets_no_forfrugtsvaerdi_after_another_afgroede(self) -> None:
+        self.assertEqual(self.mncs(KLOEVERGRAES, VINTERRAPS, 100), 286.0)
+
+    def fv(self, prev_udlaeg: int | None, afgrode: int = VAARBYG) -> float:
         result = candidate_evaluator.compute_n_inputs(
-            VAARBYG, VINTERHVEDE, prev_udlaeg, 1, 100, 0.0, 70.0, False, False,
+            afgrode, VINTERHVEDE, prev_udlaeg, 1, 100, 0.0, 70.0, False, False,
         )
         return result["fv_forfrugt"]
 
@@ -81,6 +88,10 @@ class ComputeNInputsTests(unittest.TestCase):
         self.assertEqual(self.fv(9682), 0.0)
         self.assertEqual(self.fv(9680), 0.0)
         self.assertEqual(self.fv(None), 0.0)
+
+    def test_indregn_ffv_nej_gets_no_efterafgroede_forfrugtsvaerdi(self) -> None:
+        self.assertEqual(self.fv(950, KLOEVERGRAES), 0.0)
+        self.assertEqual(self.fv(952, KLOEVERGRAES), 0.0)
 
 
 if __name__ == "__main__":

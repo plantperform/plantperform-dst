@@ -132,6 +132,8 @@ def evaluate_real_history_for_field(
             else None
         )
         fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        if not afgroede_normer.deducts_preceding_crop_value(norm):
+            fv_forfrugt = 0.0
 
         leaching: dict = {}
         if this_code is not None:
@@ -267,6 +269,8 @@ def generate_permanent_crop_candidate(
             else None
         )
         fv_forfrugt = prev_norm["forfrugtsvaerdi"] if prev_norm else 0.0
+        if not afgroede_normer.deducts_preceding_crop_value(norm):
+            fv_forfrugt = 0.0
 
         try:
             leaching = bridge_v2.evaluate_leaching_position(
