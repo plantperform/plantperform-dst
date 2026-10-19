@@ -11,7 +11,7 @@ are camelCase. Modules are independent of farms and can be reused across farms.
 | POST | `/economics-modules` | `{name, overrides?}`; returns module, HTTP 201 |
 | GET | `/economics-modules/{id}` | Returns module |
 | PATCH | `/economics-modules/{id}` | `{expectedRevision, name?, overrides?}`; returns module |
-| DELETE | `/economics-modules/{id}` | HTTP 204; existing simulation snapshots survive |
+| DELETE | `/economics-modules/{id}` | HTTP 204; selections move to standard, snapshots survive |
 | POST | `/economics-modules/{id}/duplicate` | Optional `{name}`; returns independent copy, HTTP 201 |
 | GET | `/economics-modules/{id}/members` | `[{email}]` |
 | POST | `/economics-modules/{id}/members` | `{email}`; verified existing user required, HTTP 201 |
@@ -39,6 +39,12 @@ Every member has equal read, edit, share, duplicate, and delete rights. Email
 addresses are normalized. The last member cannot be removed. Duplication gives
 membership only to its requester and copies the current overrides. It does not
 copy membership or simulation assignments.
+
+Deleting a module removes it for every member. Every simulation that selects
+it, on any farm, moves back to `standard` and its results are marked outdated.
+The applied snapshot and its figures stay until the economics are recalculated.
+While such a simulation is being created, recalculated or optimized, deletion
+returns 409.
 
 `standard` is a virtual immutable module with empty overrides, named
 `Standard (SEGES 2026)`. It can be read and duplicated but cannot be changed,
@@ -247,7 +253,7 @@ module APIs and read actual assumptions from the catalogue. Adapt profile IDs,
 quantity line IDs, and context-variant selection to the emitted identifiers.
 Pass `economicsModuleId` during creation, save selection separately, and offer
 an explicit recalculation action. Remove assumptions that profiles belong to one
-farm, automatically propagate edits, or revert simulations to standard on deletion.
+farm or automatically propagate edits.
 Label pending selection versus applied snapshot, and distinguish current values
 from the previous optimization's saved snapshot.
 
