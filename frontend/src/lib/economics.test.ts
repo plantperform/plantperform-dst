@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyOverrideEdits,
   categoryPrices,
   compareProfileChanges,
   cropRestoreEffect,
@@ -42,6 +43,7 @@ import {
   withQuantityOverride,
   withShownQuantity,
   withYieldPct,
+  withoutProfileChanges,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
   type CropEconomics,
@@ -152,6 +154,7 @@ const ASSUMPTIONS: EconomicsAssumptions = {
     },
   ],
   crops: [RAPESEED, PEAS],
+  soilVariants: {},
 }
 
 const BARLEY = crop(1, 'Vårbyg', {
@@ -252,6 +255,7 @@ describe('cropTotals', () => {
 
   it('changes a quantity for one crop only', () => {
     const overrides = withQuantityOverride(
+      ASSUMPTIONS,
       NO_OVERRIDES,
       RAPESEED,
       'spraying',
@@ -273,6 +277,7 @@ describe('profileDbEffect', () => {
       { cropCode: 30, cropName: 'Ærter', dbDkkHa: -1145, deltaDkkHa: 0 },
     ])
     const moreWork = withQuantityOverride(
+      ASSUMPTIONS,
       withPriceOverride(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
       PEAS,
       'ploughing',
@@ -338,6 +343,7 @@ describe('one crop', () => {
   it('restores every change in one crop, shared prices included', () => {
     const rapeseedYield = withYieldPct(NO_OVERRIDES, RAPESEED, 10)
     const rapeseedSpraying = withQuantityOverride(
+      ASSUMPTIONS,
       rapeseedYield,
       RAPESEED,
       'spraying',
@@ -349,7 +355,13 @@ describe('one crop', () => {
       'ploughing',
       900,
     )
-    const peasSpraying = withQuantityOverride(ploughing, PEAS, 'spraying', 3)
+    const peasSpraying = withQuantityOverride(
+      ASSUMPTIONS,
+      ploughing,
+      PEAS,
+      'spraying',
+      3,
+    )
     const restored = withoutCropChanges(ASSUMPTIONS, peasSpraying, RAPESEED)
     expect(isCropCustomised(restored, RAPESEED)).toBe(false)
     expect(isPriceCustomised(restored, 'ploughing')).toBe(false)
@@ -392,6 +404,7 @@ describe('overrides', () => {
     ).toBe(false)
 
     const lessSpraying = withQuantityOverride(
+      ASSUMPTIONS,
       NO_OVERRIDES,
       RAPESEED,
       'spraying',
@@ -400,7 +413,13 @@ describe('overrides', () => {
     expect(isQuantityCustomised(lessSpraying, RAPESEED, 'spraying')).toBe(true)
     expect(
       isQuantityCustomised(
-        withQuantityOverride(lessSpraying, RAPESEED, 'spraying', 7),
+        withQuantityOverride(
+          ASSUMPTIONS,
+          lessSpraying,
+          RAPESEED,
+          'spraying',
+          7,
+        ),
         RAPESEED,
         'spraying',
       ),
@@ -409,6 +428,7 @@ describe('overrides', () => {
 
   it('marks a crop as customised when one of its prices or quantities differs', () => {
     const rapeseedOnly = withQuantityOverride(
+      ASSUMPTIONS,
       NO_OVERRIDES,
       RAPESEED,
       'spraying',
@@ -448,7 +468,13 @@ describe('yield percentage', () => {
 
   it('leaves the sale quantity to the percentage', () => {
     const [grain] = RAPESEED.revenue
-    const overrides = withQuantityOverride(NO_OVERRIDES, RAPESEED, grain.id, 42)
+    const overrides = withQuantityOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      RAPESEED,
+      grain.id,
+      42,
+    )
     expect(overrides).toEqual(NO_OVERRIDES)
     expect(lineQuantity(overrides, RAPESEED, grain)).toBe(44)
   })
@@ -508,9 +534,152 @@ describe('yieldHint', () => {
   })
 })
 
+describe('soil variants', () => {
+  const ON_SAND = {
+    ploughing: [
+      { id: 'ploughing', value: 825 },
+      { id: 'ploughingOnSand', value: 700 },
+    ],
+    '30/spraying': [
+      { id: '30/spraying', value: 2 },
+      { id: '30/sprayingOnSand', value: 3 },
+    ],
+  }
+  const WITH_SAND: EconomicsAssumptions = {
+    ...ASSUMPTIONS,
+    soilVariants: { ...ON_SAND, ploughingOnSand: ON_SAND.ploughing },
+  }
+  const changed = withQuantityOverride(
+    WITH_SAND,
+    withPriceOverride(WITH_SAND, NO_OVERRIDES, 'ploughing', 900),
+    PEAS,
+    'spraying',
+    4,
+  )
+
+  it('sets a changed price or quantity on every soil type', () => {
+    expect(changed.prices).toEqual({ ploughing: 900, ploughingOnSand: 900 })
+    expect(changed.quantities).toEqual({
+      '30/spraying': 4,
+      '30/sprayingOnSand': 4,
+    })
+  })
+
+  it('leaves out the soil types where the value is already the standard', () => {
+    expect(
+      withPriceOverride(WITH_SAND, NO_OVERRIDES, 'ploughing', 700).prices,
+    ).toEqual({ ploughing: 700 })
+    expect(
+      withQuantityOverride(WITH_SAND, NO_OVERRIDES, PEAS, 'spraying', 3)
+        .quantities,
+    ).toEqual({ '30/spraying': 3 })
+  })
+
+  it('restores a price or quantity on every soil type', () => {
+    expect(
+      withPriceOverride(WITH_SAND, changed, 'ploughing', null).prices,
+    ).toEqual({})
+    expect(
+      withPriceOverride(WITH_SAND, changed, 'ploughing', 825).prices,
+    ).toEqual({})
+    expect(
+      withQuantityOverride(WITH_SAND, changed, PEAS, 'spraying', null)
+        .quantities,
+    ).toEqual({})
+    expect(
+      withQuantityOverride(WITH_SAND, changed, PEAS, 'spraying', 2).quantities,
+    ).toEqual({})
+    const ploughing = profileChanges(WITH_SAND, changed).find(
+      (change) => change.key === 'price:ploughing',
+    )
+    if (!ploughing) throw new Error('price:ploughing is missing')
+    expect(withoutProfileChange(WITH_SAND, changed, ploughing).prices).toEqual(
+      {},
+    )
+  })
+
+  it('counts a price once when crops on the farm use it on different soil types', () => {
+    const peasOnSand = crop(31, 'Ærter på sand', {
+      fieldWork: [line('ploughing', 1, 'gange', 'ploughingOnSand')],
+    })
+    const mixed: EconomicsAssumptions = {
+      ...WITH_SAND,
+      prices: [
+        ...ASSUMPTIONS.prices,
+        {
+          id: 'ploughingOnSand',
+          label: 'Pløjning med pakning',
+          unit: 'kr/gang',
+          valueDkk: 700,
+          source: 'SEGES',
+        },
+      ],
+      crops: [RAPESEED, PEAS, peasOnSand],
+    }
+    expect(
+      priceCrops(mixed, 'ploughingOnSand').map((entry) => entry.cropName),
+    ).toEqual(['Vinterraps', 'Ærter', 'Ærter på sand'])
+    expect(
+      profileChanges(
+        mixed,
+        withPriceOverride(mixed, NO_OVERRIDES, 'ploughing', 900),
+      ),
+    ).toMatchObject([
+      {
+        key: 'price:ploughing',
+        cropNames: ['Vinterraps', 'Ærter', 'Ærter på sand'],
+      },
+    ])
+  })
+})
+
+describe('restoring and merging a profile', () => {
+  it('restores only the changes the farm shows', () => {
+    const elsewhere = {
+      prices: { 'sale:[999,"Konventionel",""]': 200 },
+      quantities: {},
+      yieldPct: { '999': 5 },
+    }
+    expect(
+      withoutProfileChanges(
+        ASSUMPTIONS,
+        withYieldPct(
+          withPriceOverride(ASSUMPTIONS, elsewhere, 'ploughing', 700),
+          RAPESEED,
+          10,
+        ),
+      ),
+    ).toEqual(elsewhere)
+  })
+
+  it("applies only the guide's own edits on top of the latest profile", () => {
+    const opened = {
+      prices: { a: 1, b: 2 },
+      quantities: {},
+      yieldPct: { '1': 5 },
+    }
+    const edited = {
+      prices: { a: 1, c: 3 },
+      quantities: { q: 4 },
+      yieldPct: { '1': 5 },
+    }
+    const latest = {
+      prices: { a: 10, b: 2, d: 7 },
+      quantities: {},
+      yieldPct: { '1': 6 },
+    }
+    expect(applyOverrideEdits(latest, opened, edited)).toEqual({
+      prices: { a: 10, c: 3, d: 7 },
+      quantities: { q: 4 },
+      yieldPct: { '1': 6 },
+    })
+  })
+})
+
 describe('profileChanges', () => {
   const overrides = withYieldPct(
     withQuantityOverride(
+      ASSUMPTIONS,
       withPriceOverride(
         ASSUMPTIONS,
         withPriceOverride(ASSUMPTIONS, NO_OVERRIDES, 'ploughing', 700),
@@ -701,7 +870,7 @@ describe('profileChanges', () => {
       if (!change) throw new Error(`${key} is missing`)
       return profileChanges(
         ASSUMPTIONS,
-        withoutProfileChange(overrides, change),
+        withoutProfileChange(ASSUMPTIONS, overrides, change),
       ).map((entry) => entry.key)
     }
     expect(keysWithout('yield:22')).toEqual([
@@ -757,6 +926,7 @@ describe('shared prices', () => {
     ])
 
     const moreSpraying = withQuantityOverride(
+      ASSUMPTIONS,
       NO_OVERRIDES,
       RAPESEED,
       'spraying',
@@ -821,7 +991,7 @@ describe('tørring', () => {
   it('scales a changed drying quantity with the yield percentage too', () => {
     const [drying] = WHEAT.costs.drying
     const changed = withYieldPct(
-      withQuantityOverride(NO_OVERRIDES, WHEAT, drying.id, 9000),
+      withQuantityOverride(WITH_WHEAT, NO_OVERRIDES, WHEAT, drying.id, 9000),
       WHEAT,
       10,
     )
@@ -836,10 +1006,10 @@ describe('tørring', () => {
     const [drying] = WHEAT.costs.drying
     const moreYield = withYieldPct(NO_OVERRIDES, WHEAT, 10)
     expect(standardLineQuantity(moreYield, WHEAT, drying)).toBeCloseTo(9240)
-    const typed = withShownQuantity(moreYield, WHEAT, drying, 11000)
+    const typed = withShownQuantity(WITH_WHEAT, moreYield, WHEAT, drying, 11000)
     expect(lineQuantity(typed, WHEAT, drying)).toBeCloseTo(11000)
     expect(
-      withShownQuantity(moreYield, WHEAT, drying, 9240).quantities,
+      withShownQuantity(WITH_WHEAT, moreYield, WHEAT, drying, 9240).quantities,
     ).toEqual({})
   })
 
@@ -940,7 +1110,13 @@ describe('customisedBreakdownLine', () => {
     expect(
       customisedBreakdownLine(ASSUMPTIONS, ploughingPrice, 30, ploughing)?.id,
     ).toBe('ploughing')
-    const peasSpraying = withQuantityOverride(NO_OVERRIDES, PEAS, 'spraying', 3)
+    const peasSpraying = withQuantityOverride(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      PEAS,
+      'spraying',
+      3,
+    )
     expect(
       customisedBreakdownLine(ASSUMPTIONS, peasSpraying, 30, spraying)?.id,
     ).toBe('spraying')

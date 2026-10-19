@@ -1,25 +1,15 @@
-import { z } from 'zod'
-
+import type { EconomicsModule, Simulation } from '@/api/types'
 import {
   formatChangeCount,
   formatCropCount,
   formatNameList,
   NO_OVERRIDES,
-  type EconomicsOverrides,
+  sameOverrides,
 } from '@/lib/economics'
 
 export const STANDARD_SOURCE = 'SEGES Budgetkalkuler 2026'
 
-export type EconomicsProfile = {
-  id: string
-  name: string
-  overrides: EconomicsOverrides
-}
-
-export type EconomicsProfiles = {
-  profiles: EconomicsProfile[]
-  simulationProfileIds: Readonly<Record<string, string>>
-}
+export type EconomicsProfile = EconomicsModule
 
 export const STANDARD_PROFILE_ID = 'standard'
 
@@ -27,51 +17,90 @@ export const STANDARD_PROFILE: EconomicsProfile = {
   id: STANDARD_PROFILE_ID,
   name: 'Standard (SEGES 2026)',
   overrides: NO_OVERRIDES,
+  revision: 0,
 }
 
-export const NO_PROFILES: EconomicsProfiles = {
-  profiles: [],
-  simulationProfileIds: {},
-}
-
-export const allProfiles = (state: EconomicsProfiles): EconomicsProfile[] => [
+export const allProfiles = (modules: EconomicsModule[]): EconomicsProfile[] => [
   STANDARD_PROFILE,
-  ...state.profiles,
+  ...modules.filter((module) => module.id !== STANDARD_PROFILE_ID),
 ]
 
-export const findProfile = (
-  state: EconomicsProfiles,
-  profileId: string,
-): EconomicsProfile | undefined =>
-  allProfiles(state).find((profile) => profile.id === profileId)
+type ProfiledSimulation = Pick<
+  Simulation,
+  'economicsModuleId' | 'economicsSnapshot'
+>
+
+const NOT_SHARED_NAME = 'En profil, der ikke er delt med dig'
+const LOADING_NAME = 'Henter profilen'
+
+export const appliedProfile = (
+  { economicsSnapshot: snapshot }: ProfiledSimulation,
+  profiles?: EconomicsProfile[],
+): EconomicsProfile => {
+  if (!snapshot) return STANDARD_PROFILE
+  const known =
+    snapshot.sourceId === STANDARD_PROFILE_ID
+      ? STANDARD_PROFILE
+      : profiles?.find((profile) => profile.id === snapshot.sourceId)
+  return {
+    id: snapshot.sourceId,
+    name: known?.name ?? snapshot.name,
+    overrides: snapshot.overrides,
+    revision: snapshot.revision,
+  }
+}
 
 export const profileForSimulation = (
-  state: EconomicsProfiles,
-  simulationId: string,
-): EconomicsProfile =>
-  findProfile(
-    state,
-    state.simulationProfileIds[simulationId] ?? STANDARD_PROFILE_ID,
-  ) ?? STANDARD_PROFILE
+  profiles: EconomicsProfile[] | undefined,
+  simulation: ProfiledSimulation,
+): EconomicsProfile => {
+  const selectedId = simulation.economicsModuleId ?? STANDARD_PROFILE_ID
+  const applied = appliedProfile(simulation, profiles)
+  return (
+    (profiles ?? [STANDARD_PROFILE]).find(
+      (profile) => profile.id === selectedId,
+    ) ??
+    (applied.id === selectedId
+      ? applied
+      : {
+          id: selectedId,
+          name: profiles ? NOT_SHARED_NAME : LOADING_NAME,
+          overrides: NO_OVERRIDES,
+          revision: 0,
+        })
+  )
+}
 
-export const simulationsUsingProfile = <T extends { id: string }>(
-  state: EconomicsProfiles,
+export const isEconomicsCurrent = (
+  profiles: EconomicsProfile[] | undefined,
+  simulation: ProfiledSimulation,
+): boolean => {
+  const selected = profileForSimulation(profiles, simulation)
+  const applied = appliedProfile(simulation)
+  return (
+    selected.id === applied.id &&
+    sameOverrides(selected.overrides, applied.overrides)
+  )
+}
+
+export const simulationsUsingProfile = <T extends ProfiledSimulation>(
   simulations: T[],
   profileId: string,
 ): T[] =>
   simulations.filter(
-    (simulation) => profileForSimulation(state, simulation.id).id === profileId,
+    (simulation) =>
+      (simulation.economicsModuleId ?? STANDARD_PROFILE_ID) === profileId,
   )
 
 const comparableName = (name: string) => name.trim().toLocaleLowerCase('da-DK')
 
 export const profileNameError = (
-  state: EconomicsProfiles,
+  profiles: EconomicsProfile[],
   name: string,
   profileId?: string,
 ): string | null => {
   if (name.trim() === '') return 'Giv profilen et navn.'
-  const taken = allProfiles(state).some(
+  const taken = profiles.some(
     (profile) =>
       profile.id !== profileId &&
       comparableName(profile.name) === comparableName(name),
@@ -79,37 +108,47 @@ export const profileNameError = (
   return taken ? 'Der findes allerede en profil med det navn.' : null
 }
 
+export const freeProfileName = (
+  profiles: EconomicsProfile[],
+  baseName: string,
+): string => {
+  const taken = new Set(profiles.map((profile) => comparableName(profile.name)))
+  let number = 1
+  let name = baseName
+  while (taken.has(comparableName(name))) {
+    number += 1
+    name = `${baseName} ${number}`
+  }
+  return name
+}
+
+export const PROFILE_USERS_ON_FARM = 'På bedriften bruges den af'
+
 export const describeProfileUsers = (simulationNames: string[]): string =>
   simulationNames.length > 0
-    ? `Bruges af ${formatNameList(simulationNames)}`
-    : 'Bruges ikke af nogen simulering endnu'
+    ? `${PROFILE_USERS_ON_FARM} ${formatNameList(simulationNames)}`
+    : 'Bruges ikke af nogen simulering på bedriften endnu'
 
 export const deleteProfileMessage = (simulationNames: string[]): string =>
-  `Profilen slettes. ${
+  `Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet.${
     simulationNames.length > 0
-      ? `${formatNameList(simulationNames)} regner derefter med Standard.`
-      : 'Ingen simuleringer regner med den.'
+      ? ` På bedriften gælder det ${formatNameList(simulationNames)}.`
+      : ''
   } Det kan ikke fortrydes.`
 
 export const ECONOMICS_INVITATION =
   'Har bedriften en anden salgspris, et andet udbytte eller andre priser for markarbejdet, kan tallene rettes i en økonomiprofil.'
 
-export const PROFILES_NOT_IN_CALCULATION =
-  'Profilerne gemmes kun i denne browser og indgår ikke i beregningen endnu.'
-
 export const describeEconomicsLine = (ownProfileCount: number): string => {
   if (ownProfileCount === 0) return 'Simuleringerne regner med Standard.'
-  const single = ownProfileCount === 1
-  return `Bedriften har ${ownProfileCount} ${
-    single ? 'egen økonomiprofil' : 'egne økonomiprofiler'
-  } ud over Standard, og hver simulering regner med en af dem. Indtil ${
-    single ? 'profilen' : 'profilerne'
-  } indgår i beregningen, er tallene regnet med Standard.`
+  return `Du har ${ownProfileCount} ${
+    ownProfileCount === 1 ? 'egen økonomiprofil' : 'egne økonomiprofiler'
+  } ud over Standard, og hver simulering regner med en af dem.`
 }
 
 export const describeOwnProfileCount = (count: number): string => {
   if (count === 0) return 'Kun Standard.'
-  return `${count} ${count === 1 ? 'egen profil' : 'egne profiler'} ud over Standard.`
+  return `${count} ${count === 1 ? 'egen profil' : 'egne profiler'} ud over Standard, som du kan bruge på alle dine bedrifter.`
 }
 
 export const describeOwnProfiles = (names: string[]): string => {
@@ -139,159 +178,25 @@ export const describeStandard = (
   cropCount: number,
   simulationNames: string[],
 ): string =>
-  `Priser og mængder fra ${STANDARD_SOURCE} for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og bedriftens egne profiler måles mod den. ${describeProfileUsers(['afgrødehistorikken', ...simulationNames])}.`
+  `Priser og mængder fra ${STANDARD_SOURCE} for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og dine egne profiler måles mod den. ${describeProfileUsers(['afgrødehistorikken', ...simulationNames])}.`
 
 export const sharedProfileNote = (simulationCount: number): string | null => {
   if (simulationCount < 2) return null
   return simulationCount === 2
-    ? 'En rettelse gælder for begge simuleringer.'
-    : `En rettelse gælder for alle ${simulationCount} simuleringer.`
+    ? 'En rettelse gælder for begge simuleringer, når de er genberegnet.'
+    : `En rettelse gælder for alle ${simulationCount} simuleringer, når de er genberegnet.`
 }
 
-export const freeProfileName = (
-  state: EconomicsProfiles,
-  baseName: string,
+export const describeAppliedProfile = (
+  profiles: EconomicsProfile[],
+  simulation: ProfiledSimulation & Pick<Simulation, 'name'>,
 ): string => {
-  const taken = new Set(
-    allProfiles(state).map((profile) => comparableName(profile.name)),
-  )
-  let number = 1
-  let name = baseName
-  while (taken.has(comparableName(name))) {
-    number += 1
-    name = `${baseName} ${number}`
+  const selected = profileForSimulation(profiles, simulation)
+  const applied = appliedProfile(simulation, profiles)
+  if (!profiles.some((profile) => profile.id === selected.id)) {
+    return `${simulation.name} er regnet med ${applied.name}. Den valgte profil er ikke delt med dig, så vælg en af dine egne for at genberegne.`
   }
-  return name
-}
-
-export const withNewProfile = (
-  state: EconomicsProfiles,
-  profileId: string,
-  baseName: string,
-): EconomicsProfiles =>
-  state.profiles.some((profile) => profile.id === profileId)
-    ? state
-    : {
-        ...state,
-        profiles: [
-          ...state.profiles,
-          {
-            id: profileId,
-            name: freeProfileName(state, baseName),
-            overrides: NO_OVERRIDES,
-          },
-        ],
-      }
-
-const withProfile = (
-  state: EconomicsProfiles,
-  profileId: string,
-  change: (profile: EconomicsProfile) => EconomicsProfile,
-): EconomicsProfiles => ({
-  ...state,
-  profiles: state.profiles.map((profile) =>
-    profile.id === profileId ? change(profile) : profile,
-  ),
-})
-
-export const withProfileName = (
-  state: EconomicsProfiles,
-  profileId: string,
-  name: string,
-): EconomicsProfiles =>
-  withProfile(state, profileId, (profile) => ({
-    ...profile,
-    name: name.trim(),
-  }))
-
-export const withProfileOverrides = (
-  state: EconomicsProfiles,
-  profileId: string,
-  overrides: EconomicsOverrides,
-): EconomicsProfiles =>
-  withProfile(state, profileId, (profile) => ({ ...profile, overrides }))
-
-const linksWhere = (
-  links: Readonly<Record<string, string>>,
-  keep: (simulationId: string, profileId: string) => boolean,
-) =>
-  Object.fromEntries(
-    Object.entries(links).filter(([simulationId, profileId]) =>
-      keep(simulationId, profileId),
-    ),
-  )
-
-export const withoutProfile = (
-  state: EconomicsProfiles,
-  profileId: string,
-): EconomicsProfiles => ({
-  profiles: state.profiles.filter((profile) => profile.id !== profileId),
-  simulationProfileIds: linksWhere(
-    state.simulationProfileIds,
-    (_, linkedId) => linkedId !== profileId,
-  ),
-})
-
-export const withSimulationProfile = (
-  state: EconomicsProfiles,
-  simulationId: string,
-  profileId: string,
-): EconomicsProfiles => {
-  const links = linksWhere(
-    state.simulationProfileIds,
-    (linkedSimulationId) => linkedSimulationId !== simulationId,
-  )
-  const isFarmProfile = state.profiles.some(
-    (profile) => profile.id === profileId,
-  )
-  return {
-    ...state,
-    simulationProfileIds: isFarmProfile
-      ? { ...links, [simulationId]: profileId }
-      : links,
-  }
-}
-
-const storedProfileSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().trim().min(1),
-  overrides: z.object({
-    prices: z.record(z.string(), z.number()),
-    quantities: z.record(z.string(), z.number()),
-    yieldPct: z.record(z.string(), z.number()),
-  }),
-})
-
-const storedProfilesSchema = z.object({
-  profiles: z.array(z.unknown()),
-  simulationProfileIds: z.record(z.string(), z.string()),
-})
-
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-export const parseStoredProfiles = (text: string | null): EconomicsProfiles => {
-  const stored = storedProfilesSchema.safeParse(
-    text === null ? null : parseJson(text),
-  )
-  if (!stored.success) return NO_PROFILES
-  const profiles = stored.data.profiles.flatMap((entry) => {
-    const profile = storedProfileSchema.safeParse(entry)
-    return profile.success && profile.data.id !== STANDARD_PROFILE_ID
-      ? [profile.data]
-      : []
-  })
-  const profileIds = new Set(profiles.map((profile) => profile.id))
-  return {
-    profiles,
-    simulationProfileIds: linksWhere(
-      stored.data.simulationProfileIds,
-      (_, profileId) => profileIds.has(profileId),
-    ),
-  }
+  return selected.id === applied.id
+    ? `${applied.name} er rettet, siden ${simulation.name} blev regnet. Genberegn økonomien for at bruge rettelserne.`
+    : `${simulation.name} er regnet med ${applied.name}. Genberegn økonomien for at bruge ${selected.name}.`
 }

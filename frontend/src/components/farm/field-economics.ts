@@ -18,7 +18,7 @@ import { fieldTitle } from '@/lib/field-domain'
 type FieldEconomics = {
   assumptions: EconomicsAssumptions | undefined
   profile: EconomicsProfile
-  profilePath: string
+  profilePath: string | null
   returnTo: FieldReturnTarget
   openAtYearIndex: number | undefined
   onOpenedAtYear: () => void
@@ -34,7 +34,7 @@ export const useFieldEconomics = (
   const economics = useEconomicsProfiles()
   const [openAtYearIndex, onOpenedAtYear] = useCalculationReturn(field.id)
   const profile = simulation
-    ? economics.profileForSimulation(simulation.id)
+    ? economics.appliedProfile(simulation)
     : STANDARD_PROFILE
   const { data: assumptions } = useFarmBudgets(
     simulation && profile.id !== STANDARD_PROFILE_ID
@@ -45,7 +45,9 @@ export const useFieldEconomics = (
   return {
     assumptions,
     profile,
-    profilePath: economics.profilePath(profile.id),
+    profilePath: economics.findProfile(profile.id)
+      ? economics.profilePath(profile.id)
+      : null,
     returnTo: {
       kind: 'field',
       simulationId: simulation?.id ?? null,

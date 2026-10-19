@@ -56,6 +56,7 @@ const ASSUMPTIONS: EconomicsAssumptions = {
     ploughed(10, 'Vinterbyg'),
     ploughed(11, 'Vinterhvede'),
   ],
+  soilVariants: {},
 }
 const RESTORE_PLOUGHING = 'Gendan standard for Pløjning med pakning'
 

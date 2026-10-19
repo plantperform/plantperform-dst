@@ -959,18 +959,20 @@ const CustomisedLabel = ({
       <span className="block text-[11px] font-normal text-muted-foreground">
         Rettet i {fieldEconomics.profile.name}
       </span>
-      <Link
-        to={fieldEconomics.profilePath}
-        state={{
-          cropCode,
-          lineId: line.id,
-          returnTo: fieldEconomics.returnTo,
-        }}
-        onClick={fieldEconomics.onOpenProfile}
-        className={`${TEXT_LINK_CLASS} block w-fit text-[11px]`}
-      >
-        Se posten i profilen
-      </Link>
+      {fieldEconomics.profilePath ? (
+        <Link
+          to={fieldEconomics.profilePath}
+          state={{
+            cropCode,
+            lineId: line.id,
+            returnTo: fieldEconomics.returnTo,
+          }}
+          onClick={fieldEconomics.onOpenProfile}
+          className={`${TEXT_LINK_CLASS} block w-fit text-[11px]`}
+        >
+          Se posten i profilen
+        </Link>
+      ) : null}
     </>
   )
 }

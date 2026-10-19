@@ -1,5 +1,5 @@
 import { Pencil, TextCursorInput, Trash2 } from 'lucide-react'
-import { Fragment, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
@@ -18,26 +18,28 @@ import {
 import {
   BudgetsGate,
   FarmingSystemSwitch,
+  ProfilesStatus,
   TEXT_LINK_CLASS,
 } from '@/components/farm/economics-ui'
 import { EconomicsAssumptionsEditor } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
+import { NameList } from '@/components/NameList'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import {
   describeBudgetSoil,
-  nameListFormat,
-  NO_OVERRIDES,
   profileChanges,
   profileChangesTitle,
+  SOIL_VARIANTS_NOTE,
   withoutProfileChange,
+  withoutProfileChanges,
   type EconomicsAssumptions,
 } from '@/lib/economics'
 import {
   describeProfileUsers,
-  PROFILES_NOT_IN_CALCULATION,
+  PROFILE_USERS_ON_FARM,
   sharedProfileNote,
   STANDARD_PROFILE_ID,
   STANDARD_SOURCE,
@@ -130,23 +132,19 @@ const ProfileBody = ({
             `${describeProfileUsers([])}.`
           ) : (
             <>
-              Bruges af{' '}
-              {nameListFormat
-                .formatToParts(users.map((simulation) => simulation.id))
-                .map((part, index) =>
-                  part.type === 'element' ? (
-                    <button
-                      key={index}
-                      type="button"
-                      className={TEXT_LINK_CLASS}
-                      onClick={() => onOpenSimulation(part.value)}
-                    >
-                      {userNames.get(part.value)}
-                    </button>
-                  ) : (
-                    <Fragment key={index}>{part.value}</Fragment>
-                  ),
+              {PROFILE_USERS_ON_FARM}{' '}
+              <NameList
+                items={users.map((simulation) => simulation.id)}
+                renderItem={(simulationId) => (
+                  <button
+                    type="button"
+                    className={TEXT_LINK_CLASS}
+                    onClick={() => onOpenSimulation(simulationId)}
+                  >
+                    {userNames.get(simulationId)}
+                  </button>
                 )}
+              />
               .{sharedNote ? ` ${sharedNote}` : null}
             </>
           )}
@@ -170,8 +168,10 @@ const ProfileBody = ({
         )}
         <p className="text-muted-foreground">
           {describeBudgetSoil(assumptions)}
+          {isStandard || assumptions.soilTypeNumber === null
+            ? null
+            : ` ${SOIL_VARIANTS_NOTE}`}
         </p>
-        <p className="text-warning-strong">{PROFILES_NOT_IN_CALCULATION}</p>
       </div>
 
       {changesOpen && changes.length > 0 ? (
@@ -180,11 +180,13 @@ const ProfileBody = ({
           changes={changes}
           onRestore={(change) =>
             economics.changeOverrides(profile.id, (current) =>
-              withoutProfileChange(current, change),
+              withoutProfileChange(assumptions, current, change),
             )
           }
           onRestoreAll={() =>
-            economics.changeOverrides(profile.id, () => NO_OVERRIDES)
+            economics.changeOverrides(profile.id, (current) =>
+              withoutProfileChanges(assumptions, current),
+            )
           }
         />
       ) : null}
@@ -256,7 +258,7 @@ const ProfileView = ({
               {farmName} ·{' '}
               {isStandard
                 ? `${STANDARD_SOURCE}. Standard kan ikke rettes.`
-                : `Bedriftens priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Rettelser gemmes med det samme.`}
+                : `Dine priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen kan bruges på alle dine bedrifter. Rettelser gemmes med det samme og bruges, når en simulering genberegnes.`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -305,6 +307,9 @@ export const EconomicsProfilePage = (props: EconomicsProfilePageProps) => {
   const economics = useEconomicsProfiles()
   const profile = economics.findProfile(profileId)
 
+  if (!economics.ready) {
+    return <ProfilesStatus className="mx-6 mt-7 sm:mx-10" />
+  }
   if (!profile) {
     return <Navigate to={economics.overviewPath} replace />
   }

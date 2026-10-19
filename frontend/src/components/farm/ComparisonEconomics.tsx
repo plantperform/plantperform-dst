@@ -10,11 +10,7 @@ import {
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { ChangedValue } from '@/components/farm/economics-ui'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
-import {
-  compareProfileChanges,
-  formatCropNames,
-  type EconomicsAssumptions,
-} from '@/lib/economics'
+import { compareProfileChanges, formatCropNames } from '@/lib/economics'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 
 type ComparisonEconomicsProps = ComparedColumnsProps & {
@@ -31,15 +27,15 @@ export const ComparisonEconomics = ({
   const { search } = useLocation()
   const budgetsFor = (farmingSystem: FarmingSystem) =>
     farmingSystems.includes(farmingSystem) ? farmId : undefined
-  const budgets: Record<FarmingSystem, EconomicsAssumptions | undefined> = {
-    Konventionel: useFarmBudgets(budgetsFor('Konventionel'), {
-      farmingSystem: 'Konventionel',
-    }).data,
-    Økologisk: useFarmBudgets(budgetsFor('Økologisk'), {
-      farmingSystem: 'Økologisk',
-    }).data,
-  }
-  const columnBudgets = farmingSystems.map((system) => budgets[system])
+  const conventional = useFarmBudgets(budgetsFor('Konventionel'), {
+    farmingSystem: 'Konventionel',
+  }).data
+  const organic = useFarmBudgets(budgetsFor('Økologisk'), {
+    farmingSystem: 'Økologisk',
+  }).data
+  const columnBudgets = farmingSystems.map((system) =>
+    system === 'Økologisk' ? organic : conventional,
+  )
   const rows = columnBudgets.every((assumptions) => assumptions !== undefined)
     ? compareProfileChanges(
         profiles.map((profile, index) => ({

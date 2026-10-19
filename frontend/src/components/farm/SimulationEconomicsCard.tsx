@@ -1,6 +1,8 @@
-import { useId } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useId, useState } from 'react'
 
 import { useFarmBudgets } from '@/api/economics'
+import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { useStartGuide } from '@/components/farm/economics-navigation'
@@ -19,6 +21,7 @@ import {
   RULES_CARD_HEAD_CLASS,
 } from '@/components/farm/rules-ui'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
+import { Button } from '@/components/ui/button'
 import { cropGroupFor, shortCropName } from '@/lib/crop-groups'
 import {
   budgetSoilType,
@@ -32,6 +35,7 @@ import {
   type EconomicsAssumptions,
 } from '@/lib/economics'
 import {
+  describeAppliedProfile,
   ECONOMICS_INVITATION,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
@@ -154,7 +158,13 @@ type CardBodyProps = SimulationEconomicsCardProps & {
 const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
-  const profile = economics.profileForSimulation(simulation.id)
+  const profile = economics.profileForSimulation(simulation)
+  if (
+    economics.findProfile(profile.id) === undefined &&
+    economics.appliedProfile(simulation).id !== profile.id
+  ) {
+    return null
+  }
   const changes = profileChanges(assumptions, profile.overrides)
   const effect = simulationEconomicsEffect(
     assumptions,
@@ -169,10 +179,12 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
   if (profile.id === STANDARD_PROFILE_ID) {
     return (
       <p className={NOTE_CLASS}>
-        <b className="font-semibold text-foreground">{simulation.name}</b>{' '}
-        regner med priser og mængder fra {STANDARD_SOURCE} uden ændringer.{' '}
-        {economics.ownProfiles.length > 0 ? (
-          'Vælg en af bedriftens egne profiler for at se, hvad den betyder for simuleringen.'
+        <b className="font-semibold text-foreground">{simulation.name}</b> har
+        Standard valgt, altså priser og mængder fra {STANDARD_SOURCE} uden
+        ændringer.{' '}
+        {economics.ownProfiles === undefined ? null : economics.ownProfiles
+            .length > 0 ? (
+          'Vælg en af dine egne profiler for at se, hvad den betyder for simuleringen.'
         ) : (
           <>
             {ECONOMICS_INVITATION}{' '}
@@ -243,12 +255,45 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
             ikke dyrker.
           </p>
         ) : null}
-        <p className="text-warning-strong">
-          Profilen indgår ikke i beregningen endnu, så simuleringens tal er
-          regnet med {STANDARD_PROFILE.name}.
-        </p>
       </div>
     </>
+  )
+}
+
+const Recalculation = ({ simulation }: { simulation: Simulation }) => {
+  const economics = useEconomicsProfiles()
+  const optimizing = useOptimizationRun(simulation.id)?.status === 'running'
+  const [busy, setBusy] = useState(false)
+
+  if (!economics.ready || economics.isEconomicsCurrent(simulation)) return null
+  const available =
+    economics.findProfile(
+      simulation.economicsModuleId ?? STANDARD_PROFILE_ID,
+    ) !== undefined
+
+  const recalculate = async () => {
+    setBusy(true)
+    await economics.recalculate(simulation)
+    setBusy(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-warning/10 px-5 py-3 text-[13px]">
+      <p className="min-w-0 flex-1">
+        {describeAppliedProfile(economics.profiles, simulation)}
+      </p>
+      {available ? (
+        <Button
+          size="sm"
+          loading={busy}
+          disabled={optimizing}
+          onClick={() => void recalculate()}
+        >
+          {busy ? null : <RefreshCw aria-hidden="true" />}
+          Genberegn økonomi
+        </Button>
+      ) : null}
+    </div>
   )
 }
 
@@ -273,7 +318,7 @@ export const SimulationEconomicsCard = (
           </h3>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Priserne, mængderne og udbytterne bag simuleringens dækningsbidrag.
-            Et skift gælder med det samme.
+            Et skift gælder, når økonomien er genberegnet.
           </p>
         </div>
         <EconomicsProfileMenu
@@ -282,6 +327,7 @@ export const SimulationEconomicsCard = (
           simulations={props.simulations}
         />
       </div>
+      <Recalculation simulation={props.simulation} />
       <BudgetsGate budgets={budgets} className="border-t px-5 py-4">
         {(assumptions) => <CardBody {...props} assumptions={assumptions} />}
       </BudgetsGate>

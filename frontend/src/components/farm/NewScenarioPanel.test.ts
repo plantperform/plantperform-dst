@@ -84,7 +84,7 @@ vi.mock(
       profiles: [STANDARD_PROFILE],
       findProfile: () => STANDARD_PROFILE,
       profileForSimulation: () => STANDARD_PROFILE,
-      assignProfile: vi.fn(),
+      withCurrentEconomics: async (simulation: unknown) => simulation,
     }
     return {
       ...(await importOriginal<object>()),

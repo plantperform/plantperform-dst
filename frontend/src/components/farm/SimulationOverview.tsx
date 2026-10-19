@@ -72,7 +72,9 @@ export const SimulationOverview = ({
           </div>
         </header>
         <p className="text-sm text-muted-foreground">
-          {describeEconomicsLine(economics.ownProfiles.length)}{' '}
+          {economics.ownProfiles
+            ? `${describeEconomicsLine(economics.ownProfiles.length)} `
+            : null}
           <Link to={economics.overviewPath} className={TEXT_LINK_CLASS}>
             Se Økonomi
           </Link>

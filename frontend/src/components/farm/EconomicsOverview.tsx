@@ -13,6 +13,7 @@ import {
   DbDelta,
   DbDeltaBar,
   FarmingSystemSwitch,
+  ProfilesStatus,
 } from '@/components/farm/economics-ui'
 import { EconomicsBanner } from '@/components/farm/EconomicsBanner'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
@@ -37,7 +38,6 @@ import {
   describeProfileUsers,
   describeStandard,
   ECONOMICS_INVITATION,
-  PROFILES_NOT_IN_CALCULATION,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
@@ -202,7 +202,7 @@ const ProfileCards = ({
 }: ProfileCardsProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
-  const cards = economics.ownProfiles.map((profile) => ({
+  const cards = (economics.ownProfiles ?? []).map((profile) => ({
     profile,
     effects: profileDbEffect(assumptions, profile.overrides),
   }))
@@ -265,7 +265,7 @@ export const EconomicsOverview = (props: EconomicsOverviewProps) => {
   const economics = useEconomicsProfiles()
   const budgets = useEconomicsAssumptions()
   const startGuide = useStartGuide()
-  const profileCount = economics.ownProfiles.length
+  const profileCount = economics.ownProfiles?.length
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -275,17 +275,16 @@ export const EconomicsOverview = (props: EconomicsOverviewProps) => {
             <h1 className="font-display text-4xl tracking-tight">Økonomi</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               <b className="font-semibold text-foreground">{props.farmName}</b>.{' '}
-              {describeOwnProfileCount(profileCount)} Priser, mængder og
-              udbytter, som beregningen bygger på.
+              {profileCount === undefined
+                ? null
+                : `${describeOwnProfileCount(profileCount)} `}
+              Priser, mængder og udbytter, som beregningen bygger på.
               {budgets.data ? ` ${describeBudgetSoil(budgets.data)}` : null}
-            </p>
-            <p className="mt-1 text-sm text-warning-strong">
-              {PROFILES_NOT_IN_CALCULATION}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FarmingSystemSwitch />
-            {profileCount > 0 ? (
+            {profileCount ? (
               <Button
                 onClick={() =>
                   startGuide({ fromProfileId: STANDARD_PROFILE_ID })
@@ -297,11 +296,15 @@ export const EconomicsOverview = (props: EconomicsOverviewProps) => {
             ) : null}
           </div>
         </header>
-        <BudgetsGate budgets={budgets}>
-          {(assumptions) => (
-            <ProfileCards {...props} assumptions={assumptions} />
-          )}
-        </BudgetsGate>
+        {economics.ready ? (
+          <BudgetsGate budgets={budgets}>
+            {(assumptions) => (
+              <ProfileCards {...props} assumptions={assumptions} />
+            )}
+          </BudgetsGate>
+        ) : (
+          <ProfilesStatus />
+        )}
       </div>
     </div>
   )

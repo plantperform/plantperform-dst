@@ -74,6 +74,7 @@ const ASSUMPTIONS: EconomicsAssumptions = {
     crop(11, 'Vinterhvede', 80, true),
     crop(22, 'Vinterraps', 40, false),
   ],
+  soilVariants: {},
 }
 
 const year = (cropCode: number, cropName: string): RotationYear => ({

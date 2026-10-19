@@ -1,4 +1,4 @@
-import type { FarmingSystem } from '@/api/types'
+import type { EconomicsOverrides, FarmingSystem } from '@/api/types'
 import { formatWholeNumber } from '@/lib/field-domain'
 
 export type CostCategory =
@@ -45,18 +45,17 @@ export type CropEconomics = {
   costs: Record<CostCategory, EconomicsLine[]>
 }
 
+export type SoilVariant = { id: string; value: number }
+
 export type EconomicsAssumptions = {
   soilTypeNumber: number | null
   farmingSystem: FarmingSystem
   prices: UnitPrice[]
   crops: CropEconomics[]
+  soilVariants: Readonly<Record<string, readonly SoilVariant[]>>
 }
 
-export type EconomicsOverrides = {
-  prices: Readonly<Record<string, number>>
-  quantities: Readonly<Record<string, number>>
-  yieldPct: Readonly<Record<string, number>>
-}
+export type { EconomicsOverrides }
 
 export type OverridesChange = (
   current: EconomicsOverrides,
@@ -103,8 +102,43 @@ export const YIELD_ADJUSTMENT_ID = 'yieldPct'
 
 const cropKey = (crop: CropEconomics) => String(crop.cropCode)
 
-const withoutKey = (record: Readonly<Record<string, number>>, key: string) =>
-  Object.fromEntries(Object.entries(record).filter(([entry]) => entry !== key))
+const withoutKeys = (
+  record: Readonly<Record<string, number>>,
+  keys: readonly string[],
+) =>
+  Object.fromEntries(
+    Object.entries(record).filter(([entry]) => !keys.includes(entry)),
+  )
+
+const soilVariantsOf = (
+  assumptions: EconomicsAssumptions,
+  id: string,
+  standard: number,
+): readonly SoilVariant[] =>
+  assumptions.soilVariants[id] ?? [{ id, value: standard }]
+
+const variantIds = (assumptions: EconomicsAssumptions, id: string): string[] =>
+  soilVariantsOf(assumptions, id, 0).map((variant) => variant.id)
+
+const withValue = (
+  record: Readonly<Record<string, number>>,
+  variants: readonly SoilVariant[],
+  value: number | null,
+): Record<string, number> => {
+  const rest = withoutKeys(
+    record,
+    variants.map((variant) => variant.id),
+  )
+  if (value === null) return rest
+  return {
+    ...rest,
+    ...Object.fromEntries(
+      variants
+        .filter((variant) => variant.value !== value)
+        .map((variant) => [variant.id, value]),
+    ),
+  }
+}
 
 const groupedLines = (
   crop: CropEconomics,
@@ -289,16 +323,19 @@ export const withPriceOverride = (
   priceId: string,
   value: number | null,
 ): EconomicsOverrides => {
-  const rest = withoutKey(overrides.prices, priceId)
-  const isStandard =
-    value === null || value === findPrice(assumptions, priceId)?.valueDkk
+  const standard = findPrice(assumptions, priceId)?.valueDkk ?? 0
   return {
     ...overrides,
-    prices: isStandard ? rest : { ...rest, [priceId]: value },
+    prices: withValue(
+      overrides.prices,
+      soilVariantsOf(assumptions, priceId, standard),
+      value === standard ? null : value,
+    ),
   }
 }
 
 export const withQuantityOverride = (
+  assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
   crop: CropEconomics,
   lineId: string,
@@ -306,15 +343,18 @@ export const withQuantityOverride = (
 ): EconomicsOverrides => {
   const line = findLine(crop, lineId)
   if (!line?.quantityId) return overrides
-  const rest = withoutKey(overrides.quantities, line.quantityId)
-  const isStandard = value === null || value === line.quantity
   return {
     ...overrides,
-    quantities: isStandard ? rest : { ...rest, [line.quantityId]: value },
+    quantities: withValue(
+      overrides.quantities,
+      soilVariantsOf(assumptions, line.quantityId, line.quantity),
+      value === line.quantity ? null : value,
+    ),
   }
 }
 
 export const withShownQuantity = (
+  assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
   crop: CropEconomics,
   line: EconomicsLine,
@@ -322,6 +362,7 @@ export const withShownQuantity = (
 ): EconomicsOverrides => {
   const quantity = shown / yieldFactor(overrides, crop, line)
   return withQuantityOverride(
+    assumptions,
     overrides,
     crop,
     line.id,
@@ -333,15 +374,14 @@ export const withYieldPct = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
   value: number | null,
-): EconomicsOverrides => {
-  const key = cropKey(crop)
-  const rest = withoutKey(overrides.yieldPct, key)
-  const isStandard = value === null || value === 0
-  return {
-    ...overrides,
-    yieldPct: isStandard ? rest : { ...rest, [key]: value },
-  }
-}
+): EconomicsOverrides => ({
+  ...overrides,
+  yieldPct: withValue(
+    overrides.yieldPct,
+    [{ id: cropKey(crop), value: 0 }],
+    value,
+  ),
+})
 
 export const isPriceCustomised = (
   overrides: EconomicsOverrides,
@@ -438,7 +478,7 @@ export const withoutCropChanges = (
     (current, line) =>
       withPriceOverride(
         assumptions,
-        withQuantityOverride(current, crop, line.id, null),
+        withQuantityOverride(assumptions, current, crop, line.id, null),
         line.priceId,
         null,
       ),
@@ -522,10 +562,12 @@ export const quantityUnitLabel = (unit: string, quantity: number): string =>
 export const priceCrops = (
   assumptions: EconomicsAssumptions,
   priceId: string,
-): CropEconomics[] =>
-  assumptions.crops.filter((crop) =>
-    cropLines(crop).some((line) => line.priceId === priceId),
+): CropEconomics[] => {
+  const ids = variantIds(assumptions, priceId)
+  return assumptions.crops.filter((crop) =>
+    cropLines(crop).some((line) => ids.includes(line.priceId)),
   )
+}
 
 export const categoryPrices = (
   assumptions: EconomicsAssumptions,
@@ -585,8 +627,8 @@ export const cropRestoreEffect = (
   crop: CropEconomics,
 ): CropDbDelta[] => {
   const shared = new Set(
-    sharedCustomisedPrices(assumptions, overrides, crop).map(
-      (price) => price.id,
+    sharedCustomisedPrices(assumptions, overrides, crop).flatMap((price) =>
+      variantIds(assumptions, price.id),
     ),
   )
   return dbDeltas(
@@ -682,6 +724,7 @@ const quantityChange = (
 ): ProfileChange => {
   const withUnit = (value: number) =>
     `${formatEconomicsNumber(value)} ${quantityUnitLabel(line.quantityUnit, value)}`
+  const ids = variantIds(assumptions, line.quantityId)
   return {
     key: `quantity:${line.quantityId}`,
     kind: 'quantity',
@@ -689,7 +732,8 @@ const quantityChange = (
     cropNames: assumptions.crops
       .filter((entry) =>
         cropLines(entry).some(
-          (candidate) => candidate.quantityId === line.quantityId,
+          (candidate) =>
+            candidate.quantityId !== null && ids.includes(candidate.quantityId),
         ),
       )
       .map((entry) => entry.cropName),
@@ -711,11 +755,16 @@ export const profileChanges = (
     groupedLines(crop).flatMap(({ group, line }) => {
       const changes: ProfileChange[] = []
       const { quantityId } = line
+      const list = (id: string) => {
+        for (const variant of variantIds(assumptions, id)) {
+          listed.add(variant)
+        }
+      }
       if (
         isPriceCustomised(overrides, line.priceId) &&
         !listed.has(line.priceId)
       ) {
-        listed.add(line.priceId)
+        list(line.priceId)
         changes.push(priceChange(assumptions, overrides, crop, group, line))
       }
       if (
@@ -723,7 +772,7 @@ export const profileChanges = (
         overrides.quantities[quantityId] !== undefined &&
         !listed.has(quantityId)
       ) {
-        listed.add(quantityId)
+        list(quantityId)
         changes.push(
           quantityChange(assumptions, overrides, { ...line, quantityId }),
         )
@@ -827,21 +876,57 @@ const OVERRIDE_FIELD = {
 } as const
 
 export const withoutProfileChange = (
+  assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
   change: ProfileChange,
 ): EconomicsOverrides => {
   const field = OVERRIDE_FIELD[change.kind]
+  const key = change.key.slice(change.kind.length + 1)
   return {
     ...overrides,
-    [field]: withoutKey(
+    [field]: withoutKeys(
       overrides[field],
-      change.key.slice(change.kind.length + 1),
+      change.kind === 'yield' ? [key] : variantIds(assumptions, key),
     ),
   }
 }
 
+export const withoutProfileChanges = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+): EconomicsOverrides =>
+  profileChanges(assumptions, overrides).reduce(
+    (current, change) => withoutProfileChange(assumptions, current, change),
+    overrides,
+  )
+
+export const applyOverrideEdits = (
+  current: EconomicsOverrides,
+  before: EconomicsOverrides,
+  after: EconomicsOverrides,
+): EconomicsOverrides => {
+  const merge = (field: keyof EconomicsOverrides) => {
+    const edited = Object.keys({ ...before[field], ...after[field] }).filter(
+      (key) => before[field][key] !== after[field][key],
+    )
+    return {
+      ...withoutKeys(current[field], edited),
+      ...Object.fromEntries(
+        edited.flatMap((key) =>
+          after[field][key] === undefined ? [] : [[key, after[field][key]]],
+        ),
+      ),
+    }
+  }
+  return {
+    prices: merge('prices'),
+    quantities: merge('quantities'),
+    yieldPct: merge('yieldPct'),
+  }
+}
+
 export const FERTILISER_NOTE =
-  'Gødningen er regnet som handelsgødning efter kvælstofnormen, på en økologisk bedrift uden handelsgødning. I en simulering følger mængderne simuleringens gødningsvalg.'
+  'Gødningen er regnet som handelsgødning efter kvælstofnormen. På en økologisk bedrift er der ingen handelsgødning med. I en simulering følger mængderne simuleringens gødningsvalg.'
 
 export const budgetSoilType = ({
   soilTypeNumber,
@@ -852,6 +937,9 @@ export const describeBudgetBasis = (
   assumptions: EconomicsAssumptions,
 ): string =>
   `${budgetSoilType(assumptions)}, ${assumptions.farmingSystem.toLocaleLowerCase('da-DK')} drift`
+
+export const SOIL_VARIANTS_NOTE =
+  'Retter du en pris eller mængde, der afhænger af jordtypen, gælder rettelsen for alle jordtyper.'
 
 export const NO_SOIL_TYPE_NOTE =
   'Bedriftens marker har ingen jordtype, så der er ingen tal at vise.'

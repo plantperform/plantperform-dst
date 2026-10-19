@@ -147,7 +147,7 @@ const SimulationFigures = ({
   const historyDb2PerHa = totalsPerHa(history.totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
-  const profile = useEconomicsProfiles().profileForSimulation(simulation.id)
+  const profile = useEconomicsProfiles().appliedProfile(simulation)
 
   return (
     <>

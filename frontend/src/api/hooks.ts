@@ -170,6 +170,10 @@ export const simulationsKey = (farmId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/simulations`
 }
 
+export const isSimulationKey = (key: unknown) =>
+  typeof key === 'string' &&
+  /^\/farms\/[^/]+\/simulations(\/[^/]+\/view)?$/.test(key)
+
 export const simulationFieldsKey = (farmId?: string, simulationId?: string) => {
   if (!farmId || !simulationId) return null
 

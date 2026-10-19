@@ -734,30 +734,17 @@ describe('describeEconomicsVerdict', () => {
         column('Kopi', 'Forsigtig 2027'),
       ]),
     ).toBe(
-      'Reduceret kvælstof og Kopi har samme sædskifter på alle marker, men regner med hver sin økonomiprofil. Forskellen viser sig, når profilerne indgår i beregningen.',
+      'Reduceret kvælstof og Kopi har samme sædskifter på alle marker, men regner med hver sin økonomiprofil, så forskellen i dækningsbidrag kommer fra profilerne.',
     )
   })
 
-  it('names the simulations that use an own profile', () => {
+  it('says nothing when the rotations differ or the profiles are the same', () => {
     expect(
       describeEconomicsVerdict([
         column('Afgrødehistorik', null, otherPlan),
         column('Reduceret kvælstof', 'Bakkegården 2027'),
       ]),
-    ).toBe(
-      'Reduceret kvælstof regner med Bakkegården 2027, som ikke indgår i beregningen endnu.',
-    )
-    expect(
-      describeEconomicsVerdict([
-        column('Reduceret kvælstof', 'Bakkegården 2027'),
-        column('Mere vintersæd', 'Bakkegården 2027', otherPlan),
-      ]),
-    ).toBe(
-      'Reduceret kvælstof og Mere vintersæd regner med økonomiprofiler, som ikke indgår i beregningen endnu.',
-    )
-  })
-
-  it('says nothing when every simulation uses Standard', () => {
+    ).toBeNull()
     expect(
       describeEconomicsVerdict([
         column('Afgrødehistorik', null),

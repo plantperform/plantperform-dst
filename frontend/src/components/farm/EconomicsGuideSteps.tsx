@@ -32,6 +32,7 @@ import {
   priceValue,
   quantityUnitLabel,
   saleLine,
+  SOIL_VARIANTS_NOTE,
   withPriceOverride,
   withYieldPct,
   yieldHint,
@@ -120,7 +121,7 @@ export const GuidePricesStep = ({
         <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
           <span>Afgrøde</span>
           <span className="text-right">Standardens pris</span>
-          <span className="text-right">Bedriftens pris</span>
+          <span className="text-right">Din pris</span>
         </div>
         {assumptions.crops.map((crop) => {
           const sale = saleLine(crop)
@@ -134,7 +135,7 @@ export const GuidePricesStep = ({
                   price.id,
                   priceValue(assumptions, overrides, price.id),
                 )}
-                label={`Bedriftens salgspris for ${crop.cropName} i ${price.unit}`}
+                label={`Din salgspris for ${crop.cropName} i ${price.unit}`}
                 onCommit={(value) => sharedPrice.commitPrice(price.id, value)}
               >
                 <CropName crop={crop}>
@@ -174,14 +175,14 @@ export const GuideFertiliserStep = ({
       <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
         <span>Gødning</span>
         <span className="text-right">Standardens pris</span>
-        <span className="text-right">Bedriftens pris</span>
+        <span className="text-right">Din pris</span>
       </div>
       {categoryPrices(assumptions, 'fertiliser').map((price) => (
         <div key={price.id} className="border-b">
           <PriceRow
             price={price}
             value={priceValue(assumptions, overrides, price.id)}
-            label={`Bedriftens pris for ${price.label} i ${price.unit}`}
+            label={`Din pris for ${price.label} i ${price.unit}`}
             onCommit={(value) =>
               onChange((current) =>
                 withPriceOverride(assumptions, current, price.id, value),
@@ -360,7 +361,8 @@ export const GuideMachinesStep = ({
           })}
           <p className={FOOT_CLASS}>
             Tallene er for {crop.cropName}. En fælles pris gælder for alle de
-            afgrøder, der står ved den. Mængderne rettes på profilens side.
+            afgrøder, der står ved den. Mængderne rettes på profilens side.{' '}
+            {SOIL_VARIANTS_NOTE}
           </p>
         </div>
       </div>
@@ -429,7 +431,7 @@ export const GuideReviewStep = ({
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {useOptions.length > 0
-            ? 'Vælg de simuleringer, der skal regne med profilen. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
+            ? 'Vælg de simuleringer, der skal regne med profilen. Tallene skifter, når økonomien er genberegnet. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
             : 'Bedriften har ingen simuleringer endnu. Profilen kan vælges, når den første er oprettet.'}
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">

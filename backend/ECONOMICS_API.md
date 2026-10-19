@@ -248,14 +248,11 @@ explicitly to calculate a new optimum. Farm history uses standard economics.
 
 ## Frontend integration and rollout
 
-The frontend branch is unchanged. Replace browser profile storage with the
-module APIs and read actual assumptions from the catalogue. Adapt profile IDs,
-quantity line IDs, and context-variant selection to the emitted identifiers.
-Pass `economicsModuleId` during creation, save selection separately, and offer
-an explicit recalculation action. Remove assumptions that profiles belong to one
-farm or automatically propagate edits.
-Label pending selection versus applied snapshot, and distinguish current values
-from the previous optimization's saved snapshot.
+The frontend keeps profiles as modules and reads the assumptions from the crop
+budgets. It passes `economicsModuleId` during creation, saves a selection
+separately and offers an explicit recalculation. It labels the pending selection
+against the applied snapshot, and the current values against the previous
+optimization's saved snapshot.
 
 Economics modules require schema migration `20261013_0001`, introduced with
 the original economics release. Existing simulations read as standard without
