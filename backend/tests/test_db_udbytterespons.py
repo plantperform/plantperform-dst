@@ -16,6 +16,7 @@ NORM = {"udbyttenorm": 57.0, "n_norm": 175.0, "udbytteenhed": "hkg"}
 PRISLISTE = {
     "Handelsgødning, kvælstof (N)": {"pris": 10.0},
     "Handelsgødning, udbringning": {"pris": 100.0},
+    "Gylleudbringning, slæbeslanger": {"pris": 24.0, "enhed": "ton"},
 }
 
 
@@ -98,6 +99,27 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
             result["udbytte_faktor"], 1 - (0.147713 * 0.5 + 0.229401 * 0.25), places=6
         )
         self.assertAlmostEqual(result["udbytte"], 43.3 * result["udbytte_faktor"], places=4)
+
+
+class CalculateDbManureSpreadingTests(CalculateDbYieldResponseTests):
+    def manure_lines(self, result: dict) -> list[dict]:
+        return [
+            line for line in result["linjer"] if line["behandling"] == "Udbringning, husdyrgødning"
+        ]
+
+    def test_manure_is_spread_per_tonne(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Økologisk", 1, mncs=120.0, org_mineral_n_applied=120.0,
+            only_organic=True, husdyrgodning_ton_pr_ha=20.0, itemized=True,
+        )
+        [line] = self.manure_lines(result)
+        self.assertEqual(line["udgift_kr_ha"], 20.0 * 24.0)
+
+    def test_no_manure_costs_nothing(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Konventionel", 1, mncs=120.0, itemized=True
+        )
+        self.assertEqual(self.manure_lines(result), [])
 
 
 if __name__ == "__main__":

@@ -325,16 +325,6 @@ def evaluate_sequence_for_mark(
             # Known NLES5 low-N edge: a negative fractional-power base has no
             # real result. Missing soil data raises a different exception.
             leaching = {}
-        db = calculate_db(
-            this_code, driftsform, jbnr,
-            mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
-            org_mineral_n_applied=n_inputs[i]["org_mineral_n_applied"],
-            udlaeg_kode=udl_code, only_organic=only_organic,
-            praecisionsjordbrug=praecisionsjordbrug,
-            forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
-            **({"economics_key": economics_key} if economics_key else {}),
-        )
-        crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied is the utilized/mineral part of husdyrgødning,
         # the only part that counts toward the norm, like handelsgødning. g0 is
         # the remaining organically bound part; it does not count toward the
@@ -354,6 +344,17 @@ def evaluate_sequence_for_mark(
             if n_indhold_kg_per_ton > 0
             else 0.0
         )
+        db = calculate_db(
+            this_code, driftsform, jbnr,
+            mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
+            org_mineral_n_applied=tildelt_husdyrgodning_udnyttet,
+            udlaeg_kode=udl_code, only_organic=only_organic,
+            praecisionsjordbrug=praecisionsjordbrug,
+            forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
+            husdyrgodning_ton_pr_ha=husdyrgodning_ton,
+            **({"economics_key": economics_key} if economics_key else {}),
+        )
+        crop_params = afgroede_normer.lookup_crop_params(this_code)
 
         years.append(RotationCandidateYearResult(
             year=RotationYear(
