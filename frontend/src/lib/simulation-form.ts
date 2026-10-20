@@ -127,10 +127,23 @@ const checkNumberText = (
   if (!isValid(value)) ctx.addIssue({ code: 'custom', path: [path], message })
 }
 
+// Økologisk never tops up with handelsgødning, so its N has to come from
+// organic fertiliser: "Ingen organisk gødning" is not offered for it.
+export const offersNoFertiliser = (farmingSystem: FarmingSystem): boolean =>
+  farmingSystem !== 'Økologisk'
+
+// The fertiliser an økologisk simulation starts from when it had none.
+export const organicFertiliserChoice = (
+  presets: FertiliserPresetOption[],
+): string => presets[0]?.name ?? CUSTOM_FERTILISER
+
+const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
+
 // The number rules mirror the backend's FertiliserSettings; nContentKgPerTon
-// has no backend rule but only makes sense above zero.
+// has no backend rule but only makes sense above zero. The schema is loose so
+// the rules can read the driftsform, which the basics step owns.
 const nitrogenSchema = z
-  .object({
+  .looseObject({
     fertiliserChoice: z.string(),
     orgMineralN: z.string(),
     mineralSharePct: z.string(),
@@ -148,14 +161,24 @@ const nitrogenSchema = z
     includePrecedingCropValue: z.boolean(),
   })
   .superRefine((values, ctx) => {
+    const organic = values.farmingSystem === 'Økologisk'
     // Without organic fertiliser the numbers are fixed and hidden.
-    if (values.fertiliserChoice === NO_FERTILISER) return
+    if (values.fertiliserChoice === NO_FERTILISER) {
+      if (organic) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fertiliserChoice'],
+          message: ORGANIC_NEEDS_FERTILISER,
+        })
+      }
+      return
+    }
     checkNumberText(
       ctx,
       'orgMineralN',
       values.orgMineralN,
-      (value) => value >= 0,
-      'Skal være 0 eller mere',
+      (value) => (organic ? value > 0 : value >= 0),
+      organic ? ORGANIC_NEEDS_FERTILISER : 'Skal være 0 eller mere',
     )
     checkNumberText(
       ctx,

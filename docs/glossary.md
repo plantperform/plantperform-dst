@@ -96,6 +96,8 @@ field" column is the name on the wire.
 | gødning | `fertiliser`, `FertiliserSettings` | `godning` | |
 | gødningstyper | `fertiliserPresets`, `useFertiliserPresets` | | |
 | brugerdefineret | `'custom'` fertiliser choice | | |
+| ingen organisk gødning | `'none'` fertiliser choice (`NO_FERTILISER`), `offersNoFertiliser` | | Ren handelsgødning; not offered for økologisk, which never uses handelsgødning |
+| organisk gødning, økologisk standardvalg | `organicFertiliserChoice` | | The first gødningstype, chosen when an økologisk simulation has none |
 | mineralsk andel | `mineralSharePct` | `mineralskAndelPct` | |
 | N-indhold pr. ton | `nContentKgPerTon` | `nIndholdKgPerTon` | |
 | tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa`, `manureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | Shown as "Org. gødning" in the Gødning columns |

@@ -97,7 +97,8 @@ def compute_n_inputs(
     evaluated:
       - org_mineral_n=0 (pure mineral gødning): MNCS = net_scaled, G0=0.
         Organisk gødning versus handelsgødning is irrelevant to NLES5 when
-        there is no organisk source.
+        there is no organisk source. With only_organic there is no gødning
+        at all, since økologisk never uses handelsgødning: MNCS = 0.
       - only_organic=False (konventionel + gylle): eff_org is capped at
         net_scaled, MNCS remains net_scaled because handelsgødning tops up to
         the full norm, and G0 reflects the unutilized part corresponding to the
@@ -138,7 +139,7 @@ def compute_n_inputs(
 
     if org_mineral_n <= 0:
         return {
-            "mncs": net_scaled, "mnca": 0.0, "g0": 0.0,
+            "mncs": 0.0 if only_organic else net_scaled, "mnca": 0.0, "g0": 0.0,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
             "fv_forfrugt": fv_forfrugt, "n_norm": norm["n_norm"],
         }
