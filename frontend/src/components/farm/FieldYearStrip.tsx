@@ -20,7 +20,11 @@ import {
   yearNLoadKgHa,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
-import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
+import {
+  isIntermediateOrEarlySowingYear,
+  presentWinterCovers,
+  rotationCovers,
+} from '@/lib/winter-cover'
 
 type YearMetric = 'nLoad' | 'leaching' | 'db2'
 
@@ -189,7 +193,8 @@ export const FieldYearStrip = ({
             const title = `${calendarYear}${isCurrentYear ? ' (i år)' : ''}: ${
               year.cropName
             }${
-              year.undersownCropName !== null
+              year.undersownCropName !== null &&
+              !isIntermediateOrEarlySowingYear(year)
                 ? ` (udlæg: ${year.undersownCropName})`
                 : ''
             }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}${
@@ -308,7 +313,8 @@ export const FieldYearStrip = ({
           <p className="tabular-nums text-pretty">
             <span className="font-semibold">{startYear + selectedIndex}</span> ·{' '}
             {selectedYear.cropName}
-            {selectedYear.undersownCropName !== null
+            {selectedYear.undersownCropName !== null &&
+            !isIntermediateOrEarlySowingYear(selectedYear)
               ? ` · udlæg: ${shortCropName(selectedYear.undersownCropName)}`
               : ''}
             {selectedValue

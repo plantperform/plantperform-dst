@@ -75,6 +75,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   afstromningskategori: 'runoffCategory',
   afstromningskategori_ukendt: 'runoffCategoryUnknown',
   afstromning_vinterdaekke: 'runoffWinterCover',
+  mellemafgroede_eller_tidlig_saaning: 'intermediateOrEarlySowing',
   efterafgroede_nfiks: 'catchCropNFixation',
   efterafgroede_nfiks_bonus: 'catchCropNFixationBonus',
   Fmajs_anvendt: 'fmajsApplied',

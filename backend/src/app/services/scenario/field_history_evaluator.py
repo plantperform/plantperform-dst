@@ -41,6 +41,8 @@ from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer
 from app.services.rotations.historical_secondary_crop import (
+    AUTUMN_MEASURE_CODES,
+    AUTUMN_MEASURE_NAME,
     historical_secondary_crop,
     secondary_crop_name,
 )
@@ -83,7 +85,12 @@ def evaluate_real_history_for_field(
     s_soil: float | None = None,
     economics_key: str = "",
     secondary_crop_history: dict[str, int] | None = None,
+    show_either_measure: bool = True,
 ) -> list[RotationCandidateYearResult]:
+    """The farm's "Aktuel" history. `show_either_measure` marks a reported catch
+    crop before an autumn-sown crop as an intermediate crop or early sowing; a
+    simulation's baseline passes False, so simulations show them as before."""
+
     def code_for(year: int) -> int | None:
         value = crop_history.get(str(year))
         return int(value) if value is not None else None
@@ -163,6 +170,11 @@ def evaluate_real_history_for_field(
                 )
             except LowNitrogenModelError:
                 leaching = {}
+        either_measure = show_either_measure and udlaeg_kode in AUTUMN_MEASURE_CODES
+        if either_measure:
+            # Calculated as one of the two, but either may have met the
+            # requirement; the frontend shows the year as either.
+            leaching["mellemafgroede_eller_tidlig_saaning"] = True
         db = (
             calculate_db(
                 this_code, "Økologisk" if oeko else "Konventionel", jbnr,
@@ -184,7 +196,9 @@ def evaluate_real_history_for_field(
                     crop_params.get("navn", "Ukendt") if this_code is not None else "Ukendt"
                 ),
                 udlaeg_kode=udlaeg_kode,
-                udlaeg_navn=secondary_crop_name(udlaeg_kode),
+                udlaeg_navn=(
+                    AUTUMN_MEASURE_NAME if either_measure else secondary_crop_name(udlaeg_kode)
+                ),
             ),
             leaching_kg_n_ha=leaching.get("L_nuar", 0.0),
             leaching_detail=leaching,

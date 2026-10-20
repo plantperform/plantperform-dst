@@ -129,7 +129,9 @@ class HistoricalSecondaryCropTests(unittest.TestCase):
     lambda *args, **kwargs: {"db": 0.0, "udbytte": 0.0, "udbytteenhed": ""},
 )
 class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
-    def evaluate(self, crop_history: dict, secondary_crop_history: dict) -> tuple[list, dict]:
+    def evaluate(
+        self, crop_history: dict, secondary_crop_history: dict, **kwargs
+    ) -> tuple[list, dict]:
         calls: dict[int, dict] = {}
 
         def record(**kwargs):
@@ -143,6 +145,7 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
                 "Fyn",
                 False,
                 secondary_crop_history=secondary_crop_history,
+                **kwargs,
             )
         return years, calls
 
@@ -159,10 +162,34 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
         self.assertEqual(
             [(y.year.udlaeg_kode, y.year.udlaeg_navn) for y in years[-3:]],
             [
-                (INTERMEDIATE_CROP, "Mellemafgrøde"),
+                (INTERMEDIATE_CROP, "Mellemafgrøde/tidlig såning"),
                 (None, None),
                 (CATCH_CROP, "Efterafgrøder, pligtige, husdyr, målrettede"),
             ],
+        )
+
+    def test_marks_a_catch_crop_before_an_autumn_sown_crop_as_either_measure(self) -> None:
+        years, _ = self.evaluate(
+            {"2024": VAARBYG, "2025": VINTERHVEDE, "2026": VAARBYG},
+            {"2024": CATCH_CROP, "2026": CATCH_CROP},
+        )
+
+        self.assertEqual(
+            [y.leaching_detail.get("mellemafgroede_eller_tidlig_saaning") for y in years[-3:]],
+            [True, None, None],
+        )
+
+    def test_a_simulation_baseline_keeps_the_calculated_measure(self) -> None:
+        years, _ = self.evaluate(
+            {"2024": VAARBYG, "2025": VINTERHVEDE},
+            {"2024": CATCH_CROP},
+            show_either_measure=False,
+        )
+
+        self.assertNotIn("mellemafgroede_eller_tidlig_saaning", years[-3].leaching_detail)
+        self.assertEqual(
+            (years[-3].year.udlaeg_kode, years[-3].year.udlaeg_navn),
+            (INTERMEDIATE_CROP, "Mellemafgrøde"),
         )
 
     def test_counts_a_catch_crops_preceding_crop_value_the_next_year(self) -> None:

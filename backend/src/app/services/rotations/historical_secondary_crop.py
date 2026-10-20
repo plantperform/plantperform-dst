@@ -22,6 +22,11 @@ from app.services.virkemidler import TIDLIG_SAANING_KODE, virkemiddel_tilladt
 
 INTERMEDIATE_CROP_CODE = 9682
 EARLY_SOWING_CODE = TIDLIG_SAANING_KODE
+# Before an autumn-sown crop the reported catch crop stands for one of these.
+# The source does not say which, and both have the same effect, so the history
+# marks the year as either (see field_history_evaluator).
+AUTUMN_MEASURE_CODES = (INTERMEDIATE_CROP_CODE, EARLY_SOWING_CODE)
+AUTUMN_MEASURE_NAME = "Mellemafgrøde/tidlig såning"
 # The crop table's "Normal såmåned" August to November.
 AUTUMN_SOWING_MONTHS = range(8, 12)
 # The two measures have no row in the crop table.
