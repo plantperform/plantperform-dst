@@ -1,4 +1,5 @@
 import {
+  Blend,
   Leaf,
   Shovel,
   Snowflake,
@@ -24,7 +25,16 @@ const ICONS: Record<WinterCoverKind, LucideIcon> = {
   stubble: WheatOff,
   bareSoil: Shovel,
   earlySowing: Sunrise,
+  intermediateOrEarlySowing: Blend,
 }
+
+// A cover that is one of two is drawn split down the middle in their colours.
+const coverFill = ({ color, splitColors }: WinterCoverDefinition) =>
+  splitColors
+    ? {
+        backgroundImage: `linear-gradient(90deg, ${splitColors[0]} 50%, ${splitColors[1]} 50%)`,
+      }
+    : { backgroundColor: color }
 
 type WinterCoverBandProps = {
   covers: YearCover[]
@@ -41,12 +51,13 @@ export const WinterCoverBand = ({
     {covers.map((yearCover) => (
       <AppTooltip
         key={yearCover.cover.id}
-        content={showTooltip ? `${yearCover.cover.label}. ${yearCover.description}` : null}
+        content={
+          showTooltip
+            ? [yearCover.cover.label, yearCover.description].filter(Boolean).join('. ')
+            : null
+        }
       >
-        <span
-          className="flex-1"
-          style={{ backgroundColor: yearCover.cover.color }}
-        />
+        <span className="flex-1" style={coverFill(yearCover.cover)} />
       </AppTooltip>
     ))}
   </span>
@@ -69,10 +80,7 @@ export const WinterCoverSwatch = ({
         'flex size-[18px] shrink-0 items-center justify-center rounded-[3px]',
         className,
       )}
-      style={{
-        backgroundColor: cover.color,
-        color: readableTextColor(cover.color),
-      }}
+      style={{ ...coverFill(cover), color: readableTextColor(cover.color) }}
     >
       <Icon className="size-3" />
     </span>

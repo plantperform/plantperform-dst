@@ -512,6 +512,7 @@ def baseline_simulation_candidate(field, registry_row, *, economics_key=""):
         s_soil=s_soil,
         economics_key=economics_key,
         secondary_crop_history=registry_row.secondary_crop_history,
+        show_either_measure=False,
     )
     from app.domain.rotation_candidate import RotationCandidateRef
 

@@ -8,6 +8,18 @@ from app.domain.rotation_candidate import RotationCandidateRef
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
 
+# The leaching detail keys the year strip needs to draw what covers the soil
+# after harvest.
+_WINTER_COVER_KEYS = (
+    "W",
+    "W_used",
+    "EEA",
+    "EMA",
+    "ETS",
+    "afstromningskategori_ukendt",
+    "mellemafgroede_eller_tidlig_saaning",
+)
+
 
 def compact_years(candidate):
     return [
@@ -35,7 +47,7 @@ def compact_years(candidate):
             winter_cover={
                 key: value
                 for key, value in getattr(y, "leaching_detail", {}).items()
-                if key in ("W", "W_used", "EEA", "EMA", "ETS", "afstromningskategori_ukendt")
+                if key in _WINTER_COVER_KEYS
             },
         ).model_dump(mode="json")
         for y in candidate.years[: candidate.active_len]
