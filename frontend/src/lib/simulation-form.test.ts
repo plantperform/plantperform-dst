@@ -426,54 +426,43 @@ describe('candidate count', () => {
 
 describe('N-norm levels', () => {
   it('never lets 100 % be removed', () => {
-    expect(toggleNNormPercentage(['100', '80'], '100', 'Konventionel')).toEqual([
+    expect(toggleNNormPercentage(['100', '80'], '100')).toEqual([
       '100',
       '80',
     ])
-    expect(isNNormOptionLocked(['100'], '100', 'Konventionel')).toBe(true)
+    expect(isNNormOptionLocked(['100'], '100')).toBe(true)
   })
 
   it('allows at most two levels below 100 %', () => {
-    const two = toggleNNormPercentage(
-      toggleNNormPercentage(['100'], '90', 'Konventionel'),
-      '70',
-      'Konventionel',
-    )
+    const two = toggleNNormPercentage(toggleNNormPercentage(['100'], '90'), '70')
     expect(two).toEqual(['100', '90', '70'])
-    expect(toggleNNormPercentage(two, '50', 'Konventionel')).toEqual(two)
-    expect(isNNormOptionLocked(two, '50', 'Konventionel')).toBe(true)
-    expect(isNNormOptionLocked(two, '90', 'Konventionel')).toBe(false)
-    expect(toggleNNormPercentage(two, '90', 'Konventionel')).toEqual(['100', '70'])
+    expect(toggleNNormPercentage(two, '50')).toEqual(two)
+    expect(isNNormOptionLocked(two, '50')).toBe(true)
+    expect(isNNormOptionLocked(two, '90')).toBe(false)
+    expect(toggleNNormPercentage(two, '90')).toEqual(['100', '70'])
   })
 
-  it('locks an økologisk simulation to 100 %', () => {
-    expect(isNNormOptionLocked(['100'], '80', 'Økologisk')).toBe(true)
-    expect(toggleNNormPercentage(['100'], '80', 'Økologisk')).toEqual(['100'])
-    expect(nNormPercentagesFor(['100', '80'], 'Økologisk')).toEqual(['100'])
-  })
-
-  it('keeps 100 % first when the driftsform changes', () => {
-    expect(nNormPercentagesFor(['80'], 'Konventionel')).toEqual(['100', '80'])
+  it('keeps 100 % first', () => {
+    expect(nNormPercentagesFor(['80'])).toEqual(['100', '80'])
+    expect(nNormPercentagesFor(['100', '80'])).toEqual(['100', '80'])
   })
 
   it('gives a copy 100 % and the two highest levels still offered', () => {
     const offered = ['50', '60', '70', '80', '90', '100']
     expect(
-      copiedNNormPercentages(['30', '60', '80', '90'], 'Konventionel', offered),
+      copiedNNormPercentages(['30', '60', '80', '90'], offered),
     ).toEqual(['100', '90', '80'])
-    expect(
-      copiedNNormPercentages(['100', '80'], 'Økologisk', offered),
-    ).toEqual(['100'])
+    expect(copiedNNormPercentages(['100', '80'], offered)).toEqual(['100', '80'])
   })
 
-  it('sends only 100 % for an økologisk simulation', () => {
+  it('sends the lower levels for an økologisk simulation too', () => {
     expect(
       toCreateSimulationInput({
         ...filledValues,
         farmingSystem: 'Økologisk',
         nNormPercentages: ['100', '80'],
       }).allowedNNormPercentages,
-    ).toEqual(['100'])
+    ).toEqual(['100', '80'])
   })
 })
 

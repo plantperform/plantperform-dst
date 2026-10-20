@@ -17,47 +17,37 @@ export const NO_FERTILISER = 'none'
 export const CUSTOM_FERTILISER = 'custom'
 
 // 100 % is always calculated, as the reference for the lower N-norm levels.
-// Only crops with a yield-response curve on konventionel marker are cut, so an
-// økologisk simulation is calculated at 100 % only for now.
+// Only crops with a yield-response curve for the simulation's driftsform are
+// cut below the norm; every other crop is fertilized at 100 %.
 export const FULL_N_NORM = '100'
 export const MAX_REDUCED_N_NORM_LEVELS = 2
 
 const reducedNNormCount = (selected: string[]): number =>
   selected.filter((value) => value !== FULL_N_NORM).length
 
-export const isNNormOptionLocked = (
-  selected: string[],
-  value: string,
-  farmingSystem: FarmingSystem,
-): boolean =>
+export const isNNormOptionLocked = (selected: string[], value: string): boolean =>
   value === FULL_N_NORM ||
-  farmingSystem === 'Økologisk' ||
   (!selected.includes(value) &&
     reducedNNormCount(selected) >= MAX_REDUCED_N_NORM_LEVELS)
 
 export const toggleNNormPercentage = (
   selected: string[],
   value: string,
-  farmingSystem: FarmingSystem,
 ): string[] => {
-  if (isNNormOptionLocked(selected, value, farmingSystem)) return selected
+  if (isNNormOptionLocked(selected, value)) return selected
   return selected.includes(value)
     ? selected.filter((current) => current !== value)
     : [...selected, value]
 }
 
-// The levels a simulation keeps for its driftsform.
-export const nNormPercentagesFor = (
-  selected: string[],
-  farmingSystem: FarmingSystem,
-): string[] =>
-  farmingSystem === 'Økologisk'
-    ? [FULL_N_NORM]
-    : [FULL_N_NORM, ...selected.filter((value) => value !== FULL_N_NORM)]
+// The levels a simulation keeps, 100 % first.
+export const nNormPercentagesFor = (selected: string[]): string[] => [
+  FULL_N_NORM,
+  ...selected.filter((value) => value !== FULL_N_NORM),
+]
 
 export const copiedNNormPercentages = (
   selected: string[],
-  farmingSystem: FarmingSystem,
   offered: string[],
 ): string[] =>
   nNormPercentagesFor(
@@ -65,7 +55,6 @@ export const copiedNNormPercentages = (
       .filter((value) => value !== FULL_N_NORM && offered.includes(value))
       .sort((left, right) => Number(right) - Number(left))
       .slice(0, MAX_REDUCED_N_NORM_LEVELS),
-    farmingSystem,
   )
 
 // Number inputs are kept as the strings the user typed, so an empty or
@@ -569,10 +558,7 @@ export const toCreateSimulationInput = (
   return {
     name: values.name.trim(),
     allowedRotationVariants: values.rotationVariants,
-    allowedNNormPercentages: nNormPercentagesFor(
-      values.nNormPercentages,
-      values.farmingSystem,
-    ),
+    allowedNNormPercentages: nNormPercentagesFor(values.nNormPercentages),
     fertiliser: {
       farmingSystem: values.farmingSystem,
       orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),
@@ -626,7 +612,6 @@ export const simulationToFormValues = (
     rotationVariants: simulation.rotationVariants,
     nNormPercentages: copiedNNormPercentages(
       simulation.nNormPercentages,
-      fertiliser.farmingSystem,
       offeredNNormPercentages,
     ),
     fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),

@@ -38,7 +38,7 @@ const glossary = {
   nNormLevel: {
     title: 'N-norm%',
     description:
-      'Hvor stor en del af afgrødens N-norm der højst kan gødes op til. Forfrugtsværdien tæller med, så der gødes kun med det, forfrugten ikke dækker. Under 100 % falder udbyttet. Det gælder på nuværende tidspunkt kun konventionelle hovedafgrøder som korn, raps, majs, kartofler, roer og græs. Andre afgrøder og økologiske marker gødes altid fuldt. Proteinandelen påvirker endnu ikke salgsprisen.',
+      'Hvor stor en del af afgrødens N-norm der højst kan gødes op til. Forfrugtsværdien tæller med, så der gødes kun med det, forfrugten ikke dækker. Under 100 % falder udbyttet. Det gælder på nuværende tidspunkt hovedafgrøder med en udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs, og økologisk korn, raps og græs. Andre afgrøder gødes altid fuldt. Proteinandelen påvirker endnu ikke salgsprisen.',
   },
   catchCrop: {
     title: 'Efterafgrøde',

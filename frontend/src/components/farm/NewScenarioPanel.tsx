@@ -63,7 +63,6 @@ import {
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
-  nNormPercentagesFor,
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
@@ -641,10 +640,6 @@ export const NewScenarioPanel = ({
                   const value = event.target
                     .value as FertiliserSettings['farmingSystem']
                   setValue('onlyOrganic', value === 'Økologisk')
-                  setValue(
-                    'nNormPercentages',
-                    nNormPercentagesFor(getValues('nNormPercentages'), value),
-                  )
                   applyRotationChoice(
                     withFarmingSystem(categories, getValues(), value),
                   )
@@ -929,9 +924,7 @@ export const NewScenarioPanel = ({
                 <GlossaryInfo term="nNormLevel" />
               </div>
               <p className="text-xs text-muted-foreground">
-                {values.farmingSystem === 'Økologisk'
-                  ? 'Økologiske simuleringer beregnes indtil videre kun ved 100 %.'
-                  : '100 % er altid med. Vælg op til to lavere niveauer.'}
+                100 % er altid med. Vælg op til to lavere niveauer.
               </p>
               <div className="flex flex-wrap gap-2">
                 {nNormOptions.map((value) => {
@@ -939,7 +932,6 @@ export const NewScenarioPanel = ({
                   const locked = isNNormOptionLocked(
                     values.nNormPercentages,
                     value,
-                    values.farmingSystem,
                   )
                   return (
                     <label
@@ -967,7 +959,6 @@ export const NewScenarioPanel = ({
                             toggleNNormPercentage(
                               getValues('nNormPercentages'),
                               value,
-                              values.farmingSystem,
                             ),
                           )
                         }
