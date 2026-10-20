@@ -60,8 +60,25 @@ class ComputeNInputsTests(unittest.TestCase):
     def test_crop_without_response_curve_is_fertilized_at_full_norm(self) -> None:
         self.assertEqual(self.mncs(VAARHVEDE, VINTERRAPS, 80), 165.0 - 18.0)
 
-    def test_oekologisk_is_fertilized_at_full_norm(self) -> None:
+    def test_oekologisk_on_the_konventionel_norm_is_fertilized_at_full_norm(self) -> None:
+        # No organic row: cutting N here would have no yield loss to go with it.
         self.assertEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 175.0 - 18.0)
+
+    def test_oekologisk_with_its_own_norm_follows_the_kvote(self) -> None:
+        norms = {
+            **NORMS,
+            VINTERHVEDE: {
+                "n_norm": 144.0, "forfrugtsvaerdi": 0.0, "indregn_ffv": True,
+                "driftsform": "Økologisk",
+            },
+        }
+        with patch.object(
+            candidate_evaluator.afgroede_normer,
+            "lookup_norm",
+            lambda crop_code, *args, **kwargs: norms.get(crop_code),
+        ):
+            # 80 % of the organic 144 = 115.2 available; the forfrugt covers 18.
+            self.assertAlmostEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 97.2)
 
     def test_kloevergraes_standing_on_gets_no_forfrugtsvaerdi(self) -> None:
         # indregn_ffv Nej: the stand is not ploughed, so the full norm is fertilized.

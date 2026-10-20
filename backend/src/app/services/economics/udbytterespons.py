@@ -1,6 +1,6 @@
-"""Yield response to available N below the N-norm (konventionel crops only).
+"""Yield response to available N below the N-norm.
 
-Source: ResponsTilKvotereduktion.xlsx (Kenneth Hansen, 2026-09-10), sheet
+Konventionel source: ResponsTilKvotereduktion.xlsx (Kenneth Hansen, 2026-09-10), sheet
 "Udbytterespons". The sheet gives yield at 100 % down to 50 % of the N-norm per
 afgrøde and jordtype. Within each crop the curve is an exact quadratic in N, so
 the relative yield loss is stored here as two coefficients:
@@ -12,12 +12,26 @@ loss is applied on top of the master udbyttenorm; the sheet's own yields at
 100 % match the master for every crop (Vinterhvede uses the sheet's second
 Vinterhvede row, the one that matches the master udbyttenorm).
 
-Only crops in this table, on konventionel marker, may be fertilized below the
-norm. Every other crop is fertilized at 100 % and keeps its full udbyttenorm.
+Økologisk source: the organic national field trials in ICOEL's OYUP WP2 data
+(kg NH4-N, forfrugt korn), the NFTS organic rapeseed trials 2021-22 and the
+decisions of 2026-10-13/19 (the WP2 udbyttekurver data basis and its
+METODE.md). The form is the same, but a and b are relative to the temporary
+organic N-norms in the master table. Vinterbyg and vinterhybridrug borrow
+vinterhvede's and vinterrug's curves, and grass shares the konventionelle
+curve per kg N. If the organic N-norms or udbyttenormer change, a and b must
+be recalculated.
+
+Only crops in the table for the driftsform may be fertilized below the norm.
+Every other crop is fertilized at 100 % and keeps its full udbyttenorm.
 """
 from __future__ import annotations
 
 KONVENTIONEL = "Konventionel"
+OEKOLOGISK = "Økologisk"
+
+_JORDTYPER = (
+    "grovsand", "finsand", "sandblandet_ler", "lerjord", "sandjord_vandet", "humusjord",
+)
 
 # Lowest N-norm share the curves are defined for. The model never fertilizes
 # below it, so the curve is not extrapolated.
@@ -129,6 +143,46 @@ _RESPONS[70] = _RESPONS[1]
 _RESPONS[72] = _RESPONS[3]
 
 
+def _same_on_every_jordtype(a: float, b: float) -> dict[str, tuple[float, float]]:
+    """The trials cannot tell the norm classes apart, so one curve covers all."""
+    return dict.fromkeys(_JORDTYPER, (a, b))
+
+
+_RESPONS_OEKO: dict[int, dict[str, tuple[float, float]]] = {
+    1: _same_on_every_jordtype(0.127514, 0.180305),  # Vårbyg
+    2: _same_on_every_jordtype(0.137871, 0.145294),  # Vårhvede
+    3: _same_on_every_jordtype(0.127698, 0.152238),  # Vårhavre
+    11: _same_on_every_jordtype(0.147713, 0.229401),  # Vinterhvede
+    14: _same_on_every_jordtype(0.228957, 0.172329),  # Vinterrug
+    22: _same_on_every_jordtype(0.278182, 0.005883),  # Vinterraps
+    260: {  # Græs med kløver/lucerne, under 50 % bælgplanter (omdrift)
+        "grovsand": (0.166126, 0.023863),
+        "finsand": (0.163146, 0.023766),
+        "sandblandet_ler": (0.150474, 0.023632),
+        "lerjord": (0.149497, 0.023629),
+        "sandjord_vandet": (0.148088, 0.023271),
+        "humusjord": (0.133425, 0.015895),
+    },
+    263: {  # Græs uden kløvergræs (omdrift)
+        "grovsand": (0.270011, 0.205265),
+        "finsand": (0.261683, 0.207313),
+        "sandblandet_ler": (0.272696, 0.24071),
+        "lerjord": (0.272696, 0.24071),
+        "sandjord_vandet": (0.237384, 0.207984),
+        "humusjord": (0.187126, 0.126273),
+    },
+}
+# Crops without trials borrow a sister crop's curve; efterårssået vårsæd
+# follows the spring-sown crop, as in the konventionelle table.
+_RESPONS_OEKO[10] = _RESPONS_OEKO[11]  # Vinterbyg
+_RESPONS_OEKO[15] = _RESPONS_OEKO[14]  # Vinterhybridrug
+_RESPONS_OEKO[70] = _RESPONS_OEKO[1]
+_RESPONS_OEKO[71] = _RESPONS_OEKO[2]
+_RESPONS_OEKO[72] = _RESPONS_OEKO[3]
+
+_RESPONS_BY_DRIFTSFORM = {KONVENTIONEL: _RESPONS, OEKOLOGISK: _RESPONS_OEKO}
+
+
 def _jordtype(jbnr: int, irrigated: bool) -> str | None:
     """Map a JB-nr to the master CSV jordtype group used for the N-norms."""
     if irrigated and jbnr in (1, 2, 3, 4):
@@ -146,9 +200,13 @@ def _jordtype(jbnr: int, irrigated: bool) -> str | None:
     return None
 
 
+def _kurver(afgrodekode: int | None, driftsform: str) -> dict[str, tuple[float, float]] | None:
+    return _RESPONS_BY_DRIFTSFORM.get(driftsform, {}).get(afgrodekode)
+
+
 def har_udbytterespons(afgrodekode: int | None, driftsform: str) -> bool:
     """Whether the crop may be fertilized below its N-norm."""
-    return driftsform == KONVENTIONEL and afgrodekode in _RESPONS
+    return _kurver(afgrodekode, driftsform) is not None
 
 
 def udbytte_faktor(
@@ -157,6 +215,7 @@ def udbytte_faktor(
     irrigated: bool,
     tilgaengelig_n: float,
     n_norm: float | None,
+    driftsform: str = KONVENTIONEL,
 ) -> float:
     """Return the share of the udbyttenorm reached with `tilgaengelig_n`.
 
@@ -164,7 +223,7 @@ def udbytte_faktor(
     N-norm the factor is 1. Below `MIN_ANDEL` the curve is held at its 50 %
     value, since the model never fertilizes that low.
     """
-    kurver = _RESPONS.get(afgrodekode)
+    kurver = _kurver(afgrodekode, driftsform)
     jordtype = _jordtype(jbnr, irrigated)
     if kurver is None or jordtype is None or not n_norm:
         return 1.0

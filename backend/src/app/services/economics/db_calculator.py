@@ -562,9 +562,17 @@ def calculate_db(
 
     tilgaengelig_n = mncs + mnca + forfrugtsvaerdi
     faktor = 1.0
-    respons = norm is not None and har_udbytterespons(afgrodekode, driftsform)
+    # An organic curve is relative to the organic N-norm, so it needs the
+    # crop's own organic row; on the konventionel fallback it would be off.
+    respons = (
+        norm is not None
+        and har_udbytterespons(afgrodekode, driftsform)
+        and (driftsform != OEKOLOGISK or er_reel_oeko_norm)
+    )
     if respons:
-        faktor = udbytte_faktor(afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"])
+        faktor = udbytte_faktor(
+            afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"], driftsform
+        )
         udbytte *= faktor
 
     udbytte *= yield_factor
