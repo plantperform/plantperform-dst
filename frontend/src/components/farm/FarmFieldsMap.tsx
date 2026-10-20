@@ -87,6 +87,7 @@ import {
   buildCatchmentFillOpacity,
   buildFillColor,
   buildYearCropSpec,
+  colorLegendLabel,
   formatLegendUnit,
   isYearColorAttribute,
   legendEntries,
@@ -442,16 +443,18 @@ export const FarmFieldsMap = ({
 
   const yearProperties = useMemo((): FieldYearProperties | undefined => {
     if (yearIndex === null) return undefined
+    const leachingKgHaByFieldId: Record<string, number> = {}
     const nLoadKgHaByFieldId: Record<string, number> = {}
     for (const field of fields) {
       const yearResult = yearValues?.[field.id]?.[yearIndex]
       if (!yearResult) continue
+      leachingKgHaByFieldId[field.id] = yearResult.leachingKgNHa
       nLoadKgHaByFieldId[field.id] = yearNLoadKgHa(
         yearResult.leachingKgNHa,
         field.retention,
       )
     }
-    return { yearIndex, nLoadKgHaByFieldId }
+    return { yearIndex, leachingKgHaByFieldId, nLoadKgHaByFieldId }
   }, [fields, yearValues, yearIndex])
   const yearValuesFieldCount = yearProperties
     ? Object.keys(yearProperties.nLoadKgHaByFieldId).length
@@ -480,7 +483,11 @@ export const FarmFieldsMap = ({
     editLegendEntries.length > 0
   const legendBins =
     activeColorSpec === null ? [] : legendEntries(activeColorSpec)
-  const legendSignature = `${activeColorSpec?.label ?? ''}|${legendBins.length}|${yearStatusText ?? ''}|${editLegendEntries.map((entry) => entry.label).join(',')}`
+  const activeLegendLabel =
+    activeColorSpec === null
+      ? ''
+      : colorLegendLabel(activeColorSpec, colorBy, selectedCalendarYear)
+  const legendSignature = `${activeLegendLabel}|${legendBins.length}|${yearStatusText ?? ''}|${editLegendEntries.map((entry) => entry.label).join(',')}`
   const legendOverflows = overflowingLegend === legendSignature
   const hasFieldGeometry = fields.some((field) => field.geometry !== null)
 
@@ -1189,7 +1196,7 @@ export const FarmFieldsMap = ({
             {activeColorSpec !== null ? (
               <>
                 <DropdownMenuLabel>
-                  {activeColorSpec.label}
+                  {activeLegendLabel}
                   {formatLegendUnit(activeColorSpec)
                     ? ` (${formatLegendUnit(activeColorSpec)})`
                     : ''}
@@ -1845,7 +1852,7 @@ export const FarmFieldsMap = ({
           >
             {activeColorSpec !== null ? (
               <span className="shrink-0 font-medium text-muted-foreground">
-                {activeColorSpec.label}
+                {activeLegendLabel}
                 {formatLegendUnit(activeColorSpec)
                   ? ` (${formatLegendUnit(activeColorSpec)})`
                   : ''}

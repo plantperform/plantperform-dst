@@ -14,6 +14,7 @@ import {
 } from '@/lib/field-domain'
 import {
   COLOR_SPECS,
+  colorLegendLabel,
   describeSpecValue,
   soilTypeLabel,
   registryPropertyFor,
@@ -69,6 +70,7 @@ const buildRows = (
   field: FieldRecord | null,
   colorBy: ColorAttribute,
   isSimulationView: boolean,
+  selectedCalendarYear: number | null,
 ): TooltipRow[] => {
   const rows: TooltipRow[] = []
   if (field) {
@@ -79,7 +81,7 @@ const buildRows = (
         <span className="font-normal text-muted-foreground"> {text}</span>
       ) : null
     const nLoadNote =
-      colorBy === 'nLoad'
+      colorBy === 'nLoad' && selectedCalendarYear === null
         ? describeSpecValue(
             COLOR_SPECS.nLoad,
             rawSpecValue(COLOR_SPECS.nLoad, hovered),
@@ -153,7 +155,7 @@ const buildRows = (
   if (extraSpec && !rows.some((row) => row.key === colorBy)) {
     rows.push({
       key: colorBy,
-      label: extraSpec.label,
+      label: colorLegendLabel(extraSpec, colorBy, selectedCalendarYear),
       value:
         describeSpecValue(extraSpec, rawSpecValue(extraSpec, hovered)) ??
         'ingen værdi',
@@ -189,7 +191,13 @@ export const FieldTooltip = ({
   const catchmentId = field
     ? field.catchmentId
     : toFiniteNumber(hovered.properties.kystvand_id)
-  const rows = buildRows(hovered, field, colorBy, isSimulationView)
+  const rows = buildRows(
+    hovered,
+    field,
+    colorBy,
+    isSimulationView,
+    selectedCalendarYear,
+  )
 
   return (
     <div className="min-w-60 text-xs whitespace-nowrap">
