@@ -7,12 +7,16 @@ export type WinterCoverKind =
   | 'stubble'
   | 'bareSoil'
   | 'earlySowing'
+  | 'intermediateOrEarlySowing'
 
 export type WinterCoverDefinition = {
   id: WinterCoverKind
   label: string
   description: string
   color: string
+  // Drawn split down the middle in these colours: the history only knows it
+  // was one of two covers.
+  splitColors?: readonly [string, string]
 }
 
 export type YearCover = {
@@ -64,6 +68,22 @@ export const EARLY_SOWING: WinterCoverDefinition = {
   color: '#6d28d9',
 }
 
+// A reported catch crop before an autumn-sown crop: the source does not say
+// which of the two met the requirement, and both have the same effect. The
+// history names such a year's secondary crop with this label (the backend's
+// AUTUMN_MEASURE_NAME); a simulation never does.
+export const INTERMEDIATE_OR_EARLY_SOWING: WinterCoverDefinition = {
+  id: 'intermediateOrEarlySowing',
+  label: 'Mellemafgrøde/tidlig såning',
+  description: '',
+  color: INTERMEDIATE_CROP.color,
+  splitColors: [INTERMEDIATE_CROP.color, EARLY_SOWING.color],
+}
+
+// Such a year is shown by its cover, not as an udlæg.
+export const isIntermediateOrEarlySowingYear = (year: RotationYear): boolean =>
+  year.undersownCropName === INTERMEDIATE_OR_EARLY_SOWING.label
+
 const WINTER_COVERS: readonly WinterCoverDefinition[] = [
   CATCH_CROP,
   INTERMEDIATE_CROP,
@@ -71,6 +91,7 @@ const WINTER_COVERS: readonly WinterCoverDefinition[] = [
   STUBBLE,
   BARE_SOIL,
   EARLY_SOWING,
+  INTERMEDIATE_OR_EARLY_SOWING,
 ]
 
 const yearCover = (
@@ -118,6 +139,9 @@ export const yearCoversFromDetail = (
   detail: Record<string, unknown>,
 ): YearCover[] => {
   if (detail.runoffCategoryUnknown) return []
+  if (isOn(detail.intermediateOrEarlySowing)) {
+    return [yearCover(INTERMEDIATE_OR_EARLY_SOWING)]
+  }
   const state = isOn(detail.EEA)
     ? yearCover(CATCH_CROP)
     : isOn(detail.EMA)
@@ -128,8 +152,12 @@ export const yearCoversFromDetail = (
   return covers
 }
 
-const yearCoversFromUndersownCrop = (code: number | null): YearCover[] => {
+const yearCoversFromUndersownCrop = (year: RotationYear): YearCover[] => {
+  const code = year.undersownCropCode
   if (code === null) return []
+  if (isIntermediateOrEarlySowingYear(year)) {
+    return [yearCover(INTERMEDIATE_OR_EARLY_SOWING)]
+  }
   if (CATCH_CROP_CODES.has(code)) return [yearCover(CATCH_CROP)]
   if (INTERMEDIATE_CROP_CODES.has(code)) return [yearCover(INTERMEDIATE_CROP)]
   if (code === EARLY_SOWING_CODE) return [yearCover(EARLY_SOWING)]
@@ -152,7 +180,7 @@ export const rotationCovers = (
     const detail = details[index]
     return detail?.W !== undefined
       ? yearCoversFromDetail(detail)
-      : yearCoversFromUndersownCrop(year.undersownCropCode)
+      : yearCoversFromUndersownCrop(year)
   })
   return covers.some((yearCovers) => yearCovers.length > 0) ? covers : null
 }

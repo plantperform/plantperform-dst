@@ -246,6 +246,12 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(years[0]["tildelt_husdyrgodning_udnyttet_kgn_ha"], 20)
         self.assertLess(len(json.dumps(years)), len(full.model_dump_json()) / 3)
 
+    def test_compact_years_keep_an_inferred_mellemafgroede_or_tidlig_saaning(self):
+        full = rich_candidate()
+        full.years[0].leaching_detail["mellemafgroede_eller_tidlig_saaning"] = True
+        years = read_models.compact_years(full)
+        self.assertTrue(years[0]["winter_cover"]["mellemafgroede_eller_tidlig_saaning"])
+
     def test_area_contributions_and_yearly_totals_match_existing_calculations(self):
         first, second = rich_candidate(), rich_candidate("2")
         second.years[0].year.afgrode_kode = 11

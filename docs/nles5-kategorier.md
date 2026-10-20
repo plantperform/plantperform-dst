@@ -443,7 +443,11 @@ står for i beregningen:
 3. Er næste års afgrøde efterårssået (`Normal såmåned` august–november,
    DB-kolonnen `saamaaned`), kan efterafgrøden ikke have stået vinteren over.
    Så er den mellemafgrøde (9682) eller tidlig såning (9683), den første som
-   `virkemiddel_tilladt` tillader, eller ingen (fx før vinterraps).
+   `virkemiddel_tilladt` tillader, eller ingen (fx før vinterraps). Kilden
+   siger ikke, hvilken af de to det var, og de giver samme reduktion. Året får
+   derfor `mellemafgroede_eller_tidlig_saaning` i udvaskningsdetaljen, og
+   historikken viser det som "Mellemafgrøde/tidlig såning", delt på midten i
+   begges farver.
 4. Ellers står efterafgrøden (968). Er næste års afgrøde ukendt, som 2026 i
    "Aktuel", tæller den også som efterafgrøde.
 

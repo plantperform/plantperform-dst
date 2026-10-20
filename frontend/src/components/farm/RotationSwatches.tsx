@@ -3,7 +3,10 @@ import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { cropGroupFor } from '@/lib/crop-groups'
 import { cn } from '@/lib/utils'
-import { rotationCovers } from '@/lib/winter-cover'
+import {
+  isIntermediateOrEarlySowingYear,
+  rotationCovers,
+} from '@/lib/winter-cover'
 
 type RotationSwatchesProps = {
   rotation: FieldRecord['cropRotation']
@@ -25,7 +28,8 @@ export const RotationSwatches = ({
         const calendarYear = startYear + index
         const covers = yearCovers?.[index] ?? []
         const title = `${calendarYear}: ${year.cropName}${
-          year.undersownCropName !== null
+          year.undersownCropName !== null &&
+          !isIntermediateOrEarlySowingYear(year)
             ? ` (udlæg: ${year.undersownCropName})`
             : ''
         }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}`
