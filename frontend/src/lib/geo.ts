@@ -10,8 +10,11 @@ import {
 } from '@/lib/field-domain'
 import { YEAR_QUOTA_STATUS_VALUES } from '@/lib/map-coloring'
 
+// A selected year's values. With them, Udvaskning and Udledning colour the
+// map by that year instead of the field's average.
 export type FieldYearProperties = {
   yearIndex: number
+  leachingKgHaByFieldId: Record<string, number>
   nLoadKgHaByFieldId: Record<string, number>
 }
 
@@ -241,6 +244,9 @@ export const fieldsToFeatureCollection = (
         yearProperties !== undefined
           ? (field.cropRotation[yearProperties.yearIndex] ?? null)
           : null
+      const yearLeachingKgHa = field.quotaEligible
+        ? (yearProperties?.leachingKgHaByFieldId[field.id] ?? null)
+        : null
       const yearNLoadKgHa = field.quotaEligible
         ? (yearProperties?.nLoadKgHaByFieldId[field.id] ?? null)
         : null
@@ -271,8 +277,18 @@ export const fieldsToFeatureCollection = (
           soilTypeNumber: field.soilTypeNumber,
           nLoadLimitKgNHa: field.nLoadLimitKgNHa,
           nLoadQuotaKgN: field.nLoadQuotaKgN,
-          leaching: field.quotaEligible ? perHa(field.leaching) : null,
-          nLoad: field.quotaEligible ? perHa(field.nLoad) : null,
+          leaching:
+            yearProperties !== undefined
+              ? yearLeachingKgHa
+              : field.quotaEligible
+                ? perHa(field.leaching)
+                : null,
+          nLoad:
+            yearProperties !== undefined
+              ? yearNLoadKgHa
+              : field.quotaEligible
+                ? perHa(field.nLoad)
+                : null,
           db2: perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,

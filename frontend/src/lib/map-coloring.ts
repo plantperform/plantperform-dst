@@ -27,6 +27,22 @@ export const YEAR_COLOR_ATTRIBUTES: ReadonlySet<ColorAttribute> = new Set([
 export const isYearColorAttribute = (attribute: ColorAttribute) =>
   YEAR_COLOR_ATTRIBUTES.has(attribute)
 
+// Udvaskning and Udledning colour by the selected year's values when a year is
+// selected (see FieldYearProperties in geo.ts), so their legend names the year.
+const YEAR_VALUE_ATTRIBUTES: ReadonlySet<ColorAttribute> = new Set([
+  'leaching',
+  'nLoad',
+])
+
+export const colorLegendLabel = (
+  spec: ColorSpec,
+  attribute: ColorAttribute,
+  calendarYear: number | null,
+): string =>
+  calendarYear !== null && YEAR_VALUE_ATTRIBUTES.has(attribute)
+    ? `${spec.label} ${calendarYear}`
+    : spec.label
+
 export type ColorSource = 'both' | 'farm'
 
 type NumericBin = {
