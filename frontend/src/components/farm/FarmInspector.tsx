@@ -545,9 +545,7 @@ export const FarmInspector = ({
                   lockingFieldId={lockingFieldId}
                   onToggleLock={onToggleLock}
                   onBindRotation={onBindRotation}
-                  selectedYearIndex={
-                    isSimulationView ? effectiveSelectedYearIndex : null
-                  }
+                  selectedYearIndex={effectiveSelectedYearIndex}
                   yearValues={yearValues}
                   yearValuesLoading={yearValuesLoading}
                   selectedFieldId={selectedFieldId}
