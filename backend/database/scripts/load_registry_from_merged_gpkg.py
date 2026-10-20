@@ -1,8 +1,8 @@
 """Replace registry_field from the merged 2026 PlantPerform GeoPackage.
 
 The merged source contains the production registry columns plus real per-field
-P/S/Nt inputs. Kystvand data and MARS field annotations must still be recomputed
-after this load by their existing loaders.
+P/S/Nt inputs. Kystvand data, gødningsregioner and MARS field annotations must
+still be recomputed after this load by their existing loaders.
 """
 
 import json
@@ -138,7 +138,7 @@ def load_staging(dsn: str) -> None:
     columns = (
         [
             "IMK_ID", "Marknr", "IMK_areal", "CVR", "JB_Kode", "UdledgrKgNPerHa",
-            "RetTot", "KystvandID", "markblok", "journalnr", "goedningsregion", "oeko",
+            "RetTot", "KystvandID", "markblok", "journalnr", "oeko",
             "oestoette", "hoejeste_hnv", "kvotegivende", "omlaegningsplan_virkemiddel",
             "omlaegningsplan_status", "kystvand_navn", "orgNtopsoil2024", "S_soil2024",
         ]
@@ -155,7 +155,7 @@ def load_staging(dsn: str) -> None:
                     imk_id bigint PRIMARY KEY, marknr text, markblok text, journalnr text, cvr text,
                     area_ha double precision, crop_history jsonb, jbnr smallint,
                     kystvand_id integer, kystvand_navn text, retention double precision,
-                    udledningsgraense_kgn_ha double precision, goedningsregion text, oeko boolean,
+                    udledningsgraense_kgn_ha double precision, oeko boolean,
                     oestoette boolean, hoejeste_hnv smallint, kvotegivende boolean,
                     omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
                     percolation_by_kategori jsonb, org_n_topsoil double precision,
@@ -168,7 +168,7 @@ def load_staging(dsn: str) -> None:
             f"""COPY {STAGING_TABLE} (
                 imk_id, marknr, markblok, journalnr, cvr, area_ha, crop_history, jbnr,
                 kystvand_id, kystvand_navn, retention, udledningsgraense_kgn_ha,
-                goedningsregion, oeko, oestoette, hoejeste_hnv, kvotegivende,
+                oeko, oestoette, hoejeste_hnv, kvotegivende,
                 omlaegningsplan_virkemiddel, omlaegningsplan_status,
                 percolation_by_kategori, org_n_topsoil, s_soil, banned, geom
             ) FROM STDIN"""
@@ -228,7 +228,7 @@ def load_staging(dsn: str) -> None:
                             clean_int(row.KystvandID), clean_str(row.kystvand_navn),
                             clean_float_rounded(row.RetTot, RETENTION_ROUND_DIGITS),
                             udledningsgraense,
-                            clean_str(row.goedningsregion), clean_bool(row.oeko),
+                            clean_bool(row.oeko),
                             clean_bool(row.oestoette), clean_int(row.hoejeste_hnv),
                             clean_bool(row.kvotegivende), virkemiddel,
                             clean_str(row.omlaegningsplan_status), json.dumps(percolation),
@@ -271,7 +271,7 @@ def finalize_registry_field(dsn: str) -> None:
                 imk_id, cvr, marknr, markblok, journalnr, area_ha, crop_rotation, crop_history,
                 geom, centroid, sample_bucket, in_takeout_plan, udledningsgraense_kgn_ha,
                 udledningskvote_mark_kgn, jbnr, kystvand_id, kystvand_navn, retention,
-                goedningsregion, oeko, oestoette, hoejeste_hnv, kvotegivende,
+                oeko, oestoette, hoejeste_hnv, kvotegivende,
                 omlaegningsplan_virkemiddel, omlaegningsplan_status,
                 percolation_by_kategori, org_n_topsoil, s_soil, banned
             )
@@ -281,7 +281,7 @@ def finalize_registry_field(dsn: str) -> None:
                 COALESCE(omlaegningsplan_virkemiddel, 'nej'), udledningsgraense_kgn_ha,
                 ROUND((udledningsgraense_kgn_ha * COALESCE(area_ha, 0))::numeric,
                       {ROUND_DIGITS})::float,
-                jbnr, kystvand_id, kystvand_navn, retention, goedningsregion, oeko, oestoette,
+                jbnr, kystvand_id, kystvand_navn, retention, oeko, oestoette,
                 hoejeste_hnv, kvotegivende, omlaegningsplan_virkemiddel,
                 omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned
             FROM {STAGING_TABLE}

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
+from database.scripts.load_goedningsregioner import goedningsregion_by_kystvand_id
 from database.scripts.load_oekonomital_afgroedebundet import parse_oekonomital_afgroedebundet
 from database.scripts.load_oekonomital_generelle_satser import (
     parse_oekonomital_generelle_satser,
@@ -227,6 +228,28 @@ class PraecisionsgoedskningFlagTests(unittest.TestCase):
             {row[0]: row[19] for row in nuar_rows},
             {1: True, 22: True, 5: False, 260: False},
         )
+
+
+class GoedningsregionTests(unittest.TestCase):
+    def test_each_kystvandopland_gets_its_egn_as_a_bilag_3_region(self) -> None:
+        regions = goedningsregion_by_kystvand_id()
+
+        self.assertEqual(len(regions), 108)
+        self.assertEqual(
+            {kystvand_id: regions[kystvand_id] for kystvand_id in (1, 93, 136, 132, 56, 38)},
+            {
+                1: "Sjælland",
+                93: "Fyn",
+                136: "Øst og Nordjylland",
+                132: "Vestjylland",
+                56: "Bornholm",
+                38: "Lolland/Falster",
+            },
+        )
+
+    def test_a_kystvandopland_under_two_egne_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "kystvand_id 1 is listed under two egne"):
+            goedningsregion_by_kystvand_id({1: (1, 2), 6: (1,)})
 
 
 if __name__ == "__main__":

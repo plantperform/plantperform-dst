@@ -152,7 +152,7 @@ class RuntimeLookupServiceTests(unittest.TestCase):
                 [(10, 20, "Udlæg"), (10, None, None), (10, 20, "Udlæg"), (10, None, None)],
             )
 
-    def test_historical_lookup_uses_database_rows_and_region_alias(self) -> None:
+    def test_historical_lookup_uses_database_rows(self) -> None:
         rows = [
             SimpleNamespace(
                 region="Øst og Nordjylland",
@@ -175,11 +175,11 @@ class RuntimeLookupServiceTests(unittest.TestCase):
         with patch.object(historisk_goedning, "_fetch_historical_rows", return_value=rows):
             historisk_goedning.clear_historisk_goedning_cache()
             self.assertEqual(
-                historisk_goedning.lookup_historisk_n_input(10, 4, "Nordjylland", False),
+                historisk_goedning.lookup_historisk_n_input(10, 4, "Øst og Nordjylland", False),
                 {"mncs": 12.5, "g0": 4.5},
             )
             self.assertEqual(
-                historisk_goedning.lookup_historisk_n_input(11, 4, "Nordjylland", False),
+                historisk_goedning.lookup_historisk_n_input(11, 4, "Øst og Nordjylland", False),
                 {"mncs": 0.0, "g0": 0.0},
             )
 

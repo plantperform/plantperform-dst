@@ -13,12 +13,6 @@ from sqlalchemy import select
 
 from app.data.db import SessionLocal, historisk_goedningsfordeling_table
 
-# The source has six regions, while registry_field distinguishes these two.
-_REGION_ALIASES = {
-    "Østjylland": "Øst og Nordjylland",
-    "Nordjylland": "Øst og Nordjylland",
-}
-
 
 def _fetch_historical_rows() -> list[Any]:
     with SessionLocal() as session:
@@ -65,13 +59,18 @@ def lookup_historisk_n_input(
     goedningsregion: str | None,
     oeko: bool,
 ) -> dict[str, float]:
-    """Return historical average ``{"mncs": ..., "g0": ...}`` for a field."""
+    """Return historical average ``{"mncs": ..., "g0": ...}`` for a field.
+
+    ``goedningsregion`` is one of Bilag 3's six regions, which
+    load_goedningsregioner sets from the field's kystvandopland.
+    """
     if afgrode_kode is None or jbnr is None or goedningsregion is None:
         return {"mncs": 0.0, "g0": 0.0}
 
-    region = _REGION_ALIASES.get(goedningsregion, goedningsregion)
     driftsform = "Økologisk" if oeko else "Konventionel"
-    return dict(_load().get((region, driftsform, afgrode_kode, jbnr), {"mncs": 0.0, "g0": 0.0}))
+    return dict(
+        _load().get((goedningsregion, driftsform, afgrode_kode, jbnr), {"mncs": 0.0, "g0": 0.0})
+    )
 
 
 def real_history_lookback(

@@ -5,10 +5,9 @@ Source: database/data/raw/ANGJ-data/Historisk_goedningsfordeling_2025_og_2026_bi
 Columns: region, driftsform, afgroedekode, afgroede, jb_nr, n_type, vaerdi, kilde_side
   - n_type is 'mineralsk' (-> MNCS, the utilised/mineral N input) or
     'organisk' (-> G0, the organically bound N input).
-  - region has 6 values (Øst- and Nordjylland combined as "Øst og Nordjylland"),
-    one fewer than the 7-region goedningsregion column on registry_field —
-    callers must collapse Østjylland/Nordjylland to that combined name when
-    looking this table up.
+  - region has Bilag 3's 6 values (Øst- and Nordjylland combined as "Øst og
+    Nordjylland"), the names load_goedningsregioner gives
+    registry_field.goedningsregion.
 """
 
 import csv
