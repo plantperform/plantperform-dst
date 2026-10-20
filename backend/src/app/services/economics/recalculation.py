@@ -36,6 +36,9 @@ def recalculate_candidate(candidate, simulation, snapshot, jbnr):
                 praecisionsjordbrug=simulation.praecisionsjordbrug,
                 forfrugtsvaerdi=year.forfrugtsvaerdi_kgn_ha,
             )
+        # Evaluations from before manure was priced per tonne keep the tonnes on
+        # the year itself.
+        inputs = {"husdyrgodning_ton_pr_ha": year.husdyrgodning_ton_pr_ha, **inputs}
         inputs = EconomicsCalculationInputs.model_validate(inputs).model_dump()
         year.db_detail = calculate_db(**inputs, economics_key=snapshot.overrides.cache_key())
         year.db_kr_ha = year.db_detail["db"]

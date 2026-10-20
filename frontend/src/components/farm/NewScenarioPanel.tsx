@@ -876,8 +876,8 @@ export const NewScenarioPanel = ({
                       className="block text-xs text-muted-foreground"
                     >
                       Typisk kvæggylle: 4–7 kg udnyttet N/ton. Bruges til at
-                      omregne til ton gødning brugt pr. mark pr. år (reference,
-                      ingen beregningseffekt).
+                      omregne til ton gødning pr. mark pr. år, og udbringningen
+                      prissættes pr. ton.
                       {(() => {
                         const utilisedPerTon = Number(values.nContentKgPerTon)
                         const mineralPct = Number(values.mineralSharePct)
