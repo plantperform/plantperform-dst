@@ -25,7 +25,7 @@ from app.domain.rotation_candidate import (
 from app.domain.simulation import GodningSettings
 from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
-from app.services.economics.udbytterespons import KONVENTIONEL, har_udbytterespons
+from app.services.economics.udbytterespons import KONVENTIONEL, OEKOLOGISK, har_udbytterespons
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
@@ -78,7 +78,7 @@ def compute_n_inputs(
     N-norm%: the scenarie's n_norm_pct is the total available N, forfrugtsværdi
     included. kvote_n = n_norm × N-norm%, and only the part the forfrugt does
     not cover is fertilized: net_scaled = max(0, kvote_n − fv_forfrugt). The cut
-    applies only to crops with a yield-response curve on konventionel marker
+    applies only to crops with a yield-response curve for the driftsform
     (see economics.udbytterespons); every other crop is fertilized at 100 %,
     because there is no basis for the yield loss a cut would cause.
 
@@ -118,7 +118,12 @@ def compute_n_inputs(
         }
 
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
-    pct = float(n_norm_pct) if har_udbytterespons(afgrode_kode, driftsform) else 100.0
+    # An organic curve is relative to the organic N-norm. On the konventionel
+    # fallback the N would be cut without the yield loss that goes with it.
+    below_norm = har_udbytterespons(afgrode_kode, driftsform) and (
+        driftsform != OEKOLOGISK or norm.get("driftsform") == OEKOLOGISK
+    )
+    pct = float(n_norm_pct) if below_norm else 100.0
     net_scaled = max(0.0, norm["n_norm"] * pct / 100.0 - fv_forfrugt)
 
     if org_mineral_n <= 0:

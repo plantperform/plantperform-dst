@@ -85,9 +85,19 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         self.assertTrue(result["udbytterespons"])
         self.assertLess(result["udbytte_faktor"], 1.0)
 
-    def test_oekologisk_keeps_the_norm_based_yield(self) -> None:
+    def test_oekologisk_without_its_own_norm_keeps_the_norm_based_yield(self) -> None:
+        # The konventionel fallback norm: the organic curve does not apply to it.
         result = db_calculator.calculate_db(VINTERHVEDE, "Økologisk", 1, mncs=100.0)
         self.assertEqual(result["udbytte_faktor"], 1.0)
+
+    def test_oekologisk_with_its_own_norm_follows_the_organic_curve(self) -> None:
+        norm = {"udbyttenorm": 43.3, "n_norm": 144.0, "udbytteenhed": "hkg"}
+        with patch.object(db_calculator, "_lookup_udbyttenorm", lambda *a, **k: (norm, True)):
+            result = db_calculator.calculate_db(VINTERHVEDE, "Økologisk", 2, mncs=72.0)
+        self.assertAlmostEqual(
+            result["udbytte_faktor"], 1 - (0.147713 * 0.5 + 0.229401 * 0.25), places=6
+        )
+        self.assertAlmostEqual(result["udbytte"], 43.3 * result["udbytte_faktor"], places=4)
 
 
 if __name__ == "__main__":
