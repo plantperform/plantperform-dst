@@ -63,6 +63,8 @@ import {
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  offersNoFertiliser,
+  organicFertiliserChoice,
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
@@ -96,7 +98,8 @@ const LIMITS_STEP_INDEX = stepIndexOf('limits')
 
 const NO_CATEGORIES: RotationCategoryOption[] = []
 
-const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
+const FERTILISER_FIELDS: (keyof SimulationFormValues)[] = [
+  'fertiliserChoice',
   'orgMineralN',
   'mineralSharePct',
   'nContentKgPerTon',
@@ -345,8 +348,8 @@ export const NewScenarioPanel = ({
       updateValue('mineralSharePct', fertiliserFields.mineralSharePct)
       updateValue('onlyOrganic', fertiliserFields.onlyOrganic)
     }
-    if (FERTILISER_NUMBER_FIELDS.some((name) => errors[name])) {
-      void trigger(FERTILISER_NUMBER_FIELDS)
+    if (FERTILISER_FIELDS.some((name) => errors[name])) {
+      void trigger(FERTILISER_FIELDS)
     }
   }
 
@@ -643,6 +646,14 @@ export const NewScenarioPanel = ({
                   applyRotationChoice(
                     withFarmingSystem(categories, getValues(), value),
                   )
+                  if (
+                    !offersNoFertiliser(value) &&
+                    getValues('fertiliserChoice') === NO_FERTILISER
+                  ) {
+                    applyFertiliserChoice(
+                      organicFertiliserChoice(fertiliserPresets),
+                    )
+                  }
                 },
               })}
             >
@@ -737,14 +748,24 @@ export const NewScenarioPanel = ({
               <div
                 role="radiogroup"
                 aria-label="Gødningstype"
+                aria-invalid={Boolean(errors.fertiliserChoice)}
+                aria-describedby={
+                  errors.fertiliserChoice
+                    ? 'scenario-fertiliser-choice-error'
+                    : undefined
+                }
                 className="grid gap-2 sm:grid-cols-2"
               >
                 {[
-                  {
-                    value: NO_FERTILISER,
-                    label: 'Ingen organisk gødning',
-                    detail: 'Ren handelsgødning',
-                  },
+                  ...(offersNoFertiliser(values.farmingSystem)
+                    ? [
+                        {
+                          value: NO_FERTILISER,
+                          label: 'Ingen organisk gødning',
+                          detail: 'Ren handelsgødning',
+                        },
+                      ]
+                    : []),
                   ...fertiliserPresets.map((preset) => ({
                     value: preset.name,
                     label: preset.name,
@@ -793,6 +814,10 @@ export const NewScenarioPanel = ({
                   )
                 })}
               </div>
+              <FieldError
+                id="scenario-fertiliser-choice-error"
+                message={errors.fertiliserChoice?.message}
+              />
 
               {presetModified ? (
                 <p className="text-xs text-muted-foreground">

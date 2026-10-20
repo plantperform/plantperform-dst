@@ -80,6 +80,14 @@ class ComputeNInputsTests(unittest.TestCase):
             # 80 % of the organic 144 = 115.2 available; the forfrugt covers 18.
             self.assertAlmostEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 97.2)
 
+    def test_only_organic_without_organic_goedning_gets_no_n(self) -> None:
+        # Økologisk never tops up with handelsgødning, so there is nothing to apply.
+        result = candidate_evaluator.compute_n_inputs(
+            VINTERHVEDE, VINTERRAPS, None, 1, 100, 0.0, 70.0, True, False, "Økologisk",
+        )
+        self.assertEqual(result["mncs"], 0.0)
+        self.assertEqual(result["org_mineral_n_applied"], 0.0)
+
     def test_kloevergraes_standing_on_gets_no_forfrugtsvaerdi(self) -> None:
         # indregn_ffv Nej: the stand is not ploughed, so the full norm is fertilized.
         self.assertEqual(self.mncs(KLOEVERGRAES, KLOEVERGRAES, 100), 286.0)
