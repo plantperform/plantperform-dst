@@ -67,6 +67,9 @@ type NumericSpec = {
   aboveColor: string
   aboveLabel: string
   fallbackColor: string
+  // Fields that are not kvotegivende get the fallback colour whatever their
+  // value, as they are left out of the quota.
+  quotaEligibleOnly?: boolean
 }
 
 type CategorySpec = {
@@ -212,6 +215,7 @@ const N_LOAD_LIMIT: NumericSpec = {
   unit: 'kg N/ha',
   source: 'both',
   property: 'nLoadLimitKgNHa',
+  quotaEligibleOnly: true,
   bins: [
     { max: 5, color: '#440154', label: '< 5' },
     { max: 10, color: '#482878', label: '5–10' },
@@ -537,10 +541,25 @@ export const buildFillColor = (
   }
 
   // Numeric "step" expression. Maplibre's step requires strictly increasing stops.
+  // A value below 0 takes the fallback colour.
+  const value = ['to-number', ['coalesce', ['get', property], -1], -1]
+  // The property override is the registry layer's column, so the quota flag
+  // is the registry's column as well.
+  const quotaProperty =
+    propertyOverride === undefined
+      ? 'quotaEligible'
+      : REGISTRY_PROPERTY_NAMES.quotaEligible
   const sortedBins = [...spec.bins].sort((a, b) => a.max - b.max)
   const stepExpr: unknown[] = [
     'step',
-    ['to-number', ['coalesce', ['get', property], -1], -1],
+    spec.quotaEligibleOnly
+      ? [
+          'case',
+          ['==', ['to-number', ['get', quotaProperty], 1], 0],
+          -1,
+          value,
+        ]
+      : value,
     spec.fallbackColor,
     0,
     sortedBins[0].color,
@@ -599,6 +618,16 @@ export const describeSpecValue = (
 }
 
 export { formatNumber as formatLegendNumber }
+
+// Whether a scheme leaves the field out because it is not kvotegivende (see
+// quotaEligibleOnly). The map then shows the field in the fallback colour.
+export const excludedFromSpec = (
+  spec: ColorSpec,
+  quotaEligible: unknown,
+): boolean =>
+  spec.kind === 'numeric' &&
+  spec.quotaEligibleOnly === true &&
+  toFiniteNumber(quotaEligible) === 0
 
 export const specColorFor = (spec: ColorSpec, raw: unknown): string | null => {
   const value = toFiniteNumber(raw)

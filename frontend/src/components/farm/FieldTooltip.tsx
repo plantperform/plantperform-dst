@@ -16,6 +16,7 @@ import {
   COLOR_SPECS,
   colorLegendLabel,
   describeSpecValue,
+  excludedFromSpec,
   soilTypeLabel,
   registryPropertyFor,
   specColorFor,
@@ -64,6 +65,11 @@ const rawSpecValue = (spec: ColorSpec, hovered: HoveredField): unknown => {
   const property = hovered.registry ? registryPropertyFor(spec) : spec.property
   return property ? hovered.properties[property] : undefined
 }
+
+// As on the map, a field that is not kvotegivende has no value on a scheme
+// that only covers the quota.
+const excludedFromColour = (spec: ColorSpec, hovered: HoveredField) =>
+  excludedFromSpec(spec, rawSpecValue(COLOR_SPECS.quotaEligible, hovered))
 
 const buildRows = (
   hovered: HoveredField,
@@ -156,9 +162,10 @@ const buildRows = (
     rows.push({
       key: colorBy,
       label: colorLegendLabel(extraSpec, colorBy, selectedCalendarYear),
-      value:
-        describeSpecValue(extraSpec, rawSpecValue(extraSpec, hovered)) ??
-        'ingen værdi',
+      value: excludedFromColour(extraSpec, hovered)
+        ? EXCLUDED_FROM_CALCULATION
+        : (describeSpecValue(extraSpec, rawSpecValue(extraSpec, hovered)) ??
+          'ingen værdi'),
     })
   }
   return rows
@@ -226,7 +233,9 @@ export const FieldTooltip = ({
           const highlighted = row.key === colorBy
           const spec = highlighted ? tooltipSpecFor(row.key) : null
           const swatch = spec
-            ? specColorFor(spec, rawSpecValue(spec, hovered))
+            ? excludedFromColour(spec, hovered)
+              ? spec.fallbackColor
+              : specColorFor(spec, rawSpecValue(spec, hovered))
             : null
           return (
             <Fragment key={row.key}>
