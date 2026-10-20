@@ -2,7 +2,7 @@ import { Fragment, useState, type CSSProperties } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
-import { cropEdgeColor } from '@/lib/crop-groups'
+import { cropEdgeColor, shortCropName } from '@/lib/crop-groups'
 import {
   EXCLUDED_FROM_CALCULATION,
   formatHectares,
@@ -152,7 +152,7 @@ export const CropDistribution = ({ shares }: CropDistributionProps) => {
           fill="currentColor"
           opacity="0.7"
         >
-          {active ? active.label : 'i alt'}
+          {active ? shortCropName(active.label) : 'i alt'}
         </text>
       </svg>
       <ul
