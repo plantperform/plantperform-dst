@@ -27,6 +27,7 @@ import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
   CUSTOM_FERTILISER,
   NO_FERTILISER,
+  SIMULATION_FORM_STEPS,
   catchCropSowingLabel,
   combinationCount,
   farmingSystemMismatchCount,
@@ -36,8 +37,10 @@ import {
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
+  stepIndexOf,
   toCreateSimulationInput,
   yesNo,
+  type SimulationFormStepId,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 
@@ -55,36 +58,38 @@ type SimulationSummaryProps = {
 }
 
 const Section = ({
-  title,
+  step,
   term,
-  stepIndex,
   onEditStep,
   children,
 }: {
-  title: string
+  step: SimulationFormStepId
   term?: GlossaryTerm
-  stepIndex: number
   onEditStep: (stepIndex: number) => void
   children: ReactNode
-}) => (
-  <section className="space-y-1.5 py-3 first:pt-0">
-    <div className="flex items-baseline justify-between gap-2">
-      <h3 className="flex items-center gap-1 text-sm font-medium">
-        {title}
-        {term ? <GlossaryInfo term={term} /> : null}
-      </h3>
-      <button
-        type="button"
-        className="rounded-sm text-xs font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Ret ${title}`}
-        onClick={() => onEditStep(stepIndex)}
-      >
-        Ret
-      </button>
-    </div>
-    <div className="space-y-1 text-xs text-muted-foreground">{children}</div>
-  </section>
-)
+}) => {
+  const stepIndex = stepIndexOf(step)
+  const title = SIMULATION_FORM_STEPS[stepIndex].label
+  return (
+    <section className="space-y-1.5 py-3 first:pt-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="flex items-center gap-1 text-sm font-medium">
+          {title}
+          {term ? <GlossaryInfo term={term} /> : null}
+        </h3>
+        <button
+          type="button"
+          className="rounded-sm text-xs font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Ret ${title}`}
+          onClick={() => onEditStep(stepIndex)}
+        >
+          Ret
+        </button>
+      </div>
+      <div className="space-y-1 text-xs text-muted-foreground">{children}</div>
+    </section>
+  )
+}
 
 export const SimulationSummary = ({
   farmId,
@@ -134,12 +139,7 @@ export const SimulationSummary = ({
   return (
     <div className="space-y-4">
       <div className="divide-y">
-        <Section
-          title="Grundlag"
-          term="simulation"
-          stepIndex={0}
-          onEditStep={onEditStep}
-        >
+        <Section step="basics" term="simulation" onEditStep={onEditStep}>
           <p className="text-foreground">{input.name}</p>
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
@@ -148,12 +148,7 @@ export const SimulationSummary = ({
           <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
 
-        <Section
-          title="Sædskifter"
-          term="rotation"
-          stepIndex={1}
-          onEditStep={onEditStep}
-        >
+        <Section step="rotations" term="rotation" onEditStep={onEditStep}>
           <p>
             <span className="text-foreground">
               {rotationVariants.length} valgt
@@ -191,7 +186,7 @@ export const SimulationSummary = ({
           </details>
         </Section>
 
-        <Section title="Kvælstof" stepIndex={2} onEditStep={onEditStep}>
+        <Section step="nitrogen" onEditStep={onEditStep}>
           {values.fertiliserChoice === NO_FERTILISER ? (
             <p>Ingen organisk gødning (ren handelsgødning)</p>
           ) : (
@@ -213,7 +208,7 @@ export const SimulationSummary = ({
           </p>
         </Section>
 
-        <Section title="Dyrkningspraksis" stepIndex={3} onEditStep={onEditStep}>
+        <Section step="practice" onEditStep={onEditStep}>
           <p>
             Efterafgrøde <GlossaryInfo term="catchCrop" />:{' '}
             {catchCropSowingLabel(
@@ -235,7 +230,7 @@ export const SimulationSummary = ({
             {yesNo(Boolean(input.intermediateCrop))}
           </p>
         </Section>
-        <Section title="Grænser" stepIndex={4} onEditStep={onEditStep}>
+        <Section step="limits" onEditStep={onEditStep}>
           {catchments.map((catchment) => {
             const cap = settings.maxNLoadByCatchment.find(
               (entry) => entry.catchmentId === catchment.catchmentId,

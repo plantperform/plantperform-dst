@@ -230,6 +230,11 @@ export const SIMULATION_FORM_STEPS = [
   },
 ] as const
 
+export type SimulationFormStepId = (typeof SIMULATION_FORM_STEPS)[number]['id']
+
+export const stepIndexOf = (id: SimulationFormStepId): number =>
+  SIMULATION_FORM_STEPS.findIndex((step) => step.id === id)
+
 // The fields each step owns, taken from its schema so the two cannot drift.
 export const stepFields = (stepIndex: number) => {
   const { shape } = SIMULATION_FORM_STEPS[stepIndex].schema
