@@ -161,6 +161,7 @@ class YearlyOptimizationInput:
     constraints: YearlyConstraintsInput
     time_limit_seconds: float
     fixed_fields: tuple[FixedYearlyFieldContribution, ...] = ()
+    relative_gap_limit: float = RELATIVE_GAP_LIMIT
 
 
 @dataclass(frozen=True)
@@ -173,3 +174,6 @@ class YearlyOptimizationOutput:
     total_fen: float
     total_db2_by_year: tuple[float, ...]
     total_n_load_by_year: tuple[float, ...]
+    # Proven upper bound on total_db2 (same units). It can be set without a
+    # solution (UNKNOWN), and is None when there is nothing to bound.
+    db2_upper_bound: float | None = None
