@@ -9,14 +9,17 @@ import type {
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   catchCropSowingLabel,
+  chosenCropsFor,
   combinationCount,
   copiedNNormPercentages,
+  cropsForFarmingSystem,
   CUSTOM_FERTILISER,
   DEFAULT_SIMULATION_FORM_VALUES,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
   isNNormOptionLocked,
   isStepValid,
+  matchingRotationCount,
   nNormPercentagesFor,
   NO_FERTILISER,
   nNormPercentagesLabel,
@@ -30,6 +33,8 @@ import {
   stepIndexOf,
   toCreateSimulationInput,
   toggleNNormPercentage,
+  withCropChoice,
+  withFarmingSystem,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 
@@ -89,6 +94,7 @@ const CATEGORIES: RotationCategoryOption[] = [
 const filledValues: SimulationFormValues = {
   ...DEFAULT_SIMULATION_FORM_VALUES,
   name: 'Sædskifte 2026',
+  chosenCrops: ['Vårbyg', 'Vinterhvede'],
   rotationVariants: ['10', '20'],
   nNormPercentages: ['100'],
 }
@@ -124,6 +130,12 @@ describe('step schemas', () => {
     expect(
       isStepValid(stepIndexOf('basics'), { ...filledValues, name: '' }),
     ).toBe(false)
+  })
+
+  it('requires at least one crop', () => {
+    expect(
+      messageFor({ ...filledValues, chosenCrops: [] }, 'chosenCrops'),
+    ).toBe('Vælg mindst en afgrøde')
   })
 
   it('requires at least one rotation', () => {
@@ -259,6 +271,65 @@ describe('farming system mismatch warning', () => {
     expect(farmingSystemMismatchMessage(1, 'Økologisk')).toBe(
       'Du har valgt 1 konventionelle sædskifter til en økologisk simulering.',
     )
+  })
+})
+
+describe('crop choice', () => {
+  it('offers the crops of the simulation’s driftsform', () => {
+    expect(cropsForFarmingSystem(CATEGORIES, 'Konventionel')).toEqual([
+      'Brak',
+      'Kløvergræs',
+      'Majs',
+      'Vinterhvede',
+      'Vinterraps',
+      'Vårbyg',
+    ])
+    expect(cropsForFarmingSystem(CATEGORIES, 'Økologisk')).toEqual([
+      'Brak',
+      'Havre',
+      'Kløvergræs',
+    ])
+  })
+
+  it('counts the rotations with a chosen crop', () => {
+    expect(
+      matchingRotationCount(CATEGORIES, { chosenCrops: ['Kløvergræs'] }),
+    ).toBe(2)
+  })
+
+  it('drops the selected rotations that no longer match', () => {
+    expect(
+      withCropChoice(CATEGORIES, {
+        chosenCrops: ['Vårbyg', 'Kløvergræs'],
+        rotationVariants: ['10', '20', '30'],
+      }),
+    ).toEqual({
+      chosenCrops: ['Kløvergræs', 'Vårbyg'],
+      rotationVariants: ['10', '30'],
+    })
+  })
+
+  it('keeps only the crops of the new driftsform when it changes', () => {
+    expect(
+      withFarmingSystem(
+        CATEGORIES,
+        { chosenCrops: ['Havre', 'Kløvergræs'], rotationVariants: ['30'] },
+        'Konventionel',
+      ),
+    ).toEqual({ chosenCrops: ['Kløvergræs'], rotationVariants: ['30'] })
+    const nothingChosen = { chosenCrops: [], rotationVariants: ['10'] }
+    expect(withFarmingSystem(CATEGORIES, nothingChosen, 'Økologisk')).toBe(
+      nothingChosen,
+    )
+  })
+
+  it('takes an existing simulation’s crops from its rotations', () => {
+    expect(
+      chosenCropsFor(CATEGORIES, {
+        rotationVariants: ['10', '30'],
+        farmingSystem: 'Konventionel',
+      }),
+    ).toEqual(['Kløvergræs', 'Vårbyg'])
   })
 })
 

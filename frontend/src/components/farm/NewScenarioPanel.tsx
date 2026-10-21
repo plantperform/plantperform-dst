@@ -27,9 +27,15 @@ import {
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
 import { initializeYearlyNLoadCaps } from '@/components/farm/catchment-options'
-import type { FieldRecord, FertiliserSettings, Simulation } from '@/api/types'
+import type {
+  FieldRecord,
+  FertiliserSettings,
+  RotationCategoryOption,
+  Simulation,
+} from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { CropChoicePicker } from '@/components/farm/CropChoicePicker'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
 import { SimulationSummary } from '@/components/farm/SimulationSummary'
@@ -52,6 +58,7 @@ import {
   NO_FERTILISER,
   SIMULATION_FORM_STEPS,
   catchCropSowingDateOf,
+  chosenCropsFor,
   fertiliserFieldsForChoice,
   isNNormOptionLocked,
   isPresetModified,
@@ -63,6 +70,10 @@ import {
   stepIndexOf,
   toCreateSimulationInput,
   toggleNNormPercentage,
+  withCropChoice,
+  withFarmingSystem,
+  type CropChoice,
+  type RotationChoice,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 import {
@@ -83,6 +94,8 @@ type NewScenarioPanelProps = {
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 const LIMITS_STEP_INDEX = stepIndexOf('limits')
+
+const NO_CATEGORIES: RotationCategoryOption[] = []
 
 const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'orgMineralN',
@@ -142,7 +155,7 @@ export const NewScenarioPanel = ({
   const nNormQuery = useRotationNNormPercentages(farmId)
   const presetsQuery = useFertiliserPresets(farmId)
   const economicsProfiles = useEconomicsProfiles()
-  const categories = categoriesQuery.data ?? []
+  const categories = categoriesQuery.data ?? NO_CATEGORIES
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
   const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
@@ -152,7 +165,7 @@ export const NewScenarioPanel = ({
   // Steps after the first need the reference data, so hide them until it is in.
   const referenceBlocked = referenceLoading || referenceError
   const stepReachable = (index: number) =>
-    index <= stepIndexOf('rotations') || !referenceBlocked
+    index <= stepIndexOf('crops') || !referenceBlocked
   const retryReferenceData = () => {
     for (const query of referenceQueries) {
       if (query.error) void query.mutate()
@@ -216,6 +229,10 @@ export const NewScenarioPanel = ({
             nNormPercentages: source.nNormPercentages,
             economicsProfileId:
               economicsProfiles.profileForSimulation(source).id,
+            chosenCrops: chosenCropsFor(categories, {
+              rotationVariants: source.rotationVariants,
+              farmingSystem: source.fertiliser.farmingSystem,
+            }),
           }
         : DEFAULT_SIMULATION_FORM_VALUES,
     })
@@ -245,6 +262,15 @@ export const NewScenarioPanel = ({
       savedSimulation.current = prefilled.simulation ?? null
     }
   }, [prefilled, reset])
+  const missingCrops =
+    categories.length > 0 &&
+    values.chosenCrops.length === 0 &&
+    values.rotationVariants.length > 0
+  useEffect(() => {
+    if (missingCrops) {
+      setValue('chosenCrops', chosenCropsFor(categories, getValues()))
+    }
+  }, [missingCrops, categories, getValues, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -323,6 +349,12 @@ export const NewScenarioPanel = ({
     if (FERTILISER_NUMBER_FIELDS.some((name) => errors[name])) {
       void trigger(FERTILISER_NUMBER_FIELDS)
     }
+  }
+
+  const cropChoice: CropChoice = { chosenCrops: values.chosenCrops }
+  const applyRotationChoice = (next: RotationChoice) => {
+    updateValue('chosenCrops', next.chosenCrops)
+    updateValue('rotationVariants', next.rotationVariants)
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
@@ -609,6 +641,9 @@ export const NewScenarioPanel = ({
                     'nNormPercentages',
                     nNormPercentagesFor(getValues('nNormPercentages'), value),
                   )
+                  applyRotationChoice(
+                    withFarmingSystem(categories, getValues(), value),
+                  )
                 },
               })}
             >
@@ -662,10 +697,28 @@ export const NewScenarioPanel = ({
           <LoadingSkeleton message="Henter sædskifter og gødningstyper..." />
         ) : null}
 
+        {!referenceBlocked && stepId === 'crops' ? (
+          <CropChoicePicker
+            categories={categories}
+            farmingSystem={values.farmingSystem}
+            choice={cropChoice}
+            onChoiceChange={(choice) =>
+              applyRotationChoice(
+                withCropChoice(categories, {
+                  ...choice,
+                  rotationVariants: getValues('rotationVariants'),
+                }),
+              )
+            }
+            error={errors.chosenCrops?.message}
+          />
+        ) : null}
+
         {!referenceBlocked && stepId === 'rotations' ? (
           <RotationPicker
             categories={categories}
             farmingSystem={values.farmingSystem}
+            cropChoice={cropChoice}
             rotationVariants={values.rotationVariants}
             onRotationVariantsChange={(next) =>
               updateValue('rotationVariants', next)

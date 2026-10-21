@@ -148,6 +148,10 @@ export const SimulationSummary = ({
           <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
 
+        <Section step="crops" onEditStep={onEditStep}>
+          <p className="text-foreground">{values.chosenCrops.join(' · ')}</p>
+        </Section>
+
         <Section step="rotations" term="rotation" onEditStep={onEditStep}>
           <p>
             <span className="text-foreground">
