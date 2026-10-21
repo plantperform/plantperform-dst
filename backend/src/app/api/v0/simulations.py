@@ -7,6 +7,12 @@ from starlette.status import HTTP_204_NO_CONTENT
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data import economics_recalculation_store
+from app.data.quota_value_store import (
+    QuotaValueConflictError,
+    QuotaValueNotFoundError,
+    get_quota_value,
+    submit_quota_value,
+)
 from app.data.read_model_store import (
     get_simulation_view,
     require_simulation_view_ready,
@@ -45,6 +51,12 @@ from app.domain.optimization import (
     SimulationResult,
     YearlyOptimizeSimulationRequest,
 )
+from app.domain.quota_value import (
+    QuotaTradeSimulationRequest,
+    QuotaTradeSimulationResponse,
+    QuotaValueRequest,
+    QuotaValueResult,
+)
 from app.domain.read_model import SimulationView
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
@@ -64,11 +76,18 @@ from app.services.optimization.jobs import (
     QueueUnavailableError,
     SimulationNotFoundError,
     SubmissionConflictError,
+    is_production,
     submit,
 )
+from app.services.optimization.local import execute_quota_value_when_ready
 from app.services.rotations import afgroede_normer
 from app.services.scenario.candidate_evaluator import (
     evaluate_with_overrides,
+)
+from app.services.scenario.quota_trade import (
+    TradeSimulationConflictError,
+    TradeSimulationNotFoundError,
+    create_trade_simulation,
 )
 from app.services.scenario.rotations import (
     ManualRotationNotFoundError,
@@ -353,6 +372,63 @@ def post_farm_simulation_yearly_optimization(
     background_tasks: BackgroundTasks,
 ) -> SimulationResult:
     return _submit_optimization(farm_id, simulation_id, user, "yearly", request, background_tasks)
+
+
+@router.post("/{simulation_id}/quota-value", response_model=QuotaValueResult, status_code=202)
+def post_farm_simulation_quota_value(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+    request: QuotaValueRequest,
+    background_tasks: BackgroundTasks,
+) -> QuotaValueResult:
+    """Start the kvote value curve ("Kvotehandel") for the latest Års-optimering."""
+    if is_production():
+        raise HTTPException(
+            status_code=503, detail="Kvotehandel kan endnu kun beregnes i den lokale udgave."
+        )
+    try:
+        result, created = submit_quota_value(farm_id, simulation_id, user.email, request)
+    except QuotaValueNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet") from error
+    except QuotaValueConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if created:
+        background_tasks.add_task(execute_quota_value_when_ready, simulation_id, result.run_id)
+    return result
+
+
+@router.get("/{simulation_id}/quota-value", response_model=QuotaValueResult)
+def get_farm_simulation_quota_value(
+    farm_id: str, simulation_id: str, user: CurrentUser
+) -> QuotaValueResult:
+    result = get_quota_value(farm_id, simulation_id, user.email)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    return result
+
+
+@router.post(
+    "/{simulation_id}/quota-value/simulation",
+    response_model=QuotaTradeSimulationResponse,
+    status_code=201,
+)
+def post_farm_simulation_quota_trade_simulation(
+    farm_id: str,
+    simulation_id: str,
+    user: CurrentUser,
+    request: QuotaTradeSimulationRequest,
+) -> QuotaTradeSimulationResponse:
+    """Create one point of the kvote value curve as its own simulering.
+
+    The caller starts the returned Års-optimering on it, like after "Kopiér".
+    """
+    try:
+        return create_trade_simulation(farm_id, simulation_id, request, user.email)
+    except TradeSimulationNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Handlen blev ikke fundet") from error
+    except TradeSimulationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/{simulation_id}/result", response_model=SimulationResult)

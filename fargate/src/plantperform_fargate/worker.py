@@ -56,6 +56,18 @@ def _timed_phase(phase, simulation_id, run_id, *, field_count=None, candidate_co
         )
 
 
+def yearly_caps(
+    request: YearlyOptimizeSimulationRequest,
+) -> dict[int | None, tuple[float | None, ...]]:
+    """The request's per-calendar-year caps as one tuple of NUM_YEARS per opland."""
+    return {
+        cap.kystvand_id: tuple(
+            cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i) for i in range(NUM_YEARS)
+        )
+        for cap in request.max_n_load_by_kystvandopland
+    }
+
+
 class _LocalExecutionContext:
     def __init__(self):
         self.deadline = time.monotonic() + EXECUTION_TIMEOUT_SECONDS
@@ -120,16 +132,9 @@ def execute(
         excluded = frozenset(request.excluded_afgrodekoder)
         with _timed_phase("solve", simulation_id, run_id):
             if row["kind"] == "yearly":
-                caps = {
-                    cap.kystvand_id: tuple(
-                        cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
-                        for i in range(NUM_YEARS)
-                    )
-                    for cap in request.max_n_load_by_kystvandopland
-                }
                 solved = run_yearly_optimization(
                     *args,
-                    caps,
+                    yearly_caps(request),
                     request.db2_swing_pct,
                     excluded,
                     row["requested_by"],

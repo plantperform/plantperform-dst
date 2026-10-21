@@ -131,6 +131,20 @@ class OptimizationConstraints(CamelModel):
         return self
 
 
+class SimulationQuotaTrade(CamelModel):
+    """The kvote trade a simulering was created for, from a Kvotehandel curve.
+
+    The simulering's DB2 is the afgrøder's alone; the trade adds
+    -trade_kg * price_kr_per_kg kr per year on top.
+    """
+
+    kystvand_id: int
+    kystvand_navn: str | None = None
+    # kg N per year; positive bought, negative sold.
+    trade_kg: float
+    price_kr_per_kg: float = Field(ge=0)
+
+
 class Simulation(CamelModel):
     fields_initialized: bool = True  # Legacy simulations already have their field snapshot.
     optimization_settings: OptimizationSettings = Field(default_factory=OptimizationSettings)
@@ -165,6 +179,8 @@ class Simulation(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    # Set when the simulering was created from a point of a Kvotehandel curve.
+    quota_trade: SimulationQuotaTrade | None = None
 
 
 class CreateSimulationRequest(CamelModel):

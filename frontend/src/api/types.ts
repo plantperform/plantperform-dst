@@ -233,6 +233,18 @@ export type Simulation = {
   includePrecedingCropValue?: boolean
   economicsModuleId?: string
   economicsSnapshot?: EconomicsSnapshot
+  // Set when the simulation was created from a point of a Kvotehandel curve.
+  quotaTrade?: SimulationQuotaTrade | null
+}
+
+// The kvote trade a simulation was created for. Its DB2 is the crops' alone;
+// the trade adds -tradeKg * priceKrPerKg kr per year on top.
+export type SimulationQuotaTrade = {
+  catchmentId: number
+  catchmentName: string | null
+  // kg N per year; positive bought, negative sold.
+  tradeKg: number
+  priceKrPerKg: number
 }
 
 export type EconomicsOverrides = {
@@ -519,4 +531,138 @@ export type SimulationResult = SimulationResultSummary & {
   response: OptimizeSimulationResponse | null
   fieldsBefore: FieldRecord[]
   selectedCandidates: Record<string, RotationCandidateEvaluation>
+}
+
+export type QuotaPointStatus = 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN'
+
+export type QuotaFieldChange = {
+  fieldId: string
+  fieldName: string
+  fromRotationId: string
+  toRotationId: string
+  fromCrops: string[]
+  toCrops: string[]
+}
+
+// One solved trade amount: tradeKg is kg N per year added to (bought) or
+// removed from (sold) the catchment's cap in every capped year.
+export type QuotaValuePoint = {
+  tradeKg: number
+  status: QuotaPointStatus
+  // Best yearly DB2 with the traded cap, V(t); null when infeasible.
+  db2: number | null
+  // Proven upper bound on V(t): the best possible DB2 lies between db2 and
+  // this. Null when nothing bounds it, as in curves computed before bounds.
+  db2UpperBound: number | null
+  // Set when the solver found nothing better within its time limit than this
+  // smaller trade's solution, which also meets the larger cap: a lower bound.
+  solutionFromTradeKg: number | null
+  nLoadByYear: Record<string, number>
+  capByYear: Record<string, number | null>
+  feedUnitsByYear: Record<string, number>
+  changedFields: QuotaFieldChange[]
+  // Every mark's rotation in this point's plan, used to create it as a
+  // simulation; empty when infeasible or in curves computed before it existed.
+  rotations: QuotaFieldRotation[]
+}
+
+export type QuotaFieldRotation = {
+  fieldId: string
+  baseRef: RotationCandidateRef
+  overrides: RotationPositionOverride[]
+  startYear: number
+}
+
+// "Opret som simulering": one point of a curve as its own simulation.
+export type QuotaTradeSimulationInput = {
+  catchmentId: number
+  tradeKg: number
+  name: string
+  // Kept on the simulation with the trade.
+  priceKrPerKg: number
+  catchmentName: string | null
+}
+
+export type QuotaTradeSimulationResult = {
+  // Its saved settings are the curve's Års-optimering with the traded
+  // catchment's caps, so its run is started like any other simulation's.
+  simulation: Simulation
+  // Fields that could not be given the plan's rotation.
+  unmatchedFields: string[]
+}
+
+export type QuotaValueCurve = {
+  catchmentId: number
+  baseCapByYear: Record<string, number | null>
+  unconstrainedTradeKg: number
+  points: QuotaValuePoint[]
+}
+
+export type QuotaValueInteraction = {
+  priceKrPerKg: number
+  tradesKg: Record<string, number>
+  separateGain: number
+  combinedStatus: QuotaPointStatus
+  combinedGain: number | null
+}
+
+export type QuotaValueOutput = {
+  baseDb2: number
+  baseFeedUnitsByYear: Record<string, number>
+  minFeedUnits: number | null
+  maxFeedUnits: number | null
+  curves: QuotaValueCurve[]
+  interaction: QuotaValueInteraction | null
+}
+
+export type QuotaValueResult = {
+  status: 'not_started' | 'queued' | 'in_progress' | 'completed' | 'failed'
+  runId: string | null
+  baseRunId: string | null
+  inputRevision: number | null
+  outdated: boolean
+  priceKrPerKg: number | null
+  // The chosen range the curve was computed for; null for the default window.
+  tradeRange: QuotaTradeRange | null
+  queuedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  error: { code: string; message: string; detail?: unknown } | null
+  output: QuotaValueOutput | null
+  // Steps of a running curve, in the order they are solved; null before the
+  // first one starts.
+  progress: QuotaProgressStep[] | null
+}
+
+export type QuotaProgressStep = {
+  key:
+    | 'base'
+    | 'uncapped'
+    | 'buying'
+    | 'selling'
+    | 'selling_limit'
+    | 'refinement'
+    | 'interaction'
+  // The catchment the step belongs to; null for steps shared by all of them.
+  catchmentId: number | null
+  state: 'pending' | 'running' | 'done' | 'skipped'
+  done: number
+  // Solves the step needs; null while that is not yet known.
+  total: number | null
+}
+
+// Trades to solve instead of the default window: multiples of stepKg from no
+// trade, plus both ends.
+export type QuotaTradeRange = {
+  minKg: number
+  maxKg: number
+  stepKg: number
+}
+
+export type QuotaValueInput = {
+  expectedRevision: number
+  runId: string
+  priceKrPerKg: number
+  // Null solves the default window around the no-trade cap.
+  tradeRange: QuotaTradeRange | null
 }
