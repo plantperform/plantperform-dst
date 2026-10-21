@@ -15,8 +15,17 @@ pixi run load-registry-data
 ```
 
 Kommandoen kører migrationer og derefter de ti loaders i rækkefølgen nedenfor.
-Kæden bruger `&&` og stopper ved første fejl. Allerede gennemførte trin bliver
-ikke rullet tilbage; hele indlæsningen er ikke én fælles transaktion.
+Den stopper ved første fejl; hele indlæsningen er ikke én fælles transaktion.
+
+Hvis tunnelen afbrydes, skal den åbnes igen, og samme kommando køres igen.
+Gennemførte loaders springes over, og GeoPackage-loaderen fortsætter fra senest
+committede batch (standard: 10.000 kildeobjekter). Efter en fuldført indlæsning
+starter næste kørsel en ny, komplet genindlæsning.
+
+Brug `--restart` for at starte forfra, fx efter ændringer i kildefilerne, og
+`--batch-size 5000` for at ændre batchstørrelsen. Genoptagelse og begge flag
+understøttes også af `pixi run load-registry-from-merged-gpkg`. En afbrudt
+indlæsning skal genoptages med den kommando, der startede den.
 
 **Genindlæsningen erstatter hele `registry_field` og referencedataene.**
 Registeret bruger GeoPackage-filens egne `IMK_ID`, så gemte bedrifter og
