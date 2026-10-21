@@ -60,6 +60,7 @@ import {
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
+  stepIndexOf,
   toCreateSimulationInput,
   toggleNNormPercentage,
   type SimulationFormValues,
@@ -81,9 +82,7 @@ type NewScenarioPanelProps = {
 }
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
-const LIMITS_STEP_INDEX = SIMULATION_FORM_STEPS.findIndex(
-  (step) => step.id === 'limits',
-)
+const LIMITS_STEP_INDEX = stepIndexOf('limits')
 
 const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
   'orgMineralN',
@@ -152,7 +151,8 @@ export const NewScenarioPanel = ({
   const referenceRetrying = referenceQueries.some((query) => query.isValidating)
   // Steps after the first need the reference data, so hide them until it is in.
   const referenceBlocked = referenceLoading || referenceError
-  const stepReachable = (index: number) => index <= 1 || !referenceBlocked
+  const stepReachable = (index: number) =>
+    index <= stepIndexOf('rotations') || !referenceBlocked
   const retryReferenceData = () => {
     for (const query of referenceQueries) {
       if (query.error) void query.mutate()
@@ -458,6 +458,7 @@ export const NewScenarioPanel = ({
     <p className="text-muted-foreground">Gemmer indstillinger...</p>
   ) : null
 
+  const stepId = SIMULATION_FORM_STEPS[stepIndex].id
   const isLastStep = stepIndex === LAST_STEP_INDEX
 
   return (
@@ -564,7 +565,7 @@ export const NewScenarioPanel = ({
       ) : fieldsLoading ? (
         <LoadingSkeleton message="Henter simuleringens marker..." />
       ) : null}
-      {stepIndex === 0 ? (
+      {stepId === 'basics' ? (
         <div className="space-y-6">
           {!hasFields && !fieldsLoading && !fieldsError ? (
             <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-strong">
@@ -661,7 +662,7 @@ export const NewScenarioPanel = ({
           <LoadingSkeleton message="Henter sædskifter og gødningstyper..." />
         ) : null}
 
-        {!referenceBlocked && stepIndex === 1 ? (
+        {!referenceBlocked && stepId === 'rotations' ? (
           <RotationPicker
             categories={categories}
             farmingSystem={values.farmingSystem}
@@ -673,7 +674,7 @@ export const NewScenarioPanel = ({
           />
         ) : null}
 
-        {!referenceBlocked && stepIndex === 2 ? (
+        {!referenceBlocked && stepId === 'nitrogen' ? (
           <div className="space-y-6">
             <div className="space-y-3">
               <Label>Gødning</Label>
@@ -947,7 +948,7 @@ export const NewScenarioPanel = ({
           </div>
         ) : null}
 
-        {!referenceBlocked && stepIndex === 3 ? (
+        {!referenceBlocked && stepId === 'practice' ? (
           <div className="space-y-6">
             <div className="space-y-2">
               <Label>Efterafgrøde-etablering</Label>
@@ -1048,7 +1049,7 @@ export const NewScenarioPanel = ({
           </div>
         ) : null}
 
-        {!referenceBlocked && stepIndex === LIMITS_STEP_INDEX ? (
+        {!referenceBlocked && stepId === 'limits' ? (
           <div className="space-y-4">
             <FieldError
               id="simulation-limits-error"
@@ -1065,7 +1066,7 @@ export const NewScenarioPanel = ({
             />
           </div>
         ) : null}
-        {!referenceBlocked && isLastStep ? (
+        {!referenceBlocked && stepId === 'confirm' ? (
           <SimulationSummary
             farmId={farmId}
             fields={effectiveFields}

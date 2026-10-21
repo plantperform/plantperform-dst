@@ -27,6 +27,7 @@ import {
   simulationFormSchema,
   SIMULATION_FORM_STEPS,
   simulationToFormValues,
+  stepIndexOf,
   toCreateSimulationInput,
   toggleNNormPercentage,
   type SimulationFormValues,
@@ -92,9 +93,6 @@ const filledValues: SimulationFormValues = {
   nNormPercentages: ['100'],
 }
 
-const stepIndex = (id: (typeof SIMULATION_FORM_STEPS)[number]['id']): number =>
-  SIMULATION_FORM_STEPS.findIndex((step) => step.id === id)
-
 // The message for one field, or undefined when the field has no issue.
 const messageFor = (
   values: SimulationFormValues,
@@ -115,7 +113,7 @@ describe('step schemas', () => {
 
   it('accepts the default dyrkningspraksis values', () => {
     expect(
-      isStepValid(stepIndex('practice'), DEFAULT_SIMULATION_FORM_VALUES),
+      isStepValid(stepIndexOf('practice'), DEFAULT_SIMULATION_FORM_VALUES),
     ).toBe(true)
   })
 
@@ -123,9 +121,9 @@ describe('step schemas', () => {
     expect(messageFor({ ...filledValues, name: '   ' }, 'name')).toBe(
       'Giv simuleringen et navn',
     )
-    expect(isStepValid(stepIndex('basics'), { ...filledValues, name: '' })).toBe(
-      false,
-    )
+    expect(
+      isStepValid(stepIndexOf('basics'), { ...filledValues, name: '' }),
+    ).toBe(false)
   })
 
   it('requires at least one rotation', () => {
@@ -158,8 +156,8 @@ describe('step schemas', () => {
 
   it('keeps the steps independent of each other', () => {
     const withoutName = { ...filledValues, name: '' }
-    expect(isStepValid(stepIndex('basics'), withoutName)).toBe(false)
-    expect(isStepValid(stepIndex('rotations'), withoutName)).toBe(true)
+    expect(isStepValid(stepIndexOf('basics'), withoutName)).toBe(false)
+    expect(isStepValid(stepIndexOf('rotations'), withoutName)).toBe(true)
   })
 })
 
@@ -172,7 +170,7 @@ describe('fertiliser validation', () => {
       mineralSharePct: '-5',
       nContentKgPerTon: 'ikke et tal',
     }
-    expect(isStepValid(stepIndex('nitrogen'), values)).toBe(true)
+    expect(isStepValid(stepIndexOf('nitrogen'), values)).toBe(true)
   })
 
   it('validates the number fields once a fertiliser type is chosen', () => {
@@ -217,7 +215,7 @@ describe('fertiliser validation', () => {
       mineralSharePct: '100',
       nContentKgPerTon: '0.1',
     }
-    expect(isStepValid(stepIndex('nitrogen'), values)).toBe(true)
+    expect(isStepValid(stepIndexOf('nitrogen'), values)).toBe(true)
     expect(
       messageFor({ ...values, mineralSharePct: '0' }, 'mineralSharePct'),
     ).toBe('Mineralsk andel skal være større end 0 og højst 100 %')
@@ -608,7 +606,7 @@ describe('saving simulation settings', () => {
 
   it('validates the review step independently of the action', () => {
     expect(
-      isStepValid(stepIndex('confirm'), {
+      isStepValid(stepIndexOf('confirm'), {
         ...filledValues,
       }),
     ).toBe(true)
