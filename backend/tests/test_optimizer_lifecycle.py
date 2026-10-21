@@ -50,7 +50,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from app.data import optimization_store, read_model_store, repository
+from app.data import optimization_store, quota_value_store, read_model_store, repository
 from app.data import simulation_store as store
 from app.data.db import (
     app_user_table,
@@ -60,6 +60,7 @@ from app.data.db import (
     field_historical_detail_table,
     field_table,
     metadata,
+    simulation_quota_value_table,
     simulation_read_model_table,
 )
 from app.data.db import simulation_result_table as results
@@ -167,6 +168,7 @@ class DatabaseTests(unittest.TestCase):
         self.enterContext(patch.object(repository, "SessionLocal", self.sessions))
         self.enterContext(patch.object(jobs, "SessionLocal", self.sessions))
         self.enterContext(patch.object(optimization_store, "SessionLocal", self.sessions))
+        self.enterContext(patch.object(quota_value_store, "SessionLocal", self.sessions))
         # Synthetic candidates have eight library positions. Yearly solves must
         # not load the application's reference tables outside this test schema.
         self.enterContext(
@@ -212,6 +214,7 @@ class DatabaseTests(unittest.TestCase):
                     field_table,
                     simulation_read_model_table,
                     field_historical_detail_table,
+                    simulation_quota_value_table,
                 ],
             )
             simulation = Simulation(id="sim", farm_id="farm", name="test", created_at="2026-10-06")
