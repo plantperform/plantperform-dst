@@ -24,7 +24,12 @@ import { useId, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useMatch } from 'react-router-dom'
 
 import { useFarmMembers, useSimulationFields } from '@/api/hooks'
-import type { Farm, FieldRecord, Simulation } from '@/api/types'
+import type {
+  Farm,
+  FieldRecord,
+  Simulation,
+  SimulationQuotaTrade,
+} from '@/api/types'
 import { useAuth } from '@/auth/context'
 import {
   useOptimizationRun,
@@ -83,6 +88,7 @@ import {
   formatCompactDkk,
   formatFieldCount,
   formatQuotaAmount,
+  formatSigned,
   formatWholeNumber,
   isFieldLocked,
   perHaFigure,
@@ -93,6 +99,7 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { optimizationRunName } from '@/lib/optimization-run'
+import { describeQuotaTrade, quotaTradePayment } from '@/lib/quota-trade'
 import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
@@ -105,6 +112,7 @@ type ViewKeyFigures = {
 const describeKeyFigures = (
   quota: FarmQuota,
   isSimulationView: boolean,
+  quotaTrade?: SimulationQuotaTrade | null,
 ): ViewKeyFigures => {
   const { totals, level, quotaKgN } = quota
 
@@ -131,11 +139,15 @@ const describeKeyFigures = (
   const fullEmission = formatQuotaAmount(totals.nLoad, quotaKgN ?? 0)
   const quotaNote =
     quotaKgN === null ? `, ${describeSeparateQuotas(quota)}` : ''
+  // The DB2 of a simulation made from a Kvotehandel point is the crops' alone.
+  const tradeNote = quotaTrade
+    ? `. Kvotehandel: ${describeQuotaTrade(quotaTrade)}, ${formatSigned(quotaTradePayment(quotaTrade), formatWholeNumber)} kr; DB2 inkl. kvotehandel ${formatWholeNumber(totals.db2 + quotaTradePayment(quotaTrade))} kr`
+    : ''
 
   return {
     level,
     label: `${emission} · ${earnings}`,
-    title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr`,
+    title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr${tradeNote}`,
   }
 }
 
@@ -636,7 +648,9 @@ const SimulationMenuItem = ({
   const quota = simulationFields
     ? resolveFarmQuota(simulationFields, true)
     : null
-  const figures = quota ? describeKeyFigures(quota, true) : undefined
+  const figures = quota
+    ? describeKeyFigures(quota, true, simulation.quotaTrade)
+    : undefined
   const changedCount = useMemo(
     () =>
       simulationFields ? changedFieldIds(simulationFields, liveFields).size : 0,

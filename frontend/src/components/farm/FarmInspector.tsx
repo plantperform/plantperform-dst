@@ -1,3 +1,4 @@
+import { ArrowLeftRight, List } from 'lucide-react'
 import { useId, useState } from 'react'
 import { mutate } from 'swr'
 
@@ -44,6 +45,11 @@ import type {
   FarmViewSelection,
 } from '@/components/farm/types'
 import { OptimizationBanner } from '@/components/farm/OptimizationRunStatus'
+import { QuotaTradePanel } from '@/components/farm/QuotaTradePanel'
+import {
+  SegmentedControl,
+  type SegmentedControlOption,
+} from '@/components/ui/segmented-control'
 import { useOverviewCollapsed } from '@/components/farm/overview-layout'
 import { OverviewCollapseToggle } from '@/components/farm/OverviewCollapseToggle'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
@@ -58,6 +64,13 @@ import {
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
+
+type InspectorContent = 'fields' | 'quota'
+
+const CONTENT_OPTIONS: SegmentedControlOption<InspectorContent>[] = [
+  { value: 'fields', label: 'Marker', icon: List },
+  { value: 'quota', label: 'Kvotehandel', icon: ArrowLeftRight },
+]
 
 type FarmInspectorProps = {
   farm: Farm
@@ -87,6 +100,8 @@ type FarmInspectorProps = {
   optimizeDialogOpen: boolean
   onOptimizeDialogOpenChange: (open: boolean) => void
   onEditBasis: (simulation: Simulation) => void
+  // Selects another simulation, e.g. one created from a Kvotehandel trade.
+  onOpenSimulation: (simulationId: string) => void
   onError: (message: string | null) => void
 }
 
@@ -142,6 +157,7 @@ export const FarmInspector = ({
   optimizeDialogOpen,
   onOptimizeDialogOpenChange,
   onEditBasis,
+  onOpenSimulation,
   onError,
 }: FarmInspectorProps) => {
   const optimizationRun = useOptimizationRun(selectedSimulation?.id)
@@ -203,6 +219,13 @@ export const FarmInspector = ({
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
+  // Kvotehandel belongs to a scenario's values; Liste/Delt/Kort stays a
+  // separate layout choice for the fields.
+  const [content, setContent] = useState<InspectorContent>('fields')
+  const canShowQuotaTrade = canSwitchMode && !isRules
+  const effectiveContent: InspectorContent = canShowQuotaTrade
+    ? content
+    : 'fields'
   const [highlightedMode, setHighlightedMode] = useState(effectiveMode)
   if (highlightedMode !== effectiveMode) {
     setHighlightedMode(effectiveMode)
@@ -458,7 +481,28 @@ export const FarmInspector = ({
             />
             </>
           ) : null}
-          {fieldsLoading ? (
+          {canShowQuotaTrade ? (
+            <SegmentedControl
+              aria-label="Vis marker eller kvotehandel"
+              value={effectiveContent}
+              options={CONTENT_OPTIONS}
+              onValueChange={setContent}
+              className="h-8 w-fit shrink-0"
+            />
+          ) : null}
+          {effectiveContent === 'quota' && selectedSimulation ? (
+            <QuotaTradePanel
+              farmId={farm.id}
+              simulation={selectedSimulation}
+              catchmentLabel={catchmentLabel}
+              onOpenSimulation={(simulationId) => {
+                // Show the new simulation's marker, not its Kvotehandel.
+                setContent('fields')
+                onOpenSimulation(simulationId)
+              }}
+              onError={onError}
+            />
+          ) : fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
           ) : summaryMissing ? (
             <SimulationSummaryMissing

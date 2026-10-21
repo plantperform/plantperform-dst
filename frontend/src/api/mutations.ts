@@ -16,6 +16,10 @@ import type {
   FieldRecord,
   FieldRotationCandidates,
   OptimizeSimulationInput,
+  QuotaTradeSimulationInput,
+  QuotaTradeSimulationResult,
+  QuotaValueInput,
+  QuotaValueResult,
   SimulationResult,
   RegistryField,
   OptimizationConstraints,
@@ -185,6 +189,26 @@ export const runYearlySimulationOptimization = (
   postJson<SimulationResult, YearlyOptimizeSimulationInput>(
     `/farms/${farmId}/simulations/${simulationId}/optimize-yearly`,
     yearlyOptimizeSimulationInput(input),
+  )
+
+export const createQuotaTradeSimulation = (
+  farmId: string,
+  simulationId: string,
+  input: QuotaTradeSimulationInput,
+) =>
+  postJson<QuotaTradeSimulationResult, QuotaTradeSimulationInput>(
+    `/farms/${farmId}/simulations/${simulationId}/quota-value/simulation`,
+    input,
+  )
+
+export const startQuotaValue = (
+  farmId: string,
+  simulationId: string,
+  input: QuotaValueInput,
+) =>
+  postJson<QuotaValueResult, QuotaValueInput>(
+    `/farms/${farmId}/simulations/${simulationId}/quota-value`,
+    input,
   )
 
 export const evaluateRotationCandidates = (

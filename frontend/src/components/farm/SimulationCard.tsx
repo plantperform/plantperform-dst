@@ -22,6 +22,7 @@ import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   formatCompactDkk,
+  formatSigned,
   formatWholeNumber,
   isFieldLocked,
   perHaFigure,
@@ -31,6 +32,7 @@ import {
   type FarmQuota,
   type FieldTotals,
 } from '@/lib/field-domain'
+import { describeQuotaTrade, quotaTradePayment } from '@/lib/quota-trade'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeDb2Delta,
@@ -178,12 +180,44 @@ const SimulationFigures = ({
           }
         />
       </div>
+      {simulation.quotaTrade ? (
+        <QuotaTradeFigures trade={simulation.quotaTrade} db2={totals.db2} />
+      ) : null}
       <CatchmentStatusList
         farmId={farmId}
         simulationId={simulation.id}
         fields={fields}
       />
     </>
+  )
+}
+
+// A simulation created from a Kvotehandel point: its DB2 above is the crops'
+// alone, so the kvote's price is shown separately and added to it.
+const QuotaTradeFigures = ({
+  trade,
+  db2,
+}: {
+  trade: NonNullable<Simulation['quotaTrade']>
+  db2: number
+}) => {
+  const payment = quotaTradePayment(trade)
+  return (
+    <div className="rounded-md bg-muted/50 p-2.5 text-[13px]">
+      <p className="font-medium">Kvotehandel: {describeQuotaTrade(trade)}</p>
+      <dl className="mt-1 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
+        <dt className="text-muted-foreground">
+          {trade.tradeKg >= 0 ? 'Køb af kvote' : 'Salg af kvote'}
+        </dt>
+        <dd className="text-right tabular-nums">
+          {formatSigned(payment, formatWholeNumber)} kr/år
+        </dd>
+        <dt className="font-medium">Dækningsbidrag inkl. kvotehandel</dt>
+        <dd className="text-right font-medium tabular-nums">
+          {formatWholeNumber(db2 + payment)} kr/år
+        </dd>
+      </dl>
+    </div>
   )
 }
 
