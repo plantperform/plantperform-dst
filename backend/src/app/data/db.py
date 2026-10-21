@@ -400,6 +400,31 @@ field_historical_detail_table = Table(
 )
 
 
+simulation_quota_value_table = Table(
+    "simulation_quota_value",
+    metadata,
+    Column(
+        "simulation_id", Text, ForeignKey("simulation.id", ondelete="CASCADE"), primary_key=True
+    ),
+    Column("status", Text, nullable=False, server_default="not_started"),
+    Column("run_id", Text),
+    Column("base_run_id", Text),
+    Column("requested_by", Text),
+    Column("parameters", JSONB, nullable=False, server_default="{}"),
+    Column("input_revision", Integer),
+    Column("queued_at", DateTime(timezone=True)),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("error", JSONB),
+    Column("output", JSONB),
+    Column("progress", JSONB),
+    CheckConstraint(
+        "status IN ('not_started','queued','in_progress','completed','failed')",
+        name="ck_simulation_quota_value_status",
+    ),
+)
+
+
 app_user_table = Table(
     "app_user",
     metadata,
