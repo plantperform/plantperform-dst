@@ -1,5 +1,7 @@
 """Prepare solver inputs and assemble results without changing simulation setup."""
 
+import math
+from collections import defaultdict
 from dataclasses import dataclass
 
 from app.data import repository
@@ -182,6 +184,81 @@ def _max_n_load_by_kystvandopland(
     return resolved
 
 
+NLoadKey = tuple[int | None, int | None]
+
+
+def _lowest_n_load_by_kystvandopland(
+    field_inputs: list[FieldInput],
+    fixed_fields: list[FixedFieldContribution],
+) -> dict[NLoadKey, float]:
+    lowest: dict[NLoadKey, float] = defaultdict(float)
+    for field in field_inputs:
+        if field.kvotegivende:
+            lowest[(field.kystvand_id, None)] += min(option.n_load for option in field.options)
+    for fixed in fixed_fields:
+        if fixed.kvotegivende:
+            lowest[(fixed.kystvand_id, None)] += fixed.n_load
+    return lowest
+
+
+def _lowest_n_load_by_kystvandopland_and_year(
+    field_inputs: list[YearlyFieldInput],
+    fixed_fields: list[FixedYearlyFieldContribution],
+) -> dict[NLoadKey, float]:
+    lowest: dict[NLoadKey, float] = defaultdict(float)
+    for field in field_inputs:
+        if field.kvotegivende:
+            for year in range(NUM_YEARS):
+                lowest[(field.kystvand_id, year)] += min(
+                    option.n_load_by_year[year] for option in field.options
+                )
+    for fixed in fixed_fields:
+        if fixed.kvotegivende:
+            for year, n_load in enumerate(fixed.n_load_by_year):
+                lowest[(fixed.kystvand_id, year)] += n_load
+    return lowest
+
+
+def _kg(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
+
+
+def _quota_shortfall_error(
+    farm_id: str,
+    email: str,
+    lowest: dict[NLoadKey, float],
+    caps: dict[NLoadKey, float | None],
+) -> OptimizationInfeasibleError | None:
+    over = [
+        (key, value, cap)
+        for key, value in lowest.items()
+        if (cap := caps.get(key)) is not None and value > cap
+    ]
+    if not over:
+        return None
+    names = {
+        row.kystvand_id: row.kystvand_navn
+        for row in repository.get_farm_udledning_per_kystvandopland(farm_id, email) or []
+    }
+    parts = []
+    for (kystvand_id, year), value, cap in over:
+        name = names.get(kystvand_id) or (
+            f"kystvandopland {kystvand_id}"
+            if kystvand_id is not None
+            else "marker uden kystvandopland"
+        )
+        when = "" if year is None else f" i {candidate_evaluator.START_CALENDAR_YEAR + year}"
+        parts.append(
+            f"{name}{when} (mindst {_kg(math.ceil(value))} kg N, "
+            f"grænse {_kg(math.floor(cap))} kg N)"
+        )
+    listed = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} og {parts[-1]}"
+    return OptimizationInfeasibleError(
+        f"Med de valgte sædskifter kan udledningen ikke komme under grænsen i {listed}. "
+        "Vælg flere sædskifter, eller hæv maks. udledning under Grænser."
+    )
+
+
 def run_optimization(
     farm_id: str,
     simulation_id: str,
@@ -241,15 +318,16 @@ def run_optimization(
             )
         )
 
+    max_n_load = _max_n_load_by_kystvandopland(
+        fields,
+        simulation.constraints.max_n_load_by_kystvandopland,
+    )
     output = solve(
         input=OptimizationInput(
             fields=tuple(field_inputs),
             fixed_fields=tuple(fixed_fields),
             constraints=ConstraintsInput(
-                max_n_load_by_kystvandopland=_max_n_load_by_kystvandopland(
-                    fields,
-                    simulation.constraints.max_n_load_by_kystvandopland,
-                ),
+                max_n_load_by_kystvandopland=max_n_load,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
@@ -259,7 +337,12 @@ def run_optimization(
     )
 
     if output.status == "INFEASIBLE":
-        raise OptimizationInfeasibleError(
+        raise _quota_shortfall_error(
+            farm_id,
+            email,
+            _lowest_n_load_by_kystvandopland(field_inputs, fixed_fields),
+            {(kystvand_id, None): cap for kystvand_id, cap in max_n_load.items()},
+        ) or OptimizationInfeasibleError(
             "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
             "maks. udledning eller foderenheder og prøv igen."
         )
@@ -607,15 +690,16 @@ def run_yearly_optimization(
             )
         )
 
+    max_n_load_by_year = _max_n_load_by_kystvandopland_and_year(
+        fields,
+        max_n_load_by_kystvandopland,
+    )
     output = solve_yearly(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
             fixed_fields=tuple(fixed_fields),
             constraints=YearlyConstraintsInput(
-                max_n_load_by_kystvandopland_and_year=_max_n_load_by_kystvandopland_and_year(
-                    fields,
-                    max_n_load_by_kystvandopland,
-                ),
+                max_n_load_by_kystvandopland_and_year=max_n_load_by_year,
                 db2_swing_pct=db2_swing_pct,
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
@@ -626,7 +710,16 @@ def run_yearly_optimization(
     )
 
     if output.status == "INFEASIBLE":
-        raise OptimizationInfeasibleError(
+        raise _quota_shortfall_error(
+            farm_id,
+            email,
+            _lowest_n_load_by_kystvandopland_and_year(field_inputs, fixed_fields),
+            {
+                (kystvand_id, year): cap
+                for kystvand_id, caps in max_n_load_by_year.items()
+                for year, cap in enumerate(caps)
+            },
+        ) or OptimizationInfeasibleError(
             "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
             "maks. udledning eller foderenheder og prøv igen."
         )
