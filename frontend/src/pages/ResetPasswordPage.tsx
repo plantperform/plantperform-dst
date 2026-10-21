@@ -66,9 +66,8 @@ const ResetPasswordForm = ({ token }: { token: string }) => {
       } else {
         setError('Kunne ikke gemme adgangskoden lige nu. Prøv igen om lidt.')
       }
-    } finally {
-      setIsSubmitting(false)
     }
+    setIsSubmitting(false)
   }
 
   if (completed) {

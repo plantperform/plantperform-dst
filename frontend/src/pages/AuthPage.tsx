@@ -60,6 +60,11 @@ const RegisterForm = () => {
     }
 
     const email = fields.normalizedEmail
+    const pendingFarm = {
+      name: farmName.trim(),
+      ownerName: ownerName.trim(),
+      cvr: cvr.trim() || null,
+    }
     setIsSubmitting(true)
     try {
       await postJson<{ message: string }, { email: string; password: string }>(
@@ -68,13 +73,7 @@ const RegisterForm = () => {
       )
       setStoredRole(email, role)
       storeUserName(email, name)
-      if (role === 'farmer') {
-        setPendingFarm(email, {
-          name: farmName.trim(),
-          ownerName: ownerName.trim(),
-          cvr: cvr.trim() || null,
-        })
-      }
+      if (role === 'farmer') setPendingFarm(email, pendingFarm)
       setLastRegisteredEmail(email)
       navigate('/verify-email', { state: { sentTo: email } })
     } catch (requestError) {
@@ -87,9 +86,8 @@ const RegisterForm = () => {
       } else {
         setError('Kunne ikke oprette kontoen.')
       }
-    } finally {
-      setIsSubmitting(false)
     }
+    setIsSubmitting(false)
   }
 
   return (

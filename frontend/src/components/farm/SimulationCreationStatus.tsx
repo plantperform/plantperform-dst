@@ -25,10 +25,11 @@ export const SimulationCreationStatus = ({
   const retry = async () => {
     setRetrying(true)
     setError(null)
+    const request = recalculationFailed
+      ? retrySimulationEconomics
+      : retrySimulationCreation
     try {
-      const accepted = recalculationFailed
-        ? await retrySimulationEconomics(farmId, simulation.id)
-        : await retrySimulationCreation(farmId, simulation.id)
+      const accepted = await request(farmId, simulation.id)
       await mutate(
         simulationsKey(farmId),
         (current: Simulation[] = []) =>
@@ -41,10 +42,9 @@ export const SimulationCreationStatus = ({
           ? 'Kunne ikke genberegne økonomien. Prøv igen.'
           : 'Kunne ikke starte oprettelsen igen. Prøv igen.',
       )
-    } finally {
-      void mutate(simulationsKey(farmId))
-      setRetrying(false)
     }
+    void mutate(simulationsKey(farmId))
+    setRetrying(false)
   }
   return (
     <div className="space-y-3 rounded-lg border border-dashed p-4">

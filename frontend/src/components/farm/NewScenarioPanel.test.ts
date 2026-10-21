@@ -103,6 +103,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     currentIndex,
     onStepSelect,
     secondaryAction,
+    footerMessage,
   }: {
     title: string
     description: string
@@ -112,6 +113,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     currentIndex: number
     onStepSelect: (index: number) => void
     secondaryAction: ReactNode
+    footerMessage: ReactNode
   }) =>
     createElement(
       'div',
@@ -138,6 +140,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
       children,
       secondaryAction,
       actions,
+      footerMessage,
     ),
 }))
 
@@ -521,6 +524,18 @@ describe('simulation wizard steps', () => {
     ).not.toHaveProperty('timeLimitSeconds')
     expect(queries.startRun.mock.calls[0][0].input).not.toHaveProperty(
       'timeLimitSeconds',
+    )
+  })
+
+  it('shows that the simulation already has a running optimization', async () => {
+    queries.update.mockResolvedValue(source)
+    queries.startRun.mockReturnValueOnce(null)
+    await mount(source)
+    await click('Bekræft')
+    await click('Kør optimering')
+    expect(queries.startRun).toHaveBeenCalledOnce()
+    expect(container.textContent).toContain(
+      'Simuleringen har allerede en aktiv optimering.',
     )
   })
 

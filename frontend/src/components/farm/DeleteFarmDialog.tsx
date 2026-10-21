@@ -62,9 +62,8 @@ export const DeleteFarmDialog = ({
       navigate('/', { state: HOME_OVERVIEW_STATE })
     } catch {
       setFailed(true)
-    } finally {
-      setIsDeleting(false)
     }
+    setIsDeleting(false)
   }
 
   return (

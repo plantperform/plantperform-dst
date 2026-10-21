@@ -873,6 +873,16 @@ export const FarmFieldsMap = ({
     setAddMode((current) => !current)
   }
 
+  const fitRegistryBounds = (bounds: RegistryBounds) => {
+    mapRef.current?.fitBounds(
+      [
+        [bounds.west, bounds.south],
+        [bounds.east, bounds.north],
+      ],
+      { padding: withTopInset(56), maxZoom: 14, duration: 700 },
+    )
+  }
+
   const highlightFieldsForCvr = async () => {
     if (readOnly) return
 
@@ -894,21 +904,14 @@ export const FarmFieldsMap = ({
         const bounds = await fetcher<RegistryBounds>(
           `/registry/fields/bounds?cvr=${encodeURIComponent(cvr)}`,
         )
-        mapRef.current?.fitBounds(
-          [
-            [bounds.west, bounds.south],
-            [bounds.east, bounds.north],
-          ],
-          { padding: withTopInset(56), maxZoom: 14, duration: 700 },
-        )
+        fitRegistryBounds(bounds)
       }
 
       onError(null)
     } catch {
       onError('Kunne ikke indlæse marker for det CVR-nummer.')
-    } finally {
-      setIsLoadingCvrFields(false)
     }
+    setIsLoadingCvrFields(false)
   }
 
   const selectHighlightedCvrFields = () => {
@@ -946,19 +949,18 @@ export const FarmFieldsMap = ({
         await refreshFarmFields(farm.id)
         onError(null)
         setAddMode(false)
-        return
+      } else {
+        const failedFieldIds = await detachFields(
+          fieldsMarkedForDetach.map((field) => field.id),
+        )
+        setDetachFieldIds(failedFieldIds)
+        if (failedFieldIds.length === 0) setAddMode(false)
       }
-      const failedFieldIds = await detachFields(
-        fieldsMarkedForDetach.map((field) => field.id),
-      )
-      setDetachFieldIds(failedFieldIds)
-      if (failedFieldIds.length === 0) setAddMode(false)
     } catch {
       await refreshFarmFields(farm.id)
       onError('Kunne ikke tilføje de valgte marker til bedriften.')
-    } finally {
-      setIsSavingFieldChanges(false)
     }
+    setIsSavingFieldChanges(false)
   }
 
   const toggleFieldDetach = (fieldId: string) => {

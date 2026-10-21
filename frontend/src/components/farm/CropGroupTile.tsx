@@ -75,11 +75,12 @@ type CropGroupTileProps = {
 
 export const CropGroupTile = ({
   group,
-  color = group.color,
+  color: colorProp,
   size = 'sm',
   title,
   className,
 }: CropGroupTileProps) => {
+  const color = colorProp ?? group.color
   const Icon = ICONS[group.id]
   const tile = (
     <span

@@ -328,6 +328,59 @@ export const NewScenarioPanel = ({
   const catchCropSowingDate = catchCropSowingDateOf(values)
   const presetModified = isPresetModified(values, fertiliserPresets)
 
+  const saveSimulation = async () => {
+    const existing = savedSimulation.current ?? source
+    const economicsModuleId = getValues().economicsProfileId
+    const input = {
+      ...toCreateSimulationInput(getValues()),
+      constraints,
+      optimizationSettings: optimizationSettingsInput(optimizationSettings),
+      ...(existing &&
+      economicsProfiles.profileForSimulation(existing).id === economicsModuleId
+        ? {}
+        : { economicsModuleId }),
+    }
+    return existing
+      ? updateSimulation(
+          farmId,
+          existing.id,
+          running
+            ? {
+                expectedRevision: existing.revision,
+                name: getValues('name').trim(),
+              }
+            : { ...input, expectedRevision: existing.revision },
+        )
+      : createSimulation(farmId, {
+          ...input,
+          requestId: (creationRequest.current = creationRequestIdentity(
+            input,
+            creationRequest.current,
+          )).requestId,
+        })
+  }
+
+  const startOptimization = async (simulation: Simulation) => {
+    const current = await economicsProfiles.withCurrentEconomics(simulation)
+    if (current === null) return 'stopped'
+    const settings = current.optimizationSettings ?? optimizationSettings
+    const common = {
+      farmId,
+      simulationId: current.id,
+      fieldsBefore: effectiveFields,
+      input: {
+        ...optimizationSettingsInput(settings),
+        expectedRevision: current.revision,
+      },
+    }
+    const started = startRun(
+      settings.kind === 'yearly'
+        ? { ...common, kind: 'yearly' }
+        : { ...common, kind: 'optimize' },
+    )
+    return started === null ? 'alreadyRunning' : 'started'
+  }
+
   const createScenario = async (optimize = false) => {
     if (optimize && (!hasFields || fieldsLoading || fieldsError)) return
     if (running) {
@@ -343,36 +396,7 @@ export const NewScenarioPanel = ({
     setIsCreating(true)
     setCreateError(null)
     try {
-      const existing = savedSimulation.current ?? source
-      const economicsModuleId = getValues().economicsProfileId
-      const input = {
-        ...toCreateSimulationInput(getValues()),
-        constraints,
-        optimizationSettings: optimizationSettingsInput(optimizationSettings),
-        ...(existing &&
-        economicsProfiles.profileForSimulation(existing).id ===
-          economicsModuleId
-          ? {}
-          : { economicsModuleId }),
-      }
-      const simulation = existing
-        ? await updateSimulation(
-            farmId,
-            existing.id,
-            running
-              ? {
-                  expectedRevision: existing.revision,
-                  name: getValues('name').trim(),
-                }
-              : { ...input, expectedRevision: existing.revision },
-          )
-        : await createSimulation(farmId, {
-            ...input,
-            requestId: (creationRequest.current = creationRequestIdentity(
-              input,
-              creationRequest.current,
-            )).requestId,
-          })
+      const simulation = await saveSimulation()
       savedSimulation.current = simulation
       await mutate(
         simulationsKey(farmId),
@@ -384,40 +408,24 @@ export const NewScenarioPanel = ({
       )
       void mutate(simulationViewKey(farmId, simulation.id))
       onSimulationCreated(simulation)
-      if (optimize) {
-        const current = await economicsProfiles.withCurrentEconomics(simulation)
-        if (current === null) return
-        const settings = current.optimizationSettings ?? optimizationSettings
-        const common = {
-          farmId,
-          simulationId: current.id,
-          fieldsBefore: effectiveFields,
-          input: {
-            ...optimizationSettingsInput(settings),
-            expectedRevision: current.revision,
-          },
-        }
-        const started = startRun(
-          settings.kind === 'yearly'
-            ? { ...common, kind: 'yearly' }
-            : { ...common, kind: 'optimize' },
-        )
-        if (started === null)
-          throw new Error('Simuleringen har allerede en aktiv optimering.')
+      let outcome: Awaited<ReturnType<typeof startOptimization>> = 'started'
+      if (optimize) outcome = await startOptimization(simulation)
+      if (outcome === 'alreadyRunning') {
+        setCreateError('Simuleringen har allerede en aktiv optimering.')
+      } else if (outcome === 'started') {
+        onError(null)
+        onOpenChange(false)
+        creationRequest.current = null
       }
-      onError(null)
-      onOpenChange(false)
-      creationRequest.current = null
     } catch (error) {
       setCreateError(
         error instanceof ApiError || error instanceof Error
           ? error.message
           : 'Kunne ikke gemme simuleringen. Prøv igen.',
       )
-    } finally {
-      setIsCreating(false)
-      void mutate(simulationsKey(farmId))
     }
+    setIsCreating(false)
+    void mutate(simulationsKey(farmId))
   }
 
   const steps: StepDialogStep[] = SIMULATION_FORM_STEPS.map((step, index) => ({

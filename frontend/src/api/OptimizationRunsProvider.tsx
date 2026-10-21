@@ -164,7 +164,7 @@ export const OptimizationRunsProvider = ({
     ) => {
       const ticket = requests.current.begin(simulationId, force)
       if (ticket === undefined) return
-      try {
+      const refresh = async () => {
         let result = await fetcher<SimulationResult>(
           `${resultKey(farmId, simulationId)}?include_output=false`,
         )
@@ -183,11 +183,13 @@ export const OptimizationRunsProvider = ({
         }
         if (requests.current.current(simulationId, ticket))
           await acceptResult(farmId, simulationId, result, expectedId)
+      }
+      try {
+        await refresh()
       } catch {
         // Poll failures leave persisted execution state intact and are retried.
-      } finally {
-        requests.current.finish(simulationId, ticket)
       }
+      requests.current.finish(simulationId, ticket)
     },
     [acceptResult],
   )
@@ -208,7 +210,7 @@ export const OptimizationRunsProvider = ({
       }
       putRun(running)
       void (async () => {
-        try {
+        const submit = async () => {
           // Use the revision the user has seen. The backend rejects concurrent edits.
           const simulation =
             simulationsRef.current.get(request.simulationId) ??
@@ -234,6 +236,26 @@ export const OptimizationRunsProvider = ({
                 )
           if (requests.current.version(request.simulationId) === version)
             await acceptResult(request.farmId, request.simulationId, result, id)
+        }
+        const recover = async () => {
+          const result = await fetcher<SimulationResult>(
+            `${resultKey(request.farmId, request.simulationId)}?include_output=false`,
+          )
+          if (requests.current.version(request.simulationId) !== version)
+            return true
+          if (
+            result.runId &&
+            (result.status === 'queued' ||
+              result.status === 'in_progress' ||
+              result.runId === id)
+          ) {
+            await acceptResult(request.farmId, request.simulationId, result)
+            return true
+          }
+          return false
+        }
+        try {
+          await submit()
         } catch (error) {
           if (
             runsRef.current.get(request.simulationId)?.id !== id ||
@@ -242,20 +264,7 @@ export const OptimizationRunsProvider = ({
             return
           // Resolve an ambiguous POST, or restore the active run of another member.
           try {
-            const result = await fetcher<SimulationResult>(
-              `${resultKey(request.farmId, request.simulationId)}?include_output=false`,
-            )
-            if (requests.current.version(request.simulationId) !== version)
-              return
-            if (
-              result.runId &&
-              (result.status === 'queued' ||
-                result.status === 'in_progress' ||
-                result.runId === id)
-            ) {
-              await acceptResult(request.farmId, request.simulationId, result)
-              return
-            }
+            if (await recover()) return
           } catch {
             /* Keep the submission error visible. */
           }
