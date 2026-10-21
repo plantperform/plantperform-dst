@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -26,29 +26,26 @@ export const useDetachFields = (
 ) => {
   const [detachingFieldIds, setDetachingFieldIds] = useState<string[]>([])
 
-  const detachFields = useCallback(
-    async (fieldIds: string[]): Promise<string[]> => {
-      if (fieldIds.length === 0) return []
-      setDetachingFieldIds((current) => [...current, ...fieldIds])
-      const results = await Promise.allSettled(
-        fieldIds.map((fieldId) => detachField(farmId, fieldId)),
-      )
-      const failedFieldIds = fieldIds.filter(
-        (_, index) => results[index].status === 'rejected',
-      )
-      await refreshFarmFields(farmId)
-      setDetachingFieldIds((current) =>
-        current.filter((fieldId) => !fieldIds.includes(fieldId)),
-      )
-      onError(
-        failedFieldIds.length === 0
-          ? null
-          : describeDetachFailure(failedFieldIds.length, fieldIds.length),
-      )
-      return failedFieldIds
-    },
-    [farmId, onError],
-  )
+  const detachFields = async (fieldIds: string[]): Promise<string[]> => {
+    if (fieldIds.length === 0) return []
+    setDetachingFieldIds((current) => [...current, ...fieldIds])
+    const results = await Promise.allSettled(
+      fieldIds.map((fieldId) => detachField(farmId, fieldId)),
+    )
+    const failedFieldIds = fieldIds.filter(
+      (_, index) => results[index].status === 'rejected',
+    )
+    await refreshFarmFields(farmId)
+    setDetachingFieldIds((current) =>
+      current.filter((fieldId) => !fieldIds.includes(fieldId)),
+    )
+    onError(
+      failedFieldIds.length === 0
+        ? null
+        : describeDetachFailure(failedFieldIds.length, fieldIds.length),
+    )
+    return failedFieldIds
+  }
 
   return { detachingFieldIds, detachFields }
 }

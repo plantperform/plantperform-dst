@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, RotateCw } from 'lucide-react'
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -14,9 +14,12 @@ import {
 import { applyFieldRotation, previewFieldRotation } from '@/api/mutations'
 import { useOptimizationRunActions } from '@/api/optimization-runs'
 import type {
+  CropCodeOption,
   FieldRecord,
   RotationCandidateEvaluation,
+  RotationCandidateOption,
   RotationCandidateRef,
+  RotationCategoryOption,
   RotationPositionOverride,
   Simulation,
 } from '@/api/types'
@@ -82,6 +85,10 @@ const CHANGED_PILL_CLASSES =
 
 const NO_UNDERSOWN_CROP_KEY = 'none'
 
+const NO_CATEGORIES: RotationCategoryOption[] = []
+const NO_CANDIDATE_OPTIONS: RotationCandidateOption[] = []
+const NO_CROP_CODES: CropCodeOption[] = []
+
 const MAIZE_CATCH_CROP_CODES = new Set([953, 954])
 
 export const ManualRotationEditor = ({
@@ -103,21 +110,21 @@ export const ManualRotationEditor = ({
     mutate: retryCurrent,
   } = useSimulationFieldCandidateDetail(farmId, simulationId, field.id)
   const {
-    data: categories = [],
+    data: categories = NO_CATEGORIES,
     isLoading: isLoadingCategories,
     isValidating: isValidatingCategories,
     error: categoriesError,
     mutate: retryCategories,
   } = useRotationCategories(farmId)
   const {
-    data: allRefs = [],
+    data: allRefs = NO_CANDIDATE_OPTIONS,
     isLoading: isLoadingAllRefs,
     isValidating: isValidatingAllRefs,
     error: allRefsError,
     mutate: retryAllRefs,
   } = useRotationCandidateOptions(farmId)
   const {
-    data: cropCodes = [],
+    data: cropCodes = NO_CROP_CODES,
     isLoading: isLoadingCropCodes,
     isValidating: isValidatingCropCodes,
     error: cropCodesError,
@@ -162,15 +169,15 @@ export const ManualRotationEditor = ({
   const requestId = useRef(0)
   const pendingShiftDirectionRef = useRef<'left' | 'right' | null>(null)
 
-  const availableCategories = useMemo(() => {
-    const allowed = new Set(simulation.rotationVariants)
-    return categories
-      .map((k) => ({
-        ...k,
-        rotations: k.rotations.filter((s) => allowed.has(s.rotationVariant)),
-      }))
-      .filter((k) => k.rotations.some((s) => s.rotationVariant !== '1'))
-  }, [categories, simulation.rotationVariants])
+  const allowedVariants = new Set(simulation.rotationVariants)
+  const availableCategories = categories
+    .map((k) => ({
+      ...k,
+      rotations: k.rotations.filter((s) =>
+        allowedVariants.has(s.rotationVariant),
+      ),
+    }))
+    .filter((k) => k.rotations.some((s) => s.rotationVariant !== '1'))
 
   const seedEditor = useEffectEvent((seed: RotationCandidateEvaluation) => {
     const ref = seed.baseRef ?? seed.ref
@@ -192,43 +199,11 @@ export const ManualRotationEditor = ({
     if (open && current) seedEditor(current)
   }, [open, current])
 
-  const selectedCategory = useMemo(
-    () =>
-      availableCategories.find((k) => k.category === selectedCategoryName) ??
-      availableCategories[0],
-    [availableCategories, selectedCategoryName],
-  )
+  const selectedCategory =
+    availableCategories.find((k) => k.category === selectedCategoryName) ??
+    availableCategories[0]
 
-  const variantsForRotation = useMemo(() => {
-    if (!baseRef) return []
-    return Array.from(
-      new Set(
-        allRefs
-          .filter((r) => r.ref.rotationVariant === baseRef.rotationVariant)
-          .map((r) => r.ref.variant),
-      ),
-    )
-  }, [allRefs, baseRef])
-
-  const nNormsForVariant = useMemo(() => {
-    if (!baseRef) return []
-    return Array.from(
-      new Set(
-        allRefs
-          .filter(
-            (r) =>
-              r.ref.rotationVariant === baseRef.rotationVariant &&
-              r.ref.variant === baseRef.variant,
-          )
-          .map((r) => r.ref.nNormPct),
-      ),
-    ).filter((n) => simulation.nNormPercentages.includes(n))
-  }, [allRefs, baseRef, simulation.nNormPercentages])
-
-  const codeByCropName = useMemo(
-    () => new Map(cropCodes.map((a) => [a.name, a.code])),
-    [cropCodes],
-  )
+  const codeByCropName = new Map(cropCodes.map((a) => [a.name, a.code]))
 
   const colorForCropName = (name: string) =>
     cropGroupColor(codeByCropName.get(name) ?? 0, name)
@@ -241,16 +216,36 @@ export const ManualRotationEditor = ({
     meta: `${s.cropSequence.length} år`,
   }))
 
-  const cropPickerItems = useMemo(
-    () =>
-      cropCodes.map((a) => ({
-        key: String(a.code),
-        label: a.name,
-        title: a.name,
-        colors: [cropGroupColor(a.code, a.name)],
-      })),
-    [cropCodes],
-  )
+  const cropPickerItems = cropCodes.map((a) => ({
+    key: String(a.code),
+    label: a.name,
+    title: a.name,
+    colors: [cropGroupColor(a.code, a.name)],
+  }))
+
+  const variantsForRotation = baseRef
+    ? Array.from(
+        new Set(
+          allRefs
+            .filter((r) => r.ref.rotationVariant === baseRef.rotationVariant)
+            .map((r) => r.ref.variant),
+        ),
+      )
+    : []
+
+  const nNormsForVariant = baseRef
+    ? Array.from(
+        new Set(
+          allRefs
+            .filter(
+              (r) =>
+                r.ref.rotationVariant === baseRef.rotationVariant &&
+                r.ref.variant === baseRef.variant,
+            )
+            .map((r) => r.ref.nNormPct),
+        ),
+      ).filter((n) => simulation.nNormPercentages.includes(n))
+    : []
 
   const runPreview = useEffectEvent(
     (
@@ -429,23 +424,20 @@ export const ManualRotationEditor = ({
     simulation.fertiliser.farmingSystem,
     nextYear?.year.cropCode,
   )
-  const undersownCropPickerItems = useMemo(
-    () => [
-      {
-        key: NO_UNDERSOWN_CROP_KEY,
-        label: 'Intet udlæg',
-        title: 'Intet udlæg',
-        colors: [],
-      },
-      ...(undersownCropCodes ?? []).map((option) => ({
-        key: String(option.code),
-        label: option.name,
-        title: option.name,
-        colors: [cropGroupColor(option.code, option.name)],
-      })),
-    ],
-    [undersownCropCodes],
-  )
+  const undersownCropPickerItems = [
+    {
+      key: NO_UNDERSOWN_CROP_KEY,
+      label: 'Intet udlæg',
+      title: 'Intet udlæg',
+      colors: [],
+    },
+    ...(undersownCropCodes ?? []).map((option) => ({
+      key: String(option.code),
+      label: option.name,
+      title: option.name,
+      colors: [cropGroupColor(option.code, option.name)],
+    })),
+  ]
 
   const activeUndersownCropCode = activeYear?.year.undersownCropCode ?? null
   const maizeCatchCropNoLongerValid =

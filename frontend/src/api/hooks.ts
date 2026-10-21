@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import useSWR, { mutate, preload, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
@@ -143,15 +143,11 @@ export const useFarmsFields = (farms: Farm[]): FieldsByFarmId => {
     }
   }, [cache, farmIds])
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  return useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(fieldsByFarmId).map(([id, fields]) => [
-          id,
-          fields ? applyFieldAliases(fields, aliases) : fields,
-        ]),
-      ),
-    [fieldsByFarmId, aliases],
+  return Object.fromEntries(
+    Object.entries(fieldsByFarmId).map(([id, fields]) => [
+      id,
+      fields ? applyFieldAliases(fields, aliases) : fields,
+    ]),
   )
 }
 
@@ -241,10 +237,9 @@ export const useStoredSimulationFields = (
     ([path]: [string, number | undefined]) => fetcher<FieldRecord[]>(path),
   )
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => response.data ? applyFieldAliases(response.data, aliases) : undefined,
-    [response.data, aliases],
-  )
+  const data = response.data
+    ? applyFieldAliases(response.data, aliases)
+    : undefined
   return { ...response, data }
 }
 
@@ -313,15 +308,14 @@ export const useSimulationsFields = (
       fetchSimulationsFields(cache, keyFarmId, joinedIds.split(',')),
   )
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => response.data
-      ? Object.fromEntries(Object.entries(response.data).map(([id, fields]) => [
+  const data = response.data
+    ? Object.fromEntries(
+        Object.entries(response.data).map(([id, fields]) => [
           id,
           applyFieldAliases(fields, aliases),
-        ]))
-      : undefined,
-    [response.data, aliases],
-  )
+        ]),
+      )
+    : undefined
   return { ...response, data }
 }
 
@@ -368,15 +362,14 @@ export const useSimulationResults = (
       ),
   )
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => response.data
-      ? Object.fromEntries(Object.entries(response.data).map(([id, saved]) => [
+  const data = response.data
+    ? Object.fromEntries(
+        Object.entries(response.data).map(([id, saved]) => [
           id,
           saved ? applySavedResultAliases(saved, aliases) : null,
-        ]))
-      : undefined,
-    [response.data, aliases],
-  )
+        ]),
+      )
+    : undefined
   return { ...response, data }
 }
 

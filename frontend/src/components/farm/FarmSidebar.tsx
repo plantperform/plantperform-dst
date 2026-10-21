@@ -633,10 +633,9 @@ const SimulationMenuItem = ({
     isLoading: fieldsLoading,
     summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
-  const quota = useMemo(
-    () => (simulationFields ? resolveFarmQuota(simulationFields, true) : null),
-    [simulationFields],
-  )
+  const quota = simulationFields
+    ? resolveFarmQuota(simulationFields, true)
+    : null
   const figures = quota ? describeKeyFigures(quota, true) : undefined
   const changedCount = useMemo(
     () =>

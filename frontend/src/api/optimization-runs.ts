@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext } from 'react'
+import { createContext, useContext } from 'react'
 
 import type {
   FieldRecord,
@@ -98,16 +98,13 @@ const DEFAULT_OPTIMIZATION_REQUEST: OptimizationRunRequest = {
 
 export const useStartDefaultOptimization = () => {
   const { startRun } = useOptimizationRunActions()
-  return useCallback(
-    (farmId: string, simulationId: string, fieldsBefore: FieldRecord[]) =>
-      startRun({
-        ...DEFAULT_OPTIMIZATION_REQUEST,
-        farmId,
-        simulationId,
-        fieldsBefore,
-      }),
-    [startRun],
-  )
+  return (farmId: string, simulationId: string, fieldsBefore: FieldRecord[]) =>
+    startRun({
+      ...DEFAULT_OPTIMIZATION_REQUEST,
+      farmId,
+      simulationId,
+      fieldsBefore,
+    })
 }
 
 // The request that started a run, to start it again after a failure.

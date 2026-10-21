@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 
 import {
   moveOverviewBoundary,
@@ -25,7 +25,7 @@ export const useOverviewCards = (
   const { fractions, changeFractions, resetFractions } =
     useOverviewFractions(layout)
 
-  const measureRow = useCallback((row: HTMLDivElement | null) => {
+  const measureRow = (row: HTMLDivElement | null) => {
     if (!row) return
     setRowWidth(row.getBoundingClientRect().width)
     const observer = new ResizeObserver((entries) => {
@@ -34,7 +34,7 @@ export const useOverviewCards = (
     })
     observer.observe(row)
     return () => observer.disconnect()
-  }, [])
+  }
 
   const minWidths = OVERVIEW_MIN_CARD_WIDTHS[layout]
   const defaultFractions = OVERVIEW_DEFAULT_FRACTIONS[layout]

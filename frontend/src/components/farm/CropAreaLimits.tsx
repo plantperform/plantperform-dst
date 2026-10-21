@@ -107,19 +107,17 @@ export const CropAreaLimits = ({
     savedLimits.map((limit) => [limit.cropCode, limit]),
   )
 
-  const pickerItems = useMemo(() => {
-    const limitedCodes = new Set(inputs.map((input) => input.cropCode))
-    return cropCodes
-      .filter((crop) => !limitedCodes.has(crop.code))
-      .map((crop) => ({
-        key: String(crop.code),
-        label: crop.name,
-        title: `${crop.name} (${crop.code})`,
-        colors: [cropGroupColor(crop.code, crop.name)],
-        icon: <CropGroupTile group={cropGroupFor(crop.code, crop.name)} />,
-        meta: currentCropAreaLabel(currentCropAreaHa(fields, crop.code)),
-      }))
-  }, [cropCodes, inputs, fields])
+  const limitedCodes = new Set(inputs.map((input) => input.cropCode))
+  const pickerItems = cropCodes
+    .filter((crop) => !limitedCodes.has(crop.code))
+    .map((crop) => ({
+      key: String(crop.code),
+      label: crop.name,
+      title: `${crop.name} (${crop.code})`,
+      colors: [cropGroupColor(crop.code, crop.name)],
+      icon: <CropGroupTile group={cropGroupFor(crop.code, crop.name)} />,
+      meta: currentCropAreaLabel(currentCropAreaHa(fields, crop.code)),
+    }))
 
   const markTouched = (cropCode: number, touched: boolean) =>
     setTouchedCodes((current) => {

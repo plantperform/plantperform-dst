@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -174,10 +173,7 @@ export const FarmSplitView = ({
     changeView('split')
   }
 
-  const handleDraggingChange = useCallback(
-    (dragging: boolean) => setIsDragging(dragging),
-    [],
-  )
+  const handleDraggingChange = (dragging: boolean) => setIsDragging(dragging)
 
   const showList = effectiveView !== 'map'
   const showMap = effectiveView !== 'list'

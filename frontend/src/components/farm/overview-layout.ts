@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 import {
   SPLIT_DIVIDER_WIDTH,
@@ -134,29 +134,26 @@ export const useOverviewFractions = (layout: OverviewCardLayout) => {
   const fractions =
     stored.layout === layout ? stored.fractions : readStoredFractions(layout)
 
-  const changeFractions = useCallback(
-    (next: number[]) => {
-      setStored({ layout, fractions: next })
-      try {
-        window.localStorage.setItem(
-          fractionsStorageKey(layout),
-          JSON.stringify(next),
-        )
-      } catch {
-        return
-      }
-    },
-    [layout],
-  )
+  const changeFractions = (next: number[]) => {
+    setStored({ layout, fractions: next })
+    try {
+      window.localStorage.setItem(
+        fractionsStorageKey(layout),
+        JSON.stringify(next),
+      )
+    } catch {
+      return
+    }
+  }
 
-  const resetFractions = useCallback(() => {
+  const resetFractions = () => {
     setStored({ layout, fractions: OVERVIEW_DEFAULT_FRACTIONS[layout] })
     try {
       window.localStorage.removeItem(fractionsStorageKey(layout))
     } catch {
       return
     }
-  }, [layout])
+  }
 
   return { fractions, changeFractions, resetFractions }
 }

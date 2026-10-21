@@ -167,7 +167,7 @@ export const StepDialog = ({
   // The body follows its content's height so each step fits, and animates to
   // it because CSS cannot transition to height: auto in every browser. The
   // dialog's max height still caps the body, which then scrolls.
-  const measureContent = React.useCallback((element: HTMLDivElement | null) => {
+  const measureContent = (element: HTMLDivElement | null) => {
     if (!element) return
     let previousHeight: number | undefined
     let timer: number | undefined
@@ -195,7 +195,7 @@ export const StepDialog = ({
       observer.disconnect()
       window.clearTimeout(timer)
     }
-  }, [])
+  }
 
   // Each step starts at the top, even if the previous one was scrolled.
   React.useEffect(() => {

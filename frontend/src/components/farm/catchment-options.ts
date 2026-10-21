@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-
 import { useFarmEmissions } from '@/api/hooks'
 import type {
   CatchmentNLoadCap,
@@ -54,34 +52,32 @@ export const useCatchmentOptions = (
   fields: FieldRecord[],
 ): CatchmentOption[] => {
   const { data: emissions = [] } = useFarmEmissions(farmId)
-  return useMemo(() => {
-    const nameById = new Map(
-      emissions.map((u) => [u.catchmentId, u.catchmentName]),
+  const nameById = new Map(
+    emissions.map((u) => [u.catchmentId, u.catchmentName]),
+  )
+  const seen = new Map<string, Omit<CatchmentOption, 'colorClass'>>()
+  for (const field of fields) {
+    const key = catchmentKey(field.catchmentId)
+    if (seen.has(key)) continue
+    const label = describeCatchment(
+      field.catchmentId,
+      nameById.get(field.catchmentId),
     )
-    const seen = new Map<string, Omit<CatchmentOption, 'colorClass'>>()
-    for (const field of fields) {
-      const key = catchmentKey(field.catchmentId)
-      if (seen.has(key)) continue
-      const label = describeCatchment(
-        field.catchmentId,
-        nameById.get(field.catchmentId),
-      )
-      seen.set(key, { catchmentId: field.catchmentId, label })
-    }
-    const sorted = Array.from(seen.values()).sort((a, b) =>
-      a.label.localeCompare(b.label, 'da'),
-    )
-    const withCatchment = sorted.filter((option) => option.catchmentId !== null)
-    return sorted.map((option) => ({
-      ...option,
-      colorClass:
-        option.catchmentId === null
-          ? NO_CATCHMENT_COLOR_CLASS
-          : CATCHMENT_COLOR_CLASSES[
-              withCatchment.indexOf(option) % CATCHMENT_COLOR_CLASSES.length
-            ],
-    }))
-  }, [fields, emissions])
+    seen.set(key, { catchmentId: field.catchmentId, label })
+  }
+  const sorted = Array.from(seen.values()).sort((a, b) =>
+    a.label.localeCompare(b.label, 'da'),
+  )
+  const withCatchment = sorted.filter((option) => option.catchmentId !== null)
+  return sorted.map((option) => ({
+    ...option,
+    colorClass:
+      option.catchmentId === null
+        ? NO_CATCHMENT_COLOR_CLASS
+        : CATCHMENT_COLOR_CLASSES[
+            withCatchment.indexOf(option) % CATCHMENT_COLOR_CLASSES.length
+          ],
+  }))
 }
 
 // A catchment with no explicitly saved cap defaults to its combined
@@ -158,26 +154,22 @@ export const initializeYearlyNLoadCaps = (
 
 export const useCatchmentColor = (farmId: string, fields: FieldRecord[]) => {
   const options = useCatchmentOptions(farmId, fields)
-  return useMemo(() => {
-    const colorByKey = new Map(
-      options.map((option) => [
-        catchmentKey(option.catchmentId),
-        option.colorClass,
-      ]),
-    )
-    return (catchmentId: number | null) =>
-      colorByKey.get(catchmentKey(catchmentId)) ?? NO_CATCHMENT_COLOR_CLASS
-  }, [options])
+  const colorByKey = new Map(
+    options.map((option) => [
+      catchmentKey(option.catchmentId),
+      option.colorClass,
+    ]),
+  )
+  return (catchmentId: number | null) =>
+    colorByKey.get(catchmentKey(catchmentId)) ?? NO_CATCHMENT_COLOR_CLASS
 }
 
 export const useCatchmentLabel = (farmId: string, fields: FieldRecord[]) => {
   const options = useCatchmentOptions(farmId, fields)
-  return useMemo(() => {
-    const labelByKey = new Map(
-      options.map((option) => [catchmentKey(option.catchmentId), option.label]),
-    )
-    return (catchmentId: number | null) =>
-      labelByKey.get(catchmentKey(catchmentId)) ??
-      describeCatchment(catchmentId, null)
-  }, [options])
+  const labelByKey = new Map(
+    options.map((option) => [catchmentKey(option.catchmentId), option.label]),
+  )
+  return (catchmentId: number | null) =>
+    labelByKey.get(catchmentKey(catchmentId)) ??
+    describeCatchment(catchmentId, null)
 }

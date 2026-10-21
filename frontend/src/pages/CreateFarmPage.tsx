@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+} from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { mutate } from 'swr'
 
@@ -186,10 +192,7 @@ export const CreateFarmPage = () => {
     (search.data ?? []).map((field) => field.imkId),
   )
   const found = details.data
-  const summary = useMemo(
-    () => (found ? summarizeLookup(found) : null),
-    [found],
-  )
+  const summary = found ? summarizeLookup(found) : null
   const lookupError: unknown = search.error ?? details.error
   const lookupProgress = !search.data
     ? 0
