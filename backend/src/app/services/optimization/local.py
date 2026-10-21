@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
 from app.data.optimization_store import fail_queued_run
+from app.data.quota_value_store import fail_quota_value
 
 logger = logging.getLogger(__name__)
 _lock = Lock()
@@ -73,3 +74,23 @@ def execute_local_when_ready(simulation_id, run_id):
         time.monotonic() - started,
     )
     execute_local(simulation_id, run_id)
+
+
+def execute_quota_value_when_ready(simulation_id, run_id):
+    """Run a kvote value curve once the optimizer (OR-Tools) has been imported."""
+    try:
+        start_local_optimizer().initialized.result()
+        from plantperform_fargate.quota_value_worker import execute_quota_value
+    except Exception:
+        logger.exception(
+            "local_quota_value_initialization_failed simulation_id=%s run_id=%s",
+            simulation_id,
+            run_id,
+        )
+        fail_quota_value(
+            simulation_id,
+            run_id,
+            {"code": "WORKER_ERROR", "message": "Optimeringen kunne ikke startes. Prøv igen."},
+        )
+        return
+    execute_quota_value(simulation_id, run_id)
