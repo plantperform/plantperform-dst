@@ -616,7 +616,7 @@ describe('simulation wizard steps', () => {
     ).not.toHaveProperty('timeLimitSeconds')
   })
 
-  it('narrows the rotations by the chosen crops', async () => {
+  it('narrows the rotations by the crops chosen and opted out', async () => {
     queries.categories.data = [
       {
         category: 'Plante',
@@ -650,7 +650,7 @@ describe('simulation wizard steps', () => {
       },
     ]
     await mount(null)
-    await change('Simuleringens navn', 'Med vinterhvede')
+    await change('Simuleringens navn', 'Uden kartofler')
     await click('Næste')
     expect(listedCrops('Afgrøder')).toEqual([
       'Kartofler',
@@ -659,17 +659,27 @@ describe('simulation wizard steps', () => {
       'Vinterraps',
     ])
     await check('Afgrøder', 'Vinterhvede')
+    expect(listedCrops('Fravælg afgrøder')).toEqual([
+      'Kartofler',
+      'Lupin',
+      'Vinterraps',
+    ])
     expect(container.textContent).toContain('3 sædskifter passer til valget')
+    expect(checkedCrops('Fravælg afgrøder')).toEqual([false, false, false])
+    await check('Fravælg afgrøder', 'Kartofler')
+    expect(checkedCrops('Fravælg afgrøder')).toEqual([true, false, false])
+    expect(container.textContent).toContain('2 sædskifter passer til valget')
     await click('Næste')
     expect(currentStep()).toBe('Sædskifter')
     expect(container.textContent).toContain('Vinterraps')
-    expect(container.textContent).not.toContain('Majs')
+    expect(container.textContent).not.toContain('Kartofler')
     await click('Vælg alle')
     await click('Bekræft')
     expect(currentStep()).toBe('Bekræft')
+    expect(container.textContent).toContain('Fravalgt: Kartofler')
     await click('Gem')
     expect(queries.create.mock.calls[0][1]).toMatchObject({
-      allowedRotationVariants: ['10', '11'],
+      allowedRotationVariants: ['10'],
     })
   })
 

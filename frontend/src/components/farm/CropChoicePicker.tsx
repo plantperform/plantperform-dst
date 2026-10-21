@@ -3,6 +3,7 @@ import { FieldError } from '@/components/ui/field-error'
 import {
   cropsForFarmingSystem,
   matchingRotationCount,
+  otherCrops,
   toggleValue,
   type CropChoice,
 } from '@/lib/simulation-form'
@@ -56,37 +57,65 @@ export const CropChoicePicker = ({
   onChoiceChange,
   error,
 }: CropChoicePickerProps) => {
+  const others = otherCrops(categories, choice.chosenCrops)
+
   return (
-    <div className="space-y-3">
-      <div>
-        <div className="flex items-baseline justify-between gap-4">
-          <h3 className="text-sm font-medium">Afgrøder</h3>
-          <p
-            className="shrink-0 text-xs text-muted-foreground tabular-nums"
-            aria-live="polite"
-          >
-            {choice.chosenCrops.length > 0
-              ? matchingLabel(matchingRotationCount(categories, choice))
-              : null}
+    <div className="space-y-5">
+      <div className="space-y-3">
+        <div>
+          <div className="flex items-baseline justify-between gap-4">
+            <h3 className="text-sm font-medium">Afgrøder</h3>
+            <p
+              className="shrink-0 text-xs text-muted-foreground tabular-nums"
+              aria-live="polite"
+            >
+              {choice.chosenCrops.length > 0
+                ? matchingLabel(matchingRotationCount(categories, choice))
+                : null}
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Vælg de afgrøder, bedriften vil dyrke. Næste trin viser de
+            sædskifter, der har mindst en af dem.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Vælg de afgrøder, bedriften vil dyrke. Næste trin viser de sædskifter,
-          der har mindst en af dem.
-        </p>
+        <FieldError id="crop-choice-error" message={error} />
+        <CropCheckboxes
+          label="Afgrøder"
+          crops={cropsForFarmingSystem(categories, farmingSystem)}
+          isChecked={(crop) => choice.chosenCrops.includes(crop)}
+          onToggle={(crop) =>
+            onChoiceChange({
+              ...choice,
+              chosenCrops: toggleValue(choice.chosenCrops, crop),
+            })
+          }
+        />
       </div>
-      <FieldError id="crop-choice-error" message={error} />
-      <CropCheckboxes
-        label="Afgrøder"
-        crops={cropsForFarmingSystem(categories, farmingSystem)}
-        isChecked={(crop) => choice.chosenCrops.includes(crop)}
-        onToggle={(crop) =>
-          onChoiceChange({
-            ...choice,
-            chosenCrops: toggleValue(choice.chosenCrops, crop),
-          })
-        }
-      />
+
+      {others.length > 0 ? (
+        <div className="space-y-3 border-t pt-4">
+          <div>
+            <h3 className="text-sm font-medium">Fravælg afgrøder</h3>
+            <p className="text-xs text-muted-foreground">
+              De passende sædskifter har også disse afgrøder. Sæt flueben ved de
+              afgrøder, bedriften ikke vil dyrke. Så vises sædskifter med dem
+              ikke.
+            </p>
+          </div>
+          <CropCheckboxes
+            label="Fravælg afgrøder"
+            crops={others}
+            isChecked={(crop) => choice.optedOutCrops.includes(crop)}
+            onToggle={(crop) =>
+              onChoiceChange({
+                ...choice,
+                optedOutCrops: toggleValue(choice.optedOutCrops, crop),
+              })
+            }
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

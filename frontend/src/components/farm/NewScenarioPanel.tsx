@@ -351,9 +351,13 @@ export const NewScenarioPanel = ({
     }
   }
 
-  const cropChoice: CropChoice = { chosenCrops: values.chosenCrops }
+  const cropChoice: CropChoice = {
+    chosenCrops: values.chosenCrops,
+    optedOutCrops: values.optedOutCrops,
+  }
   const applyRotationChoice = (next: RotationChoice) => {
     updateValue('chosenCrops', next.chosenCrops)
+    updateValue('optedOutCrops', next.optedOutCrops)
     updateValue('rotationVariants', next.rotationVariants)
   }
 
