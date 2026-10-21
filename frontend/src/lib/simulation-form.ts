@@ -74,6 +74,7 @@ export type SimulationFormValues = {
   name: string
   farmingSystem: FarmingSystem
   economicsProfileId: string
+  chosenCrops: string[]
   // Unique across categories: a variant such as brak ("1") belongs to several
   // categories but is selected once.
   rotationVariants: string[]
@@ -96,6 +97,7 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   name: '',
   farmingSystem: 'Konventionel',
   economicsProfileId: STANDARD_PROFILE_ID,
+  chosenCrops: [],
   rotationVariants: [],
   nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
@@ -191,6 +193,13 @@ export const SIMULATION_FORM_STEPS = [
     }),
   },
   {
+    id: 'crops',
+    label: 'Afgrøder',
+    schema: z.object({
+      chosenCrops: z.array(z.string()).min(1, 'Vælg mindst en afgrøde'),
+    }),
+  },
+  {
     id: 'rotations',
     label: 'Sædskifter',
     schema: z.object({
@@ -274,37 +283,106 @@ export const selectedInCategory = (
   ).length
 }
 
-// A crop filter keeps rotations containing every chosen crop ('all') or at
-// least one of them ('any'). No chosen crops keeps everything.
-export type CropMatchMode = 'all' | 'any'
+export type CropChoice = Pick<SimulationFormValues, 'chosenCrops'>
 
-export const cropsInCategory = (category: RotationCategoryOption): string[] =>
+export type RotationChoice = CropChoice &
+  Pick<SimulationFormValues, 'rotationVariants'>
+
+const byDanishName = (a: string, b: string) => a.localeCompare(b, 'da')
+
+const rotationsByVariant = (
+  categories: RotationCategoryOption[],
+): Map<string, RotationOption> => {
+  const byVariant = new Map<string, RotationOption>()
+  for (const category of categories) {
+    for (const rotation of category.rotations) {
+      if (!byVariant.has(rotation.rotationVariant)) {
+        byVariant.set(rotation.rotationVariant, rotation)
+      }
+    }
+  }
+  return byVariant
+}
+
+const cropsIn = (rotations: RotationOption[]): string[] =>
   Array.from(
-    new Set(category.rotations.flatMap((rotation) => rotation.cropSequence)),
-  ).sort((a, b) => a.localeCompare(b, 'da'))
+    new Set(rotations.flatMap((rotation) => rotation.cropSequence)),
+  ).sort(byDanishName)
 
-export const filterRotations = (
-  rotations: RotationOption[],
-  {
-    crops,
-    mode,
-    onlySelectedFrom,
-  }: {
-    crops: string[]
-    mode: CropMatchMode
-    // When given, only rotations in this selection are kept.
-    onlySelectedFrom?: string[]
-  },
-): RotationOption[] => {
-  const selected = onlySelectedFrom ? new Set(onlySelectedFrom) : null
-  return rotations.filter((rotation) => {
-    if (selected && !selected.has(rotation.rotationVariant)) return false
-    if (crops.length === 0) return true
-    const sequence = new Set(rotation.cropSequence)
-    return mode === 'all'
-      ? crops.every((crop) => sequence.has(crop))
-      : crops.some((crop) => sequence.has(crop))
+const hasAnyCrop = (rotation: RotationOption, crops: string[]): boolean =>
+  rotation.cropSequence.some((crop) => crops.includes(crop))
+
+export const cropsForFarmingSystem = (
+  categories: RotationCategoryOption[],
+  farmingSystem: FarmingSystem,
+): string[] =>
+  cropsIn(
+    categories
+      .filter((category) => category.croppingSystem === farmingSystem)
+      .flatMap((category) => category.rotations),
+  )
+
+const matchesCropChoice = (
+  rotation: RotationOption,
+  { chosenCrops }: CropChoice,
+): boolean => hasAnyCrop(rotation, chosenCrops)
+
+export const categoriesMatchingCropChoice = (
+  categories: RotationCategoryOption[],
+  choice: CropChoice,
+): RotationCategoryOption[] =>
+  categories.flatMap((category) => {
+    const rotations = category.rotations.filter((rotation) =>
+      matchesCropChoice(rotation, choice),
+    )
+    return rotations.length > 0 ? [{ ...category, rotations }] : []
   })
+
+export const matchingRotationCount = (
+  categories: RotationCategoryOption[],
+  choice: CropChoice,
+): number =>
+  rotationsByVariant(categoriesMatchingCropChoice(categories, choice)).size
+
+export const withCropChoice = (
+  categories: RotationCategoryOption[],
+  { chosenCrops, rotationVariants }: RotationChoice,
+): RotationChoice => {
+  const choice = { chosenCrops: [...chosenCrops].sort(byDanishName) }
+  const byVariant = rotationsByVariant(categories)
+  return {
+    ...choice,
+    rotationVariants: rotationVariants.filter((variant) => {
+      const rotation = byVariant.get(variant)
+      return rotation !== undefined && matchesCropChoice(rotation, choice)
+    }),
+  }
+}
+
+export const withFarmingSystem = (
+  categories: RotationCategoryOption[],
+  choice: RotationChoice,
+  farmingSystem: FarmingSystem,
+): RotationChoice => {
+  if (choice.chosenCrops.length === 0) return choice
+  const offered = cropsForFarmingSystem(categories, farmingSystem)
+  return withCropChoice(categories, {
+    ...choice,
+    chosenCrops: choice.chosenCrops.filter((crop) => offered.includes(crop)),
+  })
+}
+
+export const chosenCropsFor = (
+  categories: RotationCategoryOption[],
+  {
+    rotationVariants,
+    farmingSystem,
+  }: Pick<SimulationFormValues, 'rotationVariants' | 'farmingSystem'>,
+): string[] => {
+  const offered = cropsForFarmingSystem(categories, farmingSystem)
+  return cropsIn(selectedRotations(categories, rotationVariants)).filter(
+    (crop) => offered.includes(crop),
+  )
 }
 
 export const setRotationsSelected = (
@@ -361,14 +439,7 @@ export const selectedRotations = (
   categories: RotationCategoryOption[],
   rotationVariants: string[],
 ): RotationOption[] => {
-  const byVariant = new Map<string, RotationOption>()
-  for (const category of categories) {
-    for (const rotation of category.rotations) {
-      if (!byVariant.has(rotation.rotationVariant)) {
-        byVariant.set(rotation.rotationVariant, rotation)
-      }
-    }
-  }
+  const byVariant = rotationsByVariant(categories)
   return rotationVariants.flatMap((variant) => byVariant.get(variant) ?? [])
 }
 

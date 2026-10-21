@@ -252,6 +252,18 @@ describe('settings without a simulation summary', () => {
   })
 })
 
+const WHEAT_CATEGORIES: RotationCategoryOption[] = [
+  {
+    category: 'Test',
+    croppingSystem: 'Konventionel',
+    rotationCount: 2,
+    rotations: [
+      { rotationVariant: '1', cropSequence: ['Hvede'], activeLen: 1 },
+      { rotationVariant: '2', cropSequence: ['Byg'], activeLen: 1 },
+    ],
+  },
+]
+
 describe('simulation wizard steps', () => {
   let root: Root | undefined
   let container: HTMLDivElement
@@ -265,7 +277,7 @@ describe('simulation wizard steps', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
     vi.clearAllMocks()
-    queries.categories.data = []
+    queries.categories.data = WHEAT_CATEGORIES
     queries.farm.isLoading = false
     queries.farm.data = [field]
     queries.farm.error = undefined
@@ -325,11 +337,29 @@ describe('simulation wizard steps', () => {
   }
   const currentStep = () =>
     container.querySelector('[aria-current="step"]')?.textContent
+  const check = async (list: string, crop: string) => {
+    const input = [
+      ...container.querySelectorAll(`ul[aria-label="${list}"] label`),
+    ]
+      .find((entry) => entry.textContent === crop)
+      ?.querySelector('input')
+    expect(input, crop).toBeDefined()
+    await act(async () => input!.click())
+  }
+  const listedCrops = (list: string) =>
+    [...container.querySelectorAll(`ul[aria-label="${list}"] label`)].map(
+      (entry) => entry.textContent,
+    )
+  const checkedCrops = (list: string) =>
+    [...container.querySelectorAll(`ul[aria-label="${list}"] input`)].map(
+      (input) => (input as HTMLInputElement).checked,
+    )
 
-  it('renders six steps and the explanatory quota choice in Grundlag', async () => {
+  it('renders seven steps and the explanatory quota choice in Grundlag', async () => {
     await mount()
     expect(SIMULATION_FORM_STEPS.map((step) => step.label)).toEqual([
       'Grundlag',
+      'Afgrøder',
       'Sædskifter',
       'Kvælstof',
       'Dyrkningspraksis',
@@ -555,19 +585,15 @@ describe('simulation wizard steps', () => {
     })
   })
 
-  it('creates a new simulation through all six steps', async () => {
-    queries.categories.data = [
-      {
-        category: 'Test',
-        croppingSystem: 'Konventionel',
-        rotationCount: 1,
-        rotations: [
-          { rotationVariant: '1', cropSequence: ['Hvede'], activeLen: 1 },
-        ],
-      },
-    ]
+  it('creates a new simulation through all seven steps', async () => {
     await mount(null)
     await change('Simuleringens navn', 'Ny simulering')
+    await click('Næste')
+    expect(currentStep()).toBe('Afgrøder')
+    await click('Næste')
+    expect(currentStep()).toBe('Afgrøder')
+    expect(container.textContent).toContain('Vælg mindst en afgrøde')
+    await check('Afgrøder', 'Hvede')
     await click('Næste')
     expect(currentStep()).toBe('Sædskifter')
     await click('Vælg alle')
@@ -588,6 +614,78 @@ describe('simulation wizard steps', () => {
     expect(
       queries.create.mock.calls[0][1].optimizationSettings,
     ).not.toHaveProperty('timeLimitSeconds')
+  })
+
+  it('narrows the rotations by the chosen crops', async () => {
+    queries.categories.data = [
+      {
+        category: 'Plante',
+        croppingSystem: 'Konventionel',
+        rotationCount: 3,
+        rotations: [
+          {
+            rotationVariant: '10',
+            cropSequence: ['Vinterhvede', 'Vinterraps'],
+            activeLen: 2,
+          },
+          {
+            rotationVariant: '11',
+            cropSequence: ['Vinterhvede', 'Kartofler'],
+            activeLen: 2,
+          },
+          { rotationVariant: '12', cropSequence: ['Majs'], activeLen: 1 },
+        ],
+      },
+      {
+        category: 'Økologisk plante',
+        croppingSystem: 'Økologisk',
+        rotationCount: 1,
+        rotations: [
+          {
+            rotationVariant: '30',
+            cropSequence: ['Vinterhvede', 'Lupin'],
+            activeLen: 2,
+          },
+        ],
+      },
+    ]
+    await mount(null)
+    await change('Simuleringens navn', 'Med vinterhvede')
+    await click('Næste')
+    expect(listedCrops('Afgrøder')).toEqual([
+      'Kartofler',
+      'Majs',
+      'Vinterhvede',
+      'Vinterraps',
+    ])
+    await check('Afgrøder', 'Vinterhvede')
+    expect(container.textContent).toContain('3 sædskifter passer til valget')
+    await click('Næste')
+    expect(currentStep()).toBe('Sædskifter')
+    expect(container.textContent).toContain('Vinterraps')
+    expect(container.textContent).not.toContain('Majs')
+    await click('Vælg alle')
+    await click('Bekræft')
+    expect(currentStep()).toBe('Bekræft')
+    await click('Gem')
+    expect(queries.create.mock.calls[0][1]).toMatchObject({
+      allowedRotationVariants: ['10', '11'],
+    })
+  })
+
+  it('takes the crops of an existing simulation from its rotations', async () => {
+    await mount()
+    await click('Afgrøder')
+    expect(checkedCrops('Afgrøder')).toEqual([false, true])
+  })
+
+  it('fills the crops when the rotations arrive after the dialog opened', async () => {
+    queries.categories.data = []
+    await mount()
+    queries.categories.data = WHEAT_CATEGORIES
+    await mount()
+    await click('Afgrøder')
+    expect(checkedCrops('Afgrøder')).toEqual([false, true])
   })
 
   it('initializes yearly limits when fields arrive after the quota choice', async () => {

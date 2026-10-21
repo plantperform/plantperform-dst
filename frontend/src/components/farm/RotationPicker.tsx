@@ -1,4 +1,4 @@
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
 
 import type { FarmingSystem, RotationCategoryOption } from '@/api/types'
@@ -10,21 +10,21 @@ import {
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import {
-  cropsInCategory,
+  categoriesMatchingCropChoice,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
-  filterRotations,
   orderCategoriesForFarmingSystem,
   selectedInCategory,
   setRotationsSelected,
   toggleValue,
-  type CropMatchMode,
+  type CropChoice,
 } from '@/lib/simulation-form'
 import { cn } from '@/lib/utils'
 
 type RotationPickerProps = {
   categories: RotationCategoryOption[]
   farmingSystem: FarmingSystem
+  cropChoice: CropChoice
   rotationVariants: string[]
   onRotationVariantsChange: (rotationVariants: string[]) => void
   error?: string
@@ -33,40 +33,39 @@ type RotationPickerProps = {
 export const RotationPicker = ({
   categories,
   farmingSystem,
+  cropChoice,
   rotationVariants,
   onRotationVariantsChange,
   error,
 }: RotationPickerProps) => {
-  const orderedCategories = orderCategoriesForFarmingSystem(
-    categories,
+  const matchingCategories = orderCategoriesForFarmingSystem(
+    categoriesMatchingCropChoice(categories, cropChoice),
     farmingSystem,
   )
   const [activeName, setActiveName] = useState<string | null>(null)
-  // Filters only change what is shown, never what is selected.
-  const [crops, setCrops] = useState<string[]>([])
-  const [matchMode, setMatchMode] = useState<CropMatchMode>('any')
   const [onlySelected, setOnlySelected] = useState(false)
 
   const active =
-    orderedCategories.find((category) => category.category === activeName) ??
-    orderedCategories[0]
+    matchingCategories.find((category) => category.category === activeName) ??
+    matchingCategories[0]
 
   if (!active) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Ingen sædskifter at vælge imellem.
-      </p>
+      <div className="space-y-2">
+        <FieldError id="rotation-picker-error" message={error} />
+        <p className="text-sm text-muted-foreground">
+          Ingen sædskifter passer til de valgte afgrøder.
+        </p>
+      </div>
     )
   }
 
-  const availableCrops = cropsInCategory(active).filter(
-    (crop) => !crops.includes(crop),
-  )
-  const shown = filterRotations(active.rotations, {
-    crops,
-    mode: matchMode,
-    onlySelectedFrom: onlySelected ? rotationVariants : undefined,
-  })
+  const shown = onlySelected
+    ? active.rotations.filter((rotation) =>
+        rotationVariants.includes(rotation.rotationVariant),
+      )
+    : active.rotations
+  const scope = shown.length === active.rotations.length ? 'alle' : 'viste'
   const shownSelectedCount = selectedInCategory(
     { ...active, rotations: shown },
     rotationVariants,
@@ -111,7 +110,7 @@ export const RotationPicker = ({
         ) : null}
 
         <div role="tablist" aria-label="Kategorier" className="flex flex-wrap gap-1.5">
-          {orderedCategories.map((category) => {
+          {matchingCategories.map((category) => {
             const isActive = category.category === active.category
             const isOtherSystem = category.croppingSystem !== farmingSystem
             return (
@@ -141,107 +140,37 @@ export const RotationPicker = ({
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">
-            Filtrér på afgrøde:
-          </span>
-          {crops.map((crop) => (
-            <span
-              key={crop}
-              className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 py-0.5 pr-1 pl-2 text-xs"
-            >
-              {crop}
-              <button
-                type="button"
-                aria-label={`Fjern filter ${crop}`}
-                className="rounded-full p-0.5 hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setCrops(toggleValue(crops, crop))}
-              >
-                <X className="size-3" aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-          {availableCrops.length > 0 ? (
-            <select
-              aria-label="Tilføj afgrøde til filter"
-              className="max-w-44 rounded-full border bg-background px-2 py-0.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-              value=""
-              onChange={(event) => {
-                if (event.target.value) setCrops([...crops, event.target.value])
-              }}
-            >
-              <option value="">+ Tilføj afgrøde</option>
-              {availableCrops.map((crop) => (
-                <option key={crop} value={crop}>
-                  {crop}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          {crops.length > 1 ? (
-            <div
-              role="radiogroup"
-              aria-label="Match"
-              className="flex items-center gap-2 text-xs"
-            >
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  checked={matchMode === 'any'}
-                  onChange={() => setMatchMode('any')}
-                />
-                mindst én
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  checked={matchMode === 'all'}
-                  onChange={() => setMatchMode('all')}
-                />
-                alle
-              </label>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground" aria-live="polite">
-            {shown.length} af {active.rotations.length} vises
-          </p>
-          <div className="flex gap-1.5">
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={shownSelectedCount === shown.length}
-              onClick={() =>
-                onRotationVariantsChange(
-                  setRotationsSelected(rotationVariants, shown, true),
-                )
-              }
-            >
-              Vælg {shown.length === active.rotations.length ? 'alle' : 'viste'}
-            </Button>
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={shownSelectedCount === 0}
-              onClick={() =>
-                onRotationVariantsChange(
-                  setRotationsSelected(rotationVariants, shown, false),
-                )
-              }
-            >
-              Fravælg {shown.length === active.rotations.length ? 'alle' : 'viste'}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-1.5">
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={shownSelectedCount === shown.length}
+            onClick={() =>
+              onRotationVariantsChange(
+                setRotationsSelected(rotationVariants, shown, true),
+              )
+            }
+          >
+            Vælg {scope}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={shownSelectedCount === 0}
+            onClick={() =>
+              onRotationVariantsChange(
+                setRotationsSelected(rotationVariants, shown, false),
+              )
+            }
+          >
+            Fravælg {scope}
+          </Button>
         </div>
       </div>
 
       {shown.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          {onlySelected && crops.length === 0
-            ? 'Ingen valgte sædskifter i denne kategori.'
-            : 'Ingen sædskifter matcher filteret.'}
+          Ingen valgte sædskifter i denne kategori.
         </p>
       ) : (
         <ul className="divide-y rounded-md border">
@@ -264,11 +193,7 @@ export const RotationPicker = ({
                       {index > 0 ? (
                         <span className="text-muted-foreground"> · </span>
                       ) : null}
-                      <span
-                        className={cn(crops.includes(crop) && 'font-semibold')}
-                      >
-                        {crop}
-                      </span>
+                      {crop}
                     </span>
                   ))}
                 </span>
