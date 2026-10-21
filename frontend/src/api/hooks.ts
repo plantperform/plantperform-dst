@@ -45,6 +45,7 @@ import type {
   FieldRecord,
   FertiliserPresetOption,
   CatchmentEmissions,
+  QuotaValueResult,
   RegistryField,
   RegistryFieldSummary,
   RotationCandidateEvaluation,
@@ -480,6 +481,23 @@ export const useSimulationYearlySummary = (
   const response = useSimulationView(farmId, simulationId)
   return { ...response, data: response.data?.data?.yearlySummary }
 }
+
+export const quotaValueKey = (farmId?: string, simulationId?: string) => {
+  if (!farmId || !simulationId) return null
+
+  return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/quota-value`
+}
+
+// Same polling interval as optimization runs while the curve is computing.
+const QUOTA_VALUE_POLL_MS = 5000
+
+export const useQuotaValue = (farmId?: string, simulationId?: string) =>
+  useSWR<QuotaValueResult>(quotaValueKey(farmId, simulationId), fetcher, {
+    refreshInterval: (result) =>
+      result?.status === 'queued' || result?.status === 'in_progress'
+        ? QUOTA_VALUE_POLL_MS
+        : 0,
+  })
 
 export const farmHistoricalYearlySummaryKey = (farmId?: string) => {
   if (!farmId) return null

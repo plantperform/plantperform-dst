@@ -43,6 +43,13 @@ field" column is the name on the wire.
 | udledningsgrænse | `nLoadLimitKgNHa` | `udledningsgraenseKgnHa` | |
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
+| kvotehandel | quota trade, `QuotaTradePanel` | | Buying or selling udledningskvote in one kystvandopland |
+| kvoteværdi | quota value, `QuotaValueResult`, `useQuotaValue` | `quota-value` | V(t): best yearly DB2 with the cap changed by t kg N |
+| kvotepris | `priceKrPerKg` | `priceKrPerKg` | Price of 1 kg N kvote per year |
+| handel (køb/salg af kvote) | `tradeKg` | `tradeKg` | kg N per year; positive buys, negative sells |
+| interval for handel | trade range, `QuotaTradeRange` | `tradeRange` | Trades to solve instead of the default window: multiples of a step from no trade, plus both ends |
+| prisgrænse for køb/salg | price threshold, `priceThresholds`, `buyBelow`, `sellAbove` | | Highest price where a buying trade is best; lowest price where a selling trade is best |
+| kvotehandel på en simulering | quota trade, `SimulationQuotaTrade`, `quotaTrade` | `quotaTrade` | The trade a simulation was created for from Kvotehandel; its payment is kept apart from the crops' DB2 |
 | opslag i markregistret | registry lookup, `summarizeLookup` | | The marker found for a CVR before the farm is created, summed per kystvandopland |
 | retention | `retention` | `retention` | Share held back, 0 to 1 |
 | udvaskning | `leaching` | | Nitrate leaving the root zone |

@@ -506,6 +506,9 @@ const FarmDetail = () => {
                     optimizeDialogOpen={optimizeDialogOpen}
                     onOptimizeDialogOpenChange={setOptimizeDialogOpen}
                     onEditBasis={openNewSimulation}
+                    onOpenSimulation={(simulationId) =>
+                      changeSelection({ kind: 'simulation', id: simulationId })
+                    }
                     onError={showError}
                   />
                 )}
