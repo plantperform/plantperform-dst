@@ -34,12 +34,17 @@ const YEAR_VALUE_ATTRIBUTES: ReadonlySet<ColorAttribute> = new Set([
   'nLoad',
 ])
 
+export const followsSelectedYear = (
+  attribute: ColorAttribute,
+  calendarYear: number | null,
+): boolean => calendarYear !== null && YEAR_VALUE_ATTRIBUTES.has(attribute)
+
 export const colorLegendLabel = (
   spec: ColorSpec,
   attribute: ColorAttribute,
   calendarYear: number | null,
 ): string =>
-  calendarYear !== null && YEAR_VALUE_ATTRIBUTES.has(attribute)
+  followsSelectedYear(attribute, calendarYear)
     ? `${spec.label} ${calendarYear}`
     : spec.label
 

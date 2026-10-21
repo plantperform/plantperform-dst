@@ -17,6 +17,7 @@ import {
   colorLegendLabel,
   describeSpecValue,
   excludedFromSpec,
+  followsSelectedYear,
   soilTypeLabel,
   registryPropertyFor,
   specColorFor,
@@ -41,7 +42,7 @@ export type HoveredField = {
 }
 
 type TooltipRow = {
-  key: ColorAttribute
+  key: string
   label: string
   value: ReactNode
   level?: QuotaStatusLevel
@@ -70,6 +71,11 @@ const rawSpecValue = (spec: ColorSpec, hovered: HoveredField): unknown => {
 // that only covers the quota.
 const excludedFromColour = (spec: ColorSpec, hovered: HoveredField) =>
   excludedFromSpec(spec, rawSpecValue(COLOR_SPECS.quotaEligible, hovered))
+
+const colourRowKey = (colorBy: ColorAttribute, calendarYear: number | null) =>
+  followsSelectedYear(colorBy, calendarYear)
+    ? `${colorBy}-${calendarYear}`
+    : colorBy
 
 const buildRows = (
   hovered: HoveredField,
@@ -127,7 +133,11 @@ const buildRows = (
     rows.push({
       key: 'nLoadLimitKgNHa',
       label: 'Udledningsgrænse',
-      value: limit === null ? 'ukendt' : `${formatNumber(limit)} kg N/ha`,
+      value: excludedFromColour(COLOR_SPECS.nLoadLimitKgNHa, hovered)
+        ? EXCLUDED_FROM_CALCULATION
+        : limit === null
+          ? 'ukendt'
+          : `${formatNumber(limit)} kg N/ha`,
     })
   }
   const retention = field
@@ -158,9 +168,10 @@ const buildRows = (
       ),
   })
   const extraSpec = tooltipSpecFor(colorBy)
-  if (extraSpec && !rows.some((row) => row.key === colorBy)) {
+  const colourKey = colourRowKey(colorBy, selectedCalendarYear)
+  if (extraSpec && !rows.some((row) => row.key === colourKey)) {
     rows.push({
-      key: colorBy,
+      key: colourKey,
       label: colorLegendLabel(extraSpec, colorBy, selectedCalendarYear),
       value: excludedFromColour(extraSpec, hovered)
         ? EXCLUDED_FROM_CALCULATION
@@ -205,6 +216,7 @@ export const FieldTooltip = ({
     isSimulationView,
     selectedCalendarYear,
   )
+  const colourKey = colourRowKey(colorBy, selectedCalendarYear)
 
   return (
     <div className="min-w-60 text-xs whitespace-nowrap">
@@ -230,8 +242,8 @@ export const FieldTooltip = ({
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t px-3 py-2">
         {rows.map((row) => {
-          const highlighted = row.key === colorBy
-          const spec = highlighted ? tooltipSpecFor(row.key) : null
+          const highlighted = row.key === colourKey
+          const spec = highlighted ? tooltipSpecFor(colorBy) : null
           const swatch = spec
             ? excludedFromColour(spec, hovered)
               ? spec.fallbackColor
