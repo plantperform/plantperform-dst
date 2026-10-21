@@ -20,9 +20,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (active) setUser(current)
       } catch {
         if (active) setUser(null)
-      } finally {
-        if (active) setIsLoading(false)
       }
+      if (active) setIsLoading(false)
     }
     void restore()
     const onExpired = () => {

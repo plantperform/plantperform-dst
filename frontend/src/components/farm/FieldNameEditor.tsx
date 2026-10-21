@@ -50,10 +50,9 @@ export const FieldNameEditor = ({
           ? cause.message
           : 'Kunne ikke gemme markens alias. Prøv igen.',
       )
-    } finally {
-      savingRef.current = false
-      setSaving(false)
     }
+    savingRef.current = false
+    setSaving(false)
   }
 
   return (

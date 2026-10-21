@@ -63,9 +63,8 @@ export const LoginForm = ({
           ? loginFailure(requestError.status, requestError.message)
           : 'unavailable',
       )
-    } finally {
-      setIsSubmitting(false)
     }
+    setIsSubmitting(false)
   }
 
   return (

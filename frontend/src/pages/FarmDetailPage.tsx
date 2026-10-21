@@ -242,9 +242,8 @@ const FarmDetail = () => {
       await farmView.mutate(next, { revalidate: next.status === 'done' })
     } catch {
       showError('Kunne ikke starte beregningen.')
-    } finally {
-      setRetryingHistory(false)
     }
+    setRetryingHistory(false)
   }
 
   const changeMode = (next: FarmInspectorMode) => {

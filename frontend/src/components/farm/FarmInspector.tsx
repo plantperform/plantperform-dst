@@ -240,9 +240,8 @@ export const FarmInspector = ({
         onError(null)
       } catch {
         onError('Kunne ikke ændre låsningen af marken.')
-      } finally {
-        setLockingFieldId(null)
       }
+      setLockingFieldId(null)
     },
     [farm.id, selectedSimulationId, onError, markStale],
   )

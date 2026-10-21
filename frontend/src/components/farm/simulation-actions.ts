@@ -67,6 +67,8 @@ export const useSimulationActions = ({
 
   const removeSimulation = async (simulationId: string) => {
     if (!farmId) return
+    const selected =
+      selection.kind === 'simulation' && selection.id === simulationId
     setDeletingSimulationId(simulationId)
     try {
       await deleteSimulation(farmId, simulationId)
@@ -74,29 +76,23 @@ export const useSimulationActions = ({
       await mutate(simulationViewKey(farmId, simulationId), undefined, {
         revalidate: false,
       })
-      if (selection.kind === 'simulation' && selection.id === simulationId) {
-        onSelectionChange({ kind: 'current' })
-      }
+      if (selected) onSelectionChange({ kind: 'current' })
       onError(null)
     } catch {
       onError('Kunne ikke slette simuleringen.')
-    } finally {
-      setDeletingSimulationId(null)
     }
+    setDeletingSimulationId(null)
   }
 
   const copySimulation = async (simulation: Simulation) => {
     if (!farmId || !isSimulationReady(simulation)) return
+    const nNormPercentages =
+      offeredNNormPercentages ?? simulation.nNormPercentages
+    const previousRequest = copyRequests.current.get(simulation.id) ?? null
     setCopyingSimulationId(simulation.id)
     try {
-      const input = buildCopyInput(
-        simulation,
-        offeredNNormPercentages ?? simulation.nNormPercentages,
-      )
-      const identity = creationRequestIdentity(
-        input,
-        copyRequests.current.get(simulation.id) ?? null,
-      )
+      const input = buildCopyInput(simulation, nNormPercentages)
+      const identity = creationRequestIdentity(input, previousRequest)
       copyRequests.current.set(simulation.id, identity)
       const created = await createSimulation(farmId, {
         ...input,
@@ -117,9 +113,8 @@ export const useSimulationActions = ({
     } catch {
       void mutate(simulationsKey(farmId))
       onError('Kunne ikke starte kopieringen af simuleringen. Prøv igen.')
-    } finally {
-      setCopyingSimulationId(null)
     }
+    setCopyingSimulationId(null)
   }
 
   return {

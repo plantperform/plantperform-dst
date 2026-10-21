@@ -225,7 +225,7 @@ const Guide = ({
     (crop) => crop.cropCode === sheet.cropCode,
   )
   const current = STEPS[step - 1]
-  const useOptions: GuideUseOption[] = simulations.map((simulation) => ({
+  const usageOptions: GuideUseOption[] = simulations.map((simulation) => ({
     id: simulation.id,
     label: simulation.name,
     note: `Valgt profil: ${economics.profileForSimulation(simulation).name}`,
@@ -265,7 +265,7 @@ const Guide = ({
     leaveGuard.release()
     await Promise.all(
       simulations.flatMap((simulation) => {
-        const option = useOptions.find((entry) => entry.id === simulation.id)
+        const option = usageOptions.find((entry) => entry.id === simulation.id)
         const uses = users.includes(simulation)
         return option && option.checked !== uses
           ? [
@@ -278,7 +278,7 @@ const Guide = ({
       }),
     )
     setToggledUses([])
-    const chosen = useOptions.filter((option) => option.checked)
+    const chosen = usageOptions.filter((option) => option.checked)
     const opened =
       chosen.find((option) => option.id === originSimulation?.id) ??
       (chosen.length === 1 ? chosen[0] : undefined)
@@ -376,7 +376,7 @@ const Guide = ({
                 name={name}
                 nameError={nameError}
                 changes={changes}
-                useOptions={useOptions}
+                usageOptions={usageOptions}
                 onNameChange={setName}
                 onRestore={(entry) =>
                   setOverrides((draft) =>

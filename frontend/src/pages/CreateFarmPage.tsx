@@ -209,24 +209,27 @@ export const CreateFarmPage = () => {
         ? farmBasicsErrors(form.name, form.ownerName, form.cvr)
         : {}
 
+  const waitForHistory = async (farmId: string) => {
+    historyWait.current?.abort()
+    historyWait.current = new AbortController()
+    await waitForFarmHistory(farmId, historyWait.current.signal)
+  }
+
   const create = async (farm: FarmForm, registryFields: RegistryField[]) => {
     setCreating(true)
     setFailedCreate(null)
     let farmId = failedHere?.farmId ?? null
+    const shown = pause(registryFields.length > 0 ? PROGRESS_STEP_MS : 0)
+    const farmDetails = {
+      name: farm.name.trim(),
+      ownerName: farm.ownerName.trim(),
+      cvr: farm.cvr || null,
+    }
     try {
-      const shown = pause(registryFields.length > 0 ? PROGRESS_STEP_MS : 0)
-      farmId ??= (
-        await createFarm({
-          name: farm.name.trim(),
-          ownerName: farm.ownerName.trim(),
-          cvr: farm.cvr || null,
-        })
-      ).id
+      if (farmId === null) farmId = (await createFarm(farmDetails)).id
       if (registryFields.length > 0) {
         await createFieldsFromRegistry(farmId, registryFields)
-        historyWait.current?.abort()
-        historyWait.current = new AbortController()
-        await waitForFarmHistory(farmId, historyWait.current.signal)
+        await waitForHistory(farmId)
       }
       await mutate(farmsKey)
       await shown

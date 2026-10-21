@@ -40,9 +40,8 @@ export const ForgotPasswordPage = () => {
       setSentTo(address)
     } catch {
       setError('Kunne ikke sende mailen lige nu. Prøv igen om lidt.')
-    } finally {
-      setIsSubmitting(false)
     }
+    setIsSubmitting(false)
   }
 
   return (

@@ -31,16 +31,16 @@ export const useMemberAccess = ({
 
   const remove = async (address: string) => {
     const leaving = address === ownEmail
+    const afterRemoval = leaving ? onLeft : () => onRemoved(address)
     setRemovingEmail(address)
     setRemoveError(null)
     try {
       await removeMember(address)
-      await (leaving ? onLeft() : onRemoved(address))
+      await afterRemoval()
     } catch {
       setRemoveError(leaving ? leaveFailure : `Kunne ikke fjerne ${address}.`)
-    } finally {
-      setRemovingEmail(null)
     }
+    setRemovingEmail(null)
   }
 
   return {
@@ -60,9 +60,8 @@ export const useMemberAccess = ({
         setEmail('')
       } catch (error) {
         setShareError(failure(error))
-      } finally {
-        setSharing(false)
       }
+      setSharing(false)
     },
     form: {
       email,

@@ -381,7 +381,7 @@ type GuideReviewStepProps = {
   name: string
   nameError: string | null
   changes: ProfileChange[]
-  useOptions: GuideUseOption[]
+  usageOptions: GuideUseOption[]
   onNameChange: (name: string) => void
   onRestore: (change: ProfileChange) => void
   onRestoreAll: () => void
@@ -392,7 +392,7 @@ export const GuideReviewStep = ({
   name,
   nameError,
   changes,
-  useOptions,
+  usageOptions,
   onNameChange,
   onRestore,
   onRestoreAll,
@@ -430,12 +430,12 @@ export const GuideReviewStep = ({
           Brug profilen i
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {useOptions.length > 0
+          {usageOptions.length > 0
             ? 'Vælg de simuleringer, der skal regne med profilen. Tallene skifter, når økonomien er genberegnet. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
             : 'Bedriften har ingen simuleringer endnu. Profilen kan vælges, når den første er oprettet.'}
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {useOptions.map((option) => (
+          {usageOptions.map((option) => (
             <label
               key={option.id}
               className={cn(

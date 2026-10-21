@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, RotateCw } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -172,13 +172,11 @@ export const ManualRotationEditor = ({
       .filter((k) => k.rotations.some((s) => s.rotationVariant !== '1'))
   }, [categories, simulation.rotationVariants])
 
-  useEffect(() => {
-    if (!open || !current) return
-    const ref = current.baseRef ?? current.ref
-    const seededStartYear = current.startYear ?? 1
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const seedEditor = useEffectEvent((seed: RotationCandidateEvaluation) => {
+    const ref = seed.baseRef ?? seed.ref
+    const seededStartYear = seed.startYear ?? 1
     setBaseRef(ref)
-    setOverrides(current.overrides ?? [])
+    setOverrides(seed.overrides ?? [])
     setStartYear(seededStartYear)
     setBaselineStartYear(seededStartYear)
     const category = availableCategories.find((k) =>
@@ -187,7 +185,11 @@ export const ManualRotationEditor = ({
     setSelectedCategoryName(
       category?.category ?? availableCategories[0]?.category ?? null,
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && current) seedEditor(current)
   }, [open, current])
 
   const selectedCategory = useMemo(
@@ -231,18 +233,13 @@ export const ManualRotationEditor = ({
   const colorForCropName = (name: string) =>
     cropGroupColor(codeByCropName.get(name) ?? 0, name)
 
-  const categoryPickerItems = useMemo(
-    () =>
-      (selectedCategory?.rotations ?? []).map((s) => ({
-        key: s.rotationVariant,
-        label: compactCropSequenceLabel(s.cropSequence),
-        title: s.cropSequence.join(' - '),
-        colors: s.cropSequence.map(colorForCropName),
-        meta: `${s.cropSequence.length} år`,
-      })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCategory, codeByCropName],
-  )
+  const categoryPickerItems = (selectedCategory?.rotations ?? []).map((s) => ({
+    key: s.rotationVariant,
+    label: compactCropSequenceLabel(s.cropSequence),
+    title: s.cropSequence.join(' - '),
+    colors: s.cropSequence.map(colorForCropName),
+    meta: `${s.cropSequence.length} år`,
+  }))
 
   const cropPickerItems = useMemo(
     () =>
@@ -255,45 +252,45 @@ export const ManualRotationEditor = ({
     [cropCodes],
   )
 
-  const runPreview = (
-    ref: RotationCandidateRef,
-    overrideList: RotationPositionOverride[],
-    year: number,
-  ) => {
-    const id = ++requestId.current
-    setIsPreviewing(true)
-    setPreviewError(null)
-    previewFieldRotation(farmId, simulationId, field.id, {
-      baseRef: ref,
-      overrides: overrideList,
-      startYear: year,
-    })
-      .then((result) => {
-        if (id !== requestId.current) return
-        setPreview(result)
-        setShiftAnimation(pendingShiftDirectionRef.current)
-        pendingShiftDirectionRef.current = null
+  const runPreview = useEffectEvent(
+    (
+      ref: RotationCandidateRef,
+      overrideList: RotationPositionOverride[],
+      year: number,
+    ) => {
+      const id = ++requestId.current
+      setIsPreviewing(true)
+      setPreviewError(null)
+      previewFieldRotation(farmId, simulationId, field.id, {
+        baseRef: ref,
+        overrides: overrideList,
+        startYear: year,
       })
-      .catch((error: unknown) => {
-        if (id !== requestId.current) return
-        pendingShiftDirectionRef.current = null
-        setPreview(null)
-        setPreviewError(
-          error instanceof Error
-            ? error.message
-            : 'Kunne ikke genberegne rotationen.',
-        )
-      })
-      .finally(() => {
-        if (id === requestId.current) setIsPreviewing(false)
-      })
-  }
+        .then((result) => {
+          if (id !== requestId.current) return
+          setPreview(result)
+          setShiftAnimation(pendingShiftDirectionRef.current)
+          pendingShiftDirectionRef.current = null
+        })
+        .catch((error: unknown) => {
+          if (id !== requestId.current) return
+          pendingShiftDirectionRef.current = null
+          setPreview(null)
+          setPreviewError(
+            error instanceof Error
+              ? error.message
+              : 'Kunne ikke genberegne rotationen.',
+          )
+        })
+        .finally(() => {
+          if (id === requestId.current) setIsPreviewing(false)
+        })
+    },
+  )
 
   useEffect(() => {
-    if (!baseRef) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    runPreview(baseRef, overrides, startYear)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (baseRef) runPreview(baseRef, overrides, startYear)
   }, [baseRef, overrides, startYear])
 
   useEffect(() => {
@@ -409,9 +406,8 @@ export const ManualRotationEditor = ({
           ? error.message
           : 'Kunne ikke gemme den manuelle rettelse.',
       )
-    } finally {
-      setIsSaving(false)
     }
+    setIsSaving(false)
   }
 
   const years = preview ? preview.years.slice(0, preview.activeLen) : []
