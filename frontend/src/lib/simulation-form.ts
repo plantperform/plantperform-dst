@@ -75,6 +75,7 @@ export type SimulationFormValues = {
   farmingSystem: FarmingSystem
   economicsProfileId: string
   chosenCrops: string[]
+  optedOutCrops: string[]
   // Unique across categories: a variant such as brak ("1") belongs to several
   // categories but is selected once.
   rotationVariants: string[]
@@ -98,6 +99,7 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   farmingSystem: 'Konventionel',
   economicsProfileId: STANDARD_PROFILE_ID,
   chosenCrops: [],
+  optedOutCrops: [],
   rotationVariants: [],
   nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
@@ -197,6 +199,7 @@ export const SIMULATION_FORM_STEPS = [
     label: 'Afgrøder',
     schema: z.object({
       chosenCrops: z.array(z.string()).min(1, 'Vælg mindst en afgrøde'),
+      optedOutCrops: z.array(z.string()),
     }),
   },
   {
@@ -283,7 +286,10 @@ export const selectedInCategory = (
   ).length
 }
 
-export type CropChoice = Pick<SimulationFormValues, 'chosenCrops'>
+export type CropChoice = Pick<
+  SimulationFormValues,
+  'chosenCrops' | 'optedOutCrops'
+>
 
 export type RotationChoice = CropChoice &
   Pick<SimulationFormValues, 'rotationVariants'>
@@ -324,8 +330,9 @@ export const cropsForFarmingSystem = (
 
 const matchesCropChoice = (
   rotation: RotationOption,
-  { chosenCrops }: CropChoice,
-): boolean => hasAnyCrop(rotation, chosenCrops)
+  { chosenCrops, optedOutCrops }: CropChoice,
+): boolean =>
+  hasAnyCrop(rotation, chosenCrops) && !hasAnyCrop(rotation, optedOutCrops)
 
 export const categoriesMatchingCropChoice = (
   categories: RotationCategoryOption[],
@@ -338,6 +345,16 @@ export const categoriesMatchingCropChoice = (
     return rotations.length > 0 ? [{ ...category, rotations }] : []
   })
 
+export const otherCrops = (
+  categories: RotationCategoryOption[],
+  chosenCrops: string[],
+): string[] =>
+  cropsIn(
+    [...rotationsByVariant(categories).values()].filter((rotation) =>
+      hasAnyCrop(rotation, chosenCrops),
+    ),
+  ).filter((crop) => !chosenCrops.includes(crop))
+
 export const matchingRotationCount = (
   categories: RotationCategoryOption[],
   choice: CropChoice,
@@ -346,9 +363,15 @@ export const matchingRotationCount = (
 
 export const withCropChoice = (
   categories: RotationCategoryOption[],
-  { chosenCrops, rotationVariants }: RotationChoice,
+  { chosenCrops, optedOutCrops, rotationVariants }: RotationChoice,
 ): RotationChoice => {
-  const choice = { chosenCrops: [...chosenCrops].sort(byDanishName) }
+  const others = otherCrops(categories, chosenCrops)
+  const choice = {
+    chosenCrops: [...chosenCrops].sort(byDanishName),
+    optedOutCrops: optedOutCrops
+      .filter((crop) => others.includes(crop))
+      .sort(byDanishName),
+  }
   const byVariant = rotationsByVariant(categories)
   return {
     ...choice,

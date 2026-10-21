@@ -52,7 +52,7 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | afgrøde | crop | | |
-| afgrødevalg, valgte afgrøder | `CropChoice`, `chosenCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop. Not saved on the simulation |
+| afgrødevalg, valgte og fravalgte afgrøder | `CropChoice`, `chosenCrops`, `optedOutCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop and no opted-out one. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
 | afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
 | helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and grønkorn blends. Majshelsæd counts as Majs |

@@ -23,6 +23,7 @@ import {
   nNormPercentagesFor,
   NO_FERTILISER,
   nNormPercentagesLabel,
+  otherCrops,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
@@ -291,21 +292,37 @@ describe('crop choice', () => {
     ])
   })
 
-  it('counts the rotations with a chosen crop', () => {
-    expect(
-      matchingRotationCount(CATEGORIES, { chosenCrops: ['Kløvergræs'] }),
-    ).toBe(2)
+  it('lists the other crops in the rotations with a chosen crop', () => {
+    expect(otherCrops(CATEGORIES, ['Kløvergræs'])).toEqual(['Havre', 'Vårbyg'])
+    expect(otherCrops(CATEGORIES, [])).toEqual([])
   })
 
-  it('drops the selected rotations that no longer match', () => {
+  it('counts the rotations with a chosen crop and no opted-out one', () => {
+    expect(
+      matchingRotationCount(CATEGORIES, {
+        chosenCrops: ['Kløvergræs'],
+        optedOutCrops: [],
+      }),
+    ).toBe(2)
+    expect(
+      matchingRotationCount(CATEGORIES, {
+        chosenCrops: ['Kløvergræs'],
+        optedOutCrops: ['Havre'],
+      }),
+    ).toBe(1)
+  })
+
+  it('drops the selected rotations and opt-outs that no longer apply', () => {
     expect(
       withCropChoice(CATEGORIES, {
         chosenCrops: ['Vårbyg', 'Kløvergræs'],
+        optedOutCrops: ['Havre', 'Majs'],
         rotationVariants: ['10', '20', '30'],
       }),
     ).toEqual({
       chosenCrops: ['Kløvergræs', 'Vårbyg'],
-      rotationVariants: ['10', '30'],
+      optedOutCrops: ['Havre'],
+      rotationVariants: ['10'],
     })
   })
 
@@ -313,11 +330,23 @@ describe('crop choice', () => {
     expect(
       withFarmingSystem(
         CATEGORIES,
-        { chosenCrops: ['Havre', 'Kløvergræs'], rotationVariants: ['30'] },
+        {
+          chosenCrops: ['Havre', 'Kløvergræs'],
+          optedOutCrops: [],
+          rotationVariants: ['30'],
+        },
         'Konventionel',
       ),
-    ).toEqual({ chosenCrops: ['Kløvergræs'], rotationVariants: ['30'] })
-    const nothingChosen = { chosenCrops: [], rotationVariants: ['10'] }
+    ).toEqual({
+      chosenCrops: ['Kløvergræs'],
+      optedOutCrops: [],
+      rotationVariants: ['30'],
+    })
+    const nothingChosen = {
+      chosenCrops: [],
+      optedOutCrops: [],
+      rotationVariants: ['10'],
+    }
     expect(withFarmingSystem(CATEGORIES, nothingChosen, 'Økologisk')).toBe(
       nothingChosen,
     )

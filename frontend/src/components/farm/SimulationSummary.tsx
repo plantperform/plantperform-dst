@@ -150,6 +150,9 @@ export const SimulationSummary = ({
 
         <Section step="crops" onEditStep={onEditStep}>
           <p className="text-foreground">{values.chosenCrops.join(' · ')}</p>
+          {values.optedOutCrops.length > 0 ? (
+            <p>Fravalgt: {values.optedOutCrops.join(' · ')}</p>
+          ) : null}
         </Section>
 
         <Section step="rotations" term="rotation" onEditStep={onEditStep}>
