@@ -180,6 +180,7 @@ class YearlyOptimizationInput:
     constraints: YearlyConstraintsInput
     time_limit_seconds: float
     fixed_fields: tuple[FixedYearlyFieldContribution, ...] = ()
+    relative_gap_limit: float = RELATIVE_GAP_LIMIT
 
 
 @dataclass(frozen=True)
@@ -195,3 +196,6 @@ class YearlyOptimizationOutput:
     # Net kg per year by kystvandopland: positive buys, negative sells.
     # total_db2 remains the crops' DB2, before quota payments.
     quota_trades: dict[int, tuple[int, ...]] = field(default_factory=dict)
+    # Proven upper bound on total_db2 (same units). It can be set without a
+    # solution (UNKNOWN), and is None when there is nothing to bound.
+    db2_upper_bound: float | None = None
