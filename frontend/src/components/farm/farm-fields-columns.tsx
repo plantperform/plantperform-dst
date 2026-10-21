@@ -23,6 +23,7 @@ import {
   fieldFigure,
   fieldDisplayName,
   fieldNNormPct,
+  firstCalendarYear,
   formatLockTooltip,
   formatNumber,
   formatQuotaAmount,
@@ -33,8 +34,6 @@ import {
   isFieldCalculated,
   isFieldLocked,
   perHaUnit,
-  REAL_HISTORY_START_CALENDAR_YEAR,
-  ROTATION_START_CALENDAR_YEAR,
   totalsFigure,
   type FarmQuota,
   type FieldTotals,
@@ -613,9 +612,7 @@ export const buildFarmFieldsColumns = ({
     areaColumn(() => `${formatNumber(totals.areaHa)} ha`),
   )
 
-  const rotationStartYear = isSimulationView
-    ? ROTATION_START_CALENDAR_YEAR
-    : REAL_HISTORY_START_CALENDAR_YEAR
+  const rotationStartYear = firstCalendarYear(!isSimulationView)
   const highlightIndex = selectedYearIndex
   const selectedCalendarYear =
     highlightIndex !== null ? rotationStartYear + highlightIndex : null

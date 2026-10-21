@@ -58,10 +58,9 @@ import {
   changedFieldIds,
   fieldDisplayName,
   fieldTitle,
+  firstCalendarYear,
   formatFieldCount,
   isFieldLocked,
-  REAL_HISTORY_START_CALENDAR_YEAR,
-  ROTATION_START_CALENDAR_YEAR,
   yearNLoadKgHa,
 } from '@/lib/field-domain'
 import {
@@ -342,11 +341,8 @@ export const FarmFieldsMap = ({
     useState<ColorAttribute | null>(null)
   const hasSelectedYear = mode !== 'rules' && selectedYearIndex !== null
   const yearIndex = hasSelectedYear ? selectedYearIndex : null
-  const rotationStartYear = isSimulationView
-    ? ROTATION_START_CALENDAR_YEAR
-    : REAL_HISTORY_START_CALENDAR_YEAR
   const selectedCalendarYear =
-    yearIndex !== null ? rotationStartYear + yearIndex : null
+    yearIndex !== null ? firstCalendarYear(!isSimulationView) + yearIndex : null
   const colorBy =
     colorBySelection.forMode === mode
       ? colorBySelection.value

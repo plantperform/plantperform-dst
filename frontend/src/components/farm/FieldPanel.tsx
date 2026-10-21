@@ -31,13 +31,12 @@ import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
+  firstCalendarYear,
   formatNumber,
   formatQuotaAmount,
   getFieldQuotaStatus,
   isFieldCalculated,
   QUOTA_STATUS_STYLES,
-  REAL_HISTORY_START_CALENDAR_YEAR,
-  ROTATION_START_CALENDAR_YEAR,
   type PerHaFigure,
   type QuotaStatus,
 } from '@/lib/field-domain'
@@ -191,9 +190,7 @@ export const FieldPanel = ({
       : calculated
         ? { value: figure.value, detail: figure.total }
         : { value: 'Ikke beregnet', muted: true }
-  const rotationStartYear = isSimulationView
-    ? ROTATION_START_CALENDAR_YEAR
-    : REAL_HISTORY_START_CALENDAR_YEAR
+  const rotationStartYear = firstCalendarYear(!isSimulationView)
   const quotaStatus = getFieldQuotaStatus(field, isSimulationView)
   const canShowCalcSection =
     !isSimulationView || (Boolean(simulationId) && field.rotationId !== null)

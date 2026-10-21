@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useViewportShorterThan } from '@/hooks/use-viewport-height'
 import {
+  firstCalendarYear,
   formatCompactDkk,
   formatFieldCount,
   formatNumber,
@@ -35,10 +36,8 @@ import {
   QUOTA_STATUS_LABELS,
   QUOTA_STATUS_STYLES,
   quotaStatusLevel,
-  REAL_HISTORY_START_CALENDAR_YEAR,
   resolveFarmQuota,
   ROTATION_CALENDAR_YEARS,
-  ROTATION_START_CALENDAR_YEAR,
   summarizeCropDistribution,
   type CatchmentQuota,
   type CatchmentTotalsByYear,
@@ -79,9 +78,7 @@ const buildColumns = (
   entries: YearlySummaryEntry[] | undefined,
   history: boolean,
 ): YearColumn[] => {
-  const startCalendarYear = history
-    ? REAL_HISTORY_START_CALENDAR_YEAR
-    : ROTATION_START_CALENDAR_YEAR
+  const startCalendarYear = firstCalendarYear(history)
   const yearCount = ROTATION_CALENDAR_YEARS.length
   const entriesByIndex = new Map<number, YearlySummaryEntry>()
   for (const entry of entries ?? []) {
