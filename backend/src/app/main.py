@@ -11,6 +11,7 @@ from app.api.v0.router import router as v0_router
 from app.auth import configured_origins, validate_aws_region
 from app.data.creation_store import recover_local_simulation_creations
 from app.data.optimization_store import recover_local_optimization_runs
+from app.data.quota_value_store import recover_local_quota_values
 from app.data.read_model_store import recover_local_preparations
 from app.domain.creation import CreationActiveError
 from app.domain.read_model import ReadModelNotReadyError
@@ -33,6 +34,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         optimizer = start_local_optimizer()
         try:
             await run_in_threadpool(recover_local_optimization_runs)
+            await run_in_threadpool(recover_local_quota_values)
             await run_in_threadpool(recover_local_simulation_creations)
             await run_in_threadpool(recover_local_preparations)
             yield
