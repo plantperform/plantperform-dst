@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useId, useMemo, useState, type KeyboardEvent } from 'react'
+import { useId, useState, type KeyboardEvent } from 'react'
 
 import type { FieldRecord } from '@/api/types'
 import { Input } from '@/components/ui/input'
@@ -39,7 +39,7 @@ export const FieldSearch = ({
   const listId = useId()
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
-  const matches = useMemo(() => matchFields(fields, query), [fields, query])
+  const matches = matchFields(fields, query)
   const hasQuery = query.trim() !== ''
   const hasMatches = matches.length > 0
   const highlightedIndex = hasMatches

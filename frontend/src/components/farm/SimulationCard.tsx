@@ -1,5 +1,4 @@
 import { Copy, Trash2 } from 'lucide-react'
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
@@ -71,24 +70,18 @@ const CatchmentStatusList = ({
   const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
   const catchmentLabel = useCatchmentLabel(farmId, fields)
-  const statuses = useMemo(
-    () =>
-      yearValues.data
-        ? summarizeCatchmentYearStatuses(
-            summarizeCatchmentYearTotals(fields, yearValues.data, false),
-            false,
-            partialCatchmentQuotas(fields, true),
-          )
-            .map((status) => ({
-              status,
-              label: catchmentLabel(status.catchmentId),
-            }))
-            .sort((left, right) =>
-              left.label.localeCompare(right.label, 'da-DK'),
-            )
-        : null,
-    [catchmentLabel, fields, yearValues.data],
-  )
+  const statuses = yearValues.data
+    ? summarizeCatchmentYearStatuses(
+        summarizeCatchmentYearTotals(fields, yearValues.data, false),
+        false,
+        partialCatchmentQuotas(fields, true),
+      )
+        .map((status) => ({
+          status,
+          label: catchmentLabel(status.catchmentId),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'da-DK'))
+    : null
 
   if (!hasValues) return null
   if (yearValues.error) {
@@ -235,6 +228,22 @@ type SimulationCardProps = {
   onDelete: () => void
 }
 
+const summarizeSimulation = (
+  fields: FieldRecord[],
+  liveFields: FieldRecord[],
+) => {
+  const { totals } = resolveFarmQuota(fields, true)
+  return {
+    fields,
+    totals,
+    changes: describeFieldChanges({
+      changed: changedFieldIds(fields, liveFields).size,
+      locked: fields.filter(isFieldLocked).length,
+      uncalculated: totals.uncalculatedCount,
+    }),
+  }
+}
+
 export const SimulationCard = ({
   farmId,
   simulation,
@@ -256,19 +265,7 @@ export const SimulationCard = ({
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
-  const summary = useMemo(() => {
-    if (!fields) return undefined
-    const { totals } = resolveFarmQuota(fields, true)
-    return {
-      fields,
-      totals,
-      changes: describeFieldChanges({
-        changed: changedFieldIds(fields, liveFields).size,
-        locked: fields.filter(isFieldLocked).length,
-        uncalculated: totals.uncalculatedCount,
-      }),
-    }
-  }, [fields, liveFields])
+  const summary = fields ? summarizeSimulation(fields, liveFields) : undefined
   const calculated = summary !== undefined && summary.totals.calculatedCount > 0
   const canCompare =
     fields !== undefined && comparisonAvailability(fields).kind === 'ready'

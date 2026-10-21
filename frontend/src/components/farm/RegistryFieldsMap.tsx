@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import MapView, { Layer, Source } from 'react-map-gl/maplibre'
 
 import type { RegistryField } from '@/api/types'
@@ -18,21 +18,18 @@ export const RegistryFieldsMap = ({
   catchments,
 }: RegistryFieldsMapProps) => {
   const [mapLib] = useState(loadMaplibre)
-  const data = useMemo<FeatureCollection>(
-    () => ({
-      type: 'FeatureCollection',
-      features: fields.map((field) => ({
-        type: 'Feature',
-        geometry: field.geometry,
-        properties: {
-          color: catchments.find(
-            (catchment) => catchment.catchmentId === field.catchmentId,
-          )?.color,
-        },
-      })),
-    }),
-    [fields, catchments],
-  )
+  const data: FeatureCollection = {
+    type: 'FeatureCollection',
+    features: fields.map((field) => ({
+      type: 'Feature',
+      geometry: field.geometry,
+      properties: {
+        color: catchments.find(
+          (catchment) => catchment.catchmentId === field.catchmentId,
+        )?.color,
+      },
+    })),
+  }
   const bounds = getFieldsBounds(fields)
   if (bounds === null) return null
 

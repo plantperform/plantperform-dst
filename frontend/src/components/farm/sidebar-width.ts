@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 export const MIN_SIDEBAR_WIDTH = 272
 export const MAX_SIDEBAR_WIDTH = 560
@@ -28,7 +28,7 @@ const readStoredWidth = () => {
 export const useSidebarWidth = () => {
   const [width, setWidth] = useState(readStoredWidth)
 
-  const changeWidth = useCallback((next: number) => {
+  const changeWidth = (next: number) => {
     const clamped = clampSidebarWidth(next)
     setWidth(clamped)
     try {
@@ -36,7 +36,7 @@ export const useSidebarWidth = () => {
     } catch {
       // Not remembering the width is acceptable; resizing still works.
     }
-  }, [])
+  }
 
   return { width, changeWidth }
 }

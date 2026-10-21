@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-
 import type { FieldRecord } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { WinterCoverLegend } from '@/components/farm/WinterCoverBand'
@@ -16,13 +14,9 @@ export const CropGroupLegend = ({
   fields,
   className,
 }: CropGroupLegendProps) => {
-  const { groups, covers } = useMemo(() => {
-    const years = fields.flatMap((field) => field.cropRotation)
-    return {
-      groups: presentCropGroups(years),
-      covers: presentWinterCovers(rotationCovers(years) ?? []),
-    }
-  }, [fields])
+  const years = fields.flatMap((field) => field.cropRotation)
+  const groups = presentCropGroups(years)
+  const covers = presentWinterCovers(rotationCovers(years) ?? [])
 
   if (groups.length === 0) return null
 

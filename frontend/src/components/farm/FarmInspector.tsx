@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
@@ -55,7 +55,7 @@ import {
   summarizeCatchmentYearTotals,
   summarizeFieldYears,
 } from '@/lib/field-domain'
-import { compareFields } from '@/lib/field-sort'
+import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
 
@@ -88,6 +88,30 @@ type FarmInspectorProps = {
   onOptimizeDialogOpenChange: (open: boolean) => void
   onEditBasis: (simulation: Simulation) => void
   onError: (message: string | null) => void
+}
+
+const onlyCatchmentKey = (fields: FieldRecord[]) => {
+  const keys = new Set(fields.map((field) => catchmentKey(field.catchmentId)))
+  return keys.size === 1 && !keys.has(catchmentKey(null)) ? [...keys][0] : null
+}
+
+const sortListFields = (
+  fields: FieldRecord[],
+  sort: FieldsSortState,
+  catchmentLabel: CatchmentLabel,
+  highlightedCatchmentKey: string | null,
+) => {
+  const sorted = [...fields].sort((left, right) =>
+    compareFields(left, right, sort, catchmentLabel),
+  )
+  const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
+  if (highlightedCatchmentKey === null) return ordered
+  const inCatchment = (field: FieldRecord) =>
+    fieldInCatchment(field, highlightedCatchmentKey)
+  return [
+    ...ordered.filter(inCatchment),
+    ...ordered.filter((field) => !inCatchment(field)),
+  ]
 }
 
 export const FarmInspector = ({
@@ -144,10 +168,7 @@ export const FarmInspector = ({
   } | null>(null)
   const [detachRequest, setDetachRequest] = useState<FieldRecord[]>([])
   const { detachingFieldIds, detachFields } = useDetachFields(farm.id, onError)
-  const requestDetach = useCallback(
-    (field: FieldRecord) => setDetachRequest([field]),
-    [],
-  )
+  const requestDetach = (field: FieldRecord) => setDetachRequest([field])
   const isSimulationView = selection.kind === 'simulation'
   const selectedSimulationId = selectedSimulation?.id
   const selectionKey =
@@ -191,75 +212,53 @@ export const FarmInspector = ({
     ? `Indlæser marker for simuleringen ${selectedSimulation.name}...`
     : 'Indlæser marker...'
 
-  const singleCatchmentKey = useMemo(() => {
-    const keys = new Set(fields.map((field) => catchmentKey(field.catchmentId)))
-    return keys.size === 1 && !keys.has(catchmentKey(null))
-      ? [...keys][0]
+  const singleCatchmentKey = onlyCatchmentKey(fields)
+  const effectiveHighlightedCatchmentKey =
+    singleCatchmentKey === null &&
+    highlightedCatchmentKey !== null &&
+    fields.some((field) => fieldInCatchment(field, highlightedCatchmentKey))
+      ? highlightedCatchmentKey
       : null
-  }, [fields])
-  const effectiveHighlightedCatchmentKey = useMemo(() => {
-    if (singleCatchmentKey !== null || highlightedCatchmentKey === null)
-      return null
-    const stillPresent = fields.some((field) =>
-      fieldInCatchment(field, highlightedCatchmentKey),
-    )
-    return stillPresent ? highlightedCatchmentKey : null
-  }, [fields, singleCatchmentKey, highlightedCatchmentKey])
 
   const catchmentLabel = useCatchmentLabel(farm.id, fields)
-  const highlightedFields = useMemo(
-    () =>
-      effectiveHighlightedCatchmentKey === null
-        ? fields
-        : fields.filter((field) =>
-            fieldInCatchment(field, effectiveHighlightedCatchmentKey),
-          ),
-    [fields, effectiveHighlightedCatchmentKey],
-  )
+  const highlightedFields =
+    effectiveHighlightedCatchmentKey === null
+      ? fields
+      : fields.filter((field) =>
+          fieldInCatchment(field, effectiveHighlightedCatchmentKey),
+        )
   const panelField = isRules
     ? null
     : (fields.find((field) => field.id === selectedFieldId) ?? null)
   const bindField = fields.find((field) => field.id === bindFieldId) ?? null
 
-  const toggleFieldLock = useCallback(
-    async (field: FieldRecord) => {
-      if (!selectedSimulationId || field.rotationId === null) return
+  const toggleFieldLock = async (field: FieldRecord) => {
+    if (!selectedSimulationId || field.rotationId === null) return
 
-      const unlocking = isFieldLocked(field)
-      const target = unlocking ? [] : [field.rotationId]
-      setLockingFieldId(field.id)
-      try {
-        await updateSimulationField(
-          farm.id,
-          selectedSimulationId,
-          field.id,
-          { allowedRotationIds: target },
-        )
-        await mutate(simulationViewKey(farm.id, selectedSimulationId))
-        if (unlocking) markStale(selectedSimulationId)
-        onError(null)
-      } catch {
-        onError('Kunne ikke ændre låsningen af marken.')
-      }
-      setLockingFieldId(null)
-    },
-    [farm.id, selectedSimulationId, onError, markStale],
-  )
-  const onToggleLock = useCallback(
-    (field: FieldRecord) => void toggleFieldLock(field),
-    [toggleFieldLock],
-  )
-  const onBindRotation = useCallback(
-    (field: FieldRecord) => setBindFieldId(field.id),
-    [],
-  )
+    const unlocking = isFieldLocked(field)
+    const target = unlocking ? [] : [field.rotationId]
+    setLockingFieldId(field.id)
+    try {
+      await updateSimulationField(farm.id, selectedSimulationId, field.id, {
+        allowedRotationIds: target,
+      })
+      await mutate(simulationViewKey(farm.id, selectedSimulationId))
+      if (unlocking) markStale(selectedSimulationId)
+      onError(null)
+    } catch {
+      onError('Kunne ikke ændre låsningen af marken.')
+    }
+    setLockingFieldId(null)
+  }
+  const onToggleLock = (field: FieldRecord) => void toggleFieldLock(field)
+  const onBindRotation = (field: FieldRecord) => setBindFieldId(field.id)
 
   const selectFieldFromMap = (fieldId: string | null) => {
     onSelectedFieldChange(fieldId)
     if (isRules && fieldId !== null) requestRowFocus(fieldId)
   }
 
-  const handleEscape = useCallback(() => {
+  const handleEscape = () => {
     if (panelField !== null) {
       onSelectedFieldChange(null)
       return true
@@ -269,7 +268,7 @@ export const FarmInspector = ({
       return true
     }
     return false
-  }, [panelField, effectiveHighlightedCatchmentKey, onSelectedFieldChange])
+  }
   useEscapeKey(handleEscape)
 
   const showYearWalkthrough = !fieldsError && !summaryMissing
@@ -281,38 +280,22 @@ export const FarmInspector = ({
   const effectiveSelectedYearIndex = showYearWalkthrough
     ? selectedYearIndex
     : null
-  const { data: yearValues, isLoading: yearValuesLoading } =
-    useFieldYearValues(
-      farm.id,
-      selectedSimulation?.id,
-      fields,
-      showYearWalkthrough,
-    )
-  const listFields = useMemo(
-    () =>
-      effectiveSelectedYearIndex !== null && yearValues
-        ? applyFieldYearValues(fields, yearValues, effectiveSelectedYearIndex)
-        : fields,
-    [fields, yearValues, effectiveSelectedYearIndex],
+  const { data: yearValues, isLoading: yearValuesLoading } = useFieldYearValues(
+    farm.id,
+    selectedSimulation?.id,
+    fields,
+    showYearWalkthrough,
   )
-  const sortedFields = useMemo(() => {
-    const sorted = [...listFields].sort((left, right) =>
-      compareFields(left, right, fieldsSort, catchmentLabel),
-    )
-    const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
-    if (effectiveHighlightedCatchmentKey === null) return ordered
-    const inCatchment = (field: FieldRecord) =>
-      fieldInCatchment(field, effectiveHighlightedCatchmentKey)
-    return [
-      ...ordered.filter(inCatchment),
-      ...ordered.filter((field) => !inCatchment(field)),
-    ]
-  }, [
+  const listFields =
+    effectiveSelectedYearIndex !== null && yearValues
+      ? applyFieldYearValues(fields, yearValues, effectiveSelectedYearIndex)
+      : fields
+  const sortedFields = sortListFields(
     listFields,
     fieldsSort,
     catchmentLabel,
     effectiveHighlightedCatchmentKey,
-  ])
+  )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,
     selectedSimulation?.id,
@@ -327,17 +310,14 @@ export const FarmInspector = ({
   } = isSimulationView ? simulationSummary : historicalSummary
   const isCatchmentScoped =
     showYearWalkthrough && effectiveHighlightedCatchmentKey !== null
-  const catchmentSummary = useMemo(
-    () =>
-      isCatchmentScoped
-        ? summarizeFieldYears(highlightedFields, yearValues, !isSimulationView)
-        : undefined,
-    [isCatchmentScoped, highlightedFields, yearValues, isSimulationView],
-  )
+  const catchmentSummary = isCatchmentScoped
+    ? summarizeFieldYears(highlightedFields, yearValues, !isSimulationView)
+    : undefined
   const catchmentColor = useCatchmentColor(farm.id, fields)
-  const catchmentTotalsByYear = useMemo(
-    () => summarizeCatchmentYearTotals(fields, yearValues, !isSimulationView),
-    [fields, yearValues, isSimulationView],
+  const catchmentTotalsByYear = summarizeCatchmentYearTotals(
+    fields,
+    yearValues,
+    !isSimulationView,
   )
   const scopeLabel = isCatchmentScoped
     ? catchmentLabel(highlightedFields[0]?.catchmentId ?? null)

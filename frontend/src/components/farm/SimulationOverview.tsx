@@ -1,5 +1,4 @@
 import { Plus } from 'lucide-react'
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { FieldRecord, Simulation } from '@/api/types'
@@ -40,7 +39,7 @@ export const SimulationOverview = ({
   onDeleteSimulation,
   onNewSimulation,
 }: SimulationOverviewProps) => {
-  const historyQuota = useMemo(() => resolveFarmQuota(fields, false), [fields])
+  const historyQuota = resolveFarmQuota(fields, false)
   const economics = useEconomicsProfiles()
 
   return (

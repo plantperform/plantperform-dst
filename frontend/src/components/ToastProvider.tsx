@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { ToastContext } from '@/components/toast'
 import { cn } from '@/lib/utils'
@@ -20,17 +20,15 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     return () => window.clearTimeout(timeout)
   }, [toast])
 
-  const value = useMemo(() => {
-    const show = (message: string, error: boolean) =>
-      setToast((current) => ({ id: (current?.id ?? 0) + 1, message, error }))
-    return {
-      showToast: (message: string) => show(message, false),
-      showError: (message: string | null) =>
-        message
-          ? show(message, true)
-          : setToast((current) => (current?.error ? null : current)),
-    }
-  }, [])
+  const show = (message: string, error: boolean) =>
+    setToast((current) => ({ id: (current?.id ?? 0) + 1, message, error }))
+  const value = {
+    showToast: (message: string) => show(message, false),
+    showError: (message: string | null) =>
+      message
+        ? show(message, true)
+        : setToast((current) => (current?.error ? null : current)),
+  }
 
   return (
     <ToastContext.Provider value={value}>

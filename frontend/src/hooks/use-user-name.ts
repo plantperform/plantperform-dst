@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 
 import { useAuth } from '@/auth/context'
 import {
@@ -23,11 +23,8 @@ export const useUserName = () => {
   const stored = useSyncExternalStore(subscribe, () =>
     readStoredUserName(email),
   )
-  const name = useMemo(() => parseStoredUserName(stored), [stored])
-  const saveName = useCallback(
-    (next: UserName) => storeUserName(email, next),
-    [email],
-  )
+  const name = parseStoredUserName(stored)
+  const saveName = (next: UserName) => storeUserName(email, next)
 
   return { name, saveName }
 }

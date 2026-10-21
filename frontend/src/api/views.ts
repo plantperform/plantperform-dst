@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import useSWR, { mutate, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
@@ -114,20 +114,14 @@ const useView = <T extends View>(key: string | null) => {
 export const useFarmView = (farmId?: string) => {
   const response = useView<FarmView>(farmViewKey(farmId))
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => applyFarmViewAliases(response.data, aliases),
-    [response.data, aliases],
-  )
+  const data = applyFarmViewAliases(response.data, aliases)
   return { ...response, data }
 }
 
 export const useSimulationView = (farmId?: string, simulationId?: string) => {
   const response = useView<SimulationView>(simulationViewKey(farmId, simulationId))
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
-  const data = useMemo(
-    () => applySimulationViewAliases(response.data, aliases),
-    [response.data, aliases],
-  )
+  const data = applySimulationViewAliases(response.data, aliases)
   return { ...response, data }
 }
 

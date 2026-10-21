@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { mutate } from 'swr'
 
 import { clearSession, loadCurrentUser, refreshAccessToken, setAccessToken } from '@/api/auth'
@@ -42,25 +42,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.clearInterval(refreshTimer)
   }, [user])
 
-  const value = useMemo(
-    () => ({
-      user,
-      isLoading,
-      signIn: async (credentials: Credentials) => {
-        const result = await postJson<TokenResponse, Credentials>('/auth/login', credentials)
-        setAccessToken(result.accessToken)
-        await mutate(() => true, undefined, { revalidate: false })
-        const current = await loadCurrentUser()
-        if (!current) throw new Error('Kunne ikke indlæse brugeren.')
-        setUser(current)
-      },
-      signOut: async () => {
-        await clearSession()
-        setUser(null)
-      },
-    }),
-    [isLoading, user],
-  )
+  const value = {
+    user,
+    isLoading,
+    signIn: async (credentials: Credentials) => {
+      const result = await postJson<TokenResponse, Credentials>(
+        '/auth/login',
+        credentials,
+      )
+      setAccessToken(result.accessToken)
+      await mutate(() => true, undefined, { revalidate: false })
+      const current = await loadCurrentUser()
+      if (!current) throw new Error('Kunne ikke indlæse brugeren.')
+      setUser(current)
+    },
+    signOut: async () => {
+      await clearSession()
+      setUser(null)
+    },
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

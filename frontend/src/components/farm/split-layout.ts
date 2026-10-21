@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 import type { FarmView } from '@/components/farm/types'
 
@@ -106,16 +106,16 @@ export const useSplitLayout = () => {
   const [view, setView] = useState(readStoredView)
   const [listSlack, setListSlack] = useState(readStoredSlack)
 
-  const changeView = useCallback((next: FarmView) => {
+  const changeView = (next: FarmView) => {
     setView(next)
     try {
       window.localStorage.setItem(VIEW_STORAGE_KEY, next)
     } catch {
       return
     }
-  }, [])
+  }
 
-  const changeListSlack = useCallback((next: number) => {
+  const changeListSlack = (next: number) => {
     const clamped = clampListSlack(next)
     setListSlack(clamped)
     try {
@@ -123,7 +123,7 @@ export const useSplitLayout = () => {
     } catch {
       return
     }
-  }, [])
+  }
 
   return { view, changeView, listSlack, changeListSlack }
 }

@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import useSWR from 'swr'
 
 import { deleteJson, fetcher, patchJson, postJson } from '@/api/client'
@@ -205,9 +204,6 @@ export const useFarmBudgets = (
   const response = useSWR<CropBudgets>(farmBudgetsKey(farmId, scope), fetcher, {
     revalidateOnFocus: false,
   })
-  const data = useMemo(
-    () => (response.data ? toAssumptions(response.data) : undefined),
-    [response.data],
-  )
+  const data = response.data ? toAssumptions(response.data) : undefined
   return { ...response, data }
 }
