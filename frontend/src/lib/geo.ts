@@ -244,9 +244,6 @@ export const fieldsToFeatureCollection = (
         yearProperties !== undefined
           ? (field.cropRotation[yearProperties.yearIndex] ?? null)
           : null
-      const yearLeachingKgHa = field.quotaEligible
-        ? (yearProperties?.leachingKgHaByFieldId[field.id] ?? null)
-        : null
       const yearNLoadKgHa = field.quotaEligible
         ? (yearProperties?.nLoadKgHaByFieldId[field.id] ?? null)
         : null
@@ -266,6 +263,8 @@ export const fieldsToFeatureCollection = (
         field.areaHa > 0 && isFieldCalculated(field, isSimulationView)
       const perHa = (value: number) =>
         hasPerHaValues ? value / field.areaHa : null
+      const quotaValue = (yearValue: number | null, total: number) =>
+        field.quotaEligible ? (yearProperties ? yearValue : perHa(total)) : null
       return {
         type: 'Feature',
         properties: {
@@ -277,18 +276,11 @@ export const fieldsToFeatureCollection = (
           soilTypeNumber: field.soilTypeNumber,
           nLoadLimitKgNHa: field.nLoadLimitKgNHa,
           nLoadQuotaKgN: field.nLoadQuotaKgN,
-          leaching:
-            yearProperties !== undefined
-              ? yearLeachingKgHa
-              : field.quotaEligible
-                ? perHa(field.leaching)
-                : null,
-          nLoad:
-            yearProperties !== undefined
-              ? yearNLoadKgHa
-              : field.quotaEligible
-                ? perHa(field.nLoad)
-                : null,
+          leaching: quotaValue(
+            yearProperties?.leachingKgHaByFieldId[field.id] ?? null,
+            field.leaching,
+          ),
+          nLoad: quotaValue(yearNLoadKgHa, field.nLoad),
           db2: perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,

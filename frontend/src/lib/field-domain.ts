@@ -105,6 +105,9 @@ export const yearNLoadKgHa = (
 // forward-looking scenario rotation.
 export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
 
+export const firstCalendarYear = (history: boolean): number =>
+  history ? REAL_HISTORY_START_CALENDAR_YEAR : ROTATION_START_CALENDAR_YEAR
+
 // One year's crop: the crop name followed by the undersown/catch crop name in
 // parentheses when that year has one.
 export const formatRotationYear = (year: RotationYear): string =>
