@@ -2,7 +2,7 @@
 
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
 from app.data import repository
@@ -14,7 +14,7 @@ from app.domain.optimization import (
     SimulationQuotaTrade,
     untradable_quota_reason,
 )
-from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.simulation import OEKO_N_LOFT_BASIS, GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
 from app.services.rotations import afgroede_normer, saedskifte_library
@@ -811,8 +811,18 @@ def _locked_yearly_field_contribution(
     )
 
 
+@dataclass(frozen=True)
+class YearlyInputBuild:
+    """The yearly solver input plus what is needed to turn a solution into fields."""
+
+    input: YearlyOptimizationInput
+    fields: tuple[FieldRecord, ...]
+    options_by_field_id: dict[str, tuple[YearlyRotationOption, ...]]
+    candidates_by_field_id: dict[str, SimulationFieldCandidates]
+
+
 @with_snapshot_rotations
-def run_yearly_optimization(
+def build_yearly_input(
     farm_id: str,
     simulation_id: str,
     time_limit_seconds: float,
@@ -822,17 +832,12 @@ def run_yearly_optimization(
     email: str,
     snapshot,
     quota_trades: tuple[QuotaTradeSetting, ...] = (),
-) -> YearlyOptimizationRunResult:
-    """Run Phase 11 "Års-optimering" with annual rotation shifting.
+) -> YearlyInputBuild:
+    """Build the "Års-optimering" solver input, including every shifted option.
 
-    This works like run_optimization but also lets the solver choose how far
-    each mark's sædskifte is shifted (start_year), allowing it to satisfy
-    calendar-year udledning caps and a limit on total DB2 fluctuation between
-    years. Winning candidates are stored as manual candidates following the
-    apply_manual_rotation pattern, but do not lock the mark. A later regular
-    "Optimér" or "Års-optimering" run may overwrite the result.
-
-    Every remaining candidate can be shifted; see _expand_yearly_options.
+    Expanding the shifted options is the expensive part of a yearly run, so
+    callers that solve the same scenarie several times (the kvote value curve)
+    build it once and only vary the constraints.
     """
     simulation, fields, field_candidates = snapshot
 
@@ -915,13 +920,11 @@ def run_yearly_optimization(
             )
         )
 
-    names = _kystvand_names(farm_id, email) if quota_trades else {}
-    _validate_quota_trades(fields, quota_trades, names)
     max_n_load_by_year = _max_n_load_by_kystvandopland_and_year(
         fields,
         max_n_load_by_kystvandopland,
     )
-    output = solve_yearly(
+    return YearlyInputBuild(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
             fixed_fields=tuple(fixed_fields),
@@ -935,8 +938,58 @@ def run_yearly_optimization(
                 kvote_by_kystvandopland=_kvote_by_kystvandopland(fields),
                 max_udnyttet_n_per_harmoni_ha=n_ceiling,
             ),
-            time_limit_seconds=solver_time_limit(time_limit_seconds),
-        )
+            time_limit_seconds=time_limit_seconds,
+        ),
+        fields=tuple(fields),
+        options_by_field_id=options_by_field_id,
+        candidates_by_field_id=candidates_by_field_id,
+    )
+
+
+@with_snapshot_rotations
+def run_yearly_optimization(
+    farm_id: str,
+    simulation_id: str,
+    time_limit_seconds: float,
+    max_n_load_by_kystvandopland: dict[int | None, tuple[float | None, ...]],
+    db2_swing_pct: float | None,
+    excluded_afgrodekoder: frozenset[int],
+    email: str,
+    snapshot,
+    quota_trades: tuple[QuotaTradeSetting, ...] = (),
+) -> YearlyOptimizationRunResult:
+    """Run Phase 11 "Års-optimering" with annual rotation shifting.
+
+    This works like run_optimization but also lets the solver choose how far
+    each mark's sædskifte is shifted (start_year), allowing it to satisfy
+    calendar-year udledning caps and a limit on total DB2 fluctuation between
+    years. Winning candidates are stored as manual candidates following the
+    apply_manual_rotation pattern, but do not lock the mark. A later regular
+    "Optimér" or "Års-optimering" run may overwrite the result.
+
+    Every remaining candidate can be shifted; see _expand_yearly_options.
+    """
+    built = build_yearly_input(
+        farm_id,
+        simulation_id,
+        time_limit_seconds,
+        max_n_load_by_kystvandopland,
+        db2_swing_pct,
+        excluded_afgrodekoder,
+        email,
+        snapshot=snapshot,
+        quota_trades=quota_trades,
+    )
+    fields = list(built.fields)
+    options_by_field_id = built.options_by_field_id
+    candidates_by_field_id = built.candidates_by_field_id
+    field_inputs = list(built.input.fields)
+    fixed_fields = list(built.input.fixed_fields)
+    n_ceiling = built.input.constraints.max_udnyttet_n_per_harmoni_ha
+    names = _kystvand_names(farm_id, email) if quota_trades else {}
+    _validate_quota_trades(fields, quota_trades, names)
+    output = solve_yearly(
+        input=replace(built.input, time_limit_seconds=solver_time_limit(time_limit_seconds))
     )
 
     if output.status == "INFEASIBLE":
@@ -947,7 +1000,9 @@ def run_yearly_optimization(
             _lowest_n_load_by_kystvandopland_and_year(field_inputs, fixed_fields),
             {
                 (kystvand_id, year): cap
-                for kystvand_id, caps in max_n_load_by_year.items()
+                for kystvand_id, caps in (
+                    built.input.constraints.max_n_load_by_kystvandopland_and_year.items()
+                )
                 # A traded opland can buy what it lacks, so it never falls short.
                 if kystvand_id not in traded
                 for year, cap in enumerate(caps)
