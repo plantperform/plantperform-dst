@@ -21,4 +21,4 @@ def initialize_configuration():
         os.environ["DATABASE_URL"] = config["DATABASE_URL"]
     os.environ.setdefault("DB_POOL_SIZE", "2")
     os.environ.setdefault("DB_MAX_OVERFLOW", "0")
-    os.environ.setdefault("OPTIMIZER_SOLVER_THREADS", "8")
+    os.environ.setdefault("OPTIMIZER_SOLVER_THREADS", "4")

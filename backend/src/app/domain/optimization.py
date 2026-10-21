@@ -1,5 +1,7 @@
 import math
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
@@ -20,14 +22,36 @@ ResultStatus = Literal["not_started", "queued", "in_progress", "completed", "fai
 OptimizationKind = Literal["optimize", "yearly"]
 
 
+class DeliveryOutcome(StrEnum):
+    ACK = "ack"
+    RETRY = "retry"
+    DEAD_LETTER = "dead_letter"
+    INTERRUPTED = "interrupted"
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    outcome: DeliveryOutcome
+    retry_after: int | None = None
+    error: dict | None = None
+
+
+class OptimizationTerminalError(RuntimeError):
+    def __init__(self, error):
+        self.error = (
+            error if isinstance(error, dict) else {"code": "WORKER_ERROR", "message": str(error)}
+        )
+        super().__init__(self.error["message"])
+
+
 class OptimizationLeaseActiveError(RuntimeError):
     def __init__(self, expires_at: datetime):
         super().__init__("The optimization run already has an active execution lease")
         self.expires_at = expires_at
 
 
-class OptimizationAttemptsExhaustedError(RuntimeError):
-    """Leave an exhausted SQS delivery unacknowledged for dead-lettering."""
+class OptimizationAttemptsExhaustedError(OptimizationTerminalError):
+    """An exhausted run must be dead-lettered without executing again."""
 
 
 class OptimizeSimulationRequest(CamelModel):

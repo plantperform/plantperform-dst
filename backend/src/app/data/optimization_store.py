@@ -14,8 +14,11 @@ from app.domain.optimization import (
     LEASE_DURATION_SECONDS,
     MAX_JOB_ATTEMPTS,
     RETRY_DELAY_SECONDS,
+    DeliveryOutcome,
+    ExecutionResult,
     OptimizationAttemptsExhaustedError,
     OptimizationLeaseActiveError,
+    OptimizationTerminalError,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,7 +76,11 @@ def _raise_if_exhausted(row):
         and row.attempts >= MAX_JOB_ATTEMPTS
         and (row.error or {}).get("code") == "WORKER_ERROR"
     ):
-        raise OptimizationAttemptsExhaustedError("The optimization attempt limit was reached")
+        raise OptimizationAttemptsExhaustedError(row.error)
+    if row.status == "failed":
+        raise OptimizationTerminalError(
+            row.error or {"code": "WORKER_ERROR", "message": "Optimeringen fejlede."}
+        )
 
 
 def check_delivery_state(simulation_id, run_id):
@@ -100,6 +107,47 @@ def check_delivery_state(simulation_id, run_id):
         raise OptimizationLeaseActiveError(row.lease_expires_at)
     if row.status in ("queued", "in_progress"):
         raise RuntimeError("The optimization run still requires execution")
+
+
+def delivery_result(simulation_id, run_id, farm_id):
+    """Resolve redelivery without starting the optimizer or incrementing attempts."""
+    with SessionLocal() as session:
+        row = session.execute(
+            select(
+                setups.c.farm_id,
+                setups.c.revision,
+                results.c.run_id,
+                results.c.input_revision,
+                results.c.status,
+                results.c.error,
+                results.c.lease_expires_at,
+            )
+            .join(results, results.c.simulation_id == setups.c.id)
+            .where(setups.c.id == simulation_id)
+        ).first()
+    if row is None:
+        return ExecutionResult(DeliveryOutcome.ACK)
+    if row.farm_id != farm_id:
+        return ExecutionResult(
+            DeliveryOutcome.DEAD_LETTER,
+            error={"code": "INVALID_INPUT", "message": "Optimization message farm does not match"},
+        )
+    if row.run_id != run_id or row.input_revision != row.revision:
+        return ExecutionResult(DeliveryOutcome.ACK)
+    if row.status == "failed":
+        return ExecutionResult(
+            DeliveryOutcome.DEAD_LETTER,
+            error=row.error or {"code": "WORKER_ERROR", "message": "Optimeringen fejlede."},
+        )
+    if row.status not in ("queued", "in_progress"):
+        return ExecutionResult(DeliveryOutcome.ACK)
+    if (
+        row.status == "in_progress"
+        and row.lease_expires_at is not None
+        and row.lease_expires_at >= datetime.now(UTC)
+    ):
+        raise OptimizationLeaseActiveError(row.lease_expires_at)
+    return None
 
 
 def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
@@ -133,6 +181,10 @@ def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
                     raise OptimizationLeaseActiveError(row.lease_expires_at)
                 return None
         if row.attempts >= MAX_JOB_ATTEMPTS:
+            error = {
+                "code": "WORKER_ERROR",
+                "message": "Optimeringen nåede det maksimale antal forsøg. Prøv igen.",
+            }
             session.execute(
                 update(results)
                 .where(results.c.simulation_id == simulation_id)
@@ -141,10 +193,7 @@ def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
                     lease_token=None,
                     lease_expires_at=None,
                     finished_at=datetime.now(UTC),
-                    error={
-                        "code": "WORKER_ERROR",
-                        "message": "Optimeringen nåede det maksimale antal forsøg. Prøv igen.",
-                    },
+                    error=error,
                 )
             )
         else:
@@ -296,7 +345,10 @@ def finish(
     error=None,
     retry=False,
     setup_fields=None,
+    stopped=False,
 ):
+    if stopped and (not error or retry or output is not None):
+        raise ValueError("Stopped-child recovery may only persist a terminal failure")
     with SessionLocal.begin() as session:
         setup = session.execute(
             select(setups.c.revision).where(setups.c.id == simulation_id).with_for_update()
@@ -311,7 +363,8 @@ def finish(
             or row.lease_token != token
             or row.input_revision != revision
             or row.status != "in_progress"
-            or row.lease_expires_at < datetime.now(UTC)
+            or row.lease_expires_at is None
+            or (not stopped and row.lease_expires_at < datetime.now(UTC))
         ):
             return False
         values = dict(
@@ -337,6 +390,45 @@ def finish(
 
             publish_optimization(session, simulation_id, revision, run_id, output)
         return True
+
+
+def fail_unclaimed(simulation_id, run_id, farm_id, error):
+    """Fail startup errors without taking an active claim away from another worker."""
+    with SessionLocal.begin() as session:
+        setup = session.execute(
+            select(setups.c.farm_id, setups.c.revision)
+            .where(setups.c.id == simulation_id)
+            .with_for_update()
+        ).first()
+        if setup is not None and setup.farm_id == farm_id:
+            row = session.execute(
+                select(results).where(results.c.simulation_id == simulation_id).with_for_update()
+            ).one()
+            if row.run_id == run_id and row.input_revision == setup.revision:
+                if row.status == "in_progress" and (
+                    row.lease_expires_at is None or row.lease_expires_at >= datetime.now(UTC)
+                ):
+                    if row.lease_expires_at is None:
+                        raise RuntimeError("The active optimization run has no execution lease")
+                    raise OptimizationLeaseActiveError(row.lease_expires_at)
+                if row.status in ("queued", "in_progress"):
+                    session.execute(
+                        update(results)
+                        .where(results.c.simulation_id == simulation_id)
+                        .values(
+                            status="failed",
+                            error=error,
+                            finished_at=datetime.now(UTC),
+                            lease_token=None,
+                            lease_expires_at=None,
+                        )
+                    )
+                elif row.status == "failed":
+                    error = row.error or error
+                else:
+                    return None
+                return error
+    return None
 
 
 def recover_local_optimization_runs():

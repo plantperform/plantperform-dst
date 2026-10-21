@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call, patch
 from uuid import uuid4
 
 from app.data import optimization_store
+from app.domain.optimization import DeliveryOutcome, ExecutionResult
 from plantperform_fargate import worker
 from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
@@ -17,7 +18,13 @@ class LocalExecutionTests(unittest.TestCase):
     def test_transient_errors_retry_twice_then_stop_on_success(self):
         with (
             patch.object(
-                worker, "execute", side_effect=[RuntimeError(), RuntimeError(), None]
+                worker,
+                "execute",
+                side_effect=[
+                    ConnectionError(),
+                    ConnectionError(),
+                    ExecutionResult(DeliveryOutcome.ACK),
+                ],
             ) as execute,
             patch.object(worker.time, "sleep") as sleep,
             patch.object(optimization_store, "recover_run") as recover,
@@ -36,7 +43,7 @@ class LocalExecutionTests(unittest.TestCase):
     def test_error_before_claim_does_not_leave_run_active_after_retry_limit(self):
         with (
             patch.object(
-                worker, "execute", side_effect=RuntimeError("database unavailable")
+                worker, "execute", side_effect=ConnectionError("database unavailable")
             ) as execute,
             patch.object(worker.time, "sleep") as sleep,
             patch.object(optimization_store, "recover_run") as recover,
@@ -77,7 +84,9 @@ class LocalExecutionTests(unittest.TestCase):
         finally:
             remaining_time.reset(token)
 
-    def test_both_modes_ignore_legacy_duration_and_publish_feasible_result_at_solver_limit(self):
+    def test_both_modes_ignore_legacy_duration_and_publish_feasible_result_at_solver_limit(
+        self,
+    ):
         for kind in ("optimize", "yearly"):
             for legacy_duration in (1, 7200):
                 with self.subTest(kind=kind, duration=legacy_duration):

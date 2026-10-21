@@ -11,17 +11,21 @@ from app.domain.optimization import (
     MAX_JOB_ATTEMPTS,
     NUM_YEARS,
     RETRY_DELAY_SECONDS,
+    DeliveryOutcome,
+    ExecutionResult,
     OptimizeSimulationRequest,
     OptimizeSimulationResponse,
     YearlyOptimizeSimulationRequest,
 )
 from app.domain.soil import MissingSoilDataError
+from app.services.optimization.failures import is_transient
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
 from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
 )
+from plantperform_fargate.memory import memory_observation
 from plantperform_fargate.orchestrator import (
     OptimizationInfeasibleError,
     OptimizationUnknownError,
@@ -41,13 +45,14 @@ def _timed_phase(phase, simulation_id, run_id, *, field_count=None, candidate_co
     finally:
         logger.info(
             "optimizer_phase simulation_id=%s run_id=%s phase=%s duration_seconds=%.3f "
-            "field_count=%s candidate_count=%s",
+            "field_count=%s candidate_count=%s memory=%s",
             simulation_id,
             run_id,
             phase,
             time.monotonic() - started,
             field_count,
             candidate_count,
+            memory_observation(),
         )
 
 
@@ -59,7 +64,15 @@ class _LocalExecutionContext:
         return max(0, int((self.deadline - time.monotonic()) * 1000))
 
 
-def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None, on_claim=None):
+def execute(
+    simulation_id,
+    run_id,
+    context,
+    *,
+    sqs_delivery=False,
+    farm_id=None,
+    on_claim=None,
+):
     started = time.monotonic()
     received_at = datetime.now(UTC)
     with _timed_phase("claim", simulation_id, run_id):
@@ -68,13 +81,14 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
         )
     if claimed is None:
         logger.info("optimizer_skipped simulation_id=%s run_id=%s", simulation_id, run_id)
-        return
+        return ExecutionResult(DeliveryOutcome.ACK)
     row, farm_id, token = claimed
     if on_claim is not None:
         on_claim(simulation_id, run_id, token, row["input_revision"])
     deadline_token = remaining_time.set(context.get_remaining_time_in_millis)
     outcome = "failed"
     saved = False
+    result = ExecutionResult(DeliveryOutcome.ACK)
     queued_at = row.get("queued_at")
     logger.info(
         "optimizer_started simulation_id=%s run_id=%s attempt=%s dispatch_wait_seconds=%s",
@@ -91,7 +105,7 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
             )
         if snapshot is None:
             outcome = "stale"
-            return
+            return ExecutionResult(DeliveryOutcome.ACK)
         check_deadline()
         with _timed_phase("prepare_candidates", simulation_id, run_id):
             snapshot = prepare(*snapshot)
@@ -134,7 +148,7 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
             selected = hydrate(snapshot, solved.selected_candidates)
         if selected is None:
             outcome = "stale"
-            return
+            return ExecutionResult(DeliveryOutcome.ACK)
         check_deadline()
         response = OptimizeSimulationResponse(
             status=solved.output.status,
@@ -176,43 +190,34 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
                 },
             )
         outcome = "completed" if saved else "stale"
-    except (
-        OptimizationInfeasibleError,
-        OptimizationUnknownError,
-        OptimizationDeadlineError,
-    ) as error:
-        code = "INFEASIBLE" if isinstance(error, OptimizationInfeasibleError) else "TIMEOUT"
-        saved = optimization_store.finish(
-            simulation_id,
-            run_id,
-            token,
-            row["input_revision"],
-            error={"code": code, "message": str(error)},
-        )
-        outcome = "failed" if saved else "stale"
-    except (MissingSoilDataError, ValueError) as error:
-        saved = optimization_store.finish(
-            simulation_id,
-            run_id,
-            token,
-            row["input_revision"],
-            error={"code": "INVALID_INPUT", "message": str(error)},
-        )
-        outcome = "failed" if saved else "stale"
-    except Exception:
+    except Exception as error:
         logger.exception("optimizer_attempt_failed run_id=%s", run_id)
-        retry = row["attempts"] + 1 < MAX_JOB_ATTEMPTS
+        retry = is_transient(error) and row["attempts"] + 1 < MAX_JOB_ATTEMPTS
+        if isinstance(error, MemoryError):
+            failure = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
+        elif isinstance(error, OptimizationInfeasibleError):
+            failure = {"code": "INFEASIBLE", "message": str(error)}
+        elif isinstance(error, (OptimizationUnknownError, OptimizationDeadlineError)):
+            failure = {"code": "TIMEOUT", "message": str(error)}
+        elif isinstance(error, (MissingSoilDataError, ValueError)):
+            failure = {"code": "INVALID_INPUT", "message": str(error)}
+        else:
+            failure = {"code": "WORKER_ERROR", "message": "Optimeringen fejlede. Prøv igen."}
         saved = optimization_store.finish(
             simulation_id,
             run_id,
             token,
             row["input_revision"],
             retry=retry,
-            error={"code": "WORKER_ERROR", "message": "Optimeringen fejlede. Prøv igen."},
+            error=failure,
         )
         outcome = ("retry" if retry else "failed") if saved else "stale"
-        if saved and (retry or sqs_delivery):
-            raise
+        if saved:
+            result = ExecutionResult(
+                DeliveryOutcome.RETRY if retry else DeliveryOutcome.DEAD_LETTER,
+                retry_after=RETRY_DELAY_SECONDS if retry else None,
+                error=failure,
+            )
     finally:
         remaining_time.reset(deadline_token)
         logger.info(
@@ -226,18 +231,20 @@ def execute(simulation_id, run_id, context, *, sqs_delivery=False, farm_id=None,
         )
         if sqs_delivery and not saved:
             optimization_store.check_delivery_state(simulation_id, run_id)
+    return result
 
 
 def execute_local(simulation_id, run_id):
     for attempt in range(MAX_JOB_ATTEMPTS):
         try:
-            execute(simulation_id, run_id, _LocalExecutionContext())
-            return
-        except Exception:
+            result = execute(simulation_id, run_id, _LocalExecutionContext())
+            if result.outcome != DeliveryOutcome.RETRY:
+                return
+        except Exception as error:
             logger.exception("local_optimizer_attempt_failed run_id=%s", run_id)
-            if attempt + 1 < MAX_JOB_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
-            else:
-                # Errors before claim or during persistence may escape execute's
-                # normal terminal-failure handling. Do not leave that run active.
+            if not is_transient(error) or attempt + 1 == MAX_JOB_ATTEMPTS:
                 optimization_store.recover_run(simulation_id, run_id, interrupted=True)
+                return
+        if attempt + 1 < MAX_JOB_ATTEMPTS:
+            time.sleep(RETRY_DELAY_SECONDS)
+    optimization_store.recover_run(simulation_id, run_id, interrupted=True)

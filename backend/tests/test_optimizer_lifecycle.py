@@ -454,20 +454,21 @@ class LifecycleTests(DatabaseTests):
         }
         with patch.object(fargate_consumer, "initialize_configuration"):
             fargate_consumer._child_execute(envelope, time.monotonic() + 3600, connection)
-        kind, value = connection.send.call_args.args[0]
-        if kind == "retry":
+        kind, result = connection.send.call_args.args[0]
+        self.assertEqual(kind, "result")
+        if result.outcome == "retry":
             self.queue.change_message_visibility(
-                QueueUrl="test-queue", ReceiptHandle="receipt", VisibilityTimeout=value
+                QueueUrl="test-queue", ReceiptHandle="receipt", VisibilityTimeout=result.retry_after
             )
-        return kind == "ack"
+        return result.outcome == "ack"
 
-    def test_sqs_retries_all_errors_and_preserves_exhausted_failure(self):
+    def test_sqs_retries_transient_errors_and_preserves_exhausted_failure(self):
         self.submit_and_execute()
         before = self.row().output
         run = self.submit()
         with (
             patch.object(
-                worker, "run_optimization", side_effect=RuntimeError("temporary")
+                worker, "run_optimization", side_effect=ConnectionError("temporary")
             ) as solve,
             self.assertLogs(level="ERROR"),
         ):
@@ -569,15 +570,15 @@ class LifecycleTests(DatabaseTests):
         self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().status, self.row().attempts), ("completed", 2))
 
-    def test_sqs_solver_failures_and_completed_results_are_acknowledged(self):
+    def test_sqs_solver_failures_are_dead_lettered_and_completion_acknowledged(self):
         for error in (worker.OptimizationInfeasibleError, worker.OptimizationDeadlineError):
             with self.subTest(error=error):
                 run = self.submit()
                 with patch.object(
                     worker, "run_optimization", side_effect=error("terminal")
                 ) as solve:
-                    self.assertEqual(self.deliver(run.run_id), True)
-                    self.assertEqual(self.deliver(run.run_id), True)
+                    self.assertEqual(self.deliver(run.run_id), False)
+                    self.assertEqual(self.deliver(run.run_id), False)
                 self.assertEqual((self.row().status, self.row().attempts), ("failed", 1))
                 self.assertEqual(solve.call_count, 1)
         run = self.submit()
@@ -620,13 +621,12 @@ class LifecycleTests(DatabaseTests):
         run = self.submit()
         with (
             patch.object(
-                worker, "run_optimization", side_effect=RuntimeError("temporary")
+                worker, "run_optimization", side_effect=ConnectionError("temporary")
             ) as solve,
             self.assertLogs(worker.logger, level="ERROR"),
         ):
             for attempt in (1, 2):
-                with self.assertRaises(RuntimeError):
-                    worker.execute("sim", run.run_id, CONTEXT)
+                self.assertEqual(worker.execute("sim", run.run_id, CONTEXT).outcome, "retry")
                 self.assertEqual((self.row().attempts, self.result().status), (attempt, "queued"))
             worker.execute("sim", run.run_id, CONTEXT)
             self.assertEqual((self.row().attempts, self.result().status), (3, "failed"))
@@ -780,13 +780,12 @@ class LifecycleTests(DatabaseTests):
         before = self.row().output
         run = self.submit()
         with (
-            patch.object(worker, "prepare", side_effect=RuntimeError("temporary")),
+            patch.object(worker, "prepare", side_effect=ConnectionError("temporary")),
             patch.object(worker, "run_optimization") as solve,
             self.assertLogs(worker.logger, level="ERROR"),
         ):
             for attempt in (1, 2):
-                with self.assertRaises(RuntimeError):
-                    worker.execute("sim", run.run_id, CONTEXT)
+                self.assertEqual(worker.execute("sim", run.run_id, CONTEXT).outcome, "retry")
                 row = self.row()
                 self.assertEqual((row.status, row.attempts), ("queued", attempt))
                 self.assertIsNone(row.lease_token)
@@ -919,9 +918,8 @@ class LifecycleTests(DatabaseTests):
         self.submit_and_execute()
         before = self.row().output
         run = self.submit()
-        with patch.object(worker, "run_optimization", side_effect=RuntimeError("temporary")):
-            with self.assertRaises(RuntimeError):
-                worker.execute("sim", run.run_id, CONTEXT)
+        with patch.object(worker, "run_optimization", side_effect=ConnectionError("temporary")):
+            self.assertEqual(worker.execute("sim", run.run_id, CONTEXT).outcome, "retry")
         self.assertEqual(self.result().status, "queued")
         self.assertEqual(self.row().output, before)
         worker.execute("sim", run.run_id, CONTEXT)
@@ -1373,7 +1371,7 @@ class LocalLifecycleTests(DatabaseTests):
             nonlocal calls
             calls += 1
             if calls < 3:
-                raise RuntimeError("temporary")
+                raise ConnectionError("temporary")
             return original(*args, **kwargs)
 
         run = self.submit()
@@ -1395,7 +1393,7 @@ class LocalLifecycleTests(DatabaseTests):
         run = self.submit()
         with (
             patch.object(
-                worker, "run_optimization", side_effect=RuntimeError("temporary")
+                worker, "run_optimization", side_effect=ConnectionError("temporary")
             ) as solve,
             patch.object(worker.time, "sleep") as sleep,
             self.assertLogs(worker.logger, level="ERROR"),
