@@ -171,7 +171,7 @@ export const StepDialog = ({
     if (!element) return
     let previousHeight: number | undefined
     let timer: number | undefined
-    const observer = new ResizeObserver(() => {
+    const observer = new ResizeObserver(([entry]) => {
       const body = bodyRef.current
       // While the body animates towards taller content it is briefly too short,
       // which would flash a scrollbar. Scrolling is only held back if the body
@@ -181,7 +181,7 @@ export const StepDialog = ({
         previousHeight === undefined ||
         !body ||
         previousHeight <= body.clientHeight + 1
-      previousHeight = element.offsetHeight
+      previousHeight = Math.ceil(entry.borderBoxSize[0].blockSize)
       setContentHeight(previousHeight)
       if (!fitted) return
       setIsGrowing(true)
@@ -213,7 +213,7 @@ export const StepDialog = ({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={!locked}
-        className="flex max-h-[calc(100dvh-4rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 max-sm:max-h-[calc(100dvh-2rem)]"
+        className="top-8 flex max-h-[calc(100dvh-4rem)] max-w-2xl translate-y-0 flex-col gap-0 overflow-hidden p-0 max-sm:top-4 max-sm:max-h-[calc(100dvh-2rem)]"
       >
         <DialogHeader className="space-y-4 border-b px-6 pt-6 pb-4">
           <div className="space-y-1.5 pr-6">
