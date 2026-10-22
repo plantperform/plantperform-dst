@@ -66,6 +66,9 @@ registry_field_table = Table(
     Column("goedningsregion", Text, nullable=True),
     Column("kvotegivende", Boolean, nullable=False, server_default=false()),
     Column("crop_history", JSON, nullable=False),
+    # The catch crops reported per year, {year: 968}, as the GeoPackage's
+    # SekAfg<year> columns hold them; the calculation decides what they stand for.
+    Column("secondary_crop_history", JSON, nullable=False, server_default="{}"),
     Column("percolation_by_kategori", JSON, nullable=True),
     Column("org_n_topsoil", Float, nullable=True),
     Column("s_soil", Float, nullable=True),
@@ -131,6 +134,8 @@ afgroede_table = Table(
     # "Praec.goedsk.eff." 1 (korn) or 2 (raps): korn or raps i renbestand
     # (§ 57, stk. 1, nr. 1; PUMR, Tabel A, felt A37).
     Column("praecisionsgoedskning_mulig", Boolean, nullable=False, server_default=false()),
+    # "Normal såmåned": the month the crop is normally sown, 0 when it is not.
+    Column("saamaaned", SmallInteger, nullable=True),
     Column("m", SmallInteger, nullable=True),
     Column("w", SmallInteger, nullable=True),
     Column("wc", SmallInteger, nullable=True),

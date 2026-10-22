@@ -110,6 +110,7 @@ def _registry_context_for_imk_id(session: Session, imk_id: int | None):
             registry_field_table.c.oeko,
             registry_field_table.c.kvotegivende,
             registry_field_table.c.crop_history,
+            registry_field_table.c.secondary_crop_history,
             registry_field_table.c.percolation_by_kategori,
             registry_field_table.c.org_n_topsoil,
             registry_field_table.c.s_soil,
@@ -131,6 +132,7 @@ def _registry_contexts_for_imk_ids(session: Session, imk_ids: list[int]) -> dict
             registry_field_table.c.oeko,
             registry_field_table.c.kvotegivende,
             registry_field_table.c.crop_history,
+            registry_field_table.c.secondary_crop_history,
             registry_field_table.c.percolation_by_kategori,
             registry_field_table.c.org_n_topsoil,
             registry_field_table.c.s_soil,
@@ -186,6 +188,7 @@ def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        secondary_crop_history=row.secondary_crop_history,
     )
     avg_leaching = sum(y.leaching_kg_n_ha for y in years) / len(years)
     avg_db = sum(y.db_kr_ha for y in years) / len(years)
@@ -376,6 +379,7 @@ def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
         percolation_by_kategori=percolation_by_kategori,
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
+        secondary_crop_history=row.secondary_crop_history,
     )
 
 
@@ -524,6 +528,8 @@ def baseline_simulation_candidate(field, registry_row, *, economics_key=""):
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
         economics_key=economics_key,
+        secondary_crop_history=registry_row.secondary_crop_history,
+        show_either_measure=False,
     )
     from app.domain.rotation_candidate import RotationCandidateRef
 
@@ -566,6 +572,7 @@ def prepare_simulation_field(
             jbnr,
             registry_row.goedningsregion,
             bool(registry_row.oeko),
+            registry_row.secondary_crop_history,
         )
 
         # A mark whose latest real afgrøde is permanent (ikke-omdrift -

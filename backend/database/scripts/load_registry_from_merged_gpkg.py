@@ -137,13 +137,31 @@ def clean_bool(value: object) -> bool:
     return text_value is not None and text_value.casefold() in {"true", "1", "t", "yes"}
 
 
+def secondary_crop_history(row: object) -> dict[str, int]:
+    """Return the years the row has a secondary crop (SekAfg<year>) in, with
+    its crop code. A row read without those columns has none."""
+    return {
+        str(year): code
+        for year in CROP_HISTORY_YEARS
+        if (code := clean_int(getattr(row, f"SekAfg{year}", None))) is not None
+    }
+
+
 def merged_source_metadata() -> dict:
     if not MERGED_GPKG.exists():
         raise FileNotFoundError(f"Expected {MERGED_GPKG}")
-    feature_count = int(read_info(str(MERGED_GPKG), layer=LAYER)["features"])
+    info = read_info(str(MERGED_GPKG), layer=LAYER)
+    feature_count = int(info["features"])
     if feature_count <= 0:
         raise ValueError("The merged GeoPackage contains no features")
-    return {"layer": LAYER, "feature_count": feature_count}
+    # An older GeoPackage without SekAfg<year> columns gives every field none.
+    fields = set(info["fields"])
+    secondary_crop_years = [year for year in CROP_HISTORY_YEARS if f"SekAfg{year}" in fields]
+    return {
+        "layer": LAYER,
+        "feature_count": feature_count,
+        "secondary_crop_years": secondary_crop_years,
+    }
 
 
 def validate_staging(run: LoadRun) -> set[int]:
@@ -218,6 +236,7 @@ def staging_values(row: object, imk_id: int) -> tuple:
         org_n_topsoil,
         s_soil,
         banned,
+        json.dumps(secondary_crop_history(row)),
         f"SRID=4326;{to_multipolygon_wkt(row.geometry)}",
     )
 
@@ -250,6 +269,7 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
         ]
         + list(PERCOLATION_COLUMNS_BY_KATEGORI)
         + [f"Afg{year}" for year in CROP_HISTORY_YEARS]
+        + [f"SekAfg{year}" for year in run.state["sources"]["secondary_crop_years"]]
     )
 
     if run.state["phase"] == "new":
@@ -265,6 +285,7 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
                     omlaegningsplan_virkemiddel text, omlaegningsplan_status text,
                     percolation_by_kategori jsonb, org_n_topsoil double precision,
                     s_soil double precision, banned boolean NOT NULL,
+                    secondary_crop_history jsonb NOT NULL,
                     geom geometry(MULTIPOLYGON, 4326) NOT NULL
                 )
                 """
@@ -302,7 +323,8 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
                     kystvand_id, kystvand_navn, retention, udledningsgraense_kgn_ha,
                     oeko, oestoette, hoejeste_hnv, kvotegivende,
                     omlaegningsplan_virkemiddel, omlaegningsplan_status,
-                    percolation_by_kategori, org_n_topsoil, s_soil, banned, geom
+                    percolation_by_kategori, org_n_topsoil, s_soil, banned,
+                    secondary_crop_history, geom
                 ) FROM STDIN"""
                 ) as copy,
             ):
@@ -369,7 +391,7 @@ def finalize_registry_field(run: LoadRun) -> None:
                 udledningskvote_mark_kgn, jbnr, kystvand_id, kystvand_navn, retention,
                 oeko, oestoette, hoejeste_hnv, kvotegivende,
                 omlaegningsplan_virkemiddel, omlaegningsplan_status,
-                percolation_by_kategori, org_n_topsoil, s_soil, banned
+                percolation_by_kategori, org_n_topsoil, s_soil, banned, secondary_crop_history
             )
             SELECT
                 imk_id, cvr, marknr, markblok, journalnr, area_ha, '', crop_history,
@@ -379,7 +401,8 @@ def finalize_registry_field(run: LoadRun) -> None:
                       {ROUND_DIGITS})::float,
                 jbnr, kystvand_id, kystvand_navn, retention, oeko, oestoette,
                 hoejeste_hnv, kvotegivende, omlaegningsplan_virkemiddel,
-                omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned
+                omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned,
+                secondary_crop_history
             FROM {STAGING_TABLE}
             WHERE area_ha IS NOT NULL AND area_ha > 0
                 """

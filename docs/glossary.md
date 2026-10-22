@@ -54,6 +54,8 @@ field" column is the name on the wire.
 | afgrøde | crop | | |
 | afgrødevalg, valgte og fravalgte afgrøder | `CropChoice`, `chosenCrops`, `optedOutCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop and no opted-out one. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
+| normal såmåned | sowing month | | The crop table's month the crop is normally sown, stored as `afgroede.saamaaned` |
+| efterårssået | autumn-sown, `is_autumn_sown`, `AUTUMN_SOWING_MONTHS` | | Normal såmåned August to November |
 | afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
 | helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and grønkorn blends. Majshelsæd counts as Majs |
 | afgrødefordeling | `CropShare`, `CropShareLevel`, `summarizeCropDistribution` | | Area and N load per crop group or per crop for a year, or the average per year |
@@ -63,6 +65,7 @@ field" column is the name on the wire.
 | pligtig, målrettet efterafgrøde | mandatory, targeted catch crop | | |
 | sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
+| mellemafgrøde eller tidlig såning | `intermediateOrEarlySowing`, `INTERMEDIATE_OR_EARLY_SOWING`, `isIntermediateOrEarlySowingYear` | `mellemafgroede_eller_tidlig_saaning` | A history year whose reported catch crop came before an autumn-sown crop: one of the two, which the source does not say; drawn split down the middle in the colours of both |
 | vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `cropCover` (plantedække), `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing` |
 | stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |

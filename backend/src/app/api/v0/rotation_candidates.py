@@ -363,7 +363,11 @@ def evaluate_rotation_candidates(
         jbnr = jbnr_for_registry(registry)
         real_history = (
             real_history_lookback(
-                registry.crop_history, jbnr, registry.goedningsregion, registry.oeko
+                registry.crop_history,
+                jbnr,
+                registry.goedningsregion,
+                registry.oeko,
+                registry.secondary_crop_history,
             )
             if registry is not None
             else None

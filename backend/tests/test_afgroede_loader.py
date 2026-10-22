@@ -39,7 +39,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
         nuar = [
             (
                 1, "NUAR-navn", 1, 2, 3, 4, 5, False, True, False, True, False, True, False,
-                1, 7, 8, True, False, True,
+                1, 7, 8, True, False, True, 9,
             )
         ]
         runoff = [(1, "Runoff-navn", 3, 1), (2, "Kun runoff", 4, None)]
@@ -74,6 +74,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
         self.assertTrue(by_code[1]["mellemafgroede_mulig"])
         self.assertFalse(by_code[1]["tidlig_saaning_mulig"])
         self.assertTrue(by_code[1]["praecisionsgoedskning_mulig"])
+        self.assertEqual(by_code[1]["saamaaned"], 9)
         self.assertEqual(by_code[2]["navn"], "Kun runoff")
         self.assertIsNone(by_code[2]["m"])
         self.assertFalse(by_code[905]["has_nuar"])
@@ -81,6 +82,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
         self.assertFalse(by_code[905]["grund6procent"])
         self.assertFalse(by_code[905]["mellemafgroede_mulig"])
         self.assertFalse(by_code[905]["praecisionsgoedskning_mulig"])
+        self.assertIsNone(by_code[905]["saamaaned"])
         self.assertEqual(by_code[905]["navn"], "Historisk navn")
         self.assertEqual(by_code[908]["navn"], "Kun permanent")
         self.assertEqual(

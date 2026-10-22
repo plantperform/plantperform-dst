@@ -36,6 +36,8 @@ import {
   CATCH_CROP,
   EARLY_SOWING,
   INTERMEDIATE_CROP,
+  INTERMEDIATE_OR_EARLY_SOWING,
+  isIntermediateOrEarlySowingYear,
   yearCoverForW,
   yearCoversFromDetail,
   type WinterCoverDefinition,
@@ -59,6 +61,8 @@ const fmtSigned = (value: unknown, digits = 3) => {
 
 const SHORT_TAB_LABEL_MAX_LENGTH = 24
 const UNDERSOWN_ABBREVIATION_LENGTH = 10
+// abbreviate() would shorten it to "Mellemafg." and drop tidlig såning.
+const INTERMEDIATE_OR_EARLY_SOWING_ABBREVIATION = 'Mellem/tidlig'
 
 const abbreviate = (name: string) =>
   name.length > UNDERSOWN_ABBREVIATION_LENGTH
@@ -71,7 +75,10 @@ const lowerFirst = (text: string) =>
 const shortTabLabel = (year: RotationYear): string => {
   const crop = shortCropName(year.cropName)
   if (!year.undersownCropName) return crop
-  const withUndersownCrop = `${crop} (${abbreviate(shortCropName(year.undersownCropName))})`
+  const undersownCrop = isIntermediateOrEarlySowingYear(year)
+    ? INTERMEDIATE_OR_EARLY_SOWING_ABBREVIATION
+    : abbreviate(shortCropName(year.undersownCropName))
+  const withUndersownCrop = `${crop} (${undersownCrop})`
   return withUndersownCrop.length <= SHORT_TAB_LABEL_MAX_LENGTH
     ? withUndersownCrop
     : crop
@@ -441,16 +448,26 @@ const CalculationStepsSection = ({
       cover: CATCH_CROP,
       pct: num(detail.EEA) * num(detail.Fdato_factor) * 100,
     },
-    {
-      name: 'Mellemafgrøde',
-      cover: INTERMEDIATE_CROP,
-      pct: num(detail.EMA) * 100,
-    },
-    {
-      name: 'Tidlig såning',
-      cover: EARLY_SOWING,
-      pct: num(detail.ETS) * 100,
-    },
+    ...(winterCover?.cover === INTERMEDIATE_OR_EARLY_SOWING
+      ? [
+          {
+            name: INTERMEDIATE_OR_EARLY_SOWING.label,
+            cover: INTERMEDIATE_OR_EARLY_SOWING,
+            pct: (num(detail.EMA) + num(detail.ETS)) * 100,
+          },
+        ]
+      : [
+          {
+            name: 'Mellemafgrøde',
+            cover: INTERMEDIATE_CROP,
+            pct: num(detail.EMA) * 100,
+          },
+          {
+            name: 'Tidlig såning',
+            cover: EARLY_SOWING,
+            pct: num(detail.ETS) * 100,
+          },
+        ]),
     { name: 'Præcisionsjordbrug', pct: num(detail.EPJ) * 100 },
   ]
   const measures = allMeasures.filter((v) => v.pct > 0.001)
@@ -461,7 +478,7 @@ const CalculationStepsSection = ({
         <SectionHeading>1. Udvaskning fra rodzonen</SectionHeading>
         {winterCover ? (
           <StepRow
-            text={winterCover.description}
+            text={winterCover.description || 'Efter høst'}
             value={
               <span className="inline-flex items-center gap-1.5">
                 <WinterCoverSwatch cover={winterCover.cover} />
@@ -870,16 +887,26 @@ const LeachingDetailSection = ({
               detail: `EEA=${fmt(num(detail.EEA), 2)} · Fdato=${fmt(num(detail.Fdato_factor), 3)}`,
               value: fmt(eeaRed, 4),
             },
-            {
-              label: 'Mellemafgrøde',
-              detail: 'EMA',
-              value: fmt(num(detail.EMA), 4),
-            },
-            {
-              label: 'Tidlig såning',
-              detail: 'ETS',
-              value: fmt(num(detail.ETS), 4),
-            },
+            ...(wState?.cover === INTERMEDIATE_OR_EARLY_SOWING
+              ? [
+                  {
+                    label: INTERMEDIATE_OR_EARLY_SOWING.label,
+                    detail: 'EMA eller ETS',
+                    value: fmt(num(detail.EMA) + num(detail.ETS), 4),
+                  },
+                ]
+              : [
+                  {
+                    label: 'Mellemafgrøde',
+                    detail: 'EMA',
+                    value: fmt(num(detail.EMA), 4),
+                  },
+                  {
+                    label: 'Tidlig såning',
+                    detail: 'ETS',
+                    value: fmt(num(detail.ETS), 4),
+                  },
+                ]),
             { label: 'Sum virkemidler', detail: '', value: fmt(measureSum, 4) },
             {
               label: 'Faktor 1 (virkemidler)',
