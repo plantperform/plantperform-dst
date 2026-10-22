@@ -139,7 +139,7 @@ type FieldPanelProps = {
   yearValues?: DisplayYearValue[]
   yearValuesLoading?: boolean
   isDetaching: boolean
-  onRequestDetach: () => void
+  onRequestDetach?: () => void
   onCalcOpenChange?: (open: boolean) => void
   onError: (message: string | null) => void
 }
@@ -417,7 +417,21 @@ export const FieldPanel = ({
         ) : null}
       </div>
 
-      <div className="border-t bg-background p-4 @2xl:flex @2xl:justify-end @2xl:px-6">
+      <div className="flex flex-col gap-2 border-t bg-background p-4 @2xl:flex-row @2xl:justify-end @2xl:px-6">
+        {onRequestDetach ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            className={cn(
+              'w-full @2xl:w-auto @2xl:px-5',
+              isSimulationView && '@2xl:mr-auto',
+            )}
+            onClick={onRequestDetach}
+            loading={isDetaching}
+          >
+            {isDetaching ? 'Fjerner...' : 'Fjern mark'}
+          </Button>
+        ) : null}
         {isSimulationView ? (
           <AppTooltip
             content={
@@ -440,17 +454,7 @@ export const FieldPanel = ({
               </Button>
             </span>
           </AppTooltip>
-        ) : (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="w-full @2xl:w-auto @2xl:px-5"
-            onClick={onRequestDetach}
-            loading={isDetaching}
-          >
-            {isDetaching ? 'Fjerner...' : 'Fjern mark'}
-          </Button>
-        )}
+        ) : null}
       </div>
 
       {isSimulationView && simulationId && simulation && manualEditorOpen ? (

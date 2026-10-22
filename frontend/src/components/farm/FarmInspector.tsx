@@ -166,11 +166,15 @@ export const FarmInspector = ({
     fieldId: string
     nonce: number
   } | null>(null)
-  const [detachRequest, setDetachRequest] = useState<FieldRecord[]>([])
-  const { detachingFieldIds, detachFields } = useDetachFields(farm.id, onError)
-  const requestDetach = (field: FieldRecord) => setDetachRequest([field])
   const isSimulationView = selection.kind === 'simulation'
   const selectedSimulationId = selectedSimulation?.id
+  const [detachRequest, setDetachRequest] = useState<FieldRecord[]>([])
+  const { detachingFieldIds, detachFields } = useDetachFields(
+    farm.id,
+    onError,
+    selectedSimulationId,
+  )
+  const requestDetach = (field: FieldRecord) => setDetachRequest([field])
   const selectionKey =
     selection.kind === 'simulation'
       ? `${farm.id}:simulation-${selection.id}`
@@ -203,6 +207,12 @@ export const FarmInspector = ({
   const canSwitchMode = isSimulationView && Boolean(selectedSimulation)
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
+  const canEditFields =
+    !isRules &&
+    (!isSimulationView ||
+      (selectedSimulation !== undefined &&
+        selectedSimulation.fieldsInitialized !== false &&
+        optimizationRun?.status !== 'running'))
   const [highlightedMode, setHighlightedMode] = useState(effectiveMode)
   if (highlightedMode !== effectiveMode) {
     setHighlightedMode(effectiveMode)
@@ -374,6 +384,7 @@ export const FarmInspector = ({
 
       <DetachFieldsDialog
         fields={detachRequest}
+        isSimulationView={isSimulationView}
         onCancel={() => setDetachRequest([])}
         onConfirm={confirmDetach}
       />
@@ -507,9 +518,7 @@ export const FarmInspector = ({
                     paneWidth={width}
                     onRequiredWidthChange={setListRequiredWidth}
                     detachingFieldIds={detachingFieldIds}
-                    onRequestDetach={
-                      isSimulationView ? undefined : requestDetach
-                    }
+                    onRequestDetach={canEditFields ? requestDetach : undefined}
                   />
                 )
               }
@@ -518,7 +527,7 @@ export const FarmInspector = ({
                   key={selectionKey}
                   farm={farm}
                   fields={fields}
-                  readOnly={isSimulationView}
+                  readOnly={!canEditFields}
                   isSimulationView={isSimulationView}
                   mode={effectiveMode}
                   lockingFieldId={lockingFieldId}
@@ -534,6 +543,7 @@ export const FarmInspector = ({
                   highlightedCatchmentKey={effectiveHighlightedCatchmentKey}
                   zoomRequest={zoomRequest ?? undefined}
                   onAddModeChange={onAddModeChange}
+                  simulationId={selectedSimulationId}
                   detachFields={detachFields}
                   search={effectiveView === 'map' ? fieldSearch : undefined}
                   onError={onError}
@@ -563,7 +573,11 @@ export const FarmInspector = ({
                         yearValues={yearValues?.[panelField.id]}
                         yearValuesLoading={yearValuesLoading}
                         isDetaching={detachingFieldIds.includes(panelField.id)}
-                        onRequestDetach={() => requestDetach(panelField)}
+                        onRequestDetach={
+                          canEditFields
+                            ? () => requestDetach(panelField)
+                            : undefined
+                        }
                         listBehind={listBehind}
                         mapVisible={mapVisible}
                         onSelectFieldId={onSelectedFieldChange}

@@ -34,6 +34,7 @@ import {
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeFieldChanges,
+  describeFieldSetChanges,
   describeNLoadDelta,
   formatCreatedAt,
   partialCatchmentQuotas,
@@ -230,6 +231,7 @@ const summarizeSimulation = (
     fields,
     totals,
     changes: describeFieldChanges({
+      fieldSet: describeFieldSetChanges(fields, liveFields),
       changed: changedFieldIds(fields, liveFields).size,
       locked: fields.filter(isFieldLocked).length,
       uncalculated: totals.uncalculatedCount,

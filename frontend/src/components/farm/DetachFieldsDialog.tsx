@@ -15,12 +15,21 @@ import { fieldTitle, formatFieldCount } from '@/lib/field-domain'
 
 type DetachFieldsDialogProps = {
   fields: FieldRecord[]
+  isSimulationView: boolean
   onCancel: () => void
   onConfirm: () => void
 }
 
+const describeDetach = (single: boolean, isSimulationView: boolean) => {
+  const subject = single ? 'Marken' : 'Markerne'
+  return isSimulationView
+    ? `${subject} fjernes kun fra simuleringen. Bedriften beholder ${single ? 'den' : 'dem'}.`
+    : `${subject} fjernes fra bedriften. Registret ændres ikke. Simuleringer, der allerede er oprettet, beholder deres marker.`
+}
+
 export const DetachFieldsDialog = ({
   fields,
+  isSimulationView,
   onCancel,
   onConfirm,
 }: DetachFieldsDialogProps) => {
@@ -45,10 +54,7 @@ export const DetachFieldsDialog = ({
               : `Fjern ${formatFieldCount(shownFields.length)}?`}
           </DialogTitle>
           <DialogDescription>
-            {single
-              ? 'Marken fjernes fra bedriften. Registret ændres ikke.'
-              : 'Markerne fjernes fra bedriften. Registret ændres ikke.'}{' '}
-            Simuleringer, der allerede er oprettet, beholder deres marker.
+            {describeDetach(single !== null, isSimulationView)}
           </DialogDescription>
         </DialogHeader>
         {single ? null : (

@@ -23,6 +23,7 @@ import {
   fieldFigure,
   fieldDisplayName,
   fieldNNormPct,
+  fieldOwnerName,
   firstCalendarYear,
   formatLockTooltip,
   formatNumber,
@@ -355,20 +356,21 @@ const rowAffordanceColumn: ColumnDef<FieldRecord, unknown> = {
 const detachColumn = (
   detachingFieldIds: string[],
   onRequestDetach: (field: FieldRecord) => void,
+  owner: string,
 ): ColumnDef<FieldRecord, unknown> => ({
   id: 'detach',
-  header: () => <span className="sr-only">Fjern fra bedriften</span>,
+  header: () => <span className="sr-only">Fjern fra {owner}</span>,
   cell: ({ row }) => {
     const rowField = row.original
     return (
-      <AppTooltip content="Fjern fra bedriften">
+      <AppTooltip content={`Fjern fra ${owner}`}>
         <span className="inline-flex">
           <Button
             variant="ghost"
             size="xs"
             className="size-7 p-0 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100 pointer-coarse:opacity-100"
             disabled={detachingFieldIds.includes(rowField.id)}
-            aria-label={`Fjern mark ${fieldDisplayName(rowField)} fra bedriften`}
+            aria-label={`Fjern mark ${fieldDisplayName(rowField)} fra ${owner}`}
             onClick={(event) => {
               event.stopPropagation()
               onRequestDetach(rowField)
@@ -945,7 +947,13 @@ export const buildFarmFieldsColumns = ({
   )
 
   if (onRequestDetach) {
-    list.push(detachColumn(detachingFieldIds, onRequestDetach))
+    list.push(
+      detachColumn(
+        detachingFieldIds,
+        onRequestDetach,
+        fieldOwnerName(isSimulationView),
+      ),
+    )
   }
   list.push(rowAffordanceColumn)
 

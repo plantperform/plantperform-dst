@@ -93,7 +93,10 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { optimizationRunName } from '@/lib/optimization-run'
-import { formatCreatedAt } from '@/lib/simulation-overview'
+import {
+  describeFieldSetChanges,
+  formatCreatedAt,
+} from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type ViewKeyFigures = {
@@ -640,6 +643,9 @@ const SimulationMenuItem = ({
     ? resolveFarmQuota(simulationFields, true)
     : null
   const figures = quota ? describeKeyFigures(quota, true) : undefined
+  const fieldSetChanges = simulationFields
+    ? describeFieldSetChanges(simulationFields, liveFields)
+    : null
   const changedCount = useMemo(
     () =>
       simulationFields ? changedFieldIds(simulationFields, liveFields).size : 0,
@@ -702,6 +708,11 @@ const SimulationMenuItem = ({
                     Regner med {ownProfileName ?? 'Standard'}
                   </span>
                 ) : null}
+                {!runningRun && fieldSetChanges ? (
+                  <span className="truncate text-xs font-normal text-sidebar-foreground/70">
+                    {fieldSetChanges}
+                  </span>
+                ) : null}
               </ViewMenuLabel>
             </SidebarMenuButton>
           </TooltipTrigger>
@@ -732,7 +743,7 @@ const SimulationMenuItem = ({
             }}>
               Indstillinger og navn
             </DropdownMenuItem>
-            <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Markernes låse følger ikke med.">
+            <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Kopien får bedriftens marker, så låse og tilføjede eller fjernede marker følger ikke med.">
               <DropdownMenuItem disabled={copying || !isSimulationReady(simulation)} onSelect={onCopy}>
                 <Copy className="mr-2 size-4" aria-hidden="true" />
                 Kopier som ny

@@ -162,6 +162,9 @@ export const formatShare = (share: number) => {
 export const formatFieldCount = (count: number) =>
   `${count} ${count === 1 ? 'mark' : 'marker'}`
 
+export const fieldOwnerName = (isSimulationView: boolean) =>
+  isSimulationView ? 'simuleringen' : 'bedriften'
+
 export const fieldDisplayName = (field: Pick<FieldRecord, 'name' | 'alias'>): string =>
   field.alias ?? field.name
 
@@ -350,12 +353,7 @@ export const changedFieldIds = (
   for (const field of viewFields) {
     if (field.imkId === null) continue
     const liveRotation = liveRotationByImk.get(field.imkId)
-    if (!liveRotation) {
-      // The field no longer exists in the live crop history (e.g. removed
-      // from the farm) - that is a difference too, not something to ignore.
-      changed.add(field.id)
-      continue
-    }
+    if (!liveRotation) continue
     if (
       !rotationsEqual(field.cropRotation, liveRotation) ||
       !measuresEqual(field.measures, emptyMeasures())
