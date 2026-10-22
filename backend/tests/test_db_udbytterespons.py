@@ -16,6 +16,7 @@ NORM = {"udbyttenorm": 57.0, "n_norm": 175.0, "udbytteenhed": "hkg"}
 PRISLISTE = {
     "Handelsgødning, kvælstof (N)": {"pris": 10.0},
     "Handelsgødning, udbringning": {"pris": 100.0},
+    "Gylleudbringning, slæbeslanger": {"pris": 24.0, "enhed": "ton"},
 }
 
 
@@ -85,9 +86,40 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         self.assertTrue(result["udbytterespons"])
         self.assertLess(result["udbytte_faktor"], 1.0)
 
-    def test_oekologisk_keeps_the_norm_based_yield(self) -> None:
+    def test_oekologisk_without_its_own_norm_keeps_the_norm_based_yield(self) -> None:
+        # The konventionel fallback norm: the organic curve does not apply to it.
         result = db_calculator.calculate_db(VINTERHVEDE, "Økologisk", 1, mncs=100.0)
         self.assertEqual(result["udbytte_faktor"], 1.0)
+
+    def test_oekologisk_with_its_own_norm_follows_the_organic_curve(self) -> None:
+        norm = {"udbyttenorm": 43.3, "n_norm": 144.0, "udbytteenhed": "hkg"}
+        with patch.object(db_calculator, "_lookup_udbyttenorm", lambda *a, **k: (norm, True)):
+            result = db_calculator.calculate_db(VINTERHVEDE, "Økologisk", 2, mncs=72.0)
+        self.assertAlmostEqual(
+            result["udbytte_faktor"], 1 - (0.147713 * 0.5 + 0.229401 * 0.25), places=6
+        )
+        self.assertAlmostEqual(result["udbytte"], 43.3 * result["udbytte_faktor"], places=4)
+
+
+class CalculateDbManureSpreadingTests(CalculateDbYieldResponseTests):
+    def manure_lines(self, result: dict) -> list[dict]:
+        return [
+            line for line in result["linjer"] if line["behandling"] == "Udbringning, husdyrgødning"
+        ]
+
+    def test_manure_is_spread_per_tonne(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Økologisk", 1, mncs=120.0, org_mineral_n_applied=120.0,
+            only_organic=True, husdyrgodning_ton_pr_ha=20.0, itemized=True,
+        )
+        [line] = self.manure_lines(result)
+        self.assertEqual(line["udgift_kr_ha"], 20.0 * 24.0)
+
+    def test_no_manure_costs_nothing(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Konventionel", 1, mncs=120.0, itemized=True
+        )
+        self.assertEqual(self.manure_lines(result), [])
 
 
 if __name__ == "__main__":

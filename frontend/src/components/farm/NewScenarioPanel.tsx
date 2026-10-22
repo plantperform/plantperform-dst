@@ -63,7 +63,8 @@ import {
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
-  nNormPercentagesFor,
+  offersNoFertiliser,
+  organicFertiliserChoice,
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
@@ -97,7 +98,8 @@ const LIMITS_STEP_INDEX = stepIndexOf('limits')
 
 const NO_CATEGORIES: RotationCategoryOption[] = []
 
-const FERTILISER_NUMBER_FIELDS: (keyof SimulationFormValues)[] = [
+const FERTILISER_FIELDS: (keyof SimulationFormValues)[] = [
+  'fertiliserChoice',
   'orgMineralN',
   'mineralSharePct',
   'nContentKgPerTon',
@@ -346,8 +348,8 @@ export const NewScenarioPanel = ({
       updateValue('mineralSharePct', fertiliserFields.mineralSharePct)
       updateValue('onlyOrganic', fertiliserFields.onlyOrganic)
     }
-    if (FERTILISER_NUMBER_FIELDS.some((name) => errors[name])) {
-      void trigger(FERTILISER_NUMBER_FIELDS)
+    if (FERTILISER_FIELDS.some((name) => errors[name])) {
+      void trigger(FERTILISER_FIELDS)
     }
   }
 
@@ -641,13 +643,17 @@ export const NewScenarioPanel = ({
                   const value = event.target
                     .value as FertiliserSettings['farmingSystem']
                   setValue('onlyOrganic', value === 'Økologisk')
-                  setValue(
-                    'nNormPercentages',
-                    nNormPercentagesFor(getValues('nNormPercentages'), value),
-                  )
                   applyRotationChoice(
                     withFarmingSystem(categories, getValues(), value),
                   )
+                  if (
+                    !offersNoFertiliser(value) &&
+                    getValues('fertiliserChoice') === NO_FERTILISER
+                  ) {
+                    applyFertiliserChoice(
+                      organicFertiliserChoice(fertiliserPresets),
+                    )
+                  }
                 },
               })}
             >
@@ -742,14 +748,24 @@ export const NewScenarioPanel = ({
               <div
                 role="radiogroup"
                 aria-label="Gødningstype"
+                aria-invalid={Boolean(errors.fertiliserChoice)}
+                aria-describedby={
+                  errors.fertiliserChoice
+                    ? 'scenario-fertiliser-choice-error'
+                    : undefined
+                }
                 className="grid gap-2 sm:grid-cols-2"
               >
                 {[
-                  {
-                    value: NO_FERTILISER,
-                    label: 'Ingen organisk gødning',
-                    detail: 'Ren handelsgødning',
-                  },
+                  ...(offersNoFertiliser(values.farmingSystem)
+                    ? [
+                        {
+                          value: NO_FERTILISER,
+                          label: 'Ingen organisk gødning',
+                          detail: 'Ren handelsgødning',
+                        },
+                      ]
+                    : []),
                   ...fertiliserPresets.map((preset) => ({
                     value: preset.name,
                     label: preset.name,
@@ -798,6 +814,10 @@ export const NewScenarioPanel = ({
                   )
                 })}
               </div>
+              <FieldError
+                id="scenario-fertiliser-choice-error"
+                message={errors.fertiliserChoice?.message}
+              />
 
               {presetModified ? (
                 <p className="text-xs text-muted-foreground">
@@ -881,8 +901,8 @@ export const NewScenarioPanel = ({
                       className="block text-xs text-muted-foreground"
                     >
                       Typisk kvæggylle: 4–7 kg udnyttet N/ton. Bruges til at
-                      omregne til ton gødning brugt pr. mark pr. år (reference,
-                      ingen beregningseffekt).
+                      omregne til ton gødning pr. mark pr. år, og udbringningen
+                      prissættes pr. ton.
                       {(() => {
                         const utilisedPerTon = Number(values.nContentKgPerTon)
                         const mineralPct = Number(values.mineralSharePct)
@@ -929,9 +949,7 @@ export const NewScenarioPanel = ({
                 <GlossaryInfo term="nNormLevel" />
               </div>
               <p className="text-xs text-muted-foreground">
-                {values.farmingSystem === 'Økologisk'
-                  ? 'Økologiske simuleringer beregnes indtil videre kun ved 100 %.'
-                  : '100 % er altid med. Vælg op til to lavere niveauer.'}
+                100 % er altid med. Vælg op til to lavere niveauer.
               </p>
               <div className="flex flex-wrap gap-2">
                 {nNormOptions.map((value) => {
@@ -939,7 +957,6 @@ export const NewScenarioPanel = ({
                   const locked = isNNormOptionLocked(
                     values.nNormPercentages,
                     value,
-                    values.farmingSystem,
                   )
                   return (
                     <label
@@ -967,7 +984,6 @@ export const NewScenarioPanel = ({
                             toggleNNormPercentage(
                               getValues('nNormPercentages'),
                               value,
-                              values.farmingSystem,
                             ),
                           )
                         }

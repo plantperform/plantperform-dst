@@ -35,7 +35,6 @@ const buildCopyInput = (
   allowedRotationVariants: simulation.rotationVariants,
   allowedNNormPercentages: copiedNNormPercentages(
     simulation.nNormPercentages,
-    simulation.fertiliser.farmingSystem,
     offeredNNormPercentages,
   ),
   fertiliser: simulation.fertiliser,

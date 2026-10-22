@@ -17,47 +17,37 @@ export const NO_FERTILISER = 'none'
 export const CUSTOM_FERTILISER = 'custom'
 
 // 100 % is always calculated, as the reference for the lower N-norm levels.
-// Only crops with a yield-response curve on konventionel marker are cut, so an
-// økologisk simulation is calculated at 100 % only for now.
+// Only crops with a yield-response curve for the simulation's driftsform are
+// cut below the norm; every other crop is fertilized at 100 %.
 export const FULL_N_NORM = '100'
 export const MAX_REDUCED_N_NORM_LEVELS = 2
 
 const reducedNNormCount = (selected: string[]): number =>
   selected.filter((value) => value !== FULL_N_NORM).length
 
-export const isNNormOptionLocked = (
-  selected: string[],
-  value: string,
-  farmingSystem: FarmingSystem,
-): boolean =>
+export const isNNormOptionLocked = (selected: string[], value: string): boolean =>
   value === FULL_N_NORM ||
-  farmingSystem === 'Økologisk' ||
   (!selected.includes(value) &&
     reducedNNormCount(selected) >= MAX_REDUCED_N_NORM_LEVELS)
 
 export const toggleNNormPercentage = (
   selected: string[],
   value: string,
-  farmingSystem: FarmingSystem,
 ): string[] => {
-  if (isNNormOptionLocked(selected, value, farmingSystem)) return selected
+  if (isNNormOptionLocked(selected, value)) return selected
   return selected.includes(value)
     ? selected.filter((current) => current !== value)
     : [...selected, value]
 }
 
-// The levels a simulation keeps for its driftsform.
-export const nNormPercentagesFor = (
-  selected: string[],
-  farmingSystem: FarmingSystem,
-): string[] =>
-  farmingSystem === 'Økologisk'
-    ? [FULL_N_NORM]
-    : [FULL_N_NORM, ...selected.filter((value) => value !== FULL_N_NORM)]
+// The levels a simulation keeps, 100 % first.
+export const nNormPercentagesFor = (selected: string[]): string[] => [
+  FULL_N_NORM,
+  ...selected.filter((value) => value !== FULL_N_NORM),
+]
 
 export const copiedNNormPercentages = (
   selected: string[],
-  farmingSystem: FarmingSystem,
   offered: string[],
 ): string[] =>
   nNormPercentagesFor(
@@ -65,7 +55,6 @@ export const copiedNNormPercentages = (
       .filter((value) => value !== FULL_N_NORM && offered.includes(value))
       .sort((left, right) => Number(right) - Number(left))
       .slice(0, MAX_REDUCED_N_NORM_LEVELS),
-    farmingSystem,
   )
 
 // Number inputs are kept as the strings the user typed, so an empty or
@@ -138,10 +127,23 @@ const checkNumberText = (
   if (!isValid(value)) ctx.addIssue({ code: 'custom', path: [path], message })
 }
 
+// Økologisk never tops up with handelsgødning, so its N has to come from
+// organic fertiliser: "Ingen organisk gødning" is not offered for it.
+export const offersNoFertiliser = (farmingSystem: FarmingSystem): boolean =>
+  farmingSystem !== 'Økologisk'
+
+// The fertiliser an økologisk simulation starts from when it had none.
+export const organicFertiliserChoice = (
+  presets: FertiliserPresetOption[],
+): string => presets[0]?.name ?? CUSTOM_FERTILISER
+
+const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
+
 // The number rules mirror the backend's FertiliserSettings; nContentKgPerTon
-// has no backend rule but only makes sense above zero.
+// has no backend rule but only makes sense above zero. The schema is loose so
+// the rules can read the driftsform, which the basics step owns.
 const nitrogenSchema = z
-  .object({
+  .looseObject({
     fertiliserChoice: z.string(),
     orgMineralN: z.string(),
     mineralSharePct: z.string(),
@@ -159,14 +161,24 @@ const nitrogenSchema = z
     includePrecedingCropValue: z.boolean(),
   })
   .superRefine((values, ctx) => {
+    const organic = values.farmingSystem === 'Økologisk'
     // Without organic fertiliser the numbers are fixed and hidden.
-    if (values.fertiliserChoice === NO_FERTILISER) return
+    if (values.fertiliserChoice === NO_FERTILISER) {
+      if (organic) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fertiliserChoice'],
+          message: ORGANIC_NEEDS_FERTILISER,
+        })
+      }
+      return
+    }
     checkNumberText(
       ctx,
       'orgMineralN',
       values.orgMineralN,
-      (value) => value >= 0,
-      'Skal være 0 eller mere',
+      (value) => (organic ? value > 0 : value >= 0),
+      organic ? ORGANIC_NEEDS_FERTILISER : 'Skal være 0 eller mere',
     )
     checkNumberText(
       ctx,
@@ -569,10 +581,7 @@ export const toCreateSimulationInput = (
   return {
     name: values.name.trim(),
     allowedRotationVariants: values.rotationVariants,
-    allowedNNormPercentages: nNormPercentagesFor(
-      values.nNormPercentages,
-      values.farmingSystem,
-    ),
+    allowedNNormPercentages: nNormPercentagesFor(values.nNormPercentages),
     fertiliser: {
       farmingSystem: values.farmingSystem,
       orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),
@@ -626,7 +635,6 @@ export const simulationToFormValues = (
     rotationVariants: simulation.rotationVariants,
     nNormPercentages: copiedNNormPercentages(
       simulation.nNormPercentages,
-      fertiliser.farmingSystem,
       offeredNNormPercentages,
     ),
     fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),

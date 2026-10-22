@@ -50,9 +50,9 @@ _OEKO_AREALSTOETTE_POST = "Grundbeløb (basis)"
 _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
-# Placeholder: gylle application has no per-ha rate in the price list (only
-# DKK/tonne), so use handelsgødning's flat application rate for now.
-_GYLLE_UDBRINGNING_PLACEHOLDER_POST = "Handelsgødning, udbringning"
+# Husdyrgødning is spread per tonne: the price list's trailing-hose rate times
+# the tonnes applied (utilized N / the gødning's utilized N per tonne).
+_GYLLE_UDBRINGNING_POST = "Gylleudbringning, slæbeslanger"
 
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
@@ -468,6 +468,7 @@ def calculate_db(
     forfrugtsvaerdi: float = 0.0,
     economics_key: str = "",
     itemized: bool = False,
+    husdyrgodning_ton_pr_ha: float = 0.0,
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -482,6 +483,10 @@ def calculate_db(
     handelsgødning; the gylle portion incurs only application costs. This also
     applies to konventionelle gylle categories, such as svinegylle/kvæggylle
     sædskifter, not only økologiske ones.
+
+    husdyrgodning_ton_pr_ha: Tonnes of husdyrgødning spread per ha, the
+    utilized N divided by the gødning's utilized N per tonne. The application
+    is priced per tonne at the price list's trailing-hose rate.
 
     only_organic: The scenarie's gødning selection (Phase 13 GodningSettings),
     not the same as driftsform. This value, not driftsform, determines whether
@@ -562,9 +567,17 @@ def calculate_db(
 
     tilgaengelig_n = mncs + mnca + forfrugtsvaerdi
     faktor = 1.0
-    respons = norm is not None and har_udbytterespons(afgrodekode, driftsform)
+    # An organic curve is relative to the organic N-norm, so it needs the
+    # crop's own organic row; on the konventionel fallback it would be off.
+    respons = (
+        norm is not None
+        and har_udbytterespons(afgrodekode, driftsform)
+        and (driftsform != OEKOLOGISK or er_reel_oeko_norm)
+    )
     if respons:
-        faktor = udbytte_faktor(afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"])
+        faktor = udbytte_faktor(
+            afgrodekode, jbnr, irrigated, tilgaengelig_n, norm["n_norm"], driftsform
+        )
         udbytte *= faktor
 
     udbytte *= yield_factor
@@ -606,15 +619,15 @@ def calculate_db(
             )
         )
     if (
-        org_mineral_n_applied > 0
+        husdyrgodning_ton_pr_ha > 0
         or quantities.get(quantity_id(afgrodekode, "fertiliser", "manureSpreading"), 0.0) > 0
     ):
         goedning_linjer.append(
             list_line(
                 "Gødning",
                 "Udbringning, husdyrgødning",
-                _GYLLE_UDBRINGNING_PLACEHOLDER_POST,
-                quantity=1.0 if org_mineral_n_applied > 0 else 0.0,
+                _GYLLE_UDBRINGNING_POST,
+                quantity=husdyrgodning_ton_pr_ha,
                 purpose="manureSpreading",
             )
         )
@@ -719,6 +732,7 @@ def calculate_db(
             "kvalitet": kvalitet,
             "praecisionsjordbrug": praecisionsjordbrug,
             "forfrugtsvaerdi": forfrugtsvaerdi,
+            "husdyrgodning_ton_pr_ha": husdyrgodning_ton_pr_ha,
         },
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,

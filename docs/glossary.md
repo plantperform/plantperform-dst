@@ -96,6 +96,8 @@ field" column is the name on the wire.
 | gødning | `fertiliser`, `FertiliserSettings` | `godning` | |
 | gødningstyper | `fertiliserPresets`, `useFertiliserPresets` | | |
 | brugerdefineret | `'custom'` fertiliser choice | | |
+| ingen organisk gødning | `'none'` fertiliser choice (`NO_FERTILISER`), `offersNoFertiliser` | | Ren handelsgødning; not offered for økologisk, which never uses handelsgødning |
+| organisk gødning, økologisk standardvalg | `organicFertiliserChoice` | | The first gødningstype, chosen when an økologisk simulation has none |
 | mineralsk andel | `mineralSharePct` | `mineralskAndelPct` | |
 | N-indhold pr. ton | `nContentKgPerTon` | `nIndholdKgPerTon` | |
 | tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa`, `manureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | Shown as "Org. gødning" in the Gødning columns |
@@ -114,7 +116,7 @@ field" column is the name on the wire.
 | udbytte | `yieldAmount` | `udbytte` | |
 | udbytteenhed | `yieldUnit` | `udbytteenhed` | |
 | manglende udbyttenorm | `yieldNormMissing` | `udbyttenorm_mangler` | |
-| udbytterespons | `hasYieldResponse` | `udbytterespons` | Whether the crop has a yield-response curve for N below the norm |
+| udbytterespons | `hasYieldResponse` | `udbytterespons` | Whether the crop has a yield-response curve for N below the norm, for the simulation's driftsform |
 | udbyttefaktor | `yieldFactor` | `udbytte_faktor` | Share of the normudbytte reached with the available N |
 | foderenheder (FEN) | `feedUnits`, `minFeedUnits`, `maxFeedUnits`, `totalFeedUnits`, `avgFeedUnits`, `isFodderCrop` | `fen`, `minFen`, `maxFen`, `totalFen`, `avgFen` | |
 | salgspris | `salePrice` | `salgspris` | |

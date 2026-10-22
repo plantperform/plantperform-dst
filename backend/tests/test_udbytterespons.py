@@ -44,11 +44,44 @@ class UdbytteFaktorTests(unittest.TestCase):
         self.assertEqual(udbytte_faktor(2, 1, False, 80.0, 165.0), 1.0)
 
 
+class OekologiskUdbytteFaktorTests(unittest.TestCase):
+    def test_full_organic_norm_gives_full_yield(self) -> None:
+        self.assertEqual(udbytte_faktor(11, 5, False, 165.0, 165.0, "Økologisk"), 1.0)
+
+    def test_vaarbyg_at_half_the_organic_norm(self) -> None:
+        self.assertAlmostEqual(
+            udbytte_faktor(1, 1, False, 42.5, 85.0, "Økologisk"),
+            1 - (0.127514 * 0.5 + 0.180305 * 0.25),
+            places=6,
+        )
+
+    def test_borrowed_curves_follow_the_sister_crop(self) -> None:
+        for borrower, source in ((10, 11), (15, 14), (70, 1), (71, 2), (72, 3)):
+            with self.subTest(borrower=borrower):
+                self.assertEqual(
+                    udbytte_faktor(borrower, 5, False, 100.0, 140.0, "Økologisk"),
+                    udbytte_faktor(source, 5, False, 100.0, 140.0, "Økologisk"),
+                )
+
+    def test_graes_uden_kloever_loses_per_kg_as_konventionelt(self) -> None:
+        # Grovsand, 30 kg below the norm: organic norm 120 kg and 4,718 FE,
+        # konventionel norm 336 kg and 8,400 FE. The FE lost are the same.
+        oeko = (1 - udbytte_faktor(263, 1, False, 90.0, 120.0, "Økologisk")) * 4718
+        konv = (1 - udbytte_faktor(263, 1, False, 306.0, 336.0)) * 8400
+        self.assertAlmostEqual(oeko, konv, delta=1.0)
+
+    def test_organic_crop_without_curve_keeps_full_yield(self) -> None:
+        self.assertEqual(udbytte_faktor(216, 1, False, 60.0, 115.0, "Økologisk"), 1.0)
+
+
 class HarUdbytteresponsTests(unittest.TestCase):
-    def test_only_konventionelle_crops_with_a_curve(self) -> None:
+    def test_crops_with_a_curve_for_the_driftsform(self) -> None:
         self.assertTrue(har_udbytterespons(11, "Konventionel"))
-        self.assertFalse(har_udbytterespons(11, "Økologisk"))
+        self.assertTrue(har_udbytterespons(11, "Økologisk"))
+        self.assertTrue(har_udbytterespons(2, "Økologisk"))
         self.assertFalse(har_udbytterespons(2, "Konventionel"))
+        self.assertTrue(har_udbytterespons(216, "Konventionel"))
+        self.assertFalse(har_udbytterespons(216, "Økologisk"))
         self.assertFalse(har_udbytterespons(None, "Konventionel"))
 
 

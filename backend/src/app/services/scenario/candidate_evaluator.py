@@ -25,7 +25,7 @@ from app.domain.rotation_candidate import (
 from app.domain.simulation import GodningSettings
 from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
-from app.services.economics.udbytterespons import KONVENTIONEL, har_udbytterespons
+from app.services.economics.udbytterespons import KONVENTIONEL, OEKOLOGISK, har_udbytterespons
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
@@ -88,7 +88,7 @@ def compute_n_inputs(
     N-norm%: the scenarie's n_norm_pct is the total available N, forfrugtsværdi
     included. kvote_n = n_norm × N-norm%, and only the part the forfrugt does
     not cover is fertilized: net_scaled = max(0, kvote_n − fv_forfrugt). The cut
-    applies only to crops with a yield-response curve on konventionel marker
+    applies only to crops with a yield-response curve for the driftsform
     (see economics.udbytterespons); every other crop is fertilized at 100 %,
     because there is no basis for the yield loss a cut would cause.
 
@@ -97,7 +97,8 @@ def compute_n_inputs(
     evaluated:
       - org_mineral_n=0 (pure mineral gødning): MNCS = net_scaled, G0=0.
         Organisk gødning versus handelsgødning is irrelevant to NLES5 when
-        there is no organisk source.
+        there is no organisk source. With only_organic there is no gødning
+        at all, since økologisk never uses handelsgødning: MNCS = 0.
       - only_organic=False (konventionel + gylle): eff_org is capped at
         net_scaled, MNCS remains net_scaled because handelsgødning tops up to
         the full norm, and G0 reflects the unutilized part corresponding to the
@@ -128,12 +129,17 @@ def compute_n_inputs(
         }
 
     net_n = max(0.0, norm["n_norm"] - fv_forfrugt)
-    pct = float(n_norm_pct) if har_udbytterespons(afgrode_kode, driftsform) else 100.0
+    # An organic curve is relative to the organic N-norm. On the konventionel
+    # fallback the N would be cut without the yield loss that goes with it.
+    below_norm = har_udbytterespons(afgrode_kode, driftsform) and (
+        driftsform != OEKOLOGISK or norm.get("driftsform") == OEKOLOGISK
+    )
+    pct = float(n_norm_pct) if below_norm else 100.0
     net_scaled = max(0.0, norm["n_norm"] * pct / 100.0 - fv_forfrugt)
 
     if org_mineral_n <= 0:
         return {
-            "mncs": net_scaled, "mnca": 0.0, "g0": 0.0,
+            "mncs": 0.0 if only_organic else net_scaled, "mnca": 0.0, "g0": 0.0,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
             "fv_forfrugt": fv_forfrugt, "n_norm": norm["n_norm"],
         }
@@ -322,16 +328,6 @@ def evaluate_sequence_for_mark(
             # Known NLES5 low-N edge: a negative fractional-power base has no
             # real result. Missing soil data raises a different exception.
             leaching = {}
-        db = calculate_db(
-            this_code, driftsform, jbnr,
-            mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
-            org_mineral_n_applied=n_inputs[i]["org_mineral_n_applied"],
-            udlaeg_kode=udl_code, only_organic=only_organic,
-            praecisionsjordbrug=praecisionsjordbrug,
-            forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
-            **({"economics_key": economics_key} if economics_key else {}),
-        )
-        crop_params = afgroede_normer.lookup_crop_params(this_code)
         # org_mineral_n_applied is the utilized/mineral part of husdyrgødning,
         # the only part that counts toward the norm, like handelsgødning. g0 is
         # the remaining organically bound part; it does not count toward the
@@ -351,6 +347,17 @@ def evaluate_sequence_for_mark(
             if n_indhold_kg_per_ton > 0
             else 0.0
         )
+        db = calculate_db(
+            this_code, driftsform, jbnr,
+            mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
+            org_mineral_n_applied=tildelt_husdyrgodning_udnyttet,
+            udlaeg_kode=udl_code, only_organic=only_organic,
+            praecisionsjordbrug=praecisionsjordbrug,
+            forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
+            husdyrgodning_ton_pr_ha=husdyrgodning_ton,
+            **({"economics_key": economics_key} if economics_key else {}),
+        )
+        crop_params = afgroede_normer.lookup_crop_params(this_code)
 
         years.append(RotationCandidateYearResult(
             year=RotationYear(

@@ -29,6 +29,7 @@ class EconomicsCalculationInputs(CamelModel):
     kvalitet: str = ""
     praecisionsjordbrug: bool = False
     forfrugtsvaerdi: float = 0
+    husdyrgodning_ton_pr_ha: float = 0
 
 
 class EconomicsOverrides(CamelModel):

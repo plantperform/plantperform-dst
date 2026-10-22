@@ -78,6 +78,7 @@ def _load_lang_lookup() -> dict[tuple[int, int, str, str], dict]:
             "afgroede": crop.norm_navn,
             "jb_gruppe": row.jb_gruppe,
             "vanding": row.vanding,
+            "driftsform": row.driftsform,
             "udbytteenhed": crop.udbytteenhed,
             "udbyttenorm": row.udbyttenorm,
             "udbyttenorm_alt": row.udbyttenorm_alt,

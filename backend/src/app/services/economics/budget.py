@@ -52,7 +52,9 @@ def _line(line, prices):
     )
 
 
-def crop_budgets(crop_codes, jb_nr, farming_system, only_organic, org_mineral_n=0.0):
+def crop_budgets(
+    crop_codes, jb_nr, farming_system, only_organic, org_mineral_n=0.0, n_indhold_kg_per_ton=6.0
+):
     with SessionLocal() as session:
         crops = {
             row.afgroedekode: row
@@ -75,7 +77,12 @@ def crop_budgets(crop_codes, jb_nr, farming_system, only_organic, org_mineral_n=
         manure_n = min(org_mineral_n, detail["mncs"])
         if manure_n > 0:
             detail = calculate_db(
-                code, farming_system, jb_nr, org_mineral_n_applied=manure_n, **inputs
+                code,
+                farming_system,
+                jb_nr,
+                org_mineral_n_applied=manure_n,
+                husdyrgodning_ton_pr_ha=manure_n / n_indhold_kg_per_ton,
+                **inputs,
             )
         budgets.append(
             dict(
@@ -129,6 +136,7 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
         return None
     only_organic = farming_system == OEKOLOGISK
     org_mineral_n = 0.0
+    n_indhold_kg_per_ton = 6.0
     if simulation_id is not None:
         simulation = next((entry for entry in simulations if entry.id == simulation_id), None)
         if simulation is None:
@@ -136,10 +144,13 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
         farming_system = simulation.godning.driftsform
         only_organic = simulation.godning.only_organic
         org_mineral_n = simulation.godning.org_mineral_n
+        n_indhold_kg_per_ton = simulation.godning.n_indhold_kg_per_ton
     jb_nr = _dominant_jbnr(fields)
     if jb_nr is None:
         return dict(jbNr=None, farmingSystem=farming_system, prices=[], crops=[], soilVariants={})
     grown = _grown_areas(fields)
     possible = set().union(*(scenario_afgrodekoder(entry) for entry in simulations)) - set(grown)
     crop_codes = [code for code, _ in grown.most_common()] + sorted(possible)
-    return crop_budgets(crop_codes, jb_nr, farming_system, only_organic, org_mineral_n)
+    return crop_budgets(
+        crop_codes, jb_nr, farming_system, only_organic, org_mineral_n, n_indhold_kg_per_ton
+    )
