@@ -99,7 +99,6 @@ const buildRows = (
             rawSpecValue(COLOR_SPECS.nLoad, hovered),
           )
         : null
-    const db2Figure = fieldFigure(field, 'db2')
     rows.push({
       key: 'nLoad',
       label: 'Udledning',
@@ -116,18 +115,21 @@ const buildRows = (
           'ikke beregnet'
         ),
     })
-    rows.push({
-      key: 'db2',
-      label: 'DB2',
-      value: calculated ? (
-        <>
-          {db2Figure.value}
-          {note(db2Figure.total)}
-        </>
-      ) : (
-        '-'
-      ),
-    })
+    if (isSimulationView) {
+      const db2Figure = fieldFigure(field, 'db2')
+      rows.push({
+        key: 'db2',
+        label: 'DB2',
+        value: calculated ? (
+          <>
+            {db2Figure.value}
+            {note(db2Figure.total)}
+          </>
+        ) : (
+          '-'
+        ),
+      })
+    }
   } else {
     const limit = toFiniteNumber(hovered.properties.udledningsgraense_kgn_ha)
     rows.push({

@@ -123,19 +123,22 @@ const describeKeyFigures = (
     'nLoad',
     `${formatWholeNumber(totals.nLoad)} kg N`,
   ).value
+  const fullEmission = formatQuotaAmount(totals.nLoad, quotaKgN ?? 0)
+  const quotaNote =
+    quotaKgN === null ? `, ${describeSeparateQuotas(quota)}` : ''
+  const emissionTitle = `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}`
+
+  if (!isSimulationView) return { level, label: emission, title: emissionTitle }
+
   const earnings = perHaFigure(
     totalsPerHa(totals, 'db2'),
     'db2',
     formatCompactDkk(totals.db2),
   ).value
-  const fullEmission = formatQuotaAmount(totals.nLoad, quotaKgN ?? 0)
-  const quotaNote =
-    quotaKgN === null ? `, ${describeSeparateQuotas(quota)}` : ''
-
   return {
     level,
     label: `${emission} · ${earnings}`,
-    title: `Udledning ${fullEmission} pr. gennemsnitsår${quotaNote}, DB2 ${formatWholeNumber(totals.db2)} kr`,
+    title: `${emissionTitle}, DB2 ${formatWholeNumber(totals.db2)} kr`,
   }
 }
 
