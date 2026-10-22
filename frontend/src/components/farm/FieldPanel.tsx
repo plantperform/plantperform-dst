@@ -246,14 +246,21 @@ export const FieldPanel = ({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-4 @2xl:gap-3">
-          <MetricCard
-            label="DB2"
-            term="db2"
-            value={calculated ? db2Figure.value : 'Ikke beregnet'}
-            detail={calculated ? db2Figure.total : undefined}
-            muted={!calculated}
-          />
+        <div
+          className={cn(
+            'grid grid-cols-2 gap-2 @2xl:gap-3',
+            isSimulationView ? '@2xl:grid-cols-4' : '@2xl:grid-cols-3',
+          )}
+        >
+          {isSimulationView ? (
+            <MetricCard
+              label="DB2"
+              term="db2"
+              value={calculated ? db2Figure.value : 'Ikke beregnet'}
+              detail={calculated ? db2Figure.total : undefined}
+              muted={!calculated}
+            />
+          ) : null}
           <MetricCard
             label="Udledning"
             term="nLoad"
@@ -282,7 +289,7 @@ export const FieldPanel = ({
           />
         </div>
 
-        {calculated ? (
+        {calculated && isSimulationView ? (
           <p className="-mt-2 text-xs text-muted-foreground">
             Økonomiprofil:{' '}
             {fieldEconomics.profilePath ? (
@@ -330,6 +337,7 @@ export const FieldPanel = ({
                 startYear={rotationStartYear}
                 selectedIndex={highlightIndex}
                 onSelect={onSelectedYearIndexChange}
+                hideEconomics={!isSimulationView}
               />
               {yearOutsideRotation ? (
                 <p className="pt-2 text-xs text-muted-foreground">

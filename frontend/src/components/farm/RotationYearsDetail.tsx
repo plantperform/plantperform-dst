@@ -224,6 +224,7 @@ const KeyMetricsSection = ({
   areaHa,
   retention,
   hideNNormLevel,
+  hideEconomics,
   footer,
 }: {
   year: RotationCandidateYearResult
@@ -231,6 +232,7 @@ const KeyMetricsSection = ({
   areaHa: number
   retention: number | null
   hideNNormLevel: boolean
+  hideEconomics: boolean
   footer?: React.ReactNode
 }) => {
   const [showMineralSplit, setShowMineralSplit] = useState(false)
@@ -273,18 +275,32 @@ const KeyMetricsSection = ({
           value={`${fmt(nLoad, 1)} kg N/ha`}
           caption={`Udvaskning ${fmt(leaching, 1)} kg N/ha - ${retentionText}`}
         />
-        <BigMetricTile
-          label={`DB2 (${calendarYear})`}
-          term="db2"
-          value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
-          caption={
-            !yieldAmount
-              ? 'Normudbytte -'
-              : response
-                ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
-                : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
-          }
-        />
+        {hideEconomics ? (
+          <BigMetricTile
+            label={`Udbytte (${calendarYear})`}
+            value={yieldAmount ? `${fmt(yieldAmount, 0)} ${yieldUnit}` : '-'}
+            caption={
+              !yieldAmount
+                ? undefined
+                : response
+                  ? `${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
+                  : 'Normudbytte'
+            }
+          />
+        ) : (
+          <BigMetricTile
+            label={`DB2 (${calendarYear})`}
+            term="db2"
+            value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
+            caption={
+              !yieldAmount
+                ? 'Normudbytte -'
+                : response
+                  ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
+                  : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
+            }
+          />
+        )}
       </div>
 
       <div className="rounded-lg border bg-background p-3.5 @2xl:col-span-7">
@@ -1175,6 +1191,7 @@ type RotationYearsDetailProps = {
   onSelectedYearIndexChange?: (index: number) => void
   hideYearSelector?: boolean
   hideNNormLevel?: boolean
+  hideEconomics?: boolean
   startCalendarYear?: number
 }
 
@@ -1186,6 +1203,7 @@ export const RotationYearsDetail = ({
   onSelectedYearIndexChange,
   hideYearSelector = false,
   hideNNormLevel = false,
+  hideEconomics = false,
   startCalendarYear = ROTATION_START_CALENDAR_YEAR,
 }: RotationYearsDetailProps) => {
   const fieldEconomics = useContext(FieldEconomicsContext)
@@ -1276,6 +1294,7 @@ export const RotationYearsDetail = ({
         areaHa={areaHa}
         retention={retention}
         hideNNormLevel={hideNNormLevel}
+        hideEconomics={hideEconomics}
         footer={
           <button
             type="button"
@@ -1295,25 +1314,27 @@ export const RotationYearsDetail = ({
             areaHa={areaHa}
             retention={retention}
           />
-          <div ref={economicsRef}>
-            <FieldEconomicsContext.Provider
-              value={
-                fieldEconomics && {
-                  ...fieldEconomics,
-                  returnTo: {
-                    ...fieldEconomics.returnTo,
-                    calculationYearIndex: yearIndex,
-                  },
+          {hideEconomics ? null : (
+            <div ref={economicsRef}>
+              <FieldEconomicsContext.Provider
+                value={
+                  fieldEconomics && {
+                    ...fieldEconomics,
+                    returnTo: {
+                      ...fieldEconomics.returnTo,
+                      calculationYearIndex: yearIndex,
+                    },
+                  }
                 }
-              }
-            >
-              <EconomicDetailSection
-                detail={year.dbDetail}
-                areaHa={areaHa}
-                cropCode={year.year.cropCode}
-              />
-            </FieldEconomicsContext.Provider>
-          </div>
+              >
+                <EconomicDetailSection
+                  detail={year.dbDetail}
+                  areaHa={areaHa}
+                  cropCode={year.year.cropCode}
+                />
+              </FieldEconomicsContext.Provider>
+            </div>
+          )}
 
           <div className="border-t pt-3">
             <button

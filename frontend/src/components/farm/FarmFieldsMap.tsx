@@ -343,10 +343,12 @@ export const FarmFieldsMap = ({
   const yearIndex = hasSelectedYear ? selectedYearIndex : null
   const selectedCalendarYear =
     yearIndex !== null ? firstCalendarYear(!isSimulationView) + yearIndex : null
-  const colorBy =
+  const selectedColorBy =
     colorBySelection.forMode === mode
       ? colorBySelection.value
       : defaultColorByForMode(mode)
+  const colorBy =
+    selectedColorBy === 'db2' && !isSimulationView ? 'none' : selectedColorBy
   if (previousHasSelectedYear !== hasSelectedYear) {
     setPreviousHasSelectedYear(hasSelectedYear)
     if (hasSelectedYear) {
@@ -387,9 +389,11 @@ export const FarmFieldsMap = ({
           ),
     [fields, yearIndex],
   )
-  const colorOptions = hasSelectedYear
-    ? ATTRIBUTE_OPTIONS
-    : ATTRIBUTE_OPTIONS.filter((option) => !isYearColorAttribute(option.value))
+  const colorOptions = ATTRIBUTE_OPTIONS.filter(
+    (option) =>
+      (hasSelectedYear || !isYearColorAttribute(option.value)) &&
+      (isSimulationView || option.value !== 'db2'),
+  )
 
   const activeColorSpec: ColorSpec | null =
     colorBy === 'none'

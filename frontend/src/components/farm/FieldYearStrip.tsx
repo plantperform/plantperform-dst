@@ -80,6 +80,7 @@ type FieldYearStripProps = {
   startYear: number
   selectedIndex: number | null
   onSelect?: (index: number | null) => void
+  hideEconomics?: boolean
 }
 
 export const FieldYearStrip = ({
@@ -88,17 +89,21 @@ export const FieldYearStrip = ({
   startYear,
   selectedIndex,
   onSelect,
+  hideEconomics = false,
 }: FieldYearStripProps) => {
-  const metricOptions = field.quotaEligible
-    ? METRIC_OPTIONS
-    : METRIC_OPTIONS.filter((option) => option.value === 'db2')
+  const metricOptions = METRIC_OPTIONS.filter((option) =>
+    option.value === 'db2' ? !hideEconomics : field.quotaEligible,
+  )
   const [chosenMetric, setMetric] = useState<YearMetric>('nLoad')
   const metric = metricOptions.some((option) => option.value === chosenMetric)
     ? chosenMetric
-    : 'db2'
-  const hasValues = yearValues !== undefined && yearValues.length > 0
+    : (metricOptions.at(0)?.value ?? chosenMetric)
+  const hasValues =
+    metricOptions.length > 0 &&
+    yearValues !== undefined &&
+    yearValues.length > 0
   const values = field.cropRotation.map((_, index) => {
-    const yearValue = yearValues?.[index]
+    const yearValue = hasValues ? yearValues?.[index] : undefined
     return yearValue ? metricValue(metric, yearValue, field) : null
   })
   const counted = values.filter((value): value is number => value !== null)

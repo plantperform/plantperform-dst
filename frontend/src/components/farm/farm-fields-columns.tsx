@@ -743,31 +743,33 @@ export const buildFarmFieldsColumns = ({
         toggleLabel: 'N-norm%',
       },
     })
+    list.push(
+      numericMetricColumn(
+        {
+          key: 'db2',
+          label: 'DB2 (kr/ha)',
+          heading: 'DB2',
+          emptyCell: (placement) =>
+            placement === 'cell' ? (
+              <Badge
+                variant="outline"
+                className="font-normal text-muted-foreground"
+              >
+                Ikke beregnet
+              </Badge>
+            ) : (
+              <span className="font-normal text-muted-foreground">
+                Ikke beregnet
+              </span>
+            ),
+        },
+        isSimulationView,
+        totals,
+      ),
+    )
   }
 
   list.push(
-    numericMetricColumn(
-      {
-        key: 'db2',
-        label: 'DB2 (kr/ha)',
-        heading: 'DB2',
-        emptyCell: (placement) =>
-          placement === 'cell' ? (
-            <Badge
-              variant="outline"
-              className="font-normal text-muted-foreground"
-            >
-              Ikke beregnet
-            </Badge>
-          ) : (
-            <span className="font-normal text-muted-foreground">
-              Ikke beregnet
-            </span>
-          ),
-      },
-      isSimulationView,
-      totals,
-    ),
     {
       id: 'quotaStatus',
       header: () => 'Udledning mod kvote',

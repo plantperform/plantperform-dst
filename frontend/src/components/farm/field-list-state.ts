@@ -54,6 +54,8 @@ export const OPTIONAL_COLUMN_IDS = [
   'soilTypeNumber',
 ]
 
+const SIMULATION_ONLY_COLUMN_IDS = ['nNormPct', 'db2', ...FERTILISER_COLUMN_IDS]
+
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
   'nNormPct',
@@ -98,7 +100,13 @@ export const readStoredColumnVisibility = (
     return Object.fromEntries(
       OPTIONAL_COLUMN_IDS.map((id) => {
         const value = entries[id]
-        return [id, typeof value === 'boolean' ? value : defaults[id]]
+        return [
+          id,
+          typeof value === 'boolean' &&
+          (isSimulationView || !SIMULATION_ONLY_COLUMN_IDS.includes(id))
+            ? value
+            : defaults[id],
+        ]
       }),
     )
   } catch {

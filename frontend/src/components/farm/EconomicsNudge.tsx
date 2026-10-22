@@ -21,7 +21,7 @@ export const EconomicsNudge = ({ farmId }: { farmId: string }) => {
   return (
     <EconomicsBanner
       label="Økonomi"
-      title={`Tallene bygger på ${STANDARD_PROFILE.name}`}
+      title={`Simuleringerne regner med ${STANDARD_PROFILE.name}`}
       text={ECONOMICS_INVITATION}
     >
       <Button

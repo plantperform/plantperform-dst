@@ -186,7 +186,7 @@ export const describeStandard = (
   cropCount: number,
   simulationNames: string[],
 ): string =>
-  `Priser og mængder fra ${STANDARD_SOURCE} for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og dine egne profiler måles mod den. ${describeProfileUsers(['afgrødehistorikken', ...simulationNames])}.`
+  `Priser og mængder fra ${STANDARD_SOURCE} for ${formatCropCount(cropCount)}. Standarden kan ikke rettes, og dine egne profiler måles mod den. ${describeProfileUsers(simulationNames)}.`
 
 export const sharedProfileNote = (simulationCount: number): string | null => {
   if (simulationCount < 2) return null

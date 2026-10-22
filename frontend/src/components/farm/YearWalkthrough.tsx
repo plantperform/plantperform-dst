@@ -196,7 +196,7 @@ const ScopedFact = ({
 type ScopedSummaryProps = {
   row: CatchmentYear
   column: YearColumn | null
-  db2: number
+  db2: number | null
   overYearCount: number
   yearCount: number
 }
@@ -244,11 +244,13 @@ const ScopedSummary = ({
               : '-'
           }
         />
-        <ScopedFact
-          label={column ? 'DB2' : 'DB2 gns. pr. år'}
-          term="db2"
-          value={formatCompactDkk(db2)}
-        />
+        {db2 === null ? null : (
+          <ScopedFact
+            label={column ? 'DB2' : 'DB2 gns. pr. år'}
+            term="db2"
+            value={formatCompactDkk(db2)}
+          />
+        )}
         <ScopedFact
           label="År over kvoten"
           value={`${overYearCount} af ${yearCount}`}
@@ -599,7 +601,7 @@ const YearPanel = ({
                   <ScopedSummary
                     row={scopedRow}
                     column={column}
-                    db2={entry ? entry.totalDb2 : quota.totals.db2}
+                    db2={history ? null : (entry?.totalDb2 ?? quota.totals.db2)}
                     overYearCount={overYearCount}
                     yearCount={yearCount}
                   />
@@ -811,7 +813,10 @@ export const YearWalkthrough = ({
     const overCount = catchmentYears(entry).filter(
       (row) => row.level === 'over',
     ).length
-    return `${column.calendarYear}: DB2 ${formatCompactDkk(entry.totalDb2)}, udledning ${formatWholeNumber(entry.totalNLoadKg)} kg N${describeYearQuota(quotaCatchmentCount, overCount)}`
+    const emission = `udledning ${formatWholeNumber(entry.totalNLoadKg)} kg N${describeYearQuota(quotaCatchmentCount, overCount)}`
+    return history
+      ? `${column.calendarYear}: ${emission}`
+      : `${column.calendarYear}: DB2 ${formatCompactDkk(entry.totalDb2)}, ${emission}`
   }
   const yearTabIndex = (position: number) =>
     columns[position].index === selectedYearIndex ||
@@ -1155,18 +1160,20 @@ export const YearWalkthrough = ({
                       >
                         {column.calendarYear}
                       </span>
-                      <span
-                        aria-hidden="true"
-                        className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
-                      >
-                        {loading ? (
-                          <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
-                        ) : entry ? (
-                          `DB2 ${formatCompactDkk(entry.totalDb2)}`
-                        ) : (
-                          '-'
-                        )}
-                      </span>
+                      {history ? null : (
+                        <span
+                          aria-hidden="true"
+                          className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+                        >
+                          {loading ? (
+                            <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
+                          ) : entry ? (
+                            `DB2 ${formatCompactDkk(entry.totalDb2)}`
+                          ) : (
+                            '-'
+                          )}
+                        </span>
+                      )}
                     </button>
                   </AppTooltip>
                 )

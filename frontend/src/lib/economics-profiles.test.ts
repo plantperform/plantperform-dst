@@ -236,7 +236,7 @@ describe('economics profiles', () => {
 
   it('introduces Standard above the profile cards', () => {
     expect(describeStandard(6, ['Mere vintersæd'])).toBe(
-      'Priser og mængder fra SEGES Budgetkalkuler 2026 for 6 afgrøder. Standarden kan ikke rettes, og dine egne profiler måles mod den. På bedriften bruges den af afgrødehistorikken og Mere vintersæd.',
+      'Priser og mængder fra SEGES Budgetkalkuler 2026 for 6 afgrøder. Standarden kan ikke rettes, og dine egne profiler måles mod den. På bedriften bruges den af Mere vintersæd.',
     )
   })
 
