@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -14,6 +14,7 @@ from app.data.read_model_store import (
 )
 from app.data.repository import (
     FieldNotOptimizedError,
+    add_simulation_fields,
     delete_simulation,
     get_simulation,
     get_simulation_field,
@@ -22,6 +23,7 @@ from app.data.repository import (
     list_scenario_afgrodekoder,
     list_simulation_fields,
     list_simulations,
+    remove_simulation_fields,
     update_simulation_constraints,
     update_simulation_field,
 )
@@ -39,7 +41,7 @@ from app.domain.economics import (
     RecalculateEconomicsRequest,
     SelectEconomicsRequest,
 )
-from app.domain.field import FieldRecord, UpdateFieldRequest
+from app.domain.field import CreateFieldRequest, FieldRecord, UpdateFieldRequest
 from app.domain.optimization import (
     OptimizeSimulationRequest,
     SimulationResult,
@@ -57,6 +59,7 @@ from app.domain.simulation import (
     Simulation,
     UpdateSimulationRequest,
 )
+from app.domain.soil import MissingSoilDataError
 from app.services.creation.jobs import retry as retry_creation
 from app.services.creation.jobs import submit as submit_creation
 from app.services.economics import jobs as economics_jobs
@@ -407,6 +410,43 @@ def get_farm_simulation_fields(
     if fields is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
     return fields
+
+
+@router.post("/{simulation_id}/fields", response_model=list[FieldRecord], status_code=201)
+def post_farm_simulation_fields(
+    farm_id: str,
+    simulation_id: str,
+    request: list[CreateFieldRequest],
+    user: CurrentUser,
+) -> list[FieldRecord]:
+    try:
+        fields = add_simulation_fields(farm_id, simulation_id, request, user.email)
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except MissingSoilDataError as error:
+        raise HTTPException(
+            status_code=422, detail="En eller flere marker mangler gyldige P/S/Nt-data"
+        ) from error
+    if fields is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    return fields
+
+
+@router.delete("/{simulation_id}/fields", status_code=HTTP_204_NO_CONTENT)
+def delete_farm_simulation_fields(
+    farm_id: str,
+    simulation_id: str,
+    field_ids: Annotated[list[str], Query(alias="fieldId")],
+    user: CurrentUser,
+) -> None:
+    try:
+        removed = remove_simulation_fields(farm_id, simulation_id, field_ids, user.email)
+    except (CreationNotReadyError, SetupRevisionConflictError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Simulering ikke fundet")
+    if not removed:
+        raise HTTPException(status_code=404, detail="Mark ikke fundet")
 
 
 @router.patch("/{simulation_id}/fields/{field_id}", response_model=FieldRecord)

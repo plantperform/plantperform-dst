@@ -1,6 +1,7 @@
 """Settings-only creation and real worker orchestration without persisted alternatives."""
 
 from copy import deepcopy
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from app.data import simulation_settings_store as settings
 from app.data.db import field_table, metadata
 from app.data.db import simulation_read_model_table as views
 from app.data.db import simulation_result_table as results
+from app.domain.field import CreateFieldRequest
 from app.domain.optimization import OptimizationSettings, OptimizeSimulationRequest
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, UpdateSimulationRequest
@@ -268,6 +270,41 @@ class SimulationSettingsTests(DatabaseTests):
         self.assertEqual(second.response.fields[0].name, "Edited")
         self.assertGreater(second.response.objective_db2, first.response.objective_db2)
         self.assertEqual(second.fields_before[0].db2, first.response.fields[0].db2)
+
+    def test_fields_added_and_removed_in_a_simulation_are_optimized(self):
+        created = self.create()
+        kept, dropped = [f.id for f in self.optimize(created).response.fields]
+        context = {
+            "imk_id": 7,
+            "jbnr": 5,
+            "goedningsregion": None,
+            "oeko": False,
+            "kvotegivende": True,
+            "crop_history": {},
+            "percolation_by_kategori": None,
+            "org_n_topsoil": None,
+            "s_soil": None,
+        }
+        with (
+            patch.object(
+                repository,
+                "_registry_contexts_for_imk_ids",
+                return_value={7: SimpleNamespace(_mapping=context, **context)},
+            ),
+            patch.object(repository, "_soil_data_for_context", return_value=((), 3, 1)),
+            patch.object(
+                repository, "_historical_years_for_context", return_value=self.chosen().years
+            ),
+        ):
+            [added] = simulation_store.add_simulation_fields(
+                "farm", created.id, [CreateFieldRequest(imk_id=7, name="New", area_ha=2)], EMAIL
+            )
+        simulation_store.remove_simulation_fields("farm", created.id, [dropped], EMAIL)
+
+        second = self.optimize(repository.get_simulation("farm", created.id, EMAIL))
+
+        self.assertEqual([f.id for f in second.response.fields], [kept, added.id])
+        self.assertTrue(all(f.rotation_id for f in second.response.fields))
 
     def test_retry_reuses_initialized_fields_and_captures_settings_before_rename(self):
         created = self.create()

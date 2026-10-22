@@ -341,3 +341,12 @@ class RegistryAccessControlTests(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(get_owned_imk_ids.call_args.args, (db, "farm-1", MEMBER.email))
+
+    def test_tile_owns_listed_fields_and_rejects_invalid_ids(self) -> None:
+        with patch.object(registry, "get_registry_tile", return_value=b"") as get_registry_tile:
+            registry.get_tile(1, 1, 1, object(), MEMBER, owned_imk_ids="7,9,")
+            with self.assertRaises(HTTPException) as context:
+                registry.get_tile(1, 1, 1, object(), MEMBER, owned_imk_ids="7,x")
+
+        self.assertEqual(get_registry_tile.call_args.kwargs["owned_imk_ids"], [7, 9])
+        self.assertEqual(context.exception.status_code, 422)

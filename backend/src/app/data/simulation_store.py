@@ -1,11 +1,14 @@
 """Simulation aggregates. Always lock setup before result when changing either."""
 
+from collections import defaultdict
 from copy import deepcopy
+from uuid import uuid4
 
 from sqlalchemy import delete, func, select, update
 
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.domain.creation import CreationNotReadyError
 from app.domain.field import FieldRecord, validate_measures_for_rotation
 from app.domain.optimization import (
     OptimizeSimulationRequest,
@@ -532,7 +535,7 @@ def _save_field(session, simulation_id, field, candidate=None):
         )
     )
     invalidate(session, simulation_id)
-    read_model_store.update_field_view(session, simulation_id, field, setup_field)
+    read_model_store.refresh_simulation_view(session, simulation_id)
     return True
 
 
@@ -558,6 +561,127 @@ def update_simulation_field(farm_id, simulation_id, field_id, request, email):
             )
         _save_field(session, simulation_id, field)
         return field
+
+
+def _require_field_snapshot(row):
+    if not row.data.get("fields_initialized", True):
+        raise CreationNotReadyError("Kør Optimér, før du tilføjer eller fjerner marker.")
+
+
+def _quota_by_catchment(fields):
+    quotas = defaultdict(float)
+    for field in fields:
+        if field.kvotegivende and field.kystvand_id is not None:
+            quotas[field.kystvand_id] += field.udledningskvote_mark_kgn
+    return quotas
+
+
+def _fit_constraints(constraints, before, after):
+    old, new = _quota_by_catchment(before), _quota_by_catchment(after)
+    limit = constraints.get("max_fields_with_new_rotation")
+    return {
+        **constraints,
+        "max_n_load_by_kystvandopland": [
+            cap
+            for cap in constraints.get("max_n_load_by_kystvandopland", [])
+            if cap["max_n_load_kg"] is None
+            or old[cap["kystvand_id"]] == new[cap["kystvand_id"]]
+            or abs(cap["max_n_load_kg"] - old[cap["kystvand_id"]]) > 0.5
+        ],
+        "max_fields_with_new_rotation": None if limit is None else min(limit, len(after)),
+    }
+
+
+def _change_field_set(session, simulation_id, row, before, after, **values):
+    from app.data import read_model_store
+
+    constraints = row.data.get("constraints") or {}
+    fitted = _fit_constraints(constraints, before, after)
+    if fitted != constraints:
+        values["data"] = {**row.data, "constraints": fitted}
+    session.execute(update(setups).where(setups.c.id == simulation_id).values(**values))
+    invalidate(session, simulation_id)
+    read_model_store.refresh_simulation_view(session, simulation_id)
+
+
+def add_simulation_fields(farm_id, simulation_id, requests, email):
+    from app.data import read_model_store
+
+    repository = _common()
+    with repository.SessionLocal() as session:
+        row = _row(session, farm_id, simulation_id, email, ready=True)
+        if row is None:
+            return None
+        _require_field_snapshot(row)
+        contexts = repository._registry_contexts_for_imk_ids(
+            session, list({request.imk_id for request in requests if request.imk_id is not None})
+        )
+    fields = []
+    for request in requests:
+        context = contexts.get(request.imk_id)
+        field, _ = repository._historical_field(
+            repository._new_field(farm_id, str(uuid4()), request, context), context
+        )
+        fields.append(field)
+    with repository.SessionLocal.begin() as session:
+        row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
+        if row is None:
+            return None
+        _require_field_snapshot(row)
+        before = _fields(session, simulation_id)
+        present = {field.imk_id for field in before}
+        added = []
+        for field in fields:
+            if field.imk_id not in present:
+                present.add(field.imk_id)
+                added.append(field)
+        if not added:
+            return []
+        setup = {
+            field.id: {
+                **split_field(repository._dump(field)),
+                "calculation_context": dict(contexts[field.imk_id]._mapping),
+            }
+            for field in added
+        }
+        _change_field_set(
+            session,
+            simulation_id,
+            row,
+            before,
+            before + added,
+            fields=setups.c.fields.op("||")(read_model_store.insert_json(setup)),
+            field_order=setups.c.field_order.op("||")(
+                read_model_store.insert_json([field.id for field in added])
+            ),
+        )
+        return added
+
+
+def remove_simulation_fields(farm_id, simulation_id, field_ids, email):
+    from sqlalchemy import Text, literal
+    from sqlalchemy.dialects.postgresql import ARRAY
+
+    with _common().SessionLocal.begin() as session:
+        row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
+        if row is None:
+            return None
+        _require_field_snapshot(row)
+        removed = set(field_ids)
+        before = _fields(session, simulation_id)
+        after = [field for field in before if field.id not in removed]
+        if len(after) == len(before):
+            return False
+        _change_field_set(
+            session,
+            simulation_id,
+            row,
+            before,
+            after,
+            fields=setups.c.fields.op("-")(literal(sorted(removed), ARRAY(Text))),
+            field_order=[field.id for field in after],
+        )
+        return True
 
 
 def save_manual_rotation(
