@@ -132,7 +132,7 @@ export const ComparisonCharts = ({
     <div className="grid gap-6 @3xl:grid-cols-2">
       <ChartCard
         title="Dækningsbidrag og udledning"
-        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. Den stiplede linje er afgrødehistorikkens udledning, og i det grønne felt er udledningen lavere.`}
+        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. Den stiplede linje er afgrødehistorikkens udledning, og til venstre for den er udledningen lavere.`}
       >
         <p className={cn(AXIS_CAPTION_CLASS, 'mb-1')}>
           Dækningsbidrag, {perHaUnit('db2')}
