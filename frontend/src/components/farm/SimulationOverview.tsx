@@ -53,7 +53,8 @@ export const SimulationOverview = ({
             <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
               En simulering er en kopi af bedriftens marker, som du kan ændre og
               optimere uden at røre afgrødehistorikken. Tallene er gennemsnit
-              pr. år, og under dem står forskellen til afgrødehistorikken.
+              pr. år, og under udledningen står forskellen til
+              afgrødehistorikken.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

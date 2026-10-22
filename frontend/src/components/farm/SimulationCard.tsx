@@ -33,7 +33,6 @@ import {
 } from '@/lib/field-domain'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
-  describeDb2Delta,
   describeFieldChanges,
   describeNLoadDelta,
   formatCreatedAt,
@@ -137,7 +136,6 @@ const SimulationFigures = ({
   const comparable =
     totals.uncalculatedCount === 0 && history.totals.calculatedCount > 0
   const db2PerHa = totalsPerHa(totals, 'db2')
-  const historyDb2PerHa = totalsPerHa(history.totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
   const profile = useEconomicsProfiles().appliedProfile(simulation)
@@ -148,11 +146,6 @@ const SimulationFigures = ({
         <KeyFigure
           label="Dækningsbidrag pr. år"
           figure={perHaFigure(db2PerHa, 'db2', formatCompactDkk(totals.db2))}
-          note={
-            comparable && db2PerHa !== null && historyDb2PerHa !== null ? (
-              <DeltaNote delta={describeDb2Delta(db2PerHa, historyDb2PerHa)} />
-            ) : undefined
-          }
         >
           {profile.id === STANDARD_PROFILE_ID ? null : (
             <EconomicsChip

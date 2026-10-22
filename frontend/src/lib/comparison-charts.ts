@@ -1,12 +1,4 @@
-import {
-  barX,
-  defineChart,
-  dot,
-  rect,
-  ruleX,
-  ruleY,
-  text,
-} from '@tanstack/charts'
+import { barX, defineChart, dot, rect, ruleX, text } from '@tanstack/charts'
 import { decorative } from '@tanstack/charts/mark/decorative'
 import { scaleBand } from '@tanstack/charts/scales/band'
 import { scaleLinear } from '@tanstack/charts/scales/linear'
@@ -41,7 +33,6 @@ const MUTED_TEXT_PAINT = 'hsl(var(--muted-foreground))'
 
 const LABEL_LENGTH = 22
 const LABEL_OFFSET = 10
-const HISTORY_LABEL_RISE = 12
 const LEFT_LABELS_FROM = 0.6
 const CLOSE_X = 0.3
 const CLOSE_Y = 0.1
@@ -122,17 +113,19 @@ export const db2NLoadPoints = (
         ],
   )
 
-const dotPaint = ({ history, tone }: Db2NLoadPoint) =>
-  history
-    ? { fill: CARD_PAINT, stroke: TONE_PAINT[tone], strokeWidth: 2 }
-    : { fill: TONE_PAINT[tone], stroke: CARD_PAINT, strokeWidth: 2 }
+const dotPaint = ({ tone }: Db2NLoadPoint) => ({
+  fill: TONE_PAINT[tone],
+  stroke: CARD_PAINT,
+  strokeWidth: 2,
+})
 
-const labelPaint = ({ history, tone }: Db2NLoadPoint) => {
+const labelPaint = ({ tone }: Db2NLoadPoint) => {
   if (tone === 'best') return PRIMARY_PAINT
-  return history || tone === 'dimmed' ? MUTED_TEXT_PAINT : TEXT_PAINT
+  return tone === 'dimmed' ? MUTED_TEXT_PAINT : TEXT_PAINT
 }
 
 export type Db2NLoadChartOptions = {
+  historyNLoad: number | null
   formatDb2: (value: number) => string
   formatNLoad: (value: number) => string
   describe: (point: Db2NLoadPoint) => string
@@ -140,11 +133,11 @@ export type Db2NLoadChartOptions = {
 
 export const db2NLoadChart = (
   points: Db2NLoadPoint[],
-  { formatDb2, formatNLoad, describe }: Db2NLoadChartOptions,
+  { historyNLoad, formatDb2, formatNLoad, describe }: Db2NLoadChartOptions,
 ) => {
-  const xDomain = domainOf(points.map(({ nLoad }) => nLoad))
+  const history = historyNLoad === null ? [] : [{ nLoad: historyNLoad }]
+  const xDomain = domainOf([...points, ...history].map(({ nLoad }) => nLoad))
   const yDomain = domainOf(points.map(({ db2 }) => db2))
-  const history = points.filter((point) => point.history)
   const sides = placeLabels(
     points.map(({ nLoad, db2 }) => ({ x: nLoad, y: db2 })),
   )
@@ -153,26 +146,25 @@ export const db2NLoadChart = (
     label: chartLabel(point.title),
     side: sides[index],
   }))
-  const historyRule = {
-    stroke: TONE_PAINT.history,
-    strokeOpacity: 1,
-    strokeDasharray: '4 3',
-  }
   return defineChart({
     marks: [
       decorative(
         rect(history, {
           x1: () => xDomain[0],
           x2: 'nLoad',
-          y1: 'db2',
+          y1: () => yDomain[0],
           y2: () => yDomain[1],
           fill: PRIMARY_PAINT,
           fillOpacity: BETTER_AREA_OPACITY,
           inset: 0,
         }),
       ),
-      ruleX(history, { x: 'nLoad', ...historyRule }),
-      ruleY(history, { y: 'db2', ...historyRule }),
+      ruleX(history, {
+        x: 'nLoad',
+        stroke: TONE_PAINT.history,
+        strokeOpacity: 1,
+        strokeDasharray: '4 3',
+      }),
       ...points.map((point) =>
         dot([point], {
           id: `dot-${point.key}`,
@@ -191,7 +183,6 @@ export const db2NLoadChart = (
           key: 'key',
           anchor: ({ side }) => (side === 'left' ? 'end' : 'start'),
           dx: ({ side }) => (side === 'left' ? -LABEL_OFFSET : LABEL_OFFSET),
-          dy: ({ history }) => (history ? -HISTORY_LABEL_RISE : 0),
           fill: labelPaint,
           fontSize: 12,
           fontWeight: 500,

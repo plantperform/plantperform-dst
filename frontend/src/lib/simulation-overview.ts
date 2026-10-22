@@ -1,7 +1,6 @@
 import type { FieldRecord } from '@/api/types'
 import {
   formatFieldCount,
-  formatNumber,
   formatPerHa,
   formatSigned,
   groupFieldsByCatchment,
@@ -140,28 +139,9 @@ export type KeyFigureDelta = {
   tone: DeltaTone
 }
 
-const roundPercent = (value: number): number =>
-  value >= 10 ? Math.round(value) : Math.round(value * 10) / 10
-
 const toneOf = (difference: number, higherIsBetter: boolean): DeltaTone => {
   if (difference === 0) return 'same'
   return difference > 0 === higherIsBetter ? 'better' : 'worse'
-}
-
-export const describeDb2Delta = (
-  valuePerHa: number,
-  baselinePerHa: number,
-): KeyFigureDelta => {
-  const difference = Math.round(valuePerHa - baselinePerHa)
-  const amount = formatSigned(difference, (value) => formatPerHa(value, 'db2'))
-  const percent =
-    baselinePerHa === 0
-      ? 0
-      : roundPercent((Math.abs(difference) / Math.abs(baselinePerHa)) * 100)
-  return {
-    text: percent > 0 ? `${amount} (${formatNumber(percent)} %)` : amount,
-    tone: toneOf(difference, true),
-  }
 }
 
 export const describeNLoadDelta = (

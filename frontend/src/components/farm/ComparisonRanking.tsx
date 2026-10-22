@@ -36,7 +36,7 @@ import {
   type BestDirection,
   type ComparisonSort,
 } from '@/lib/simulation-comparison'
-import { describeDb2Delta, describeNLoadDelta } from '@/lib/simulation-overview'
+import { describeNLoadDelta } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type Metric = {
@@ -46,7 +46,7 @@ type Metric = {
   valueOf: (column: ComparedColumn) => number | null
   format: (value: number) => string
   total?: (column: ComparedColumn) => string
-  describeDelta: (value: number, history: number) => string
+  describeDelta?: (value: number, history: number) => string
   direction: BestDirection
   bestWord: string
   barClass: string
@@ -56,10 +56,10 @@ const METRICS: Metric[] = [
   {
     key: 'db2',
     label: 'Dækningsbidrag pr. år',
-    valueOf: (column) => totalsPerHa(column.totals, 'db2'),
+    valueOf: (column) =>
+      column.history ? null : totalsPerHa(column.totals, 'db2'),
     format: (value) => formatPerHa(value, 'db2'),
     total: (column) => `${formatCompactDkk(column.totals.db2)} i alt`,
-    describeDelta: (value, history) => describeDb2Delta(value, history).text,
     direction: 'highest',
     bestWord: 'højest',
     barClass: 'bg-primary',
@@ -105,6 +105,7 @@ const MetricCell = ({
   max,
   catchmentCount,
 }: MetricCellProps) => {
+  if (column.history && !metric.describeDelta) return null
   const value = metric.valueOf(column)
   if (value === null) {
     return metric.key === 'yearsOver' && column.catchments === undefined ? (
@@ -118,6 +119,10 @@ const MetricCell = ({
     )
   }
   const historyValue = metric.valueOf(history)
+  const delta =
+    historyValue === null || !metric.describeDelta
+      ? null
+      : metric.describeDelta(value, historyValue)
   return (
     <>
       <span
@@ -158,12 +163,10 @@ const MetricCell = ({
         ) : null
       ) : (
         <span className="mt-1.5 block text-xs text-muted-foreground">
-          {historyValue === null
-            ? null
-            : metric.describeDelta(value, historyValue)}
+          {delta}
           {best ? (
             <>
-              {historyValue === null ? null : ' · '}
+              {delta === null ? null : ' · '}
               <span className={cn('font-semibold', BEST_TEXT_CLASS)}>
                 {metric.bestWord}
               </span>
