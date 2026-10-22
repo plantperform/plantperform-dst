@@ -35,32 +35,27 @@ const share = (id: CropGroup, value: number): CropShare => {
 
 describe('db2NLoadPoints', () => {
   const columns = [
-    {
-      key: 'history',
-      title: 'Afgrødehistorik',
-      history: true,
-      db2: 323_000,
-      nLoad: 572,
-    },
     { key: 'a', title: 'Test 2', history: false, db2: 766_000, nLoad: 213 },
     { key: 'b', title: 'Test 3', history: false, db2: null, nLoad: null },
+    { key: 'c', title: 'Test 1', history: false, db2: 758_000, nLoad: 227 },
   ]
 
   it('leaves out columns without figures', () => {
     expect(db2NLoadPoints(columns, 'a', null).map(({ key }) => key)).toEqual([
-      'history',
       'a',
+      'c',
     ])
   })
 
   it('tones the points like the catchment curves', () => {
     expect(db2NLoadPoints(columns, 'a', null).map(({ tone }) => tone)).toEqual([
-      'history',
       'best',
+      'plain',
     ])
-    expect(
-      db2NLoadPoints(columns, 'a', 'history').map(({ tone }) => tone),
-    ).toEqual(['highlighted', 'dimmed'])
+    expect(db2NLoadPoints(columns, 'a', 'c').map(({ tone }) => tone)).toEqual([
+      'dimmed',
+      'highlighted',
+    ])
   })
 })
 
@@ -101,14 +96,6 @@ describe('chartLabel', () => {
 describe('db2NLoadChart', () => {
   const points: Db2NLoadPoint[] = [
     {
-      key: 'history',
-      title: 'Afgrødehistorik',
-      history: true,
-      db2: 323_000,
-      nLoad: 572,
-      tone: 'history',
-    },
-    {
       key: 'a',
       title: 'Test 2',
       history: false,
@@ -127,6 +114,7 @@ describe('db2NLoadChart', () => {
   ]
   const scene = createChartScene(
     db2NLoadChart(points, {
+      historyNLoad: 572,
       formatDb2: String,
       formatNLoad: String,
       describe: ({ title }) => title,
@@ -134,15 +122,11 @@ describe('db2NLoadChart', () => {
     SIZE,
   )
 
-  it('makes only the dots interactive', () => {
-    expect(scene.points.map(({ datum }) => datum.key)).toEqual([
-      'history',
-      'a',
-      'b',
-    ])
+  it('makes only the dots of the simulations interactive', () => {
+    expect(scene.points.map(({ datum }) => datum.key)).toEqual(['a', 'b'])
   })
 
-  it('runs both axes from zero to a round number above the largest value', () => {
+  it('runs both axes from zero to a round number above the largest value, the crop history included', () => {
     expect(scene.scales.x.domain).toEqual([0, 600])
     expect(scene.scales.y.domain).toEqual([0, 800_000])
   })

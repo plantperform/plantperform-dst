@@ -48,13 +48,15 @@ export const ComparisonEconomics = ({
   return (
     <ComparisonColumnsTable {...table}>
       <ComparisonFigureRow label="Regner med" {...table}>
-        {(_, index) => (
-          <EconomicsChip
-            profile={profiles[index]}
-            farmingSystem={farmingSystems[index]}
-            returnTo={{ kind: 'compare', search }}
-          />
-        )}
+        {(column, index) =>
+          column.history ? null : (
+            <EconomicsChip
+              profile={profiles[index]}
+              farmingSystem={farmingSystems[index]}
+              returnTo={{ kind: 'compare', search }}
+            />
+          )
+        }
       </ComparisonFigureRow>
       {rows.map((row) => (
         <ComparisonFigureRow
@@ -63,15 +65,17 @@ export const ComparisonEconomics = ({
           note={formatCropNames(row.cropNames)}
           {...table}
         >
-          {(_, index) => (
-            <span className="text-[13px] tabular-nums">
-              {row.cells[index].changed ? (
-                <ChangedValue>{row.cells[index].value}</ChangedValue>
-              ) : (
-                row.cells[index].value
-              )}
-            </span>
-          )}
+          {(column, index) =>
+            column.history ? null : (
+              <span className="text-[13px] tabular-nums">
+                {row.cells[index].changed ? (
+                  <ChangedValue>{row.cells[index].value}</ChangedValue>
+                ) : (
+                  row.cells[index].value
+                )}
+              </span>
+            )
+          }
         </ComparisonFigureRow>
       ))}
     </ComparisonColumnsTable>

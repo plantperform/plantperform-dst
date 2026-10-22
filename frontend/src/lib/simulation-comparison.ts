@@ -6,7 +6,6 @@ import type {
 } from '@/api/types'
 import {
   formatFieldCount,
-  formatPerHa,
   formatSigned,
   formatWholeNumber,
   groupFieldsByCatchment,
@@ -374,50 +373,31 @@ export const formatYears = (count: number): string => `${count} år`
 export const formatYearsDelta = (difference: number): string =>
   `${formatSigned(difference, String)} år`
 
-const describeDb2AgainstHistory = (
-  db2PerHa: number,
-  historyDb2PerHa: number,
-): string => {
-  const difference = Math.round(db2PerHa - historyDb2PerHa)
-  if (difference === 0) return 'samme dækningsbidrag som afgrødehistorikken'
-  return `${formatPerHa(Math.abs(difference), 'db2')} ${difference > 0 ? 'mere' : 'mindre'} end afgrødehistorikken`
-}
-
 export type ComparisonVerdictInput = {
-  best: { title: string; db2PerHa: number | null; yearsOver: number | null }
+  best: { title: string; yearsOver: number | null }
   compliantCount: number
   simulationCount: number
-  historyDb2PerHa: number | null
 }
 
 export const describeComparisonVerdict = ({
   best,
   compliantCount,
   simulationCount,
-  historyDb2PerHa,
 }: ComparisonVerdictInput): string | null => {
   if (best.yearsOver === null || simulationCount === 0) return null
-  const db2 =
-    best.db2PerHa === null || historyDb2PerHa === null
-      ? null
-      : describeDb2AgainstHistory(best.db2PerHa, historyDb2PerHa)
   if (best.yearsOver > 0) {
     return simulationCount === 1
       ? `${best.title} holder ikke kvoten i alle år: ${formatYears(best.yearsOver)} over kvoten.`
       : `Ingen simulering holder kvoten i alle år. ${best.title} kommer tættest på med ${formatYears(best.yearsOver)} over kvoten.`
   }
   if (simulationCount === 1) {
-    return db2 === null
-      ? `${best.title} holder kvoten i alle år og alle oplande.`
-      : `${best.title} holder kvoten i alle år og alle oplande og giver ${db2}.`
+    return `${best.title} holder kvoten i alle år og alle oplande.`
   }
   const reason =
     compliantCount === 1
       ? 'eneste simulering under kvoten i alle år og alle oplande'
       : 'højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande'
-  return db2 === null
-    ? `${best.title} giver den bedste balance: ${reason}.`
-    : `${best.title} giver den bedste balance: ${reason}, og ${db2}.`
+  return `${best.title} giver den bedste balance: ${reason}.`
 }
 
 export const describeCatchmentYearsOver = (

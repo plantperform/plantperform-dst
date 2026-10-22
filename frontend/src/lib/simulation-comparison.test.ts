@@ -530,19 +530,17 @@ describe('formatYearsDelta', () => {
 })
 
 describe('describeComparisonVerdict', () => {
-  const historyDb2PerHa = 1_000
-  const test3 = { title: 'Test3', db2PerHa: 1_250, yearsOver: 0 }
+  const test3 = { title: 'Test3', yearsOver: 0 }
 
-  it('names the only simulation under the quota and what it earns more', () => {
+  it('names the only simulation under the quota', () => {
     expect(
       describeComparisonVerdict({
         best: test3,
         compliantCount: 1,
         simulationCount: 3,
-        historyDb2PerHa,
       }),
     ).toBe(
-      'Test3 giver den bedste balance: eneste simulering under kvoten i alle år og alle oplande, og 250 kr/ha mere end afgrødehistorikken.',
+      'Test3 giver den bedste balance: eneste simulering under kvoten i alle år og alle oplande.',
     )
   })
 
@@ -552,20 +550,18 @@ describe('describeComparisonVerdict', () => {
         best: test3,
         compliantCount: 2,
         simulationCount: 3,
-        historyDb2PerHa,
       }),
     ).toBe(
-      'Test3 giver den bedste balance: højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande, og 250 kr/ha mere end afgrødehistorikken.',
+      'Test3 giver den bedste balance: højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande.',
     )
   })
 
   it('names the one closest to the quota when none keeps it', () => {
     expect(
       describeComparisonVerdict({
-        best: { title: 'Test2', db2PerHa: 1_300, yearsOver: 4 },
+        best: { title: 'Test2', yearsOver: 4 },
         compliantCount: 0,
         simulationCount: 3,
-        historyDb2PerHa,
       }),
     ).toBe(
       'Ingen simulering holder kvoten i alle år. Test2 kommer tættest på med 4 år over kvoten.',
@@ -578,17 +574,13 @@ describe('describeComparisonVerdict', () => {
         best: test3,
         compliantCount: 1,
         simulationCount: 1,
-        historyDb2PerHa,
       }),
-    ).toBe(
-      'Test3 holder kvoten i alle år og alle oplande og giver 250 kr/ha mere end afgrødehistorikken.',
-    )
+    ).toBe('Test3 holder kvoten i alle år og alle oplande.')
     expect(
       describeComparisonVerdict({
         best: { ...test3, yearsOver: 3 },
         compliantCount: 0,
         simulationCount: 1,
-        historyDb2PerHa,
       }),
     ).toBe('Test3 holder ikke kvoten i alle år: 3 år over kvoten.')
   })
@@ -599,7 +591,6 @@ describe('describeComparisonVerdict', () => {
         best: { ...test3, yearsOver: null },
         compliantCount: 0,
         simulationCount: 1,
-        historyDb2PerHa,
       }),
     ).toBeNull()
   })

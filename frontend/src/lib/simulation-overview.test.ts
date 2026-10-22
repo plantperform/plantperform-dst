@@ -4,7 +4,6 @@ import type { FieldRecord } from '@/api/types'
 import { emptyMeasures, type CatchmentTotalsByYear } from '@/lib/field-domain'
 import {
   describeCatchmentYearStatus,
-  describeDb2Delta,
   describeFieldChanges,
   describeNLoadDelta,
   partialCatchmentQuotas,
@@ -240,50 +239,6 @@ describe('describeCatchmentYearStatus', () => {
         overYears: [],
       }),
     ).toBe('Delvist beregnet')
-  })
-})
-
-describe('describeDb2Delta', () => {
-  it('shows a gain in kroner per hectare and percent as better', () => {
-    expect(describeDb2Delta(1_045, 1_000)).toEqual({
-      text: '+45 kr/ha (4,5 %)',
-      tone: 'better',
-    })
-  })
-
-  it('shows a loss as worse', () => {
-    expect(describeDb2Delta(970, 1_000)).toEqual({
-      text: '−30 kr/ha (3 %)',
-      tone: 'worse',
-    })
-  })
-
-  it('rounds the percent to whole numbers from 10 %', () => {
-    expect(describeDb2Delta(1_123.4, 1_000)).toEqual({
-      text: '+123 kr/ha (12 %)',
-      tone: 'better',
-    })
-  })
-
-  it('leaves out a percent that rounds to zero', () => {
-    expect(describeDb2Delta(100_004, 100_000)).toEqual({
-      text: '+4 kr/ha',
-      tone: 'better',
-    })
-  })
-
-  it('leaves out the percent when the crop history has no DB2', () => {
-    expect(describeDb2Delta(500, 0)).toEqual({
-      text: '+500 kr/ha',
-      tone: 'better',
-    })
-  })
-
-  it('is the same when nothing changed', () => {
-    expect(describeDb2Delta(1_000, 1_000)).toEqual({
-      text: '±0 kr/ha',
-      tone: 'same',
-    })
   })
 })
 

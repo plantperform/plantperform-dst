@@ -116,8 +116,9 @@ export const ComparisonCharts = ({
   highlightedKey,
   onHighlight,
 }: ComparisonChartsProps) => {
+  const [history, ...simulations] = columns
   const points = db2NLoadPoints(
-    columns.map((column) => ({
+    simulations.map((column) => ({
       key: column.key,
       title: column.title,
       history: column.history,
@@ -131,19 +132,20 @@ export const ComparisonCharts = ({
     <div className="grid gap-6 @3xl:grid-cols-2">
       <ChartCard
         title="Dækningsbidrag og udledning"
-        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. I det grønne felt er dækningsbidraget højere og udledningen lavere end afgrødehistorikkens.`}
+        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. Den stiplede linje er afgrødehistorikkens udledning, og i det grønne felt er udledningen lavere.`}
       >
         <p className={cn(AXIS_CAPTION_CLASS, 'mb-1')}>
           Dækningsbidrag, {perHaUnit('db2')}
         </p>
         <Chart
           definition={db2NLoadChart(points, {
+            historyNLoad: totalsPerHa(history.totals, 'nLoad'),
             formatDb2: formatWholeNumber,
             formatNLoad: formatNumber,
             describe: describeDb2NLoad,
           })}
           height={DB2_NLOAD_HEIGHT}
-          ariaLabel="Dækningsbidrag og udledning for afgrødehistorikken og de valgte simuleringer"
+          ariaLabel="Dækningsbidrag og udledning for de valgte simuleringer"
           onFocusChange={(point) => onHighlight(point?.datum.key ?? null)}
         />
         <p className={cn(AXIS_CAPTION_CLASS, 'text-right')}>

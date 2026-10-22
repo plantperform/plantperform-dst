@@ -283,16 +283,11 @@ export const SimulationComparison = ({
     bestBalance === undefined
       ? null
       : describeComparisonVerdict({
-          best: {
-            title: bestBalance.title,
-            db2PerHa: totalsPerHa(bestBalance.totals, 'db2'),
-            yearsOver: bestBalance.yearsOver,
-          },
+          best: bestBalance,
           compliantCount: simulationColumns.filter(
             (column) => column.yearsOver === 0,
           ).length,
           simulationCount: simulationColumns.length,
-          historyDb2PerHa: totalsPerHa(history.totals, 'db2'),
         })
   const ordered = [
     history,
