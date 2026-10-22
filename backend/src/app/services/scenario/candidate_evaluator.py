@@ -29,6 +29,7 @@ from app.services.economics.udbytterespons import KONVENTIONEL, har_udbytterespo
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
 from app.services.rotations import afgroede_normer, saedskifte_library
+from app.services.rotations.historical_secondary_crop import historical_secondary_crop
 from app.services.virkemidler import virkemiddel_tilladt
 
 # The displayed/calculated eight-year rotation starts in 2027 for new
@@ -190,14 +191,15 @@ def evaluate_sequence_for_mark(
     (Phase 10, manual single-position adjustment).
 
     Optional real_history has the shape
-    {2025: {"code", "mncs", "mnca", "g0"}, 2026: {...}} and comes from
-    historisk_goedning.real_history_lookback. It contains the mark's own actual
-    2025/26 afgrøder and their historical N inputs (Bilag 3), used to seed
-    f1/f2/g1/g2/m1/m2 for positions 0 (2027) and 1 (2028) instead of cycling to
-    a hypothetical future position in the same candidate. Only those two
-    positions' lookbacks are affected; the rest of the rotation (2029+) still
-    uses the scenarie's unchanged gødning choices. Omitting real_history keeps
-    the previous behavior of purely cyclic lookback.
+    {2025: {"code", "mncs", "mnca", "g0", "secondary_crop"}, 2026: {...}} and
+    comes from historisk_goedning.real_history_lookback. It contains the mark's
+    own actual 2025/26 afgrøder and their historical N inputs (Bilag 3), used to
+    seed f1/f2/g1/g2/m1/m2 for positions 0 (2027) and 1 (2028) instead of
+    cycling to a hypothetical future position in the same candidate. Only those
+    two positions' lookbacks are affected; the rest of the rotation (2029+)
+    still uses the scenarie's unchanged gødning choices. The 2026 catch crop
+    the mark reported is position 0's previous secondary crop. Omitting
+    real_history keeps the previous behavior of purely cyclic lookback.
     """
     n_norm_pct = float(result_ref.n_norm_pct)
 
@@ -227,9 +229,16 @@ def evaluate_sequence_for_mark(
 
     def prev_udlaeg_for(i: int) -> int | None:
         idx = i - 1
-        # Historical data does not record virkemidler, so do not infer one.
+        # The actual year before 2027 has the mark's reported catch crop, which
+        # depends on the candidate's crop after it: before an autumn-sown
+        # crop it was an intermediate crop or early sowing, or nothing.
         if real_history is not None and idx < 0:
-            return None
+            entry = real_history.get(str(START_CALENDAR_YEAR + idx))
+            if entry is None:
+                return None
+            return historical_secondary_crop(
+                entry.get("secondary_crop"), entry["code"], afgrode_seq[i],
+            )
         return udlaeg_seq[idx % active_len]
 
     n_inputs = [

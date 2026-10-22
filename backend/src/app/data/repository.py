@@ -554,6 +554,7 @@ def prepare_simulation_field(
             jbnr,
             registry_row.goedningsregion,
             bool(registry_row.oeko),
+            registry_row.secondary_crop_history,
         )
 
         # A mark whose latest real afgrøde is permanent (ikke-omdrift -

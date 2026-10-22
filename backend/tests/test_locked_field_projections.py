@@ -69,7 +69,11 @@ class PermanentFieldLockTests(unittest.TestCase):
             "fen": 5000,
         }
         registry_row = SimpleNamespace(
-            jbnr=4, crop_history={"2026": PERMANENT_GRASS}, goedningsregion=None, oeko=False
+            jbnr=4,
+            crop_history={"2026": PERMANENT_GRASS},
+            secondary_crop_history={},
+            goedningsregion=None,
+            oeko=False,
         )
         with (
             patch.object(repository, "SessionLocal"),
