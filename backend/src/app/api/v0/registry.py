@@ -19,7 +19,15 @@ router = APIRouter(prefix="/registry", tags=["registry"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 DbSession = Annotated[Session, Depends(get_db)]
 OwnedByFarmId = Annotated[str | None, Query(alias="ownedByFarmId")]
+OwnedImkIds = Annotated[str | None, Query(alias="ownedImkIds")]
 FocusCvr = Annotated[str | None, Query(alias="focusCvr")]
+
+
+def _imk_ids(value: str | None) -> list[int]:
+    try:
+        return [int(item) for item in (value or "").split(",") if item]
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="Ugyldigt IMK-id") from error
 
 
 @router.get("/fields/search", response_model=list[RegistryFieldSummary])
@@ -39,8 +47,7 @@ def get_field_bounds(
     cvr: str | None = None,
     imk_ids: str | None = Query(default=None, alias="imkIds"),
 ) -> RegistryBounds:
-    parsed_imk_ids = [int(value) for value in imk_ids.split(",") if value] if imk_ids else []
-    bounds = get_registry_bounds(db, cvr=cvr, imk_ids=parsed_imk_ids)
+    bounds = get_registry_bounds(db, cvr=cvr, imk_ids=_imk_ids(imk_ids))
 
     if bounds is None:
         raise HTTPException(status_code=404, detail="Ingen registerudstrækning fundet")
@@ -54,7 +61,7 @@ def get_fields(
     _: CurrentUser,
     imk_ids: str = Query(alias="imkIds"),
 ) -> list[RegistryField]:
-    parsed_imk_ids = [int(value) for value in imk_ids.split(",") if value]
+    parsed_imk_ids = _imk_ids(imk_ids)
     fields = get_registry_fields(db, parsed_imk_ids)
 
     if len(fields) != len(set(parsed_imk_ids)):
@@ -89,13 +96,14 @@ def get_tile(
     cvr: str | None = None,
     focus_cvr: FocusCvr = None,
     owned_by_farm_id: OwnedByFarmId = None,
+    owned_imk_ids: OwnedImkIds = None,
 ) -> Response:
     if owned_by_farm_id is not None:
-        owned_imk_ids = get_owned_imk_ids(db, owned_by_farm_id, user.email)
-        if owned_imk_ids is None:
+        owned = get_owned_imk_ids(db, owned_by_farm_id, user.email)
+        if owned is None:
             raise HTTPException(status_code=404, detail="Farm not found")
     else:
-        owned_imk_ids = []
+        owned = _imk_ids(owned_imk_ids)
     tile = get_registry_tile(
         db,
         z=z,
@@ -103,7 +111,7 @@ def get_tile(
         y=y,
         cvr=cvr,
         focus_cvr=focus_cvr,
-        owned_imk_ids=owned_imk_ids,
+        owned_imk_ids=owned,
     )
     return Response(
         content=tile,

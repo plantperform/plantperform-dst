@@ -488,7 +488,7 @@ class ReadModelTests(DatabaseTests):
             actual[11], next(value for value in expected if value["afgrode_kode"] == 11)
         )
         with (
-            patch.object(read_model_store, "update_field_view", side_effect=RuntimeError),
+            patch.object(read_model_store, "refresh_simulation_view", side_effect=RuntimeError),
             self.assertRaises(RuntimeError),
         ):
             self.edit(area_ha=8)
@@ -677,7 +677,6 @@ class ReadModelTests(DatabaseTests):
         with (
             patch.object(repository, "_registry_contexts_for_imk_ids", return_value=contexts),
             patch.object(repository, "_soil_data_for_context", return_value=((), 3, 1)),
-            patch.object(repository, "_aktuel_field_state", side_effect=AssertionError),
             patch.object(repository, "_historical_years_for_context", side_effect=AssertionError),
         ):
             fields, job = repository.register_fields(

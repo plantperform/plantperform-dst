@@ -285,7 +285,7 @@ def invalidate_simulation(session, simulation_id):
     )
 
 
-def update_field_view(session, simulation_id, field, setup):
+def refresh_simulation_view(session, simulation_id):
     revision = session.execute(
         select(setups.c.revision).where(setups.c.id == simulation_id)
     ).scalar_one()

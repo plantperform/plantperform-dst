@@ -17,6 +17,9 @@ from app.data.simulation_store import (
     _get_simulation as _get_simulation,
 )
 from app.data.simulation_store import (
+    add_simulation_fields as add_simulation_fields,
+)
+from app.data.simulation_store import (
     delete_simulation as delete_simulation,
 )
 from app.data.simulation_store import (
@@ -36,6 +39,9 @@ from app.data.simulation_store import (
 )
 from app.data.simulation_store import (
     list_simulations as list_simulations,
+)
+from app.data.simulation_store import (
+    remove_simulation_fields as remove_simulation_fields,
 )
 from app.data.simulation_store import (
     save_manual_rotation as save_manual_rotation,
@@ -160,53 +166,6 @@ def get_registry_soil_data_batch(imk_ids: list[int]) -> dict[int, RegistrySoilDa
         imk_id: soil_data
         for imk_id, row in contexts.items()
         if (soil_data := _soil_data_for_context(row)) is not None
-    }
-
-
-def _aktuel_field_state(row, area_ha: float, retention: float | None) -> dict:
-    """Calculate a mark's "Aktuel" state (db2/n_load/leaching/fen).
-
-    Uses the mark's actual crop_history and historical gødning allocation
-    (Bilag 3), without involving a scenarie/gødning slider. Used by "Tilføj
-    marker" instead of the former hard-coded zeros.
-    """
-    if row is None:
-        raise MissingSoilDataError("Registry field is missing or banned")
-
-    jbnr = row.jbnr if row.jbnr is not None else FALLBACK_JBNR
-    soil_data = _soil_data_for_context(row)
-    if soil_data is None:
-        raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
-    percolation_by_kategori, org_n_topsoil, s_soil = soil_data
-    years = evaluate_real_history_for_field(
-        row.crop_history or {},
-        jbnr,
-        row.goedningsregion,
-        bool(row.oeko),
-        percolation_by_kategori=percolation_by_kategori,
-        org_n_topsoil=org_n_topsoil,
-        s_soil=s_soil,
-    )
-    avg_leaching = sum(y.leaching_kg_n_ha for y in years) / len(years)
-    avg_db = sum(y.db_kr_ha for y in years) / len(years)
-    fen_values = [
-        y.db_detail["udbytte"] for y in years if y.db_detail.get("udbytteenhed") == "FE/ha"
-    ]
-    avg_fen = sum(fen_values) / len(years) if fen_values else 0.0
-
-    leaching_total = avg_leaching * area_ha
-    retention_factor = 1 - (retention or 0) / 100
-    return {
-        "jbnr": jbnr,
-        "db2": avg_db * area_ha,
-        "n_load": leaching_total * retention_factor,
-        "leaching": leaching_total,
-        "fen": avg_fen * area_ha,
-        # Actual 2019-2026 afgrøder (the same eight positions as the calculation
-        # above), shown in the "Aktuel" mark overview with real calendar years
-        # per the request to show history like the scenarier's forward years.
-        "crop_rotation": [y.year for y in years],
-        "kvotegivende": bool(row.kvotegivende),
     }
 
 
@@ -379,6 +338,43 @@ def _historical_years_for_context(row) -> list[RotationCandidateYearResult]:
     )
 
 
+def _new_field(farm_id: str, field_id: str, request: CreateFieldRequest, row) -> FieldRecord:
+    if row is None or _soil_data_for_context(row) is None:
+        raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
+    return FieldRecord(
+        id=field_id,
+        farm_id=farm_id,
+        db2=0,
+        n_load=0,
+        leaching=0,
+        jbnr=row.jbnr if row.jbnr is not None else FALLBACK_JBNR,
+        kvotegivende=bool(row.kvotegivende),
+        **request.model_dump(),
+    )
+
+
+def _historical_field(
+    field: FieldRecord, row
+) -> tuple[FieldRecord, list[RotationCandidateYearResult]]:
+    years = _historical_years_for_context(row)
+    count = len(years)
+    leaching = sum(year.leaching_kg_n_ha for year in years) / count * field.area_ha
+    return (
+        field.model_copy(
+            update={
+                "crop_rotation": [year.year for year in years],
+                "db2": sum(year.db_kr_ha for year in years) / count * field.area_ha,
+                "leaching": leaching,
+                "n_load": leaching * (1 - (field.retention or 0) / 100),
+                "fen": sum(year.fen_fe_ha for year in years) / count * field.area_ha,
+                "kvotegivende": bool(row.kvotegivende),
+                "jbnr": row.jbnr if row.jbnr is not None else field.jbnr,
+            }
+        ),
+        years,
+    )
+
+
 def get_field_historical_years(farm_id: str, field_id: str, email: str):
     from app.data.read_model_store import historical_detail
 
@@ -425,21 +421,9 @@ def register_fields(
         )
         fields = []
         for request in requests:
-            context = contexts.get(request.imk_id)
-            if context is None or _soil_data_for_context(context) is None:
-                raise MissingSoilDataError("Registry field has incomplete P/S/Nt data")
             field_id = existing.get(request.imk_id) or str(uuid4())
             existing[request.imk_id] = field_id
-            field = FieldRecord(
-                id=field_id,
-                farm_id=farm_id,
-                db2=0,
-                n_load=0,
-                leaching=0,
-                jbnr=context.jbnr if context.jbnr is not None else FALLBACK_JBNR,
-                kvotegivende=bool(context.kvotegivende),
-                **request.model_dump(),
-            )
+            field = _new_field(farm_id, field_id, request, contexts.get(request.imk_id))
             session.execute(
                 pg_insert(field_table)
                 .values(

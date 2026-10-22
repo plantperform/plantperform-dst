@@ -93,26 +93,11 @@ def _history(session, job, context):
     updated, field_years, rich = [], {}, {}
     for field in fields:
         _check_deadline(context)
-        context_row = contexts.get(field.imk_id)
-        years = repository._historical_years_for_context(context_row)
-        count = len(years)
-        candidate = SimpleNamespace(years=years, active_len=count)
+        field, years = repository._historical_field(field, contexts.get(field.imk_id))
+        candidate = SimpleNamespace(years=years, active_len=len(years))
         field_years[field.id] = compact_years(candidate)
         rich[field.id] = [year.model_dump(mode="json") for year in years]
-        leaching = sum(year.leaching_kg_n_ha for year in years) / count * field.area_ha
-        updated.append(
-            field.model_copy(
-                update={
-                    "crop_rotation": [year.year for year in years],
-                    "db2": sum(year.db_kr_ha for year in years) / count * field.area_ha,
-                    "leaching": leaching,
-                    "n_load": leaching * (1 - (field.retention or 0) / 100),
-                    "fen": sum(year.fen_fe_ha for year in years) / count * field.area_ha,
-                    "kvotegivende": bool(context_row.kvotegivende),
-                    "jbnr": context_row.jbnr if context_row.jbnr is not None else field.jbnr,
-                }
-            )
-        )
+        updated.append(field)
     data = {
         "fields": [field.model_dump(mode="json") for field in updated],
         "field_years": field_years,
