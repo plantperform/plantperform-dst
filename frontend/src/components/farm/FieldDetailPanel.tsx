@@ -23,7 +23,7 @@ type FieldDetailPanelProps = {
   yearValues?: DisplayYearValue[]
   yearValuesLoading?: boolean
   isDetaching: boolean
-  onRequestDetach: () => void
+  onRequestDetach?: () => void
   listBehind: boolean
   mapVisible: boolean
   onSelectFieldId: (fieldId: string) => void

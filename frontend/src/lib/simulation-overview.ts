@@ -175,18 +175,47 @@ export const describeNLoadDelta = (
   }
 }
 
+const countMissing = (fields: FieldRecord[], from: FieldRecord[]) => {
+  const imkIds = new Set(from.map((field) => field.imkId))
+  return fields.filter(
+    (field) => field.imkId !== null && !imkIds.has(field.imkId),
+  ).length
+}
+
+export const describeFieldSetChanges = (
+  fields: FieldRecord[],
+  liveFields: FieldRecord[],
+): string | null => {
+  if (fields.length === 0 || liveFields.length === 0) return null
+  const added = countMissing(fields, liveFields)
+  const removed = countMissing(liveFields, fields)
+  if (added === 0) {
+    return removed === 0 ? null : `${formatFieldCount(removed)} fjernet`
+  }
+  return removed === 0
+    ? `${formatFieldCount(added)} tilføjet`
+    : `${formatFieldCount(added)} tilføjet, ${removed} fjernet`
+}
+
 export const describeFieldChanges = ({
+  fieldSet = null,
   changed,
   locked,
   uncalculated,
 }: {
+  fieldSet?: string | null
   changed: number
   locked: number
   uncalculated: number
 }): string => {
-  const parts = [
-    changed > 0 ? `${formatFieldCount(changed)} ændret` : 'Ingen marker ændret',
-  ]
+  const parts = fieldSet ? [`${fieldSet} i forhold til bedriften`] : []
+  if (changed > 0 || !fieldSet) {
+    parts.push(
+      changed > 0
+        ? `${formatFieldCount(changed)} ændret`
+        : 'Ingen marker ændret',
+    )
+  }
   if (locked > 0) parts.push(`${formatFieldCount(locked)} låst`)
   if (uncalculated > 0) {
     parts.push(`${formatFieldCount(uncalculated)} er ikke beregnet`)

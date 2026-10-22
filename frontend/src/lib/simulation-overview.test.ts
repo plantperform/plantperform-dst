@@ -6,6 +6,7 @@ import {
   describeCatchmentYearStatus,
   describeDb2Delta,
   describeFieldChanges,
+  describeFieldSetChanges,
   describeNLoadDelta,
   partialCatchmentQuotas,
   summarizeCatchmentYearStatuses,
@@ -310,6 +311,34 @@ describe('describeNLoadDelta', () => {
   })
 })
 
+describe('describeFieldSetChanges', () => {
+  const fields = (...imkIds: number[]) =>
+    imkIds.map((imkId) => field({ id: `field-${imkId}`, imkId }))
+  const farm = fields(1, 2, 3)
+
+  it('says nothing when the simulation has the farm fields', () => {
+    expect(describeFieldSetChanges(fields(1, 2, 3), farm)).toBeNull()
+  })
+
+  it('names the noun once when fields are both added and removed', () => {
+    expect(describeFieldSetChanges(fields(1, 2, 4, 5), farm)).toBe(
+      '2 marker tilføjet, 1 fjernet',
+    )
+  })
+
+  it('describes added or removed fields alone', () => {
+    expect(describeFieldSetChanges(fields(1, 2, 3, 4), farm)).toBe(
+      '1 mark tilføjet',
+    )
+    expect(describeFieldSetChanges(fields(1), farm)).toBe('2 marker fjernet')
+  })
+
+  it('says nothing until both sides have fields', () => {
+    expect(describeFieldSetChanges([], farm)).toBeNull()
+    expect(describeFieldSetChanges(farm, [])).toBeNull()
+  })
+})
+
 describe('describeFieldChanges', () => {
   it('counts the changed fields and leaves out locks when there are none', () => {
     expect(
@@ -333,5 +362,24 @@ describe('describeFieldChanges', () => {
     expect(
       describeFieldChanges({ changed: 1, locked: 0, uncalculated: 3 }),
     ).toBe('1 mark ændret · 3 marker er ikke beregnet')
+  })
+
+  it('starts with the added and removed fields instead of saying none changed', () => {
+    expect(
+      describeFieldChanges({
+        fieldSet: '1 mark tilføjet',
+        changed: 0,
+        locked: 0,
+        uncalculated: 1,
+      }),
+    ).toBe('1 mark tilføjet i forhold til bedriften · 1 mark er ikke beregnet')
+    expect(
+      describeFieldChanges({
+        fieldSet: '1 mark fjernet',
+        changed: 2,
+        locked: 0,
+        uncalculated: 0,
+      }),
+    ).toBe('1 mark fjernet i forhold til bedriften · 2 marker ændret')
   })
 })

@@ -47,8 +47,25 @@ export const removeFarmMember = (farmId: string, email: string) =>
 export const createField = (farmId: string, input: CreateFieldInput) =>
   postJson<FieldRecord, CreateFieldInput>(`/farms/${farmId}/fields`, input)
 
-export const createFields = (farmId: string, input: CreateFieldInput[]) =>
-  postJson<FieldRecord[], CreateFieldInput[]>(`/farms/${farmId}/fields`, input)
+const notifySimulationChanged = (farmId: string, simulationId: string) => {
+  window.dispatchEvent(
+    new CustomEvent('simulation:changed', {
+      detail: { farmId, simulationId },
+    }),
+  )
+}
+
+export const createFields = (
+  farmId: string,
+  input: CreateFieldInput[],
+  simulationId?: string,
+) =>
+  postJson<FieldRecord[], CreateFieldInput[]>(
+    simulationId
+      ? `/farms/${farmId}/simulations/${simulationId}/fields`
+      : `/farms/${farmId}/fields`,
+    input,
+  )
 
 const registryFieldToInput = (field: RegistryField): CreateFieldInput => ({
   imkId: field.imkId,
@@ -65,19 +82,39 @@ const registryFieldToInput = (field: RegistryField): CreateFieldInput => ({
 export const createFieldsFromRegistry = (
   farmId: string,
   registryFields: RegistryField[],
-) => createFields(farmId, registryFields.map(registryFieldToInput))
+  simulationId?: string,
+) =>
+  createFields(farmId, registryFields.map(registryFieldToInput), simulationId)
 
 export const importRegistryFields = async (
   farmId: string,
   imkIds: number[],
+  simulationId?: string,
 ): Promise<FieldRecord[]> => {
   const key = registryFieldsBulkKey(imkIds)
   if (!key) return []
-  return createFieldsFromRegistry(farmId, await fetcher<RegistryField[]>(key))
+  const fields = await createFieldsFromRegistry(
+    farmId,
+    await fetcher<RegistryField[]>(key),
+    simulationId,
+  )
+  if (simulationId) notifySimulationChanged(farmId, simulationId)
+  return fields
 }
 
 export const detachField = (farmId: string, fieldId: string) =>
   deleteJson(`/farms/${farmId}/fields/${fieldId}`)
+
+export const removeSimulationFields = (
+  farmId: string,
+  simulationId: string,
+  fieldIds: string[],
+) =>
+  deleteJson(
+    `/farms/${farmId}/simulations/${simulationId}/fields?${new URLSearchParams(
+      fieldIds.map((fieldId) => ['fieldId', fieldId]),
+    )}`,
+  ).then(() => notifySimulationChanged(farmId, simulationId))
 
 export const createSimulation = (
   farmId: string,
@@ -141,11 +178,7 @@ export const updateSimulationConstraints = (
     `/farms/${farmId}/simulations/${simulationId}/constraints`,
     input,
   ).then((value) => {
-    window.dispatchEvent(
-      new CustomEvent('simulation:changed', {
-        detail: { farmId, simulationId },
-      }),
-    )
+    notifySimulationChanged(farmId, simulationId)
     return value
   })
 
@@ -159,11 +192,7 @@ export const updateSimulationField = (
     `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}`,
     input,
   ).then((value) => {
-    window.dispatchEvent(
-      new CustomEvent('simulation:changed', {
-        detail: { farmId, simulationId },
-      }),
-    )
+    notifySimulationChanged(farmId, simulationId)
     return value
   })
 
@@ -217,10 +246,6 @@ export const applyFieldRotation = (
     `/farms/${farmId}/simulations/${simulationId}/fields/${fieldId}/apply-rotation`,
     input,
   ).then((value) => {
-    window.dispatchEvent(
-      new CustomEvent('simulation:changed', {
-        detail: { farmId, simulationId },
-      }),
-    )
+    notifySimulationChanged(farmId, simulationId)
     return value
   })

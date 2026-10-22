@@ -35,7 +35,7 @@ import {
   fieldInCatchment,
   useCatchmentLabel,
 } from '@/components/farm/catchment-options'
-import { refreshFarmFields } from '@/components/farm/detach-fields'
+import { refreshFields } from '@/components/farm/detach-fields'
 import { FieldRowList, type FieldRow } from '@/components/farm/FieldRowList'
 import { FieldTooltip, type HoveredField } from '@/components/farm/FieldTooltip'
 import { loadMaplibre, MAP_STYLE_URL } from '@/components/farm/maplibre'
@@ -57,6 +57,7 @@ import { Input } from '@/components/ui/input'
 import {
   changedFieldIds,
   fieldDisplayName,
+  fieldOwnerName,
   fieldTitle,
   firstCalendarYear,
   formatFieldCount,
@@ -114,15 +115,17 @@ const registryFieldLabel = (imkId: number, fieldNumber: unknown) =>
     ? `Mark ${fieldNumber}`
     : `IMK ${imkId}`
 
-const describeFarmAfterChanges = (
+const describeFieldsAfterChanges = (
+  isSimulationView: boolean,
   fieldCount: number,
   nextFieldCount: number,
   areaChangeHa: number,
 ) => {
+  const owner = isSimulationView ? 'Simuleringen' : 'Bedriften'
   const count =
     nextFieldCount === fieldCount
-      ? `Bedriften bliver på ${formatFieldCount(fieldCount)}`
-      : `Bedriften går fra ${fieldCount} til ${formatFieldCount(nextFieldCount)}`
+      ? `${owner} bliver på ${formatFieldCount(fieldCount)}`
+      : `${owner} går fra ${fieldCount} til ${formatFieldCount(nextFieldCount)}`
   const area =
     areaChangeHa === 0
       ? ''
@@ -142,8 +145,11 @@ const EDIT_MODE_LAYER_IDS = [
   'farm-fields-fill',
 ]
 
-const EDIT_BASE_LEGEND = [
-  { label: 'Bedriftens marker', color: 'rgba(107, 141, 87, 0.28)' },
+const editBaseLegend = (isSimulationView: boolean) => [
+  {
+    label: isSimulationView ? 'Simuleringens marker' : 'Bedriftens marker',
+    color: 'rgba(107, 141, 87, 0.28)',
+  },
   { label: 'Registermarker', color: 'rgba(100, 116, 139, 0.3)' },
 ]
 
@@ -225,6 +231,7 @@ type FarmFieldsMapProps = {
   highlightedCatchmentKey?: string | null
   zoomRequest?: { fieldId: string; nonce: number }
   onAddModeChange?: (active: boolean) => void
+  simulationId?: string
   detachFields: (fieldIds: string[]) => Promise<string[]>
   onError: (message: string | null) => void
   search?: ReactNode
@@ -296,10 +303,12 @@ export const FarmFieldsMap = ({
   highlightedCatchmentKey = null,
   zoomRequest,
   onAddModeChange,
+  simulationId,
   detachFields,
   onError,
   search,
 }: FarmFieldsMapProps) => {
+  const fieldOwner = fieldOwnerName(isSimulationView)
   const mapRef = useRef<MapRef>(null)
   const [mapLib] = useState(loadMaplibre)
   const initialViewState =
@@ -329,6 +338,7 @@ export const FarmFieldsMap = ({
   >([])
   const [isCvrOpen, setIsCvrOpen] = useState(false)
   const [isSavingFieldChanges, setIsSavingFieldChanges] = useState(false)
+  if (readOnly && addMode) setAddMode(false)
 
   const [isLoadingCvrFields, setIsLoadingCvrFields] = useState(false)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
@@ -468,7 +478,7 @@ export const FarmFieldsMap = ({
           : null
   const editLegendEntries = addMode
     ? [
-        ...(activeColorSpec === null ? EDIT_BASE_LEGEND : []),
+        ...(activeColorSpec === null ? editBaseLegend(isSimulationView) : []),
         ...EDIT_CHANGE_LEGEND,
         ...(highlightedCvr ? [CVR_LEGEND_ENTRY] : []),
       ]
@@ -662,10 +672,11 @@ export const FarmFieldsMap = ({
         ['==', ['get', 'cvr'], highlightedCvr],
       ] as FilterSpecification)
     : (['==', ['get', 'imk_id'], -1] as FilterSpecification)
-  const tileParams = new URLSearchParams({
-    ownedByFarmId: farm.id,
-    fieldVersion: attachedImkIds.join(','),
-  })
+  const tileParams = new URLSearchParams(
+    isSimulationView
+      ? { ownedImkIds: attachedImkIds.join(',') }
+      : { ownedByFarmId: farm.id, fieldVersion: attachedImkIds.join(',') },
+  )
   if (highlightedCvr) {
     tileParams.set('focusCvr', highlightedCvr)
   }
@@ -942,11 +953,11 @@ export const FarmFieldsMap = ({
     setIsSavingFieldChanges(true)
     try {
       if (selectedImkIds.length > 0) {
-        await importRegistryFields(farm.id, selectedImkIds)
+        await importRegistryFields(farm.id, selectedImkIds, simulationId)
         setSelectedRegistryFields([])
       }
       if (fieldsMarkedForDetach.length === 0) {
-        await refreshFarmFields(farm.id)
+        await refreshFields(farm.id, simulationId)
         onError(null)
         setAddMode(false)
       } else {
@@ -957,8 +968,8 @@ export const FarmFieldsMap = ({
         if (failedFieldIds.length === 0) setAddMode(false)
       }
     } catch {
-      await refreshFarmFields(farm.id)
-      onError('Kunne ikke tilføje de valgte marker til bedriften.')
+      await refreshFields(farm.id, simulationId)
+      onError(`Kunne ikke tilføje de valgte marker til ${fieldOwner}.`)
     }
     setIsSavingFieldChanges(false)
   }
@@ -1791,7 +1802,7 @@ export const FarmFieldsMap = ({
                   >
                     {actionPopupMarked
                       ? 'Fortryd fjernelse'
-                      : 'Fjern fra bedriften'}
+                      : `Fjern fra ${fieldOwner}`}
                   </Button>
                   <Button
                     size="sm"
@@ -1892,7 +1903,8 @@ export const FarmFieldsMap = ({
                   <FieldChangeList title="Fjernes" changes={detachChanges} />
                   <FieldChangeList title="Tilføjes" changes={addChanges} />
                   <p className="text-xs text-muted-foreground">
-                    {describeFarmAfterChanges(
+                    {describeFieldsAfterChanges(
+                      isSimulationView,
                       fields.length,
                       fields.length +
                         pendingRegistryFields.length -
@@ -1903,8 +1915,8 @@ export const FarmFieldsMap = ({
                 </>
               ) : (
                 <p className="text-muted-foreground">
-                  Klik på en registermark for at tilføje den, eller på en af
-                  bedriftens marker for at fjerne den eller se detaljer.
+                  Klik på en registermark for at tilføje den, eller på en af{' '}
+                  {fieldOwner}s marker for at fjerne den eller se detaljer.
                 </p>
               )}
               <div className="flex gap-2">
