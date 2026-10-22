@@ -17,7 +17,7 @@ maintained separately.
 ### Prerequisites
 
 - [Pixi](https://pixi.sh/)
-- Node.js and npm
+- Node.js 22.23.4 or a later 22.x release (see `frontend/.nvmrc`) and npm
 - Docker with Docker Compose
 
 ### Start the database and backend
