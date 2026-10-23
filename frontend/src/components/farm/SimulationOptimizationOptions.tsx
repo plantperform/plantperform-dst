@@ -1,3 +1,5 @@
+import { useId, useState } from 'react'
+
 import { useCropCodes, useRotationCandidateOptions } from '@/api/hooks'
 import type {
   FieldRecord,
@@ -7,11 +9,90 @@ import type {
 import {
   useCatchmentOptions,
   catchmentKey,
+  sameCapEveryYear,
 } from '@/components/farm/catchment-options'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+
+// One cap for every year, unless "Forskellig grænse pr. år" is ticked. The
+// one cap is the maks. udledning under Regler (onEveryYearChange). A cap saved
+// with different years opens with the box ticked.
+function YearlyCatchmentCap({
+  label,
+  maxNLoadByYear,
+  onChange,
+  onEveryYearChange,
+}: {
+  label: string
+  maxNLoadByYear: Record<number, number>
+  onChange: (maxNLoadByYear: Record<number, number>) => void
+  onEveryYearChange: (maxNLoadKg: number | null) => void
+}) {
+  const id = useId()
+  const firstYear = maxNLoadByYear[ROTATION_CALENDAR_YEARS[0]]
+  const [perYear, setPerYear] = useState(
+    () => !sameCapEveryYear(maxNLoadByYear),
+  )
+  const setEveryYear = (text: string) =>
+    onEveryYearChange(text === '' ? null : Number(text))
+
+  return (
+    <fieldset className="space-y-2 rounded-md border p-3">
+      <legend className="px-1 text-sm font-medium">
+        Årligt udledningsloft: {label}
+      </legend>
+      {perYear ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {ROTATION_CALENDAR_YEARS.map((year) => (
+            <label key={year} className="space-y-1 text-xs">
+              {year}
+              <Input
+                type="number"
+                min="0"
+                placeholder="Ingen grænse"
+                value={maxNLoadByYear[year] ?? ''}
+                onChange={(event) => {
+                  const next = { ...maxNLoadByYear }
+                  if (event.target.value === '') delete next[year]
+                  else next[year] = Number(event.target.value)
+                  onChange(next)
+                }}
+              />
+            </label>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label htmlFor={`${id}-every-year`} className="text-xs font-normal">
+            Kg N i hvert år
+          </Label>
+          <Input
+            id={`${id}-every-year`}
+            type="number"
+            min="0"
+            placeholder="Ingen grænse"
+            value={firstYear ?? ''}
+            onChange={(event) => setEveryYear(event.target.value)}
+          />
+        </div>
+      )}
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={perYear}
+          onChange={(event) => {
+            setPerYear(event.target.checked)
+            // Back to one cap: every year takes the first year's.
+            if (!event.target.checked) setEveryYear(String(firstYear ?? ''))
+          }}
+        />
+        Forskellig grænse pr. år
+      </label>
+    </fieldset>
+  )
+}
 
 type Props = {
   farmId: string
@@ -42,6 +123,29 @@ export function SimulationOptimizationOptions({
   )
   const patch = (value: Partial<OptimizationSettings>) =>
     onSettingsChange({ ...settings, ...value })
+  const setYearlyCap = (
+    catchmentId: number | null,
+    maxNLoadByYear: Record<number, number>,
+  ) =>
+    patch({
+      maxNLoadByCatchment: [
+        ...settings.maxNLoadByCatchment.filter(
+          (cap) => cap.catchmentId !== catchmentId,
+        ),
+        { catchmentId, maxNLoadByYear },
+      ],
+    })
+  // The maks. udledning under Regler.
+  const setAverageCap = (catchmentId: number | null, maxNLoadKg: number | null) =>
+    onConstraintsChange({
+      ...constraints,
+      maxNLoadByCatchment: [
+        ...constraints.maxNLoadByCatchment.filter(
+          (cap) => cap.catchmentId !== catchmentId,
+        ),
+        { catchmentId, maxNLoadKg },
+      ],
+    })
   return (
     <div className="space-y-5">
       {settings.kind === 'yearly' ? (
@@ -71,45 +175,28 @@ export function SimulationOptimizationOptions({
               (cap) => cap.catchmentId === catchment.catchmentId,
             )
             return (
-              <fieldset
+              <YearlyCatchmentCap
                 key={catchmentKey(catchment.catchmentId)}
-                className="space-y-2 rounded-md border p-3"
-              >
-                <legend className="px-1 text-sm font-medium">
-                  Årligt udledningsloft: {catchment.label}
-                </legend>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {ROTATION_CALENDAR_YEARS.map((year) => (
-                    <label key={year} className="space-y-1 text-xs">
-                      {year}
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="Ingen grænse"
-                        value={cap?.maxNLoadByYear[year] ?? ''}
-                        onChange={(event) => {
-                          const maxNLoadByYear = { ...cap?.maxNLoadByYear }
-                          if (event.target.value === '')
-                            delete maxNLoadByYear[year]
-                          else maxNLoadByYear[year] = Number(event.target.value)
-                          patch({
-                            maxNLoadByCatchment: [
-                              ...settings.maxNLoadByCatchment.filter(
-                                (cap) =>
-                                  cap.catchmentId !== catchment.catchmentId,
-                              ),
-                              {
-                                catchmentId: catchment.catchmentId,
-                                maxNLoadByYear,
-                              },
-                            ],
-                          })
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+                label={catchment.label}
+                maxNLoadByYear={cap?.maxNLoadByYear ?? {}}
+                onChange={(maxNLoadByYear) =>
+                  setYearlyCap(catchment.catchmentId, maxNLoadByYear)
+                }
+                onEveryYearChange={(maxNLoadKg) => {
+                  setYearlyCap(
+                    catchment.catchmentId,
+                    maxNLoadKg === null
+                      ? {}
+                      : Object.fromEntries(
+                          ROTATION_CALENDAR_YEARS.map((year) => [
+                            year,
+                            maxNLoadKg,
+                          ]),
+                        ),
+                  )
+                  setAverageCap(catchment.catchmentId, maxNLoadKg)
+                }}
+              />
             )
           })}
         </>
@@ -136,21 +223,10 @@ export function SimulationOptimizationOptions({
                 )?.maxNLoadKg ?? ''
               }
               onChange={(event) =>
-                onConstraintsChange({
-                  ...constraints,
-                  maxNLoadByCatchment: [
-                    ...constraints.maxNLoadByCatchment.filter(
-                      (cap) => cap.catchmentId !== catchment.catchmentId,
-                    ),
-                    {
-                      catchmentId: catchment.catchmentId,
-                      maxNLoadKg:
-                        event.target.value === ''
-                          ? null
-                          : Number(event.target.value),
-                    },
-                  ],
-                })
+                setAverageCap(
+                  catchment.catchmentId,
+                  event.target.value === '' ? null : Number(event.target.value),
+                )
               }
             />
           </label>

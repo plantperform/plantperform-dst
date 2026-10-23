@@ -10,18 +10,18 @@ type Props = {
 
 const OPTIONS = [
   {
-    kind: 'optimize',
-    description:
-      'Kvoten gælder for gennemsnittet af simuleringens år. Et år må ligge over kvoten, når et andet ligger tilsvarende under.',
-    guidance:
-      'Vælg den, når kvoten skal overholdes over hele perioden. Bruger de regler, der er gemt på simuleringen.',
-  },
-  {
     kind: 'yearly',
     description:
       'Kvoten er et loft, som udledningen ikke må overstige i noget kalenderår. Sædskifterne kan rykkes i deres cyklus for at sprede udledningen.',
     guidance:
       'Vælg den, når kvoten skal overholdes hvert år, eller når DB2 ikke må svinge for meget mellem årene. Bruger de indstillinger, der er gemt på simuleringen.',
+  },
+  {
+    kind: 'optimize',
+    description:
+      'Kvoten gælder for gennemsnittet af simuleringens år. Et år må ligge over kvoten, når et andet ligger tilsvarende under.',
+    guidance:
+      'Vælg den, når kvoten skal overholdes over hele perioden. Bruger de regler, der er gemt på simuleringen.',
   },
 ] as const
 
