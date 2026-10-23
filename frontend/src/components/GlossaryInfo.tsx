@@ -36,9 +36,11 @@ const glossary = {
       'Normen for, hvor meget kvælstof der må tildeles en afgrøde. Procenten angiver niveauet i forhold til normen.',
   },
   nNormLevel: {
-    title: 'N-norm%',
+    title: 'N-norm %',
     description:
-      'Hvor stor en del af afgrødens N-norm der højst kan gødes op til. Forfrugtsværdien tæller med, så der gødes kun med det, forfrugten ikke dækker. Under 100 % falder udbyttet. Det gælder på nuværende tidspunkt hovedafgrøder med en udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs, og økologisk korn, raps og græs. Andre afgrøder gødes altid fuldt. Proteinandelen påvirker endnu ikke salgsprisen.',
+      'Simuleringen kan vælge mellem flere N-niveauer og gødsker hver mark op til den valgte procentdel af afgrødens N-norm. Forfrugtsværdien medregnes, så der kun tilføres den mængde kvælstof, som forfrugten ikke dækker.\n\n' +
+      'Ved gødskning under 100 % af N-normen reduceres udbyttet. Dette gælder på nuværende tidspunkt kun afgrøder med en tilknyttet udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs samt økologisk korn, raps og græs.\n\n' +
+      'Øvrige afgrøder gødskes altid op til fuld N-norm. Ændringer i proteinindholdet påvirker endnu ikke salgsprisen.',
   },
   nContentPerTon: {
     title: 'Mineralsk N-indhold',
@@ -124,7 +126,8 @@ export const GlossaryInfo = ({
           }}
         >
           <span className="block font-semibold">{title}</span>
-          <span>{description}</span>
+          {/* Blank lines in a description separate its paragraphs. */}
+          <span className="block whitespace-pre-line">{description}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
