@@ -1,8 +1,10 @@
 import type { OptimizationConstraints, OptimizationSettings } from '@/api/types'
 import { cropAreaLimitError } from '@/lib/crop-area-limits'
 
+// A new simulation starts with the kvote as a ceiling in each year. Stored
+// simulations keep the kind they were saved with.
 export const DEFAULT_OPTIMIZATION_SETTINGS: OptimizationSettings = {
-  kind: 'optimize',
+  kind: 'yearly',
   excludedCropCodes: [],
   maxNLoadByCatchment: [],
   db2SwingPct: null,
