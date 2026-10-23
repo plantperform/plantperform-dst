@@ -205,11 +205,14 @@ export const NewScenarioPanel = ({
 
   const hasFields = effectiveFields.length > 0
 
+  // Saving the grænser under Regler does not change the revision, so the
+  // constraints are part of the key: reopening after such a save starts from
+  // the saved grænser instead of the ones the panel held before.
   const prefillKey = !open
     ? null
     : source === null
       ? 'blank'
-      : `${source.id}:${source.revision}:${source.name}`
+      : `${source.id}:${source.revision}:${source.name}:${JSON.stringify(source.constraints)}`
   const [prefilled, setPrefilled] = useState<{
     key: string
     values: SimulationFormValues | null
