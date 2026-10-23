@@ -46,7 +46,7 @@ import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
 import { STANDARD_PROFILE } from '@/lib/economics-profiles'
-import { formatNumber } from '@/lib/field-domain'
+import { formatNumber, formatWholeNumber } from '@/lib/field-domain'
 import {
   SOWING_DATE_OPTIONS,
   SOWING_DATE_INTERVALS,
@@ -57,6 +57,7 @@ import {
   DEFAULT_SIMULATION_FORM_VALUES,
   NO_FERTILISER,
   SIMULATION_FORM_STEPS,
+  capsOrganicFertiliserN,
   catchCropSowingDateOf,
   chosenCropsFor,
   fertiliserFieldsForChoice,
@@ -769,7 +770,9 @@ export const NewScenarioPanel = ({
                   ...fertiliserPresets.map((preset) => ({
                     value: preset.name,
                     label: preset.name,
-                    detail: `${formatNumber(preset.fertiliser.orgMineralN)} kg N/ha · ${formatNumber(preset.fertiliser.mineralSharePct)} % mineralsk`,
+                    detail: capsOrganicFertiliserN(values.farmingSystem)
+                      ? `${formatNumber(preset.fertiliser.orgMineralN)} kg N/ha · ${formatNumber(preset.fertiliser.mineralSharePct)} % mineralsk`
+                      : `${formatNumber(preset.fertiliser.mineralSharePct)} % mineralsk`,
                   })),
                   {
                     value: CUSTOM_FERTILISER,
@@ -836,25 +839,52 @@ export const NewScenarioPanel = ({
               ) : null}
 
               {values.fertiliserChoice !== NO_FERTILISER ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-sm">
-                    <span className="text-xs text-muted-foreground">
-                      Maks tilladt udnyttet N fra organisk gødning (kg N/ha)
-                    </span>
-                    <Input
-                      type="number"
-                      min="0"
-                      aria-invalid={Boolean(errors.orgMineralN)}
-                      aria-describedby={
-                        errors.orgMineralN ? 'scenario-org-n-error' : undefined
-                      }
-                      {...register('orgMineralN')}
-                    />
-                    <FieldError
-                      id="scenario-org-n-error"
-                      message={errors.orgMineralN?.message}
-                    />
-                  </label>
+                <div className="grid items-start gap-3 sm:grid-cols-2">
+                  {capsOrganicFertiliserN(values.farmingSystem) ? (
+                    <label className="space-y-1 text-sm sm:col-span-2">
+                      <span className="text-xs text-muted-foreground">
+                        Maks tilladt mineralsk N fra organisk gødning (kg N/ha)
+                      </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        aria-invalid={Boolean(errors.orgMineralN)}
+                        aria-describedby={
+                          errors.orgMineralN
+                            ? 'scenario-org-n-error'
+                            : 'scenario-org-n-help'
+                        }
+                        {...register('orgMineralN')}
+                      />
+                      <FieldError
+                        id="scenario-org-n-error"
+                        message={errors.orgMineralN?.message}
+                      />
+                      <span
+                        id="scenario-org-n-help"
+                        className="block text-xs text-muted-foreground"
+                      >
+                        {(() => {
+                          const mineralN = Number(values.orgMineralN)
+                          const mineralPct = Number(values.mineralSharePct)
+                          if (!mineralN || !mineralPct) return null
+                          return (
+                            <>
+                              Med {formatNumber(mineralPct)} % mineralsk andel
+                              svarer det til ca.{' '}
+                              {formatWholeNumber(mineralN / (mineralPct / 100))}{' '}
+                              kg total-N/ha.
+                            </>
+                          )
+                        })()}
+                      </span>
+                    </label>
+                  ) : (
+                    <p className="text-sm sm:col-span-2">
+                      Når økologisk dyrkningspraksis er valgt, dækkes
+                      N-tilførslen af husdyrgødning.
+                    </p>
+                  )}
                   <label className="space-y-1 text-sm">
                     <span className="text-xs text-muted-foreground">
                       Mineralsk andel (%)
@@ -877,8 +907,9 @@ export const NewScenarioPanel = ({
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-xs text-muted-foreground">
-                      Udnyttet N-indhold (kg N/ton)
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Mineralsk N-indhold (kg N/ton)
+                      <GlossaryInfo term="nContentPerTon" />
                     </span>
                     <Input
                       type="number"
@@ -900,9 +931,6 @@ export const NewScenarioPanel = ({
                       id="scenario-n-content-help"
                       className="block text-xs text-muted-foreground"
                     >
-                      Typisk kvæggylle: 4–7 kg udnyttet N/ton. Bruges til at
-                      omregne til ton gødning pr. mark pr. år, og udbringningen
-                      prissættes pr. ton.
                       {(() => {
                         const utilisedPerTon = Number(values.nContentKgPerTon)
                         const mineralPct = Number(values.mineralSharePct)
@@ -910,9 +938,9 @@ export const NewScenarioPanel = ({
                         const totalPerTon = utilisedPerTon / (mineralPct / 100)
                         return (
                           <>
-                            {' '}
-                            Svarer til ca. {totalPerTon.toFixed(1)} kg total
-                            N/ton (ved {mineralPct}% mineralsk andel).
+                            Med {formatNumber(mineralPct)} % mineralsk andel
+                            indeholder et ton ca. {formatNumber(totalPerTon)}{' '}
+                            kg total-N.
                           </>
                         )
                       })()}
@@ -921,25 +949,14 @@ export const NewScenarioPanel = ({
                 </div>
               ) : null}
 
-              {values.fertiliserChoice !== NO_FERTILISER ? (
-                values.farmingSystem === 'Økologisk' ? (
-                  // Not registered: a disabled registered input would drop its value.
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input type="checkbox" checked disabled readOnly />
-                    <span>
-                      Kun organisk gødning (ingen handelsgødnings-optopning)
-                      <span className="block">
-                        Følger driftsform: økologisk tilføres aldrig
-                        handelsgødning.
-                      </span>
-                    </span>
-                  </label>
-                ) : (
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input type="checkbox" {...register('onlyOrganic')} />
-                    Kun organisk gødning (ingen handelsgødnings-optopning)
-                  </label>
-                )
+              {/* Økologisk is always only organic (toCreateSimulationInput
+                  forces it), so the choice is shown for konventionel only. */}
+              {values.fertiliserChoice !== NO_FERTILISER &&
+              values.farmingSystem !== 'Økologisk' ? (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" {...register('onlyOrganic')} />
+                  Kun organisk gødning (ingen handelsgødnings-optopning)
+                </label>
               ) : null}
             </div>
 

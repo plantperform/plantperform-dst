@@ -98,8 +98,9 @@ field" column is the name on the wire.
 | brugerdefineret | `'custom'` fertiliser choice | | |
 | ingen organisk gødning | `'none'` fertiliser choice (`NO_FERTILISER`), `offersNoFertiliser` | | Ren handelsgødning; not offered for økologisk, which never uses handelsgødning |
 | organisk gødning, økologisk standardvalg | `organicFertiliserChoice` | | The first gødningstype, chosen when an økologisk simulation has none |
+| maks tilladt mineralsk N fra organisk gødning | `orgMineralN`, `capsOrganicFertiliserN`, `organicFertiliserNLabel` | `orgMineralN` | Konventionel only; økologisk organisk gødning covers the whole N-norm ("Hele N-normen") and sends 0 |
 | mineralsk andel | `mineralSharePct` | `mineralskAndelPct` | |
-| N-indhold pr. ton | `nContentKgPerTon` | `nIndholdKgPerTon` | |
+| N-indhold pr. ton | `nContentKgPerTon`, `nContentPerTon` glossary term | `nIndholdKgPerTon` | |
 | tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa`, `manureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | Shown as "Org. gødning" in the Gødning columns |
 | tildelt handelsgødning | `appliedMineralFertiliserKgNHa`, `mineralFertiliserKgNHa` | `tildeltHandelsgodningKgnHa` | |
 | tilgængeligt N | `availableNKgNHa`, `availableNShareOfNorm` | | Forfrugtsværdi plus the tildelt N that counts toward the norm |
