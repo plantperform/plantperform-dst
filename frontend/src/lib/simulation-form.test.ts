@@ -18,14 +18,15 @@ import {
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
   isNNormOptionLocked,
+  isPresetModified,
   isStepValid,
   matchingRotationCount,
   nNormPercentagesFor,
   NO_FERTILISER,
   nNormPercentagesLabel,
-  lacksOrganicFertiliser,
   offersNoFertiliser,
   organicFertiliserChoice,
+  organicFertiliserNLabel,
   otherCrops,
   precedingCropValueLabel,
   selectedCountsByCategory,
@@ -259,17 +260,64 @@ describe('fertiliser validation', () => {
       ),
     ).toBe('Økologisk kræver organisk gødning')
     expect(
-      messageFor(
-        { ...organic, fertiliserChoice: CUSTOM_FERTILISER, orgMineralN: '0' },
-        'orgMineralN',
-      ),
-    ).toBe('Økologisk kræver organisk gødning')
-    expect(
       isStepValid(stepIndexOf('nitrogen'), {
         ...organic,
         fertiliserChoice: 'Kvæggylle',
         orgMineralN: '150',
       }),
+    ).toBe(true)
+  })
+
+  it('does not check the organic N cap of an økologisk simulation', () => {
+    const organic: SimulationFormValues = {
+      ...filledValues,
+      farmingSystem: 'Økologisk',
+      onlyOrganic: true,
+      fertiliserChoice: CUSTOM_FERTILISER,
+    }
+    for (const orgMineralN of ['', '0', '-1']) {
+      expect(
+        isStepValid(stepIndexOf('nitrogen'), { ...organic, orgMineralN }),
+      ).toBe(true)
+    }
+  })
+
+  it('labels the organic N as the whole norm for økologisk', () => {
+    expect(
+      organicFertiliserNLabel({ farmingSystem: 'Konventionel', orgMineralN: 170 }),
+    ).toBe('170 kg N/ha')
+    expect(
+      organicFertiliserNLabel({ farmingSystem: 'Økologisk', orgMineralN: 0 }),
+    ).toBe('Hele N-normen')
+  })
+
+  it('compares only the mineral share with the preset for økologisk', () => {
+    const preset: FertiliserPresetOption = {
+      name: 'Kvæggylle',
+      fertiliser: {
+        farmingSystem: 'Konventionel',
+        orgMineralN: 170,
+        mineralSharePct: 70,
+        onlyOrganic: false,
+        nContentKgPerTon: 6,
+      },
+    }
+    const values = {
+      fertiliserChoice: 'Kvæggylle',
+      orgMineralN: '0',
+      mineralSharePct: '70',
+    }
+    expect(
+      isPresetModified({ ...values, farmingSystem: 'Konventionel' }, [preset]),
+    ).toBe(true)
+    expect(
+      isPresetModified({ ...values, farmingSystem: 'Økologisk' }, [preset]),
+    ).toBe(false)
+    expect(
+      isPresetModified(
+        { ...values, farmingSystem: 'Økologisk', mineralSharePct: '75' },
+        [preset],
+      ),
     ).toBe(true)
   })
 
@@ -291,23 +339,6 @@ describe('fertiliser validation', () => {
     }
     expect(organicFertiliserChoice([preset])).toBe('Kvæggylle')
     expect(organicFertiliserChoice([])).toBe(CUSTOM_FERTILISER)
-  })
-
-  it('finds an økologisk simulation saved without organic fertiliser', () => {
-    const fertiliser = {
-      farmingSystem: 'Økologisk' as const,
-      orgMineralN: 0,
-      mineralSharePct: 100,
-      onlyOrganic: true,
-      nContentKgPerTon: 6,
-    }
-    expect(lacksOrganicFertiliser(fertiliser)).toBe(true)
-    expect(lacksOrganicFertiliser({ ...fertiliser, orgMineralN: 150 })).toBe(
-      false,
-    )
-    expect(
-      lacksOrganicFertiliser({ ...fertiliser, farmingSystem: 'Konventionel' }),
-    ).toBe(false)
   })
 })
 
@@ -632,6 +663,18 @@ describe('toCreateSimulationInput', () => {
     expect(fertiliser?.onlyOrganic).toBe(true)
   })
 
+  it('sends no organic N cap for an økologisk simulering', () => {
+    const values: SimulationFormValues = {
+      ...filledValues,
+      farmingSystem: 'Økologisk',
+      fertiliserChoice: CUSTOM_FERTILISER,
+      // Hidden for økologisk; left over from a konventionel draft.
+      orgMineralN: 'ikke et tal',
+      mineralSharePct: '50',
+    }
+    expect(toCreateSimulationInput(values).fertiliser?.orgMineralN).toBe(0)
+  })
+
   it('sends the chosen sowing date for the interval and the daily basis', () => {
     expect(
       toCreateSimulationInput({
@@ -735,25 +778,29 @@ describe('simulationToFormValues', () => {
     expect(withFertiliser(31, 50)).toBe(CUSTOM_FERTILISER)
   })
 
-  it('starts an økologisk simulation without organic fertiliser from the first preset', () => {
-    const values = simulationToFormValues(
-      {
-        ...simulation,
-        fertiliser: {
-          ...simulation.fertiliser,
-          farmingSystem: 'Økologisk',
-          orgMineralN: 0,
-          mineralSharePct: 100,
-          onlyOrganic: true,
+  it('reads an økologisk fertiliser type from its mineral share alone', () => {
+    const organic = (orgMineralN: number, mineralSharePct: number) =>
+      simulationToFormValues(
+        {
+          ...simulation,
+          fertiliser: {
+            ...simulation.fertiliser,
+            farmingSystem: 'Økologisk',
+            onlyOrganic: true,
+            orgMineralN,
+            mineralSharePct,
+          },
         },
-      },
-      [kvaeggylle],
-      offered,
-    )
-    expect(values.fertiliserChoice).toBe('Kvæggylle')
-    expect(values.orgMineralN).toBe('30')
-    expect(values.mineralSharePct).toBe('50')
-    expect(values.onlyOrganic).toBe(true)
+        [kvaeggylle],
+        offered,
+      )
+    // Saved before the cap was dropped, and saved without one.
+    for (const orgMineralN of [150, 0]) {
+      const values = organic(orgMineralN, 50)
+      expect(values.fertiliserChoice).toBe('Kvæggylle')
+      expect(values.orgMineralN).toBe('30')
+    }
+    expect(organic(0, 100).fertiliserChoice).toBe(CUSTOM_FERTILISER)
   })
 
   it('keeps a sowing date on the daily basis', () => {
