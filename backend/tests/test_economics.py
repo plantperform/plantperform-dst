@@ -210,6 +210,7 @@ class EconomicsDatabaseTests(DatabaseTests):
                 (
                     ("Handelsgødning, kvælstof (N)", 10),
                     ("Handelsgødning, udbringning", 100),
+                    ("Gylleudbringning, slæbeslanger", 20),
                     ("Grundbetaling (estimat)", 1000),
                     ("Grundbeløb (basis)", 500),
                     ("Stivelseskartofler", 200),
@@ -468,7 +469,12 @@ class EconomicsDatabaseTests(DatabaseTests):
             ),
             SimpleNamespace(jbnr=3, area_ha=8, crop_rotation=[SimpleNamespace(afgrode_kode=999)]),
         ]
-        godning = SimpleNamespace(driftsform="Konventionel", only_organic=False, org_mineral_n=50)
+        godning = SimpleNamespace(
+            driftsform="Konventionel",
+            only_organic=False,
+            org_mineral_n=50,
+            n_indhold_kg_per_ton=5.0,
+        )
         simulation = SimpleNamespace(id="sim", godning=godning)
         url = "/api/v0/farms/farm/economics/budgets"
         with (
@@ -529,13 +535,24 @@ class EconomicsDatabaseTests(DatabaseTests):
         defaults.update({price["id"]: price["value"] for price in manured["prices"]})
         self.assertEqual(
             priced_db(manured["crops"][0], EconomicsOverrides()),
-            calculator.calculate_db(1, "Konventionel", 5, org_mineral_n_applied=50)["db"],
+            calculator.calculate_db(
+                1, "Konventionel", 5, org_mineral_n_applied=50, husdyrgodning_ton_pr_ha=10.0
+            )["db"],
         )
         self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
         defaults.update({price["id"]: price["value"] for price in organic["prices"]})
+        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says.
+        organic_norm = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["mncs"]
         self.assertEqual(
             priced_db(organic["crops"][0], EconomicsOverrides()),
-            calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["db"],
+            calculator.calculate_db(
+                1,
+                "Økologisk",
+                5,
+                only_organic=True,
+                org_mineral_n_applied=organic_norm,
+                husdyrgodning_ton_pr_ha=organic_norm / 6.0,
+            )["db"],
         )
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):

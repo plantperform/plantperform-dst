@@ -8,6 +8,7 @@ import { formatNumber } from '@/lib/field-domain'
 import {
   catchCropSowingLabel,
   nNormPercentagesLabel,
+  organicFertiliserNLabel,
   precedingCropValueLabel,
   yesNo,
 } from '@/lib/simulation-form'
@@ -33,15 +34,15 @@ const basisValues = (simulation: Simulation): BasisValue[] => {
     },
     { label: 'Driftsform', value: fertiliser.farmingSystem },
     {
-      label: 'Udnyttet N fra organisk gødning',
-      value: `${formatNumber(fertiliser.orgMineralN)} kg N/ha`,
+      label: 'Mineralsk N fra organisk gødning',
+      value: organicFertiliserNLabel(fertiliser),
     },
     {
       label: 'Mineralsk andel',
       value: `${formatNumber(fertiliser.mineralSharePct)} %`,
     },
     {
-      label: 'Udnyttet N-indhold',
+      label: 'Mineralsk N-indhold',
       value: `${formatNumber(fertiliser.nContentKgPerTon)} kg N/ton`,
     },
     { label: 'Kun organisk gødning', value: yesNo(fertiliser.onlyOrganic) },

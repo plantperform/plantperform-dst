@@ -95,18 +95,22 @@ def compute_n_inputs(
     org_mineral_n/mineralsk_andel_pct/only_organic are the scenarie's gødning
     choices (Phase 13's GodningSettings), independent of the sædskifte being
     evaluated:
+      - driftsform økologisk: organisk gødning covers net_scaled in full, so
+        eff_org = MNCS = net_scaled and org_mineral_n is not used. There is no
+        handelsgødning to top up with, and a cap would leave every crop whose
+        norm exceeds it below the norm, with no yield loss for the crops
+        without a yield-response curve.
       - org_mineral_n=0 (pure mineral gødning): MNCS = net_scaled, G0=0.
         Organisk gødning versus handelsgødning is irrelevant to NLES5 when
         there is no organisk source. With only_organic there is no gødning
-        at all, since økologisk never uses handelsgødning: MNCS = 0.
-      - only_organic=False (konventionel + gylle): eff_org is capped at
-        net_scaled, MNCS remains net_scaled because handelsgødning tops up to
-        the full norm, and G0 reflects the unutilized part corresponding to the
-        norm-limited eff_org allocation.
-      - only_organic=True (økologisk): eff_org and MNCS are both
-        min(org_mineral_n, net_scaled), with no handelsgødning top-up. G0 is
-        likewise based on eff_org: eff_org ×
-        (100−mineralsk_andel%)/mineralsk_andel%.
+        at all: MNCS = 0.
+      - only_organic=False (konventionel + gylle): eff_org is
+        min(org_mineral_n, net_scaled), MNCS remains net_scaled because
+        handelsgødning tops up to the full norm, and G0 reflects the unutilized
+        part corresponding to the norm-limited eff_org allocation.
+      - only_organic=True on a konventionel simulering: eff_org and MNCS are
+        both min(org_mineral_n, net_scaled), with no handelsgødning top-up.
+    G0 is always based on eff_org: eff_org × (100−mineralsk_andel%)/mineralsk_andel%.
 
     MNCA (autumn mineral N) is not part of the gødning choice in the original
     model. It is a separate, independent input that defaults to 0.
@@ -137,14 +141,16 @@ def compute_n_inputs(
     pct = float(n_norm_pct) if below_norm else 100.0
     net_scaled = max(0.0, norm["n_norm"] * pct / 100.0 - fv_forfrugt)
 
-    if org_mineral_n <= 0:
+    if driftsform == OEKOLOGISK:
+        eff_org = net_scaled
+    elif org_mineral_n <= 0:
         return {
             "mncs": 0.0 if only_organic else net_scaled, "mnca": 0.0, "g0": 0.0,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
             "fv_forfrugt": fv_forfrugt, "n_norm": norm["n_norm"],
         }
-
-    eff_org = min(org_mineral_n, net_scaled)
+    else:
+        eff_org = min(org_mineral_n, net_scaled)
     pool_pct = 100.0 - mineralsk_andel_pct
     # G0 intentionally uses eff_org, the norm-limited quantity actually
     # allocated, rather than the raw org_mineral_n scenarie setting. The old
