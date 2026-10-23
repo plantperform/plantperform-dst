@@ -77,12 +77,10 @@ export const RulesLimitsCard = ({ limits, fields }: RulesLimitsCardProps) => {
             Grænser for hele bedriften
           </h3>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Bruges, når du vælger{' '}
-            <b className="font-semibold text-foreground">
-              Gennemsnit for perioden
-            </b>{' '}
-            i Optimér. Loft hvert år har egne indstillinger, der kun gælder den
-            enkelte kørsel.
+            Bruges ved næste kørsel af Optimér. Med{' '}
+            <b className="font-semibold text-foreground">Loft hvert år</b>{' '}
+            gælder maks. udledning i hvert år, medmindre der er sat en
+            forskellig grænse pr. år i Optimér.
           </p>
         </div>
         <Button
@@ -286,7 +284,7 @@ export const RulesLimitsCard = ({ limits, fields }: RulesLimitsCardProps) => {
               />
               <span className="font-semibold text-primary">Gemt</span>
               <span className="text-muted-foreground">
-                · bruges ved næste kørsel med Gennemsnit for perioden
+                · bruges ved næste kørsel af Optimér
               </span>
             </>
           ) : (
