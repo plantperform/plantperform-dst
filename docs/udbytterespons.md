@@ -38,9 +38,12 @@ basis (`build_norm_basis.py` in the udbyttekurver scripts, outside the repo).
 ## Gødning
 
 - Økologisk never uses handelsgødning. Its N comes from organic gødning only,
-  up to the simulation's `org_mineral_n`. Without organic gødning an økologisk
-  field gets no N, so the form does not offer "Ingen organisk gødning" for
-  økologisk.
+  and that covers each crop's whole N-norm (minus forfrugtsværdi, at the
+  chosen N-norm%): `org_mineral_n` is not a cap for økologisk. A cap would
+  leave every crop whose norm exceeds it below the norm, and the crops without
+  a yield-response curve would lose no yield for it. The form does not offer
+  "Ingen organisk gødning" for økologisk, and shows "Hele N-normen" instead of
+  the cap; konventionel gylle keeps its cap and tops up with handelsgødning.
 - Husdyrgødning is spread per tonne: "Gylleudbringning, slæbeslanger" times
   the tonnes applied. Tonnes = tildelt udnyttet N / the gødning's udnyttet
   N-indhold per tonne (`n_indhold_kg_per_ton`, default 6). This applies to
