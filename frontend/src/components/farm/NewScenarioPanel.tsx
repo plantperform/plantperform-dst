@@ -26,7 +26,7 @@ import {
 } from '@/lib/simulation-settings'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
-import { initializeYearlyNLoadCaps } from '@/components/farm/catchment-options'
+import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type {
   FieldRecord,
   FertiliserSettings,
@@ -244,19 +244,25 @@ export const NewScenarioPanel = ({
     setCreateError(null)
     setLimitsTouched(false)
   }
+  // Once per opening, after fields load: a yearly cap that is the same in
+  // every year follows the maks. udledning under Regler. Later edits in the
+  // panel keep the two in step themselves.
+  const [yearlySyncedKey, setYearlySyncedKey] = useState<string | null>(null)
   if (
     open &&
     prefillKey === prefilled.key &&
+    yearlySyncedKey !== prefillKey &&
     !fieldsLoading &&
     !fieldsError &&
     optimizationSettings.kind === 'yearly'
   ) {
-    const initialized = initializeYearlyNLoadCaps(
+    setYearlySyncedKey(prefillKey)
+    const synced = syncYearlyNLoadCaps(
       optimizationSettings,
       effectiveFields,
+      constraints.maxNLoadByCatchment,
     )
-    if (initialized !== optimizationSettings)
-      setOptimizationSettings(initialized)
+    if (synced !== optimizationSettings) setOptimizationSettings(synced)
   }
   const limitsError = simulationLimitsError(optimizationSettings, constraints)
   useEffect(() => {
@@ -334,6 +340,7 @@ export const NewScenarioPanel = ({
     setFurthestStepIndex(0)
     setCreateError(null)
     setLimitsTouched(false)
+    setYearlySyncedKey(null)
     setPrefilled({ key: 'blank', values: null })
   }
 

@@ -8,7 +8,7 @@ import {
 } from '@/lib/simulation-settings'
 import { fromWire, toWire } from '@/api/wire'
 import type { OptimizationSettings } from '@/api/types'
-import { initializeYearlyNLoadCaps } from '@/components/farm/catchment-options'
+import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type { FieldRecord } from '@/api/types'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 
@@ -99,17 +99,19 @@ describe('saved optimization settings', () => {
     ).toBeNull()
   })
 
-  it('initializes missing yearly caps after fields load without replacing saved or cleared years', () => {
+  it('starts yearly caps from Regler or the kvote and keeps per-year caps', () => {
+    const everyYear = (value: number) =>
+      Object.fromEntries(ROTATION_CALENDAR_YEARS.map((year) => [year, value]))
     const settings: OptimizationSettings = {
       ...DEFAULT_OPTIMIZATION_SETTINGS,
       kind: 'yearly',
       maxNLoadByCatchment: [
         { catchmentId: 1, maxNLoadByYear: { 2027: 12 } },
-        { catchmentId: 2, maxNLoadByYear: {} },
+        { catchmentId: 2, maxNLoadByYear: everyYear(50) },
       ],
     }
-    expect(initializeYearlyNLoadCaps(settings, [])).toBe(settings)
-    const fields = [1, 2, 3].map(
+    expect(syncYearlyNLoadCaps(settings, [], [])).toBe(settings)
+    const fields = [1, 2, 3, 4].map(
       (catchmentId) =>
         ({
           catchmentId,
@@ -117,16 +119,25 @@ describe('saved optimization settings', () => {
           nLoadQuotaKgN: 100,
         }) as FieldRecord,
     )
-    const initialized = initializeYearlyNLoadCaps(settings, fields)
-    expect(initialized.maxNLoadByCatchment.slice(0, 2)).toEqual(
-      settings.maxNLoadByCatchment,
-    )
-    expect(initialized.maxNLoadByCatchment[2]).toEqual({
-      catchmentId: 3,
-      maxNLoadByYear: Object.fromEntries(
-        ROTATION_CALENDAR_YEARS.map((year) => [year, 100]),
-      ),
-    })
-    expect(initializeYearlyNLoadCaps(initialized, fields)).toBe(initialized)
+    const synced = syncYearlyNLoadCaps(settings, fields, [
+      { catchmentId: 2, maxNLoadKg: 80 },
+      { catchmentId: 4, maxNLoadKg: null },
+    ])
+    expect(synced.maxNLoadByCatchment).toEqual([
+      // Different years: kept as saved.
+      { catchmentId: 1, maxNLoadByYear: { 2027: 12 } },
+      // The same in every year: follows Regler.
+      { catchmentId: 2, maxNLoadByYear: everyYear(80) },
+      // Nothing under Regler: the kvote.
+      { catchmentId: 3, maxNLoadByYear: everyYear(100) },
+      // Ingen grænse under Regler.
+      { catchmentId: 4, maxNLoadByYear: {} },
+    ])
+    expect(
+      syncYearlyNLoadCaps(synced, fields, [
+        { catchmentId: 2, maxNLoadKg: 80 },
+        { catchmentId: 4, maxNLoadKg: null },
+      ]),
+    ).toBe(synced)
   })
 })

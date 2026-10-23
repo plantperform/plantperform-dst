@@ -119,37 +119,58 @@ export const effectiveMaxNLoadByCatchment = (
   return resolved
 }
 
-// Initialize only missing catchments, never saved caps or explicitly blank
-// years. Called after fields load, including when yearly was chosen beforehand.
-export const initializeYearlyNLoadCaps = (
+const capEveryYear = (value: number | undefined): Record<number, number> =>
+  value === undefined
+    ? {}
+    : Object.fromEntries(ROTATION_CALENDAR_YEARS.map((year) => [year, value]))
+
+// True when every year has the same cap, or none has one.
+export const sameCapEveryYear = (maxNLoadByYear: Record<number, number>) =>
+  ROTATION_CALENDAR_YEARS.every(
+    (year) => maxNLoadByYear[year] === maxNLoadByYear[ROTATION_CALENDAR_YEARS[0]],
+  )
+
+// The yearly cap of a catchment is its maks. udledning under Regler
+// (averageCaps), or its kvote when Regler has none, in every year. Only a cap
+// that differs between years ("Forskellig grænse pr. år") is kept as saved.
+// Returns settings unchanged when nothing differs.
+export const syncYearlyNLoadCaps = (
   settings: OptimizationSettings,
   fields: FieldRecord[],
+  averageCaps: CatchmentNLoadCap[],
 ): OptimizationSettings => {
   const catchmentIds = new Set(fields.map((field) => field.catchmentId))
+  const startCaps = effectiveMaxNLoadByCatchment(fields, averageCaps)
+  const startCap = (catchmentId: number | null) =>
+    capEveryYear(startCaps.get(catchmentKey(catchmentId)))
+  let changed = false
+  const kept = settings.maxNLoadByCatchment.map((cap) => {
+    if (
+      !catchmentIds.has(cap.catchmentId) ||
+      !sameCapEveryYear(cap.maxNLoadByYear)
+    )
+      return cap
+    const maxNLoadByYear = startCap(cap.catchmentId)
+    if (
+      ROTATION_CALENDAR_YEARS.every(
+        (year) => cap.maxNLoadByYear[year] === maxNLoadByYear[year],
+      )
+    )
+      return cap
+    changed = true
+    return { ...cap, maxNLoadByYear }
+  })
   const existing = new Set(
     settings.maxNLoadByCatchment.map((cap) => cap.catchmentId),
   )
-  const missing = [...catchmentIds].filter((id) => !existing.has(id))
-  if (missing.length === 0) return settings
-  const quotas = effectiveMaxNLoadByCatchment(fields, [])
-  return {
-    ...settings,
-    maxNLoadByCatchment: [
-      ...settings.maxNLoadByCatchment,
-      ...missing.map((catchmentId) => {
-        const quota = quotas.get(catchmentKey(catchmentId))
-        return {
-          catchmentId,
-          maxNLoadByYear:
-            quota === undefined
-              ? {}
-              : Object.fromEntries(
-                  ROTATION_CALENDAR_YEARS.map((year) => [year, quota]),
-                ),
-        }
-      }),
-    ],
-  }
+  const missing = [...catchmentIds]
+    .filter((catchmentId) => !existing.has(catchmentId))
+    .map((catchmentId) => ({
+      catchmentId,
+      maxNLoadByYear: startCap(catchmentId),
+    }))
+  if (!changed && missing.length === 0) return settings
+  return { ...settings, maxNLoadByCatchment: [...kept, ...missing] }
 }
 
 export const useCatchmentColor = (farmId: string, fields: FieldRecord[]) => {
