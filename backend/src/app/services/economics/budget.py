@@ -74,7 +74,10 @@ def crop_budgets(
         if crop is None:
             continue
         detail = calculate_db(code, farming_system, jb_nr, **inputs)
-        manure_n = min(org_mineral_n, detail["mncs"])
+        # Økologisk husdyrgødning has no cap: it covers the whole norm.
+        manure_n = (
+            detail["mncs"] if farming_system == OEKOLOGISK else min(org_mineral_n, detail["mncs"])
+        )
         if manure_n > 0:
             detail = calculate_db(
                 code,
