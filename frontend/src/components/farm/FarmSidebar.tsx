@@ -31,6 +31,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
@@ -93,10 +94,7 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { optimizationRunName } from '@/lib/optimization-run'
-import {
-  describeFieldSetChanges,
-  formatCreatedAt,
-} from '@/lib/simulation-overview'
+import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
 type ViewKeyFigures = {
@@ -643,9 +641,11 @@ const SimulationMenuItem = ({
     ? resolveFarmQuota(simulationFields, true)
     : null
   const figures = quota ? describeKeyFigures(quota, true) : undefined
-  const fieldSetChanges = simulationFields
-    ? describeFieldSetChanges(simulationFields, liveFields)
-    : null
+  const fieldSetChanges = useFieldSetChanges(
+    farmId,
+    simulation,
+    simulationFields,
+  )
   const changedCount = useMemo(
     () =>
       simulationFields ? changedFieldIds(simulationFields, liveFields).size : 0,
