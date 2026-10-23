@@ -1,5 +1,6 @@
 """Simulation aggregates. Always lock setup before result when changing either."""
 
+import math
 from collections import defaultdict
 from copy import deepcopy
 from uuid import uuid4
@@ -568,37 +569,60 @@ def _require_field_snapshot(row):
         raise CreationNotReadyError("Kør Optimér, før du tilføjer eller fjerner marker.")
 
 
-def _quota_by_catchment(fields):
+def _default_caps(fields):
     quotas = defaultdict(float)
     for field in fields:
         if field.kvotegivende and field.kystvand_id is not None:
             quotas[field.kystvand_id] += field.udledningskvote_mark_kgn
-    return quotas
+    return {key: math.floor(quota + 0.5) for key, quota in quotas.items() if quota > 0}
 
 
-def _fit_constraints(constraints, before, after):
-    old, new = _quota_by_catchment(before), _quota_by_catchment(after)
+def _fit_settings(data, before, after):
+    old, new = _default_caps(before), _default_caps(after)
+    moved = {key for key in old if old[key] != new.get(key)}
+    constraints = data.get("constraints") or {}
+    settings = data.get("optimization_settings") or {}
     limit = constraints.get("max_fields_with_new_rotation")
+
+    def yearly(cap):
+        kystvand_id = cap["kystvand_id"]
+        if kystvand_id not in moved:
+            return cap
+        years = {}
+        for year, value in cap["max_n_load_by_year"].items():
+            if value != old[kystvand_id]:
+                years[year] = value
+            elif kystvand_id in new:
+                years[year] = new[kystvand_id]
+        return {**cap, "max_n_load_by_year": years}
+
     return {
-        **constraints,
-        "max_n_load_by_kystvandopland": [
-            cap
-            for cap in constraints.get("max_n_load_by_kystvandopland", [])
-            if cap["max_n_load_kg"] is None
-            or old[cap["kystvand_id"]] == new[cap["kystvand_id"]]
-            or abs(cap["max_n_load_kg"] - old[cap["kystvand_id"]]) > 0.5
-        ],
-        "max_fields_with_new_rotation": None if limit is None else min(limit, len(after)),
+        **data,
+        "constraints": {
+            **constraints,
+            "max_n_load_by_kystvandopland": [
+                cap
+                for cap in constraints.get("max_n_load_by_kystvandopland", [])
+                if cap["kystvand_id"] not in moved
+                or cap["max_n_load_kg"] != old[cap["kystvand_id"]]
+            ],
+            "max_fields_with_new_rotation": None if limit is None else min(limit, len(after)),
+        },
+        "optimization_settings": {
+            **settings,
+            "max_n_load_by_kystvandopland": [
+                yearly(cap) for cap in settings.get("max_n_load_by_kystvandopland", [])
+            ],
+        },
     }
 
 
 def _change_field_set(session, simulation_id, row, before, after, **values):
     from app.data import read_model_store
 
-    constraints = row.data.get("constraints") or {}
-    fitted = _fit_constraints(constraints, before, after)
-    if fitted != constraints:
-        values["data"] = {**row.data, "constraints": fitted}
+    data = _fit_settings(row.data, before, after)
+    if data != row.data:
+        values["data"] = data
     session.execute(update(setups).where(setups.c.id == simulation_id).values(**values))
     invalidate(session, simulation_id)
     read_model_store.refresh_simulation_view(session, simulation_id)

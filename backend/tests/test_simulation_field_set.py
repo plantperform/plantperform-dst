@@ -82,10 +82,10 @@ class SimulationFieldSetTests(DatabaseTests):
         with self.sessions() as session:
             return session.execute(select(results.c.status)).scalar_one()
 
-    def save_constraints(self, **values):
+    def save(self, section, **values):
         with self.sessions.begin() as session:
             data = session.execute(select(setups.c.data)).scalar_one()
-            data["constraints"] = {**data["constraints"], **values}
+            data[section] = {**data.get(section, {}), **values}
             session.execute(update(setups).values(data=data))
 
     def caps(self):
@@ -144,7 +144,7 @@ class SimulationFieldSetTests(DatabaseTests):
         self.assertEqual((row.revision, row.field_order), (0, ["field-b", "field-a"]))
 
     def test_removed_fields_leave_only_the_simulation_and_lower_its_limit(self):
-        self.save_constraints(max_fields_with_new_rotation=2)
+        self.save("constraints", max_fields_with_new_rotation=2)
 
         response = self.remove("field-a", "field-b")
 
@@ -160,21 +160,47 @@ class SimulationFieldSetTests(DatabaseTests):
         first = [new_field(7, catchment=1, quota=10.4), new_field(8, catchment=2, quota=20)]
         self.client.post(FIELDS, json=first)
         set_cap = {"kystvand_id": 2, "max_n_load_kg": 15}
-        self.save_constraints(
-            max_n_load_by_kystvandopland=[{"kystvand_id": 1, "max_n_load_kg": 10}, set_cap]
+        self.save(
+            "constraints",
+            max_n_load_by_kystvandopland=[{"kystvand_id": 1, "max_n_load_kg": 10}, set_cap],
         )
 
         [added, _] = self.client.post(
             FIELDS, json=[new_field(9, catchment=1, quota=5), new_field(10, catchment=2, quota=5)]
         ).json()
         after_adding = self.caps()
-        self.save_constraints(
-            max_n_load_by_kystvandopland=[set_cap, {"kystvand_id": 1, "max_n_load_kg": 15}]
+        self.save(
+            "constraints",
+            max_n_load_by_kystvandopland=[set_cap, {"kystvand_id": 1, "max_n_load_kg": 15}],
         )
         self.remove(added["id"])
 
         self.assertEqual(after_adding, [set_cap])
         self.assertEqual(self.caps(), [set_cap])
+
+    def test_a_set_cap_next_to_the_rounded_kvote_stays(self):
+        self.client.post(FIELDS, json=[new_field(7, catchment=1, quota=10.5)])
+        set_cap = {"kystvand_id": 1, "max_n_load_kg": 10}
+        self.save("constraints", max_n_load_by_kystvandopland=[set_cap])
+
+        self.client.post(FIELDS, json=[new_field(8, catchment=1, quota=5)])
+
+        self.assertEqual(self.caps(), [set_cap])
+
+    def test_yearly_caps_left_at_the_kvote_follow_it_and_set_years_stay(self):
+        self.client.post(FIELDS, json=[new_field(7, catchment=1, quota=10.4)])
+        self.save(
+            "optimization_settings",
+            max_n_load_by_kystvandopland=[
+                {"kystvand_id": 1, "max_n_load_by_year": {"2027": 10, "2028": 7}}
+            ],
+        )
+
+        self.client.post(FIELDS, json=[new_field(8, catchment=1, quota=5)])
+
+        settings = self.setup_row().data["optimization_settings"]
+        [cap] = settings["max_n_load_by_kystvandopland"]
+        self.assertEqual(cap["max_n_load_by_year"], {"2027": 15, "2028": 7})
 
     def test_fields_wait_for_the_simulation_to_copy_the_farm(self):
         with self.sessions.begin() as session:
