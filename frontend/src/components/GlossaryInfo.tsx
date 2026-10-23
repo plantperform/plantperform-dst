@@ -40,6 +40,11 @@ const glossary = {
     description:
       'Hvor stor en del af afgrødens N-norm der højst kan gødes op til. Forfrugtsværdien tæller med, så der gødes kun med det, forfrugten ikke dækker. Under 100 % falder udbyttet. Det gælder på nuværende tidspunkt hovedafgrøder med en udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs, og økologisk korn, raps og græs. Andre afgrøder gødes altid fuldt. Proteinandelen påvirker endnu ikke salgsprisen.',
   },
+  nContentPerTon: {
+    title: 'Mineralsk N-indhold',
+    description:
+      'Hvor mange kg NH4-N (mineralsk N) et ton husdyrgødning indeholder. Bruges til at regne ud, hvor mange ton gødning der køres ud pr. ha om året. Udbringningen koster pr. ton.',
+  },
   catchCrop: {
     title: 'Efterafgrøde',
     description:

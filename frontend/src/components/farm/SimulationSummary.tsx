@@ -34,6 +34,7 @@ import {
   farmingSystemMismatchMessage,
   isPresetModified,
   nNormPercentagesLabel,
+  organicFertiliserNLabel,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
@@ -199,7 +200,7 @@ export const SimulationSummary = ({
           ) : (
             <p>
               <span className="text-foreground">{fertiliserLabel}</span> ·{' '}
-              {formatNumber(fertiliser.orgMineralN)} kg N/ha ·{' '}
+              {organicFertiliserNLabel(fertiliser)} ·{' '}
               {formatNumber(fertiliser.mineralSharePct)} % mineralsk ·{' '}
               {formatNumber(fertiliser.nContentKgPerTon)} kg N/ton
             </p>

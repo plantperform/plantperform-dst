@@ -10,6 +10,7 @@ import type {
   Simulation,
 } from '@/api/types'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import { formatNumber } from '@/lib/field-domain'
 import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
 
 // 'none' and 'custom' are fixed choices; any other value is a preset name.
@@ -140,10 +141,17 @@ export const organicFertiliserChoice = (
   presets: FertiliserPresetOption[],
 ): string => presets[0]?.name ?? CUSTOM_FERTILISER
 
-export const lacksOrganicFertiliser = (
-  fertiliser: FertiliserSettings,
-): boolean =>
-  !offersNoFertiliser(fertiliser.farmingSystem) && fertiliser.orgMineralN <= 0
+// Økologisk organic fertiliser covers the whole N-norm, so only konventionel
+// caps the utilised N it supplies (orgMineralN). Økologisk sends 0.
+export const capsOrganicFertiliserN = (farmingSystem: FarmingSystem): boolean =>
+  farmingSystem !== 'Økologisk'
+
+export const organicFertiliserNLabel = (
+  fertiliser: Pick<FertiliserSettings, 'farmingSystem' | 'orgMineralN'>,
+): string =>
+  capsOrganicFertiliserN(fertiliser.farmingSystem)
+    ? `${formatNumber(fertiliser.orgMineralN)} kg N/ha`
+    : 'Hele N-normen'
 
 const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
 
@@ -181,13 +189,15 @@ const nitrogenSchema = z
       }
       return
     }
-    checkNumberText(
-      ctx,
-      'orgMineralN',
-      values.orgMineralN,
-      (value) => (organic ? value > 0 : value >= 0),
-      organic ? ORGANIC_NEEDS_FERTILISER : 'Skal være 0 eller mere',
-    )
+    if (!organic) {
+      checkNumberText(
+        ctx,
+        'orgMineralN',
+        values.orgMineralN,
+        (value) => value >= 0,
+        'Skal være 0 eller mere',
+      )
+    }
     checkNumberText(
       ctx,
       'mineralSharePct',
@@ -545,7 +555,7 @@ export const fertiliserFieldsForChoice = (
 export const isPresetModified = (
   values: Pick<
     SimulationFormValues,
-    'fertiliserChoice' | 'orgMineralN' | 'mineralSharePct'
+    'farmingSystem' | 'fertiliserChoice' | 'orgMineralN' | 'mineralSharePct'
   >,
   presets: FertiliserPresetOption[],
 ): boolean => {
@@ -554,7 +564,8 @@ export const isPresetModified = (
   )
   if (!preset) return false
   return (
-    Number(values.orgMineralN) !== preset.fertiliser.orgMineralN ||
+    (capsOrganicFertiliserN(values.farmingSystem) &&
+      Number(values.orgMineralN) !== preset.fertiliser.orgMineralN) ||
     Number(values.mineralSharePct) !== preset.fertiliser.mineralSharePct
   )
 }
@@ -586,13 +597,15 @@ export const toCreateSimulationInput = (
   values: SimulationFormValues,
 ): CreateSimulationInput => {
   const withoutFertiliser = values.fertiliserChoice === NO_FERTILISER
+  const capped = capsOrganicFertiliserN(values.farmingSystem)
   return {
     name: values.name.trim(),
     allowedRotationVariants: values.rotationVariants,
     allowedNNormPercentages: nNormPercentagesFor(values.nNormPercentages),
     fertiliser: {
       farmingSystem: values.farmingSystem,
-      orgMineralN: withoutFertiliser ? 0 : Number(values.orgMineralN),
+      orgMineralN:
+        withoutFertiliser || !capped ? 0 : Number(values.orgMineralN),
       mineralSharePct: withoutFertiliser ? 100 : Number(values.mineralSharePct),
       // Økologisk never tops up with handelsgødning, whatever the draft holds.
       onlyOrganic: values.farmingSystem === 'Økologisk' || values.onlyOrganic,
@@ -612,19 +625,32 @@ export const toCreateSimulationInput = (
 
 export const copiedSimulationName = (name: string) => `${name} (kopi)`
 
+// An økologisk simulation always has organic fertiliser and no cap, so only
+// its mineral share tells the type apart.
+const fertiliserPresetOf = (
+  fertiliser: FertiliserSettings,
+  presets: FertiliserPresetOption[],
+): FertiliserPresetOption | undefined => {
+  const capped = capsOrganicFertiliserN(fertiliser.farmingSystem)
+  return presets.find(
+    (option) =>
+      (!capped || option.fertiliser.orgMineralN === fertiliser.orgMineralN) &&
+      option.fertiliser.mineralSharePct === fertiliser.mineralSharePct,
+  )
+}
+
 const fertiliserChoiceOf = (
   fertiliser: FertiliserSettings,
   presets: FertiliserPresetOption[],
 ): string => {
-  if (fertiliser.orgMineralN === 0 && fertiliser.mineralSharePct === 100) {
+  if (
+    capsOrganicFertiliserN(fertiliser.farmingSystem) &&
+    fertiliser.orgMineralN === 0 &&
+    fertiliser.mineralSharePct === 100
+  ) {
     return NO_FERTILISER
   }
-  const preset = presets.find(
-    (option) =>
-      option.fertiliser.orgMineralN === fertiliser.orgMineralN &&
-      option.fertiliser.mineralSharePct === fertiliser.mineralSharePct,
-  )
-  return preset?.name ?? CUSTOM_FERTILISER
+  return fertiliserPresetOf(fertiliser, presets)?.name ?? CUSTOM_FERTILISER
 }
 
 export const simulationToFormValues = (
@@ -636,20 +662,6 @@ export const simulationToFormValues = (
   const isInterval = SOWING_DATE_INTERVALS.some(
     (interval) => interval.date === catchCropSowingDate,
   )
-  const savedChoice = fertiliserChoiceOf(fertiliser, presets)
-  const fertiliserChoice =
-    savedChoice === NO_FERTILISER &&
-    !offersNoFertiliser(fertiliser.farmingSystem)
-      ? organicFertiliserChoice(presets)
-      : savedChoice
-  const choiceFields =
-    fertiliserChoice === savedChoice
-      ? null
-      : fertiliserFieldsForChoice(
-          fertiliserChoice,
-          presets,
-          fertiliser.farmingSystem,
-        )
   return {
     ...DEFAULT_SIMULATION_FORM_VALUES,
     name: copiedSimulationName(simulation.name),
@@ -659,11 +671,17 @@ export const simulationToFormValues = (
       simulation.nNormPercentages,
       offeredNNormPercentages,
     ),
-    fertiliserChoice,
-    orgMineralN: choiceFields?.orgMineralN ?? String(fertiliser.orgMineralN),
-    mineralSharePct:
-      choiceFields?.mineralSharePct ?? String(fertiliser.mineralSharePct),
-    onlyOrganic: choiceFields?.onlyOrganic ?? fertiliser.onlyOrganic,
+    fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),
+    // Økologisk stores no cap; the preset's keeps a later switch to
+    // konventionel from starting at 0.
+    orgMineralN: String(
+      capsOrganicFertiliserN(fertiliser.farmingSystem)
+        ? fertiliser.orgMineralN
+        : (fertiliserPresetOf(fertiliser, presets)?.fertiliser.orgMineralN ??
+            fertiliser.orgMineralN),
+    ),
+    mineralSharePct: String(fertiliser.mineralSharePct),
+    onlyOrganic: fertiliser.onlyOrganic,
     nContentKgPerTon: String(fertiliser.nContentKgPerTon),
     catchCropDailyBasis,
     catchCropSowingInterval:
