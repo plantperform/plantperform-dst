@@ -80,13 +80,33 @@ class ComputeNInputsTests(unittest.TestCase):
             # 80 % of the organic 144 = 115.2 available; the forfrugt covers 18.
             self.assertAlmostEqual(self.mncs(VINTERHVEDE, VINTERRAPS, 80, "Økologisk"), 97.2)
 
-    def test_only_organic_without_organic_goedning_gets_no_n(self) -> None:
-        # Økologisk never tops up with handelsgødning, so there is nothing to apply.
+    def test_oekologisk_organic_goedning_covers_the_norm_whatever_the_cap(self) -> None:
+        for org_mineral_n in (0.0, 107.0, 400.0):
+            with self.subTest(org_mineral_n=org_mineral_n):
+                result = candidate_evaluator.compute_n_inputs(
+                    VINTERHVEDE, VINTERRAPS, None, 1, 100, org_mineral_n, 70.0, True, False,
+                    "Økologisk",
+                )
+                self.assertEqual(result["mncs"], 175.0 - 18.0)
+                self.assertEqual(result["org_mineral_n_applied"], 175.0 - 18.0)
+                self.assertAlmostEqual(result["g0"], (175.0 - 18.0) * 30 / 70)
+
+    def test_konventionel_gylle_is_capped_and_topped_up(self) -> None:
         result = candidate_evaluator.compute_n_inputs(
-            VINTERHVEDE, VINTERRAPS, None, 1, 100, 0.0, 70.0, True, False, "Økologisk",
+            VINTERHVEDE, VINTERRAPS, None, 1, 100, 107.0, 70.0, False, False,
         )
-        self.assertEqual(result["mncs"], 0.0)
-        self.assertEqual(result["org_mineral_n_applied"], 0.0)
+        self.assertEqual(result["mncs"], 175.0 - 18.0)
+        self.assertEqual(result["org_mineral_n_applied"], 107.0)
+
+    def test_konventionel_only_organic_is_capped_without_top_up(self) -> None:
+        capped = candidate_evaluator.compute_n_inputs(
+            VINTERHVEDE, VINTERRAPS, None, 1, 100, 107.0, 70.0, True, False,
+        )
+        self.assertEqual(capped["mncs"], 107.0)
+        without = candidate_evaluator.compute_n_inputs(
+            VINTERHVEDE, VINTERRAPS, None, 1, 100, 0.0, 70.0, True, False,
+        )
+        self.assertEqual(without["mncs"], 0.0)
 
     def test_kloevergraes_standing_on_gets_no_forfrugtsvaerdi(self) -> None:
         # indregn_ffv Nej: the stand is not ploughed, so the full norm is fertilized.

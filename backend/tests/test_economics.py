@@ -541,9 +541,18 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
         defaults.update({price["id"]: price["value"] for price in organic["prices"]})
+        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says.
+        organic_norm = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["mncs"]
         self.assertEqual(
             priced_db(organic["crops"][0], EconomicsOverrides()),
-            calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["db"],
+            calculator.calculate_db(
+                1,
+                "Økologisk",
+                5,
+                only_organic=True,
+                org_mineral_n_applied=organic_norm,
+                husdyrgodning_ton_pr_ha=organic_norm / 6.0,
+            )["db"],
         )
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):

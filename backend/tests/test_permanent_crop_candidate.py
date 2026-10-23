@@ -86,6 +86,19 @@ class PermanentCropCandidateTests(unittest.TestCase):
                             NORM["n_norm"],
                         )
 
+    def test_organic_manure_covers_a_norm_above_the_manure_setting(self) -> None:
+        # 252 has no yield-response curve, so a cap below its norm of 158
+        # would cut its N without costing any yield.
+        godning = ORGANIC.model_copy(update={"org_mineral_n": 107.0})
+        with patch.object(
+            candidate_evaluator.afgroede_normer,
+            "lookup_norm",
+            return_value={**NORM, "indregn_ffv": False},
+        ):
+            for year in self.candidate(godning).years:
+                self.assertEqual(year.tildelt_husdyrgodning_udnyttet_kgn_ha, 158.0)
+                self.assertEqual(year.tildelt_handelsgodning_kgn_ha, 0.0)
+
     def test_stays_locked_to_the_crop_at_full_n_norm(self) -> None:
         candidate = self.candidate(ORGANIC)
         self.assertEqual(candidate.ref.to_id(), "permanent:252:100")
