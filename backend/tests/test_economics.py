@@ -210,6 +210,7 @@ class EconomicsDatabaseTests(DatabaseTests):
                 (
                     ("Handelsgødning, kvælstof (N)", 10),
                     ("Handelsgødning, udbringning", 100),
+                    ("Gylleudbringning, slæbeslanger", 20),
                     ("Grundbetaling (estimat)", 1000),
                     ("Grundbeløb (basis)", 500),
                     ("Stivelseskartofler", 200),
@@ -468,7 +469,12 @@ class EconomicsDatabaseTests(DatabaseTests):
             ),
             SimpleNamespace(jbnr=3, area_ha=8, crop_rotation=[SimpleNamespace(afgrode_kode=999)]),
         ]
-        godning = SimpleNamespace(driftsform="Konventionel", only_organic=False, org_mineral_n=50)
+        godning = SimpleNamespace(
+            driftsform="Konventionel",
+            only_organic=False,
+            org_mineral_n=50,
+            n_indhold_kg_per_ton=5.0,
+        )
         simulation = SimpleNamespace(id="sim", godning=godning)
         url = "/api/v0/farms/farm/economics/budgets"
         with (
@@ -529,7 +535,9 @@ class EconomicsDatabaseTests(DatabaseTests):
         defaults.update({price["id"]: price["value"] for price in manured["prices"]})
         self.assertEqual(
             priced_db(manured["crops"][0], EconomicsOverrides()),
-            calculator.calculate_db(1, "Konventionel", 5, org_mineral_n_applied=50)["db"],
+            calculator.calculate_db(
+                1, "Konventionel", 5, org_mineral_n_applied=50, husdyrgodning_ton_pr_ha=10.0
+            )["db"],
         )
         self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
         defaults.update({price["id"]: price["value"] for price in organic["prices"]})
