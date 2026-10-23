@@ -333,9 +333,14 @@ describe('describeFieldSetChanges', () => {
     expect(describeFieldSetChanges(fields(1), farm)).toBe('2 marker fjernet')
   })
 
-  it('says nothing until both sides have fields', () => {
-    expect(describeFieldSetChanges([], farm)).toBeNull()
-    expect(describeFieldSetChanges(farm, [])).toBeNull()
+  it('says nothing until both sides are loaded', () => {
+    expect(describeFieldSetChanges(undefined, farm)).toBeNull()
+    expect(describeFieldSetChanges(farm, undefined)).toBeNull()
+  })
+
+  it('counts every field when one side has none', () => {
+    expect(describeFieldSetChanges([], farm)).toBe('3 marker fjernet')
+    expect(describeFieldSetChanges(fields(1, 2), [])).toBe('2 marker tilføjet')
   })
 })
 

@@ -183,10 +183,10 @@ const countMissing = (fields: FieldRecord[], from: FieldRecord[]) => {
 }
 
 export const describeFieldSetChanges = (
-  fields: FieldRecord[],
-  liveFields: FieldRecord[],
+  fields: FieldRecord[] | undefined,
+  liveFields: FieldRecord[] | undefined,
 ): string | null => {
-  if (fields.length === 0 || liveFields.length === 0) return null
+  if (!fields || !liveFields) return null
   const added = countMissing(fields, liveFields)
   const removed = countMissing(liveFields, fields)
   if (added === 0) {

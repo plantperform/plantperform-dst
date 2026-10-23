@@ -7,6 +7,7 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
+import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
@@ -35,7 +36,6 @@ import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeDb2Delta,
   describeFieldChanges,
-  describeFieldSetChanges,
   describeNLoadDelta,
   formatCreatedAt,
   partialCatchmentQuotas,
@@ -232,13 +232,14 @@ type SimulationCardProps = {
 const summarizeSimulation = (
   fields: FieldRecord[],
   liveFields: FieldRecord[],
+  fieldSet: string | null,
 ) => {
   const { totals } = resolveFarmQuota(fields, true)
   return {
     fields,
     totals,
     changes: describeFieldChanges({
-      fieldSet: describeFieldSetChanges(fields, liveFields),
+      fieldSet,
       changed: changedFieldIds(fields, liveFields).size,
       locked: fields.filter(isFieldLocked).length,
       uncalculated: totals.uncalculatedCount,
@@ -267,7 +268,10 @@ export const SimulationCard = ({
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
-  const summary = fields ? summarizeSimulation(fields, liveFields) : undefined
+  const fieldSet = useFieldSetChanges(farmId, simulation, fields)
+  const summary = fields
+    ? summarizeSimulation(fields, liveFields, fieldSet)
+    : undefined
   const calculated = summary !== undefined && summary.totals.calculatedCount > 0
   const canCompare =
     fields !== undefined && comparisonAvailability(fields).kind === 'ready'
@@ -286,7 +290,7 @@ export const SimulationCard = ({
         )
       }
       active={active}
-      meta={calculated ? summary.changes : undefined}
+      meta={summary && (calculated || fieldSet) ? summary.changes : undefined}
       actions={
         <>
           <Button
