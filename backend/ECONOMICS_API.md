@@ -116,7 +116,7 @@ the user is not a member of and an unknown `simulationId` return 404.
 {
   "jbNr": 5,
   "farmingSystem": "Konventionel",
-  "prices": [{"id": "rate:[...]", "label": "Pløjning", "unit": "kr/gang", "value": 825, "source": "SEGES"}],
+  "prices": [{"id": "rate:[...]", "label": "Pløjning", "unit": "kr/gang pr. ha", "value": 825, "source": "SEGES"}],
   "crops": [{
     "cropCode": 1,
     "cropName": "Vårbyg",

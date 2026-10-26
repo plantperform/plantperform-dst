@@ -573,6 +573,17 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(organic["markarbejde"], 1200)
         self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
 
+    def test_a_rate_per_gang_is_priced_per_gang_pr_ha_and_counted_in_gange(self):
+        crop = budget.crop_budgets([1], 5, "Konventionel", False)["crops"][0]
+        ploughing = next(line for line in crop["costs"] if line["label"] == "Pløjning")
+        self.assertEqual(ploughing["quantityUnit"], "gange")
+        for prices in (
+            budget.crop_budgets([1], 5, "Konventionel", False)["prices"],
+            overrides.assumptions()["prices"],
+        ):
+            price = next(p for p in prices if p["id"] == ploughing["priceId"])
+            self.assertEqual(price["unit"], "kr/gang pr. ha")
+
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))
         self.assertEqual(
