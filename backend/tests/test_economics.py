@@ -555,6 +555,24 @@ class EconomicsDatabaseTests(DatabaseTests):
             )["db"],
         )
 
+    def test_a_driftsform_without_work_quantities_uses_its_own_flat_costs(self):
+        konventionel = calculator.calculate_db(1, "Konventionel", 5)
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(dyrkningsomkostning_table).values(
+                    source_order=50,
+                    afgroedekode=1,
+                    driftsform="Økologisk",
+                    kategori="Markarbejde",
+                    behandling="Såning og høst",
+                    udgift_kr_ha=1200,
+                )
+            )
+        calculator.clear_lookup_cache()
+        organic = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)
+        self.assertEqual(organic["markarbejde"], 1200)
+        self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
+
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))
         self.assertEqual(

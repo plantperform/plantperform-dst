@@ -103,7 +103,7 @@ def clear_lookup_cache() -> None:
         _load_halmudbytte,
         _load_arbejdssatser,
         _load_arbejdsmaengder,
-        _migrerede_afgrodekoder,
+        _migrerede_budgetter,
         _load_dyrkningsomkostninger,
         _load_prisliste,
         soil_variants,
@@ -291,8 +291,13 @@ def soil_variants() -> dict[str, tuple[tuple[str, float], ...]]:
 
 
 @lru_cache(maxsize=1)
-def _migrerede_afgrodekoder() -> frozenset[int]:
-    return frozenset(code for code, _, _, _ in _load_arbejdsmaengder())
+def _migrerede_budgetter() -> frozenset[tuple[int, str]]:
+    """The (afgrødekode, driftsform) pairs priced from arbejdsmængder.
+
+    A driftsform without arbejdsmængder for the afgrøde falls back to the flat
+    dyrkningsomkostninger of that driftsform, whatever the other one has.
+    """
+    return frozenset((code, driftsform) for code, driftsform, _, _ in _load_arbejdsmaengder())
 
 
 @lru_cache(maxsize=1)
@@ -353,7 +358,7 @@ def _lookup_omkostningslinjer(
 ) -> list[dict]:
     prices = (economics or {}).get("prices", {})
     quantities = (economics or {}).get("quantities", {})
-    if afgrodekode not in _migrerede_afgrodekoder():
+    if (afgrodekode, driftsform) not in _migrerede_budgetter():
         lines = []
         for row in _load_dyrkningsomkostninger().get((afgrodekode, driftsform), []):
             pris_id = identifier(
