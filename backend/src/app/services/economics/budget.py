@@ -12,15 +12,15 @@ from sqlalchemy import select
 from app.data.db import SessionLocal, afgroede_table
 from app.data.repository import list_fields, list_simulations, scenario_afgrodekoder
 from app.services.economics.db_calculator import OEKOLOGISK, calculate_db, soil_variants
-from app.services.economics.overrides import price_unit
+from app.services.economics.overrides import PRICE_PER_GANG_UNIT, price_unit
 
 _PRICE_LABELS = {"Udbytte": "Salgspris", "Halm": "Halmpris"}
 
 
 def _quantity_unit(unit):
-    per = unit.split("/", 1)[1]
-    if per == "gang":
+    if unit == PRICE_PER_GANG_UNIT:
         return "gange"
+    per = unit.split("/", 1)[1]
     if per == "enhed":
         return "enheder/ha"
     if per in ("ha", "mm"):

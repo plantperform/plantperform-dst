@@ -25,10 +25,15 @@ def quantity_id(crop, namespace, *parts):
     return f"{crop}/{identifier(namespace, *parts)}"
 
 
+PRICE_PER_GANG_UNIT = "kr/gang pr. ha"
+
+
 def price_unit(unit):
     if not unit:
         return "kr/enhed"
-    return unit if "/" in unit else f"kr/{unit}"
+    unit = unit if "/" in unit else f"kr/{unit}"
+    # A rate per gang is the price of one pass over one ha.
+    return PRICE_PER_GANG_UNIT if unit == "kr/gang" else unit
 
 
 def assumptions():
