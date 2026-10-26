@@ -88,7 +88,8 @@ values are percentage changes, not absolute yields.
 Existing lookup and fallback rules select a reference variant first; an override
 then replaces that selected value. A shared work rate affects every line that
 uses that rate. Crop aliases retain their existing budget-code mapping. Legacy
-flat costs apply only where the existing calculator uses the legacy cost budget.
+flat costs apply only for a farming system the crop has no work quantities for,
+whatever the other farming system has.
 General price-list entries affect calculations only when their scheme or cost is
 already included; setting a price does not enable an optional subsidy scheme.
 
