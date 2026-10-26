@@ -24,7 +24,7 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
-from app.services.economics.overrides import identifier, quantity_id
+from app.services.economics.overrides import identifier, post_label, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
 from app.services.virkemidler import praecisionsgoedskning_tilladt
 
@@ -682,7 +682,8 @@ def calculate_db(
     )
 
     tilskud_linjer = [
-        list_line("Tilskud", post, post) for post in _tilskud_poster(afgrodekode, driftsform)
+        list_line("Tilskud", post, post, navn=post_label(post))
+        for post in _tilskud_poster(afgrodekode, driftsform)
     ]
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
     omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer

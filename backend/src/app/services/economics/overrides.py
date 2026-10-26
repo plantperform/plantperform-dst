@@ -36,6 +36,15 @@ def price_unit(unit):
     return PRICE_PER_GANG_UNIT if unit == "kr/gang" else unit
 
 
+# The imported name of a price-list post stays its identity, so saved overrides
+# keep applying. Only what the user reads is renamed.
+_POST_LABELS = {"Grundbeløb (basis)": "Økologisk arealstøtte – basis"}
+
+
+def post_label(post):
+    return _POST_LABELS.get(post, post)
+
+
 def assumptions():
     """Raw context variants, rather than a fictitious uniform farm budget.
 
@@ -151,7 +160,7 @@ def assumptions():
             key = identifier("list", row.post)
             prices[key] = dict(
                 id=key,
-                label=row.post,
+                label=post_label(row.post),
                 value=row.pris,
                 unit=price_unit(row.enhed),
                 source=row.kilde,
