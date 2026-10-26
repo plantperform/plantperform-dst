@@ -555,6 +555,32 @@ class EconomicsDatabaseTests(DatabaseTests):
             )["db"],
         )
 
+    def test_organic_budget_names_the_organic_area_support_and_keeps_its_identity(self):
+        fields = [
+            SimpleNamespace(jbnr=5, area_ha=10, crop_rotation=[SimpleNamespace(afgrode_kode=1)])
+        ]
+        url = "/api/v0/farms/farm/economics/budgets"
+        with (
+            patch.object(budget, "list_fields", return_value=fields),
+            patch.object(budget, "list_simulations", return_value=[]),
+        ):
+            conventional = self.client.get(url).json()
+            organic = self.client.get(url, params={"farmingSystem": "Økologisk"}).json()
+        basic = overrides.identifier("list", "Grundbetaling (estimat)")
+        support = overrides.identifier("list", "Grundbeløb (basis)")
+        label = "Økologisk arealstøtte – basis"
+        self.assertEqual(
+            [line["label"] for line in conventional["crops"][0]["subsidies"]],
+            ["Grundbetaling (estimat)"],
+        )
+        subsidies = organic["crops"][0]["subsidies"]
+        self.assertEqual(
+            [(line["label"], line["priceId"]) for line in subsidies],
+            [("Grundbetaling (estimat)", basic), (label, support)],
+        )
+        for prices in (organic["prices"], overrides.assumptions()["prices"]):
+            self.assertEqual(next(p["label"] for p in prices if p["id"] == support), label)
+
     def test_a_driftsform_without_work_quantities_uses_its_own_flat_costs(self):
         konventionel = calculator.calculate_db(1, "Konventionel", 5)
         with self.sessions.begin() as session:
