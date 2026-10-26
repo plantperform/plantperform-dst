@@ -12,10 +12,12 @@ from app.data.db import simulation_table as setups
 from app.domain.creation import CreationNotReadyError
 from app.domain.field import FieldRecord, validate_measures_for_rotation
 from app.domain.optimization import (
+    KystvandoplandYearlyNLoadCaps,
     OptimizeSimulationRequest,
     SimulationResult,
     SimulationResultSummary,
     YearlyOptimizeSimulationRequest,
+    untradable_quota_reason,
 )
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
@@ -596,6 +598,25 @@ def _fit_settings(data, before, after):
                 years[year] = new[kystvand_id]
         return {**cap, "max_n_load_by_year": years}
 
+    yearly_caps = [yearly(cap) for cap in settings.get("max_n_load_by_kystvandopland", [])]
+    caps_by_id = {
+        cap["kystvand_id"]: KystvandoplandYearlyNLoadCaps.model_validate(cap) for cap in yearly_caps
+    }
+    kvotegivende = {field.kystvand_id for field in after if field.kvotegivende}
+    # Kvotehandel is only set when creating a simulation, so a trade the new
+    # marker cannot carry is dropped rather than left to fail every run.
+    quota_trades = [
+        trade
+        for trade in settings.get("quota_trades", [])
+        if untradable_quota_reason(
+            caps_by_id.get(trade["kystvand_id"]), trade["kystvand_id"] in kvotegivende
+        )
+        is None
+    ]
+    fitted_settings = {**settings, "max_n_load_by_kystvandopland": yearly_caps}
+    if "quota_trades" in settings:
+        fitted_settings["quota_trades"] = quota_trades
+
     return {
         **data,
         "constraints": {
@@ -608,12 +629,7 @@ def _fit_settings(data, before, after):
             ],
             "max_fields_with_new_rotation": None if limit is None else min(limit, len(after)),
         },
-        "optimization_settings": {
-            **settings,
-            "max_n_load_by_kystvandopland": [
-                yearly(cap) for cap in settings.get("max_n_load_by_kystvandopland", [])
-            ],
-        },
+        "optimization_settings": fitted_settings,
     }
 
 
