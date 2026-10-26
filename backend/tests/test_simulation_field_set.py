@@ -202,6 +202,25 @@ class SimulationFieldSetTests(DatabaseTests):
         [cap] = settings["max_n_load_by_kystvandopland"]
         self.assertEqual(cap["max_n_load_by_year"], {"2027": 15, "2028": 7})
 
+    def test_a_trade_is_dropped_only_when_its_opland_cannot_trade_any_more(self):
+        self.client.post(
+            FIELDS,
+            json=[new_field(7, catchment=1, quota=10), new_field(8, catchment=2, quota=20)],
+        )
+        trades = [
+            {"kystvand_id": 1, "price_kr_per_kg": 35},
+            {"kystvand_id": 2, "price_kr_per_kg": 40},
+        ]
+        self.save("optimization_settings", kind="yearly", quota_trades=trades)
+
+        self.client.post(FIELDS, json=[new_field(9, catchment=1, quota=5)])
+        after_adding = self.setup_row().data["optimization_settings"]["quota_trades"]
+        removed = next(f for f in self.view().data.fields if f.kystvand_id == 2)
+        self.remove(removed.id)
+
+        self.assertEqual(after_adding, trades)
+        self.assertEqual(self.setup_row().data["optimization_settings"]["quota_trades"], trades[:1])
+
     def test_fields_wait_for_the_simulation_to_copy_the_farm(self):
         with self.sessions.begin() as session:
             data = session.execute(select(setups.c.data)).scalar_one()
