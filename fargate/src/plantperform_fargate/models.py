@@ -145,6 +145,30 @@ class FixedYearlyFieldContribution:
 
 
 @dataclass(frozen=True)
+class QuotaTradeInput:
+    """Kvotehandel at a fixed price for one kystvandopland.
+
+    The solver chooses one trade in whole kg N, the same in every year: the
+    opland's cap becomes original cap + trade in each year (trade > 0 buys,
+    < 0 sells), and price * trade is paid per year. The opland must have a cap
+    in every year.
+    """
+
+    kystvand_id: int
+    price_kr_per_kg: float
+
+
+@dataclass(frozen=True)
+class QuotaTradeResult:
+    kystvand_id: int
+    trade_kg: int
+    price_kr_per_kg: float
+    # Paid per year, on the same per-year basis as the output's total_db2;
+    # negative when the trade sells.
+    payment_kr_per_year: float
+
+
+@dataclass(frozen=True)
 class YearlyConstraintsInput:
     # Same per-kystvandopland principle as ConstraintsInput, but with an
     # eight-item per-calendar-year cap tuple per opland instead of one value.
@@ -153,6 +177,7 @@ class YearlyConstraintsInput:
     min_fen: float | None
     max_fen: float | None
     crop_area_limits: tuple[CropAreaLimit, ...] = ()
+    quota_trades: tuple[QuotaTradeInput, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -173,3 +198,6 @@ class YearlyOptimizationOutput:
     total_fen: float
     total_db2_by_year: tuple[float, ...]
     total_n_load_by_year: tuple[float, ...]
+    # total_db2 is the crops' DB2 alone; subtract the trades' payments for the
+    # DB2 including kvotehandel.
+    quota_trades: tuple[QuotaTradeResult, ...] = ()
