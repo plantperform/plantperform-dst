@@ -34,6 +34,7 @@ import {
   getFieldQuotaStatus,
   isFieldCalculated,
   isFieldLocked,
+  NO_ECONOMICS,
   perHaUnit,
   totalsFigure,
   type FarmQuota,
@@ -233,9 +234,9 @@ const numericMetricColumn = (
   const { key, label, heading, emptyCell, quotaGated } = config
   const contentOf = (field: FieldRecord): CellContent => {
     if (quotaGated && !field.quotaEligible) return EXCLUDED_FROM_CALCULATION
-    return isFieldCalculated(field, isSimulationView)
-      ? fieldFigure(field, key)
-      : null
+    if (!isFieldCalculated(field, isSimulationView)) return null
+    if (key === 'db2' && field.economicsMissing) return NO_ECONOMICS
+    return fieldFigure(field, key)
   }
   return {
     accessorKey: key,

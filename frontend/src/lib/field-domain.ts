@@ -208,11 +208,14 @@ export const formatLockTooltip = (field: FieldRecord): string => {
   }
 
   if (field.areaHa > 0) {
-    lines.push(
-      `DB2 ${formatPerHa(field.db2 / field.areaHa, 'db2')} · ` +
-        `Udledning ${formatPerHa(field.nLoad / field.areaHa, 'nLoad')} · ` +
-        `Udvaskning ${formatPerHa(field.leaching / field.areaHa, 'leaching')}`,
-    )
+    const figures = [
+      field.economicsMissing
+        ? null
+        : `DB2 ${formatPerHa(field.db2 / field.areaHa, 'db2')}`,
+      `Udledning ${formatPerHa(field.nLoad / field.areaHa, 'nLoad')}`,
+      `Udvaskning ${formatPerHa(field.leaching / field.areaHa, 'leaching')}`,
+    ]
+    lines.push(figures.filter((figure) => figure !== null).join(' · '))
   }
 
   lines.push('Optimér ændrer den ikke. Lås op under Regler.')
@@ -449,6 +452,8 @@ export type QuotaStatus = {
 
 export const EXCLUDED_FROM_CALCULATION = 'Indgår ikke i beregningen'
 
+export const NO_ECONOMICS = 'Ingen økonomi'
+
 export const getFieldQuotaStatus = (
   field: FieldRecord,
   isSimulationView: boolean,
@@ -543,6 +548,9 @@ export type FieldTotals = {
   areaHa: number
   calculatedAreaHa: number
   nLoadAreaHa: number
+  // The calculated area that has economics: an afgrøde without a cost budget
+  // has no DB2 to average.
+  economicsAreaHa: number
   db2: number
   nLoad: number
   leaching: number
@@ -562,6 +570,7 @@ export const computeFieldTotals = (
     areaHa: 0,
     calculatedAreaHa: 0,
     nLoadAreaHa: 0,
+    economicsAreaHa: 0,
     db2: 0,
     nLoad: 0,
     leaching: 0,
@@ -582,7 +591,10 @@ export const computeFieldTotals = (
     if (!isFieldCalculated(field, isSimulationView)) continue
     totals.calculatedCount += 1
     totals.calculatedAreaHa += field.areaHa
-    totals.db2 += field.db2
+    if (!field.economicsMissing) {
+      totals.economicsAreaHa += field.areaHa
+      totals.db2 += field.db2
+    }
     totals.feedUnits += field.feedUnits
     // A mark that is not quota eligible draws down no quota and must not
     // contribute to the N load it is compared against either - see
@@ -619,9 +631,11 @@ export const totalsPerHa = (
 ): number | null =>
   perHa(
     totals[metric],
-    metric === 'db2' || metric === 'feedUnits'
-      ? totals.calculatedAreaHa
-      : totals.nLoadAreaHa,
+    metric === 'db2'
+      ? totals.economicsAreaHa
+      : metric === 'feedUnits'
+        ? totals.calculatedAreaHa
+        : totals.nLoadAreaHa,
   )
 
 const formatMetricValue = (value: number, metric: PerHaMetric): string =>
@@ -653,21 +667,27 @@ export const fieldFigure = (
   field: FieldRecord,
   metric: PerHaMetric,
 ): PerHaFigure =>
-  perHaFigure(
-    perHa(field[metric], field.areaHa),
-    metric,
-    formatMetricTotal(field[metric], metric),
-  )
+  metric === 'db2' && field.economicsMissing
+    ? { value: NO_ECONOMICS }
+    : perHaFigure(
+        perHa(field[metric], field.areaHa),
+        metric,
+        formatMetricTotal(field[metric], metric),
+      )
 
 export const totalsFigure = (
   totals: FieldTotals,
   metric: PerHaMetric,
 ): PerHaFigure =>
-  perHaFigure(
-    totalsPerHa(totals, metric),
-    metric,
-    formatMetricTotal(totals[metric], metric),
-  )
+  metric === 'db2' &&
+  totals.calculatedCount > 0 &&
+  totals.economicsAreaHa === 0
+    ? { value: NO_ECONOMICS }
+    : perHaFigure(
+        totalsPerHa(totals, metric),
+        metric,
+        formatMetricTotal(totals[metric], metric),
+      )
 
 export const totalsQuotaStatusLevel = (totals: FieldTotals): QuotaStatusLevel =>
   aggregateQuotaStatusLevel(

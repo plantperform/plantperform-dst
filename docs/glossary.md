@@ -116,6 +116,8 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | dækningsbidrag | `db2`, `dbDkkHa`, `avgDbDkkHa` | `db2`, `dbKrHa`, `avgDbKrHa` | DB2 kept as an acronym |
+| omkostningsbudget | cost budget, `har_omkostningsbudget` (backend) | | The afgrøde's arbejdsmængder or dyrkningsomkostninger in the økonomital for the driftsform. An afgrøde without one has no real economics, unless a sædskifte grows it |
+| ingen økonomi | `economicsMissing`, `NO_ECONOMICS` | `economicsMissing`, `economics_missing` in the calculation detail | An afgrøde without a cost budget that no sædskifte grows, such as bestøverbrak. Its DB2 of 0 means no figure, so the mark shows "Ingen økonomi" and is left out of the DB2 averages |
 | kr | `Dkk` suffix, `formatCompactDkk` | | |
 | udbytte | `yieldAmount` | `udbytte` | |
 | udbytteenhed | `yieldUnit` | `udbytteenhed` | |

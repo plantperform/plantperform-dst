@@ -86,6 +86,9 @@ export type FieldRecord = {
   measures: FieldMeasures
   allowedRotationIds: string[]
   db2: number
+  // Every year of the rotation is an afgrøde without a cost budget that no
+  // sædskifte grows, so db2 is 0 and means no figure.
+  economicsMissing?: boolean
   nLoad: number
   leaching: number
   feedUnits: number
@@ -396,6 +399,7 @@ export type FieldYearValue = Pick<RotationCandidateYearResult,
   'manureOrganicBoundKgNHa' | 'manureTonsPerHa' | 'cropNormKgNHa' | 'nNormPct'> & {
   feedUnitsPerHa: number
   winterCover: Record<string, unknown>
+  economicsMissing?: boolean
 }
 
 // Detailed calculations also satisfy the display inputs used by older fixtures.

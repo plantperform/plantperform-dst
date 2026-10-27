@@ -16,6 +16,7 @@ import {
 } from '@/lib/economics'
 import {
   nNormTargetKgNHa,
+  NO_ECONOMICS,
   ROTATION_START_CALENDAR_YEAR,
   yearNLoadKgHa,
   yieldResponse,
@@ -247,6 +248,7 @@ const KeyMetricsSection = ({
   const yieldAmount = num(year.dbDetail.yieldAmount)
   const yieldUnit = String(year.dbDetail.yieldUnit ?? '')
   const isFodderCrop = yieldUnit === 'FE/ha'
+  const economicsMissing = year.dbDetail.economicsMissing === true
   const precedingCropValue = year.precedingCropValueKgNHa
   // Manure has two parts: a utilised/mineral part that counts toward
   // satisfying the norm like mineral fertiliser, and an organically bound part
@@ -298,13 +300,19 @@ const KeyMetricsSection = ({
           <BigMetricTile
             label={`DB2 (${calendarYear})`}
             term="db2"
-            value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
+            value={
+              economicsMissing
+                ? NO_ECONOMICS
+                : `${fmt(year.dbDkkHa, 0)} kr/ha`
+            }
             caption={
-              !yieldAmount
-                ? 'Normudbytte -'
-                : response
-                  ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
-                  : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
+              economicsMissing
+                ? undefined
+                : !yieldAmount
+                  ? 'Normudbytte -'
+                  : response
+                    ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
+                    : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
             }
           />
         )}
@@ -1090,6 +1098,17 @@ const EconomicDetailSection = ({
   cropCode: number
 }) => {
   const customisedLine = useCustomisedLine(cropCode)
+  if (detail.economicsMissing) {
+    return (
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
+        <p className="text-sm">
+          Afgrøden har ingen økonomi i økonomitallene, så der er ikke beregnet
+          et dækningsbidrag.
+        </p>
+      </div>
+    )
+  }
   const customisedLabel = (label: string, row: BreakdownRow) => (
     <CustomisedLabel
       label={label}

@@ -86,8 +86,12 @@ const comparePrimary = (
     case 'db2':
     case 'feedUnits':
       return compareNullableNumber(
-        perHa(left[sort.key], left.areaHa),
-        perHa(right[sort.key], right.areaHa),
+        sort.key === 'db2' && left.economicsMissing
+          ? null
+          : perHa(left[sort.key], left.areaHa),
+        sort.key === 'db2' && right.economicsMissing
+          ? null
+          : perHa(right[sort.key], right.areaHa),
         sort.direction,
       )
     case 'nLoadQuotaKgN':
