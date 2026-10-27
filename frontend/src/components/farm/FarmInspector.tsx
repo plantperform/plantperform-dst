@@ -321,10 +321,13 @@ export const FarmInspector = ({
           simulationView.data?.data?.savedResult,
         )
       : undefined
-  // The yearly caps the trades moved, as saved under Grænser.
-  const quotaCaps = isSimulationView
-    ? selectedSimulation?.optimizationSettings?.maxNLoadByCatchment
-    : undefined
+  // Each year's own limit under Grænser, which the trades move. Only
+  // Års-optimering holds oplande to them.
+  const quotaCaps =
+    isSimulationView &&
+    selectedSimulation?.optimizationSettings?.kind === 'yearly'
+      ? selectedSimulation.optimizationSettings.maxNLoadByCatchment
+      : undefined
   const historicalSummary = useFarmHistoricalYearlySummary(
     isSimulationView ? undefined : farm.id,
   )

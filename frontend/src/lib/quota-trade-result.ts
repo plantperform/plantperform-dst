@@ -109,6 +109,27 @@ export const quotaCapKgN = (
   )
 }
 
+// An opland's own limit in a calendar year: the cap saved under Grænser, or
+// its kvote where none is saved. With calendarYear null, the average over the
+// period.
+export const yearLimitKgN = (
+  caps: CatchmentYearlyNLoadCaps[],
+  catchmentId: number | null,
+  calendarYear: number | null,
+  quotaKgN: number,
+): number => {
+  const saved = caps.find(
+    (cap) => cap.catchmentId === catchmentId,
+  )?.maxNLoadByYear
+  if (!saved) return quotaKgN
+  const limitIn = (year: number) => saved[year] ?? quotaKgN
+  if (calendarYear !== null) return limitIn(calendarYear)
+  return (
+    ROTATION_CALENDAR_YEARS.reduce((sum, year) => sum + limitIn(year), 0) /
+    ROTATION_CALENDAR_YEARS.length
+  )
+}
+
 // Where an opland's limit before any trade sits on a bar drawn so the original
 // kvote sits at quotaLinePct of its height: its cap when it trades, else the
 // kvote.
@@ -162,6 +183,26 @@ export const quotaBarHeights = (
     overPct:
       heightPct > limitPct ? ((heightPct - limitPct) / heightPct) * 100 : 0,
   }
+}
+
+// A trade as a share of the cap it moved, signed: "+51 %" bought, "−26 %"
+// sold. null when there is no cap to compare with.
+export const formatTradeShareOfCap = (limit: TradedLimit): string | null =>
+  limit.capKgN > 0
+    ? `${limit.tradeKg < 0 ? '−' : '+'}${formatWholeNumber(
+        (Math.abs(limit.tradeKg) / limit.capKgN) * 100,
+      )} %`
+    : null
+
+// A year's trade, or with average the average per year over the period:
+// "Købt 171 kg N", "Solgt gns. 50 kg N/år".
+export const describeTradeKg = (tradeKg: number, average: boolean) => {
+  const kind = quotaTradeKind(tradeKg)
+  if (kind === null)
+    return average ? 'Ingen handel i gennemsnit' : 'Ingen handel i året'
+  return `${kind === 'bought' ? 'Købt' : 'Solgt'}${average ? ' gns.' : ''} ${formatWholeNumber(
+    Math.abs(tradeKg),
+  )} kg N${average ? '/år' : ''}`
 }
 
 export const describeQuotaTradeAmount = (tradeKg: number) => {
