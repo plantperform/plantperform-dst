@@ -94,9 +94,7 @@ export function SimulationQuotaTradeOptions({
           <span>
             <span className="font-medium">Samme mængde i alle år</span>
             <span className="block text-xs text-muted-foreground">
-              {draft.sameEachYear
-                ? 'Den samme mængde kvote handles i hvert år.'
-                : 'Optimeringen vælger mængden for hvert år for sig, så der kan købes i ét år og sælges i et andet.'}
+              Den samme mængde kvote handles i hvert år.
             </span>
           </span>
         </label>
