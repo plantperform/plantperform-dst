@@ -13,8 +13,6 @@ describe('classifyCrop', () => {
   })
 
   it('finds a keyword at the start or the end of a word', () => {
-    expect(classifyCrop(709, 'Grønkorn af vinterrug')).toBe('winterCereal')
-    expect(classifyCrop(710, 'Grønkorn af hybridrug')).toBe('springCereal')
     expect(classifyCrop(423, 'Sukkermajs')).toBe('maize')
     expect(classifyCrop(424, 'Ærter, konsum')).toBe('legume')
     expect(classifyCrop(596, 'Elefantgræs')).toBe('grass')
@@ -39,6 +37,15 @@ describe('classifyCrop', () => {
     expect(classifyCrop(210, 'Vårbyg, helsæd')).toBe('wholeCropSilage')
     expect(classifyCrop(222, 'Vinterrug, helsæd')).toBe('wholeCropSilage')
     expect(classifyCrop(230, 'Blanding af vårkorn, grønkorn')).toBe(
+      'wholeCropSilage',
+    )
+  })
+
+  it('puts grønkorn of a single cereal under Helsæd whatever the species', () => {
+    expect(classifyCrop(701, 'Grønkorn af vårbyg')).toBe('wholeCropSilage')
+    expect(classifyCrop(709, 'Grønkorn af vinterrug')).toBe('wholeCropSilage')
+    expect(classifyCrop(710, 'Grønkorn af hybridrug')).toBe('wholeCropSilage')
+    expect(classifyCrop(711, 'Grønkorn af vintertriticale')).toBe(
       'wholeCropSilage',
     )
   })
