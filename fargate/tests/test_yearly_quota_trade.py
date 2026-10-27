@@ -78,7 +78,16 @@ def _chosen(output) -> dict[str, str]:
 
 
 def _trades(output) -> dict[int, tuple[int, float]]:
-    return {t.kystvand_id: (t.trade_kg, t.payment_kr_per_year) for t in output.quota_trades}
+    """Each opland's trade, the same in every year, and its payment per year."""
+    trades = {}
+    for t in output.quota_trades:
+        assert t.same_each_year and len(set(t.trade_kg_by_year)) == 1, t
+        trades[t.kystvand_id] = (t.trade_kg_by_year[0], t.payment_kr_per_year)
+    return trades
+
+
+def _yearly_trades(output) -> dict[int, tuple[tuple[int, ...], float]]:
+    return {t.kystvand_id: (t.trade_kg_by_year, t.payment_kr_per_year) for t in output.quota_trades}
 
 
 CAP_100 = (100.0,) * NUM_YEARS
@@ -150,6 +159,29 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         output = _solve((_field("a", 1),), {1: CAP_100}, (QuotaTradeInput(1, 0),))
         self.assertEqual(_chosen(output), {"a": "high"})
         self.assertEqual(_trades(output), {1: (50, 0.0)})
+
+    def test_a_trade_by_year_buys_only_what_each_year_needs(self) -> None:
+        # high needs 90 kg more in the 60 kg year and 50 kg in the others.
+        caps = (100.0, 60.0) + (100.0,) * (NUM_YEARS - 2)
+        output = _solve(
+            (_field("a", 1),), {1: caps}, (QuotaTradeInput(1, 8, same_each_year=False),)
+        )
+        self.assertEqual(_chosen(output), {"a": "high"})
+        # 8 kr for 7 * 50 + 90 kg over 8 years: 440 kr per year, not 720.
+        self.assertEqual(_yearly_trades(output), {1: ((50, 90) + (50,) * (NUM_YEARS - 2), 440.0)})
+        self.assertFalse(output.quota_trades[0].same_each_year)
+
+    def test_a_trade_by_year_sells_what_each_year_does_not_use(self) -> None:
+        # Nothing is let out, so each year's whole cap is sold.
+        field = YearlyFieldInput(
+            id="a", area_ha=10, kystvand_id=1, options=(_option("none", 0.0, 0.0),)
+        )
+        caps = (100.0, 40.0) + (100.0,) * (NUM_YEARS - 2)
+        output = _solve((field,), {1: caps}, (QuotaTradeInput(1, 5, same_each_year=False),))
+        self.assertEqual(
+            _yearly_trades(output),
+            {1: ((-100, -40) + (-100,) * (NUM_YEARS - 2), -5 * (100 * 7 + 40) / NUM_YEARS)},
+        )
 
     def test_an_opland_without_a_cap_in_every_year_cannot_trade(self) -> None:
         caps = (None,) + (100.0,) * (NUM_YEARS - 1)

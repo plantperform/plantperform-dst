@@ -31,6 +31,12 @@ class QuotaTradeSettingsTests(unittest.TestCase):
         saved = settings(trades=[{"kystvand_id": 1, "price_kr_per_kg": 35.5}])
         self.assertEqual(saved.quota_trades[0].price_kr_per_kg, 35.5)
 
+    def test_a_trade_is_the_same_each_year_unless_saved_otherwise(self):
+        same = settings(trades=[{"kystvand_id": 1, "price_kr_per_kg": 35}])
+        by_year = settings(trades=[{"kystvandId": 1, "priceKrPerKg": 35, "sameEachYear": False}])
+        self.assertTrue(same.quota_trades[0].same_each_year)
+        self.assertFalse(by_year.quota_trades[0].same_each_year)
+
     def test_an_opland_with_a_cap_in_every_year_can_trade(self):
         caps = [{"kystvand_id": 1, "max_n_load_by_year": ALL_YEARS}]
         settings(caps, [{"kystvand_id": 1, "price_kr_per_kg": 35}])

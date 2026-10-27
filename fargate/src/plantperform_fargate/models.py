@@ -148,23 +148,26 @@ class FixedYearlyFieldContribution:
 class QuotaTradeInput:
     """Kvotehandel at a fixed price for one kystvandopland.
 
-    The solver chooses one trade in whole kg N, the same in every year: the
-    opland's cap becomes original cap + trade in each year (trade > 0 buys,
-    < 0 sells), and price * trade is paid per year. The opland must have a cap
-    in every year.
+    The solver chooses a trade in whole kg N for each year: the opland's cap
+    becomes original cap + trade in that year (trade > 0 buys, < 0 sells), and
+    price * trade is paid for it. With same_each_year the trade is one amount
+    for every year. The opland must have a cap in every year.
     """
 
     kystvand_id: int
     price_kr_per_kg: float
+    same_each_year: bool = True
 
 
 @dataclass(frozen=True)
 class QuotaTradeResult:
     kystvand_id: int
-    trade_kg: int
+    # One entry per year, like total_db2_by_year.
+    trade_kg_by_year: tuple[int, ...]
     price_kr_per_kg: float
-    # Paid per year, on the same per-year basis as the output's total_db2;
-    # negative when the trade sells.
+    same_each_year: bool
+    # The average payment per year, on the same per-year basis as the output's
+    # total_db2; negative when the trades sell more than they buy.
     payment_kr_per_year: float
 
 
