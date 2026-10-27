@@ -14,6 +14,7 @@ import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   copiedNNormPercentages,
   copiedSimulationName,
+  lacksOrganicFertiliser,
 } from '@/lib/simulation-form'
 import {
   creationRequestIdentity,
@@ -85,6 +86,12 @@ export const useSimulationActions = ({
 
   const copySimulation = async (simulation: Simulation) => {
     if (!farmId || !isSimulationReady(simulation)) return
+    if (lacksOrganicFertiliser(simulation.fertiliser)) {
+      onError(
+        'Simuleringen kan ikke kopieres, fordi økologisk kræver organisk gødning. Vælg en gødning under Ret grundlag først.',
+      )
+      return
+    }
     const nNormPercentages =
       offeredNNormPercentages ?? simulation.nNormPercentages
     const previousRequest = copyRequests.current.get(simulation.id) ?? null

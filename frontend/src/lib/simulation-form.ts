@@ -137,6 +137,11 @@ export const organicFertiliserChoice = (
   presets: FertiliserPresetOption[],
 ): string => presets[0]?.name ?? CUSTOM_FERTILISER
 
+export const lacksOrganicFertiliser = (
+  fertiliser: FertiliserSettings,
+): boolean =>
+  !offersNoFertiliser(fertiliser.farmingSystem) && fertiliser.orgMineralN <= 0
+
 const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
 
 // The number rules mirror the backend's FertiliserSettings; nContentKgPerTon
