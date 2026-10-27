@@ -23,6 +23,7 @@ import {
   nNormPercentagesFor,
   NO_FERTILISER,
   nNormPercentagesLabel,
+  lacksOrganicFertiliser,
   offersNoFertiliser,
   organicFertiliserChoice,
   otherCrops,
@@ -287,6 +288,23 @@ describe('fertiliser validation', () => {
     }
     expect(organicFertiliserChoice([preset])).toBe('Kvæggylle')
     expect(organicFertiliserChoice([])).toBe(CUSTOM_FERTILISER)
+  })
+
+  it('finds an økologisk simulation saved without organic fertiliser', () => {
+    const fertiliser = {
+      farmingSystem: 'Økologisk' as const,
+      orgMineralN: 0,
+      mineralSharePct: 100,
+      onlyOrganic: true,
+      nContentKgPerTon: 6,
+    }
+    expect(lacksOrganicFertiliser(fertiliser)).toBe(true)
+    expect(lacksOrganicFertiliser({ ...fertiliser, orgMineralN: 150 })).toBe(
+      false,
+    )
+    expect(
+      lacksOrganicFertiliser({ ...fertiliser, farmingSystem: 'Konventionel' }),
+    ).toBe(false)
   })
 })
 
