@@ -134,7 +134,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('marks bought and sold kvote apart from the udledning and names them', async () => {
     await render([trade(1, 30), trade(2, -40)])
-    expect(legend()).toContain('Oprindelig kvote')
+    expect(legend()).toContain('Loft før kvotehandel')
     expect(legend()).toContain('Købt kvote')
     expect(legend()).toContain('Solgt kvote')
     // One band in the year's bar and one in the legend, for each kind.
@@ -175,16 +175,22 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(overParts()).toBe(0)
   })
 
+  // Opland 1's cap under Grænser in every year.
+  const cap = (kg: number): CatchmentYearlyNLoadCaps[] => [
+    {
+      catchmentId: 1,
+      maxNLoadByYear: Object.fromEntries(
+        ROTATION_CALENDAR_YEARS.map((year) => [year, kg]),
+      ),
+    },
+  ]
+  const limitLines = () =>
+    [...container.querySelectorAll<HTMLElement>('span[data-limit-line]')].map(
+      (line) => line.style.bottom,
+    )
+
   it('measures a trade from the cap under Grænser, not the kvote', async () => {
     // Opland 1 lets out 120 kg N; its kvote is 100 kg N.
-    const cap = (kg: number): CatchmentYearlyNLoadCaps[] => [
-      {
-        catchmentId: 1,
-        maxNLoadByYear: Object.fromEntries(
-          ROTATION_CALENDAR_YEARS.map((year) => [year, kg]),
-        ),
-      },
-    ]
     // A cap of 150 kg N less 20 kg N sold still covers it.
     await render([trade(1, -20)], cap(150))
     expect(overParts()).toBe(0)
@@ -196,10 +202,21 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(overParts()).toBe(1)
   })
 
+  it('marks each bar’s limit before the trade at its own cap', async () => {
+    // The kvote of 100 kg N sits at 34 % of each bar, so opland 1's cap of
+    // 150 kg N sits at 51 %; opland 2 trades nothing and keeps its kvote.
+    await render([trade(1, -20)], cap(150))
+    expect(limitLines()).toEqual(['51%', '34%'])
+    // Without a saved cap, a trading opland's limit is its kvote.
+    await render([trade(1, -20)])
+    expect(limitLines()).toEqual(['34%', '34%'])
+  })
+
   it('stays as before without kvotehandel', async () => {
     await render()
     expect(legend()).not.toContain('Købt kvote')
-    expect(legend()).not.toContain('Oprindelig kvote')
+    expect(legend()).not.toContain('Loft før kvotehandel')
+    expect(limitLines()).toEqual([])
     expect(bands('border-amber-500')).toBe(0)
     expect(overParts()).toBe(1)
   })
