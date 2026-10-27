@@ -13,7 +13,7 @@ import { cropGroupFor } from '@/lib/crop-groups'
 import {
   cropDbChange,
   cropTotals,
-  FERTILISER_NOTE,
+  fertiliserNote,
   formatDbDkk,
   formatSignedDkk,
   isCropCustomised,
@@ -109,7 +109,7 @@ const CropsOverview = ({
         })}
       </div>
       <p className="bg-muted/30 px-5 py-2.5 text-[11px] text-muted-foreground">
-        {FERTILISER_NOTE}
+        {fertiliserNote(assumptions)}
       </p>
     </div>
   )

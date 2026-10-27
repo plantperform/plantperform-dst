@@ -29,6 +29,7 @@ import {
   isPriceCustomised,
   lineAmountDkkHa,
   lineQuantity,
+  manurePrices,
   priceValue,
   quantityUnitLabel,
   saleLine,
@@ -169,38 +170,51 @@ export const GuideFertiliserStep = ({
   assumptions,
   overrides,
   onChange,
-}: StepProps) => (
-  <div className="overflow-x-auto">
-    <div className="min-w-130">
-      <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
-        <span>Gødning</span>
-        <span className="text-right">Standardens pris</span>
-        <span className="text-right">Din pris</span>
-      </div>
-      {categoryPrices(assumptions, 'fertiliser').map((price) => (
-        <div key={price.id} className="border-b">
-          <PriceRow
-            price={price}
-            value={priceValue(assumptions, overrides, price.id)}
-            label={`Din pris for ${price.label} i ${price.unit}`}
-            onCommit={(value) =>
-              onChange((current) =>
-                withPriceOverride(assumptions, current, price.id, value),
-              )
-            }
-          >
-            <span>{price.label}</span>
-          </PriceRow>
+}: StepProps) => {
+  const manure = manurePrices(assumptions)
+  const manureIds = new Set(manure.map((price) => price.id))
+  const prices = [
+    ...categoryPrices(assumptions, 'fertiliser').filter(
+      (price) => !manureIds.has(price.id),
+    ),
+    ...manure,
+  ]
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-130">
+        <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
+          <span>Gødning</span>
+          <span className="text-right">Standardens pris</span>
+          <span className="text-right">Din pris</span>
         </div>
-      ))}
-      <p className={FOOT_CLASS}>
-        Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
-        husdyrgødning dækker den en del af normen. Husdyrgødningen har endnu
-        ingen pris, men udbringningen af den regnes pr. ton.
-      </p>
+        {prices.map((price) => (
+          <div key={price.id} className="border-b">
+            <PriceRow
+              price={price}
+              value={priceValue(assumptions, overrides, price.id)}
+              label={`Din pris for ${price.label} i ${price.unit}`}
+              onCommit={(value) =>
+                onChange((current) =>
+                  withPriceOverride(assumptions, current, price.id, value),
+                )
+              }
+            >
+              <span>{price.label}</span>
+            </PriceRow>
+          </div>
+        ))}
+        <p className={FOOT_CLASS}>
+          Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
+          husdyrgødning dækker den en del af normen. Husdyrgødningens
+          udbringning og købspris er pr. ton og gælder både for konventionel og
+          økologisk drift, når en simulering bruger husdyrgødning. Standardens
+          købspris er 0 kr/ton.
+        </p>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 const YIELD_GRID_CLASS =
   'grid grid-cols-[minmax(9rem,1fr)_11rem_11rem] items-center gap-x-4 px-5'

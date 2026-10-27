@@ -45,7 +45,7 @@ import {
 import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import {
   applyOverrideEdits,
-  FERTILISER_NOTE,
+  fertiliserNote,
   formatCropCount,
   formatDbDkk,
   NO_OVERRIDES,
@@ -76,7 +76,7 @@ const STEPS = [
     id: 2,
     label: 'Gødning',
     intro:
-      'Skriv dine priser på handelsgødning og udbringning, hvis de afviger fra standarden.',
+      'Skriv dine priser på handelsgødning og husdyrgødning, hvis de afviger fra standarden. Husdyrgødningens udbringning og køb er pr. ton.',
   },
   {
     id: 3,
@@ -428,7 +428,7 @@ const Guide = ({
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 Det, marken tjener pr. ha: udbytte gange salgspris plus tilskud,
                 minus gødning, udsæd, planteværn, markarbejde og tørring.{' '}
-                {FERTILISER_NOTE}
+                {fertiliserNote(assumptions)}
               </p>
             </section>
           </aside>

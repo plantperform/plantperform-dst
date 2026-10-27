@@ -47,10 +47,22 @@ export type CropEconomics = {
 
 export type SoilVariant = { id: string; value: number }
 
+// The husdyrgødning an økologisk budget without a simulation is fertilised
+// with. It covers the whole N-norm, at `nKgPerTon` utilized N per tonne.
+export type StandardManure = {
+  name: string
+  nKgPerTon: number
+}
+
 export type EconomicsAssumptions = {
   soilTypeNumber: number | null
   farmingSystem: FarmingSystem
   prices: UnitPrice[]
+  // The husdyrgødning prices per tonne, in `prices` on either farming system
+  // even when no budget row uses them.
+  manureSpreadingPriceId?: string | null
+  manurePurchasePriceId?: string | null
+  standardManure?: StandardManure | null
   crops: CropEconomics[]
   soilVariants: Readonly<Record<string, readonly SoilVariant[]>>
 }
@@ -581,6 +593,16 @@ export const categoryPrices = (
   return assumptions.prices.filter((price) => priceIds.has(price.id))
 }
 
+// Spreading and buying husdyrgødning, per tonne. They are there on either
+// farming system, since a simulation that spreads husdyrgødning uses them.
+export const manurePrices = (assumptions: EconomicsAssumptions): UnitPrice[] =>
+  [assumptions.manureSpreadingPriceId, assumptions.manurePurchasePriceId].flatMap(
+    (id) => {
+      const price = id ? findPrice(assumptions, id) : undefined
+      return price ? [price] : []
+    },
+  )
+
 export type CropDbDelta = { cropName: string; deltaDkkHa: number }
 
 const dbDeltas = (
@@ -669,6 +691,8 @@ export type ProfileChange = {
   kind: 'yield' | 'price' | 'quantity'
   label: string
   cropNames: string[]
+  // What a price without crop rows applies to, such as the husdyrgødning prices.
+  appliesTo?: string
   from: string
   to: string
   guideStep: 1 | 2 | 3 | 4 | null
@@ -743,6 +767,34 @@ const quantityChange = (
   }
 }
 
+const MANURE_APPLIES_TO = 'Simuleringer med husdyrgødning'
+
+// The husdyrgødning prices belong to no crop row in the standard, so they are
+// listed on their own.
+const manureChanges = (
+  assumptions: EconomicsAssumptions,
+  overrides: EconomicsOverrides,
+  listed: ReadonlySet<string>,
+): ProfileChange[] =>
+  manurePrices(assumptions)
+    .filter(
+      (price) => isPriceCustomised(overrides, price.id) && !listed.has(price.id),
+    )
+    .map((price): ProfileChange => {
+      const withUnit = (value: number) =>
+        `${formatEconomicsNumber(value)} ${price.unit}`
+      return {
+        key: `price:${price.id}`,
+        kind: 'price',
+        label: price.label,
+        cropNames: [],
+        appliesTo: MANURE_APPLIES_TO,
+        from: withUnit(price.valueDkk),
+        to: withUnit(priceValue(assumptions, overrides, price.id)),
+        guideStep: 2,
+      }
+    })
+
 export const profileChanges = (
   assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
@@ -780,13 +832,14 @@ export const profileChanges = (
       return changes
     }),
   )
-  return [...yields, ...lines]
+  return [...yields, ...lines, ...manureChanges(assumptions, overrides, listed)]
 }
 
 export type ProfileChangeComparison = {
   key: string
   label: string
   cropNames: string[]
+  appliesTo?: string
   cells: { value: string; changed: boolean }[]
 }
 
@@ -819,6 +872,7 @@ export const compareProfileChanges = (
     key: row.key,
     label: row.label,
     cropNames: row.cropNames,
+    appliesTo: row.appliesTo,
     cells: changes.map((own, index) => {
       const change = own.find((entry) => entry.key === row.key)
       return {
@@ -925,8 +979,14 @@ export const applyOverrideEdits = (
   }
 }
 
-export const FERTILISER_NOTE =
-  'Gødningen er regnet som handelsgødning efter kvælstofnormen. På en økologisk bedrift er der ingen handelsgødning med. I en simulering følger mængderne simuleringens gødningsvalg.'
+export const fertiliserNote = ({
+  standardManure,
+}: Pick<EconomicsAssumptions, 'standardManure'>): string => {
+  const source = standardManure
+    ? `Gødningen er regnet som ${standardManure.name.toLocaleLowerCase('da-DK')}, der dækker hele kvælstofnormen med ${formatEconomicsNumber(standardManure.nKgPerTon)} kg udnyttet N pr. ton, og med udbringning og køb pr. ton. På en konventionel bedrift er den handelsgødning efter kvælstofnormen.`
+    : 'Gødningen er regnet som handelsgødning efter kvælstofnormen. På en økologisk bedrift er den regnet som svinegylle.'
+  return `${source} I en simulering følger mængderne simuleringens gødningsvalg. Husdyrgødningens udbringning og købspris regnes pr. ton og gælder, når en simulering bruger husdyrgødning.`
+}
 
 export const budgetSoilType = ({
   soilTypeNumber,

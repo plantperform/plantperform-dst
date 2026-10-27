@@ -27,7 +27,7 @@ import {
   cropTotals,
   cropYieldPct,
   describeBudgetBasis,
-  FERTILISER_NOTE,
+  fertiliserNote,
   findPrice,
   formatCropCount,
   formatDbDkk,
@@ -487,7 +487,7 @@ export const EconomicsCropDetail = ({
       </div>
 
       <div className="space-y-1 border-t px-5 py-2.5 text-[11px] text-muted-foreground">
-        <p>{FERTILISER_NOTE}</p>
+        <p>{fertiliserNote(assumptions)}</p>
         {sources.length > 0 ? (
           <>
             <p>{sources.length === 1 ? 'Kilde:' : 'Kilder:'}</p>

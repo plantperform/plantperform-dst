@@ -110,6 +110,9 @@ field" column is the name on the wire.
 | gødningsoverblik | `FertiliserFigures`, `fieldFertiliser`, `fertiliserByFieldId` | | The Gødning column group in the mark list, per year or the average per year |
 | organisk bundet | `manureOrganicBoundKgNHa` | `husdyrgodningOrganiskBundetKgnHa` | |
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
+| udbringning af husdyrgødning, pr. ton | `manureSpreading`, `manureSpreadingPriceId` | `manureSpreadingPriceId` | The price per tonne of spreading husdyrgødning, set in the Gødning step on both driftsformer |
+| købspris for husdyrgødning, pr. ton | `manurePurchase`, `manurePurchasePriceId` | `manurePurchasePriceId` | What a tonne of husdyrgødning costs to buy, standard 0 kr/ton |
+| standard svinegylle | `StandardManure`, `standardManure` | `standardManure` | What an økologisk Standard budget without a simulation is fertilised with: svinegylle covering the whole N-norm, at 6 kg udnyttet N pr. ton |
 
 ## Economics
 
