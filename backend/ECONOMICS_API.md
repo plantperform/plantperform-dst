@@ -152,7 +152,10 @@ A row's amount is `quantity × price`. With a module, replace the price by
 with `followsYield` by `1 + yieldPct[cropCode] / 100`; those are the yield and
 straw revenue, the drying, storage, cleaning, sorting and freight priced per kg
 (the kg harvested) and the straw pressing (priced per kg of the straw sold).
-Revenue, subsidies minus
+Potatoes (spise-, lægge- and økologiske læggekartofler) have two yield rows,
+"Sorterede kartofler" and "Frasorterede kartofler", that split the yield by the
+share SEGES culls (about 15 %) and sell it at two prices; the yield is their
+sum. Revenue, subsidies minus
 costs then give the dækningsbidrag `calculate_db` returns for the same inputs.
 Cost rows keep their Danish category. A gødning row is only there when the
 standard budget uses it, so a module's `fertiliser` quantity for a missing row,

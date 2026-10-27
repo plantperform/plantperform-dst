@@ -826,6 +826,108 @@ class EconomicsDatabaseTests(DatabaseTests):
             price = next(p for p in prices if p["id"] == ploughing["priceId"])
             self.assertEqual(price["unit"], "kr/gang pr. ha")
 
+    def add_spisekartofler(self, *, with_culled_price):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(afgroede_table).values(
+                    afgroedekode=152, navn="Spisekartofler", udbytteenhed="hkg"
+                )
+            )
+            session.execute(
+                insert(afgroede_norm_lookup_table).values(
+                    source_order=20,
+                    jb_nr=5,
+                    afgroedekode=152,
+                    jb_gruppe="JB5-6",
+                    vanding="Uvandet",
+                    udbyttenorm=437,
+                    n_norm=145,
+                    driftsform="Konventionel",
+                )
+            )
+            prices = (("", 150), ("Frasorterede", 13)) if with_culled_price else (("", 150),)
+            for index, (kvalitet, price) in enumerate(prices, 20):
+                session.execute(
+                    insert(salgspris_table).values(
+                        source_order=index,
+                        afgroedekode=152,
+                        driftsform="Konventionel",
+                        kvalitet=kvalitet,
+                        salgspris=price,
+                        enhed="kr/hkg",
+                        halm_pris_kr_kg=0,
+                    )
+                )
+            session.execute(
+                insert(arbejdsmaengde_table).values(
+                    source_order=20,
+                    afgroedekode=152,
+                    driftsform="Konventionel",
+                    jordbonitet="JB5-6",
+                    kvalitet="",
+                    kategori="Markarbejde",
+                    behandling="Pløjning",
+                    antal=1,
+                )
+            )
+        calculator.clear_lookup_cache()
+
+    def test_potatoes_are_sold_as_sorted_and_frasorterede_at_their_own_prices(self):
+        self.add_spisekartofler(with_culled_price=True)
+        culled_price_id = overrides.identifier("sale", 152, "Konventionel", "Frasorterede")
+
+        def revenue(yield_pct=0, culled_price=None):
+            prices = {} if culled_price is None else {culled_price_id: culled_price}
+            detail = calculator.calculate_db(
+                152,
+                "Konventionel",
+                5,
+                mncs=145,
+                itemized=True,
+                economics_key=EconomicsOverrides(
+                    yieldPct={"152": yield_pct}, prices=prices
+                ).cache_key(),
+            )
+            return detail, detail["indtaegt_linjer"]
+
+        detail, (sorted_line, culled_line) = revenue()
+        self.assertEqual(
+            [sorted_line["navn"], culled_line["navn"]],
+            ["Sorterede kartofler", "Frasorterede kartofler"],
+        )
+        self.assertAlmostEqual(culled_line["maengde"], 437 * 0.151)
+        self.assertAlmostEqual(sorted_line["maengde"] + culled_line["maengde"], 437)
+        self.assertEqual((sorted_line["pris"], culled_line["pris"]), (150, 13))
+        self.assertAlmostEqual(
+            detail["indtaegt"], sorted_line["maengde"] * 150 + culled_line["maengde"] * 13, 0
+        )
+        self.assertAlmostEqual(detail["indtaegt"], 437 * 150 - culled_line["maengde"] * 137, 0)
+        self.assertEqual((detail["frasorteret_andel"], detail["frasorteret_pris"]), (0.151, 13))
+
+        # The culls follow the yield percentage and have a price of their own to set.
+        more, (sorted_more, culled_more) = revenue(yield_pct=10)
+        self.assertAlmostEqual(sorted_more["maengde"] + culled_more["maengde"], 437 * 1.1)
+        self.assertTrue(sorted_more["foelger_udbytte"] and culled_more["foelger_udbytte"])
+        _, (_, dearer) = revenue(culled_price=20)
+        self.assertEqual(dearer["pris"], 20)
+        self.assertEqual(dearer["pris_id"], culled_price_id)
+        self.assertIn(culled_price_id, {price["id"] for price in overrides.assumptions()["prices"]})
+
+        crop = budget.crop_budgets([152], 5, "Konventionel", False)
+        self.assertEqual(
+            [line["label"] for line in crop["crops"][0]["revenue"]],
+            ["Sorterede kartofler", "Frasorterede kartofler"],
+        )
+        prices = {price["id"]: price["label"] for price in crop["prices"]}
+        self.assertEqual(prices[culled_price_id], "Salgspris, frasorterede kartofler")
+
+    def test_potatoes_without_a_frasorterede_price_are_sold_whole_at_the_sorted_price(self):
+        self.add_spisekartofler(with_culled_price=False)
+        detail = calculator.calculate_db(152, "Konventionel", 5, mncs=145, itemized=True)
+        self.assertEqual([line["navn"] for line in detail["indtaegt_linjer"]], ["Udbytte"])
+        self.assertEqual(detail["indtaegt"], 437 * 150)
+        self.assertEqual(detail["frasorteret_andel"], 0)
+
     def test_an_afgroede_without_a_cost_budget_has_no_economics_unless_a_saedskifte_grows_it(self):
         # 900 has no budget, 901 has one, and 902 has none but is grown by a sædskifte.
         calculator._afgroeder_i_saedskifter.return_value = frozenset({1, 902})
