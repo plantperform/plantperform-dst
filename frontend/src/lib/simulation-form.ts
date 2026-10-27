@@ -633,6 +633,20 @@ export const simulationToFormValues = (
   const isInterval = SOWING_DATE_INTERVALS.some(
     (interval) => interval.date === catchCropSowingDate,
   )
+  const savedChoice = fertiliserChoiceOf(fertiliser, presets)
+  const fertiliserChoice =
+    savedChoice === NO_FERTILISER &&
+    !offersNoFertiliser(fertiliser.farmingSystem)
+      ? organicFertiliserChoice(presets)
+      : savedChoice
+  const choiceFields =
+    fertiliserChoice === savedChoice
+      ? null
+      : fertiliserFieldsForChoice(
+          fertiliserChoice,
+          presets,
+          fertiliser.farmingSystem,
+        )
   return {
     ...DEFAULT_SIMULATION_FORM_VALUES,
     name: copiedSimulationName(simulation.name),
@@ -642,10 +656,11 @@ export const simulationToFormValues = (
       simulation.nNormPercentages,
       offeredNNormPercentages,
     ),
-    fertiliserChoice: fertiliserChoiceOf(fertiliser, presets),
-    orgMineralN: String(fertiliser.orgMineralN),
-    mineralSharePct: String(fertiliser.mineralSharePct),
-    onlyOrganic: fertiliser.onlyOrganic,
+    fertiliserChoice,
+    orgMineralN: choiceFields?.orgMineralN ?? String(fertiliser.orgMineralN),
+    mineralSharePct:
+      choiceFields?.mineralSharePct ?? String(fertiliser.mineralSharePct),
+    onlyOrganic: choiceFields?.onlyOrganic ?? fertiliser.onlyOrganic,
     nContentKgPerTon: String(fertiliser.nContentKgPerTon),
     catchCropDailyBasis,
     catchCropSowingInterval:
