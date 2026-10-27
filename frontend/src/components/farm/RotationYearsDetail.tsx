@@ -478,7 +478,7 @@ const CalculationStepsSection = ({
         <SectionHeading>1. Udvaskning fra rodzonen</SectionHeading>
         {winterCover ? (
           <StepRow
-            text={winterCover.description || 'Efter høst'}
+            text={winterCover.description}
             value={
               <span className="inline-flex items-center gap-1.5">
                 <WinterCoverSwatch cover={winterCover.cover} />

@@ -51,11 +51,7 @@ export const WinterCoverBand = ({
     {covers.map((yearCover) => (
       <AppTooltip
         key={yearCover.cover.id}
-        content={
-          showTooltip
-            ? [yearCover.cover.label, yearCover.description].filter(Boolean).join('. ')
-            : null
-        }
+        content={showTooltip ? `${yearCover.cover.label}. ${yearCover.description}` : null}
       >
         <span className="flex-1" style={coverFill(yearCover.cover)} />
       </AppTooltip>
