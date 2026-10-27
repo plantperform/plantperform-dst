@@ -281,7 +281,7 @@ export const fieldsToFeatureCollection = (
             field.leaching,
           ),
           nLoad: quotaValue(yearNLoadKgHa, field.nLoad),
-          db2: perHa(field.db2),
+          db2: field.economicsMissing ? null : perHa(field.db2),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
           quotaEligible: field.quotaEligible ? 1 : 0,

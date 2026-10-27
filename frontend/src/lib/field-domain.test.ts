@@ -148,6 +148,41 @@ describe('totalsFigure', () => {
   })
 })
 
+describe('a field without economics', () => {
+  const locked = field({
+    id: 'locked',
+    areaHa: 4,
+    db2: 0,
+    nLoad: 8,
+    economicsMissing: true,
+  })
+
+  it('leaves its area out of the DB2 average and keeps it in the others', () => {
+    const totals = computeFieldTotals([fields[0], locked], true)
+    expect(totals).toMatchObject({
+      calculatedAreaHa: 6,
+      economicsAreaHa: 2,
+      db2: 2000,
+    })
+    expect(totalsPerHa(totals, 'db2')).toBe(1000)
+    expect(totalsPerHa(totals, 'feedUnits')).toBeCloseTo(100 / 6)
+  })
+
+  it('shows no DB2 figure, but the other figures as usual', () => {
+    expect(fieldFigure(locked, 'db2')).toEqual({ value: 'Ingen økonomi' })
+    expect(fieldFigure(locked, 'nLoad')).toEqual({
+      value: '2 kg N/ha',
+      total: '8 kg N i alt',
+    })
+  })
+
+  it('shows no DB2 total when no calculated field has economics', () => {
+    expect(totalsFigure(computeFieldTotals([locked], true), 'db2')).toEqual({
+      value: 'Ingen økonomi',
+    })
+  })
+})
+
 describe('formatPerHa', () => {
   it('writes kroner and feed units whole and kg N with one decimal', () => {
     expect(formatPerHa(1787.3, 'db2')).toBe('1.787 kr/ha')

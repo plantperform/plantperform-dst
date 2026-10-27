@@ -96,7 +96,9 @@ export const FieldYearStrip = ({
   hideEconomics = false,
 }: FieldYearStripProps) => {
   const metricOptions = METRIC_OPTIONS.filter((option) =>
-    option.value === 'db2' ? !hideEconomics : field.quotaEligible,
+    option.value === 'db2'
+      ? !hideEconomics && !field.economicsMissing
+      : field.quotaEligible,
   )
   const [chosenMetric, setMetric] = useState<YearMetric>('nLoad')
   const metric = metricOptions.some((option) => option.value === chosenMetric)

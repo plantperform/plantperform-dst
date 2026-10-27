@@ -58,6 +58,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   udbytte: 'yieldAmount',
   udbytteenhed: 'yieldUnit',
   udbyttenorm_mangler: 'yieldNormMissing',
+  economics_missing: 'economicsMissing',
   udbytterespons: 'hasYieldResponse',
   udbytte_faktor: 'yieldFactor',
   salgspris: 'salePrice',
