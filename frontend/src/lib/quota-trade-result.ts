@@ -1,9 +1,14 @@
 import type {
+  CatchmentYearlyNLoadCaps,
   SavedResultView,
   Simulation,
   SimulationQuotaTrade,
 } from '@/api/types'
-import { formatNumber, formatWholeNumber } from '@/lib/field-domain'
+import {
+  formatNumber,
+  formatWholeNumber,
+  ROTATION_CALENDAR_YEARS,
+} from '@/lib/field-domain'
 
 // The trades of the simulation's latest run. A saved result from an earlier
 // run is not the one its figures come from, so it has none to show.
@@ -76,49 +81,70 @@ export const QUOTA_TRADE_LABELS: Record<QuotaTradeKind, string> = {
 export const quotaTradeKind = (tradeKg: number): QuotaTradeKind | null =>
   tradeKg > 0 ? 'bought' : tradeKg < 0 ? 'sold' : null
 
-// The limit after a trade, as the run set it: the kvote rounded to whole kg
-// N, like the cap it defaults to, moved by the trade. Without a trade the
-// limit is the kvote itself.
-export const tradedLimitKgN = (quotaKgN: number, tradeKg: number) =>
-  tradeKg === 0 ? quotaKgN : Math.round(quotaKgN) + tradeKg
+// The limit after a trade, as the run set it: the year's cap moved by the
+// trade.
+export type TradedLimit = {
+  // The opland's cap in the year before the trade.
+  capKgN: number
+  tradeKg: number
+}
 
-// Where a trade moves an opland's kvote on a bar drawn so the original kvote
-// sits at quotaLinePct of its height: between the original kvote and the
-// traded one, in percent of the height.
+// The cap a run moves by a trade: the one saved under Grænser for the
+// calendar year, or the kvote rounded to whole kg N when the opland has none.
+// With calendarYear null, the average over the period.
+export const quotaCapKgN = (
+  caps: CatchmentYearlyNLoadCaps[],
+  catchmentId: number | null,
+  calendarYear: number | null,
+  quotaKgN: number,
+): number => {
+  const saved = caps.find(
+    (cap) => cap.catchmentId === catchmentId,
+  )?.maxNLoadByYear
+  const capIn = (year: number) => saved?.[year] ?? Math.round(quotaKgN)
+  if (calendarYear !== null) return capIn(calendarYear)
+  return (
+    ROTATION_CALENDAR_YEARS.reduce((sum, year) => sum + capIn(year), 0) /
+    ROTATION_CALENDAR_YEARS.length
+  )
+}
+
+// Where a trade moves an opland's limit on a bar drawn so the original kvote
+// sits at quotaLinePct of its height: between the cap and the traded one, in
+// percent of the height.
 export const quotaTradeBand = (
   quotaKgN: number,
-  tradeKg: number,
+  limit: TradedLimit,
   quotaLinePct: number,
 ): { kind: QuotaTradeKind; bottomPct: number; heightPct: number } | null => {
-  const kind = quotaTradeKind(tradeKg)
+  const kind = quotaTradeKind(limit.tradeKg)
   if (kind === null || quotaKgN <= 0) return null
-  const tradedPct = Math.min(
-    100,
-    Math.max(0, (tradedLimitKgN(quotaKgN, tradeKg) / quotaKgN) * quotaLinePct),
-  )
+  const pctOf = (kg: number) =>
+    Math.min(100, Math.max(0, (kg / quotaKgN) * quotaLinePct))
+  const capPct = pctOf(limit.capKgN)
+  const tradedPct = pctOf(limit.capKgN + limit.tradeKg)
   return {
     kind,
-    bottomPct: Math.min(quotaLinePct, tradedPct),
-    heightPct: Math.abs(tradedPct - quotaLinePct),
+    bottomPct: Math.min(capPct, tradedPct),
+    heightPct: Math.abs(tradedPct - capPct),
   }
 }
 
 // A bar scaled so the original kvote sits at quotaLinePct of its height: how
 // tall it is, and which share of it (from the top, in percent of the bar) is
-// over the limit. After a trade the limit is the traded kvote, so udledning
-// covered by bought kvote is not over it, and udledning above sold kvote is.
+// over the limit. An opland that trades is held to its cap moved by the
+// trade, so udledning covered by bought kvote is not over it, and udledning
+// above sold kvote is; without a trade the limit is the kvote itself.
 export const quotaBarHeights = (
   nLoadKg: number,
   quotaKgN: number,
-  tradeKg: number,
+  limit: TradedLimit | null,
   quotaLinePct: number,
 ): { heightPct: number; overPct: number } => {
   if (quotaKgN <= 0) return { heightPct: 0, overPct: 0 }
   const heightPct = Math.min(100, (nLoadKg / quotaKgN) * quotaLinePct)
-  const limitPct = Math.max(
-    0,
-    (tradedLimitKgN(quotaKgN, tradeKg) / quotaKgN) * quotaLinePct,
-  )
+  const limitKgN = limit === null ? quotaKgN : limit.capKgN + limit.tradeKg
+  const limitPct = Math.max(0, (limitKgN / quotaKgN) * quotaLinePct)
   return {
     heightPct,
     overPct:

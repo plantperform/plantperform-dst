@@ -4,7 +4,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { FieldRecord, SimulationQuotaTrade } from '@/api/types'
+import type {
+  CatchmentYearlyNLoadCaps,
+  FieldRecord,
+  SimulationQuotaTrade,
+} from '@/api/types'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -85,7 +89,10 @@ describe('kvotehandel in the Årsgennemgang', () => {
     vi.unstubAllGlobals()
   })
 
-  const render = (quotaTrades?: SimulationQuotaTrade[]) =>
+  const render = (
+    quotaTrades?: SimulationQuotaTrade[],
+    quotaCaps?: CatchmentYearlyNLoadCaps[],
+  ) =>
     act(async () =>
       root.render(
         createElement(
@@ -111,6 +118,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
             collapsed: false,
             catchmentTotalsByYear: yearTotals,
             quotaTrades,
+            quotaCaps,
           }),
         ),
       ),
@@ -165,6 +173,27 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(legend()).toContain('Solgt kvote')
     expect(bands('border-amber-500')).toBe(2)
     expect(overParts()).toBe(0)
+  })
+
+  it('measures a trade from the cap under Grænser, not the kvote', async () => {
+    // Opland 1 lets out 120 kg N; its kvote is 100 kg N.
+    const cap = (kg: number): CatchmentYearlyNLoadCaps[] => [
+      {
+        catchmentId: 1,
+        maxNLoadByYear: Object.fromEntries(
+          ROTATION_CALENDAR_YEARS.map((year) => [year, kg]),
+        ),
+      },
+    ]
+    // A cap of 150 kg N less 20 kg N sold still covers it.
+    await render([trade(1, -20)], cap(150))
+    expect(overParts()).toBe(0)
+    // Measured from the kvote, the same sale would leave it over.
+    await render([trade(1, -20)])
+    expect(overParts()).toBe(1)
+    // A cap of 50 kg N with 30 kg N bought does not cover it.
+    await render([trade(1, 30)], cap(50))
+    expect(overParts()).toBe(1)
   })
 
   it('stays as before without kvotehandel', async () => {
