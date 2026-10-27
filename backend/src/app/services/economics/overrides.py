@@ -45,6 +45,14 @@ def post_label(post):
     return _POST_LABELS.get(post, post)
 
 
+_FERTILISER_QUANTITY_UNITS = {
+    "mineralN": "kg N/ha",
+    "mineralSpreading": "ha",
+    "manureSpreading": "ton/ha",
+    "manurePurchase": "ton/ha",
+}
+
+
 def assumptions():
     """Raw context variants, rather than a fictitious uniform farm budget.
 
@@ -177,13 +185,13 @@ def assumptions():
                 )
         # Fertilizer quantities are priced independently from physical N allocations.
         for crop in crops:
-            for purpose in ("mineralN", "mineralSpreading", "manureSpreading"):
+            for purpose in ("mineralN", "mineralSpreading", "manureSpreading", "manurePurchase"):
                 qty = quantity_id(crop, "fertiliser", purpose)
                 quantities[qty] = dict(
                     id=qty,
                     lineId=qty.split("/", 1)[1],
                     value=None,
-                    unit="kg N/ha" if purpose == "mineralN" else "ha",
+                    unit=_FERTILISER_QUANTITY_UNITS[purpose],
                     context=dict(cropCode=crop),
                     dynamic=True,
                 )

@@ -11,10 +11,21 @@ from sqlalchemy import select
 
 from app.data.db import SessionLocal, afgroede_table
 from app.data.repository import list_fields, list_simulations, scenario_afgrodekoder
-from app.services.economics.db_calculator import OEKOLOGISK, calculate_db, soil_variants
+from app.domain.simulation import GodningSettings
+from app.services.economics.db_calculator import (
+    OEKOLOGISK,
+    calculate_db,
+    manure_prices,
+    soil_variants,
+)
 from app.services.economics.overrides import PRICE_PER_GANG_UNIT, price_unit
 
 _PRICE_LABELS = {"Udbytte": "Salgspris", "Halm": "Halmpris"}
+
+# An økologisk budget without a simulation has no handelsgødning, so the
+# whole N-norm comes from svinegylle at the default utilized N per tonne, which
+# turns the N into the tonnes to spread and buy.
+STANDARD_MANURE = dict(name="Svinegylle", nKgPerTon=GodningSettings().n_indhold_kg_per_ton)
 
 
 def _quantity_unit(unit):
@@ -53,7 +64,13 @@ def _line(line, prices):
 
 
 def crop_budgets(
-    crop_codes, jb_nr, farming_system, only_organic, org_mineral_n=0.0, n_indhold_kg_per_ton=6.0
+    crop_codes,
+    jb_nr,
+    farming_system,
+    only_organic,
+    org_mineral_n=0.0,
+    n_indhold_kg_per_ton=6.0,
+    standard_manure=None,
 ):
     with SessionLocal() as session:
         crops = {
@@ -99,6 +116,12 @@ def crop_budgets(
                 costs=[_line(line, prices) for line in detail["linjer"]],
             )
         )
+    # The husdyrgødning prices belong to the budget even though only a
+    # simulation that spreads it has rows for them, on either driftsform.
+    manure = manure_prices()
+    for price in manure.values():
+        if price is not None:
+            prices.setdefault(price["id"], price)
     used = set(prices).union(
         line["quantityId"]
         for crop in budgets
@@ -109,6 +132,9 @@ def crop_budgets(
         jbNr=jb_nr,
         farmingSystem=farming_system,
         prices=list(prices.values()),
+        manureSpreadingPriceId=manure["spreading"] and manure["spreading"]["id"],
+        manurePurchasePriceId=manure["purchase"] and manure["purchase"]["id"],
+        standardManure=standard_manure,
         crops=budgets,
         soilVariants={
             key: [dict(id=variant, value=value) for variant, value in variants[key]]
@@ -142,6 +168,7 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
     only_organic = farming_system == OEKOLOGISK
     org_mineral_n = 0.0
     n_indhold_kg_per_ton = 6.0
+    standard_manure = None
     if simulation_id is not None:
         simulation = next((entry for entry in simulations if entry.id == simulation_id), None)
         if simulation is None:
@@ -150,6 +177,9 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
         only_organic = simulation.godning.only_organic
         org_mineral_n = simulation.godning.org_mineral_n
         n_indhold_kg_per_ton = simulation.godning.n_indhold_kg_per_ton
+    elif only_organic:
+        standard_manure = STANDARD_MANURE
+        n_indhold_kg_per_ton = standard_manure["nKgPerTon"]
     jb_nr = _dominant_jbnr(fields)
     if jb_nr is None:
         return dict(jbNr=None, farmingSystem=farming_system, prices=[], crops=[], soilVariants={})
@@ -157,5 +187,11 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
     possible = set().union(*(scenario_afgrodekoder(entry) for entry in simulations)) - set(grown)
     crop_codes = [code for code, _ in grown.most_common()] + sorted(possible)
     return crop_budgets(
-        crop_codes, jb_nr, farming_system, only_organic, org_mineral_n, n_indhold_kg_per_ton
+        crop_codes,
+        jb_nr,
+        farming_system,
+        only_organic,
+        org_mineral_n,
+        n_indhold_kg_per_ton,
+        standard_manure,
     )

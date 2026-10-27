@@ -46,6 +46,7 @@ from app.data.db import (
 )
 from app.domain.economics import (
     CreateEconomicsModuleRequest,
+    CropBudgets,
     EconomicsConflictError,
     EconomicsModuleNotFoundError,
     EconomicsOverrides,
@@ -259,14 +260,15 @@ class EconomicsDatabaseTests(DatabaseTests):
                     udgift_kr_ha=100,
                 )
             )
-            for index, (post, price) in enumerate(
+            for index, (post, price, unit) in enumerate(
                 (
-                    ("Handelsgødning, kvælstof (N)", 10),
-                    ("Handelsgødning, udbringning", 100),
-                    ("Gylleudbringning, slæbeslanger", 20),
-                    ("Grundbetaling (estimat)", 1000),
-                    ("Grundbeløb (basis)", 500),
-                    ("Stivelseskartofler", 200),
+                    ("Handelsgødning, kvælstof (N)", 10, "kr/enhed"),
+                    ("Handelsgødning, udbringning", 100, "kr/enhed"),
+                    ("Grundbetaling (estimat)", 1000, "kr/enhed"),
+                    ("Grundbeløb (basis)", 500, "kr/enhed"),
+                    ("Stivelseskartofler", 200, "kr/enhed"),
+                    ("Gylleudbringning, slæbeslanger", 24, "ton"),
+                    ("Husdyrgødning, køb", 0, "ton"),
                 ),
                 1,
             ):
@@ -277,7 +279,7 @@ class EconomicsDatabaseTests(DatabaseTests):
                         kategori="Gødning",
                         type="Omkostning",
                         pris=price,
-                        enhed="kr/enhed",
+                        enhed=unit,
                     )
                 )
         app = FastAPI()
@@ -594,8 +596,22 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
         defaults.update({price["id"]: price["value"] for price in organic["prices"]})
-        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says.
+        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says. Without a
+        # simulation the budget is fertilised with the standard svinegylle at 6 kg utilized N
+        # per tonne.
         organic_norm = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["mncs"]
+        self.assertEqual(organic["standardManure"], dict(name="Svinegylle", nKgPerTon=6))
+        self.assertIsNone(budgets["standardManure"])
+        self.assertIsNone(manured["standardManure"])
+        spreading_quantity = overrides.quantity_id(1, "fertiliser", "manureSpreading")
+        self.assertEqual(
+            [
+                line["quantity"]
+                for line in organic["crops"][0]["costs"]
+                if line["quantityId"] == spreading_quantity
+            ],
+            [organic_norm / 6.0],
+        )
         self.assertEqual(
             priced_db(organic["crops"][0], EconomicsOverrides()),
             calculator.calculate_db(
@@ -723,6 +739,37 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertFalse(calculator.calculate_db(1, "Konventionel", 5)["economics_missing"])
         crops = budget.crop_budgets([1, 900, 901, 902], 5, "Konventionel", False)["crops"]
         self.assertEqual([crop["cropCode"] for crop in crops], [1, 901, 902])
+
+    def test_the_husdyrgoedning_prices_are_there_on_both_driftsformer_and_can_be_set(self):
+        spreading = overrides.identifier("list", "Gylleudbringning, slæbeslanger")
+        purchase = overrides.identifier("list", "Husdyrgødning, køb")
+        for system, only_organic in (("Konventionel", False), ("Økologisk", True)):
+            with self.subTest(system=system):
+                result = budget.crop_budgets([1], 5, system, only_organic)
+                CropBudgets.model_validate(result)
+                self.assertEqual(
+                    (result["manureSpreadingPriceId"], result["manurePurchasePriceId"]),
+                    (spreading, purchase),
+                )
+                prices = {price["id"]: price for price in result["prices"]}
+                self.assertEqual(
+                    [(prices[key]["unit"], prices[key]["value"]) for key in (spreading, purchase)],
+                    [("kr/ton", 24), ("kr/ton", 0)],
+                )
+        # Set like any other price, and used once a simulation spreads husdyrgødning.
+        changes = EconomicsOverrides(prices={spreading: 30, purchase: 15})
+        overrides.validate_identifiers(changes)
+        result = calculator.calculate_db(
+            1,
+            "Økologisk",
+            5,
+            mncs=120,
+            org_mineral_n_applied=120,
+            only_organic=True,
+            husdyrgodning_ton_pr_ha=10,
+            economics_key=changes.cache_key(),
+        )
+        self.assertEqual(result["goedning"], 10 * 30 + 10 * 15)
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))
