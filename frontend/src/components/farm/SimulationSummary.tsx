@@ -306,7 +306,11 @@ export const SimulationSummary = ({
               ))}
               <p>
                 Optimeringen vælger, hvor meget kvote der købes eller sælges.
-                Mængden er den samme i alle år.
+                {settings.quotaTrades.every(
+                  (trade) => trade.sameEachYear !== false,
+                )
+                  ? ' Mængden er den samme i alle år.'
+                  : ' Mængden kan være forskellig fra år til år.'}
               </p>
             </>
           )}

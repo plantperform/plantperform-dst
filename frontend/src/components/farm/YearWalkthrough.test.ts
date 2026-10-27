@@ -7,7 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FieldRecord, SimulationQuotaTrade } from '@/api/types'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { CatchmentTotalsByYear } from '@/lib/field-domain'
+import {
+  ROTATION_CALENDAR_YEARS,
+  type CatchmentTotalsByYear,
+} from '@/lib/field-domain'
 
 const field = (id: string, catchmentId: number, nLoad: number) =>
   ({
@@ -25,11 +28,22 @@ const field = (id: string, catchmentId: number, nLoad: number) =>
     allowedRotationIds: [],
   }) as unknown as FieldRecord
 
-const trade = (catchmentId: number, tradeKg: number): SimulationQuotaTrade => ({
+// laterKg: what the years after the first trade, when it differs.
+const trade = (
+  catchmentId: number,
+  tradeKg: number,
+  laterKg = tradeKg,
+): SimulationQuotaTrade => ({
   catchmentId,
   catchmentName: null,
-  tradeKg,
+  tradeKgByYear: Object.fromEntries(
+    ROTATION_CALENDAR_YEARS.map((year, index) => [
+      year,
+      index === 0 ? tradeKg : laterKg,
+    ]),
+  ),
   priceDkkPerKg: 30,
+  sameEachYear: tradeKg === laterKg,
   paymentDkkPerYear: 30 * tradeKg,
 })
 
@@ -137,6 +151,20 @@ describe('kvotehandel in the Årsgennemgang', () => {
     // Opland 2 lets out 40 kg N, under its kvote but over 100 - 70 kg N.
     await render([trade(1, 30), trade(2, -70)])
     expect(overParts()).toBe(1)
+  })
+
+  it('draws each year’s own trade when it differs between years', async () => {
+    // The shown first year buys nothing; later years buy 30 kg N.
+    await render([trade(1, 0, 30)])
+    // The legend names the bought kvote, but the first year has no band.
+    expect(legend()).toContain('Købt kvote')
+    expect(bands('border-amber-500')).toBe(1)
+    expect(overParts()).toBe(1)
+    // The first year buys 30 kg N and later years sell.
+    await render([trade(1, 30, -20)])
+    expect(legend()).toContain('Solgt kvote')
+    expect(bands('border-amber-500')).toBe(2)
+    expect(overParts()).toBe(0)
   })
 
   it('stays as before without kvotehandel', async () => {

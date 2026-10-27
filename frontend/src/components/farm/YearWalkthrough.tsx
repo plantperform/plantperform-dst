@@ -54,6 +54,7 @@ import {
   QUOTA_TRADE_LABELS,
   quotaBarHeights,
   quotaTradeBand,
+  quotaTradeKgIn,
   quotaTradeKind,
   type QuotaTradeKind,
 } from '@/lib/quota-trade-result'
@@ -123,8 +124,9 @@ type CatchmentYear = {
   nLoadKg: number
   quotaKgN: number
   level: QuotaStatusLevel
-  // Kvote the run bought (> 0) or sold (< 0) in every year; the status above
-  // still measures against the original kvote.
+  // Kvote the run bought (> 0) or sold (< 0) in this year, or on average per
+  // year for the whole period; the status above still measures against the
+  // original kvote.
   tradeKg: number
 }
 
@@ -742,15 +744,29 @@ export const YearWalkthrough = ({
   const quotaCatchmentCount = catchments.filter(
     (catchment) => catchment.totals.nLoadQuotaKgN > 0,
   ).length
-  const tradeKgFor = (catchmentId: number | null) =>
-    quotaTrades.find((trade) => trade.catchmentId === catchmentId)?.tradeKg ?? 0
-  // Only the oplande shown here, so a scoped view names only its own trade.
+  const tradeFor = (catchmentId: number | null) =>
+    quotaTrades.find((trade) => trade.catchmentId === catchmentId)
+  // calendarYear null: the average per year over the period.
+  const tradeKgFor = (
+    catchmentId: number | null,
+    calendarYear: number | null,
+  ) => {
+    const trade = tradeFor(catchmentId)
+    return trade ? quotaTradeKgIn(trade, calendarYear) : 0
+  }
+  // Only the oplande shown here, so a scoped view names only its own trade. A
+  // trade chosen year by year can buy in one year and sell in another.
   const tradeKinds = (['bought', 'sold'] as const).filter((kind) =>
-    catchments.some(
-      (catchment) =>
+    catchments.some((catchment) => {
+      const trade = tradeFor(catchment.catchmentId)
+      return (
         catchment.totals.nLoadQuotaKgN > 0 &&
-        quotaTradeKind(tradeKgFor(catchment.catchmentId)) === kind,
-    ),
+        trade !== undefined &&
+        Object.values(trade.tradeKgByYear).some(
+          (kg) => quotaTradeKind(kg) === kind,
+        )
+      )
+    }),
   )
   // Every bar is drawn to its own kvote at the same height, so one line marks
   // each opland's original kvote; with trades it is what the bands start from.
@@ -758,7 +774,15 @@ export const YearWalkthrough = ({
 
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
-      const tradeKg = tradeKgFor(catchment.catchmentId)
+      // A simulation's entries count rotation years from 1.
+      const tradeKg = tradeKgFor(
+        catchment.catchmentId,
+        entry === null
+          ? null
+          : history
+            ? entry.year
+            : firstCalendarYear(false) + entry.year - 1,
+      )
       if (entry === null) {
         return {
           catchment,

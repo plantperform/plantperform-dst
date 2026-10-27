@@ -749,7 +749,10 @@ describe('simulation wizard steps', () => {
     } satisfies Simulation
     const average = {
       ...source,
-      optimizationSettings: { ...DEFAULT_OPTIMIZATION_SETTINGS, kind: 'optimize' },
+      optimizationSettings: {
+        ...DEFAULT_OPTIMIZATION_SETTINGS,
+        kind: 'optimize',
+      },
     } satisfies Simulation
     const tick = async (label: string) => {
       const input = [...container.querySelectorAll('label')]
@@ -798,10 +801,38 @@ describe('simulation wizard steps', () => {
       expect(container.textContent).toContain(
         'Kystvandopland 1 · 35,5 kr/kg N pr. år',
       )
+      expect(container.textContent).toContain('Mængden er den samme i alle år.')
       await click('Gem')
       expect(
         queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
-      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5 }])
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: true }])
+    })
+
+    it('lets the amount differ between years when asked', async () => {
+      await mount({
+        ...yearly,
+        optimizationSettings: {
+          ...yearly.optimizationSettings,
+          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+        },
+      })
+      await click('Kvotehandel')
+      // Saved before the choice existed: the same amount every year.
+      expect(container.textContent).toContain(
+        'Den samme mængde kvote handles i hvert år.',
+      )
+      await tick('Samme mængde i alle år')
+      expect(container.textContent).toContain(
+        'Optimeringen vælger mængden for hvert år for sig',
+      )
+      await click('Bekræft')
+      expect(container.textContent).toContain(
+        'Mængden kan være forskellig fra år til år.',
+      )
+      await click('Gem')
+      expect(
+        queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 40, sameEachYear: false }])
     })
 
     it('stops trading a catchment once a year has no limit, keeping its price', async () => {

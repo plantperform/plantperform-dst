@@ -27,7 +27,7 @@ const yearly: OptimizationSettings = {
   ],
 }
 const average: OptimizationSettings = { ...yearly, kind: 'optimize' }
-const fields =[field(1), field(2), field(3, false), field(null)]
+const fields = [field(1), field(2), field(3, false), field(null)]
 
 describe('kvotehandel settings', () => {
   it('names why a catchment cannot trade', () => {
@@ -61,6 +61,7 @@ describe('kvotehandel settings', () => {
   it('saves the switched-on catchments that can trade, in the yearly optimization only', () => {
     const draft = {
       enabled: true,
+      sameEachYear: true,
       catchments: {
         1: { enabled: true, price: '35,5' },
         2: { enabled: false, price: '20' },
@@ -68,8 +69,11 @@ describe('kvotehandel settings', () => {
       },
     }
     expect(quotaTradesFrom(draft, yearly, fields)).toEqual([
-      { catchmentId: 1, priceDkkPerKg: 35.5 },
+      { catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: true },
     ])
+    expect(
+      quotaTradesFrom({ ...draft, sameEachYear: false }, yearly, fields),
+    ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: false }])
     expect(quotaTradesFrom(draft, average, fields)).toEqual([])
     expect(
       quotaTradesFrom({ ...draft, enabled: false }, yearly, fields),
@@ -80,10 +84,15 @@ describe('kvotehandel settings', () => {
     expect(quotaTradeError(NO_QUOTA_TRADE_DRAFT, yearly, fields)).toBeNull()
     const draft = (price: string) => ({
       enabled: true,
+      sameEachYear: true,
       catchments: { 1: { enabled: true, price } },
     })
     expect(
-      quotaTradeError({ enabled: true, catchments: {} }, yearly, fields),
+      quotaTradeError(
+        { enabled: true, sameEachYear: true, catchments: {} },
+        yearly,
+        fields,
+      ),
     ).toContain('Vælg mindst ét kystvandopland')
     for (const price of ['', '-1', 'abc'])
       expect(quotaTradeError(draft(price), yearly, fields)).toContain(
@@ -95,14 +104,21 @@ describe('kvotehandel settings', () => {
   })
 
   it('opens saved trades as a draft and round trips them through the API names', () => {
-    const trades = [{ catchmentId: 1, priceDkkPerKg: 35 }]
+    const trades = [{ catchmentId: 1, priceDkkPerKg: 35, sameEachYear: false }]
     expect(quotaTradeDraftFrom([])).toBe(NO_QUOTA_TRADE_DRAFT)
     const draft = quotaTradeDraftFrom(trades)
+    expect(draft.sameEachYear).toBe(false)
     expect(quotaTradesFrom(draft, yearly, fields)).toEqual(trades)
     const settings = { ...yearly, quotaTrades: trades }
     expect(toWire(settings)).toMatchObject({
-      quotaTrades: [{ kystvandId: 1, priceKrPerKg: 35 }],
+      quotaTrades: [{ kystvandId: 1, priceKrPerKg: 35, sameEachYear: false }],
     })
     expect(fromWire(toWire(settings))).toEqual(settings)
+  })
+
+  it('opens trades saved before the choice as the same each year', () => {
+    expect(
+      quotaTradeDraftFrom([{ catchmentId: 1, priceDkkPerKg: 35 }]).sameEachYear,
+    ).toBe(true)
   })
 })

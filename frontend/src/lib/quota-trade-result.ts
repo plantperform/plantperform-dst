@@ -20,12 +20,51 @@ export const latestQuotaTrades = (
 export const quotaTradePayment = (trades: SimulationQuotaTrade[]) =>
   trades.reduce((sum, trade) => sum + trade.paymentDkkPerYear, 0)
 
-export const describeQuotaTrade = (trade: SimulationQuotaTrade) =>
-  trade.tradeKg === 0
+const tradeKgs = (trade: SimulationQuotaTrade) =>
+  Object.values(trade.tradeKgByYear)
+
+// The kvote traded in a calendar year, or with year null the average per year
+// over the period.
+export const quotaTradeKgIn = (
+  trade: SimulationQuotaTrade,
+  year: number | null,
+): number => {
+  if (year !== null) return trade.tradeKgByYear[year] ?? 0
+  const kgs = tradeKgs(trade)
+  return kgs.length === 0
+    ? 0
+    : kgs.reduce((sum, kg) => sum + kg, 0) / kgs.length
+}
+
+// A trade chosen year by year can still come out the same in every year.
+export const quotaTradeVaries = (trade: SimulationQuotaTrade) =>
+  new Set(tradeKgs(trade)).size > 1
+
+const describeTradeKgs = (trade: SimulationQuotaTrade) => {
+  const kgs = tradeKgs(trade)
+  const min = Math.min(0, ...kgs)
+  const max = Math.max(0, ...kgs)
+  const kg = formatWholeNumber
+  if (!quotaTradeVaries(trade)) {
+    const only = kgs[0] ?? 0
+    return only === 0
+      ? null
+      : `${only > 0 ? 'Køb' : 'Salg'} ${kg(Math.abs(only))} kg N/år`
+  }
+  if (min < 0 && max > 0)
+    return `Køb op til ${kg(max)} og salg op til ${kg(-min)} kg N/år`
+  const sorted = kgs.map(Math.abs).sort((a, b) => a - b)
+  return `${max > 0 ? 'Køb' : 'Salg'} ${kg(sorted[0])}–${kg(
+    sorted[sorted.length - 1],
+  )} kg N/år`
+}
+
+export const describeQuotaTrade = (trade: SimulationQuotaTrade) => {
+  const amount = describeTradeKgs(trade)
+  return amount === null
     ? 'Ingen handel'
-    : `${trade.tradeKg > 0 ? 'Køb' : 'Salg'} ${formatWholeNumber(
-        Math.abs(trade.tradeKg),
-      )} kg N/år · ${formatNumber(trade.priceDkkPerKg)} kr/kg N`
+    : `${amount} · ${formatNumber(trade.priceDkkPerKg)} kr/kg N`
+}
 
 export type QuotaTradeKind = 'bought' | 'sold'
 
@@ -94,9 +133,10 @@ export const describeQuotaTradeAmount = (tradeKg: number) => {
     : `${QUOTA_TRADE_LABELS[kind]} ${formatWholeNumber(Math.abs(tradeKg))} kg N`
 }
 
-export const describeQuotaPayment = (payment: number) =>
+// average: the payment differs between years, so this is its average.
+export const describeQuotaPayment = (payment: number, average = false) =>
   payment === 0
     ? '0 kr/år'
-    : `${payment > 0 ? 'Betaler' : 'Modtager'} ${formatWholeNumber(
-        Math.abs(payment),
-      )} kr/år`
+    : `${payment > 0 ? 'Betaler' : 'Modtager'}${
+        average ? ' gns.' : ''
+      } ${formatWholeNumber(Math.abs(payment))} kr/år`

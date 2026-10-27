@@ -10,6 +10,7 @@ import {
   describeQuotaPayment,
   describeQuotaTrade,
   quotaTradePayment,
+  quotaTradeVaries,
 } from '@/lib/quota-trade-result'
 
 type Props = {
@@ -49,7 +50,10 @@ export const QuotaTradeFigures = ({
               </span>
               <span className="text-muted-foreground tabular-nums">
                 {describeQuotaTrade(trade)} ·{' '}
-                {describeQuotaPayment(trade.paymentDkkPerYear)}
+                {describeQuotaPayment(
+                  trade.paymentDkkPerYear,
+                  quotaTradeVaries(trade),
+                )}
               </span>
             </li>
           )

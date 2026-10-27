@@ -76,11 +76,31 @@ export function SimulationQuotaTradeOptions({
           <span className="font-medium">Brug kvotehandel</span>
           <span className="block text-xs text-muted-foreground">
             Optimeringen må købe eller sælge udledningskvote til en fast pris i
-            de kystvandoplande, du vælger. Den samme mængde handles i hvert år,
-            og prisen betales pr. kg N pr. år.
+            de kystvandoplande, du vælger. Prisen betales pr. kg N pr. år.
           </span>
         </span>
       </label>
+
+      {draft.enabled ? (
+        <label className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={draft.sameEachYear}
+            onChange={(event) =>
+              onDraftChange({ ...draft, sameEachYear: event.target.checked })
+            }
+          />
+          <span>
+            <span className="font-medium">Samme mængde i alle år</span>
+            <span className="block text-xs text-muted-foreground">
+              {draft.sameEachYear
+                ? 'Den samme mængde kvote handles i hvert år.'
+                : 'Optimeringen vælger mængden for hvert år for sig, så der kan købes i ét år og sælges i et andet.'}
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       {draft.enabled ? (
         <fieldset className="space-y-2">
