@@ -939,8 +939,8 @@ export const NewScenarioPanel = ({
                         return (
                           <>
                             Med {formatNumber(mineralPct)} % mineralsk andel
-                            indeholder et ton ca. {formatNumber(totalPerTon)}{' '}
-                            kg total-N.
+                            indeholder et ton ca. {formatNumber(totalPerTon)} kg
+                            total-N.
                           </>
                         )
                       })()}

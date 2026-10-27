@@ -284,7 +284,10 @@ describe('fertiliser validation', () => {
 
   it('labels the organic N as the whole norm for økologisk', () => {
     expect(
-      organicFertiliserNLabel({ farmingSystem: 'Konventionel', orgMineralN: 170 }),
+      organicFertiliserNLabel({
+        farmingSystem: 'Konventionel',
+        orgMineralN: 170,
+      }),
     ).toBe('170 kg N/ha')
     expect(
       organicFertiliserNLabel({ farmingSystem: 'Økologisk', orgMineralN: 0 }),
