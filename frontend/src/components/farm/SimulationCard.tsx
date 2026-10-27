@@ -1,7 +1,11 @@
 import { Copy, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
+import {
+  useFieldYearValues,
+  useSimulationFields,
+  useSimulationView,
+} from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
@@ -10,6 +14,7 @@ import { EconomicsChip } from '@/components/farm/EconomicsChip'
 import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
+import { QuotaTradeFigures } from '@/components/farm/QuotaTradeFigures'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
@@ -32,6 +37,7 @@ import {
   type FarmQuota,
   type FieldTotals,
 } from '@/lib/field-domain'
+import { latestQuotaTrades } from '@/lib/quota-trade-result'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeFieldChanges,
@@ -140,6 +146,13 @@ const SimulationFigures = ({
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
   const profile = useEconomicsProfiles().appliedProfile(simulation)
+  // Shares the view the card's fields come from, so this fetches nothing new.
+  const view = useSimulationView(farmId, simulation.id)
+  const quotaTrades = latestQuotaTrades(
+    simulation,
+    view.data?.data?.savedResult,
+  )
+  const catchmentLabel = useCatchmentLabel(farmId, fields)
 
   return (
     <>
@@ -172,6 +185,11 @@ const SimulationFigures = ({
           }
         />
       </div>
+      <QuotaTradeFigures
+        trades={quotaTrades}
+        totals={totals}
+        catchmentLabel={catchmentLabel}
+      />
       <CatchmentStatusList
         farmId={farmId}
         simulationId={simulation.id}

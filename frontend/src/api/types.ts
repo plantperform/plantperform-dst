@@ -311,12 +311,25 @@ export type RotationAssignment = {
 
 export type OptimizeSimulationResponse = {
   status: OptimizationStatus
+  // The crops' DB2 alone, without the quotaTrades' payments.
   objectiveDb2: number
   totalNLoadKg: number
   totalLeachingKg: number
   totalFeedUnits: number
   fields: FieldRecord[]
   assignments: RotationAssignment[]
+  // Runs from before kvotehandel have none.
+  quotaTrades?: SimulationQuotaTrade[]
+}
+
+// A kvotehandel a yearly run chose: tradeKg > 0 buys, < 0 sells, in every
+// year. The payment is per year, negative when the trade sells.
+export type SimulationQuotaTrade = {
+  catchmentId: number
+  catchmentName: string | null
+  tradeKg: number
+  priceDkkPerKg: number
+  paymentDkkPerYear: number
 }
 
 export type CatchmentYearlyNLoadCaps = {
