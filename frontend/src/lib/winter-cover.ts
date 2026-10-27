@@ -75,7 +75,8 @@ export const EARLY_SOWING: WinterCoverDefinition = {
 export const INTERMEDIATE_OR_EARLY_SOWING: WinterCoverDefinition = {
   id: 'intermediateOrEarlySowing',
   label: 'Mellemafgrøde/tidlig såning',
-  description: '',
+  description:
+    'Indberettet efterafgrøde før en efterårssået afgrøde. Kilden siger ikke, om det var en mellemafgrøde eller tidlig såning, men de tæller ens.',
   color: INTERMEDIATE_CROP.color,
   splitColors: [INTERMEDIATE_CROP.color, EARLY_SOWING.color],
 }
