@@ -382,9 +382,7 @@ describe('simulation wizard steps', () => {
       ),
     ).toHaveLength(2)
     expect(
-      container
-        .querySelector('input[value="optimize"]')
-        ?.getAttribute('checked'),
+      container.querySelector('input[value="yearly"]')?.getAttribute('checked'),
     ).not.toBeNull()
   })
 
@@ -444,6 +442,10 @@ describe('simulation wizard steps', () => {
   it('keeps both modes’ limits and shows edit links in a read-only confirmation', async () => {
     await mount({
       ...source,
+      constraints: {
+        ...source.constraints,
+        maxNLoadByCatchment: [{ catchmentId: 1, maxNLoadKg: null }],
+      },
       optimizationSettings: {
         ...DEFAULT_OPTIMIZATION_SETTINGS,
         kind: 'yearly',
@@ -735,12 +737,12 @@ describe('simulation wizard steps', () => {
     await mount(null)
     await act(async () =>
       (
-        container.querySelector('input[value="yearly"]') as HTMLInputElement
+        container.querySelector('input[value="optimize"]') as HTMLInputElement
       ).click(),
     )
     await click('Start forfra')
     expect(
-      (container.querySelector('input[value="optimize"]') as HTMLInputElement)
+      (container.querySelector('input[value="yearly"]') as HTMLInputElement)
         .checked,
     ).toBe(true)
   })
