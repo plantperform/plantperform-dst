@@ -45,7 +45,7 @@ const glossary = {
   nContentPerTon: {
     title: 'Mineralsk N-indhold',
     description:
-      'Hvor mange kg NH4-N (mineralsk N) et ton husdyrgødning indeholder. Bruges til at regne ud, hvor mange ton gødning der køres ud pr. ha om året. Udbringningen koster pr. ton.',
+      'Hvor mange kg NH4-N (mineralsk N) et ton husdyrgødning indeholder, typisk 4–7 kg i kvæggylle. Bruges til at regne ud, hvor mange ton gødning der køres ud pr. ha om året. Udbringningen koster pr. ton.',
   },
   catchCrop: {
     title: 'Efterafgrøde',
