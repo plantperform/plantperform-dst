@@ -1133,10 +1133,12 @@ const EconomicDetailSection = ({
   const revenue = num(detail.revenue)
   const subsidy = num(detail.subsidy)
   const fertiliserCost = num(detail.fertiliserCost)
+  const otherFertilisers = num(detail.otherFertilisers)
   const seed = num(detail.seed)
   const cropProtection = num(detail.cropProtection)
   const fieldWork = num(detail.fieldWork)
   const drying = num(detail.drying)
+  const other = num(detail.other)
   const totalCosts = num(detail.totalCosts)
   const db = num(detail.db)
 
@@ -1149,8 +1151,8 @@ const EconomicDetailSection = ({
       <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
       <p className="text-sm">
         Indtægt og tilskud, minus omkostninger til gødning, udsæd, planteværn,
-        markarbejde og tørring, giver dækningsbidraget (DB2) pr. hektar - ganget
-        med markens areal til sidst.
+        markarbejde, tørring og andet, giver dækningsbidraget (DB2) pr. hektar -
+        ganget med markens areal til sidst.
       </p>
       {detail.yieldNormMissing ? (
         <p className="text-xs text-warning-strong">
@@ -1205,6 +1207,14 @@ const EconomicDetailSection = ({
           lines={linesFor('Gødning')}
           cropCode={cropCode}
         />
+        {otherFertilisers > 0 ? (
+          <CategoryBreakdownRow
+            label="Andre gødningsstoffer"
+            total={otherFertilisers}
+            lines={linesFor('Andre gødningsstoffer')}
+            cropCode={cropCode}
+          />
+        ) : null}
         <CategoryBreakdownRow
           label="Udsæd"
           total={seed}
@@ -1229,6 +1239,14 @@ const EconomicDetailSection = ({
           lines={linesFor('Tørring/lagring')}
           cropCode={cropCode}
         />
+        {other > 0 ? (
+          <CategoryBreakdownRow
+            label="Andet"
+            total={other}
+            lines={linesFor('Andet')}
+            cropCode={cropCode}
+          />
+        ) : null}
       </div>
       <DetailTable
         rows={[

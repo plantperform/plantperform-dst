@@ -136,11 +136,13 @@ field" column is the name on the wire.
 | planteværn | `cropProtection` | `plantevaern` | |
 | markarbejde | `fieldWork` | `markarbejde` | |
 | tørring | `drying` | `toerring` | |
+| andre gødningsstoffer, omkostning | `otherFertilisers` | `andre_goedningsstoffer` | |
+| andet, omkostning | `other` | `andet` | The costs listed as Andet, such as Hegn/vedligehold on græs |
 | omkostninger i alt | `totalCosts` | `omkostninger_total` | |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
 | bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |
-| gødning, andre gødningsstoffer, udsæd, planteværn, markarbejde, tørring/lagring | `fertiliser`, `otherFertilisers`, `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | `category` | The cost groups of a crop |
+| gødning, andre gødningsstoffer, udsæd, planteværn, markarbejde, tørring/lagring, andet | `fertiliser`, `otherFertilisers`, `seed`, `cropProtection`, `fieldWork`, `drying`, `other` (`CostCategory`) | `category` | The cost groups of a crop |
 | stykpris | `UnitPrice`, `priceId` | `priceId` | Price per unit, e.g. kr/gang or kr/kg |
 | kilde | `source`, `cropSources` | `source` | Where a price comes from, e.g. SEGES Budgetkalkuler 2026 |
 | mængde | `quantity`, `quantityUnit`, `quantityId` | `quantityId` | Per hectare, e.g. 3 sprøjtninger |

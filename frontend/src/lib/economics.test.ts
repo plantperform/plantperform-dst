@@ -80,6 +80,7 @@ const crop = (
     fertiliser?: EconomicsLine[]
     fieldWork?: EconomicsLine[]
     drying?: EconomicsLine[]
+    other?: EconomicsLine[]
   },
 ): CropEconomics => {
   const ownQuantity = (entry: EconomicsLine) => ({
@@ -105,6 +106,7 @@ const crop = (
         ...ownQuantity(entry),
         followsYield: true,
       })),
+      other: (parts.other ?? []).map(ownQuantity),
     },
   }
 }
@@ -269,6 +271,30 @@ describe('cropTotals', () => {
     expect(totals.subsidyDkkHa).toBe(1575)
     expect(totals.costsDkkHa.fieldWork).toBe(1945)
     expect(totals.totalCostsDkkHa).toBe(1945)
+  })
+
+  it('counts the costs in the category Andet in the total costs', () => {
+    const fenced = crop(251, 'Permanent græs', {
+      fieldWork: [line('ploughing', 1, 'gange', 'ploughing')],
+      other: [line('Hegn/vedligehold', 1, 'ha', 'fencing')],
+    })
+    const assumptions: EconomicsAssumptions = {
+      ...ASSUMPTIONS,
+      prices: [
+        ...ASSUMPTIONS.prices,
+        {
+          id: 'fencing',
+          label: 'Hegn/vedligehold',
+          unit: 'kr/ha',
+          valueDkk: 150,
+          source: 'SEGES',
+        },
+      ],
+      crops: [...ASSUMPTIONS.crops, fenced],
+    }
+    const totals = cropTotals(assumptions, NO_OVERRIDES, fenced)
+    expect(totals.costsDkkHa.other).toBe(150)
+    expect(totals.totalCostsDkkHa).toBe(totals.costsDkkHa.fieldWork + 150)
   })
 
   it('changes every crop that uses a shared price', () => {
