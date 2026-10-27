@@ -27,6 +27,73 @@ export const describeQuotaTrade = (trade: SimulationQuotaTrade) =>
         Math.abs(trade.tradeKg),
       )} kg N/år · ${formatNumber(trade.priceDkkPerKg)} kr/kg N`
 
+export type QuotaTradeKind = 'bought' | 'sold'
+
+export const QUOTA_TRADE_LABELS: Record<QuotaTradeKind, string> = {
+  bought: 'Købt kvote',
+  sold: 'Solgt kvote',
+}
+
+export const quotaTradeKind = (tradeKg: number): QuotaTradeKind | null =>
+  tradeKg > 0 ? 'bought' : tradeKg < 0 ? 'sold' : null
+
+// The limit after a trade, as the run set it: the kvote rounded to whole kg
+// N, like the cap it defaults to, moved by the trade. Without a trade the
+// limit is the kvote itself.
+export const tradedLimitKgN = (quotaKgN: number, tradeKg: number) =>
+  tradeKg === 0 ? quotaKgN : Math.round(quotaKgN) + tradeKg
+
+// Where a trade moves an opland's kvote on a bar drawn so the original kvote
+// sits at quotaLinePct of its height: between the original kvote and the
+// traded one, in percent of the height.
+export const quotaTradeBand = (
+  quotaKgN: number,
+  tradeKg: number,
+  quotaLinePct: number,
+): { kind: QuotaTradeKind; bottomPct: number; heightPct: number } | null => {
+  const kind = quotaTradeKind(tradeKg)
+  if (kind === null || quotaKgN <= 0) return null
+  const tradedPct = Math.min(
+    100,
+    Math.max(0, (tradedLimitKgN(quotaKgN, tradeKg) / quotaKgN) * quotaLinePct),
+  )
+  return {
+    kind,
+    bottomPct: Math.min(quotaLinePct, tradedPct),
+    heightPct: Math.abs(tradedPct - quotaLinePct),
+  }
+}
+
+// A bar scaled so the original kvote sits at quotaLinePct of its height: how
+// tall it is, and which share of it (from the top, in percent of the bar) is
+// over the limit. After a trade the limit is the traded kvote, so udledning
+// covered by bought kvote is not over it, and udledning above sold kvote is.
+export const quotaBarHeights = (
+  nLoadKg: number,
+  quotaKgN: number,
+  tradeKg: number,
+  quotaLinePct: number,
+): { heightPct: number; overPct: number } => {
+  if (quotaKgN <= 0) return { heightPct: 0, overPct: 0 }
+  const heightPct = Math.min(100, (nLoadKg / quotaKgN) * quotaLinePct)
+  const limitPct = Math.max(
+    0,
+    (tradedLimitKgN(quotaKgN, tradeKg) / quotaKgN) * quotaLinePct,
+  )
+  return {
+    heightPct,
+    overPct:
+      heightPct > limitPct ? ((heightPct - limitPct) / heightPct) * 100 : 0,
+  }
+}
+
+export const describeQuotaTradeAmount = (tradeKg: number) => {
+  const kind = quotaTradeKind(tradeKg)
+  return kind === null
+    ? ''
+    : `${QUOTA_TRADE_LABELS[kind]} ${formatWholeNumber(Math.abs(tradeKg))} kg N`
+}
+
 export const describeQuotaPayment = (payment: number) =>
   payment === 0
     ? '0 kr/år'
