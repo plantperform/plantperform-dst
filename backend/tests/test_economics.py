@@ -668,6 +668,30 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(organic["markarbejde"], 1200)
         self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
 
+    def test_the_cost_category_andet_counts_in_the_costs_and_the_db(self):
+        with self.sessions.begin() as session:
+            for index, (kategori, behandling, udgift) in enumerate(
+                (("Markarbejde", "Såning og høst", 1200), ("Andet", "Hegn/vedligehold", 150)), 50
+            ):
+                session.execute(
+                    insert(dyrkningsomkostning_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Økologisk",
+                        kategori=kategori,
+                        behandling=behandling,
+                        udgift_kr_ha=udgift,
+                    )
+                )
+        calculator.clear_lookup_cache()
+        organic = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)
+        self.assertEqual((organic["markarbejde"], organic["andet"]), (1200, 150))
+        self.assertEqual(organic["omkostninger_total"], 1350)
+        self.assertAlmostEqual(
+            organic["db"], organic["indtaegt"] + organic["tilskud"] - 1350, delta=1
+        )
+        self.assertEqual(calculator.calculate_db(1, "Konventionel", 5)["andet"], 0)
+
     def test_irrigation_work_only_counts_for_an_irrigated_field(self):
         # The JB1-4 sheet is the only one the crop has for a field on JB 3, and it is
         # the irrigated sheet: it carries the irrigation rows.

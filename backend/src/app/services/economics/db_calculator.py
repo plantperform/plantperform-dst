@@ -850,13 +850,14 @@ def calculate_db(
     andre_goedningsstoffer = sum(
         line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andre gødningsstoffer"
     )
+    andet = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andet")
 
     ingen_oekonomi = mangler_oekonomi(afgrodekode, driftsform)
     if ingen_oekonomi:
         # Nothing to subtract from: no economics at all, rather than a
         # dækningsbidrag of the sales value and the grundbetaling.
         indtaegt = halm_indtaegt = goedning = andre_goedningsstoffer = 0.0
-        udsaed = plantevaern = markarbejde = toerring = 0.0
+        udsaed = plantevaern = markarbejde = toerring = andet = 0.0
         alle_linjer = []
     tilskud_linjer = (
         []
@@ -867,7 +868,9 @@ def calculate_db(
         ]
     )
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
-    omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
+    omkostninger = (
+        udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer + andet
+    )
     db = indtaegt + tilskud - omkostninger
 
     if itemized:
@@ -960,6 +963,7 @@ def calculate_db(
         "plantevaern": round(plantevaern, 0),
         "markarbejde": round(markarbejde, 0),
         "toerring": round(toerring, 0),
+        "andet": round(andet, 0),
         "omkostninger_total": round(omkostninger, 0),
         "db": round(db, 0),
         "economics_missing": ingen_oekonomi,
