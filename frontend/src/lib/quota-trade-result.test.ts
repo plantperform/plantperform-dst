@@ -13,7 +13,10 @@ import type { FieldTotals } from '@/lib/field-domain'
 import {
   describeQuotaPayment,
   describeQuotaTrade,
+  describeQuotaTradeAmount,
   latestQuotaTrades,
+  quotaBarHeights,
+  quotaTradeBand,
   quotaTradePayment,
 } from '@/lib/quota-trade-result'
 
@@ -67,6 +70,51 @@ describe('kvotehandel results', () => {
     expect(quotaTradePayment([buy, sell])).toBe(2_425)
     expect(describeQuotaPayment(4_200)).toBe('Betaler 4.200 kr/år')
     expect(describeQuotaPayment(-1_775)).toBe('Modtager 1.775 kr/år')
+  })
+
+  it('places the bought or sold kvote between the original and the traded kvote', () => {
+    // The original kvote of 100 kg N sits at 34 % of the bar's height.
+    expect(quotaTradeBand(100, 50, 34)).toEqual({
+      kind: 'bought',
+      bottomPct: 34,
+      heightPct: 17,
+    })
+    expect(quotaTradeBand(100, -25, 34)).toEqual({
+      kind: 'sold',
+      bottomPct: 25.5,
+      heightPct: 8.5,
+    })
+    // Kept inside the bar area, and nothing without a trade or a kvote.
+    expect(quotaTradeBand(100, 500, 34)?.heightPct).toBe(66)
+    expect(quotaTradeBand(100, -150, 34)).toMatchObject({
+      bottomPct: 0,
+      heightPct: 34,
+    })
+    expect(quotaTradeBand(100, 0, 34)).toBeNull()
+    expect(quotaTradeBand(0, 50, 34)).toBeNull()
+    expect(describeQuotaTradeAmount(225)).toBe('Købt kvote 225 kg N')
+    expect(describeQuotaTradeAmount(-50)).toBe('Solgt kvote 50 kg N')
+  })
+
+  it('marks udledning over the limit after the trade, not over the original kvote', () => {
+    // 120 kg N against a kvote of 100 kg N drawn at 34 %.
+    expect(quotaBarHeights(120, 100, 0, 34).overPct).toBeCloseTo(100 / 6)
+    // Bought kvote covers it entirely, or partly.
+    expect(quotaBarHeights(120, 100, 30, 34)).toEqual({
+      heightPct: 40.8,
+      overPct: 0,
+    })
+    expect(quotaBarHeights(120, 100, 10, 34).overPct).toBeCloseTo(100 / 12)
+    // Selling lowers the limit below the original kvote.
+    expect(quotaBarHeights(90, 100, -20, 34).overPct).toBeCloseTo(100 / 9)
+    expect(quotaBarHeights(80, 100, -20, 34).overPct).toBe(0)
+    // The run's limit is the kvote rounded to whole kg N plus the trade, so
+    // udledning up to it is not over a kvote that rounds up.
+    expect(quotaBarHeights(124.9, 99.6, 25, 34).overPct).toBe(0)
+    expect(quotaBarHeights(80, 0, 20, 34)).toEqual({
+      heightPct: 0,
+      overPct: 0,
+    })
   })
 
   it('takes the payments off the crops’ DB2 on the card', () => {
