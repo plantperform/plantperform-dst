@@ -15,15 +15,15 @@ const coversOf = (detail: Record<string, unknown>) =>
 
 describe('yearCoversFromDetail', () => {
   it('shows a history year inferred as an intermediate crop as either measure', () => {
-    expect(coversOf({ W: 4, EMA: 0.2, intermediateOrEarlySowing: true })).toEqual([
-      INTERMEDIATE_OR_EARLY_SOWING,
-    ])
+    expect(
+      coversOf({ W: 4, EMA: 0.2, intermediateOrEarlySowing: true }),
+    ).toEqual([INTERMEDIATE_OR_EARLY_SOWING])
   })
 
   it('shows a history year inferred as early sowing as either measure', () => {
-    expect(coversOf({ W: 1, ETS: 0.2, intermediateOrEarlySowing: true })).toEqual([
-      INTERMEDIATE_OR_EARLY_SOWING,
-    ])
+    expect(
+      coversOf({ W: 1, ETS: 0.2, intermediateOrEarlySowing: true }),
+    ).toEqual([INTERMEDIATE_OR_EARLY_SOWING])
   })
 
   it('keeps a chosen intermediate crop and early sowing apart', () => {
@@ -64,7 +64,9 @@ describe('isIntermediateOrEarlySowingYear', () => {
         undersownCropCode: 9682,
         undersownCropName,
       }) as RotationYear
-    expect(isIntermediateOrEarlySowingYear(year('Mellemafgrøde/tidlig såning'))).toBe(true)
+    expect(
+      isIntermediateOrEarlySowingYear(year('Mellemafgrøde/tidlig såning')),
+    ).toBe(true)
     expect(isIntermediateOrEarlySowingYear(year('Mellemafgrøde'))).toBe(false)
   })
 })
