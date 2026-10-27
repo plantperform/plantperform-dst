@@ -14,6 +14,8 @@ import {
   describeQuotaPayment,
   describeQuotaTrade,
   describeQuotaTradeAmount,
+  describeTradeKg,
+  formatTradeShareOfCap,
   latestQuotaTrades,
   quotaBarHeights,
   quotaCapKgN,
@@ -22,6 +24,7 @@ import {
   quotaTradeKgIn,
   quotaTradePayment,
   quotaTradeVaries,
+  yearLimitKgN,
 } from '@/lib/quota-trade-result'
 
 const everyYear = (kg: number) =>
@@ -137,6 +140,31 @@ describe('kvotehandel results', () => {
     expect(quotaCapKgN(caps, 1, null, 336.7)).toBe((150 + 7 * 337) / 8)
     // No cap under Grænser: the kvote rounded to whole kg N, like the run.
     expect(quotaCapKgN(caps, 2, first, 99.6)).toBe(100)
+  })
+
+  it('takes each year’s own limit from Grænser, or else the kvote', () => {
+    const [first, second] = ROTATION_CALENDAR_YEARS
+    const caps = [
+      { catchmentId: 1, maxNLoadByYear: { ...everyYear(337), [first]: 150 } },
+    ]
+    expect(yearLimitKgN(caps, 1, first, 336.7)).toBe(150)
+    expect(yearLimitKgN(caps, 1, second, 336.7)).toBe(337)
+    expect(yearLimitKgN(caps, 1, null, 336.7)).toBe((150 + 7 * 337) / 8)
+    // No caps saved for the opland: the kvote itself, not rounded.
+    expect(yearLimitKgN(caps, 2, first, 99.6)).toBe(99.6)
+    // A year left without a cap ("Ingen grænse") falls back to the kvote.
+    const gap = [{ catchmentId: 1, maxNLoadByYear: { [first]: 150 } }]
+    expect(yearLimitKgN(gap, 1, second, 99.6)).toBe(99.6)
+  })
+
+  it('describes a trade against the cap it moved', () => {
+    expect(formatTradeShareOfCap({ capKgN: 150, tradeKg: 171 })).toBe('+114 %')
+    expect(formatTradeShareOfCap({ capKgN: 450, tradeKg: -119 })).toBe('−26 %')
+    expect(formatTradeShareOfCap({ capKgN: 0, tradeKg: 20 })).toBeNull()
+    expect(describeTradeKg(171, false)).toBe('Købt 171 kg N')
+    expect(describeTradeKg(-50, true)).toBe('Solgt gns. 50 kg N/år')
+    expect(describeTradeKg(0, false)).toBe('Ingen handel i året')
+    expect(describeTradeKg(0, true)).toBe('Ingen handel i gennemsnit')
   })
 
   it('marks the limit before the trade at the cap, or else the kvote', () => {
