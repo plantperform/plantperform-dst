@@ -65,6 +65,20 @@ _HALMPRESNING = "Halmpresning"
 _PER_KG_HARVESTED = frozenset({"Rensning", "Sortering af kartofler", "Fragt"})
 _KG_PER_HKG = 100
 
+# Potatoes are sorted before they are sold, and the culls (frasorterede
+# kartofler) sell at a fraction of the sorted price, which is its own
+# salgspris row. SEGES culls 6.600 of 43.700 kg konventionelle spisekartofler,
+# 5.700 of 37.800 kg læggekartofler and, økologisk, 3.500 of 23.500 kg
+# læggekartofler; the økologiske spisekartofler calculation sells no culls.
+_FRASORTERET_KVALITET = "Frasorterede"
+_FRASORTERET_ANDEL = {
+    (149, KONVENTIONEL): 0.151,
+    (152, KONVENTIONEL): 0.151,
+    (149, OEKOLOGISK): 0.149,
+}
+_SORTEREDE_KARTOFLER = "Sorterede kartofler"
+_FRASORTEREDE_KARTOFLER = "Frasorterede kartofler"
+
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
 
@@ -643,6 +657,17 @@ def calculate_db(
     )
     kalkule_kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
     pris = _lookup_salgspris(kalkule_kode, driftsform, kvalitet)
+    frasorteret_andel = _FRASORTERET_ANDEL.get((kalkule_kode, driftsform), 0.0)
+    frasorteret = (
+        _lookup_salgspris(kalkule_kode, driftsform, _FRASORTERET_KVALITET)
+        if frasorteret_andel and not kvalitet
+        else None
+    )
+    if frasorteret is None:
+        frasorteret_andel = 0.0
+    frasorteret_pris = (
+        prices.get(frasorteret["sale_id"], frasorteret["salgspris"]) if frasorteret else 0.0
+    )
 
     salgspris = prices.get(pris.get("sale_id"), pris["salgspris"]) if pris else 0.0
     halm_pris = prices.get(pris.get("straw_id"), pris["halm_pris_kr_kg"]) if pris else 0.0
@@ -684,7 +709,9 @@ def calculate_db(
         udbytte *= faktor
 
     udbytte *= yield_factor
-    indtaegt = udbytte * salgspris + halm_indtaegt
+    frasorteret_udbytte = udbytte * frasorteret_andel
+    sorteret_udbytte = udbytte - frasorteret_udbytte
+    indtaegt = sorteret_udbytte * salgspris + frasorteret_udbytte * frasorteret_pris + halm_indtaegt
 
     # Itemized rows behind each category total for the UI calculation
     # walkthrough, showing which entries actually total categories such as
@@ -844,13 +871,27 @@ def calculate_db(
             indtaegt_linjer.append(
                 _linje(
                     "Indtægt",
-                    "Udbytte",
-                    udbytte,
+                    _SORTEREDE_KARTOFLER if frasorteret else "Udbytte",
+                    sorteret_udbytte,
                     salgspris,
                     pris_id=pris.get("sale_id"),
                     maengde_id=None,
                     enhed=pris.get("enhed"),
                     kilde=pris.get("kilde"),
+                    foelger_udbytte=True,
+                )
+            )
+        if frasorteret is not None and udbytte:
+            indtaegt_linjer.append(
+                _linje(
+                    "Indtægt",
+                    _FRASORTEREDE_KARTOFLER,
+                    frasorteret_udbytte,
+                    frasorteret_pris,
+                    pris_id=frasorteret["sale_id"],
+                    maengde_id=None,
+                    enhed=frasorteret["enhed"],
+                    kilde=frasorteret["kilde"],
                     foelger_udbytte=True,
                 )
             )
@@ -902,6 +943,8 @@ def calculate_db(
         "udbytte_faktor": faktor,
         "tilgaengelig_n": tilgaengelig_n,
         "salgspris": salgspris,
+        "frasorteret_andel": frasorteret_andel,
+        "frasorteret_pris": frasorteret_pris,
         "halm_indtaegt": round(halm_indtaegt, 0),
         "indtaegt": round(indtaegt, 0),
         "tilskud": round(tilskud, 0),

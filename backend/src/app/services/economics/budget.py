@@ -20,7 +20,12 @@ from app.services.economics.db_calculator import (
 )
 from app.services.economics.overrides import PRICE_PER_GANG_UNIT, price_unit
 
-_PRICE_LABELS = {"Udbytte": "Salgspris", "Halm": "Halmpris"}
+_PRICE_LABELS = {
+    "Udbytte": "Salgspris",
+    "Sorterede kartofler": "Salgspris, sorterede kartofler",
+    "Frasorterede kartofler": "Salgspris, frasorterede kartofler",
+    "Halm": "Halmpris",
+}
 
 # An økologisk budget without a simulation has no handelsgødning, so the
 # whole N-norm comes from svinegylle at the default utilized N per tonne, which
