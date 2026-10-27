@@ -265,6 +265,12 @@ export const SIMULATION_FORM_STEPS = [
     schema: z.object({}),
   },
   {
+    id: 'quotaTrade',
+    label: 'Kvotehandel',
+    // The kvotehandel draft is validated by the panel, like the limits.
+    schema: z.object({}),
+  },
+  {
     id: 'confirm',
     label: 'Bekræft',
     // Reviews the saved settings; Save and Run are separate actions.

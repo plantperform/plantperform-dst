@@ -19,4 +19,5 @@ export const yearlyOptimizeSimulationInput = (
   ...optimizeSimulationInput(input),
   maxNLoadByCatchment: input.maxNLoadByCatchment,
   db2SwingPct: input.db2SwingPct,
+  quotaTrades: input.quotaTrades,
 })

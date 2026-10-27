@@ -278,6 +278,16 @@ export type OptimizationSettings = {
   excludedCropCodes: number[]
   maxNLoadByCatchment: CatchmentYearlyNLoadCaps[]
   db2SwingPct: number | null
+  // Kvotehandel; only the yearly optimization uses it.
+  quotaTrades: QuotaTrade[]
+}
+
+// Kvotehandel at a fixed price: the yearly optimization may buy or sell kvote
+// in the catchment, the same amount in every year, at priceDkkPerKg per kg N
+// per year.
+export type QuotaTrade = {
+  catchmentId: number
+  priceDkkPerKg: number
 }
 
 export type UpdateSimulationInput = Partial<CreateSimulationInput> & {
@@ -319,6 +329,7 @@ export type YearlyOptimizeSimulationInput = {
   runId?: string
   maxNLoadByCatchment?: CatchmentYearlyNLoadCaps[]
   db2SwingPct?: number | null
+  quotaTrades?: QuotaTrade[]
   excludedCropCodes?: number[]
 }
 

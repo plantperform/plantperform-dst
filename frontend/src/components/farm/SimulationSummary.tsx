@@ -289,6 +289,28 @@ export const SimulationSummary = ({
               : 'Ingen'}
           </p>
         </Section>
+        <Section step="quotaTrade" onEditStep={onEditStep}>
+          {settings.quotaTrades.length === 0 ? (
+            <p>Ingen kvotehandel</p>
+          ) : (
+            <>
+              {settings.quotaTrades.map((trade) => (
+                <p key={trade.catchmentId}>
+                  <span className="text-foreground">
+                    {catchments.find(
+                      (catchment) => catchment.catchmentId === trade.catchmentId,
+                    )?.label ?? `Kystvandopland ${trade.catchmentId}`}
+                  </span>{' '}
+                  · {formatNumber(trade.priceDkkPerKg)} kr/kg N pr. år
+                </p>
+              ))}
+              <p>
+                Optimeringen vælger, hvor meget kvote der købes eller sælges.
+                Mængden er den samme i alle år.
+              </p>
+            </>
+          )}
+        </Section>
       </div>
 
       <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">

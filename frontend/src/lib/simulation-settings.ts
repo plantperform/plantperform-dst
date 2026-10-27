@@ -8,6 +8,7 @@ export const DEFAULT_OPTIMIZATION_SETTINGS: OptimizationSettings = {
   excludedCropCodes: [],
   maxNLoadByCatchment: [],
   db2SwingPct: null,
+  quotaTrades: [],
 }
 
 export const DEFAULT_SIMULATION_CONSTRAINTS: OptimizationConstraints = {
@@ -47,6 +48,8 @@ export const optimizationSettingsInput = (
   excludedCropCodes: settings.excludedCropCodes,
   maxNLoadByCatchment: settings.maxNLoadByCatchment,
   db2SwingPct: settings.db2SwingPct,
+  // Settings saved before kvotehandel have none.
+  quotaTrades: settings.quotaTrades ?? [],
 })
 
 export function simulationLimitsError(
