@@ -253,7 +253,10 @@ describe('fertiliser validation', () => {
       onlyOrganic: true,
     }
     expect(
-      messageFor({ ...organic, fertiliserChoice: NO_FERTILISER }, 'fertiliserChoice'),
+      messageFor(
+        { ...organic, fertiliserChoice: NO_FERTILISER },
+        'fertiliserChoice',
+      ),
     ).toBe('Økologisk kræver organisk gødning')
     expect(
       messageFor(
@@ -490,15 +493,15 @@ describe('candidate count', () => {
 
 describe('N-norm levels', () => {
   it('never lets 100 % be removed', () => {
-    expect(toggleNNormPercentage(['100', '80'], '100')).toEqual([
-      '100',
-      '80',
-    ])
+    expect(toggleNNormPercentage(['100', '80'], '100')).toEqual(['100', '80'])
     expect(isNNormOptionLocked(['100'], '100')).toBe(true)
   })
 
   it('allows at most two levels below 100 %', () => {
-    const two = toggleNNormPercentage(toggleNNormPercentage(['100'], '90'), '70')
+    const two = toggleNNormPercentage(
+      toggleNNormPercentage(['100'], '90'),
+      '70',
+    )
     expect(two).toEqual(['100', '90', '70'])
     expect(toggleNNormPercentage(two, '50')).toEqual(two)
     expect(isNNormOptionLocked(two, '50')).toBe(true)
@@ -513,10 +516,15 @@ describe('N-norm levels', () => {
 
   it('gives a copy 100 % and the two highest levels still offered', () => {
     const offered = ['50', '60', '70', '80', '90', '100']
-    expect(
-      copiedNNormPercentages(['30', '60', '80', '90'], offered),
-    ).toEqual(['100', '90', '80'])
-    expect(copiedNNormPercentages(['100', '80'], offered)).toEqual(['100', '80'])
+    expect(copiedNNormPercentages(['30', '60', '80', '90'], offered)).toEqual([
+      '100',
+      '90',
+      '80',
+    ])
+    expect(copiedNNormPercentages(['100', '80'], offered)).toEqual([
+      '100',
+      '80',
+    ])
   })
 
   it('sends the lower levels for an økologisk simulation too', () => {

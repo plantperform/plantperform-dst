@@ -25,7 +25,10 @@ export const MAX_REDUCED_N_NORM_LEVELS = 2
 const reducedNNormCount = (selected: string[]): number =>
   selected.filter((value) => value !== FULL_N_NORM).length
 
-export const isNNormOptionLocked = (selected: string[], value: string): boolean =>
+export const isNNormOptionLocked = (
+  selected: string[],
+  value: string,
+): boolean =>
   value === FULL_N_NORM ||
   (!selected.includes(value) &&
     reducedNNormCount(selected) >= MAX_REDUCED_N_NORM_LEVELS)
