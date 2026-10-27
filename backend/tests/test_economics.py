@@ -53,7 +53,10 @@ from app.domain.economics import (
     SelectEconomicsRequest,
     UpdateEconomicsModuleRequest,
 )
+from app.domain.field import FieldRecord
+from app.domain.rotation_candidate import RotationCandidateYearResult, RotationYear
 from app.domain.simulation import CreateSimulationRequest, Simulation
+from app.services import read_models
 from app.services.calculation import CalculationFailedError
 from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
@@ -96,6 +99,51 @@ class EconomicsValidationTests(unittest.TestCase):
         self.assertEqual(CreateEconomicsModuleRequest(name=" Mine ").name, "Mine")
 
 
+class EconomicsMissingViewTests(unittest.TestCase):
+    @staticmethod
+    def year(missing):
+        return RotationCandidateYearResult(
+            year=RotationYear(afgrode_kode=900, afgrode_navn="900"),
+            leaching_kg_n_ha=0,
+            leaching_detail={},
+            db_kr_ha=0,
+            db_detail={"economics_missing": missing},
+        )
+
+    def test_the_year_values_carry_the_flag(self):
+        candidate = SimpleNamespace(years=[self.year(True), self.year(False)], active_len=2)
+        self.assertEqual(
+            [year["economics_missing"] for year in read_models.compact_years(candidate)],
+            [True, False],
+        )
+
+    def test_a_mark_has_no_economics_when_every_year_has_none(self):
+        def mark(field_id):
+            return FieldRecord(
+                id=field_id, farm_id="farm", db2=0, n_load=0, leaching=0, name=field_id, area_ha=2
+            )
+
+        def year(missing):
+            return dict(leaching_kg_n_ha=0, db_kr_ha=0, fen_fe_ha=0, economics_missing=missing)
+
+        field_years = {
+            "locked": [year(True)] * 8,
+            "mixed": [year(True), year(False)],
+            "uncalculated": [],
+        }
+        data, _ = read_models.simulation_data(
+            [mark(field_id) for field_id in field_years],
+            {},
+            field_years,
+            catalog=[],
+            contributions={},
+        )
+        self.assertEqual(
+            {field["id"]: field["economics_missing"] for field in data["fields"]},
+            {"locked": True, "mixed": False, "uncalculated": False},
+        )
+
+
 class EconomicsDatabaseTests(DatabaseTests):
     def setUp(self):
         super().setUp()
@@ -115,6 +163,11 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.enterContext(patch.object(calculator, "SessionLocal", self.sessions))
         self.enterContext(patch.object(overrides, "SessionLocal", self.sessions))
         self.enterContext(patch.object(budget, "SessionLocal", self.sessions))
+        self.enterContext(
+            patch.object(
+                calculator, "_afgroeder_i_saedskifter", return_value=frozenset({1, 11, 216})
+            )
+        )
         calculator.clear_lookup_cache()
         self.addCleanup(calculator.clear_lookup_cache)
         with self.sessions.begin() as session:
@@ -609,6 +662,67 @@ class EconomicsDatabaseTests(DatabaseTests):
         ):
             price = next(p for p in prices if p["id"] == ploughing["priceId"])
             self.assertEqual(price["unit"], "kr/gang pr. ha")
+
+    def test_an_afgroede_without_a_cost_budget_has_no_economics_unless_a_saedskifte_grows_it(self):
+        # 900 has no budget, 901 has one, and 902 has none but is grown by a sædskifte.
+        calculator._afgroeder_i_saedskifter.return_value = frozenset({1, 902})
+        with self.sessions.begin() as session:
+            for index, code in enumerate((900, 901, 902), 10):
+                session.execute(
+                    insert(afgroede_table).values(
+                        afgroedekode=code, navn=str(code), udbytteenhed="FE/ha"
+                    )
+                )
+                session.execute(
+                    insert(afgroede_norm_lookup_table).values(
+                        source_order=index,
+                        jb_nr=5,
+                        afgroedekode=code,
+                        jb_gruppe="JB5-6",
+                        vanding="Uvandet",
+                        udbyttenorm=60,
+                        n_norm=175,
+                        driftsform="Konventionel",
+                    )
+                )
+                session.execute(
+                    insert(salgspris_table).values(
+                        source_order=index,
+                        afgroedekode=code,
+                        driftsform="Konventionel",
+                        kvalitet="",
+                        salgspris=100,
+                        enhed="kr/FE",
+                        halm_pris_kr_kg=0,
+                    )
+                )
+            session.execute(
+                insert(dyrkningsomkostning_table).values(
+                    source_order=60,
+                    afgroedekode=901,
+                    driftsform="Konventionel",
+                    kategori="Markarbejde",
+                    behandling="Slæt",
+                    udgift_kr_ha=800,
+                )
+            )
+        calculator.clear_lookup_cache()
+        without = calculator.calculate_db(900, "Konventionel", 5)
+        self.assertTrue(without["economics_missing"])
+        self.assertEqual(
+            [without[key] for key in ("indtaegt", "tilskud", "omkostninger_total", "db")],
+            [0, 0, 0, 0],
+        )
+        with_budget = calculator.calculate_db(901, "Konventionel", 5)
+        self.assertFalse(with_budget["economics_missing"])
+        self.assertEqual(with_budget["markarbejde"], 800)
+        self.assertNotEqual(with_budget["db"], 0)
+        grown = calculator.calculate_db(902, "Konventionel", 5)
+        self.assertFalse(grown["economics_missing"])
+        self.assertNotEqual(grown["db"], 0)
+        self.assertFalse(calculator.calculate_db(1, "Konventionel", 5)["economics_missing"])
+        crops = budget.crop_budgets([1, 900, 901, 902], 5, "Konventionel", False)["crops"]
+        self.assertEqual([crop["cropCode"] for crop in crops], [1, 901, 902])
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))

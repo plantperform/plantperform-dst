@@ -158,6 +158,10 @@ class FieldRecord(CamelModel):
     measures: FieldMeasures = Field(default_factory=FieldMeasures)
     allowed_rotation_ids: list[str] = Field(default_factory=default_allowed_rotation_ids)
     db2: float
+    # Set when the view is built: every year of the mark's rotation is an
+    # afgrøde without a cost budget that no sædskifte grows, so db2 is 0 and
+    # means no figure.
+    economics_missing: bool = False
     n_load: float
     leaching: float
     # Foderenheder (FEN) are meaningful only for afgrøder measured in FE

@@ -26,6 +26,7 @@ from app.data.db import (
 )
 from app.services.economics.overrides import identifier, post_label, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
+from app.services.rotations import saedskifte_library
 from app.services.virkemidler import praecisionsgoedskning_tilladt
 
 KONVENTIONEL = "Konventionel"
@@ -104,6 +105,7 @@ def clear_lookup_cache() -> None:
         _load_arbejdssatser,
         _load_arbejdsmaengder,
         _migrerede_budgetter,
+        _afgroeder_i_saedskifter,
         _load_dyrkningsomkostninger,
         _load_prisliste,
         soil_variants,
@@ -414,6 +416,39 @@ def _lookup_omkostningslinjer(
     return []
 
 
+def har_omkostningsbudget(afgrodekode: int, driftsform: str) -> bool:
+    """Whether the økonomital hold a cost budget for the afgrøde and driftsform."""
+    kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
+    return (kode, driftsform) in _migrerede_budgetter() or bool(
+        _load_dyrkningsomkostninger().get((kode, driftsform))
+    )
+
+
+@lru_cache(maxsize=1)
+def _afgroeder_i_saedskifter() -> frozenset[int]:
+    """The afgrøder some sædskifte grows, which the simulations choose between."""
+    return frozenset(
+        int(position[0])
+        for saedskifte, variant in saedskifte_library.list_all_saedskifte_refs()
+        for position in saedskifte_library.get_raw_rotation(saedskifte, variant)
+        if position[0]
+    )
+
+
+def mangler_oekonomi(afgrodekode: int, driftsform: str) -> bool:
+    """Whether an afgrøde has no real economics, so no dækningsbidrag.
+
+    Without a cost budget an afgrøde would get a dækningsbidrag made of the
+    grundbetaling and a price that nothing was subtracted from. The afgrøder a
+    sædskifte grows are kept, budget or not: the simulations compare their
+    dækningsbidrag, and a figure of 0 would only steer the optimization away
+    from them.
+    """
+    if har_omkostningsbudget(afgrodekode, driftsform):
+        return False
+    return afgrodekode not in _afgroeder_i_saedskifter()
+
+
 @lru_cache(maxsize=1)
 def _load_prisliste() -> dict[str, dict]:
     """Map post to price-list data for both Omkostning and Tilskud."""
@@ -508,6 +543,10 @@ def calculate_db(
     mncs and mnca it is the available N that the udbyttenorm is scaled by for
     crops with a yield-response curve (see economics.udbytterespons). Below
     the N-norm their yield drops; every other crop keeps its full udbyttenorm.
+
+    An afgrøde without a cost budget that no sædskifte grows (see
+    mangler_oekonomi) gets no indtægt, tilskud or omkostninger and a
+    dækningsbidrag of 0, and `economics_missing` is true.
     """
     economics = json.loads(economics_key) if economics_key else {}
     prices = economics.get("prices", {})
@@ -681,10 +720,21 @@ def calculate_db(
         line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andre gødningsstoffer"
     )
 
-    tilskud_linjer = [
-        list_line("Tilskud", post, post, navn=post_label(post))
-        for post in _tilskud_poster(afgrodekode, driftsform)
-    ]
+    ingen_oekonomi = mangler_oekonomi(afgrodekode, driftsform)
+    if ingen_oekonomi:
+        # Nothing to subtract from: no economics at all, rather than a
+        # dækningsbidrag of the sales value and the grundbetaling.
+        indtaegt = halm_indtaegt = goedning = andre_goedningsstoffer = 0.0
+        udsaed = plantevaern = markarbejde = toerring = 0.0
+        alle_linjer = []
+    tilskud_linjer = (
+        []
+        if ingen_oekonomi
+        else [
+            list_line("Tilskud", post, post, navn=post_label(post))
+            for post in _tilskud_poster(afgrodekode, driftsform)
+        ]
+    )
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
     omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
     db = indtaegt + tilskud - omkostninger
@@ -719,6 +769,8 @@ def calculate_db(
                     foelger_udbytte=True,
                 )
             )
+        if ingen_oekonomi:
+            indtaegt_linjer = []
         detail = {"indtaegt_linjer": indtaegt_linjer, "tilskud_linjer": tilskud_linjer}
     else:
         alle_linjer = [{key: line[key] for key in _STORED_LINE_KEYS} for line in alle_linjer]
@@ -763,6 +815,7 @@ def calculate_db(
         "toerring": round(toerring, 0),
         "omkostninger_total": round(omkostninger, 0),
         "db": round(db, 0),
+        "economics_missing": ingen_oekonomi,
         "linjer": alle_linjer,
         **detail,
     }

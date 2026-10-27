@@ -27,6 +27,7 @@ def compact_years(candidate):
             year=y.year,
             leaching_kg_n_ha=y.leaching_kg_n_ha,
             db_kr_ha=y.db_kr_ha,
+            economics_missing=bool(getattr(y, "db_detail", {}).get("economics_missing")),
             fen_fe_ha=y.fen_fe_ha,
             **{
                 key: getattr(
@@ -186,6 +187,11 @@ def combine_contributions(contributions):
     return [combined[code] for code in sorted(combined)]
 
 
+def _without_economics(years):
+    """A mark has no economics when every year of its rotation has none."""
+    return bool(years) and all(year.get("economics_missing") for year in years)
+
+
 def yearly_totals(fields, field_years, *, history=False):
     totals = {}
     for field in fields:
@@ -275,7 +281,12 @@ def simulation_data(
             for field in fields
         }
     data = {
-        "fields": [field.model_dump(mode="json") for field in fields],
+        "fields": [
+            field.model_copy(
+                update={"economics_missing": _without_economics(field_years.get(field.id, []))}
+            ).model_dump(mode="json")
+            for field in fields
+        ],
         "field_years": field_years,
         "yearly_summary": yearly_totals(fields, field_years),
         "crop_area_ranges": combine_contributions(contributions),

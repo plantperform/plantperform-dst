@@ -104,8 +104,11 @@ purchase or transport model.
 
 `GET /farms/{farmId}/economics/budgets?farmingSystem=Konventionel` returns the
 standard budget of each crop in the farm's field history, largest area first,
-and then each crop the simulations' sædskifter can choose. Every budget is for
-the soil type covering most of the farm's area, unirrigated, at the N-norm with
+and then each crop the simulations' sædskifter can choose. A crop without a
+cost budget for the farming system, such as bestøverbrak, a skovrejsning or a
+permanent græs, has no real economics and is left out unless a sædskifte grows
+it; its marks show `economicsMissing: true` and no dækningsbidrag. Every
+budget is for the soil type covering most of the farm's area, unirrigated, at the N-norm with
 handelsgødning (none when `farmingSystem` is `Økologisk`), row by row as the
 calculator prices it. With `simulationId`, the simulation's farming system and
 gødning apply instead, so husdyrgødning covers up to its `orgMineralN` of the

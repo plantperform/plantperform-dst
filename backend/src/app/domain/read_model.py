@@ -18,6 +18,9 @@ class FieldYearValue(CamelModel):
     year: RotationYear
     leaching_kg_n_ha: float
     db_kr_ha: float
+    # An afgrøde without a cost budget that no sædskifte grows: db_kr_ha is 0
+    # and means no figure.
+    economics_missing: bool = False
     fen_fe_ha: float
     forfrugtsvaerdi_kgn_ha: float = 0
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0
