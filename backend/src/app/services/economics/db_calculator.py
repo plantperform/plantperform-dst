@@ -64,6 +64,9 @@ _HALMPRESNING = "Halmpresning"
 # Besides drying and storage, these are priced per kg of the harvest.
 _PER_KG_HARVESTED = frozenset({"Rensning", "Sortering af kartofler", "Fragt"})
 _KG_PER_HKG = 100
+# The irrigation rows are SEGES' "vandet" sheet. Some crops, such as potatoes,
+# have it as their only JB1-4 sheet, so an unirrigated field would pick it up.
+_VANDING = "Vanding"
 
 # Potatoes are sorted before they are sold, and the culls (frasorterede
 # kartofler) sell at a fraction of the sorted price, which is its own
@@ -435,6 +438,8 @@ def _lookup_omkostningslinjer(
             continue
         lines = []
         for row in rows:
+            if not irrigated and row["behandling"].startswith(_VANDING):
+                continue
             maengde_id = quantity_id(
                 afgrodekode,
                 "work",

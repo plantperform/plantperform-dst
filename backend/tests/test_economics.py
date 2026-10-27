@@ -668,6 +668,50 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(organic["markarbejde"], 1200)
         self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
 
+    def test_irrigation_work_only_counts_for_an_irrigated_field(self):
+        # The JB1-4 sheet is the only one the crop has for a field on JB 3, and it is
+        # the irrigated sheet: it carries the irrigation rows.
+        with self.sessions.begin() as session:
+            for index, (behandling, antal) in enumerate(
+                (("Såning og høst", 1), ("Vanding pr millimeter", 100)), 60
+            ):
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Konventionel",
+                        jordbonitet="JB1-4",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling=behandling,
+                        antal=antal,
+                    )
+                )
+                session.execute(
+                    insert(arbejdssats_table).values(
+                        source_order=index,
+                        behandling=behandling,
+                        jordbonitet="JB1-4",
+                        afgroedekode=None,
+                        driftsform="",
+                        pris_kr_per_enhed=1000 if antal == 1 else 5,
+                        enhed="kr/gang" if antal == 1 else "kr/mm",
+                        kilde="SEGES",
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        def field_work(**kwargs):
+            result = calculator.calculate_db(1, "Konventionel", 3, **kwargs)
+            return result["markarbejde"], [
+                line["behandling"] for line in result["linjer"] if line["kategori"] == "Markarbejde"
+            ]
+
+        self.assertEqual(field_work(), (1000, ["Såning og høst"]))
+        self.assertEqual(
+            field_work(irrigated=True), (1500, ["Såning og høst", "Vanding pr millimeter"])
+        )
+
     def test_the_straw_sold_is_the_straw_pressed_and_both_follow_the_yield(self):
         with self.sessions.begin() as session:
             session.execute(
