@@ -15,9 +15,10 @@ export type QuotaTradeDraft = {
   catchments: Record<number, { enabled: boolean; price: string }>
 }
 
+// A new kvotehandel chooses its amount for each year.
 export const NO_QUOTA_TRADE_DRAFT: QuotaTradeDraft = {
   enabled: false,
-  sameEachYear: true,
+  sameEachYear: false,
   catchments: {},
 }
 
