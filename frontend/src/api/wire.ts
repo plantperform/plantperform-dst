@@ -62,6 +62,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   udbytterespons: 'hasYieldResponse',
   udbytte_faktor: 'yieldFactor',
   salgspris: 'salePrice',
+  halm_indtaegt: 'strawRevenue',
   indtaegt: 'revenue',
   tilskud: 'subsidy',
   goedning: 'fertiliserCost',
