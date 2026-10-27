@@ -45,6 +45,8 @@ field" column is the name on the wire.
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
 | kvotehandel (fast pris) | `QuotaTrade`, `quotaTrades`, `QuotaTradeDraft`, `SimulationQuotaTradeOptions` | `quotaTrades` | The Kvotehandel step in Ny simulering. Års-optimering may buy or sell kvote in the chosen kystvandoplande at a fixed price, the same amount in every year. Needs a cap in every year and kvotegivende marker |
 | kvotepris | `priceDkkPerKg` | `priceKrPerKg` | Kr per kg N per year, the same for buying and selling |
+| handlet kvote, kvotebetaling | `SimulationQuotaTrade`, `tradeKg`, `paymentDkkPerYear` | `quotaTrades`, `tradeKg`, `paymentKrPerYear` | What a run chose: `tradeKg` > 0 buys and < 0 sells, in every year; the payment is per year and negative when selling |
+| Dækningsbidrag inkl. kvotehandel | `QuotaTradeFigures` | | The crops' DB2 per year less the payments, on the simulation card |
 | opslag i markregistret | registry lookup, `summarizeLookup` | | The marker found for a CVR before the farm is created, summed per kystvandopland |
 | retention | `retention` | `retention` | Share held back, 0 to 1 |
 | udvaskning | `leaching` | | Nitrate leaving the root zone |
