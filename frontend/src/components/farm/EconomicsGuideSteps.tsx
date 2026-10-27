@@ -196,7 +196,7 @@ export const GuideFertiliserStep = ({
       <p className={FOOT_CLASS}>
         Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
         husdyrgødning dækker den en del af normen. Husdyrgødningen har endnu
-        ingen pris, og udbringningen af den regnes med handelsgødningens pris.
+        ingen pris, men udbringningen af den regnes pr. ton.
       </p>
     </div>
   </div>
