@@ -6,6 +6,7 @@ import {
   useFarmHistoricalYearlySummary,
   useFieldYearValues,
   useRotationCategories,
+  useSimulationView,
   useSimulationYearlySummary,
 } from '@/api/hooks'
 import { updateSimulationField } from '@/api/mutations'
@@ -58,6 +59,7 @@ import {
 } from '@/lib/field-domain'
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
 import { nNormLevelByFieldId, type NNormLevel } from '@/lib/n-norm-level'
+import { latestQuotaTrades } from '@/lib/quota-trade-result'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import {
   rotationColorsOf,
@@ -349,6 +351,15 @@ export const FarmInspector = ({
     farm.id,
     selectedSimulation?.id,
   )
+  // The same view as the summary, so this fetches nothing new.
+  const simulationView = useSimulationView(farm.id, selectedSimulation?.id)
+  const quotaTrades =
+    isSimulationView && selectedSimulation
+      ? latestQuotaTrades(
+          selectedSimulation,
+          simulationView.data?.data?.savedResult,
+        )
+      : undefined
   const historicalSummary = useFarmHistoricalYearlySummary(
     isSimulationView ? undefined : farm.id,
   )
@@ -497,6 +508,7 @@ export const FarmInspector = ({
                   : null
               }
               history={!isSimulationView}
+              quotaTrades={quotaTrades}
               unavailableMessage={
                 yearlySummaryError && !isCatchmentScoped
                   ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
