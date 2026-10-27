@@ -62,7 +62,7 @@ export const ComparisonEconomics = ({
         <ComparisonFigureRow
           key={row.key}
           label={row.label}
-          note={formatCropNames(row.cropNames)}
+          note={row.appliesTo ?? formatCropNames(row.cropNames)}
           {...table}
         >
           {(column, index) =>

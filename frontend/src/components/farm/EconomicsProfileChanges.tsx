@@ -44,7 +44,7 @@ export const EconomicsProfileChanges = ({
       </div>
       <ul>
         {changes.map((change) => {
-          const crops = formatCropNames(change.cropNames)
+          const crops = change.appliesTo ?? formatCropNames(change.cropNames)
           return (
             <li
               key={change.key}

@@ -13,6 +13,7 @@ import {
   dbDeltaScale,
   describePriceCrops,
   describeProfileChanges,
+  fertiliserNote,
   formatChangeCount,
   formatDbDkk,
   formatEconomicsNumber,
@@ -24,10 +25,12 @@ import {
   isYieldCustomised,
   lineGroupId,
   lineQuantity,
+  manurePrices,
   NO_OVERRIDES,
   parseEconomicsInput,
   parseYieldPctInput,
   priceCrops,
+  priceValue,
   profileChanges,
   profileChangesTitle,
   profileDbEffect,
@@ -958,6 +961,88 @@ describe('gødning', () => {
     expect(
       categoryPrices(WITH_WHEAT, 'fertiliser').map((price) => price.id),
     ).toEqual(['nitrogen', 'spreading'])
+  })
+
+  it('lists the husdyrgødning prices per tonne although no budget row uses them', () => {
+    const manure: EconomicsAssumptions = {
+      ...WITH_WHEAT,
+      prices: [
+        ...WITH_WHEAT.prices,
+        {
+          id: 'manureSpreading',
+          label: 'Udbringning, husdyrgødning',
+          unit: 'kr/ton',
+          valueDkk: 24,
+          source: 'SEGES',
+        },
+        {
+          id: 'manurePurchase',
+          label: 'Husdyrgødning, køb',
+          unit: 'kr/ton',
+          valueDkk: 0,
+          source: 'Bruger-angivet',
+        },
+      ],
+      manureSpreadingPriceId: 'manureSpreading',
+      manurePurchasePriceId: 'manurePurchase',
+    }
+    expect(manurePrices(manure).map((price) => price.id)).toEqual([
+      'manureSpreading',
+      'manurePurchase',
+    ])
+    expect(categoryPrices(manure, 'fertiliser').map((price) => price.id)).toEqual(
+      ['nitrogen', 'spreading'],
+    )
+    const bought = withPriceOverride(manure, NO_OVERRIDES, 'manurePurchase', 15)
+    expect(priceValue(manure, bought, 'manurePurchase')).toBe(15)
+    expect(priceValue(manure, bought, 'manureSpreading')).toBe(24)
+    expect(manurePrices(WITH_WHEAT)).toEqual([])
+  })
+
+  it('names the standard svinegylle of an økologisk budget in the note', () => {
+    expect(fertiliserNote(WITH_WHEAT)).toContain('handelsgødning')
+    expect(fertiliserNote(WITH_WHEAT)).not.toContain('hele kvælstofnormen')
+    expect(
+      fertiliserNote({ standardManure: { name: 'Svinegylle', nKgPerTon: 6 } }),
+    ).toContain(
+      'svinegylle, der dækker hele kvælstofnormen med 6 kg udnyttet N pr. ton',
+    )
+  })
+
+  it('lists a changed husdyrgødning price as a change, and restores it', () => {
+    const manure: EconomicsAssumptions = {
+      ...WITH_WHEAT,
+      prices: [
+        ...WITH_WHEAT.prices,
+        {
+          id: 'manurePurchase',
+          label: 'Husdyrgødning, køb',
+          unit: 'kr/ton',
+          valueDkk: 0,
+          source: 'Bruger-angivet',
+        },
+      ],
+      manurePurchasePriceId: 'manurePurchase',
+    }
+    expect(profileChanges(manure, NO_OVERRIDES)).toEqual([])
+    const bought = withPriceOverride(manure, NO_OVERRIDES, 'manurePurchase', 15)
+    const changes = profileChanges(manure, bought)
+    expect(changes).toEqual([
+      {
+        key: 'price:manurePurchase',
+        kind: 'price',
+        label: 'Husdyrgødning, køb',
+        cropNames: [],
+        appliesTo: 'Simuleringer med husdyrgødning',
+        from: '0 kr/ton',
+        to: '15 kr/ton',
+        guideStep: 2,
+      },
+    ])
+    expect(describeProfileChanges(changes)).toBe('1 pris')
+    expect(withoutProfileChange(manure, bought, changes[0])).toEqual(
+      NO_OVERRIDES,
+    )
   })
 
   it('finds the handelsgødning line although the backend adds the amount to its name', () => {
