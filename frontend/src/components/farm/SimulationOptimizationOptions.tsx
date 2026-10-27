@@ -136,7 +136,10 @@ export function SimulationOptimizationOptions({
       ],
     })
   // The maks. udledning under Regler.
-  const setAverageCap = (catchmentId: number | null, maxNLoadKg: number | null) =>
+  const setAverageCap = (
+    catchmentId: number | null,
+    maxNLoadKg: number | null,
+  ) =>
     onConstraintsChange({
       ...constraints,
       maxNLoadByCatchment: [

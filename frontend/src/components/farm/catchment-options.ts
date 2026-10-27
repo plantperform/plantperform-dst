@@ -127,7 +127,8 @@ const capEveryYear = (value: number | undefined): Record<number, number> =>
 // True when every year has the same cap, or none has one.
 export const sameCapEveryYear = (maxNLoadByYear: Record<number, number>) =>
   ROTATION_CALENDAR_YEARS.every(
-    (year) => maxNLoadByYear[year] === maxNLoadByYear[ROTATION_CALENDAR_YEARS[0]],
+    (year) =>
+      maxNLoadByYear[year] === maxNLoadByYear[ROTATION_CALENDAR_YEARS[0]],
   )
 
 // The yearly cap of a catchment is its maks. udledning under Regler
