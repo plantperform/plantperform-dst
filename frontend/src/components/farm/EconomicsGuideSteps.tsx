@@ -34,9 +34,11 @@ import {
   quantityUnitLabel,
   saleLine,
   SOIL_VARIANTS_NOTE,
+  standardYield,
   withPriceOverride,
   withYieldPct,
   yieldHint,
+  yieldLines,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsOverrides,
@@ -125,38 +127,58 @@ export const GuidePricesStep = ({
           <span className="text-right">Din pris</span>
         </div>
         {assumptions.crops.map((crop) => {
-          const sale = saleLine(crop)
-          const price = sale && findPrice(assumptions, sale.priceId)
-          if (!price) return null
+          const sales = yieldLines(crop).flatMap((line) => {
+            const price = findPrice(assumptions, line.priceId)
+            return price ? [{ line, price }] : []
+          })
+          if (sales.length === 0) return null
+          const [first] = sales
           return (
             <div key={crop.cropCode} className="border-b">
-              <PriceRow
-                price={price}
-                value={sharedPrice.shownPrice(
-                  price.id,
-                  priceValue(assumptions, overrides, price.id),
-                )}
-                label={`Din salgspris for ${crop.cropName} i ${price.unit}`}
-                onCommit={(value) => sharedPrice.commitPrice(price.id, value)}
-              >
-                <CropName crop={crop}>
-                  <button
-                    type="button"
-                    aria-label={`Se alle poster for ${crop.cropName}`}
-                    className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
-                    onClick={() => onOpenCrop(crop.cropCode)}
+              {sales.map(({ line, price }) => (
+                <div key={line.id}>
+                  <PriceRow
+                    price={price}
+                    value={sharedPrice.shownPrice(
+                      price.id,
+                      priceValue(assumptions, overrides, price.id),
+                    )}
+                    label={`Din salgspris for ${crop.cropName}${sales.length > 1 ? `, ${line.label.toLowerCase()},` : ''} i ${price.unit}`}
+                    onCommit={(value) =>
+                      sharedPrice.commitPrice(price.id, value)
+                    }
                   >
-                    Se alle poster
-                  </button>
-                </CropName>
-              </PriceRow>
-              <SharedPriceConfirm
-                assumptions={assumptions}
-                overrides={overrides}
-                sharedPrice={sharedPrice}
-                priceId={price.id}
-                className="px-5 pb-3"
-              />
+                    {line === first.line ? (
+                      <CropName crop={crop}>
+                        {sales.length > 1 ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {line.label}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label={`Se alle poster for ${crop.cropName}`}
+                          className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
+                          onClick={() => onOpenCrop(crop.cropCode)}
+                        >
+                          Se alle poster
+                        </button>
+                      </CropName>
+                    ) : (
+                      <span className="pl-[26px] text-xs text-muted-foreground">
+                        {line.label}
+                      </span>
+                    )}
+                  </PriceRow>
+                  <SharedPriceConfirm
+                    assumptions={assumptions}
+                    overrides={overrides}
+                    sharedPrice={sharedPrice}
+                    priceId={price.id}
+                    className="px-5 pb-3"
+                  />
+                </div>
+              ))}
             </div>
           )
         })}
@@ -242,7 +264,7 @@ export const GuideYieldStep = ({
           >
             <CropName crop={crop} />
             <span className="text-right text-muted-foreground tabular-nums">
-              {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på{' '}
+              {formatEconomicsNumber(standardYield(crop))} {grain.quantityUnit} på{' '}
               {budgetSoilType(assumptions)}
             </span>
             <YieldPctField

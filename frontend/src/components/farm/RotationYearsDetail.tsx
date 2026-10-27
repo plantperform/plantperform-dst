@@ -1120,10 +1120,14 @@ const EconomicDetailSection = ({
   const unit = String(detail.yieldUnit ?? '')
   const response = yieldResponse(yieldAmount, detail.yieldFactor)
   const salePrice = num(detail.salePrice)
+  const culledShare = num(detail.culledShare)
+  const culledPrice = num(detail.culledPrice)
   const strawRevenue = num(detail.strawRevenue)
   const priceUnit = `kr/${(unit || 'enhed').replace(/\/ha$/, '')}`
   const revenueFormula = [
-    'udbytte × salgspris',
+    culledShare > 0
+      ? 'sorterede × salgspris + frasorterede × salgspris'
+      : 'udbytte × salgspris',
     ...(strawRevenue > 0 ? ['halm × halmpris'] : []),
   ].join(' + ')
   const revenue = num(detail.revenue)
@@ -1164,9 +1168,21 @@ const EconomicDetailSection = ({
             value: `${fmt(yieldAmount, 1)} ${unit}`,
           },
           {
-            label: customisedLabel('Salgspris', { kind: 'salePrice' }),
+            label: customisedLabel(
+              culledShare > 0 ? 'Salgspris, sorterede kartofler' : 'Salgspris',
+              { kind: 'salePrice' },
+            ),
             value: `${fmt(salePrice, 2)} ${priceUnit}`,
           },
+          ...(culledShare > 0
+            ? [
+                {
+                  label: 'Salgspris, frasorterede kartofler',
+                  detail: `${fmt(culledShare * 100, 1)} % af udbyttet`,
+                  value: `${fmt(culledPrice, 2)} ${priceUnit}`,
+                },
+              ]
+            : []),
           ...(strawRevenue > 0
             ? [{ label: 'Halm', value: `+${fmt(strawRevenue, 0)} kr/ha` }]
             : []),
