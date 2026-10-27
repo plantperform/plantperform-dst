@@ -668,6 +668,153 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(organic["markarbejde"], 1200)
         self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
 
+    def test_the_straw_sold_is_the_straw_pressed_and_both_follow_the_yield(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(arbejdssats_table).values(
+                    source_order=2,
+                    behandling="Halmpresning",
+                    jordbonitet="JB5-6",
+                    afgroedekode=None,
+                    driftsform="",
+                    pris_kr_per_enhed=0.2,
+                    enhed="kr/kg",
+                    kilde="SEGES",
+                )
+            )
+            # Økologisk straw is below the konventionel halmudbytte of 1000 kg/ha.
+            straw = (("Konventionel", 1000), ("Økologisk", 600))
+            for index, (driftsform, kg) in enumerate(straw, 60):
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform=driftsform,
+                        jordbonitet="JB5-6",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling="Halmpresning",
+                        antal=kg,
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        for driftsform, kg in straw:
+            for yield_pct in (0, 20):
+                detail = calculator.calculate_db(
+                    1,
+                    driftsform,
+                    5,
+                    only_organic=driftsform == "Økologisk",
+                    itemized=True,
+                    economics_key=EconomicsOverrides(yieldPct={"1": yield_pct}).cache_key(),
+                )
+                lines = {line["behandling"]: line for line in detail["indtaegt_linjer"]}
+                lines.update({line["behandling"]: line for line in detail["linjer"]})
+                sold, pressed = lines["Halm"], lines["Halmpresning"]
+                with self.subTest(driftsform=driftsform, yield_pct=yield_pct):
+                    self.assertAlmostEqual(sold["maengde"], kg * (1 + yield_pct / 100))
+                    self.assertEqual(pressed["maengde"], sold["maengde"])
+                    self.assertAlmostEqual(pressed["udgift_kr_ha"], sold["maengde"] * 0.2)
+                    self.assertTrue(pressed["foelger_udbytte"])
+
+    def test_drying_per_kg_is_the_harvested_yield_unless_the_quantity_is_edited(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(arbejdssats_table).values(
+                    source_order=3,
+                    behandling="Tørring, korn",
+                    jordbonitet="JB5-6",
+                    afgroedekode=None,
+                    driftsform="",
+                    pris_kr_per_enhed=0.1,
+                    enhed="kr/kg",
+                    kilde="SEGES",
+                )
+            )
+            # The budget's own 5000 kg is below the 60 hkg the calculation harvests.
+            session.execute(
+                insert(arbejdsmaengde_table).values(
+                    source_order=70,
+                    afgroedekode=1,
+                    driftsform="Konventionel",
+                    jordbonitet="JB5-6",
+                    kvalitet="",
+                    kategori="Tørring/lagring",
+                    behandling="Tørring, korn",
+                    antal=5000,
+                )
+            )
+        calculator.clear_lookup_cache()
+
+        def drying(overrides_):
+            detail = calculator.calculate_db(
+                1, "Konventionel", 5, mncs=175, itemized=True, economics_key=overrides_.cache_key()
+            )
+            line = next(line for line in detail["linjer"] if line["behandling"] == "Tørring, korn")
+            return detail, line
+
+        for yield_pct in (0, 20):
+            detail, line = drying(EconomicsOverrides(yieldPct={"1": yield_pct}))
+            with self.subTest(yield_pct=yield_pct):
+                self.assertAlmostEqual(line["maengde"], detail["udbytte"] * 100)
+                self.assertAlmostEqual(line["maengde"], 6000 * (1 + yield_pct / 100))
+                self.assertAlmostEqual(line["udgift_kr_ha"], line["maengde"] * 0.1)
+                self.assertTrue(line["foelger_udbytte"])
+        edited = overrides.quantity_id(
+            1, "work", "Konventionel", "JB5-6", "", "Tørring/lagring", "Tørring, korn"
+        )
+        _, line = drying(EconomicsOverrides(quantities={edited: 4000}))
+        self.assertEqual(line["maengde"], 4000)
+
+    def test_cleaning_sorting_and_freight_per_kg_are_the_harvested_yield(self):
+        posts = {"Rensning": 0.06, "Sortering af kartofler": 0.27, "Fragt": 0.05}
+        with self.sessions.begin() as session:
+            for index, (post, price) in enumerate(posts.items(), 10):
+                session.execute(
+                    insert(arbejdssats_table).values(
+                        source_order=index,
+                        behandling=post,
+                        jordbonitet="JB5-6",
+                        afgroedekode=None,
+                        driftsform="",
+                        pris_kr_per_enhed=price,
+                        enhed="kr/kg",
+                        kilde="SEGES",
+                    )
+                )
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Konventionel",
+                        jordbonitet="JB5-6",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling=post,
+                        antal=44000,
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        for yield_pct in (0, 20):
+            detail = calculator.calculate_db(
+                1,
+                "Konventionel",
+                5,
+                mncs=175,
+                itemized=True,
+                economics_key=EconomicsOverrides(yieldPct={"1": yield_pct}).cache_key(),
+            )
+            lines = {line["behandling"]: line for line in detail["linjer"]}
+            for post, price in posts.items():
+                line = lines[post]
+                with self.subTest(post=post, yield_pct=yield_pct):
+                    self.assertAlmostEqual(line["maengde"], detail["udbytte"] * 100)
+                    self.assertAlmostEqual(line["maengde"], 6000 * (1 + yield_pct / 100))
+                    self.assertAlmostEqual(line["udgift_kr_ha"], line["maengde"] * price)
+                    self.assertTrue(line["foelger_udbytte"])
+
     def test_a_rate_per_gang_is_priced_per_gang_pr_ha_and_counted_in_gange(self):
         crop = budget.crop_budgets([1], 5, "Konventionel", False)["crops"][0]
         ploughing = next(line for line in crop["costs"] if line["label"] == "Pløjning")
