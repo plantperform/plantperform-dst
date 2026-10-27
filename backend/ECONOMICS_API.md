@@ -157,10 +157,13 @@ Potatoes (spise-, lægge- and økologiske læggekartofler) have two yield rows,
 share SEGES culls (about 15 %) and sell it at two prices; the yield is their
 sum. Revenue, subsidies minus
 costs then give the dækningsbidrag `calculate_db` returns for the same inputs.
-Cost rows keep their Danish category. A gødning row is only there when the
-standard budget uses it, so a module's `fertiliser` quantity for a missing row,
-such as handelsgødning on an organic budget, has no row to replace. A row with
-`priceId: null` has no rate in the reference data and costs 0.
+Cost rows keep their Danish category: Gødning, Andre gødningsstoffer, Udsæd,
+Planteværn, Markarbejde, Tørring/lagring and Andet, all of which `calculate_db`
+counts in `omkostninger_total` (the last as `andet`). A gødning row is only
+there when the standard budget uses it, so a module's `fertiliser` quantity for
+a missing row, such as handelsgødning on an organic budget, has no row to
+replace. A row with `priceId: null` has no rate in the reference data and costs
+0.
 
 Work rates and work quantities differ by soil group, and a row carries the
 identifier of the variant for the budget's soil type. `soilVariants` maps each
