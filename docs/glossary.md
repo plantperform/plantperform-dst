@@ -147,6 +147,7 @@ field" column is the name on the wire.
 | følger udbyttet | `followsYield` | `followsYield` | Revenue and drying, which the yield percentage scales |
 | salgspris | `saleLine` | | The first revenue line of a crop |
 | halmindtægt | `strawRevenue` | `halm_indtaegt` | The straw sold, part of the indtægt in a field's calculation detail |
+| frasorterede kartofler | `culledShare`, `culledPrice`, `yieldLines`, `standardYield` | `frasorteret_andel`, `frasorteret_pris` | The culls of a potato yield, sold at their own, much lower price. The yield is the sorted potatoes (the sale line) plus the culls |
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |

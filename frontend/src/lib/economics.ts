@@ -168,8 +168,18 @@ const cropLines = (crop: CropEconomics): EconomicsLine[] =>
 const findLine = (crop: CropEconomics, lineId: string) =>
   cropLines(crop).find((line) => line.id === lineId)
 
+const STRAW_LINE_LABEL = 'Halm'
+
 export const saleLine = (crop: CropEconomics): EconomicsLine | undefined =>
   crop.revenue[0]
+
+// The harvested produce is the sale line plus, for potatoes, the culls sold at
+// their own price; the straw is a by-product with its own yield.
+export const yieldLines = (crop: CropEconomics): EconomicsLine[] =>
+  crop.revenue.filter((line) => line.label !== STRAW_LINE_LABEL)
+
+export const standardYield = (crop: CropEconomics): number =>
+  yieldLines(crop).reduce((total, line) => total + line.quantity, 0)
 
 export const findPrice = (
   assumptions: EconomicsAssumptions,
@@ -665,8 +675,6 @@ export const cropRestoreEffect = (
   )
 }
 
-const STRAW_LINE_LABEL = 'Halm'
-
 export const yieldHint = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
@@ -674,11 +682,18 @@ export const yieldHint = (
   const grain = saleLine(crop)
   if (!grain) return ''
   const straw = crop.revenue.find((line) => line.label === STRAW_LINE_LABEL)
-  const amount = (line: EconomicsLine) =>
-    `${formatEconomicsNumber(lineQuantity(overrides, crop, line))} ${line.quantityUnit.replace('/ha', '')}`
+  const amount = (quantity: number, line: EconomicsLine) =>
+    `${formatEconomicsNumber(quantity)} ${line.quantityUnit.replace('/ha', '')}`
+  const harvest = amount(
+    yieldLines(crop).reduce(
+      (total, line) => total + lineQuantity(overrides, crop, line),
+      0,
+    ),
+    grain,
+  )
   const quantities = straw
-    ? `${amount(grain)} kerne og ${amount(straw)} halm`
-    : amount(grain)
+    ? `${harvest} kerne og ${amount(lineQuantity(overrides, crop, straw), straw)} halm`
+    : harvest
   const pct = cropYieldPct(overrides, crop)
   const dried = crop.costs.drying.length > 0
   return pct === 0
@@ -737,7 +752,9 @@ const priceChange = (
     ),
     from: withUnit(price?.valueDkk ?? 0),
     to: withUnit(priceValue(assumptions, overrides, line.priceId)),
-    guideStep: line === saleLine(crop) ? 1 : (COST_GUIDE_STEPS[group] ?? null),
+    guideStep: yieldLines(crop).includes(line)
+      ? 1
+      : (COST_GUIDE_STEPS[group] ?? null),
   }
 }
 

@@ -39,6 +39,7 @@ import {
   sharedCustomisedPrices,
   sharedPriceEffect,
   standardLineQuantity,
+  standardYield,
   stepYieldPct,
   withoutCropChanges,
   withoutProfileChange,
@@ -49,6 +50,7 @@ import {
   withoutProfileChanges,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
+  yieldLines,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
@@ -186,6 +188,34 @@ const WITH_BARLEY: EconomicsAssumptions = {
     },
   ],
   crops: [...ASSUMPTIONS.crops, BARLEY],
+}
+
+const POTATOES = crop(152, 'Spisekartofler', {
+  revenue: [
+    line('Sorterede kartofler', 371, 'hkg/ha', 'sortedPrice'),
+    line('Frasorterede kartofler', 66, 'hkg/ha', 'culledPrice'),
+  ],
+})
+const WITH_POTATOES: EconomicsAssumptions = {
+  ...ASSUMPTIONS,
+  prices: [
+    ...ASSUMPTIONS.prices,
+    {
+      id: 'sortedPrice',
+      label: 'Salgspris, sorterede kartofler',
+      unit: 'kr/hkg',
+      valueDkk: 150,
+      source: 'SEGES',
+    },
+    {
+      id: 'culledPrice',
+      label: 'Salgspris, frasorterede kartofler',
+      unit: 'kr/hkg',
+      valueDkk: 13,
+      source: 'SEGES',
+    },
+  ],
+  crops: [...ASSUMPTIONS.crops, POTATOES],
 }
 
 const WHEAT = crop(11, 'Vinterhvede', {
@@ -534,6 +564,39 @@ describe('yieldHint', () => {
       '−25 % giver 33 hkg pr. ha. Omkostningerne ændrer sig ikke.',
     )
     expect(yieldHint(NO_OVERRIDES, PEAS)).toBe('')
+  })
+
+  it('counts the culled potatoes in the yield, not only the sorted ones', () => {
+    expect(yieldLines(POTATOES).map((entry) => entry.label)).toEqual([
+      'Sorterede kartofler',
+      'Frasorterede kartofler',
+    ])
+    expect(standardYield(POTATOES)).toBe(437)
+    expect(standardYield(BARLEY)).toBe(66)
+    expect(yieldHint(NO_OVERRIDES, POTATOES)).toBe(
+      'Normen er 437 hkg pr. ha. Procenten ændrer mængden, men ikke omkostningerne.',
+    )
+    expect(yieldHint(withYieldPct(NO_OVERRIDES, POTATOES, 10), POTATOES)).toBe(
+      '+10 % giver 480,7 hkg pr. ha. Omkostningerne ændrer sig ikke.',
+    )
+  })
+
+  it('sends both potato prices to the prices step', () => {
+    const overrides = withPriceOverride(
+      WITH_POTATOES,
+      withPriceOverride(WITH_POTATOES, NO_OVERRIDES, 'culledPrice', 20),
+      'sortedPrice',
+      160,
+    )
+    expect(
+      profileChanges(WITH_POTATOES, overrides).map((change) => [
+        change.label,
+        change.guideStep,
+      ]),
+    ).toEqual([
+      ['Salgspris, sorterede kartofler', 1],
+      ['Salgspris, frasorterede kartofler', 1],
+    ])
   })
 })
 
