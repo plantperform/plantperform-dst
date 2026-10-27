@@ -64,6 +64,7 @@ import {
   quotaBarHeights,
   quotaTradeBand,
   quotaCapKgN,
+  quotaLimitLinePct,
   quotaTradeKgIn,
   quotaTradeKind,
   type QuotaTradeKind,
@@ -215,6 +216,9 @@ type QuotaBarProps = {
   colorClass: string
   widthClass: string
   quotaLinePct: number
+  // Marks the bar's own limit before any trade, which differs between oplande
+  // and years when Grænser set caps other than the kvote.
+  showLimitLine: boolean
 }
 
 const QuotaBar = ({
@@ -223,6 +227,7 @@ const QuotaBar = ({
   colorClass,
   widthClass,
   quotaLinePct,
+  showLimitLine,
 }: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
   // Red only above the limit after any trade; the status keeps the original
@@ -267,6 +272,15 @@ const QuotaBar = ({
             QUOTA_TRADE_BAND_CLASSES[band.kind],
           )}
           style={{ bottom: `${band.bottomPct}%`, height: `${band.heightPct}%` }}
+        />
+      ) : null}
+      {showLimitLine ? (
+        <span
+          data-limit-line=""
+          className="pointer-events-none absolute -inset-x-0.5 z-30 border-t-[1.5px] border-dashed border-foreground/45"
+          style={{
+            bottom: `${quotaLimitLinePct(row.quotaKgN, row.tradedLimit, quotaLinePct)}%`,
+          }}
         />
       ) : null}
     </span>
@@ -880,6 +894,7 @@ export const YearWalkthrough = ({
       )
     }),
   )
+  const showLimitLines = tradeKinds.length > 0
 
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
@@ -1267,8 +1282,8 @@ export const YearWalkthrough = ({
                     aria-hidden="true"
                     className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
                   />
-                  {tradeKinds.length > 0
-                    ? 'Oprindelig kvote'
+                  {showLimitLines
+                    ? 'Loft før kvotehandel'
                     : quotaCatchmentCount === 1
                       ? 'Oplandets kvote'
                       : 'Egen kvote'}
@@ -1398,6 +1413,7 @@ export const YearWalkthrough = ({
                                 )}
                                 widthClass={barWidth}
                                 quotaLinePct={quotaLinePct}
+                                showLimitLine={showLimitLines}
                               />
                             ))}
                       </span>
