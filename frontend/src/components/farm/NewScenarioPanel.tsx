@@ -668,9 +668,10 @@ export const NewScenarioPanel = ({
           <SimulationQuotaChoice
             kind={optimizationSettings.kind}
             disabled={running || isCreating}
-            onChange={(kind) =>
+            onChange={(kind) => {
               setOptimizationSettings((current) => ({ ...current, kind }))
-            }
+              setYearlySyncedKey(null)
+            }}
           />
 
           <div className="space-y-2">
