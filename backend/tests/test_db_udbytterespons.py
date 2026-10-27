@@ -33,6 +33,7 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
             "_lookup_omkostningslinjer": lambda *args, **kwargs: [],
             "_load_prisliste": lambda: PRISLISTE,
             "_tilskud_poster": lambda *args, **kwargs: [],
+            "mangler_oekonomi": lambda *args, **kwargs: False,
         }.items():
             patcher = patch.object(db_calculator, name, value)
             patcher.start()
