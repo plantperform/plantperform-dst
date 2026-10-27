@@ -29,6 +29,28 @@ describe('fromWire', () => {
     })
   })
 
+  it('names every cost category of a dækningsbidrag', () => {
+    expect(
+      fromWire({
+        goedning: 1,
+        andre_goedningsstoffer: 2,
+        udsaed: 3,
+        plantevaern: 4,
+        markarbejde: 5,
+        toerring: 6,
+        andet: 7,
+      }),
+    ).toEqual({
+      fertiliserCost: 1,
+      otherFertilisers: 2,
+      seed: 3,
+      cropProtection: 4,
+      fieldWork: 5,
+      drying: 6,
+      other: 7,
+    })
+  })
+
   it('leaves a geometry as the backend sent it', () => {
     const geometry = {
       type: 'Polygon',

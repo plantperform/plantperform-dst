@@ -49,6 +49,7 @@ const crop = (
         ]
       : [],
     drying: [],
+    other: [],
   },
 })
 

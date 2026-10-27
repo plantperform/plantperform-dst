@@ -36,6 +36,7 @@ const ploughed = (cropCode: number, cropName: string): CropEconomics => ({
       },
     ],
     drying: [],
+    other: [],
   },
 })
 

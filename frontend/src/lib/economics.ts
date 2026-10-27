@@ -8,6 +8,7 @@ export type CostCategory =
   | 'cropProtection'
   | 'fieldWork'
   | 'drying'
+  | 'other'
 
 export const COST_CATEGORIES: readonly { id: CostCategory; label: string }[] = [
   { id: 'fertiliser', label: 'Gødning' },
@@ -16,6 +17,7 @@ export const COST_CATEGORIES: readonly { id: CostCategory; label: string }[] = [
   { id: 'cropProtection', label: 'Planteværn' },
   { id: 'fieldWork', label: 'Markarbejde' },
   { id: 'drying', label: 'Tørring/lagring' },
+  { id: 'other', label: 'Andet' },
 ]
 
 export type UnitPrice = {
