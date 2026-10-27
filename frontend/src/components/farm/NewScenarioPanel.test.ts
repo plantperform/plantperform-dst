@@ -746,4 +746,23 @@ describe('simulation wizard steps', () => {
         .checked,
     ).toBe(true)
   })
+
+  it('lets the yearly cap follow maks. udledning edited under the average', async () => {
+    await mount()
+    await act(async () =>
+      (
+        container.querySelector('input[value="optimize"]') as HTMLInputElement
+      ).click(),
+    )
+    await click('Grænser')
+    await change('Maks. gennemsnitlig udledning', '80')
+    await click('Grundlag')
+    await act(async () =>
+      (
+        container.querySelector('input[value="yearly"]') as HTMLInputElement
+      ).click(),
+    )
+    await click('Bekræft')
+    expect(container.textContent).toContain('2027: 80 kg N')
+  })
 })
