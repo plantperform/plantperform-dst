@@ -727,6 +727,27 @@ describe('simulationToFormValues', () => {
     expect(withFertiliser(31, 50)).toBe(CUSTOM_FERTILISER)
   })
 
+  it('starts an økologisk simulation without organic fertiliser from the first preset', () => {
+    const values = simulationToFormValues(
+      {
+        ...simulation,
+        fertiliser: {
+          ...simulation.fertiliser,
+          farmingSystem: 'Økologisk',
+          orgMineralN: 0,
+          mineralSharePct: 100,
+          onlyOrganic: true,
+        },
+      },
+      [kvaeggylle],
+      offered,
+    )
+    expect(values.fertiliserChoice).toBe('Kvæggylle')
+    expect(values.orgMineralN).toBe('30')
+    expect(values.mineralSharePct).toBe('50')
+    expect(values.onlyOrganic).toBe(true)
+  })
+
   it('keeps a sowing date on the daily basis', () => {
     const values = simulationToFormValues(
       { ...simulation, catchCropDailyBasis: true, catchCropSowingDate: '3/9' },
