@@ -881,8 +881,8 @@ export const NewScenarioPanel = ({
                     </label>
                   ) : (
                     <p className="text-sm sm:col-span-2">
-                      Når økologisk dyrkningspraksis er valgt, dækkes
-                      N-tilførslen af husdyrgødning.
+                      Ved økologisk driftsform dækker husdyrgødningen hele
+                      N-normen.
                     </p>
                   )}
                   <label className="space-y-1 text-sm">
