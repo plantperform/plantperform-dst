@@ -117,6 +117,8 @@ describe('kvotehandel settings', () => {
   })
 
   it('opens trades saved before the choice as the same each year', () => {
+    // A new kvotehandel chooses an amount for each year.
+    expect(NO_QUOTA_TRADE_DRAFT.sameEachYear).toBe(false)
     expect(
       quotaTradeDraftFrom([{ catchmentId: 1, priceDkkPerKg: 35 }]).sameEachYear,
     ).toBe(true)

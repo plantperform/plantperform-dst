@@ -44,7 +44,7 @@ field" column is the name on the wire.
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
 | kvotehandel (fast pris) | `QuotaTrade`, `quotaTrades`, `QuotaTradeDraft`, `SimulationQuotaTradeOptions` | `quotaTrades` | The Kvotehandel step in Ny simulering. Års-optimering may buy or sell kvote in the chosen kystvandoplande at a fixed price, an amount for each year. Needs a cap in every year and kvotegivende marker |
-| samme mængde i alle år | `sameEachYear` | `sameEachYear` | A kvotehandel that trades one amount in every year instead of an amount per year. On by default, and for trades saved before the choice existed |
+| samme mængde i alle år | `sameEachYear` | `sameEachYear` | A kvotehandel that trades one amount in every year instead of an amount per year. Off for a new kvotehandel; on for trades saved before the choice existed |
 | kvotepris | `priceDkkPerKg` | `priceKrPerKg` | Kr per kg N per year, the same for buying and selling |
 | handlet kvote, kvotebetaling | `SimulationQuotaTrade`, `tradeKgByYear`, `paymentDkkPerYear` | `quotaTrades`, `tradeKgByYear`, `paymentKrPerYear` | What a run chose, per calendar year: > 0 buys and < 0 sells; the payment is the average per year and negative when selling more than buying |
 | Dækningsbidrag inkl. kvotehandel | `QuotaTradeFigures` | | The crops' DB2 per year less the payments, on the simulation card |

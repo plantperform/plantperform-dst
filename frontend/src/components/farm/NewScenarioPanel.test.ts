@@ -801,14 +801,23 @@ describe('simulation wizard steps', () => {
       expect(container.textContent).toContain(
         'Kystvandopland 1 · 35,5 kr/kg N pr. år',
       )
-      expect(container.textContent).toContain('Mængden er den samme i alle år.')
+      // A new kvotehandel chooses the amount for each year.
+      expect(container.textContent).toContain(
+        'Mængden kan være forskellig fra år til år.',
+      )
       await click('Gem')
       expect(
         queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
-      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: true }])
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: false }])
     })
 
-    it('lets the amount differ between years when asked', async () => {
+    it('trades the same amount every year when ticked', async () => {
+      const sameEachYear = () =>
+        [...container.querySelectorAll('label')]
+          .find((label) =>
+            label.textContent?.includes('Samme mængde i alle år'),
+          )
+          ?.querySelector('input')?.checked
       await mount({
         ...yearly,
         optimizationSettings: {
@@ -817,22 +826,24 @@ describe('simulation wizard steps', () => {
         },
       })
       await click('Kvotehandel')
-      // Saved before the choice existed: the same amount every year.
+      // Saved before the choice existed: the same amount every year. The
+      // text says what ticking it does, whether or not it is ticked.
+      expect(sameEachYear()).toBe(true)
       expect(container.textContent).toContain(
         'Den samme mængde kvote handles i hvert år.',
       )
       await tick('Samme mængde i alle år')
+      expect(sameEachYear()).toBe(false)
       expect(container.textContent).toContain(
-        'Optimeringen vælger mængden for hvert år for sig',
+        'Den samme mængde kvote handles i hvert år.',
       )
+      await tick('Samme mængde i alle år')
       await click('Bekræft')
-      expect(container.textContent).toContain(
-        'Mængden kan være forskellig fra år til år.',
-      )
+      expect(container.textContent).toContain('Mængden er den samme i alle år.')
       await click('Gem')
       expect(
         queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
-      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 40, sameEachYear: false }])
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 40, sameEachYear: true }])
     })
 
     it('stops trading a catchment once a year has no limit, keeping its price', async () => {
