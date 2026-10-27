@@ -10,11 +10,14 @@ import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 // quotaTradesFrom decides what is saved.
 export type QuotaTradeDraft = {
   enabled: boolean
+  // One choice for every catchment that trades.
+  sameEachYear: boolean
   catchments: Record<number, { enabled: boolean; price: string }>
 }
 
 export const NO_QUOTA_TRADE_DRAFT: QuotaTradeDraft = {
   enabled: false,
+  sameEachYear: true,
   catchments: {},
 }
 
@@ -25,6 +28,7 @@ export const quotaTradeDraftFrom = (
     ? NO_QUOTA_TRADE_DRAFT
     : {
         enabled: true,
+        sameEachYear: trades.every((trade) => trade.sameEachYear !== false),
         catchments: Object.fromEntries(
           trades.map((trade) => [
             trade.catchmentId,
@@ -105,6 +109,7 @@ export const quotaTradesFrom = (
   tradingCatchments(draft, settings, fields).map((entry) => ({
     catchmentId: entry.catchmentId,
     priceDkkPerKg: parsePrice(entry.price),
+    sameEachYear: draft.sameEachYear,
   }))
 
 export const quotaTradeError = (
