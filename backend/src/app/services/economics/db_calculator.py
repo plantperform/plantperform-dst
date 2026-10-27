@@ -24,7 +24,7 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
-from app.services.economics.overrides import identifier, post_label, quantity_id
+from app.services.economics.overrides import identifier, post_label, price_unit, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
 from app.services.rotations import saedskifte_library
 from app.services.virkemidler import praecisionsgoedskning_tilladt
@@ -52,8 +52,12 @@ _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
 # Husdyrgødning is spread per tonne: the price list's trailing-hose rate times
-# the tonnes applied (utilized N / the gødning's utilized N per tonne).
+# the tonnes applied (utilized N / the gødning's utilized N per tonne). Buying
+# it is priced the same way, at a standard of 0 kr/tonne.
 _GYLLE_UDBRINGNING_POST = "Gylleudbringning, slæbeslanger"
+_GYLLE_UDBRINGNING_LABEL = "Udbringning, husdyrgødning"
+_GYLLE_KOEB_POST = "Husdyrgødning, køb"
+_GYLLE_KOEB_LABEL = "Husdyrgødning, køb"
 
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
@@ -449,6 +453,33 @@ def mangler_oekonomi(afgrodekode: int, driftsform: str) -> bool:
     return afgrodekode not in _afgroeder_i_saedskifter()
 
 
+def manure_prices() -> dict[str, dict | None]:
+    """The two husdyrgødning prices per tonne a profile can set.
+
+    They are listed whether or not a budget row uses them: the standard budget
+    spreads no husdyrgødning, but a simulation that does uses the prices, on
+    both driftsformer. A price missing from an older price list is None.
+    """
+    prisliste = _load_prisliste()
+
+    def price(post: str, label: str) -> dict | None:
+        entry = prisliste.get(post)
+        if entry is None:
+            return None
+        return dict(
+            id=identifier("list", post),
+            label=label,
+            unit=price_unit(entry["enhed"]),
+            value=entry["pris"],
+            source=entry["kilde"],
+        )
+
+    return {
+        "spreading": price(_GYLLE_UDBRINGNING_POST, _GYLLE_UDBRINGNING_LABEL),
+        "purchase": price(_GYLLE_KOEB_POST, _GYLLE_KOEB_LABEL),
+    }
+
+
 @lru_cache(maxsize=1)
 def _load_prisliste() -> dict[str, dict]:
     """Map post to price-list data for both Omkostning and Tilskud."""
@@ -526,7 +557,8 @@ def calculate_db(
 
     husdyrgodning_ton_pr_ha: Tonnes of husdyrgødning spread per ha, the
     utilized N divided by the gødning's utilized N per tonne. The application
-    is priced per tonne at the price list's trailing-hose rate.
+    is priced per tonne at the price list's trailing-hose rate, and the
+    gødning itself at its purchase price per tonne.
 
     only_organic: The scenarie's gødning selection (Phase 13 GodningSettings),
     not the same as driftsform. This value, not driftsform, determines whether
@@ -669,10 +701,25 @@ def calculate_db(
         goedning_linjer.append(
             list_line(
                 "Gødning",
-                "Udbringning, husdyrgødning",
+                _GYLLE_UDBRINGNING_LABEL,
                 _GYLLE_UDBRINGNING_POST,
                 quantity=husdyrgodning_ton_pr_ha,
                 purpose="manureSpreading",
+            )
+        )
+    if (
+        husdyrgodning_ton_pr_ha > 0
+        or quantities.get(quantity_id(afgrodekode, "fertiliser", "manurePurchase"), 0.0) > 0
+    ):
+        # Optional: an older price list has no purchase price, which then is 0.
+        goedning_linjer.append(
+            list_line(
+                "Gødning",
+                _GYLLE_KOEB_LABEL,
+                _GYLLE_KOEB_POST,
+                quantity=husdyrgodning_ton_pr_ha,
+                purpose="manurePurchase",
+                optional=True,
             )
         )
     goedning = sum(line["udgift_kr_ha"] for line in goedning_linjer)

@@ -78,7 +78,7 @@ variants; the frontend's example IDs are not API identifiers.
 | `cropCode/work:[farmingSystem,soilGroup,quality,category,treatment]` | Work/material quantity |
 | `cropCode/cost:[farmingSystem,category,treatment]` | Multiplier for legacy flat cost; default 1 |
 | `cropCode/list:[post]` | Quantity/multiplier for a general price-list item; default 1 |
-| `cropCode/fertiliser:[purpose]` | Economic fertilizer quantity; purpose is `mineralN`, `mineralSpreading`, or `manureSpreading` |
+| `cropCode/fertiliser:[purpose]` | Economic fertilizer quantity; purpose is `mineralN`, `mineralSpreading`, `manureSpreading` (tonnes of husdyrgødning spread) or `manurePurchase` (tonnes bought) |
 
 The text after `:` is a compact JSON array with Unicode preserved. A quantity
 entry's ID equals `cropCode + '/' + lineId`, matching the existing frontend's
@@ -96,9 +96,11 @@ already included; setting a price does not enable an optional subsidy scheme.
 Prices carry the unit and `source` from the økonomi CSVs. A work quantity's
 unit follows the rate that prices it, which depends on the soil group, so the
 catalogue keeps `enheder/ha` for quantities; crop budgets carry the resolved
-unit. Existing manure-spreading costs retain the calculator's flat
-application-rate placeholder. Recalculation does not introduce a new manure
-purchase or transport model.
+unit. Husdyrgødning is priced per tonne: its spreading at the price list's
+`Gylleudbringning, slæbeslanger` and its purchase at `Husdyrgødning, køb`, a
+standard of 0 kr/ton. Both lines use the tonnes the simulation spreads per ha,
+so a profile sets the two prices for konventionel and økologisk drift alike.
+Recalculation does not introduce a transport model.
 
 ## Crop budgets
 
@@ -109,11 +111,21 @@ cost budget for the farming system, such as bestøverbrak, a skovrejsning or a
 permanent græs, has no real economics and is left out unless a sædskifte grows
 it; its marks show `economicsMissing: true` and no dækningsbidrag. Every
 budget is for the soil type covering most of the farm's area, unirrigated, at the N-norm with
-handelsgødning (none when `farmingSystem` is `Økologisk`), row by row as the
-calculator prices it. With `simulationId`, the simulation's farming system and
-gødning apply instead, so husdyrgødning covers up to its `orgMineralN` of the
-norm. `jbNr` is null and `crops` empty when no field has a soil type. A farm
+handelsgødning, row by row as the calculator prices it. When `farmingSystem` is
+`Økologisk` there is no handelsgødning: the whole N-norm comes from a standard
+svinegylle at the default 6 kg utilized N per tonne, which `standardManure`
+names. Its tonnes are spread and bought at the two prices below. Økologisk
+husdyrgødning has no cap, in a simulation either. With `simulationId`, the
+simulation's farming system and gødning apply instead, so konventionel
+husdyrgødning covers up to its `orgMineralN` of the norm, and `standardManure`
+is null. `jbNr` is null and `crops` empty when no field has a soil type. A farm
 the user is not a member of and an unknown `simulationId` return 404.
+
+`prices` always holds the two husdyrgødning prices per tonne, on either farming
+system and whether or not a row uses them, and `manureSpreadingPriceId` and
+`manurePurchasePriceId` name them (null when an older price list lacks the
+post). A budget has husdyrgødning rows only when it spreads it: an økologisk
+standard budget or a simulation's.
 
 ```json
 {
