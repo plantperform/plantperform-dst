@@ -43,6 +43,8 @@ field" column is the name on the wire.
 | udledningsgrænse | `nLoadLimitKgNHa` | `udledningsgraenseKgnHa` | |
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
+| kvotehandel (fast pris) | `QuotaTrade`, `quotaTrades`, `QuotaTradeDraft`, `SimulationQuotaTradeOptions` | `quotaTrades` | The Kvotehandel step in Ny simulering. Års-optimering may buy or sell kvote in the chosen kystvandoplande at a fixed price, the same amount in every year. Needs a cap in every year and kvotegivende marker |
+| kvotepris | `priceDkkPerKg` | `priceKrPerKg` | Kr per kg N per year, the same for buying and selling |
 | opslag i markregistret | registry lookup, `summarizeLookup` | | The marker found for a CVR before the farm is created, summed per kystvandopland |
 | retention | `retention` | `retention` | Share held back, 0 to 1 |
 | udvaskning | `leaching` | | Nitrate leaving the root zone |
