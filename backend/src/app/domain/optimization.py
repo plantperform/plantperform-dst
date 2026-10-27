@@ -68,12 +68,15 @@ class KystvandoplandYearlyNLoadCaps(CamelModel):
 class QuotaTradeSetting(CamelModel):
     """Kvotehandel at a fixed price for one kystvandopland in Års-optimering.
 
-    The run chooses one trade in whole kg N that moves the opland's cap by the
-    same amount in every year, and pays price_kr_per_kg for each kg per year.
+    The run chooses a trade in whole kg N for each year that moves the opland's
+    cap in that year, and pays price_kr_per_kg for each kg per year. With
+    same_each_year the trade is one amount for every year.
     """
 
     kystvand_id: int
     price_kr_per_kg: float = Field(ge=0, allow_inf_nan=False)
+    # Settings saved before trades could differ by year traded the same amount.
+    same_each_year: bool = True
 
 
 class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
@@ -135,13 +138,15 @@ class RotationAssignmentResponse(CamelModel):
 
 
 class SimulationQuotaTrade(CamelModel):
-    """A kvotehandel a run chose: trade_kg > 0 buys, < 0 sells, in every year."""
+    """A kvotehandel a run chose: per calendar year, > 0 buys and < 0 sells."""
 
     kystvand_id: int
     kystvand_navn: str | None = None
-    trade_kg: int
+    trade_kg_by_year: dict[int, int]
     price_kr_per_kg: float
-    # Per year, like objective_db2; negative when the trade sells.
+    same_each_year: bool
+    # The average per year, like objective_db2; negative when the trades sell
+    # more than they buy.
     payment_kr_per_year: float
 
 

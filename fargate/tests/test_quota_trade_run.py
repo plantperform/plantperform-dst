@@ -22,6 +22,11 @@ class QuotaTradeInputTests(unittest.TestCase):
         inputs = _quota_trade_inputs([_field(1)], {1: (100.0,) * NUM_YEARS}, (TRADE,), NAMES)
         self.assertEqual(inputs, (QuotaTradeInput(kystvand_id=1, price_kr_per_kg=35),))
 
+    def test_a_trade_by_year_reaches_the_solver_as_one(self):
+        by_year = TRADE.model_copy(update={"same_each_year": False})
+        [trade] = _quota_trade_inputs([_field(1)], {}, (by_year,), NAMES)
+        self.assertFalse(trade.same_each_year)
+
     def test_an_opland_left_at_its_kvote_can_trade(self):
         self.assertEqual(len(_quota_trade_inputs([_field(1)], {}, (TRADE,), NAMES)), 1)
 
@@ -60,8 +65,9 @@ class QuotaTradeWorkerTests(unittest.TestCase):
         chosen = SimulationQuotaTrade(
             kystvand_id=1,
             kystvand_navn="Limfjorden",
-            trade_kg=-50,
+            trade_kg_by_year={2027 + y: -50 for y in range(NUM_YEARS)},
             price_kr_per_kg=35,
+            same_each_year=True,
             payment_kr_per_year=-1_750,
         )
         solved = SimpleNamespace(
