@@ -8,6 +8,7 @@ import {
 import { CalendarRange, Droplets, Layers, Wheat } from 'lucide-react'
 
 import type {
+  CatchmentYearlyNLoadCaps,
   FieldRecord,
   FieldYearValues,
   OptimizeSimulationResponse,
@@ -54,9 +55,11 @@ import {
   QUOTA_TRADE_LABELS,
   quotaBarHeights,
   quotaTradeBand,
+  quotaCapKgN,
   quotaTradeKgIn,
   quotaTradeKind,
   type QuotaTradeKind,
+  type TradedLimit,
 } from '@/lib/quota-trade-result'
 import { cn } from '@/lib/utils'
 
@@ -128,6 +131,9 @@ type CatchmentYear = {
   // year for the whole period; the status above still measures against the
   // original kvote.
   tradeKg: number
+  // The cap the run held a trading opland to and the trade that moved it;
+  // null when the opland does not trade.
+  tradedLimit: TradedLimit | null
 }
 
 const catchmentYearLevel = (
@@ -179,10 +185,12 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
   const { heightPct, overPct } = quotaBarHeights(
     row.nLoadKg,
     row.quotaKgN,
-    row.tradeKg,
+    row.tradedLimit,
     QUOTA_LINE_PCT,
   )
-  const band = quotaTradeBand(row.quotaKgN, row.tradeKg, QUOTA_LINE_PCT)
+  const band = row.tradedLimit
+    ? quotaTradeBand(row.quotaKgN, row.tradedLimit, QUOTA_LINE_PCT)
+    : null
   return (
     <span
       className={cn(
@@ -705,9 +713,12 @@ type YearWalkthroughProps = {
   collapsed: boolean
   // Kvotehandel of the simulation's latest run, drawn next to the kvote.
   quotaTrades?: SimulationQuotaTrade[]
+  // The yearly caps under Grænser that the trades moved.
+  quotaCaps?: CatchmentYearlyNLoadCaps[]
 }
 
 const NO_QUOTA_TRADES: SimulationQuotaTrade[] = []
+const NO_QUOTA_CAPS: CatchmentYearlyNLoadCaps[] = []
 
 export const YearWalkthrough = ({
   entries,
@@ -726,6 +737,7 @@ export const YearWalkthrough = ({
   splitPanels = false,
   collapsed,
   quotaTrades = NO_QUOTA_TRADES,
+  quotaCaps = NO_QUOTA_CAPS,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -769,27 +781,41 @@ export const YearWalkthrough = ({
     }),
   )
   // Every bar is drawn to its own kvote at the same height, so one line marks
-  // each opland's original kvote; with trades it is what the bands start from.
+  // each opland's original kvote; with trades the bands start from the year's
+  // cap, which is the kvote unless Grænser set another.
   const showQuotaLine = quotaCatchmentCount === 1 || tradeKinds.length > 0
 
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
       // A simulation's entries count rotation years from 1.
-      const tradeKg = tradeKgFor(
-        catchment.catchmentId,
+      const calendarYear =
         entry === null
           ? null
           : history
             ? entry.year
-            : firstCalendarYear(false) + entry.year - 1,
-      )
+            : firstCalendarYear(false) + entry.year - 1
+      const tradeKg = tradeKgFor(catchment.catchmentId, calendarYear)
+      const tradedLimitFor = (quotaKgN: number): TradedLimit | null =>
+        tradeFor(catchment.catchmentId) === undefined
+          ? null
+          : {
+              capKgN: quotaCapKgN(
+                quotaCaps,
+                catchment.catchmentId,
+                calendarYear,
+                quotaKgN,
+              ),
+              tradeKg,
+            }
       if (entry === null) {
+        const quotaKgN = catchment.totals.nLoadQuotaKgN
         return {
           catchment,
           nLoadKg: catchment.totals.nLoad,
-          quotaKgN: catchment.totals.nLoadQuotaKgN,
+          quotaKgN,
           level: catchment.level,
           tradeKg,
+          tradedLimit: tradedLimitFor(quotaKgN),
         }
       }
       const yearTotals = catchmentTotalsByYear?.get(catchment.catchmentId)?.[
@@ -808,6 +834,7 @@ export const YearWalkthrough = ({
           catchment.totals.fieldCount,
         ),
         tradeKg,
+        tradedLimit: tradedLimitFor(quotaKgN),
       }
     })
 

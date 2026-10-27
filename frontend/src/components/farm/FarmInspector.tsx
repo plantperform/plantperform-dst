@@ -321,6 +321,10 @@ export const FarmInspector = ({
           simulationView.data?.data?.savedResult,
         )
       : undefined
+  // The yearly caps the trades moved, as saved under Grænser.
+  const quotaCaps = isSimulationView
+    ? selectedSimulation?.optimizationSettings?.maxNLoadByCatchment
+    : undefined
   const historicalSummary = useFarmHistoricalYearlySummary(
     isSimulationView ? undefined : farm.id,
   )
@@ -467,6 +471,7 @@ export const FarmInspector = ({
               }
               history={!isSimulationView}
               quotaTrades={quotaTrades}
+              quotaCaps={quotaCaps}
               unavailableMessage={
                 yearlySummaryError && !isCatchmentScoped
                   ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
