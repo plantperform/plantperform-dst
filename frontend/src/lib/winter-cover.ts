@@ -85,6 +85,9 @@ export const INTERMEDIATE_OR_EARLY_SOWING: WinterCoverDefinition = {
 export const isIntermediateOrEarlySowingYear = (year: RotationYear): boolean =>
   year.undersownCropName === INTERMEDIATE_OR_EARLY_SOWING.label
 
+export const shownUndersownCropName = (year: RotationYear): string | null =>
+  isIntermediateOrEarlySowingYear(year) ? null : year.undersownCropName
+
 const WINTER_COVERS: readonly WinterCoverDefinition[] = [
   CATCH_CROP,
   INTERMEDIATE_CROP,

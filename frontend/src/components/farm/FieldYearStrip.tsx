@@ -21,9 +21,9 @@ import {
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 import {
-  isIntermediateOrEarlySowingYear,
   presentWinterCovers,
   rotationCovers,
+  shownUndersownCropName,
 } from '@/lib/winter-cover'
 
 type YearMetric = 'nLoad' | 'leaching' | 'db2'
@@ -131,6 +131,9 @@ export const FieldYearStrip = ({
   )
   const selectedYear =
     selectedIndex !== null ? field.cropRotation[selectedIndex] : undefined
+  const selectedUndersownCropName = selectedYear
+    ? shownUndersownCropName(selectedYear)
+    : null
   const selectedValue =
     selectedIndex !== null ? yearValues?.[selectedIndex] : undefined
   const otherMetrics = metricOptions.filter((option) => option.value !== metric)
@@ -190,13 +193,11 @@ export const FieldYearStrip = ({
             const calendarYear = startYear + index
             const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
             const group = cropGroupFor(year.cropCode, year.cropName)
+            const undersownCropName = shownUndersownCropName(year)
             const title = `${calendarYear}${isCurrentYear ? ' (i år)' : ''}: ${
               year.cropName
             }${
-              year.undersownCropName !== null &&
-              !isIntermediateOrEarlySowingYear(year)
-                ? ` (udlæg: ${year.undersownCropName})`
-                : ''
+              undersownCropName !== null ? ` (udlæg: ${undersownCropName})` : ''
             }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}${
               value !== null ? ` · ${describeMetric(metric, value)}` : ''
             }`
@@ -313,9 +314,8 @@ export const FieldYearStrip = ({
           <p className="tabular-nums text-pretty">
             <span className="font-semibold">{startYear + selectedIndex}</span> ·{' '}
             {selectedYear.cropName}
-            {selectedYear.undersownCropName !== null &&
-            !isIntermediateOrEarlySowingYear(selectedYear)
-              ? ` · udlæg: ${shortCropName(selectedYear.undersownCropName)}`
+            {selectedUndersownCropName !== null
+              ? ` · udlæg: ${shortCropName(selectedUndersownCropName)}`
               : ''}
             {selectedValue
               ? otherMetrics
