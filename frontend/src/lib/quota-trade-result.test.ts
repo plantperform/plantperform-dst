@@ -17,6 +17,7 @@ import {
   latestQuotaTrades,
   quotaBarHeights,
   quotaCapKgN,
+  quotaLimitLinePct,
   quotaTradeBand,
   quotaTradeKgIn,
   quotaTradePayment,
@@ -136,6 +137,15 @@ describe('kvotehandel results', () => {
     expect(quotaCapKgN(caps, 1, null, 336.7)).toBe((150 + 7 * 337) / 8)
     // No cap under Grænser: the kvote rounded to whole kg N, like the run.
     expect(quotaCapKgN(caps, 2, first, 99.6)).toBe(100)
+  })
+
+  it('marks the limit before the trade at the cap, or else the kvote', () => {
+    // The original kvote of 100 kg N sits at 34 % of the bar's height.
+    expect(quotaLimitLinePct(100, { capKgN: 150, tradeKg: -20 }, 34)).toBe(51)
+    expect(quotaLimitLinePct(100, { capKgN: 50, tradeKg: 30 }, 34)).toBe(17)
+    expect(quotaLimitLinePct(100, null, 34)).toBe(34)
+    // Kept inside the bar area.
+    expect(quotaLimitLinePct(100, { capKgN: 500, tradeKg: 0 }, 34)).toBe(100)
   })
 
   it('places the bought or sold kvote between the cap and the traded cap', () => {

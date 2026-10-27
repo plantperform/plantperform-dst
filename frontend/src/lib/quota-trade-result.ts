@@ -109,6 +109,18 @@ export const quotaCapKgN = (
   )
 }
 
+// Where an opland's limit before any trade sits on a bar drawn so the original
+// kvote sits at quotaLinePct of its height: its cap when it trades, else the
+// kvote.
+export const quotaLimitLinePct = (
+  quotaKgN: number,
+  limit: TradedLimit | null,
+  quotaLinePct: number,
+): number =>
+  limit === null || quotaKgN <= 0
+    ? quotaLinePct
+    : Math.min(100, Math.max(0, (limit.capKgN / quotaKgN) * quotaLinePct))
+
 // Where a trade moves an opland's limit on a bar drawn so the original kvote
 // sits at quotaLinePct of its height: between the cap and the traded one, in
 // percent of the height.

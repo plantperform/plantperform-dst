@@ -56,6 +56,7 @@ import {
   quotaBarHeights,
   quotaTradeBand,
   quotaCapKgN,
+  quotaLimitLinePct,
   quotaTradeKgIn,
   quotaTradeKind,
   type QuotaTradeKind,
@@ -176,9 +177,18 @@ type QuotaBarProps = {
   title: string
   colorClass: string
   widthClass: string
+  // Marks the bar's own limit before any trade, which differs between oplande
+  // and years when Grænser set caps other than the kvote.
+  showLimitLine: boolean
 }
 
-const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
+const QuotaBar = ({
+  row,
+  title,
+  colorClass,
+  widthClass,
+  showLimitLine,
+}: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
   // Red only above the limit after any trade; the status keeps the original
   // kvote.
@@ -222,6 +232,15 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
             QUOTA_TRADE_BAND_CLASSES[band.kind],
           )}
           style={{ bottom: `${band.bottomPct}%`, height: `${band.heightPct}%` }}
+        />
+      ) : null}
+      {showLimitLine ? (
+        <span
+          data-limit-line=""
+          className="pointer-events-none absolute -inset-x-0.5 z-30 border-t-[1.5px] border-dashed border-foreground/45"
+          style={{
+            bottom: `${quotaLimitLinePct(row.quotaKgN, row.tradedLimit, QUOTA_LINE_PCT)}%`,
+          }}
         />
       ) : null}
     </span>
@@ -780,10 +799,12 @@ export const YearWalkthrough = ({
       )
     }),
   )
-  // Every bar is drawn to its own kvote at the same height, so one line marks
-  // each opland's original kvote; with trades the bands start from the year's
-  // cap, which is the kvote unless Grænser set another.
-  const showQuotaLine = quotaCatchmentCount === 1 || tradeKinds.length > 0
+  // Every bar is drawn to its own kvote at the same height, so one line across
+  // the year marks each opland's kvote. With trades each bar marks its own
+  // limit before the trade instead: the year's cap under Grænser, which can
+  // differ from the kvote and between oplande, so one line cannot mark it.
+  const showLimitLines = tradeKinds.length > 0
+  const showQuotaLine = quotaCatchmentCount === 1 && !showLimitLines
 
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
@@ -1144,14 +1165,14 @@ export const YearWalkthrough = ({
             ))}
             {quotaCatchmentCount > 0 ? (
               <>
-                {showQuotaLine ? (
+                {showQuotaLine || showLimitLines ? (
                   <span className="inline-flex items-center gap-1.5">
                     <span
                       aria-hidden="true"
                       className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
                     />
-                    {tradeKinds.length > 0
-                      ? 'Oprindelig kvote'
+                    {showLimitLines
+                      ? 'Loft før kvotehandel'
                       : 'Oplandets kvote'}
                   </span>
                 ) : null}
@@ -1275,6 +1296,7 @@ export const YearWalkthrough = ({
                                   row.catchment.catchmentId,
                                 )}
                                 widthClass={barWidth}
+                                showLimitLine={showLimitLines}
                               />
                             ))}
                       </span>
