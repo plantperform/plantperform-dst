@@ -135,6 +135,7 @@ const CODE_RANGES: readonly CodeRange[] = [
   [280, 283, 'beet'],
   [170, 299, 'grass'],
   [300, 329, 'fallow'],
+  [701, 711, 'wholeCropSilage'],
   [988, 994, 'fallow'],
 ]
 
