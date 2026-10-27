@@ -59,6 +59,12 @@ _GYLLE_UDBRINGNING_LABEL = "Udbringning, husdyrgødning"
 _GYLLE_KOEB_POST = "Husdyrgødning, køb"
 _GYLLE_KOEB_LABEL = "Husdyrgødning, køb"
 
+# The Halmpresning quantity is the kg of straw the budget presses.
+_HALMPRESNING = "Halmpresning"
+# Besides drying and storage, these are priced per kg of the harvest.
+_PER_KG_HARVESTED = frozenset({"Rensning", "Sortering af kartofler", "Fragt"})
+_KG_PER_HKG = 100
+
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
 
@@ -198,7 +204,28 @@ def _load_halmudbytte() -> dict[tuple[int, str], float]:
     return lookup
 
 
-def _lookup_halm_udbytte(afgrodekode: int, jbnr: int, irrigated: bool) -> float:
+def _lookup_halm_udbytte(
+    afgrodekode: int,
+    jbnr: int,
+    irrigated: bool,
+    driftsform: str = KONVENTIONEL,
+    kvalitet: str = "",
+) -> float:
+    """Kg straw per ha that is sold, which is also the straw the budget presses.
+
+    The budget's Halmpresning quantity is that straw, so the sale and the
+    pressing share one amount. It matters for økologisk, whose straw is below
+    the konventionel halmudbytte. Without a pressing line the halmudbytte applies.
+    """
+    maengder = _load_arbejdsmaengder()
+    for jordbonitet in _jordbonitet_kandidater(jbnr, irrigated):
+        rows = maengder.get((afgrodekode, driftsform, jordbonitet, kvalitet))
+        if rows is None:
+            continue
+        pressing = next((row for row in rows if row["behandling"] == _HALMPRESNING), None)
+        if pressing is not None:
+            return pressing["antal"]
+        break
     lookup = _load_halmudbytte()
     for jordbonitet in _jordbonitet_kandidater(jbnr, irrigated):
         hit = lookup.get((afgrodekode, jordbonitet))
@@ -619,7 +646,7 @@ def calculate_db(
 
     salgspris = prices.get(pris.get("sale_id"), pris["salgspris"]) if pris else 0.0
     halm_pris = prices.get(pris.get("straw_id"), pris["halm_pris_kr_kg"]) if pris else 0.0
-    halm_udbytte = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated)
+    halm_udbytte = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated, driftsform, kvalitet)
     halm_indtaegt = halm_udbytte * halm_pris * yield_factor
     if norm is not None:
         udbytte = norm["udbyttenorm"] or 0.0
@@ -724,17 +751,42 @@ def calculate_db(
         )
     goedning = sum(line["udgift_kr_ha"] for line in goedning_linjer)
 
-    # Drying is priced per kg of the normudbytte, so it follows the yield
-    # response. Copies, since the static cost rows are cached.
-    linjer = [
-        {
+    # Drying, storage, cleaning, sorting and freight priced per kg are the kg
+    # actually harvested, so they take the yield after the response and the yield
+    # percentage, not the kg of the budget's own yield. Other drying follows the
+    # yield response. Pressing is priced per kg of straw, which follows the yield
+    # percentage like the straw sold. Copies, since the static cost rows are cached.
+    def follow_yield(line: dict) -> dict:
+        per_kg_harvested = line.get("enhed") == "kr/kg" and (
+            line["kategori"] == "Tørring/lagring" or line["behandling"] in _PER_KG_HARVESTED
+        )
+        if (
+            per_kg_harvested
+            and line["maengde_id"] not in quantities
+            and udbytteenhed.startswith("hkg")
+        ):
+            harvested_kg = udbytte * _KG_PER_HKG
+            return {
+                **line,
+                "udgift_kr_ha": harvested_kg * line["pris"],
+                "maengde": harvested_kg,
+                "foelger_udbytte": True,
+            }
+        if line["kategori"] == "Tørring/lagring" or per_kg_harvested:
+            scale = faktor * yield_factor
+        elif line["behandling"] == _HALMPRESNING:
+            scale = yield_factor
+        else:
+            return line
+        return {
             **line,
-            "udgift_kr_ha": line["udgift_kr_ha"] * faktor * yield_factor,
-            "maengde": line["maengde"] * faktor * yield_factor,
+            "udgift_kr_ha": line["udgift_kr_ha"] * scale,
+            "maengde": line["maengde"] * scale,
             "foelger_udbytte": True,
         }
-        if line["kategori"] == "Tørring/lagring"
-        else line
+
+    linjer = [
+        follow_yield(line)
         for line in _lookup_omkostningslinjer(
             kalkule_kode,
             driftsform,
