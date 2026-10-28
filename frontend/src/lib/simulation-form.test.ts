@@ -15,8 +15,10 @@ import {
   cropsForFarmingSystem,
   CUSTOM_FERTILISER,
   DEFAULT_SIMULATION_FORM_VALUES,
+  excludedCropCodesAfter,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  groupSelection,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -27,7 +29,6 @@ import {
   offersNoFertiliser,
   organicFertiliserChoice,
   organicFertiliserNLabel,
-  otherCrops,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
@@ -37,6 +38,7 @@ import {
   simulationToFormValues,
   stepIndexOf,
   toCreateSimulationInput,
+  toggleGroup,
   toggleNNormPercentage,
   withCropChoice,
   withFarmingSystem,
@@ -151,7 +153,10 @@ describe('step schemas', () => {
 
   it('requires 100 % and at most two lower N-norm levels', () => {
     expect(
-      messageFor({ ...filledValues, nNormPercentages: ['80'] }, 'nNormPercentages'),
+      messageFor(
+        { ...filledValues, nNormPercentages: ['80'] },
+        'nNormPercentages',
+      ),
     ).toBe('100 % skal altid være med')
     expect(
       messageFor(
@@ -356,7 +361,9 @@ describe('farming system mismatch warning', () => {
   })
 
   it('never counts brak, which belongs to every category', () => {
-    expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Konventionel')).toBe(0)
+    expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Konventionel')).toBe(
+      0,
+    )
     expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Økologisk')).toBe(0)
   })
 
@@ -393,36 +400,25 @@ describe('crop choice', () => {
     ])
   })
 
-  it('lists the other crops in the rotations with a chosen crop', () => {
-    expect(otherCrops(CATEGORIES, ['Kløvergræs'])).toEqual(['Havre', 'Vårbyg'])
-    expect(otherCrops(CATEGORIES, [])).toEqual([])
+  it('counts the rotations whose crops are all chosen', () => {
+    const count = (chosenCrops: string[]) =>
+      matchingRotationCount(CATEGORIES, { chosenCrops })
+    // A crop that is not chosen is opted out, so one missing crop is enough.
+    expect(count(['Kløvergræs'])).toBe(0)
+    expect(count(['Kløvergræs', 'Vårbyg'])).toBe(1)
+    expect(count(['Kløvergræs', 'Vårbyg', 'Havre'])).toBe(2)
+    expect(count(['Brak'])).toBe(1)
+    expect(count([])).toBe(0)
   })
 
-  it('counts the rotations with a chosen crop and no opted-out one', () => {
-    expect(
-      matchingRotationCount(CATEGORIES, {
-        chosenCrops: ['Kløvergræs'],
-        optedOutCrops: [],
-      }),
-    ).toBe(2)
-    expect(
-      matchingRotationCount(CATEGORIES, {
-        chosenCrops: ['Kløvergræs'],
-        optedOutCrops: ['Havre'],
-      }),
-    ).toBe(1)
-  })
-
-  it('drops the selected rotations and opt-outs that no longer apply', () => {
+  it('drops the selected rotations that no longer fit the crops', () => {
     expect(
       withCropChoice(CATEGORIES, {
         chosenCrops: ['Vårbyg', 'Kløvergræs'],
-        optedOutCrops: ['Havre', 'Majs'],
         rotationVariants: ['10', '20', '30'],
       }),
     ).toEqual({
       chosenCrops: ['Kløvergræs', 'Vårbyg'],
-      optedOutCrops: ['Havre'],
       rotationVariants: ['10'],
     })
   })
@@ -433,19 +429,16 @@ describe('crop choice', () => {
         CATEGORIES,
         {
           chosenCrops: ['Havre', 'Kløvergræs'],
-          optedOutCrops: [],
           rotationVariants: ['30'],
         },
         'Konventionel',
       ),
     ).toEqual({
       chosenCrops: ['Kløvergræs'],
-      optedOutCrops: [],
-      rotationVariants: ['30'],
+      rotationVariants: [],
     })
     const nothingChosen = {
       chosenCrops: [],
-      optedOutCrops: [],
       rotationVariants: ['10'],
     }
     expect(withFarmingSystem(CATEGORIES, nothingChosen, 'Økologisk')).toBe(
@@ -460,6 +453,47 @@ describe('crop choice', () => {
         farmingSystem: 'Konventionel',
       }),
     ).toEqual(['Kløvergræs', 'Vårbyg'])
+  })
+})
+
+describe('selecting a group of crops', () => {
+  const group = ['Vinterhvede', 'Vinterbyg']
+
+  it('tells whether none, some or all of the group are selected', () => {
+    expect(groupSelection(['Majs'], group)).toBe('none')
+    expect(groupSelection(['Majs', 'Vinterbyg'], group)).toBe('some')
+    expect(groupSelection(['Vinterbyg', 'Vinterhvede', 'Majs'], group)).toBe(
+      'all',
+    )
+  })
+
+  it('selects the rest of a group that is not fully selected', () => {
+    expect(toggleGroup(['Majs'], group)).toEqual([
+      'Majs',
+      'Vinterhvede',
+      'Vinterbyg',
+    ])
+    expect(toggleGroup(['Vinterbyg'], group)).toEqual([
+      'Vinterbyg',
+      'Vinterhvede',
+    ])
+  })
+
+  it('clears a group that is fully selected and keeps the other crops', () => {
+    expect(toggleGroup(['Majs', 'Vinterhvede', 'Vinterbyg'], group)).toEqual([
+      'Majs',
+    ])
+  })
+})
+
+describe('excluded crops', () => {
+  it('excludes the listed crops that are no longer included', () => {
+    expect(excludedCropCodesAfter([], [11, 22, 1], [11, 1])).toEqual([22])
+    expect(excludedCropCodesAfter([22], [11, 22, 1], [])).toEqual([11, 22, 1])
+  })
+
+  it('includes the listed crops again and keeps other exclusions', () => {
+    expect(excludedCropCodesAfter([22, 310], [11, 22], [11, 22])).toEqual([310])
   })
 })
 
@@ -500,7 +534,10 @@ describe('candidate count', () => {
   it('multiplies rotations, N-norm levels and fields', () => {
     expect(
       combinationCount(
-        { rotationVariants: ['10', '20', '1'], nNormPercentages: ['80', '100'] },
+        {
+          rotationVariants: ['10', '20', '1'],
+          nNormPercentages: ['80', '100'],
+        },
         12,
       ),
     ).toBe(72)
@@ -508,10 +545,7 @@ describe('candidate count', () => {
 
   it('is zero while one of the three is empty', () => {
     expect(
-      combinationCount(
-        { rotationVariants: [], nNormPercentages: ['100'] },
-        12,
-      ),
+      combinationCount({ rotationVariants: [], nNormPercentages: ['100'] }, 12),
     ).toBe(0)
     expect(
       combinationCount({ rotationVariants: ['10'], nNormPercentages: [] }, 12),
@@ -771,7 +805,11 @@ describe('simulationToFormValues', () => {
       simulationToFormValues(
         {
           ...simulation,
-          fertiliser: { ...simulation.fertiliser, orgMineralN, mineralSharePct },
+          fertiliser: {
+            ...simulation.fertiliser,
+            orgMineralN,
+            mineralSharePct,
+          },
         },
         [kvaeggylle],
         offered,
@@ -833,7 +871,9 @@ describe('simulationToFormValues', () => {
 
 describe('saving simulation settings', () => {
   it('does not couple saving to optimization', () => {
-    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty('optimizeOnCreate')
+    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty(
+      'optimizeOnCreate',
+    )
   })
 
   it('validates the review step independently of the action', () => {

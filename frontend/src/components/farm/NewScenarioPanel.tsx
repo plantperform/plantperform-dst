@@ -6,6 +6,7 @@ import { mutate } from 'swr'
 import {
   simulationsKey,
   simulationViewKey,
+  useCropCodes,
   useFarmFields,
   useStoredSimulationFields,
   useFertiliserPresets,
@@ -28,6 +29,7 @@ import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptim
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
 import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type {
+  CropCodeOption,
   FieldRecord,
   FertiliserSettings,
   RotationCategoryOption,
@@ -98,6 +100,7 @@ const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 const LIMITS_STEP_INDEX = stepIndexOf('limits')
 
 const NO_CATEGORIES: RotationCategoryOption[] = []
+const NO_CROP_CODES: CropCodeOption[] = []
 
 const FERTILISER_FIELDS: (keyof SimulationFormValues)[] = [
   'fertiliserChoice',
@@ -158,6 +161,7 @@ export const NewScenarioPanel = ({
   const nNormQuery = useRotationNNormPercentages(farmId)
   const presetsQuery = useFertiliserPresets(farmId)
   const economicsProfiles = useEconomicsProfiles()
+  const cropCodes = useCropCodes(farmId).data ?? NO_CROP_CODES
   const categories = categoriesQuery.data ?? NO_CATEGORIES
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
@@ -364,13 +368,9 @@ export const NewScenarioPanel = ({
     }
   }
 
-  const cropChoice: CropChoice = {
-    chosenCrops: values.chosenCrops,
-    optedOutCrops: values.optedOutCrops,
-  }
+  const cropChoice: CropChoice = { chosenCrops: values.chosenCrops }
   const applyRotationChoice = (next: RotationChoice) => {
     updateValue('chosenCrops', next.chosenCrops)
-    updateValue('optedOutCrops', next.optedOutCrops)
     updateValue('rotationVariants', next.rotationVariants)
   }
 
@@ -722,6 +722,7 @@ export const NewScenarioPanel = ({
         {!referenceBlocked && stepId === 'crops' ? (
           <CropChoicePicker
             categories={categories}
+            cropCodes={cropCodes}
             farmingSystem={values.farmingSystem}
             choice={cropChoice}
             onChoiceChange={(choice) =>

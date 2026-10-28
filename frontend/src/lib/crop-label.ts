@@ -23,7 +23,7 @@ export const cropLabelByCode = (
     : `Afgrøde ${cropCode}`
 }
 
-// The simulation choices (chosen and opted-out crops) are stored as crop
+// The chosen crops of a simulation are stored as crop
 // names, so the afgrødekode is looked up by name. Names in the rotation
 // categories and in the crop codes both come from the NUAR table, so a name
 // has at most one code.
