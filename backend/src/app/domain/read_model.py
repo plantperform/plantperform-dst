@@ -29,6 +29,9 @@ class FieldYearValue(CamelModel):
     husdyrgodning_ton_pr_ha: float = 0
     afgrode_norm_kgn_ha: float | None = None
     n_norm_pct: float = 100
+    # Whether the year's afgrøde has a yield-response curve, so n_norm_pct can
+    # cut its N and yield. None in read models prepared before the flag existed.
+    has_yield_response: bool | None = None
     winter_cover: dict = Field(default_factory=dict)
 
 

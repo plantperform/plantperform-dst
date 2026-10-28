@@ -29,6 +29,7 @@ def compact_years(candidate):
             db_kr_ha=y.db_kr_ha,
             economics_missing=bool(getattr(y, "db_detail", {}).get("economics_missing")),
             fen_fe_ha=y.fen_fe_ha,
+            has_yield_response=getattr(y, "db_detail", {}).get("udbytterespons"),
             **{
                 key: getattr(
                     y,

@@ -246,6 +246,15 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(years[0]["tildelt_husdyrgodning_udnyttet_kgn_ha"], 20)
         self.assertLess(len(json.dumps(years)), len(full.model_dump_json()) / 3)
 
+    def test_compact_years_keep_whether_the_n_norm_level_cut_the_yield(self):
+        full = rich_candidate()
+        full.years[0].db_detail["udbytterespons"] = True
+        full.years[1].db_detail["udbytterespons"] = False
+        years = read_models.compact_years(full)
+        self.assertIs(years[0]["has_yield_response"], True)
+        self.assertIs(years[1]["has_yield_response"], False)
+        self.assertIsNone(years[2]["has_yield_response"])
+
     def test_compact_years_keep_an_inferred_mellemafgroede_or_tidlig_saaning(self):
         full = rich_candidate()
         full.years[0].leaching_detail["mellemafgroede_eller_tidlig_saaning"] = True
