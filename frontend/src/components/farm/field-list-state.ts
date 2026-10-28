@@ -3,6 +3,8 @@ import type { VisibilityState } from '@tanstack/react-table'
 export type FieldsSortKey =
   | 'name'
   | 'areaHa'
+  | 'cropCode'
+  | 'cropYear'
   | 'catchment'
   | 'nNormPct'
   | 'db2'

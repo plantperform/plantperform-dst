@@ -100,9 +100,10 @@ const sortListFields = (
   sort: FieldsSortState,
   catchmentLabel: CatchmentLabel,
   highlightedCatchmentKey: string | null,
+  selectedYearIndex: number | null,
 ) => {
   const sorted = [...fields].sort((left, right) =>
-    compareFields(left, right, sort, catchmentLabel),
+    compareFields(left, right, sort, catchmentLabel, selectedYearIndex),
   )
   const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
   if (highlightedCatchmentKey === null) return ordered
@@ -305,6 +306,7 @@ export const FarmInspector = ({
     fieldsSort,
     catchmentLabel,
     effectiveHighlightedCatchmentKey,
+    effectiveSelectedYearIndex,
   )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,

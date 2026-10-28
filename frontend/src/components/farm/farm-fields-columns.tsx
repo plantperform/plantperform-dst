@@ -619,6 +619,8 @@ export const buildFarmFieldsColumns = ({
   const highlightIndex = selectedYearIndex
   const selectedCalendarYear =
     highlightIndex !== null ? rotationStartYear + highlightIndex : null
+  const selectedYearLabel =
+    selectedCalendarYear !== null ? String(selectedCalendarYear) : 'vælg et år'
   const selectedYearOf = (field: FieldRecord) =>
     highlightIndex !== null ? field.cropRotation[highlightIndex] : undefined
 
@@ -679,14 +681,53 @@ export const buildFarmFieldsColumns = ({
   })
 
   list.push({
+    id: 'cropCode',
+    accessorFn: (field) => selectedYearOf(field)?.cropCode ?? null,
+    header: ({ column }) => (
+      <SortableColumnHeaderContent
+        label="Afgrødekode"
+        unit={selectedYearLabel}
+        align="right"
+        column={column}
+      />
+    ),
+    cell: ({ row }) => {
+      const year = selectedYearOf(row.original)
+      return year ? (
+        year.cropCode
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      )
+    },
+    footer: () => null,
+    meta: {
+      headerClassName: cn(
+        NUMERIC_HEADER_CLASS,
+        'whitespace-nowrap',
+        highlightIndex === null && 'hidden full:table-cell',
+      ),
+      cellClassName: cn(
+        NUMERIC_CELL_CLASS,
+        highlightIndex === null && 'hidden full:table-cell',
+      ),
+      widthHints: [
+        (field) => {
+          const year = selectedYearOf(field)
+          return year ? textWidth(String(year.cropCode)) : 0
+        },
+      ],
+    },
+  })
+
+  list.push({
     id: 'cropYear',
-    header: () => (
-      <div className="flex flex-col">
-        <span>Afgrøde</span>
-        <span className={HEADER_SUBLINE_CLASS}>
-          {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
-        </span>
-      </div>
+    accessorFn: (field) => selectedYearOf(field)?.cropName ?? null,
+    header: ({ column }) => (
+      <SortableColumnHeaderContent
+        label="Afgrøde"
+        unit={selectedYearLabel}
+        column={column}
+      />
     ),
     cell: ({ row }) => {
       const year = selectedYearOf(row.original)
@@ -702,7 +743,6 @@ export const buildFarmFieldsColumns = ({
       )
     },
     footer: () => null,
-    enableSorting: false,
     meta: {
       headerClassName: cn(
         HEADER_CELL_CLASS,
