@@ -335,7 +335,7 @@ const KeyMetricsSection = ({
               value={
                 hasYieldResponse
                   ? `${fmt(year.nNormPct, 0)} % = ${fmt(nNormTargetKgNHa(cropNorm, year.nNormPct), 0)} kg N/ha`
-                  : '100 % (fuld norm)'
+                  : '100 % (ingen udbyttekurve)'
               }
             />
           ) : null}

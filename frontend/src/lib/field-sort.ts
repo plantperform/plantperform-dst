@@ -3,7 +3,8 @@ import type {
   FieldsSortDirection,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
-import { fieldDisplayName, fieldNNormPct, perHa } from '@/lib/field-domain'
+import { fieldDisplayName, perHa } from '@/lib/field-domain'
+import { fieldNNormSortValue, type NNormLevel } from '@/lib/n-norm-level'
 
 const nameCollator = new Intl.Collator('da-DK', {
   numeric: true,
@@ -76,6 +77,7 @@ const comparePrimary = (
   sort: FieldsSortState,
   catchmentLabel?: CatchmentLabel,
   selectedYearIndex: number | null = null,
+  nNormLevels?: Map<string, NNormLevel>,
 ) => {
   switch (sort.key) {
     case 'name':
@@ -103,8 +105,8 @@ const comparePrimary = (
       )
     case 'nNormPct':
       return compareNullableNumber(
-        fieldNNormPct(left),
-        fieldNNormPct(right),
+        fieldNNormSortValue(left, nNormLevels),
+        fieldNNormSortValue(right, nNormLevels),
         sort.direction,
       )
     case 'nLoad':
@@ -158,6 +160,7 @@ export const compareFields = (
   sort: FieldsSortState,
   catchmentLabel?: CatchmentLabel,
   selectedYearIndex: number | null = null,
+  nNormLevels?: Map<string, NNormLevel>,
 ) => {
   const primary = comparePrimary(
     left,
@@ -165,6 +168,7 @@ export const compareFields = (
     sort,
     catchmentLabel,
     selectedYearIndex,
+    nNormLevels,
   )
   if (primary !== 0) return primary
   const imkTie = compareNullableNumber(left.imkId, right.imkId, 'asc')

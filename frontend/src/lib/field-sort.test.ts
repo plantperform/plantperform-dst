@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { FieldRecord } from '@/api/types'
 import { emptyMeasures } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
+import type { NNormLevel } from '@/lib/n-norm-level'
 
 const field = (id: string, areaHa: number, db2: number): FieldRecord => ({
   id,
@@ -142,5 +143,34 @@ describe('compareFields', () => {
       expect(idsSortedBy('cropCode', 'asc', null)).toEqual(byId)
       expect(idsSortedBy('cropYear', 'desc', null)).toEqual(byId)
     })
+  })
+
+  it('sorts by the N-norm level the list shows, with no norm last', () => {
+    // The candidate IDs say 75 and 85, which the list does not show for these.
+    const grass = { ...field('grass', 1, 0), rotationId: '1:1:75' }
+    const brak = { ...field('brak', 1, 0), rotationId: '1:1:85' }
+    const reduced = { ...field('reduced', 1, 0), rotationId: '1:1:90' }
+    const levels = new Map<string, NNormLevel>([
+      ['grass', { kind: 'fullNorm' }],
+      ['brak', { kind: 'noNorm' }],
+      ['reduced', { kind: 'level', pct: 90 }],
+    ])
+    const expected = {
+      asc: ['reduced', 'grass', 'brak'],
+      desc: ['grass', 'reduced', 'brak'],
+    }
+    for (const direction of ['asc', 'desc'] as const) {
+      const sorted = [brak, grass, reduced].sort((left, right) =>
+        compareFields(
+          left,
+          right,
+          { key: 'nNormPct', direction },
+          undefined,
+          null,
+          levels,
+        ),
+      )
+      expect(sorted.map(({ id }) => id)).toEqual(expected[direction])
+    }
   })
 })

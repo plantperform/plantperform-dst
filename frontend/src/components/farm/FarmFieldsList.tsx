@@ -88,6 +88,7 @@ import {
   withGaps,
   withGroupRows,
 } from '@/lib/field-list-rows'
+import { nNormLevelByFieldId } from '@/lib/n-norm-level'
 import { cn } from '@/lib/utils'
 
 type ColumnToggle = {
@@ -350,6 +351,14 @@ export const FarmFieldsList = ({
     [isSimulationView, sortedFields, yearValues, selectedYearIndex],
   )
 
+  const nNormLevels = useMemo(
+    () =>
+      isSimulationView
+        ? nNormLevelByFieldId(sortedFields, yearValues, selectedYearIndex)
+        : new Map(),
+    [isSimulationView, sortedFields, yearValues, selectedYearIndex],
+  )
+
   const runStarts = useMemo(
     () =>
       new Map(
@@ -427,6 +436,7 @@ export const FarmFieldsList = ({
         selectedYearIndex,
         fields: sortedFields,
         fertiliser,
+        nNormLevels,
         fertiliserLoading: yearValuesLoading,
         quota,
         catchmentLabel,
@@ -439,6 +449,7 @@ export const FarmFieldsList = ({
       selectedYearIndex,
       sortedFields,
       fertiliser,
+      nNormLevels,
       yearValuesLoading,
       quota,
       catchmentLabel,

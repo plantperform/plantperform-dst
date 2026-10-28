@@ -22,7 +22,6 @@ import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
   fieldDisplayName,
-  fieldNNormPct,
   fieldOwnerName,
   firstCalendarYear,
   formatLockTooltip,
@@ -45,6 +44,12 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { cropLabel } from '@/lib/crop-label'
+import {
+  describeNNormLevel,
+  fieldNNormSortValue,
+  type NNormLevel,
+  type NNormLevelText,
+} from '@/lib/n-norm-level'
 import { textWidth } from '@/lib/text-width'
 import { cn } from '@/lib/utils'
 
@@ -582,6 +587,7 @@ export type FarmFieldsColumnsArgs = {
   selectedYearIndex: number | null
   fields: FieldRecord[]
   fertiliser: Map<string, FertiliserFigures>
+  nNormLevels: Map<string, NNormLevel>
   fertiliserLoading: boolean
   quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
@@ -595,6 +601,7 @@ export const buildFarmFieldsColumns = ({
   selectedYearIndex,
   fields,
   fertiliser,
+  nNormLevels,
   fertiliserLoading,
   quota,
   catchmentLabel,
@@ -771,26 +778,50 @@ export const buildFarmFieldsColumns = ({
   })
 
   if (isSimulationView) {
+    const levelTextOf = (field: FieldRecord): NNormLevelText | null => {
+      const level = nNormLevels.get(field.id)
+      return level ? describeNNormLevel(level) : null
+    }
+    const levelFigureOf = (field: FieldRecord): PerHaFigure | null => {
+      const text = levelTextOf(field)
+      return text === null || text.muted
+        ? null
+        : { value: text.value, total: text.note }
+    }
     list.push({
       id: 'nNormPct',
-      accessorFn: (field) => fieldNNormPct(field),
+      accessorFn: (field) => fieldNNormSortValue(field, nNormLevels),
       header: ({ column }) => (
         <SortableColumnHeaderContent label="N-norm%" column={column} />
       ),
       cell: ({ row }) => {
-        const pct = fieldNNormPct(row.original)
-        return pct === null ? (
-          <span className="text-muted-foreground">-</span>
+        if (fertiliserLoading) return loadingFigure
+        const text = levelTextOf(row.original)
+        if (text === null)
+          return <span className="text-muted-foreground">-</span>
+        const figure = levelFigureOf(row.original)
+        const content = figure ? (
+          renderMetricFigure(figure, 'cell')
         ) : (
-          `${formatNumber(pct)} %`
+          <span className="text-muted-foreground">{text.value}</span>
+        )
+        return text.tooltip ? (
+          <AppTooltip content={text.tooltip}>
+            <div>{content}</div>
+          </AppTooltip>
+        ) : (
+          content
         )
       },
       // A level per mark, not something to total.
       footer: () => null,
       meta: {
-        headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
-        cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),
+        headerClassName: cn(NUMERIC_HEADER_CLASS, 'whitespace-nowrap'),
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'N-norm%',
+        widthHints: fertiliserLoading
+          ? undefined
+          : contentWidthHints(levelFigureOf),
       },
     })
     list.push(
