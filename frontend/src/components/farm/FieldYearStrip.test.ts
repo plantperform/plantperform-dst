@@ -40,8 +40,8 @@ const render = (yearValues: FieldYearValue[], quotaEligible: boolean) =>
 describe('FieldYearStrip', () => {
   it('shows no DB2 for a year without economics, and averages it as 0 like the mark', () => {
     const markup = render([year(6000), year(0, true)], false)
-    expect(markup).toContain('aria-label="2027: Vinterhvede · DB2 6.000 kr/ha"')
-    expect(markup).toContain('aria-label="2028: Gulerod · Ingen økonomi"')
+    expect(markup).toContain('aria-label="2027: 11 - Vinterhvede · DB2 6.000 kr/ha"')
+    expect(markup).toContain('aria-label="2028: 407 - Gulerod · Ingen økonomi"')
     expect(markup).toContain('gns. 3.000')
   })
 

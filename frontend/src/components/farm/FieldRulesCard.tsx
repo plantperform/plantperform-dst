@@ -23,6 +23,7 @@ import {
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
+import { cropLabel } from '@/lib/crop-label'
 import { cn } from '@/lib/utils'
 
 const ROW_GRID_CLASS =
@@ -34,11 +35,11 @@ const NO_ROTATION_TITLE =
 const rotationByYear = (field: FieldRecord) =>
   field.cropRotation.length === 0
     ? []
-    : ROTATION_CALENDAR_YEARS.map((year, index) => ({
-        year,
-        cropName:
-          field.cropRotation[index % field.cropRotation.length].cropName,
-      }))
+    : ROTATION_CALENDAR_YEARS.map((year, index) => {
+        const { cropCode, cropName } =
+          field.cropRotation[index % field.cropRotation.length]
+        return { year, label: cropLabel(cropCode, cropName) }
+      })
 
 type FieldRuleRowProps = {
   field: FieldRecord
@@ -98,12 +99,10 @@ const FieldRuleRow = ({
       )}
       {locked && years.length > 0 ? (
         <AppTooltip
-          content={years
-            .map(({ year, cropName }) => `${year}: ${cropName}`)
-            .join(', ')}
+          content={years.map(({ year, label }) => `${year}: ${label}`).join(', ')}
         >
           <span className="min-w-0 text-xs">
-            {years.map(({ cropName }) => cropName).join(' · ')}
+            {years.map(({ label }) => label).join(' · ')}
           </span>
         </AppTooltip>
       ) : (

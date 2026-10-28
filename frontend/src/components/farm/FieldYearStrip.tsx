@@ -13,6 +13,7 @@ import {
   type SegmentedControlOption,
 } from '@/components/ui/segmented-control'
 import { cropGroupFor, shortCropName } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   CURRENT_CALENDAR_YEAR,
   formatPerHa,
@@ -26,6 +27,7 @@ import { cn } from '@/lib/utils'
 import {
   presentWinterCovers,
   rotationCovers,
+  shownUndersownCropLabel,
   shownUndersownCropName,
 } from '@/lib/winter-cover'
 
@@ -204,11 +206,12 @@ export const FieldYearStrip = ({
             const calendarYear = startYear + index
             const isCurrentYear = calendarYear === CURRENT_CALENDAR_YEAR
             const group = cropGroupFor(year.cropCode, year.cropName)
-            const undersownCropName = shownUndersownCropName(year)
-            const title = `${calendarYear}${isCurrentYear ? ' (i år)' : ''}: ${
-              year.cropName
-            }${
-              undersownCropName !== null ? ` (udlæg: ${undersownCropName})` : ''
+            const undersownLabel = shownUndersownCropLabel(year)
+            const title = `${calendarYear}${isCurrentYear ? ' (i år)' : ''}: ${cropLabel(
+              year.cropCode,
+              year.cropName,
+            )}${
+              undersownLabel !== null ? ` (udlæg: ${undersownLabel})` : ''
             }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}${
               years[index] ? ` · ${describeMetric(metric, value)}` : ''
             }`
@@ -324,7 +327,7 @@ export const FieldYearStrip = ({
         <div className="space-y-1.5 pt-2 text-xs leading-4">
           <p className="tabular-nums text-pretty">
             <span className="font-semibold">{startYear + selectedIndex}</span> ·{' '}
-            {selectedYear.cropName}
+            {cropLabel(selectedYear.cropCode, selectedYear.cropName)}
             {selectedUndersownCropName !== null
               ? ` · udlæg: ${shortCropName(selectedUndersownCropName)}`
               : ''}
