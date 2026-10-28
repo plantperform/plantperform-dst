@@ -54,6 +54,7 @@ field" column is the name on the wire.
 | afgrøde | crop | | |
 | afgrødevalg, valgte og fravalgte afgrøder | `CropChoice`, `chosenCrops`, `optedOutCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop and no opted-out one. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
+| afgrøde med kode | `cropLabel`, `rotationYearLabel`, `shownUndersownCropLabel`, `cropLabels` | | The full name with its afgrødekode in front, "210 - Vårbyg, helsæd". Used wherever the full name is shown; the short names (`shortCropName`) stay without the code, and the field list has the code in a column of its own |
 | normal såmåned | sowing month | | The crop table's month the crop is normally sown, stored as `afgroede.saamaaned` |
 | efterårssået | autumn-sown, `is_autumn_sown`, `AUTUMN_SOWING_MONTHS` | | Normal såmåned August to November |
 | afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |

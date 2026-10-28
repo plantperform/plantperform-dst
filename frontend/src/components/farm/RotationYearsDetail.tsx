@@ -9,6 +9,7 @@ import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { shortCropName } from '@/lib/crop-groups'
+import { rotationYearLabel } from '@/lib/crop-label'
 import {
   customisedBreakdownLine,
   type BreakdownRow,
@@ -91,9 +92,7 @@ const fullTabLabel = (
   index: number,
   calendarYear: number,
 ): string =>
-  `År ${index + 1} (${calendarYear}) - ${year.cropName}${
-    year.undersownCropName ? ` (${year.undersownCropName})` : ''
-  }`
+  `År ${index + 1} (${calendarYear}) - ${rotationYearLabel(year)}`
 
 const calculateNLoad = (
   lNuar: number,

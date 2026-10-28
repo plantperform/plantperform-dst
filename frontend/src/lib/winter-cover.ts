@@ -1,4 +1,5 @@
 import type { RotationYear } from '@/api/types'
+import { cropLabel } from '@/lib/crop-label'
 
 export type WinterCoverKind =
   | 'catchCrop'
@@ -87,6 +88,11 @@ export const isIntermediateOrEarlySowingYear = (year: RotationYear): boolean =>
 
 export const shownUndersownCropName = (year: RotationYear): string | null =>
   isIntermediateOrEarlySowingYear(year) ? null : year.undersownCropName
+
+export const shownUndersownCropLabel = (year: RotationYear): string | null => {
+  const name = shownUndersownCropName(year)
+  return name === null ? null : cropLabel(year.undersownCropCode, name)
+}
 
 const WINTER_COVERS: readonly WinterCoverDefinition[] = [
   CATCH_CROP,

@@ -45,12 +45,12 @@ import { LoadError } from '@/components/ui/load-error'
 import {
   compactCropSequenceLabel,
   fieldDisplayName,
-  formatRotationYear,
   NO_ECONOMICS,
   ROTATION_START_CALENDAR_YEAR,
   rotationEconomicsMissing,
 } from '@/lib/field-domain'
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel, rotationYearLabel } from '@/lib/crop-label'
 import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type ManualRotationEditorProps = {
@@ -213,15 +213,17 @@ export const ManualRotationEditor = ({
   const categoryPickerItems = (selectedCategory?.rotations ?? []).map((s) => ({
     key: s.rotationVariant,
     label: compactCropSequenceLabel(s.cropSequence),
-    title: s.cropSequence.join(' - '),
+    title: s.cropSequence
+      .map((name) => cropLabel(codeByCropName.get(name), name))
+      .join(' · '),
     colors: s.cropSequence.map(colorForCropName),
     meta: `${s.cropSequence.length} år`,
   }))
 
   const cropPickerItems = cropCodes.map((a) => ({
     key: String(a.code),
-    label: a.name,
-    title: a.name,
+    label: cropLabel(a.code, a.name),
+    title: cropLabel(a.code, a.name),
     colors: [cropGroupColor(a.code, a.name)],
   }))
 
@@ -429,14 +431,16 @@ export const ManualRotationEditor = ({
   const undersownCropPickerItems = [
     {
       key: NO_UNDERSOWN_CROP_KEY,
+      name: null,
       label: 'Intet udlæg',
       title: 'Intet udlæg',
       colors: [],
     },
     ...(undersownCropCodes ?? []).map((option) => ({
       key: String(option.code),
-      label: option.name,
-      title: option.name,
+      name: option.name,
+      label: cropLabel(option.code, option.name),
+      title: cropLabel(option.code, option.name),
       colors: [cropGroupColor(option.code, option.name)],
     })),
   ]
@@ -696,7 +700,7 @@ export const ManualRotationEditor = ({
                             )
                             const cellTitle = cellWrap
                               ? `Afgrøden rullede rundt fra ${cellWrap.fromYear}`
-                              : formatRotationYear(y.year)
+                              : rotationYearLabel(y.year)
                             return (
                               <AppTooltip key={index} content={cellTitle}>
                                 <button
@@ -741,7 +745,10 @@ export const ManualRotationEditor = ({
                                       covers={yearCovers?.[index]}
                                     />
                                     <span className="min-w-0 truncate">
-                                      {y.year.cropName}
+                                      {cropLabel(
+                                        y.year.cropCode,
+                                        y.year.cropName,
+                                      )}
                                     </span>
                                   </span>
                                   {cellWrap ? (
@@ -846,7 +853,7 @@ export const ManualRotationEditor = ({
                                     : Number(key),
                                   key === NO_UNDERSOWN_CROP_KEY
                                     ? null
-                                    : (item?.label ?? null),
+                                    : (item?.name ?? null),
                                 )
                               }}
                               searchLabel="Søg sekundær afgrøde"
