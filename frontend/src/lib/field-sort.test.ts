@@ -62,4 +62,85 @@ describe('compareFields', () => {
     )
     expect(sorted.map(({ id }) => id)).toEqual(['reduced', 'full', 'none'])
   })
+
+  describe('by the crop of the selected year', () => {
+    const withCrop = (
+      id: string,
+      cropCode: number,
+      cropName: string,
+    ): FieldRecord => ({
+      ...field(id, 1, 0),
+      cropRotation: [
+        {
+          cropCode: 1,
+          cropName: 'Første',
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+        {
+          cropCode,
+          cropName,
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+      ],
+    })
+    const spring = withCrop('spring', 210, 'Vårbyg, helsæd')
+    const wheat = withCrop('wheat', 11, 'Vinterhvede')
+    const barley = withCrop('barley', 101, 'Vinterbyg')
+    const none = field('none', 1, 0)
+
+    const idsSortedBy = (
+      key: 'cropCode' | 'cropYear',
+      direction: 'asc' | 'desc',
+      selectedYearIndex: number | null,
+    ) =>
+      [none, spring, wheat, barley]
+        .sort((left, right) =>
+          compareFields(
+            left,
+            right,
+            { key, direction },
+            undefined,
+            selectedYearIndex,
+          ),
+        )
+        .map(({ id }) => id)
+
+    it('sorts by afgrødekode with marker without a crop last', () => {
+      expect(idsSortedBy('cropCode', 'asc', 1)).toEqual([
+        'wheat',
+        'barley',
+        'spring',
+        'none',
+      ])
+      expect(idsSortedBy('cropCode', 'desc', 1)).toEqual([
+        'spring',
+        'barley',
+        'wheat',
+        'none',
+      ])
+    })
+
+    it('sorts by crop name with marker without a crop last', () => {
+      expect(idsSortedBy('cropYear', 'asc', 1)).toEqual([
+        'barley',
+        'wheat',
+        'spring',
+        'none',
+      ])
+      expect(idsSortedBy('cropYear', 'desc', 1)).toEqual([
+        'spring',
+        'wheat',
+        'barley',
+        'none',
+      ])
+    })
+
+    it('falls back to the usual order until a year is selected', () => {
+      const byId = ['barley', 'none', 'spring', 'wheat']
+      expect(idsSortedBy('cropCode', 'asc', null)).toEqual(byId)
+      expect(idsSortedBy('cropYear', 'desc', null)).toEqual(byId)
+    })
+  })
 })
