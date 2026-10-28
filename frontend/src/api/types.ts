@@ -400,6 +400,8 @@ export type FieldYearValue = Pick<RotationCandidateYearResult,
   feedUnitsPerHa: number
   winterCover: Record<string, unknown>
   economicsMissing?: boolean
+  // Missing in read models prepared before the backend sent it.
+  hasYieldResponse?: boolean | null
 }
 
 // Detailed calculations also satisfy the display inputs used by older fixtures.

@@ -40,7 +40,7 @@ const glossary = {
     description:
       'Simuleringen kan vælge mellem flere N-niveauer og gødsker hver mark op til den valgte procentdel af afgrødens N-norm. Forfrugtsværdien medregnes, så der kun tilføres den mængde kvælstof, som forfrugten ikke dækker.\n\n' +
       'Ved gødskning under 100 % af N-normen reduceres udbyttet. Dette gælder på nuværende tidspunkt kun afgrøder med en tilknyttet udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs samt økologisk korn, raps og græs.\n\n' +
-      'Øvrige afgrøder gødskes altid op til fuld N-norm. Ændringer i proteinindholdet påvirker endnu ikke salgsprisen.',
+      'Øvrige afgrøder gødskes altid op til fuld N-norm og står i listen som «100 %» med «ingen udbyttekurve». Afgrøder uden N-norm, fx brak, står som «-». Ændringer i proteinindholdet påvirker endnu ikke salgsprisen.',
   },
   nContentPerTon: {
     title: 'Mineralsk N-indhold',

@@ -56,6 +56,7 @@ import {
   summarizeFieldYears,
 } from '@/lib/field-domain'
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
+import { nNormLevelByFieldId, type NNormLevel } from '@/lib/n-norm-level'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import { cn } from '@/lib/utils'
 
@@ -101,9 +102,17 @@ const sortListFields = (
   catchmentLabel: CatchmentLabel,
   highlightedCatchmentKey: string | null,
   selectedYearIndex: number | null,
+  nNormLevels: Map<string, NNormLevel>,
 ) => {
   const sorted = [...fields].sort((left, right) =>
-    compareFields(left, right, sort, catchmentLabel, selectedYearIndex),
+    compareFields(
+      left,
+      right,
+      sort,
+      catchmentLabel,
+      selectedYearIndex,
+      nNormLevels,
+    ),
   )
   const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
   if (highlightedCatchmentKey === null) return ordered
@@ -307,6 +316,10 @@ export const FarmInspector = ({
     catchmentLabel,
     effectiveHighlightedCatchmentKey,
     effectiveSelectedYearIndex,
+    // The N-norm% column sorts by what it shows, so the list needs the years.
+    fieldsSort.key === 'nNormPct' && yearValues
+      ? nNormLevelByFieldId(listFields, yearValues, effectiveSelectedYearIndex)
+      : new Map(),
   )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,

@@ -51,6 +51,7 @@ import {
 } from '@/lib/field-domain'
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
 import { cropLabel, rotationYearLabel } from '@/lib/crop-label'
+import { nNormLevelNote, nNormLevelOf } from '@/lib/n-norm-level'
 import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type ManualRotationEditorProps = {
@@ -410,6 +411,7 @@ export const ManualRotationEditor = ({
   }
 
   const years = preview ? preview.years.slice(0, preview.activeLen) : []
+  const nNormNote = nNormLevelNote(nNormLevelOf(years, null))
   const yearCovers = rotationCovers(
     years.map((y) => y.year),
     years.map((y) => y.leachingDetail),
@@ -609,6 +611,9 @@ export const ManualRotationEditor = ({
                   efterafgrøder og andre virkemidler der er lagt ind. N-norm er
                   andelen af fuld kvælstofnorm.
                 </p>
+                {nNormNote ? (
+                  <p className="text-xs text-muted-foreground">{nNormNote}</p>
+                ) : null}
               </div>
 
               <div className="space-y-4">
