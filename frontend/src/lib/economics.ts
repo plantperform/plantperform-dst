@@ -1,4 +1,5 @@
 import type { EconomicsOverrides, FarmingSystem } from '@/api/types'
+import { cropLabel } from '@/lib/crop-label'
 import { formatWholeNumber } from '@/lib/field-domain'
 
 export type CostCategory =
@@ -625,7 +626,11 @@ export const mineralFertiliserPrices = (
   )
 }
 
-export type CropDbDelta = { cropName: string; deltaDkkHa: number }
+export type CropDbDelta = {
+  cropCode: number
+  cropName: string
+  deltaDkkHa: number
+}
 
 const dbDeltas = (
   assumptions: EconomicsAssumptions,
@@ -634,6 +639,7 @@ const dbDeltas = (
   crops: CropEconomics[],
 ): CropDbDelta[] =>
   crops.map((crop) => ({
+    cropCode: crop.cropCode,
     cropName: crop.cropName,
     deltaDkkHa:
       wholeDbDkkHa(assumptions, after, crop) -
@@ -719,13 +725,16 @@ export type ProfileChange = {
   key: string
   kind: 'yield' | 'price' | 'quantity'
   label: string
-  cropNames: string[]
+  cropLabels: string[]
   // What a price without crop rows applies to, such as the husdyrgødning prices.
   appliesTo?: string
   from: string
   to: string
   guideStep: 1 | 2 | 3 | 4 | null
 }
+
+const economicsCropLabel = (crop: CropEconomics): string =>
+  cropLabel(crop.cropCode, crop.cropName)
 
 const COST_GUIDE_STEPS: Partial<Record<EconomicsGroupId, 2 | 4>> = {
   fertiliser: 2,
@@ -741,7 +750,7 @@ const yieldChange = (
   key: `yield:${cropKey(crop)}`,
   kind: 'yield',
   label: YIELD_ADJUSTMENT_LABEL,
-  cropNames: [crop.cropName],
+  cropLabels: [economicsCropLabel(crop)],
   from: '0 %',
   to: `${formatYieldPct(cropYieldPct(overrides, crop))} %`,
   guideStep: 3,
@@ -761,9 +770,7 @@ const priceChange = (
     key: `price:${line.priceId}`,
     kind: 'price',
     label: price?.label ?? line.label,
-    cropNames: priceCrops(assumptions, line.priceId).map(
-      (entry) => entry.cropName,
-    ),
+    cropLabels: priceCrops(assumptions, line.priceId).map(economicsCropLabel),
     from: withUnit(price?.valueDkk ?? 0),
     to: withUnit(priceValue(assumptions, overrides, line.priceId)),
     guideStep: yieldLines(crop).includes(line)
@@ -784,14 +791,14 @@ const quantityChange = (
     key: `quantity:${line.quantityId}`,
     kind: 'quantity',
     label: `${line.label}, mængde`,
-    cropNames: assumptions.crops
+    cropLabels: assumptions.crops
       .filter((entry) =>
         cropLines(entry).some(
           (candidate) =>
             candidate.quantityId !== null && ids.includes(candidate.quantityId),
         ),
       )
-      .map((entry) => entry.cropName),
+      .map(economicsCropLabel),
     from: withUnit(line.quantity),
     to: withUnit(overrides.quantities[line.quantityId] ?? line.quantity),
     guideStep: null,
@@ -819,7 +826,7 @@ const manureChanges = (
         key: `price:${price.id}`,
         kind: 'price',
         label: price.label,
-        cropNames: [],
+        cropLabels: [],
         appliesTo: MANURE_APPLIES_TO,
         from: withUnit(price.valueDkk),
         to: withUnit(priceValue(assumptions, overrides, price.id)),
@@ -870,7 +877,7 @@ export const profileChanges = (
 export type ProfileChangeComparison = {
   key: string
   label: string
-  cropNames: string[]
+  cropLabels: string[]
   appliesTo?: string
   cells: { value: string; changed: boolean }[]
 }
@@ -903,7 +910,7 @@ export const compareProfileChanges = (
   return [...rows.values()].map((row) => ({
     key: row.key,
     label: row.label,
-    cropNames: row.cropNames,
+    cropLabels: row.cropLabels,
     appliesTo: row.appliesTo,
     cells: changes.map((own, index) => {
       const change = own.find((entry) => entry.key === row.key)
@@ -927,8 +934,8 @@ export const profileChangesTitle = (count: number): string =>
 export const formatCropCount = (count: number): string =>
   formatCount(count, 'afgrøde', 'afgrøder')
 
-export const formatCropNames = (names: string[]): string =>
-  names.length > 3 ? formatCropCount(names.length) : formatNameList(names)
+export const formatCropLabels = (labels: string[]): string =>
+  labels.length > 3 ? formatCropCount(labels.length) : formatNameList(labels)
 
 export const describePriceCrops = (
   assumptions: EconomicsAssumptions,
@@ -937,7 +944,7 @@ export const describePriceCrops = (
   const crops = priceCrops(assumptions, priceId)
   return crops.length === assumptions.crops.length
     ? `Alle ${formatCropCount(crops.length)}`
-    : formatCropNames(crops.map((crop) => crop.cropName))
+    : formatCropLabels(crops.map(economicsCropLabel))
 }
 
 export const describeProfileChanges = (changes: ProfileChange[]): string => {
@@ -947,7 +954,7 @@ export const describeProfileChanges = (changes: ProfileChange[]): string => {
   const prices = ofKind('price').length
   const quantities = ofKind('quantity').length
   const parts = [
-    yields.length === 1 ? `Udbytte for ${yields[0].cropNames[0]}` : null,
+    yields.length === 1 ? `Udbytte for ${yields[0].cropLabels[0]}` : null,
     yields.length > 1 ? `Udbytte for ${formatCropCount(yields.length)}` : null,
     prices > 0 ? formatCount(prices, 'pris', 'priser') : null,
     quantities > 0 ? formatCount(quantities, 'mængde', 'mængder') : null,

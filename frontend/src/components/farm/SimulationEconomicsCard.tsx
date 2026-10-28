@@ -23,11 +23,12 @@ import {
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { cropGroupFor, shortCropName } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   budgetSoilType,
   dbDeltaScale,
   describeProfileChanges,
-  formatCropNames,
+  formatCropLabels,
   formatNameList,
   formatSignedDkk,
   NO_SOIL_TYPE_NOTE,
@@ -96,7 +97,9 @@ const EffectTable = ({ effect }: EffectTableProps) => {
                 group={cropGroupFor(crop.cropCode, crop.cropName)}
                 className={moved ? undefined : 'opacity-50'}
               />
-              <span className="truncate">{crop.cropName}</span>
+              <span className="truncate">
+                {cropLabel(crop.cropCode, crop.cropName)}
+              </span>
             </span>
             <span className="text-right">{formatNumber(crop.areaHa)}</span>
             <span className="text-right">
@@ -215,7 +218,7 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
     )
   }
 
-  const unused = effect.unusedCropNames
+  const unused = effect.unusedCropLabels
 
   return (
     <>
@@ -251,7 +254,7 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
         </p>
         {unused.length > 0 ? (
           <p>
-            Profilen ændrer også {formatCropNames(unused)}, som simuleringen
+            Profilen ændrer også {formatCropLabels(unused)}, som simuleringen
             ikke dyrker.
           </p>
         ) : null}
