@@ -67,8 +67,8 @@ export type SimulationFormValues = {
   name: string
   farmingSystem: FarmingSystem
   economicsProfileId: string
+  // The crops the farm will grow. A crop that is not chosen is opted out.
   chosenCrops: string[]
-  optedOutCrops: string[]
   // Unique across categories: a variant such as brak ("1") belongs to several
   // categories but is selected once.
   rotationVariants: string[]
@@ -92,7 +92,6 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   farmingSystem: 'Konventionel',
   economicsProfileId: STANDARD_PROFILE_ID,
   chosenCrops: [],
-  optedOutCrops: [],
   rotationVariants: [],
   nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
@@ -229,16 +228,13 @@ export const SIMULATION_FORM_STEPS = [
     label: 'Afgrøder',
     schema: z.object({
       chosenCrops: z.array(z.string()).min(1, 'Vælg mindst en afgrøde'),
-      optedOutCrops: z.array(z.string()),
     }),
   },
   {
     id: 'rotations',
     label: 'Sædskifter',
     schema: z.object({
-      rotationVariants: z
-        .array(z.string())
-        .min(1, 'Vælg mindst ét sædskifte'),
+      rotationVariants: z.array(z.string()).min(1, 'Vælg mindst ét sædskifte'),
     }),
   },
   {
@@ -296,7 +292,11 @@ export const simulationFormSchema = z
       const result = step.schema.safeParse(values)
       if (result.success) continue
       for (const issue of result.error.issues) {
-        ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+        ctx.addIssue({
+          code: 'custom',
+          path: issue.path,
+          message: issue.message,
+        })
       }
     }
   })
@@ -305,6 +305,34 @@ export const toggleValue = (values: string[], value: string): string[] =>
   values.includes(value)
     ? values.filter((current) => current !== value)
     : [...values, value]
+
+export type GroupSelection = 'none' | 'some' | 'all'
+
+export const groupSelection = (
+  values: string[],
+  group: string[],
+): GroupSelection => {
+  const selected = group.filter((value) => values.includes(value)).length
+  if (selected === 0) return 'none'
+  return selected === group.length ? 'all' : 'some'
+}
+
+// A group is selected as a whole, or cleared when all of it already is.
+export const toggleGroup = (values: string[], group: string[]): string[] =>
+  groupSelection(values, group) === 'all'
+    ? values.filter((value) => !group.includes(value))
+    : [...values, ...group.filter((value) => !values.includes(value))]
+
+// Only the crops of the chosen rotations are listed for exclusion, so the
+// exclusion of any other crop stays as it is.
+export const excludedCropCodesAfter = (
+  excludedCodes: number[],
+  listedCodes: number[],
+  includedCodes: number[],
+): number[] => [
+  ...excludedCodes.filter((code) => !listedCodes.includes(code)),
+  ...listedCodes.filter((code) => !includedCodes.includes(code)),
+]
 
 export const selectedInCategory = (
   category: RotationCategoryOption,
@@ -316,10 +344,7 @@ export const selectedInCategory = (
   ).length
 }
 
-export type CropChoice = Pick<
-  SimulationFormValues,
-  'chosenCrops' | 'optedOutCrops'
->
+export type CropChoice = Pick<SimulationFormValues, 'chosenCrops'>
 
 export type RotationChoice = CropChoice &
   Pick<SimulationFormValues, 'rotationVariants'>
@@ -345,9 +370,6 @@ const cropsIn = (rotations: RotationOption[]): string[] =>
     new Set(rotations.flatMap((rotation) => rotation.cropSequence)),
   ).sort(byDanishName)
 
-const hasAnyCrop = (rotation: RotationOption, crops: string[]): boolean =>
-  rotation.cropSequence.some((crop) => crops.includes(crop))
-
 export const cropsForFarmingSystem = (
   categories: RotationCategoryOption[],
   farmingSystem: FarmingSystem,
@@ -358,11 +380,14 @@ export const cropsForFarmingSystem = (
       .flatMap((category) => category.rotations),
   )
 
+// A crop that is not chosen is opted out, so a rotation fits only when every
+// crop in it is chosen.
 const matchesCropChoice = (
   rotation: RotationOption,
-  { chosenCrops, optedOutCrops }: CropChoice,
+  { chosenCrops }: CropChoice,
 ): boolean =>
-  hasAnyCrop(rotation, chosenCrops) && !hasAnyCrop(rotation, optedOutCrops)
+  rotation.cropSequence.length > 0 &&
+  rotation.cropSequence.every((crop) => chosenCrops.includes(crop))
 
 export const categoriesMatchingCropChoice = (
   categories: RotationCategoryOption[],
@@ -375,16 +400,6 @@ export const categoriesMatchingCropChoice = (
     return rotations.length > 0 ? [{ ...category, rotations }] : []
   })
 
-export const otherCrops = (
-  categories: RotationCategoryOption[],
-  chosenCrops: string[],
-): string[] =>
-  cropsIn(
-    [...rotationsByVariant(categories).values()].filter((rotation) =>
-      hasAnyCrop(rotation, chosenCrops),
-    ),
-  ).filter((crop) => !chosenCrops.includes(crop))
-
 export const matchingRotationCount = (
   categories: RotationCategoryOption[],
   choice: CropChoice,
@@ -393,15 +408,9 @@ export const matchingRotationCount = (
 
 export const withCropChoice = (
   categories: RotationCategoryOption[],
-  { chosenCrops, optedOutCrops, rotationVariants }: RotationChoice,
+  { chosenCrops, rotationVariants }: RotationChoice,
 ): RotationChoice => {
-  const others = otherCrops(categories, chosenCrops)
-  const choice = {
-    chosenCrops: [...chosenCrops].sort(byDanishName),
-    optedOutCrops: optedOutCrops
-      .filter((crop) => others.includes(crop))
-      .sort(byDanishName),
-  }
+  const choice = { chosenCrops: [...chosenCrops].sort(byDanishName) }
   const byVariant = rotationsByVariant(categories)
   return {
     ...choice,

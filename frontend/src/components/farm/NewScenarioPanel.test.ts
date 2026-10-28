@@ -337,21 +337,35 @@ describe('simulation wizard steps', () => {
   }
   const currentStep = () =>
     container.querySelector('[aria-current="step"]')?.textContent
+  // The crops sit in one list per crop group inside the list of the choice.
   const check = async (list: string, crop: string) => {
     const input = [
-      ...container.querySelectorAll(`ul[aria-label="${list}"] label`),
+      ...container.querySelectorAll(`ul[aria-label="${list}"] ul label`),
     ]
       .find((entry) => entry.textContent === crop)
       ?.querySelector('input')
     expect(input, crop).toBeDefined()
     await act(async () => input!.click())
   }
+  const groupCheckbox = (list: string, group: string) =>
+    [...container.querySelectorAll(`ul[aria-label="${list}"] > li > label`)]
+      .find((entry) => entry.textContent === group)
+      ?.querySelector('input')
+  const checkGroup = async (list: string, group: string) => {
+    const input = groupCheckbox(list, group)
+    expect(input, group).toBeDefined()
+    await act(async () => input!.click())
+  }
+  const listedGroups = (list: string) =>
+    [
+      ...container.querySelectorAll(`ul[aria-label="${list}"] > li > label`),
+    ].map((entry) => entry.textContent)
   const listedCrops = (list: string) =>
-    [...container.querySelectorAll(`ul[aria-label="${list}"] label`)].map(
+    [...container.querySelectorAll(`ul[aria-label="${list}"] ul label`)].map(
       (entry) => entry.textContent,
     )
   const checkedCrops = (list: string) =>
-    [...container.querySelectorAll(`ul[aria-label="${list}"] input`)].map(
+    [...container.querySelectorAll(`ul[aria-label="${list}"] ul input`)].map(
       (input) => (input as HTMLInputElement).checked,
     )
 
@@ -618,7 +632,7 @@ describe('simulation wizard steps', () => {
     ).not.toHaveProperty('timeLimitSeconds')
   })
 
-  it('narrows the rotations by the crops chosen and opted out', async () => {
+  it('narrows the rotations by the crops chosen', async () => {
     queries.categories.data = [
       {
         category: 'Plante',
@@ -652,25 +666,19 @@ describe('simulation wizard steps', () => {
       },
     ]
     await mount(null)
-    await change('Simuleringens navn', 'Uden kartofler')
+    await change('Simuleringens navn', 'Med vinterhvede')
     await click('Næste')
     expect(listedCrops('Afgrøder')).toEqual([
-      'Kartofler',
-      'Majs',
       'Vinterhvede',
+      'Majs',
       'Vinterraps',
-    ])
-    await check('Afgrøder', 'Vinterhvede')
-    expect(listedCrops('Fravælg afgrøder')).toEqual([
       'Kartofler',
-      'Lupin',
-      'Vinterraps',
     ])
-    expect(container.textContent).toContain('3 sædskifter passer til valget')
-    expect(checkedCrops('Fravælg afgrøder')).toEqual([false, false, false])
-    await check('Fravælg afgrøder', 'Kartofler')
-    expect(checkedCrops('Fravælg afgrøder')).toEqual([true, false, false])
-    expect(container.textContent).toContain('2 sædskifter passer til valget')
+    // An unchecked crop is opted out: every crop of a rotation must be checked.
+    await check('Afgrøder', 'Vinterhvede')
+    expect(container.textContent).toContain('Ingen sædskifter passer til valget')
+    await check('Afgrøder', 'Vinterraps')
+    expect(container.textContent).toContain('1 sædskifte passer til valget')
     await click('Næste')
     expect(currentStep()).toBe('Sædskifter')
     expect(container.textContent).toContain('Vinterraps')
@@ -678,11 +686,73 @@ describe('simulation wizard steps', () => {
     await click('Vælg alle')
     await click('Bekræft')
     expect(currentStep()).toBe('Bekræft')
-    expect(container.textContent).toContain('Fravalgt: Kartofler')
     await click('Gem')
     expect(queries.create.mock.calls[0][1]).toMatchObject({
       allowedRotationVariants: ['10'],
     })
+  })
+
+  it('selects and clears every crop of a group with its checkbox', async () => {
+    queries.categories.data = [
+      {
+        category: 'Plante',
+        croppingSystem: 'Konventionel',
+        rotationCount: 2,
+        rotations: [
+          {
+            rotationVariant: '10',
+            cropSequence: ['Vinterhvede', 'Vinterbyg', 'Majs'],
+            activeLen: 3,
+          },
+          {
+            rotationVariant: '11',
+            cropSequence: ['Vinterrug', 'Vinterraps'],
+            activeLen: 2,
+          },
+        ],
+      },
+    ]
+    await mount(null)
+    await change('Simuleringens navn', 'Med grupper')
+    await click('Næste')
+    expect(listedGroups('Afgrøder')).toEqual([
+      'Vintersæd',
+      'Majs',
+      'Raps og olie',
+    ])
+    expect(listedCrops('Afgrøder')).toEqual([
+      'Vinterbyg',
+      'Vinterhvede',
+      'Vinterrug',
+      'Majs',
+      'Vinterraps',
+    ])
+
+    await checkGroup('Afgrøder', 'Vintersæd')
+    expect(checkedCrops('Afgrøder')).toEqual([true, true, true, false, false])
+    expect(groupCheckbox('Afgrøder', 'Vintersæd')).toMatchObject({
+      checked: true,
+      indeterminate: false,
+    })
+
+    await check('Afgrøder', 'Vinterbyg')
+    expect(checkedCrops('Afgrøder')).toEqual([false, true, true, false, false])
+    expect(groupCheckbox('Afgrøder', 'Vintersæd')).toMatchObject({
+      checked: false,
+      indeterminate: true,
+    })
+    await checkGroup('Afgrøder', 'Vintersæd')
+    expect(checkedCrops('Afgrøder')).toEqual([true, true, true, false, false])
+
+    // Majs and Vinterraps are opted out, so neither rotation fits yet.
+    expect(container.textContent).toContain('Ingen sædskifter passer til valget')
+    await check('Afgrøder', 'Vinterraps')
+    expect(container.textContent).toContain('1 sædskifte passer til valget')
+
+    await checkGroup('Afgrøder', 'Vintersæd')
+    expect(checkedCrops('Afgrøder')).toEqual([false, false, false, false, true])
+    await check('Afgrøder', 'Vinterraps')
+    expect(container.textContent).not.toContain('passer til valget')
   })
 
   it('takes the crops of an existing simulation from its rotations', async () => {

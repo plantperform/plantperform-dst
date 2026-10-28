@@ -22,6 +22,7 @@ import {
   formatNumber,
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
+import { cropLabelByCode, cropLabelByName } from '@/lib/crop-label'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
@@ -106,8 +107,9 @@ export const SimulationSummary = ({
   const fieldCount = fields.length
   const catchments = useCatchmentOptions(farmId, fields)
   const crops = useCropCodes(farmId)
-  const cropName = (code: number) =>
-    crops.data?.find((crop) => crop.code === code)?.name ?? `Afgrøde ${code}`
+  const cropLabelFor = (code: number) => cropLabelByCode(code, crops.data ?? [])
+  const cropLabelByChosenName = (name: string) =>
+    cropLabelByName(name, crops.data ?? [])
   const quotas = effectiveMaxNLoadByCatchment(fields, [])
   const averageCaps = effectiveMaxNLoadByCatchment(
     fields,
@@ -150,10 +152,9 @@ export const SimulationSummary = ({
         </Section>
 
         <Section step="crops" onEditStep={onEditStep}>
-          <p className="text-foreground">{values.chosenCrops.join(' · ')}</p>
-          {values.optedOutCrops.length > 0 ? (
-            <p>Fravalgt: {values.optedOutCrops.join(' · ')}</p>
-          ) : null}
+          <p className="text-foreground">
+            {values.chosenCrops.map(cropLabelByChosenName).join(' · ')}
+          </p>
         </Section>
 
         <Section step="rotations" term="rotation" onEditStep={onEditStep}>
@@ -276,7 +277,7 @@ export const SimulationSummary = ({
           ) : (
             constraints.cropAreaLimits.map((limit) => (
               <p key={limit.cropCode}>
-                {cropName(limit.cropCode)} · Min.:{' '}
+                {cropLabelFor(limit.cropCode)} · Min.:{' '}
                 {capLabel(limit.minAreaHa, 'ha')} · Maks.:{' '}
                 {capLabel(limit.maxAreaHa, 'ha')}
               </p>
@@ -285,7 +286,7 @@ export const SimulationSummary = ({
           <p>
             Udelukkede afgrøder:{' '}
             {settings.excludedCropCodes.length > 0
-              ? settings.excludedCropCodes.map(cropName).join(' · ')
+              ? settings.excludedCropCodes.map(cropLabelFor).join(' · ')
               : 'Ingen'}
           </p>
         </Section>

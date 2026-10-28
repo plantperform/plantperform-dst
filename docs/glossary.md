@@ -52,12 +52,12 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | afgrøde | crop | | |
-| afgrødevalg, valgte og fravalgte afgrøder | `CropChoice`, `chosenCrops`, `optedOutCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop and no opted-out one. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
+| afgrødevalg, valgte afgrøder | `CropChoice`, `chosenCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. A crop without a check mark is opted out, so Sædskifter shows the rotations where every crop is chosen. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
 | afgrøde med kode | `cropLabel`, `rotationYearLabel`, `shownUndersownCropLabel`, `cropLabels` | | The full name with its afgrødekode in front, "210 - Vårbyg, helsæd". Used wherever the full name is shown; the short names (`shortCropName`) stay without the code, and the field list has the code in a column of its own |
 | normal såmåned | sowing month | | The crop table's month the crop is normally sown, stored as `afgroede.saamaaned` |
 | efterårssået | autumn-sown, `is_autumn_sown`, `AUTUMN_SOWING_MONTHS` | | Normal såmåned August to November |
-| afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
+| afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor`, `groupCrops`, `CropGroupChecklist` | | The groups the map, the year strip and the crop distribution colour by. The Afgrøder step and Grænser list their crops under them, with a checkbox for the whole group |
 | helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and all grønkorn, blends and single species alike (afgrødekode 701–711, whatever the cereal). Majshelsæd counts as Majs |
 | afgrødefordeling | `CropShare`, `CropShareLevel`, `summarizeCropDistribution` | | Area and N load per crop group or per crop for a year, or the average per year |
 | afgrødearealkrav | `CropAreaLimit`, `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `CropAreaViolation`, `CropAreaRange` | `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `cropAreaViolations`, `crop-area-ranges` | Min. and/or max. hectares of one afgrødekode under Regler; percent is of the simulation's total area |
