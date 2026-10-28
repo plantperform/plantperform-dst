@@ -10,6 +10,7 @@ import {
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   cropDbChange,
   cropTotals,
@@ -82,7 +83,9 @@ const CropsOverview = ({
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
-                <span className="min-w-0 truncate">{crop.cropName}</span>
+                <span className="min-w-0 truncate">
+                  {cropLabel(crop.cropCode, crop.cropName)}
+                </span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
               </span>
               <span className="text-right">
@@ -166,7 +169,9 @@ export const EconomicsAssumptionsEditor = ({
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
-                <span className="min-w-0 flex-1">{crop.cropName}</span>
+                <span className="min-w-0 flex-1">
+                  {cropLabel(crop.cropCode, crop.cropName)}
+                </span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
               </button>
             </li>
@@ -176,7 +181,9 @@ export const EconomicsAssumptionsEditor = ({
 
       <section
         aria-label={
-          active ? `Priser og mængder for ${active.cropName}` : 'Alle afgrøder'
+          active
+            ? `Priser og mængder for ${cropLabel(active.cropCode, active.cropName)}`
+            : 'Alle afgrøder'
         }
         className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
       >

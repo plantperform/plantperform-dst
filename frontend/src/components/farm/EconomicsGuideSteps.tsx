@@ -18,6 +18,7 @@ import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   budgetSoilType,
   cropYieldPct,
@@ -65,7 +66,7 @@ const CropName = ({ crop, children }: CropNameProps) => (
   <span className="flex min-w-0 items-center gap-2">
     <CropGroupTile group={cropGroupFor(crop.cropCode, crop.cropName)} />
     <span className="min-w-0">
-      <span className="block">{crop.cropName}</span>
+      <span className="block">{cropLabel(crop.cropCode, crop.cropName)}</span>
       {children}
     </span>
   </span>
@@ -133,6 +134,7 @@ export const GuidePricesStep = ({
           })
           if (sales.length === 0) return null
           const [first] = sales
+          const label = cropLabel(crop.cropCode, crop.cropName)
           return (
             <div key={crop.cropCode} className="border-b">
               {sales.map(({ line, price }) => (
@@ -143,7 +145,7 @@ export const GuidePricesStep = ({
                       price.id,
                       priceValue(assumptions, overrides, price.id),
                     )}
-                    label={`Din salgspris for ${crop.cropName}${sales.length > 1 ? `, ${line.label.toLowerCase()},` : ''} i ${price.unit}`}
+                    label={`Din salgspris for ${label}${sales.length > 1 ? `, ${line.label.toLowerCase()},` : ''} i ${price.unit}`}
                     onCommit={(value) =>
                       sharedPrice.commitPrice(price.id, value)
                     }
@@ -157,7 +159,7 @@ export const GuidePricesStep = ({
                         ) : null}
                         <button
                           type="button"
-                          aria-label={`Se alle poster for ${crop.cropName}`}
+                          aria-label={`Se alle poster for ${label}`}
                           className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
                           onClick={() => onOpenCrop(crop.cropCode)}
                         >
@@ -262,7 +264,7 @@ export const GuideYieldStep = ({
             </span>
             <YieldPctField
               pct={pct}
-              cropName={crop.cropName}
+              cropLabel={cropLabel(crop.cropCode, crop.cropName)}
               onCommit={(value) =>
                 onChange((current) => withYieldPct(current, crop, value))
               }
@@ -320,7 +322,7 @@ export const GuideMachinesStep = ({
         >
           {crops.map((entry) => (
             <option key={entry.cropCode} value={entry.cropCode}>
-              {entry.cropName}
+              {cropLabel(entry.cropCode, entry.cropName)}
             </option>
           ))}
         </select>
@@ -390,7 +392,8 @@ export const GuideMachinesStep = ({
             )
           })}
           <p className={FOOT_CLASS}>
-            Tallene er for {crop.cropName}. En fælles pris gælder for alle de
+            Tallene er for {cropLabel(crop.cropCode, crop.cropName)}. En fælles
+            pris gælder for alle de
             afgrøder, der står ved den. Mængderne rettes på profilens side.{' '}
             {SOIL_VARIANTS_NOTE}
           </p>

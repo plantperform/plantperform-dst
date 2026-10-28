@@ -63,6 +63,7 @@ import {
   STANDARD_SOURCE,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
+import { cropLabel } from '@/lib/crop-label'
 import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
@@ -146,10 +147,10 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
                 )}
               >
                 <TruncatedTooltip
-                  content={effect.cropName}
+                  content={cropLabel(effect.cropCode, effect.cropName)}
                   className="truncate"
                 >
-                  {effect.cropName}
+                  {cropLabel(effect.cropCode, effect.cropName)}
                 </TruncatedTooltip>
                 <span className="text-right text-muted-foreground">
                   {formatDbDkk(effect.dbDkkHa - effect.deltaDkkHa)}

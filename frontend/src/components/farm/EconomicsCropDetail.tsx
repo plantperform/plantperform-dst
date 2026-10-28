@@ -19,6 +19,7 @@ import {
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   COST_CATEGORIES,
   cropDbChange,
@@ -235,7 +236,7 @@ const YieldAdjustmentRow = ({
       </div>
       <YieldPctField
         pct={cropYieldPct(overrides, crop)}
-        cropName={crop.cropName}
+        cropLabel={cropLabel(crop.cropCode, crop.cropName)}
         onCommit={changePct}
       />
       <span aria-hidden="true" />
@@ -375,7 +376,9 @@ export const EconomicsCropDetail = ({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <CropGroupTile group={cropGroupFor(crop.cropCode, crop.cropName)} />
-            <h2 className="text-base font-semibold">{crop.cropName}</h2>
+            <h2 className="text-base font-semibold">
+              {cropLabel(crop.cropCode, crop.cropName)}
+            </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Forfrugtsværdi {formatNumber(crop.precedingCropValueKgNHa)} kg N/ha
@@ -402,7 +405,7 @@ export const EconomicsCropDetail = ({
       </div>
       {restoreEffects.length > 0 ? (
         <DbEffectsConfirm
-          title={`Gendan standard for ${crop.cropName}`}
+          title={`Gendan standard for ${cropLabel(crop.cropCode, crop.cropName)}`}
           description={`${formatNameList(sharedPrices.map((price) => price.label))} ${sharedPrices.length === 1 ? 'er en fælles pris' : 'er fælles priser'} og går også tilbage for de andre afgrøder. Dækningsbidraget ændres pr. ha:`}
           effects={restoreEffects}
           confirmLabel={`Gendan for alle ${restoreEffects.length}`}

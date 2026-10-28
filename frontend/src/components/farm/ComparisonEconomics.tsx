@@ -10,7 +10,7 @@ import {
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { ChangedValue } from '@/components/farm/economics-ui'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
-import { compareProfileChanges, formatCropNames } from '@/lib/economics'
+import { compareProfileChanges, formatCropLabels } from '@/lib/economics'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 
 type ComparisonEconomicsProps = ComparedColumnsProps & {
@@ -62,7 +62,7 @@ export const ComparisonEconomics = ({
         <ComparisonFigureRow
           key={row.key}
           label={row.label}
-          note={row.appliesTo ?? formatCropNames(row.cropNames)}
+          note={row.appliesTo ?? formatCropLabels(row.cropLabels)}
           {...table}
         >
           {(column, index) =>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import type { SharedPrice } from '@/components/farm/shared-price-confirm'
 import { Button } from '@/components/ui/button'
+import { cropLabel } from '@/lib/crop-label'
 import {
   findPrice,
   formatCropCount,
@@ -54,8 +55,8 @@ export const DbEffectsConfirm = ({
       </div>
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
         {effects.map((effect) => (
-          <li key={effect.cropName}>
-            {effect.cropName}{' '}
+          <li key={effect.cropCode}>
+            {cropLabel(effect.cropCode, effect.cropName)}{' '}
             <span className="font-semibold">
               {formatSignedDkk(effect.deltaDkkHa)}
             </span>

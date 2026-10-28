@@ -1,4 +1,5 @@
 import type { FieldRecord } from '@/api/types'
+import { cropLabel } from '@/lib/crop-label'
 import {
   isCropCustomised,
   profileChanges,
@@ -27,7 +28,7 @@ export type SimulationEconomicsEffect = {
   crops: SimulationCropEffect[]
   otherCrops: CropArea[]
   deltaDkk: number
-  unusedCropNames: string[]
+  unusedCropLabels: string[]
 }
 
 const yearlyCropAreas = (fields: RotationField[]): CropArea[] => {
@@ -65,7 +66,7 @@ export const simulationEconomicsEffect = (
         areaHa: area.areaHa,
         deltaDkk: Math.round(effect.deltaDkkHa * area.areaHa),
         changes: changes.filter((change) =>
-          change.cropNames.includes(effect.cropName),
+          change.cropLabels.includes(cropLabel(effect.cropCode, effect.cropName)),
         ),
       },
     ]
@@ -74,12 +75,12 @@ export const simulationEconomicsEffect = (
     crops,
     otherCrops: areas.filter((area) => !effects.has(area.cropCode)),
     deltaDkk: crops.reduce((total, entry) => total + entry.deltaDkk, 0),
-    unusedCropNames: assumptions.crops
+    unusedCropLabels: assumptions.crops
       .filter(
         (crop) =>
           !grownCropCodes.has(crop.cropCode) &&
           isCropCustomised(overrides, crop),
       )
-      .map((crop) => crop.cropName),
+      .map((crop) => cropLabel(crop.cropCode, crop.cropName)),
   }
 }

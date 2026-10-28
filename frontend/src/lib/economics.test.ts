@@ -720,7 +720,7 @@ describe('soil variants', () => {
     ).toMatchObject([
       {
         key: 'price:ploughing',
-        cropNames: ['Vinterraps', 'Ærter', 'Ærter på sand'],
+        cropLabels: ['22 - Vinterraps', '30 - Ærter', '31 - Ærter på sand'],
       },
     ])
   })
@@ -793,7 +793,7 @@ describe('profileChanges', () => {
         key: 'yield:22',
         kind: 'yield',
         label: 'Udbytte i forhold til normen',
-        cropNames: ['Vinterraps'],
+        cropLabels: ['22 - Vinterraps'],
         from: '0 %',
         to: '+10 %',
         guideStep: 3,
@@ -802,7 +802,7 @@ describe('profileChanges', () => {
         key: 'price:rapeseedPrice',
         kind: 'price',
         label: 'Salgspris',
-        cropNames: ['Vinterraps'],
+        cropLabels: ['22 - Vinterraps'],
         from: '335 kr/hkg',
         to: '350 kr/hkg',
         guideStep: 1,
@@ -811,7 +811,7 @@ describe('profileChanges', () => {
         key: 'price:ploughing',
         kind: 'price',
         label: 'Pløjning med pakning',
-        cropNames: ['Vinterraps', 'Ærter'],
+        cropLabels: ['22 - Vinterraps', '30 - Ærter'],
         from: '825 kr/gang',
         to: '700 kr/gang',
         guideStep: 4,
@@ -820,7 +820,7 @@ describe('profileChanges', () => {
         key: 'quantity:30/spraying',
         kind: 'quantity',
         label: 'spraying, mængde',
-        cropNames: ['Ærter'],
+        cropLabels: ['30 - Ærter'],
         from: '2 gange',
         to: '3 gange',
         guideStep: null,
@@ -920,12 +920,12 @@ describe('profileChanges', () => {
   it('sums up the changes of a profile by kind', () => {
     const change = (
       kind: ProfileChange['kind'],
-      cropName: string,
+      cropLabel: string,
     ): ProfileChange => ({
-      key: `${kind}:${cropName}`,
+      key: `${kind}:${cropLabel}`,
       kind,
       label: '',
-      cropNames: [cropName],
+      cropLabels: [cropLabel],
       from: '',
       to: '',
       guideStep: null,
@@ -996,8 +996,8 @@ describe('shared prices', () => {
     expect(
       sharedPriceEffect(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
     ).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 70 },
-      { cropName: 'Ærter', deltaDkkHa: 20 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 70 },
+      { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 20 },
     ])
   })
 
@@ -1014,8 +1014,8 @@ describe('shared prices', () => {
       ),
     ).toEqual(['ploughing'])
     expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 175 },
-      { cropName: 'Ærter', deltaDkkHa: 175 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 175 },
+      { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 175 },
     ])
 
     const moreSpraying = withQuantityOverride(
@@ -1029,12 +1029,14 @@ describe('shared prices', () => {
       [],
     )
     expect(cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 160 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 },
     ])
   })
 
   it('names the crops of a price, or all of them at once', () => {
-    expect(describePriceCrops(ASSUMPTIONS, 'rapeseedPrice')).toBe('Vinterraps')
+    expect(describePriceCrops(ASSUMPTIONS, 'rapeseedPrice')).toBe(
+      '22 - Vinterraps',
+    )
     expect(describePriceCrops(ASSUMPTIONS, 'ploughing')).toBe('Alle 2 afgrøder')
   })
 })
@@ -1150,7 +1152,7 @@ describe('gødning', () => {
         key: 'price:manurePurchase',
         kind: 'price',
         label: 'Husdyrgødning, køb',
-        cropNames: [],
+        cropLabels: [],
         appliesTo: 'Simuleringer med husdyrgødning',
         from: '0 kr/ton',
         to: '15 kr/ton',

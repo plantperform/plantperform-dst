@@ -150,7 +150,7 @@ describe('simulationEconomicsEffect', () => {
       330,
     )
     const effect = simulationEconomicsEffect(ASSUMPTIONS, overrides, FIELDS)
-    expect(effect.unusedCropNames).toEqual(['Vinterraps'])
+    expect(effect.unusedCropLabels).toEqual(['22 - Vinterraps'])
     expect(effect.deltaDkk).toBe(0)
   })
 
