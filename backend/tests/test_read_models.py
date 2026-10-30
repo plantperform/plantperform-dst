@@ -381,7 +381,7 @@ class ReadModelTests(DatabaseTests):
         )
         self.assertIsNone(replaced.error)
 
-    def publish_result(self):
+    def publish_result(self, without_economics=()):
         value = rich_candidate()
         fields = [
             field(id).model_copy(
@@ -396,6 +396,10 @@ class ReadModelTests(DatabaseTests):
             )
             for id in ("field-b", "field-a")
         ]
+        selected = {f.id: value.model_dump(mode="json") for f in fields}
+        for field_id in without_economics:
+            for year in selected[field_id]["years"]:
+                year["db_detail"]["economics_missing"] = True
         output = {
             "response": {
                 "status": "OPTIMAL",
@@ -407,7 +411,7 @@ class ReadModelTests(DatabaseTests):
                 "assignments": [],
             },
             "fields_before": [field(f.id).model_dump(mode="json") for f in fields],
-            "selected_candidates": {f.id: value.model_dump(mode="json") for f in fields},
+            "selected_candidates": selected,
         }
         run = self.submit()
         _, _, token = optimization_store.claim("sim", run.run_id)
@@ -585,6 +589,17 @@ class ReadModelTests(DatabaseTests):
         self.assertEqual(statement["db"], saved["response"]["objectiveDb2"])
         self.assertEqual(statement["omkostningerTotal"], 0)
         self.assertEqual(statement["andreGoedningsstoffer"], 0)
+
+    def test_saved_result_counts_only_the_fields_with_economics(self):
+        self.publish_result(without_economics=["field-a"])
+        view = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view").json()
+        saved = view["data"]["savedResult"]
+        self.assertEqual(
+            {f["id"]: f["economicsMissing"] for f in saved["response"]["fields"]},
+            {"field-a": True, "field-b": False},
+        )
+        self.assertEqual(saved["economicsStatement"]["areaHa"], 2)
+        self.assertEqual(saved["economicsStatement"]["db"], 400)
 
     def test_backfill_after_failed_new_run_preserves_successful_provenance(self):
         _, successful, _, _ = self.publish_result()

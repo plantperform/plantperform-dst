@@ -64,7 +64,7 @@ def economics_statement(fields, candidates):
     for field in fields:
         candidate = candidates.get(field["id"])
         cycle = candidate.years[: candidate.active_len] if candidate else []
-        if field.get("rotation_id") is None or not cycle:
+        if field.get("rotation_id") is None or field.get("economics_missing") or not cycle:
             continue
         weight = field["area_ha"] / len(cycle)
         statement["area_ha"] += field["area_ha"]
@@ -210,6 +210,16 @@ def combine_contributions(contributions):
 def _without_economics(years):
     """A mark has no economics when every year of its rotation has none."""
     return bool(years) and all(year.get("economics_missing") for year in years)
+
+
+def flag_fields_without_economics(response, field_years):
+    return {
+        **response,
+        "fields": [
+            {**field, "economics_missing": _without_economics(field_years.get(field["id"], []))}
+            for field in response["fields"]
+        ],
+    }
 
 
 def yearly_totals(fields, field_years, *, history=False):
