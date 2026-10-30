@@ -427,7 +427,7 @@ const Guide = ({
               </h2>
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 Det, marken tjener pr. ha: udbytte gange salgspris plus tilskud,
-                minus gødning, udsæd, planteværn, markarbejde og tørring.{' '}
+                minus gødning, udsæd, planteværn, markarbejde, tørring og andet.{' '}
                 {fertiliserNote(assumptions)}
               </p>
             </section>
