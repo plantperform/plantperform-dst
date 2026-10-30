@@ -463,6 +463,14 @@ def evaluate_candidate_for_mark(
     )
 
 
+def _rotation_for_ref(
+    ref: RotationCandidateRef, start_year: int
+) -> list[saedskifte_library.RawPosition]:
+    if ref.saedskiftevariant == "permanent" and ref.variant.isdigit():
+        return [(int(ref.variant), None, None)] * 8
+    return saedskifte_library.generate_rotation(ref.saedskiftevariant, ref.variant, start_year)
+
+
 def evaluate_with_overrides(
     base_ref: RotationCandidateRef,
     overrides: list[RotationPositionOverride],
@@ -502,9 +510,7 @@ def evaluate_with_overrides(
     otherwise its actual afgrøde sequence would share an ID with the different
     start_year=1 candidate in the stored candidate set.
     """
-    raw_rotation = saedskifte_library.generate_rotation(
-        base_ref.saedskiftevariant, base_ref.variant, start_year
-    )
+    raw_rotation = _rotation_for_ref(base_ref, start_year)
     raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
     if active_len == 0:

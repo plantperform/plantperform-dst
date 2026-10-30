@@ -585,25 +585,27 @@ export const ManualRotationEditor = ({
                     </div>
                   ) : null}
 
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">
-                      N-norm
-                    </span>
-                    {nNormsForVariant.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        aria-pressed={baseRef?.nNormPct === n}
-                        onClick={() => {
-                          if (!baseRef) return
-                          changeBase({ ...baseRef, nNormPct: n })
-                        }}
-                        className={chipClassName(baseRef?.nNormPct === n)}
-                      >
-                        {n}%
-                      </button>
-                    ))}
-                  </div>
+                  {nNormsForVariant.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        N-norm
+                      </span>
+                      {nNormsForVariant.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={baseRef?.nNormPct === n}
+                          onClick={() => {
+                            if (!baseRef) return
+                            changeBase({ ...baseRef, nNormPct: n })
+                          }}
+                          className={chipClassName(baseRef?.nNormPct === n)}
+                        >
+                          {n}%
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <p className="text-xs text-muted-foreground">
