@@ -107,6 +107,49 @@ class PermanentFieldLockTests(unittest.TestCase):
         self.assertEqual(field.n_load, 10 * 4 * 0.75)
         self.assertEqual(field.fen, 3200 * 4)
 
+    def test_a_context_saved_before_catch_crops_prepares_without_them(self) -> None:
+        saved_before_catch_crops = repository.saved_registry_context(
+            {
+                "jbnr": 4,
+                "goedningsregion": None,
+                "oeko": False,
+                "kvotegivende": True,
+                "crop_history": {"2026": 1},
+                "percolation_by_kategori": None,
+                "org_n_topsoil": None,
+                "s_soil": None,
+            }
+        )
+        years = _permanent_candidate().years
+        with (
+            patch.object(repository, "_soil_data_for_context", return_value=None),
+            patch.object(repository, "real_history_lookback", return_value={}) as lookback,
+            patch.object(repository, "is_permanent_afgrode", return_value=False),
+            patch.object(
+                repository, "evaluate_real_history_for_field", return_value=years
+            ) as history,
+        ):
+            from app.domain.field import FieldRecord
+
+            setup, _ = repository.prepare_simulation_field(
+                FieldRecord(
+                    id="field",
+                    farm_id="farm",
+                    name="55-0",
+                    area_ha=4,
+                    db2=0,
+                    n_load=0,
+                    leaching=0,
+                    crop_rotation=[year.year for year in years],
+                ),
+                saved_before_catch_crops,
+                CreateSimulationRequest(name="Saved before catch crops"),
+            )
+
+        lookback.assert_called_once_with({"2026": 1}, 4, None, False, None)
+        self.assertIsNone(history.call_args.kwargs["secondary_crop_history"])
+        self.assertIn("baseline_candidate", setup)
+
 
 class YearlySummaryTests(unittest.TestCase):
     def test_udledning_counts_only_kvotegivende_marker(self) -> None:

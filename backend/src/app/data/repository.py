@@ -1,4 +1,5 @@
 from copy import deepcopy
+from types import SimpleNamespace
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -154,6 +155,20 @@ def _soil_data_for_context(row) -> RegistrySoilData | None:
     if row is None:
         return None
     return registry_soil_data(row.percolation_by_kategori, row.org_n_topsoil, row.s_soil)
+
+
+def saved_registry_context(value):
+    return SimpleNamespace(**{"secondary_crop_history": None, **value}) if value else None
+
+
+def _real_history_for_context(row, jbnr):
+    return real_history_lookback(
+        row.crop_history or {},
+        jbnr,
+        row.goedningsregion,
+        bool(row.oeko),
+        row.secondary_crop_history,
+    )
 
 
 def get_registry_soil_data(imk_id: int | None) -> RegistrySoilData | None:
@@ -550,13 +565,7 @@ def prepare_simulation_field(
     candidates: list[RotationCandidateEvaluation] = []
     real_history = None
     if registry_row is not None:
-        real_history = real_history_lookback(
-            registry_row.crop_history or {},
-            jbnr,
-            registry_row.goedningsregion,
-            bool(registry_row.oeko),
-            registry_row.secondary_crop_history,
-        )
+        real_history = _real_history_for_context(registry_row, jbnr)
 
         # A mark whose latest real afgrøde is permanent (ikke-omdrift -
         # e.g. frugtplantage, skov, permanent græs) has no meaningful

@@ -318,21 +318,13 @@ def get_simulation_field_context(farm_id, simulation_id, field_id, email):
         if setup is None:
             return None
         if "calculation_context" in setup:
-            value = setup["calculation_context"]
-            registry = SimpleNamespace(**value) if value else None
+            registry = _common().saved_registry_context(setup["calculation_context"])
         else:
             registry = _common()._registry_context_for_imk_id(session, setup.get("imk_id"))
-        from app.services.rotations.historisk_goedning import real_history_lookback
         from app.services.soil.jbnr import FALLBACK_JBNR
 
         jbnr = registry.jbnr if registry and registry.jbnr is not None else FALLBACK_JBNR
-        history = (
-            real_history_lookback(
-                registry.crop_history or {}, jbnr, registry.goedningsregion, bool(registry.oeko)
-            )
-            if registry
-            else None
-        )
+        history = _common()._real_history_for_context(registry, jbnr) if registry else None
         return SimpleNamespace(
             jbnr=jbnr, real_history=history, soil_data=_common()._soil_data_for_context(registry)
         )
