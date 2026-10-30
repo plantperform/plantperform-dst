@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from app.data import repository
 from app.data.optimizer_inputs import OptimizerCandidate, OptimizerYear
 from app.domain.field import FieldRecord
-from app.domain.optimization import NUM_YEARS
+from app.domain.optimization import (
+    NUM_YEARS,
+    KystvandoplandYearlyNLoadCaps,
+    QuotaTradeSetting,
+    SimulationQuotaTrade,
+    untradable_quota_reason,
+)
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
@@ -23,6 +29,7 @@ from plantperform_fargate.models import (
     FixedYearlyFieldContribution,
     OptimizationInput,
     OptimizationOutput,
+    QuotaTradeInput,
     RotationOption,
     YearlyConstraintsInput,
     YearlyFieldInput,
@@ -57,6 +64,7 @@ class YearlyOptimizationRunResult:
     output: YearlyOptimizationOutput
     fields: tuple[FieldRecord, ...]
     selected_candidates: dict[str, RotationCandidateEvaluation]
+    quota_trades: tuple[SimulationQuotaTrade, ...] = ()
 
 
 def _exclude_afgrodekoder(
@@ -223,6 +231,57 @@ def _kg(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
 
+def _kystvand_names(farm_id: str, email: str) -> dict[int | None, str]:
+    return {
+        row.kystvand_id: row.kystvand_navn
+        for row in repository.get_farm_udledning_per_kystvandopland(farm_id, email) or []
+    }
+
+
+def _kystvand_name(names: dict[int | None, str], kystvand_id: int | None) -> str:
+    return names.get(kystvand_id) or (
+        f"kystvandopland {kystvand_id}" if kystvand_id is not None else "marker uden kystvandopland"
+    )
+
+
+def _quota_trade_inputs(
+    fields: list[FieldRecord],
+    requested_caps: dict[int | None, tuple[float | None, ...]],
+    quota_trades: tuple[QuotaTradeSetting, ...],
+    names: dict[int | None, str],
+) -> tuple[QuotaTradeInput, ...]:
+    """Check each kvotehandel against this run's marker and caps.
+
+    Saved settings are checked without marker, so a trade for an opland whose
+    kvotegivende marker are gone is only caught here.
+    """
+    kvotegivende = {field.kystvand_id for field in fields if field.kvotegivende}
+    for trade in quota_trades:
+        caps = requested_caps.get(trade.kystvand_id)
+        reason = untradable_quota_reason(
+            None
+            if caps is None
+            else KystvandoplandYearlyNLoadCaps(
+                kystvand_id=trade.kystvand_id,
+                max_n_load_by_year={y: cap for y, cap in enumerate(caps) if cap is not None},
+            ),
+            trade.kystvand_id in kvotegivende,
+        )
+        if reason is not None:
+            raise ValueError(
+                f"Kvotehandel er ikke mulig i {_kystvand_name(names, trade.kystvand_id)}: "
+                f"{reason.lower()}."
+            )
+    return tuple(
+        QuotaTradeInput(
+            kystvand_id=trade.kystvand_id,
+            price_kr_per_kg=trade.price_kr_per_kg,
+            same_each_year=trade.same_each_year,
+        )
+        for trade in quota_trades
+    )
+
+
 def _quota_shortfall_error(
     farm_id: str,
     email: str,
@@ -236,17 +295,10 @@ def _quota_shortfall_error(
     ]
     if not over:
         return None
-    names = {
-        row.kystvand_id: row.kystvand_navn
-        for row in repository.get_farm_udledning_per_kystvandopland(farm_id, email) or []
-    }
+    names = _kystvand_names(farm_id, email)
     parts = []
     for (kystvand_id, year), value, cap in over:
-        name = names.get(kystvand_id) or (
-            f"kystvandopland {kystvand_id}"
-            if kystvand_id is not None
-            else "marker uden kystvandopland"
-        )
+        name = _kystvand_name(names, kystvand_id)
         when = "" if year is None else f" i {candidate_evaluator.START_CALENDAR_YEAR + year}"
         parts.append(
             f"{name}{when} (mindst {_kg(math.ceil(value))} kg N, "
@@ -598,6 +650,7 @@ def run_yearly_optimization(
     excluded_afgrodekoder: frozenset[int],
     email: str,
     snapshot,
+    quota_trades: tuple[QuotaTradeSetting, ...] = (),
 ) -> YearlyOptimizationRunResult:
     """Run Phase 11 "Års-optimering" with annual rotation shifting.
 
@@ -690,6 +743,8 @@ def run_yearly_optimization(
             )
         )
 
+    names = _kystvand_names(farm_id, email) if quota_trades else {}
+    trade_inputs = _quota_trade_inputs(fields, max_n_load_by_kystvandopland, quota_trades, names)
     max_n_load_by_year = _max_n_load_by_kystvandopland_and_year(
         fields,
         max_n_load_by_kystvandopland,
@@ -704,12 +759,14 @@ def run_yearly_optimization(
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
+                quota_trades=trade_inputs,
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
     )
 
     if output.status == "INFEASIBLE":
+        traded = {trade.kystvand_id for trade in trade_inputs}
         raise _quota_shortfall_error(
             farm_id,
             email,
@@ -717,6 +774,8 @@ def run_yearly_optimization(
             {
                 (kystvand_id, year): cap
                 for kystvand_id, caps in max_n_load_by_year.items()
+                # A traded opland can buy what it lacks, so it never falls short.
+                if kystvand_id not in traded
                 for year, cap in enumerate(caps)
             },
         ) or OptimizationInfeasibleError(
@@ -751,5 +810,21 @@ def run_yearly_optimization(
                 if candidate:
                     selected[field.id] = candidate
     return YearlyOptimizationRunResult(
-        output=output, fields=result_fields, selected_candidates=selected
+        output=output,
+        fields=result_fields,
+        selected_candidates=selected,
+        quota_trades=tuple(
+            SimulationQuotaTrade(
+                kystvand_id=trade.kystvand_id,
+                kystvand_navn=names.get(trade.kystvand_id),
+                trade_kg_by_year={
+                    candidate_evaluator.START_CALENDAR_YEAR + y: kg
+                    for y, kg in enumerate(trade.trade_kg_by_year)
+                },
+                price_kr_per_kg=trade.price_kr_per_kg,
+                same_each_year=trade.same_each_year,
+                payment_kr_per_year=trade.payment_kr_per_year,
+            )
+            for trade in output.quota_trades
+        ),
     )

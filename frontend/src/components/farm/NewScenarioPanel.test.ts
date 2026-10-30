@@ -355,7 +355,7 @@ describe('simulation wizard steps', () => {
       (input) => (input as HTMLInputElement).checked,
     )
 
-  it('renders seven steps and the explanatory quota choice in Grundlag', async () => {
+  it('renders eight steps and the explanatory quota choice in Grundlag', async () => {
     await mount()
     expect(SIMULATION_FORM_STEPS.map((step) => step.label)).toEqual([
       'Grundlag',
@@ -364,6 +364,7 @@ describe('simulation wizard steps', () => {
       'Kvælstof',
       'Dyrkningspraksis',
       'Grænser',
+      'Kvotehandel',
       'Bekræft',
     ])
     expect(container.textContent).toContain(
@@ -407,6 +408,8 @@ describe('simulation wizard steps', () => {
     expect(container.textContent).not.toContain(
       'Min. foderenheder er større end maks.',
     )
+    await click('Næste')
+    expect(currentStep()).toBe('Kvotehandel')
     await click('Næste')
     expect(currentStep()).toBe('Bekræft')
     expect(container.querySelectorAll('input, select')).toHaveLength(0)
@@ -587,7 +590,7 @@ describe('simulation wizard steps', () => {
     })
   })
 
-  it('creates a new simulation through all seven steps', async () => {
+  it('creates a new simulation through all eight steps', async () => {
     await mount(null)
     await change('Simuleringens navn', 'Ny simulering')
     await click('Næste')
@@ -606,7 +609,10 @@ describe('simulation wizard steps', () => {
     await click('Næste')
     expect(currentStep()).toBe('Grænser')
     await click('Næste')
+    expect(currentStep()).toBe('Kvotehandel')
+    await click('Næste')
     expect(currentStep()).toBe('Bekræft')
+    expect(container.textContent).toContain('Ingen kvotehandel')
     await click('Gem')
     expect(queries.create).toHaveBeenCalledOnce()
     expect(queries.create.mock.calls[0][1]).toMatchObject({
@@ -616,6 +622,9 @@ describe('simulation wizard steps', () => {
     expect(
       queries.create.mock.calls[0][1].optimizationSettings,
     ).not.toHaveProperty('timeLimitSeconds')
+    expect(
+      queries.create.mock.calls[0][1].optimizationSettings.quotaTrades,
+    ).toEqual([])
   })
 
   it('narrows the rotations by the crops chosen and opted out', async () => {
@@ -731,6 +740,150 @@ describe('simulation wizard steps', () => {
     expect(currentStep()).toBe('Grænser')
     await click('Bekræft')
     expect(container.textContent).toContain('20 FE')
+  })
+
+  describe('kvotehandel', () => {
+    const yearly = {
+      ...source,
+      optimizationSettings: { ...DEFAULT_OPTIMIZATION_SETTINGS, kind: 'yearly' },
+    } satisfies Simulation
+    const average = {
+      ...source,
+      optimizationSettings: {
+        ...DEFAULT_OPTIMIZATION_SETTINGS,
+        kind: 'optimize',
+      },
+    } satisfies Simulation
+    const tick = async (label: string) => {
+      const input = [...container.querySelectorAll('label')]
+        .find((entry) => entry.textContent?.includes(label))
+        ?.querySelector('input')
+      expect(input, label).toBeDefined()
+      await act(async () => input!.click())
+    }
+
+    it('is off by default and needs the yearly optimization', async () => {
+      await mount(average)
+      await click('Kvotehandel')
+      expect(container.textContent).toContain(
+        'Kvotehandel kræver, at udledningskvoten gælder som "Loft hvert år"',
+      )
+      expect(container.querySelectorAll('input')).toHaveLength(0)
+      await click('Bekræft')
+      expect(container.textContent).toContain('Ingen kvotehandel')
+    })
+
+    it('saves the chosen catchment and price once both are given', async () => {
+      await mount(yearly)
+      await click('Kvotehandel')
+      expect(container.textContent).not.toContain('Kystvandopland 1')
+      await tick('Brug kvotehandel')
+      expect(container.textContent).toContain(
+        'Loft under Grænser: 100 kg N hvert år',
+      )
+      await click('Næste')
+      expect(currentStep()).toBe('Kvotehandel')
+      expect(container.textContent).toContain(
+        'Vælg mindst ét kystvandopland, der skal handle kvote.',
+      )
+      expect(
+        container
+          .querySelector('[data-step="quotaTrade"]')
+          ?.getAttribute('data-status'),
+      ).toBe('invalid')
+      await tick('Kystvandopland 1')
+      await click('Næste')
+      expect(currentStep()).toBe('Kvotehandel')
+      expect(container.textContent).toContain('Prisen skal være et tal')
+      await change('Pris (kr/kg N pr. år)', '35.5')
+      await click('Næste')
+      expect(currentStep()).toBe('Bekræft')
+      expect(container.textContent).toContain(
+        'Kystvandopland 1 · 35,5 kr/kg N pr. år',
+      )
+      // A new kvotehandel chooses the amount for each year.
+      expect(container.textContent).toContain(
+        'Mængden kan være forskellig fra år til år.',
+      )
+      await click('Gem')
+      expect(
+        queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: false }])
+    })
+
+    it('trades the same amount every year when ticked', async () => {
+      const sameEachYear = () =>
+        [...container.querySelectorAll('label')]
+          .find((label) =>
+            label.textContent?.includes('Samme mængde i alle år'),
+          )
+          ?.querySelector('input')?.checked
+      await mount({
+        ...yearly,
+        optimizationSettings: {
+          ...yearly.optimizationSettings,
+          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+        },
+      })
+      await click('Kvotehandel')
+      // Saved before the choice existed: the same amount every year. The
+      // text says what ticking it does, whether or not it is ticked.
+      expect(sameEachYear()).toBe(true)
+      expect(container.textContent).toContain(
+        'Den samme mængde kvote handles i hvert år.',
+      )
+      await tick('Samme mængde i alle år')
+      expect(sameEachYear()).toBe(false)
+      expect(container.textContent).toContain(
+        'Den samme mængde kvote handles i hvert år.',
+      )
+      await tick('Samme mængde i alle år')
+      await click('Bekræft')
+      expect(container.textContent).toContain('Mængden er den samme i alle år.')
+      await click('Gem')
+      expect(
+        queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
+      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 40, sameEachYear: true }])
+    })
+
+    it('stops trading a catchment once a year has no limit, keeping its price', async () => {
+      await mount({
+        ...yearly,
+        optimizationSettings: {
+          ...yearly.optimizationSettings,
+          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+        },
+      })
+      await click('Grænser')
+      await tick('Forskellig grænse pr. år')
+      await change('2027', '')
+      await click('Kvotehandel')
+      expect(container.textContent).toContain('Ikke grænse i alle år')
+      await click('Bekræft')
+      expect(currentStep()).toBe('Kvotehandel')
+      await click('Grænser')
+      await change('2027', '100')
+      await click('Bekræft')
+      expect(container.textContent).toContain(
+        'Kystvandopland 1 · 40 kr/kg N pr. år',
+      )
+    })
+
+    it('saves no trades when the optimization is not yearly', async () => {
+      await mount({
+        ...average,
+        optimizationSettings: {
+          ...average.optimizationSettings,
+          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+        },
+      })
+      await click('Bekræft')
+      expect(container.textContent).toContain('Ingen kvotehandel')
+      await click('Gem')
+      expect(
+        queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
+      ).toEqual([])
+    })
   })
 
   it('resets a new draft when only the quota choice changed', async () => {

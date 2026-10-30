@@ -26,6 +26,12 @@ import {
 } from '@/lib/simulation-settings'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
+import { SimulationQuotaTradeOptions } from '@/components/farm/SimulationQuotaTradeOptions'
+import {
+  quotaTradeDraftFrom,
+  quotaTradeError,
+  quotaTradesFrom,
+} from '@/lib/quota-trade-settings'
 import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type {
   FieldRecord,
@@ -96,6 +102,7 @@ type NewScenarioPanelProps = {
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 const LIMITS_STEP_INDEX = stepIndexOf('limits')
+const QUOTA_TRADE_STEP_INDEX = stepIndexOf('quotaTrade')
 
 const NO_CATEGORIES: RotationCategoryOption[] = []
 
@@ -153,6 +160,9 @@ export const NewScenarioPanel = ({
   const [constraints, setConstraints] = useState(
     source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS,
   )
+  const [quotaTradeDraft, setQuotaTradeDraft] = useState(
+    quotaTradeDraftFrom(source?.optimizationSettings?.quotaTrades),
+  )
   const savedSimulation = useRef<Simulation | null>(null)
   const categoriesQuery = useRotationCategories(farmId)
   const nNormQuery = useRotationNNormPercentages(farmId)
@@ -201,6 +211,7 @@ export const NewScenarioPanel = ({
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [limitsTouched, setLimitsTouched] = useState(false)
+  const [quotaTradeTouched, setQuotaTradeTouched] = useState(false)
   const creationRequest = useRef<CreationRequestIdentity | null>(null)
 
   const hasFields = effectiveFields.length > 0
@@ -225,6 +236,9 @@ export const NewScenarioPanel = ({
       ),
     )
     setConstraints(source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS)
+    setQuotaTradeDraft(
+      quotaTradeDraftFrom(source?.optimizationSettings?.quotaTrades),
+    )
     setPrefilled({
       key: prefillKey,
       simulation: source,
@@ -246,6 +260,7 @@ export const NewScenarioPanel = ({
     setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)
     setCreateError(null)
     setLimitsTouched(false)
+    setQuotaTradeTouched(false)
   }
   // Once per opening, after fields load: a yearly cap that is the same in
   // every year follows the maks. udledning under Regler. Later edits in the
@@ -268,6 +283,20 @@ export const NewScenarioPanel = ({
     if (synced !== optimizationSettings) setOptimizationSettings(synced)
   }
   const limitsError = simulationLimitsError(optimizationSettings, constraints)
+  const quotaTradeStepError = quotaTradeError(
+    quotaTradeDraft,
+    optimizationSettings,
+    effectiveFields,
+  )
+  // What is saved and summarised: the draft becomes the settings' trades here.
+  const settingsWithTrades = {
+    ...optimizationSettings,
+    quotaTrades: quotaTradesFrom(
+      quotaTradeDraft,
+      optimizationSettings,
+      effectiveFields,
+    ),
+  }
   useEffect(() => {
     if (prefilled.values) {
       reset(prefilled.values)
@@ -301,6 +330,10 @@ export const NewScenarioPanel = ({
     if (index === LIMITS_STEP_INDEX) {
       setLimitsTouched(true)
       return limitsError === null
+    }
+    if (index === QUOTA_TRADE_STEP_INDEX) {
+      setQuotaTradeTouched(true)
+      return quotaTradeStepError === null
     }
     const names = stepFields(index)
     if (names.length === 0) return true
@@ -338,12 +371,16 @@ export const NewScenarioPanel = ({
       ),
     )
     setConstraints(source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS)
+    setQuotaTradeDraft(
+      quotaTradeDraftFrom(source?.optimizationSettings?.quotaTrades),
+    )
     reset(DEFAULT_SIMULATION_FORM_VALUES)
     setStepIndex(0)
     setFurthestStepIndex(0)
     setCreateError(null)
     setLimitsTouched(false)
     setYearlySyncedKey(null)
+    setQuotaTradeTouched(false)
     setPrefilled({ key: 'blank', values: null })
   }
 
@@ -383,7 +420,7 @@ export const NewScenarioPanel = ({
     const input = {
       ...toCreateSimulationInput(getValues()),
       constraints,
-      optimizationSettings: optimizationSettingsInput(optimizationSettings),
+      optimizationSettings: optimizationSettingsInput(settingsWithTrades),
       ...(existing &&
       economicsProfiles.profileForSimulation(existing).id === economicsModuleId
         ? {}
@@ -412,7 +449,7 @@ export const NewScenarioPanel = ({
   const startOptimization = async (simulation: Simulation) => {
     const current = await economicsProfiles.withCurrentEconomics(simulation)
     if (current === null) return 'stopped'
-    const settings = current.optimizationSettings ?? optimizationSettings
+    const settings = current.optimizationSettings ?? settingsWithTrades
     const common = {
       farmId,
       simulationId: current.id,
@@ -486,7 +523,9 @@ export const NewScenarioPanel = ({
         : (
               index === LIMITS_STEP_INDEX
                 ? limitsError === null
-                : isStepValid(index, values)
+                : index === QUOTA_TRADE_STEP_INDEX
+                  ? quotaTradeStepError === null
+                  : isStepValid(index, values)
             )
           ? 'complete'
           : 'invalid',
@@ -549,6 +588,10 @@ export const NewScenarioPanel = ({
             JSON.stringify(constraints) !==
               JSON.stringify(
                 source?.constraints ?? DEFAULT_SIMULATION_CONSTRAINTS,
+              ) ||
+            JSON.stringify(quotaTradeDraft) !==
+              JSON.stringify(
+                quotaTradeDraftFrom(source?.optimizationSettings?.quotaTrades),
               )) ? (
           <Button variant="ghost" size="sm" onClick={startOver}>
             Start forfra
@@ -1167,6 +1210,21 @@ export const NewScenarioPanel = ({
             />
           </div>
         ) : null}
+        {!referenceBlocked && stepId === 'quotaTrade' ? (
+          <div className="space-y-4">
+            <FieldError
+              id="simulation-quota-trade-error"
+              message={quotaTradeTouched ? quotaTradeStepError : null}
+            />
+            <SimulationQuotaTradeOptions
+              farmId={farmId}
+              fields={effectiveFields}
+              settings={optimizationSettings}
+              draft={quotaTradeDraft}
+              onDraftChange={setQuotaTradeDraft}
+            />
+          </div>
+        ) : null}
         {!referenceBlocked && stepId === 'confirm' ? (
           <SimulationSummary
             farmId={farmId}
@@ -1174,7 +1232,7 @@ export const NewScenarioPanel = ({
             values={values}
             categories={categories}
             fertiliserPresets={fertiliserPresets}
-            settings={optimizationSettings}
+            settings={settingsWithTrades}
             constraints={constraints}
             economicsProfile={economicsProfile}
             onEditStep={(index) => void goToStep(index)}

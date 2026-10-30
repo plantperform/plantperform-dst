@@ -134,6 +134,7 @@ def execute(
                     excluded,
                     row["requested_by"],
                     snapshot=snapshot,
+                    quota_trades=tuple(request.quota_trades),
                 )
             else:
                 solved = run_optimization(*args, excluded, row["requested_by"], snapshot=snapshot)
@@ -169,6 +170,7 @@ def execute(
                 START_CALENDAR_YEAR + i: v
                 for i, v in enumerate(getattr(solved.output, "total_n_load_by_year", ()))
             },
+            quota_trades=list(getattr(solved, "quota_trades", ())),
         )
         with _timed_phase("persist_result", simulation_id, run_id, field_count=len(snapshot[1])):
             saved = optimization_store.finish(

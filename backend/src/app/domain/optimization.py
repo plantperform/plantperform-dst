@@ -65,9 +65,39 @@ class KystvandoplandYearlyNLoadCaps(CamelModel):
     max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
 
 
+class QuotaTradeSetting(CamelModel):
+    """Kvotehandel at a fixed price for one kystvandopland in Års-optimering.
+
+    The run chooses a trade in whole kg N for each year that moves the opland's
+    cap in that year, and pays price_kr_per_kg for each kg per year. With
+    same_each_year the trade is one amount for every year.
+    """
+
+    kystvand_id: int
+    price_kr_per_kg: float = Field(ge=0, allow_inf_nan=False)
+    # Settings saved before trades could differ by year traded the same amount.
+    same_each_year: bool = True
+
+
 class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0)
+    quota_trades: list[QuotaTradeSetting] = Field(default_factory=list)
+
+
+def untradable_quota_reason(
+    caps: KystvandoplandYearlyNLoadCaps | None, has_kvotegivende_marker: bool
+) -> str | None:
+    """Why an opland cannot trade kvote, or None when it can.
+
+    An opland without saved yearly caps uses its marker's kvote in every year.
+    A saved year left out has "Ingen grænse".
+    """
+    if not has_kvotegivende_marker:
+        return "Ingen kvotegivende marker"
+    if caps is not None and len(caps.max_n_load_by_year) < NUM_YEARS:
+        return "Ikke grænse i alle år"
+    return None
 
 
 class OptimizationSettings(CamelModel):
@@ -75,6 +105,8 @@ class OptimizationSettings(CamelModel):
     excluded_afgrodekoder: list[int] = Field(default_factory=list)
     max_n_load_by_kystvandopland: list[KystvandoplandYearlyNLoadCaps] = Field(default_factory=list)
     db2_swing_pct: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    # Used by Års-optimering only.
+    quota_trades: list[QuotaTradeSetting] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_yearly_caps(self):
@@ -85,14 +117,42 @@ class OptimizationSettings(CamelModel):
                 raise ValueError("Årlige udledningslofter skal være tal på mindst 0")
         return self
 
+    @model_validator(mode="after")
+    def validate_quota_trades(self):
+        ids = [trade.kystvand_id for trade in self.quota_trades]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Et kystvandopland kan kun have én kvotehandel")
+        caps = {cap.kystvand_id: cap for cap in self.max_n_load_by_kystvandopland}
+        for kystvand_id in ids:
+            # Marker are only known at run time; the run checks them.
+            if untradable_quota_reason(caps.get(kystvand_id), True) is not None:
+                raise ValueError(
+                    "Kvotehandel kræver en udledningsgrænse i alle år i kystvandoplandet"
+                )
+        return self
+
 
 class RotationAssignmentResponse(CamelModel):
     field_id: str
     rotation_id: str
 
 
+class SimulationQuotaTrade(CamelModel):
+    """A kvotehandel a run chose: per calendar year, > 0 buys and < 0 sells."""
+
+    kystvand_id: int
+    kystvand_navn: str | None = None
+    trade_kg_by_year: dict[int, int]
+    price_kr_per_kg: float
+    same_each_year: bool
+    # The average per year, like objective_db2; negative when the trades sell
+    # more than they buy.
+    payment_kr_per_year: float
+
+
 class OptimizeSimulationResponse(CamelModel):
     status: Literal["OPTIMAL", "FEASIBLE"]
+    # The crops' DB2 alone; subtract the quota_trades' payments to include them.
     objective_db2: float
     total_n_load_kg: float
     total_leaching_kg: float
@@ -101,6 +161,7 @@ class OptimizeSimulationResponse(CamelModel):
     assignments: list[RotationAssignmentResponse]
     total_db2_by_year: dict[int, float] = Field(default_factory=dict)
     total_n_load_by_year: dict[int, float] = Field(default_factory=dict)
+    quota_trades: list[SimulationQuotaTrade] = Field(default_factory=list)
 
 
 class ResultError(CamelModel):
