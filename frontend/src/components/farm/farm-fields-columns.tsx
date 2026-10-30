@@ -44,6 +44,7 @@ import {
   type QuotaStatus,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { cropLabel } from '@/lib/crop-label'
 import { textWidth } from '@/lib/text-width'
 import { cn } from '@/lib/utils'
 
@@ -104,6 +105,10 @@ const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   }
   return seenNames
 }
+
+const uniqueCropLabels = (rotation: FieldRecord['cropRotation']): string[] => [
+  ...new Set(rotation.map((year) => cropLabel(year.cropCode, year.cropName))),
+]
 
 const cropFirstWord = (name: string): string =>
   name
@@ -275,7 +280,7 @@ const renderRotationSwatches = (
       highlightIndex={highlightIndex}
       tileClassName="size-4 full:size-[18px]"
     />
-    <AppTooltip content={uniqueCropNames(rotation).join(' · ')}>
+    <AppTooltip content={uniqueCropLabels(rotation).join(' · ')}>
       <span className="hidden min-w-0 max-w-40 truncate text-sm full:block">
         {uniqueCropNamesLabel(rotation)}
       </span>

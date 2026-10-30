@@ -15,6 +15,7 @@ import {
   shortCropName,
   type CropGroupDefinition,
 } from '@/lib/crop-groups'
+import { cropLabel, rotationYearLabel } from '@/lib/crop-label'
 
 export const CROP_VALUES: Crop[] = [
   'CEREAL_WINTER',
@@ -204,7 +205,7 @@ export const formatLockTooltip = (field: FieldRecord): string => {
   const lines = [`${fieldDisplayName(field)} - låst sædskifte`]
 
   if (field.cropRotation.length > 0) {
-    lines.push(field.cropRotation.map(formatRotationYear).join(' - '))
+    lines.push(field.cropRotation.map(rotationYearLabel).join(' - '))
   }
 
   if (field.areaHa > 0) {
@@ -1054,10 +1055,12 @@ export const summarizeCropDistribution = (
       codesByShortName.set(shortName, (codesByShortName.get(shortName) ?? 0) + 1)
     }
   }
-  const labelFor = ({ fullName }: CropShareTotals) => {
+  const labelFor = (id: string, { fullName }: CropShareTotals) => {
     if (level === 'group') return fullName
     const shortName = shortCropName(fullName)
-    return (codesByShortName.get(shortName) ?? 0) > 1 ? fullName : shortName
+    return (codesByShortName.get(shortName) ?? 0) > 1
+      ? cropLabel(Number(id), fullName)
+      : shortName
   }
   const shadeIndexByGroup = new Map<string, number>()
   return [...totalsById.entries()]
@@ -1067,7 +1070,7 @@ export const summarizeCropDistribution = (
       shadeIndexByGroup.set(totals.group.id, shadeIndex + 1)
       return {
         id,
-        label: labelFor(totals),
+        label: labelFor(id, totals),
         group: totals.group,
         color: cropShadeColor(totals.group.color, shadeIndex),
         areaHa: totals.areaHa,
