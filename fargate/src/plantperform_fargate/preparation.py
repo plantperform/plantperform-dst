@@ -83,11 +83,13 @@ def prepare(simulation, fields, setup_fields, contexts):
         args = evaluation_args(simulation, registry, full.real_history, full.jbnr)
         for key in ("manual_candidate", "fixed_candidate"):
             value = previous.get(key)
-            if not value or value["ref"]["saedskiftevariant"] == "permanent":
+            if not value or (
+                value["ref"]["saedskiftevariant"] == "permanent" and not value.get("base_ref")
+            ):
                 continue
             old = RotationCandidateEvaluation.model_validate(value)
             source = old.base_ref or old.ref
-            if (
+            if source.saedskiftevariant != "permanent" and (
                 source.saedskiftevariant not in simulation.rotation_saedskiftevarianter
                 or source.n_norm_pct not in simulation.rotation_n_norm_procenter
             ):
@@ -116,6 +118,7 @@ def prepare(simulation, fields, setup_fields, contexts):
                 conflicts.append(field.name)
             else:
                 setup["fixed_candidate"] = selected.model_dump(mode="json")
+                setup["allowed_rotation_ids"] = field.allowed_rotation_ids
                 setup["fixed"] = {
                     "crop_rotation": [y.year.model_dump(mode="json") for y in selected.years],
                     "rotation_id": selected.ref.to_id(),
