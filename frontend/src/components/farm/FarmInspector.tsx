@@ -484,13 +484,18 @@ export const FarmInspector = ({
             />
             </>
           ) : null}
-          {fieldsLoading ? (
-            <FarmFieldsSkeleton message={loadingMessage} />
-          ) : summaryMissing ? (
+          {summaryMissing && !fieldsLoading && fields.length > 0 ? (
             <SimulationSummaryMissing
               onOpenSettings={() => onOptimizeDialogOpenChange(true)}
             />
-          ) : fieldsError ? (
+          ) : null}
+          {fieldsLoading ? (
+            <FarmFieldsSkeleton message={loadingMessage} />
+          ) : summaryMissing && fields.length === 0 ? (
+            <SimulationSummaryMissing
+              onOpenSettings={() => onOptimizeDialogOpenChange(true)}
+            />
+          ) : fieldsError && !summaryMissing ? (
             <LoadError
               message="Kunne ikke hente simuleringens marker."
               onRetry={onRetryFields}
