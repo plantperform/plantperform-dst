@@ -5,12 +5,13 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react'
-import { CalendarRange, Droplets, Layers, Wheat } from 'lucide-react'
+import { CalendarRange, Droplets, Layers, Repeat, Wheat } from 'lucide-react'
 
 import type {
   FieldRecord,
   FieldYearValues,
   OptimizeSimulationResponse,
+  RotationOption,
   YearlySummaryEntry,
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
@@ -18,6 +19,7 @@ import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropDistribution } from '@/components/farm/CropDistribution'
 import { CropGroupIcon } from '@/components/farm/CropGroupTile'
 import { useOverviewCards } from '@/components/farm/overview-cards'
+import { RotationDistribution } from '@/components/farm/RotationDistribution'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   SegmentedControl,
@@ -48,25 +50,50 @@ import {
 } from '@/lib/field-domain'
 import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
+import {
+  summarizeRotationDistribution,
+  type RotationShare,
+} from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
+import {
+  summarizeWinterCover,
+  type WinterCoverShare,
+} from '@/lib/winter-cover-overview'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 
 const COMPACT_VIEWPORT_HEIGHT = 960
 
+const NO_ROTATION_OPTIONS: RotationOption[] = []
+
 const QUOTA_LINE_PCT = 34
 
-type PanelView = 'nLoad' | CropShareLevel
+type PanelView = 'nLoad' | CropShareLevel | 'rotation'
 
 const CROP_LEVEL_OPTIONS: SegmentedControlOption<PanelView>[] = [
   { value: 'group', label: 'Grupper', icon: Layers },
   { value: 'crop', label: 'Afgrøder', icon: Wheat },
 ]
 
+const ROTATION_OPTION: SegmentedControlOption<PanelView> = {
+  value: 'rotation',
+  label: 'Sædskifter',
+  icon: Repeat,
+}
+
 const PANEL_VIEW_OPTIONS: SegmentedControlOption<PanelView>[] = [
   { value: 'nLoad', label: 'Udledning', icon: Droplets },
   ...CROP_LEVEL_OPTIONS,
 ]
+
+// The crop history has no rotations, so it has no Sædskifter tab.
+const panelViewOptions = (
+  options: SegmentedControlOption<PanelView>[],
+  history: boolean,
+) => (history ? options : [...options, ROTATION_OPTION])
+
+const isCropLevel = (view: PanelView): view is CropShareLevel =>
+  view === 'group' || view === 'crop'
 
 type YearColumn = {
   index: number
@@ -439,6 +466,8 @@ type YearPanelProps = {
   fieldCount: number
   yearFieldCount: number | null
   cropShares: CropShare[]
+  winterCoverShares: WinterCoverShare[]
+  rotationShares: RotationShare[]
   lastRun: OptimizeSimulationResponse | null
   history: boolean
   unavailableMessage: string | null
@@ -461,6 +490,8 @@ const YearPanel = ({
   fieldCount,
   yearFieldCount,
   cropShares,
+  winterCoverShares,
+  rotationShares,
   lastRun,
   history,
   unavailableMessage,
@@ -469,10 +500,13 @@ const YearPanel = ({
   onViewChange,
   style,
 }: YearPanelProps) => {
-  const showCrops = view !== 'nLoad'
+  const showCrops = isCropLevel(view)
+  const showRotations = view === 'rotation'
   const canShowNLoad =
     viewOptions?.some((option) => option.value === 'nLoad') ?? false
-  const fixedCrops = showCrops && !canShowNLoad
+  const canShowRotations =
+    viewOptions?.some((option) => option.value === 'rotation') ?? false
+  const fixedPanel = view !== 'nLoad' && !canShowNLoad
   const entry = column?.entry ?? null
   const scoped = scopeLabel !== null
   const pending =
@@ -487,11 +521,14 @@ const YearPanel = ({
       ? rows[0]
       : null
 
-  const title = column
-    ? String(column.calendarYear)
-    : (scopeLabel ?? (yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'))
+  // A field has one rotation, so the rotation shares do not follow the year.
+  const title = showRotations
+    ? (scopeLabel ?? 'Hele bedriften')
+    : column
+      ? String(column.calendarYear)
+      : (scopeLabel ?? (yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'))
   const levelLabel = view === 'crop' ? 'afgrøde' : 'afgrødegruppe'
-  const subtitle = pending
+  const dataSubtitle = pending
     ? column
       ? 'Ingen årstal for året'
       : 'Ikke beregnet endnu'
@@ -508,14 +545,23 @@ const YearPanel = ({
         : scoped
           ? 'Gennemsnit pr. år mod kvoten'
           : 'Gennemsnit pr. år mod hvert oplands kvote'
+  const ringNote =
+    showCrops && !pending && winterCoverShares.length > 0
+      ? ', indre ring: vinterdække'
+      : ''
+  const subtitle = showRotations
+    ? scoped
+      ? `Areal pr. sædskifte i ${scopeLabel}, andel af oplandets areal`
+      : 'Areal pr. sædskifte, andel af bedriftens areal'
+    : `${dataSubtitle}${ringNote}`
 
   const pendingNote = column
     ? history
       ? `Ingen historik for ${column.calendarYear}.`
       : `Ingen årstal for ${column.calendarYear} endnu.`
     : 'Ingen marker er beregnet endnu.'
-  const message = pending
-    ? fixedCrops
+  const dataMessage = pending
+    ? fixedPanel
       ? null
       : (unavailableMessage ?? pendingNote)
     : showCrops
@@ -525,6 +571,7 @@ const YearPanel = ({
         : column
           ? null
           : unavailableMessage
+  const message = showRotations ? null : dataMessage
 
   return (
     <aside
@@ -533,15 +580,23 @@ const YearPanel = ({
           ? 'Oversigt over årene'
           : view === 'nLoad'
             ? 'Udledning'
-            : 'Afgrøder'
+            : showRotations
+              ? 'Sædskifter'
+              : 'Afgrøder'
       }
       className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
       style={style}
     >
       <div
-        key={loading ? 'loading' : (column?.index ?? 'all')}
-        role={fixedCrops ? undefined : 'status'}
-        aria-live={fixedCrops ? undefined : 'polite'}
+        key={
+          loading
+            ? 'loading'
+            : showRotations
+              ? 'rotation'
+              : (column?.index ?? 'all')
+        }
+        role={fixedPanel ? undefined : 'status'}
+        aria-live={fixedPanel ? undefined : 'polite'}
         className="flex min-h-0 flex-1 flex-col gap-2.5 motion-safe:animate-rise-in"
       >
         {loading ? (
@@ -569,11 +624,14 @@ const YearPanel = ({
               </div>
               {viewOptions && onViewChange ? (
                 <SegmentedControl
-                  aria-label={
-                    canShowNLoad
-                      ? 'Vis udledning, afgrødegrupper eller afgrøder'
-                      : 'Vis afgrødegrupper eller afgrøder'
-                  }
+                  aria-label={`Vis ${[
+                    ...(canShowNLoad ? ['udledning'] : []),
+                    'afgrødegrupper',
+                    'afgrøder',
+                    ...(canShowRotations ? ['sædskifter'] : []),
+                  ]
+                    .join(', ')
+                    .replace(/, ([^,]+)$/, ' eller $1')}`}
                   value={view}
                   options={viewOptions}
                   onValueChange={onViewChange}
@@ -589,9 +647,20 @@ const YearPanel = ({
                     {message}
                   </p>
                 ) : null}
-                {showCrops ? (
+                {showRotations ? (
+                  rotationShares.length > 0 ? (
+                    <RotationDistribution shares={rotationShares} />
+                  ) : (
+                    <p className="text-[11px] leading-4 text-muted-foreground">
+                      Ingen marker at vise.
+                    </p>
+                  )
+                ) : showCrops ? (
                   cropShares.length > 0 ? (
-                    <CropDistribution shares={cropShares} />
+                    <CropDistribution
+                      shares={cropShares}
+                      winterCover={winterCoverShares}
+                    />
                   ) : !pending ? (
                     <p className="text-[11px] leading-4 text-muted-foreground">
                       Ingen afgrøder at vise.
@@ -615,7 +684,7 @@ const YearPanel = ({
                     />
                   ))
                 ) : null}
-                {!showCrops &&
+                {view === 'nLoad' &&
                 entry &&
                 yearFieldCount !== null &&
                 yearFieldCount < fieldCount ? (
@@ -624,7 +693,7 @@ const YearPanel = ({
                     året.
                   </p>
                 ) : null}
-                {lastRun && !column && !showCrops ? (
+                {lastRun && !column && view === 'nLoad' ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
                     Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
                     {formatCompactDkk(lastRun.objectiveDb2)}, udledning{' '}
@@ -656,6 +725,7 @@ type YearWalkthroughProps = {
   scopeLabel?: string | null
   catchmentTotalsByYear?: CatchmentTotalsByYear
   yearValues?: FieldYearValues
+  rotationOptions?: RotationOption[]
   splitPanels?: boolean
   collapsed: boolean
 }
@@ -674,13 +744,17 @@ export const YearWalkthrough = ({
   scopeLabel = null,
   catchmentTotalsByYear,
   yearValues,
+  rotationOptions = NO_ROTATION_OPTIONS,
   splitPanels = false,
   collapsed,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const [panelView, setPanelView] = useState<PanelView>('nLoad')
-  const cropLevel: CropShareLevel = panelView === 'nLoad' ? 'group' : panelView
+  const [chosenPanelView, setPanelView] = useState<PanelView>('nLoad')
+  // The rotation tab is hidden in the crop history, so fall back from it.
+  const panelView: PanelView =
+    history && chosenPanelView === 'rotation' ? 'nLoad' : chosenPanelView
+  const cropLevel: CropShareLevel = isCropLevel(panelView) ? panelView : 'group'
 
   const columns = useMemo(
     () => buildColumns(loading ? undefined : entries, history),
@@ -747,6 +821,15 @@ export const YearWalkthrough = ({
         cropLevel,
       ),
     [fields, yearValues, selectedColumn, cropLevel],
+  )
+  const winterCoverShares = useMemo(
+    () =>
+      summarizeWinterCover(fields, yearValues, selectedColumn?.index ?? null),
+    [fields, yearValues, selectedColumn],
+  )
+  const rotationShares = useMemo(
+    () => summarizeRotationDistribution(fields, rotationOptions),
+    [fields, rotationOptions],
   )
 
   const selectYear = (index: number | null) => {
@@ -846,6 +929,8 @@ export const YearWalkthrough = ({
       ? countFieldsWithYearValues(selectedColumn.entry.year)
       : null,
     cropShares,
+    winterCoverShares,
+    rotationShares,
     lastRun,
     history,
     unavailableMessage,
@@ -1191,8 +1276,8 @@ export const YearWalkthrough = ({
           <YearPanel {...panelProps} view="nLoad" style={cardStyle(1)} />
           <YearPanel
             {...panelProps}
-            view={cropLevel}
-            viewOptions={CROP_LEVEL_OPTIONS}
+            view={panelView === 'nLoad' ? cropLevel : panelView}
+            viewOptions={panelViewOptions(CROP_LEVEL_OPTIONS, history)}
             onViewChange={setPanelView}
             style={cardStyle(2)}
           />
@@ -1201,7 +1286,7 @@ export const YearWalkthrough = ({
         <YearPanel
           {...panelProps}
           view={panelView}
-          viewOptions={PANEL_VIEW_OPTIONS}
+          viewOptions={panelViewOptions(PANEL_VIEW_OPTIONS, history)}
           onViewChange={setPanelView}
           style={cardStyle(1)}
         />

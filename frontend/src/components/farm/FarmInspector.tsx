@@ -1,10 +1,11 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
   simulationViewKey,
   useFarmHistoricalYearlySummary,
   useFieldYearValues,
+  useRotationCategories,
   useSimulationYearlySummary,
 } from '@/api/hooks'
 import { updateSimulationField } from '@/api/mutations'
@@ -58,6 +59,7 @@ import {
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
 import { nNormLevelByFieldId, type NNormLevel } from '@/lib/n-norm-level'
 import { useEscapeKey } from '@/hooks/use-escape-key'
+import { rotationOptionsOf } from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
 
 type FarmInspectorProps = {
@@ -306,6 +308,14 @@ export const FarmInspector = ({
     fields,
     showYearWalkthrough,
   )
+  // Only the Sædskifter tab needs these, and the afgrødehistorik has none.
+  const { data: rotationCategories } = useRotationCategories(
+    isSimulationView ? farm.id : undefined,
+  )
+  const rotationOptions = useMemo(
+    () => rotationOptionsOf(rotationCategories ?? []),
+    [rotationCategories],
+  )
   const listFields =
     effectiveSelectedYearIndex !== null && yearValues
       ? applyFieldYearValues(fields, yearValues, effectiveSelectedYearIndex)
@@ -460,6 +470,7 @@ export const FarmInspector = ({
               collapsed={overviewCollapsed}
               catchmentTotalsByYear={catchmentTotalsByYear}
               yearValues={yearValues}
+              rotationOptions={rotationOptions}
               selectedYearIndex={selectedYearIndex}
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentLabel={catchmentLabel}
