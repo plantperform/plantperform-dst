@@ -150,17 +150,18 @@ describe('compareFields', () => {
     const grass = { ...field('grass', 1, 0), rotationId: '1:1:75' }
     const brak = { ...field('brak', 1, 0), rotationId: '1:1:85' }
     const reduced = { ...field('reduced', 1, 0), rotationId: '1:1:90' }
+    const noValues = { ...field('noValues', 1, 0), rotationId: '1:1:100' }
     const levels = new Map<string, NNormLevel>([
       ['grass', { kind: 'fullNorm' }],
       ['brak', { kind: 'noNorm' }],
       ['reduced', { kind: 'level', pct: 90 }],
     ])
     const expected = {
-      asc: ['reduced', 'grass', 'brak'],
-      desc: ['grass', 'reduced', 'brak'],
+      asc: ['reduced', 'grass', 'brak', 'noValues'],
+      desc: ['grass', 'reduced', 'brak', 'noValues'],
     }
     for (const direction of ['asc', 'desc'] as const) {
-      const sorted = [brak, grass, reduced].sort((left, right) =>
+      const sorted = [noValues, brak, grass, reduced].sort((left, right) =>
         compareFields(
           left,
           right,
