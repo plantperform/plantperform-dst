@@ -102,7 +102,7 @@ const sortListFields = (
   catchmentLabel: CatchmentLabel,
   highlightedCatchmentKey: string | null,
   selectedYearIndex: number | null,
-  nNormLevels: Map<string, NNormLevel>,
+  nNormLevels: Map<string, NNormLevel> | undefined,
 ) => {
   const sorted = [...fields].sort((left, right) =>
     compareFields(
@@ -317,9 +317,9 @@ export const FarmInspector = ({
     effectiveHighlightedCatchmentKey,
     effectiveSelectedYearIndex,
     // The N-norm% column sorts by what it shows, so the list needs the years.
-    fieldsSort.key === 'nNormPct' && yearValues
+    fieldsSort.key === 'nNormPct'
       ? nNormLevelByFieldId(listFields, yearValues, effectiveSelectedYearIndex)
-      : new Map(),
+      : undefined,
   )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,

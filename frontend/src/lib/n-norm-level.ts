@@ -98,14 +98,15 @@ export const nNormLevelSortValue = (level: NNormLevel): number | null => {
   }
 }
 
-// The number for a mark, or the one in the candidate ID when the list has not
-// worked out the level for it.
+// The number for a mark. A mark without a level shows "-" and sorts last. The
+// candidate ID is only used when the levels are not worked out at all.
 export const fieldNNormSortValue = (
   field: FieldRecord,
   levels: Map<string, NNormLevel> | undefined,
 ): number | null => {
-  const level = levels?.get(field.id)
-  return level ? nNormLevelSortValue(level) : fieldNNormPct(field)
+  if (!levels) return fieldNNormPct(field)
+  const level = levels.get(field.id)
+  return level ? nNormLevelSortValue(level) : null
 }
 
 export const describeNNormLevel = (level: NNormLevel): NNormLevelText => {

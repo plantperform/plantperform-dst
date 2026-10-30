@@ -224,11 +224,15 @@ describe('sorting', () => {
     ).toBe(75)
   })
 
-  it('falls back to the candidate ID for a mark without a level', () => {
-    const levels = new Map([['b', { kind: 'noNorm' } as const]])
-    expect(fieldNNormSortValue(field('a', '1:1:80'), levels)).toBe(80)
-    expect(fieldNNormSortValue(field('b', '1:1:80'), levels)).toBeNull()
+  it('uses the candidate ID only when the levels are not worked out', () => {
+    expect(fieldNNormSortValue(field('a', '1:1:80'), undefined)).toBe(80)
     expect(fieldNNormSortValue(field('c', null), undefined)).toBeNull()
+  })
+
+  it('sorts a mark without a level last, whatever its candidate ID says', () => {
+    const levels = new Map([['b', { kind: 'noNorm' } as const]])
+    expect(fieldNNormSortValue(field('a', '1:1:80'), levels)).toBeNull()
+    expect(fieldNNormSortValue(field('b', '1:1:80'), levels)).toBeNull()
   })
 })
 
