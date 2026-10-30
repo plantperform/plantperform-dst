@@ -123,6 +123,17 @@ describe('nNormLevelOf', () => {
     })
   })
 
+  it('treats a norm of 0 as no norm', () => {
+    const peas = year({ cropNormKgNHa: 0, hasYieldResponse: false })
+    expect(nNormLevelOf([peas], 75)).toEqual({ kind: 'noNorm' })
+    expect(nNormLevelOf([wheat, peas], null)).toEqual({
+      kind: 'partial',
+      pct: 75,
+      responseYears: 1,
+      years: 2,
+    })
+  })
+
   it('treats a year without the flag as having a curve', () => {
     expect(nNormLevelOf([year({ hasYieldResponse: undefined })], null)).toEqual(
       { kind: 'level', pct: 75 },

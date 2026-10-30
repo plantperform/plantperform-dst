@@ -37,6 +37,9 @@ const yearHasResponse = (year: DisplayYearValue): boolean | null => {
   return typeof flag === 'boolean' ? flag : null
 }
 
+const hasNorm = (year: DisplayYearValue): boolean =>
+  (year.cropNormKgNHa ?? 0) > 0
+
 // The level over the given years, or the one in the candidate ID when the
 // years are not loaded. Null when none of the years has values.
 export const nNormLevelOf = (
@@ -48,7 +51,7 @@ export const nNormLevelOf = (
   }
   const counted = years.filter(yearResultHasValues)
   if (counted.length === 0) return null
-  const withNorm = counted.filter((year) => year.cropNormKgNHa !== null)
+  const withNorm = counted.filter(hasNorm)
   if (withNorm.length === 0) return { kind: 'noNorm' }
   const responding = withNorm.filter((year) => yearHasResponse(year) !== false)
   if (responding.length === 0) return { kind: 'fullNorm' }
