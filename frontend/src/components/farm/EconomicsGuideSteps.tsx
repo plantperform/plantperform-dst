@@ -264,8 +264,8 @@ export const GuideYieldStep = ({
           >
             <CropName crop={crop} />
             <span className="text-right text-muted-foreground tabular-nums">
-              {formatEconomicsNumber(standardYield(crop))} {grain.quantityUnit} på{' '}
-              {budgetSoilType(assumptions)}
+              {formatEconomicsNumber(standardYield(crop))} {grain.quantityUnit}{' '}
+              på {budgetSoilType(assumptions)}
             </span>
             <YieldPctField
               pct={pct}

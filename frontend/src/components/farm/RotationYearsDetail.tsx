@@ -301,9 +301,7 @@ const KeyMetricsSection = ({
             label={`DB2 (${calendarYear})`}
             term="db2"
             value={
-              economicsMissing
-                ? NO_ECONOMICS
-                : `${fmt(year.dbDkkHa, 0)} kr/ha`
+              economicsMissing ? NO_ECONOMICS : `${fmt(year.dbDkkHa, 0)} kr/ha`
             }
             caption={
               economicsMissing

@@ -679,9 +679,7 @@ export const totalsFigure = (
   totals: FieldTotals,
   metric: PerHaMetric,
 ): PerHaFigure =>
-  metric === 'db2' &&
-  totals.calculatedCount > 0 &&
-  totals.economicsAreaHa === 0
+  metric === 'db2' && totals.calculatedCount > 0 && totals.economicsAreaHa === 0
     ? { value: NO_ECONOMICS }
     : perHaFigure(
         totalsPerHa(totals, metric),

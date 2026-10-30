@@ -608,12 +608,13 @@ export const categoryPrices = (
 // Spreading and buying husdyrgødning, per tonne. They are there on either
 // farming system, since a simulation that spreads husdyrgødning uses them.
 export const manurePrices = (assumptions: EconomicsAssumptions): UnitPrice[] =>
-  [assumptions.manureSpreadingPriceId, assumptions.manurePurchasePriceId].flatMap(
-    (id) => {
-      const price = id ? findPrice(assumptions, id) : undefined
-      return price ? [price] : []
-    },
-  )
+  [
+    assumptions.manureSpreadingPriceId,
+    assumptions.manurePurchasePriceId,
+  ].flatMap((id) => {
+    const price = id ? findPrice(assumptions, id) : undefined
+    return price ? [price] : []
+  })
 
 export type CropDbDelta = { cropName: string; deltaDkkHa: number }
 
@@ -797,7 +798,8 @@ const manureChanges = (
 ): ProfileChange[] =>
   manurePrices(assumptions)
     .filter(
-      (price) => isPriceCustomised(overrides, price.id) && !listed.has(price.id),
+      (price) =>
+        isPriceCustomised(overrides, price.id) && !listed.has(price.id),
     )
     .map((price): ProfileChange => {
       const withUnit = (value: number) =>

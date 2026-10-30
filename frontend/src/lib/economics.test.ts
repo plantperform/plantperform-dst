@@ -1079,9 +1079,9 @@ describe('gødning', () => {
       'manureSpreading',
       'manurePurchase',
     ])
-    expect(categoryPrices(manure, 'fertiliser').map((price) => price.id)).toEqual(
-      ['nitrogen', 'spreading'],
-    )
+    expect(
+      categoryPrices(manure, 'fertiliser').map((price) => price.id),
+    ).toEqual(['nitrogen', 'spreading'])
     const bought = withPriceOverride(manure, NO_OVERRIDES, 'manurePurchase', 15)
     expect(priceValue(manure, bought, 'manurePurchase')).toBe(15)
     expect(priceValue(manure, bought, 'manureSpreading')).toBe(24)
