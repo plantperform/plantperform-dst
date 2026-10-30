@@ -99,7 +99,9 @@ const FieldRuleRow = ({
       )}
       {locked && years.length > 0 ? (
         <AppTooltip
-          content={years.map(({ year, label }) => `${year}: ${label}`).join(', ')}
+          content={years
+            .map(({ year, label }) => `${year}: ${label}`)
+            .join(', ')}
         >
           <span className="min-w-0 text-xs">
             {years.map(({ label }) => label).join(' · ')}
