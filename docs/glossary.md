@@ -82,6 +82,7 @@ field" column is the name on the wire.
 | afgrødenorm | `cropNormKgNHa` | `afgrodeNormKgnHa` | |
 | reduceret norm | `reducedNorm` | | |
 | låst sædskifte | locked rotation | `allowedRotationIds` | |
+| sædskiftefordeling | `RotationShare`, `summarizeRotationDistribution`, `rotationVariantOf` | | Area and share of the farm per sædskifte, shown in the Sædskifter tab of the overview. A mark's `rotationId` is `<rotationVariant>:<variant>:<nNormPct>` ("315:4:80"), and only the first part is the sædskifte, so candidates of the same one are merged. Marks without a rotationId are a last row, "Uden sædskifte". `farm.rotationLibrary` ids do not match `rotationId` |
 
 ## Measures
 
