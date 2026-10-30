@@ -191,10 +191,10 @@ export const SimulationComparison = ({
       requirement: null,
       changedCount: null,
     }
-    const chosen = ids.flatMap((id): ComparisonColumn[] => {
-      const simulation = simulations.find((candidate) => candidate.id === id)
+    const chosen = selectedSimulations.flatMap((simulation) => {
+      const { id } = simulation
       const simulationFields = fieldsBySimulationId?.[id]
-      if (!simulation || !simulationFields) return []
+      if (!simulationFields) return []
       return [
         {
           key: id,
@@ -210,7 +210,12 @@ export const SimulationComparison = ({
       ]
     })
     return [history, ...chosen]
-  }, [fields, fieldsBySimulationId, ids, simulations, simulationsFields.data])
+  }, [
+    fields,
+    fieldsBySimulationId,
+    selectedSimulations,
+    simulationsFields.data,
+  ])
 
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const quotaByCatchment = useMemo(() => catchmentQuotas(fields), [fields])
@@ -289,18 +294,15 @@ export const SimulationComparison = ({
           ).length,
           simulationCount: simulationColumns.length,
         })
-  const orderedSimulations = sortComparison(candidates, sort).map(
-    ({ column }) => column,
-  )
-  const ordered = [history, ...orderedSimulations]
-  const profiles = orderedSimulations.map((column) =>
+  const ranked = sortComparison(candidates, sort).map(({ column }) => column)
+  const profiles = simulationColumns.map((column) =>
     economics.appliedProfile({
       economicsSnapshot:
         simulationsFields.data?.[column.key]?.economicsSnapshot,
     }),
   )
   const economicsVerdict = describeEconomicsVerdict(
-    orderedSimulations.map((column, index) => ({
+    simulationColumns.map((column, index) => ({
       title: column.title,
       ownProfileName:
         profiles[index].id === STANDARD_PROFILE_ID
@@ -310,12 +312,12 @@ export const SimulationComparison = ({
     })),
   )
   const requirements = placeFeedUnitRequirements(
-    ordered.map((column) => column.requirement),
+    compared.map((column) => column.requirement),
   )
   const showFeedUnits =
     requirements.label !== null ||
     requirements.cells.some((cell) => cell !== null) ||
-    ordered.some((column) => column.totals.feedUnits !== 0)
+    compared.some((column) => column.totals.feedUnits !== 0)
 
   return (
     <div className="@container min-h-0 flex-1 overflow-y-auto">
@@ -383,7 +385,7 @@ export const SimulationComparison = ({
               </div>
             ) : null}
             <ComparisonRanking
-              columns={ordered}
+              columns={[history, ...ranked]}
               bestBalanceKey={bestBalance?.key ?? null}
               catchmentCount={catchments.length}
               sort={sort}
@@ -392,7 +394,7 @@ export const SimulationComparison = ({
               onHighlight={setHighlightedKey}
             />
             <ComparisonCharts
-              columns={ordered}
+              columns={compared}
               bestBalanceKey={bestBalance?.key ?? null}
               highlightedKey={highlightedKey}
               onHighlight={setHighlightedKey}
@@ -402,7 +404,7 @@ export const SimulationComparison = ({
                 År over kvoten pr. opland
               </h2>
               <CatchmentQuotaTable
-                columns={ordered}
+                columns={compared}
                 catchments={catchments}
                 quotaByCatchment={quotaByCatchment}
                 showFeedUnits={showFeedUnits}
@@ -412,20 +414,20 @@ export const SimulationComparison = ({
                 bestBalanceKey={bestBalance?.key ?? null}
               />
             </section>
-            {orderedSimulations.length > 0 ? (
+            {simulationColumns.length > 0 ? (
               <section
                 ref={economicsRef}
                 className="w-fit max-w-full scroll-mt-4 space-y-2.5"
               >
                 <ComparisonEconomics
-                  columns={orderedSimulations}
+                  columns={simulationColumns}
                   profiles={profiles}
-                  farmingSystems={orderedSimulations.map(
+                  farmingSystems={simulationColumns.map(
                     (column) =>
                       simulations.find((entry) => entry.id === column.key)
                         ?.fertiliser.farmingSystem ?? 'Konventionel',
                   )}
-                  statements={orderedSimulations.map(
+                  statements={simulationColumns.map(
                     (column) =>
                       simulationsFields.data?.[column.key]?.economicsStatement,
                   )}
