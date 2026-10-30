@@ -75,6 +75,8 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   toerring: 'drying',
   andet: 'other',
   omkostninger_total: 'totalCosts',
+  omkostningerTotal: 'totalCosts',
+  andreGoedningsstoffer: 'otherFertilisers',
   linjer: 'lines',
   behandling: 'treatment',
   udgift_kr_ha: 'costDkkHa',

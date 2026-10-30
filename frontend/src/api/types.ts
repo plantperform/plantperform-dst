@@ -421,6 +421,21 @@ export type FarmViewData = {
   yearlySummary: YearlySummaryEntry[]
 }
 
+export type EconomicsStatement = {
+  areaHa: number
+  revenue: number
+  subsidy: number
+  fertiliserCost: number
+  otherFertilisers: number
+  seed: number
+  cropProtection: number
+  fieldWork: number
+  drying: number
+  other: number
+  totalCosts: number
+  db: number
+}
+
 export type SavedResultView = {
   runId: string
   resultRevision: number
@@ -428,6 +443,7 @@ export type SavedResultView = {
   fieldsBefore: FieldRecord[]
   fieldYears: FieldYearValues
   economicsSnapshot?: EconomicsSnapshot
+  economicsStatement?: EconomicsStatement | null
 }
 
 export type SimulationViewData = FarmViewData & {

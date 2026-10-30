@@ -1,9 +1,11 @@
 import type {
+  EconomicsStatement,
   FieldRecord,
   FieldYearValues,
   OptimizationConstraints,
   Simulation,
 } from '@/api/types'
+import { COST_CATEGORIES, formatDbDkk, formatSignedDkk } from '@/lib/economics'
 import {
   formatFieldCount,
   formatSigned,
@@ -11,6 +13,8 @@ import {
   groupFieldsByCatchment,
   isFieldCalculated,
   NUM_ROTATION_YEARS,
+  perHa,
+  perHaUnit,
   quotaPercent,
   quotaStatusLevel,
   REAL_HISTORY_START_CALENDAR_YEAR,
@@ -535,4 +539,70 @@ export const describeEconomicsVerdict = (
     }
   }
   return null
+}
+
+export type StatementUnit = 'perHa' | 'total'
+
+export const STATEMENT_UNIT_LABELS: Record<StatementUnit, string> = {
+  perHa: perHaUnit('db2'),
+  total: 'kr i alt',
+}
+
+export type StatementLine = {
+  label: string
+  amount: (statement: EconomicsStatement) => number
+  format?: (value: number) => string
+}
+
+type StatementGroup = {
+  label: string
+  lines: StatementLine[]
+  total: StatementLine
+}
+
+export const STATEMENT_GROUPS: StatementGroup[] = [
+  {
+    label: 'Indtægter',
+    lines: [
+      { label: 'Indtægt', amount: (statement) => statement.revenue },
+      {
+        label: 'Tilskud',
+        amount: (statement) => statement.subsidy,
+        format: formatSignedDkk,
+      },
+    ],
+    total: {
+      label: 'Indtægter i alt',
+      amount: (statement) => statement.revenue + statement.subsidy,
+    },
+  },
+  {
+    label: 'Omkostninger',
+    lines: COST_CATEGORIES.map(
+      ({ id, label }): StatementLine => ({
+        label,
+        amount: (statement) =>
+          -statement[id === 'fertiliser' ? 'fertiliserCost' : id],
+      }),
+    ),
+    total: {
+      label: 'Omkostninger i alt',
+      amount: (statement) => -statement.totalCosts,
+    },
+  },
+]
+
+export const STATEMENT_RESULT: StatementLine = {
+  label: 'Dækningsbidrag',
+  amount: (statement) => statement.db,
+}
+
+export const formatStatementLine = (
+  statement: EconomicsStatement,
+  line: StatementLine,
+  unit: StatementUnit,
+): string | null => {
+  const amount = line.amount(statement)
+  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
+  return value === null ? null : (line.format ?? formatDbDkk)(value)
 }
