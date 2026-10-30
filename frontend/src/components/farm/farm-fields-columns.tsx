@@ -694,6 +694,7 @@ export const buildFarmFieldsColumns = ({
         unit={selectedYearLabel}
         align="right"
         column={column}
+        disabled={highlightIndex === null}
       />
     ),
     cell: ({ row }) => {
@@ -732,6 +733,7 @@ export const buildFarmFieldsColumns = ({
         label="Afgrøde"
         unit={selectedYearLabel}
         column={column}
+        disabled={highlightIndex === null}
       />
     ),
     cell: ({ row }) => {
