@@ -20,6 +20,7 @@ import {
   totalsFigure,
   totalsPerHa,
   applyFieldYearValues,
+  rotationEconomicsMissing,
   summarizeFieldYears,
   yearFeedUnitsPerHa,
 } from '@/lib/field-domain'
@@ -180,6 +181,38 @@ describe('a field without economics', () => {
     expect(totalsFigure(computeFieldTotals([locked], true), 'db2')).toEqual({
       value: 'Ingen økonomi',
     })
+  })
+
+  const year = (dbDkkHa: number, economicsMissing = false) =>
+    ({
+      dbDkkHa,
+      economicsMissing,
+      leachingKgNHa: 20,
+      feedUnitsPerHa: 0,
+      winterCover: {},
+    }) as FieldYearValue
+
+  it('treats one year without economics as no figure for that year', () => {
+    const applied = applyFieldYearValues(
+      [field({ id: 'wheat', areaHa: 2 }), field({ id: 'carrot', areaHa: 2 })],
+      { wheat: [year(6000)], carrot: [year(0, true)] },
+      0,
+    )
+    expect(fieldFigure(applied[1], 'db2')).toEqual({ value: 'Ingen økonomi' })
+    expect(totalsPerHa(computeFieldTotals(applied, true), 'db2')).toBe(6000)
+  })
+
+  it('takes every year to call a rotation without economics', () => {
+    expect(rotationEconomicsMissing([])).toBe(false)
+    expect(rotationEconomicsMissing([year(6000), year(0, true)])).toBe(false)
+    expect(rotationEconomicsMissing([year(0, true), year(0, true)])).toBe(true)
+    expect(
+      rotationEconomicsMissing([
+        {
+          dbDetail: { economicsMissing: true },
+        } as unknown as RotationCandidateYearResult,
+      ]),
+    ).toBe(true)
   })
 })
 

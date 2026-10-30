@@ -861,6 +861,15 @@ export const yearFeedUnitsPerHa = (year: DisplayYearValue): number =>
     ? year.feedUnitsPerHa
     : year.dbDetail.yieldUnit === 'FE/ha' ? Number(year.dbDetail.yieldAmount) || 0 : 0
 
+export const yearEconomicsMissing = (year: DisplayYearValue): boolean =>
+  'feedUnitsPerHa' in year
+    ? year.economicsMissing === true
+    : year.dbDetail.economicsMissing === true
+
+export const rotationEconomicsMissing = (
+  years: readonly DisplayYearValue[],
+): boolean => years.length > 0 && years.every(yearEconomicsMissing)
+
 export const yearResultHasValues = (year: DisplayYearValue): boolean =>
   year.dbDkkHa !== 0 || year.leachingKgNHa !== 0 || yearFeedUnitsPerHa(year) !== 0
 
@@ -924,6 +933,7 @@ export const applyFieldYearValues = (
     return {
       ...field,
       db2: yearResult.dbDkkHa * field.areaHa,
+      economicsMissing: yearEconomicsMissing(yearResult),
       nLoad:
         yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
         field.areaHa,
