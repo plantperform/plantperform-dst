@@ -1,5 +1,6 @@
 """Small simulation writes; calculation belongs exclusively to the optimizer."""
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -95,6 +96,75 @@ def create(farm_id, request, email):
             {"version": 3, "contributions": {}},
         )
         return simulation
+
+
+# A copied mark keeps its data and captured context, never another scenarie's choice.
+UNCOPIED_FIELD_KEYS = ("manual_candidate", "fixed_candidate", "fixed", "economics_candidate")
+
+
+def copy_fields(farm_id, simulation_id, source_id, email) -> dict[str, str] | None:
+    """Give a new simulation the marker of another, with their captured contexts.
+
+    Normally a simulation captures the farm's marker on its first optimization.
+    A simulation made from another one (a Kvotehandel trade) starts from that
+    one's marker instead, so the same registry/soil context is used and each
+    mark can be given a rotation before the first run. Locks and manual choices
+    are left out. Returns the source mark id -> the new mark id, or None when
+    either simulation is missing or the new one already has marker.
+    """
+    with repository.SessionLocal.begin() as session:
+        if not repository._member_exists(session, farm_id, email):
+            return None
+        rows = {
+            row.id: row
+            for row in session.execute(
+                select(setups.c.id, setups.c.data, setups.c.fields, setups.c.field_order)
+                .where(setups.c.farm_id == farm_id, setups.c.id.in_((simulation_id, source_id)))
+                .with_for_update()
+            )
+        }
+        target, source = rows.get(simulation_id), rows.get(source_id)
+        if target is None or source is None or target.data.get("fields_initialized", True):
+            return None
+        ids = {old: str(uuid4()) for old in source.field_order}
+        fields = {}
+        for old, new in ids.items():
+            field = {
+                key: deepcopy(value)
+                for key, value in source.fields[old].items()
+                if key not in UNCOPIED_FIELD_KEYS
+            }
+            fields[new] = {**field, "id": new, "allowed_rotation_ids": []}
+        session.execute(
+            update(setups)
+            .where(setups.c.id == simulation_id)
+            .values(
+                fields=fields,
+                field_order=list(ids.values()),
+                data={**target.data, "fields_initialized": True},
+            )
+        )
+        return ids
+
+
+def record_quota_trade(farm_id, simulation_id, trade, email) -> bool:
+    """Keep the kvote trade a simulering was created for (SimulationQuotaTrade)."""
+    with repository.SessionLocal.begin() as session:
+        if not repository._member_exists(session, farm_id, email):
+            return False
+        row = session.execute(
+            select(setups.c.data)
+            .where(setups.c.id == simulation_id, setups.c.farm_id == farm_id)
+            .with_for_update()
+        ).first()
+        if row is None:
+            return False
+        session.execute(
+            update(setups)
+            .where(setups.c.id == simulation_id)
+            .values(data={**row.data, "quota_trade": trade.model_dump(mode="json")})
+        )
+        return True
 
 
 def update_settings(farm_id, simulation_id, request, email):
