@@ -46,7 +46,9 @@ import {
   compactCropSequenceLabel,
   fieldDisplayName,
   formatRotationYear,
+  NO_ECONOMICS,
   ROTATION_START_CALENDAR_YEAR,
+  rotationEconomicsMissing,
 } from '@/lib/field-domain'
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
 import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
@@ -622,7 +624,11 @@ export const ManualRotationEditor = ({
                       />
                       <BigMetricTile
                         label="DB2"
-                        value={`${preview ? fmt(preview.avgDbDkkHa, 0) : '-'} kr/ha`}
+                        value={
+                          rotationEconomicsMissing(years)
+                            ? NO_ECONOMICS
+                            : `${preview ? fmt(preview.avgDbDkkHa, 0) : '-'} kr/ha`
+                        }
                         caption={
                           preview && preview.avgFeedUnits > 0
                             ? `${fmt(preview.avgFeedUnits, 0)} FE/ha`
