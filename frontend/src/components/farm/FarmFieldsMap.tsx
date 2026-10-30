@@ -79,6 +79,7 @@ import {
   readableTextColor,
   shortCropName,
 } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
@@ -534,7 +535,7 @@ export const FarmFieldsMap = ({
           field,
           point,
           name: shortCropName(year.cropName),
-          fullName: year.cropName,
+          fullName: cropLabel(year.cropCode, year.cropName),
           color: cropGroupColor(year.cropCode, year.cropName),
         },
       ]

@@ -20,6 +20,7 @@ import {
   totalsFigure,
   totalsPerHa,
   applyFieldYearValues,
+  formatLockTooltip,
   rotationEconomicsMissing,
   summarizeFieldYears,
   yearFeedUnitsPerHa,
@@ -92,6 +93,22 @@ describe('stored compact field years', () => {
       cropNormKgNHa: 100, precedingCropValueKgNHa: 10, mineralFertiliserKgNHa: 60,
       manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, manureTonsPerHa: 5,
     })
+  })
+})
+
+describe('formatLockTooltip', () => {
+  it('shows the crops of a locked rotation with their codes', () => {
+    const locked = field({
+      cropRotation: [
+        {
+          cropCode: 210,
+          cropName: 'Vårbyg, helsæd',
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+      ],
+    })
+    expect(formatLockTooltip(locked)).toContain('210 - Vårbyg, helsæd')
   })
 })
 
@@ -293,7 +310,7 @@ describe('summarizeCropDistribution', () => {
     expect(share.nLoadKgHa).toBeNull()
   })
 
-  it('keeps crops that share a short name apart, under their full names', () => {
+  it('keeps crops that share a short name apart, under their codes and full names', () => {
     const shares = summarizeCropDistribution(
       [field({ id: 'a', areaHa: 2 }), field({ id: 'b', areaHa: 3 })],
       {
@@ -304,8 +321,8 @@ describe('summarizeCropDistribution', () => {
       'crop',
     )
     expect(shares.map(({ id, label, areaHa }) => ({ id, label, areaHa }))).toEqual([
-      { id: '153', label: 'Kartofler, andre', areaHa: 3 },
-      { id: '151', label: 'Kartofler, stivelses-', areaHa: 2 },
+      { id: '153', label: '153 - Kartofler, andre', areaHa: 3 },
+      { id: '151', label: '151 - Kartofler, stivelses-', areaHa: 2 },
     ])
   })
 
