@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import type { CreationStatus } from '@/api/types'
 import {
   creationRequestIdentity,
   creationStatusLabel,
   isSimulationCreating,
   isSimulationReady,
+  updateOrRecreate,
 } from '@/lib/simulation-creation'
 
 const state = (status: CreationStatus) => ({
@@ -52,5 +54,48 @@ describe('simulation creation', () => {
         identity,
       ).requestId,
     ).not.toBe(identity.requestId)
+  })
+})
+
+describe('updateOrRecreate', () => {
+  const missing = () =>
+    Promise.reject(new ApiError(404, 'Simulering ikke fundet'))
+  const setup = (update: () => Promise<string>, canRecreate = true) => {
+    const create = vi.fn(() => Promise.resolve('created'))
+    const onRecreate = vi.fn()
+    return {
+      create,
+      onRecreate,
+      run: () => updateOrRecreate({ update, create, canRecreate, onRecreate }),
+    }
+  }
+
+  it('keeps the update when the simulation still exists', async () => {
+    const { create, onRecreate, run } = setup(() => Promise.resolve('updated'))
+    await expect(run()).resolves.toBe('updated')
+    expect(create).not.toHaveBeenCalled()
+    expect(onRecreate).not.toHaveBeenCalled()
+  })
+
+  it('creates a new simulation when the saved one was deleted', async () => {
+    const { create, onRecreate, run } = setup(missing)
+    await expect(run()).resolves.toBe('created')
+    expect(onRecreate).toHaveBeenCalledOnce()
+    expect(create).toHaveBeenCalledOnce()
+  })
+
+  it('does not replace a simulation that is being edited', async () => {
+    const { create, onRecreate, run } = setup(missing, false)
+    await expect(run()).rejects.toThrow('Simulering ikke fundet')
+    expect(create).not.toHaveBeenCalled()
+    expect(onRecreate).not.toHaveBeenCalled()
+  })
+
+  it('passes other errors on', async () => {
+    const { create, run } = setup(() =>
+      Promise.reject(new ApiError(409, 'Revisionen er ændret')),
+    )
+    await expect(run()).rejects.toThrow('Revisionen er ændret')
+    expect(create).not.toHaveBeenCalled()
   })
 })
