@@ -698,10 +698,12 @@ export const yieldHint = (
     ? `${harvest} kerne og ${amount(lineQuantity(overrides, crop, straw), straw)} halm`
     : harvest
   const pct = cropYieldPct(overrides, crop)
-  const dried = crop.costs.drying.length > 0
+  const costsFollow = COST_CATEGORIES.some(({ id }) =>
+    crop.costs[id].some((line) => line.followsYield),
+  )
   return pct === 0
-    ? `Normen er ${quantities} pr. ha. Procenten ændrer ${straw ? 'begge' : 'mængden'}${dried ? ' og tørringen' : ''}, men ikke ${dried ? 'de andre omkostninger' : 'omkostningerne'}.`
-    : `${formatYieldPct(pct)} % giver ${quantities} pr. ha. ${dried ? 'Tørringen følger med, de andre omkostninger ændrer sig ikke.' : 'Omkostningerne ændrer sig ikke.'}`
+    ? `Normen er ${quantities} pr. ha. Procenten ændrer ${straw ? 'begge' : 'mængden'}${costsFollow ? ` og de omkostninger, der afhænger af ${straw ? 'dem' : 'den'}` : ''}, men ikke ${costsFollow ? 'de andre omkostninger' : 'omkostningerne'}.`
+    : `${formatYieldPct(pct)} % giver ${quantities} pr. ha. ${costsFollow ? 'De omkostninger, der afhænger af mængden, følger med, de andre ændrer sig ikke.' : 'Omkostningerne ændrer sig ikke.'}`
 }
 
 export type ProfileChange = {
