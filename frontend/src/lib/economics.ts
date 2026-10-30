@@ -616,6 +616,15 @@ export const manurePrices = (assumptions: EconomicsAssumptions): UnitPrice[] =>
     return price ? [price] : []
   })
 
+export const mineralFertiliserPrices = (
+  assumptions: EconomicsAssumptions,
+): UnitPrice[] => {
+  const manureIds = new Set(manurePrices(assumptions).map((price) => price.id))
+  return categoryPrices(assumptions, 'fertiliser').filter(
+    (price) => !manureIds.has(price.id),
+  )
+}
+
 export type CropDbDelta = { cropName: string; deltaDkkHa: number }
 
 const dbDeltas = (

@@ -76,7 +76,7 @@ const STEPS = [
     id: 2,
     label: 'Gødning',
     intro:
-      'Skriv dine priser på handelsgødning og husdyrgødning, hvis de afviger fra standarden. Husdyrgødningens udbringning og køb er pr. ton.',
+      'Skriv dine gødningspriser, hvis de afviger fra standarden. Husdyrgødningens udbringning og køb er pr. ton.',
   },
   {
     id: 3,
