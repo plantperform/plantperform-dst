@@ -78,7 +78,7 @@ field" column is the name on the wire.
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |
 | N-norm | `nNormPct`, `nNormPercentages`, `allowedNNormPercentages` | `nNormPct`, `rotationNNormProcenter`, `nNormProcenter` | |
-| N-norm% i feltlisten | `NNormLevel`, `nNormLevelOf`, `nNormLevelByFieldId` | | What the level means for a mark in the selected year (or over its sædskifte): `noNorm` (brak, shown "-"), `fullNorm` (no udbytterespons, "100 %"), `level`, or `partial` (only some years have a curve, "75 %" with "3 af 5 år") |
+| N-norm% i feltlisten | `NNormLevel`, `nNormLevelOf`, `nNormLevelByFieldId` | | What the level means for a mark in the selected year (or over its sædskifte): `noNorm` (brak or a norm of 0 kg N, shown "-"), `fullNorm` (no udbytterespons, "100 %"), `level`, or `partial` (only some years have a curve, "75 %" with "3 af 5 år") |
 | afgrødenorm | `cropNormKgNHa` | `afgrodeNormKgnHa` | |
 | reduceret norm | `reducedNorm` | | |
 | låst sædskifte | locked rotation | `allowedRotationIds` | |

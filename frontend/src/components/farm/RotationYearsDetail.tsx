@@ -328,7 +328,7 @@ const KeyMetricsSection = ({
             term="nNorm"
             value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
           />
-          {cropNorm !== null && !hideNNormLevel ? (
+          {cropNorm !== null && cropNorm > 0 && !hideNNormLevel ? (
             <DefinitionRow
               label="N-norm%"
               term="nNormLevel"
