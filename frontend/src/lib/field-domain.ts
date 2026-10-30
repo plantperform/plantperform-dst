@@ -369,6 +369,19 @@ export const changedFieldIds = (
   return changed
 }
 
+// A simulation that has not been optimized yet has no field snapshot of its
+// own, so the farm's current marker stand in for it. The farm's figures are not
+// the simulation's, so they are cleared and the marker show as not calculated.
+export const withoutCalculation = (fields: FieldRecord[]): FieldRecord[] =>
+  fields.map((field) => ({
+    ...field,
+    rotationId: null,
+    db2: 0,
+    nLoad: 0,
+    leaching: 0,
+    feedUnits: 0,
+  }))
+
 export const isFieldCalculated = (
   field: FieldRecord,
   isSimulationView: boolean,

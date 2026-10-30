@@ -224,7 +224,11 @@ export const FieldPanel = ({
             <FieldNameEditor
               farmId={farmId}
               field={field}
-              simulationId={isSimulationView ? simulationId : undefined}
+              simulationId={
+                isSimulationView && simulation?.fieldsInitialized !== false
+                  ? simulationId
+                  : undefined
+              }
             />
             <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {metaParts.map((part, index) => (
