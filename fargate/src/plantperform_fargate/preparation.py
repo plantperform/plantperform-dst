@@ -1,7 +1,6 @@
 """Transient candidates. Only selected evaluations cross the persistence boundary."""
 
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 from app.data import repository, simulation_store
 from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
@@ -72,7 +71,7 @@ def prepare(simulation, fields, setup_fields, contexts):
     conflicts = []
     for field in fields:
         check_deadline()
-        registry = SimpleNamespace(**contexts[field.id]) if contexts.get(field.id) else None
+        registry = repository.saved_registry_context(contexts.get(field.id))
         setup, full = repository.prepare_simulation_field(
             field,
             registry,
@@ -154,8 +153,7 @@ def hydrate(snapshot, selected):
                 snapshot.setup_fields[field_id]["fixed_candidate"],
             )
             continue
-        context = snapshot.contexts.get(field_id)
-        registry = SimpleNamespace(**context) if context else None
+        registry = repository.saved_registry_context(snapshot.contexts.get(field_id))
         row = rows[field_id]
         value = candidate_evaluator.evaluate_with_overrides(
             candidate.base_ref or candidate.ref,
