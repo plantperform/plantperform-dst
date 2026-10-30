@@ -255,6 +255,45 @@ class ProjectionTests(unittest.TestCase):
         self.assertIs(years[1]["has_yield_response"], False)
         self.assertIsNone(years[2]["has_yield_response"])
 
+    def test_economics_statement_adds_each_calculated_fields_average_year_by_area(self):
+        value = candidate(200)
+        value.active_len = 2
+        for year, (revenue, fertiliser) in zip(
+            value.years[:2], ((1000, 300), (1400, 500)), strict=True
+        ):
+            year.db_detail = {
+                "indtaegt": revenue,
+                "tilskud": 100,
+                "goedning": fertiliser,
+                "udsaed": 200,
+                "omkostninger_total": fertiliser + 200,
+            }
+        calculated = field("calculated").model_copy(
+            update={"rotation_id": value.ref.to_id(), "db2": 1400}
+        )
+        missing = field("missing").model_copy(update={"rotation_id": value.ref.to_id()})
+        fields = [f.model_dump(mode="json") for f in (calculated, field("uncalculated"), missing)]
+        statement = read_models.economics_statement(
+            fields, {"calculated": value, "uncalculated": value}
+        )
+        self.assertEqual(
+            statement,
+            {
+                "area_ha": 2,
+                "indtaegt": 2400,
+                "tilskud": 200,
+                "goedning": 800,
+                "andre_goedningsstoffer": 0,
+                "udsaed": 400,
+                "plantevaern": 0,
+                "markarbejde": 0,
+                "toerring": 0,
+                "andet": 0,
+                "omkostninger_total": 1200,
+                "db": 1400,
+            },
+        )
+
     def test_compact_years_keep_an_inferred_mellemafgroede_or_tidlig_saaning(self):
         full = rich_candidate()
         full.years[0].leaching_detail["mellemafgroede_eller_tidlig_saaning"] = True
@@ -536,6 +575,16 @@ class ReadModelTests(DatabaseTests):
             self.assertIsNone(
                 read_model_store.schedule_preparation(session, "prepare_simulation_view", "sim")
             )
+
+    def test_saved_result_shows_the_economics_of_its_selected_rotations(self):
+        self.publish_result()
+        view = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view").json()
+        saved = view["data"]["savedResult"]
+        statement = saved["economicsStatement"]
+        self.assertEqual(statement["areaHa"], 4)
+        self.assertEqual(statement["db"], saved["response"]["objectiveDb2"])
+        self.assertEqual(statement["omkostningerTotal"], 0)
+        self.assertEqual(statement["andreGoedningsstoffer"], 0)
 
     def test_backfill_after_failed_new_run_preserves_successful_provenance(self):
         _, successful, _, _ = self.publish_result()

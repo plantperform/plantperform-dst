@@ -64,6 +64,21 @@ class RotationChoiceCategory(CamelModel):
     saedskifter: list[RotationChoice]
 
 
+class EconomicsStatement(CamelModel):
+    area_ha: float
+    indtaegt: float
+    tilskud: float
+    goedning: float
+    andre_goedningsstoffer: float
+    udsaed: float
+    plantevaern: float
+    markarbejde: float
+    toerring: float
+    andet: float
+    omkostninger_total: float
+    db: float
+
+
 class SavedResultView(CamelModel):
     economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     run_id: str
@@ -71,6 +86,7 @@ class SavedResultView(CamelModel):
     response: OptimizeSimulationResponse
     fields_before: list[FieldRecord]
     field_years: dict[str, list[FieldYearValue]]
+    economics_statement: EconomicsStatement | None = None
 
 
 class FarmViewData(CamelModel):

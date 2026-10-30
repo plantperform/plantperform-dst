@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from app.domain.field import FieldRecord
-from app.domain.read_model import FieldYearValue
+from app.domain.read_model import EconomicsStatement, FieldYearValue
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
@@ -54,6 +54,25 @@ def compact_years(candidate):
         ).model_dump(mode="json")
         for y in candidate.years[: candidate.active_len]
     ]
+
+
+_STATEMENT_LINES = EconomicsStatement.model_fields.keys() - {"area_ha", "db"}
+
+
+def economics_statement(fields, candidates):
+    statement = dict.fromkeys(EconomicsStatement.model_fields, 0.0)
+    for field in fields:
+        candidate = candidates.get(field["id"])
+        cycle = candidate.years[: candidate.active_len] if candidate else []
+        if field.get("rotation_id") is None or not cycle:
+            continue
+        weight = field["area_ha"] / len(cycle)
+        statement["area_ha"] += field["area_ha"]
+        statement["db"] += field["db2"]
+        for year in cycle:
+            for line in _STATEMENT_LINES:
+                statement[line] += weight * (year.db_detail.get(line) or 0)
+    return statement
 
 
 def candidate_metadata(candidate):
