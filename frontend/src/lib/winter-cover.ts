@@ -4,7 +4,9 @@ import { cropLabel } from '@/lib/crop-label'
 export type WinterCoverKind =
   | 'catchCrop'
   | 'intermediateCrop'
-  | 'cropCover'
+  | 'winterCereal'
+  | 'grassRapeBeets'
+  | 'undersownOrFallow'
   | 'stubble'
   | 'bareSoil'
   | 'earlySowing'
@@ -39,26 +41,41 @@ export const INTERMEDIATE_CROP: WinterCoverDefinition = {
   color: '#db2777',
 }
 
-const CROP_COVER: WinterCoverDefinition = {
-  id: 'cropCover',
-  label: 'Plantedække',
-  description: 'En afgrøde dækker jorden vinteren over.',
+export const WINTER_CEREAL: WinterCoverDefinition = {
+  id: 'winterCereal',
+  label: 'Vintersæd',
+  description: 'Vintersæd dækker jorden vinteren over.',
   color: '#2563eb',
 }
 
-const STUBBLE: WinterCoverDefinition = {
+export const GRASS_RAPE_BEETS: WinterCoverDefinition = {
+  id: 'grassRapeBeets',
+  label: 'Græs, raps og roer',
+  description:
+    'Græs, kløvergræs, vinterraps eller roer står på marken langt ind i efteråret.',
+  color: '#4d7c0f',
+}
+
+export const UNDERSOWN_OR_FALLOW: WinterCoverDefinition = {
+  id: 'undersownOrFallow',
+  label: 'Undersået græs og brak',
+  description: 'Undersået græs eller brak dækker jorden vinteren over.',
+  color: '#a3c46a',
+}
+
+export const STUBBLE: WinterCoverDefinition = {
   id: 'stubble',
-  label: 'Stubmark',
+  label: 'Stub',
   description:
     'Stubben står urørt, og kun ukrudt og spildkorn dækker jorden vinteren over.',
   color: '#f97316',
 }
 
-const BARE_SOIL: WinterCoverDefinition = {
+export const BARE_SOIL: WinterCoverDefinition = {
   id: 'bareSoil',
   label: 'Bar jord',
-  description: 'Jorden er bearbejdet og ligger uden plantedække vinteren over.',
-  color: '#d6d3d1',
+  description: 'Jorden er bearbejdet og ligger uden plantevækst vinteren over.',
+  color: '#a8a29e',
 }
 
 export const EARLY_SOWING: WinterCoverDefinition = {
@@ -97,12 +114,22 @@ export const shownUndersownCropLabel = (year: RotationYear): string | null => {
 const WINTER_COVERS: readonly WinterCoverDefinition[] = [
   CATCH_CROP,
   INTERMEDIATE_CROP,
-  CROP_COVER,
+  WINTER_CEREAL,
+  GRASS_RAPE_BEETS,
+  UNDERSOWN_OR_FALLOW,
   STUBBLE,
   BARE_SOIL,
   EARLY_SOWING,
   INTERMEDIATE_OR_EARLY_SOWING,
 ]
+
+export const winterCoverDefinition = (
+  id: WinterCoverKind,
+): WinterCoverDefinition => {
+  const definition = WINTER_COVERS.find((cover) => cover.id === id)
+  if (!definition) throw new Error(`Unknown winter cover ${id}`)
+  return definition
+}
 
 const yearCover = (
   cover: WinterCoverDefinition,
@@ -110,27 +137,27 @@ const yearCover = (
 ): YearCover => ({ cover, description })
 
 const W_COVERS: Record<number, YearCover> = {
-  1: yearCover(CROP_COVER, 'Vintersæd dækker jorden vinteren over.'),
+  1: yearCover(WINTER_CEREAL),
   2: yearCover(BARE_SOIL, 'Jorden ligger bar vinteren over.'),
   3: yearCover(
     BARE_SOIL,
     'Efter majs eller kartofler ligger jorden bar vinteren over.',
   ),
   4: yearCover(
-    CROP_COVER,
+    UNDERSOWN_OR_FALLOW,
     'Efterafgrøder, undersået græs eller brak dækker jorden vinteren over.',
   ),
   5: yearCover(
     STUBBLE,
     'Stubben står urørt, og kun ukrudt og spildkorn dækker jorden vinteren over.',
   ),
-  6: yearCover(
-    CROP_COVER,
-    'Græs, kløvergræs, vinterraps eller roer står på marken langt ind i efteråret.',
+  6: yearCover(GRASS_RAPE_BEETS),
+  7: yearCover(
+    WINTER_CEREAL,
+    'Vintersæd efter græs dækker jorden vinteren over.',
   ),
-  7: yearCover(CROP_COVER, 'Vintersæd efter græs dækker jorden vinteren over.'),
   8: yearCover(
-    CROP_COVER,
+    GRASS_RAPE_BEETS,
     'Græs eller kløvergræs, der først pløjes sent, dækker jorden det meste af vinteren.',
   ),
 }
@@ -174,7 +201,7 @@ const yearCoversFromUndersownCrop = (year: RotationYear): YearCover[] => {
   if (UNDERSOWN_COVER_CODES.has(code)) {
     return [
       yearCover(
-        CROP_COVER,
+        UNDERSOWN_OR_FALLOW,
         'Udlæg af græs eller frøgræs står på marken efter høst.',
       ),
     ]

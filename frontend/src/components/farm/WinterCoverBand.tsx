@@ -1,10 +1,12 @@
 import {
   Blend,
+  Clover,
   Leaf,
   Shovel,
-  Snowflake,
+  Shrub,
   Sprout,
   Sunrise,
+  Wheat,
   WheatOff,
   type LucideIcon,
 } from 'lucide-react'
@@ -21,7 +23,9 @@ import type {
 const ICONS: Record<WinterCoverKind, LucideIcon> = {
   catchCrop: Sprout,
   intermediateCrop: Leaf,
-  cropCover: Snowflake,
+  winterCereal: Wheat,
+  grassRapeBeets: Clover,
+  undersownOrFallow: Shrub,
   stubble: WheatOff,
   bareSoil: Shovel,
   earlySowing: Sunrise,
@@ -51,7 +55,11 @@ export const WinterCoverBand = ({
     {covers.map((yearCover) => (
       <AppTooltip
         key={yearCover.cover.id}
-        content={showTooltip ? `${yearCover.cover.label}. ${yearCover.description}` : null}
+        content={
+          showTooltip
+            ? `${yearCover.cover.label}. ${yearCover.description}`
+            : null
+        }
       >
         <span className="flex-1" style={coverFill(yearCover.cover)} />
       </AppTooltip>
