@@ -51,6 +51,12 @@ describe('fromWire', () => {
     })
   })
 
+  it('names the regnskab lines the backend sends in camelCase', () => {
+    expect(
+      fromWire({ omkostningerTotal: 310, andreGoedningsstoffer: 20 }),
+    ).toEqual({ totalCosts: 310, otherFertilisers: 20 })
+  })
+
   it('leaves a geometry as the backend sent it', () => {
     const geometry = {
       type: 'Polygon',

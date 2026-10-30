@@ -22,7 +22,7 @@ import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state
 import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { LoadError } from '@/components/ui/load-error'
-import { STANDARD_PROFILE, STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   computeFieldTotals,
@@ -289,37 +289,25 @@ export const SimulationComparison = ({
           ).length,
           simulationCount: simulationColumns.length,
         })
-  const ordered = [
-    history,
-    ...sortComparison(candidates, sort).map(({ column }) => column),
-  ]
-  const columnSimulations = ordered.map((column) =>
-    column.history
-      ? undefined
-      : simulations.find((entry) => entry.id === column.key),
+  const orderedSimulations = sortComparison(candidates, sort).map(
+    ({ column }) => column,
   )
-  const profiles = ordered.map((column) =>
-    column.history
-      ? STANDARD_PROFILE
-      : economics.appliedProfile({
-          economicsSnapshot:
-            simulationsFields.data?.[column.key]?.economicsSnapshot,
-        }),
-  )
-  const showEconomics = profiles.some(
-    (profile) => profile.id !== STANDARD_PROFILE_ID,
+  const ordered = [history, ...orderedSimulations]
+  const profiles = orderedSimulations.map((column) =>
+    economics.appliedProfile({
+      economicsSnapshot:
+        simulationsFields.data?.[column.key]?.economicsSnapshot,
+    }),
   )
   const economicsVerdict = describeEconomicsVerdict(
-    ordered
-      .map((column, index) => ({
-        title: column.title,
-        ownProfileName:
-          profiles[index].id === STANDARD_PROFILE_ID
-            ? null
-            : profiles[index].name,
-        fields: column.fields,
-      }))
-      .slice(1),
+    orderedSimulations.map((column, index) => ({
+      title: column.title,
+      ownProfileName:
+        profiles[index].id === STANDARD_PROFILE_ID
+          ? null
+          : profiles[index].name,
+      fields: column.fields,
+    })),
   )
   const requirements = placeFeedUnitRequirements(
     ordered.map((column) => column.requirement),
@@ -424,17 +412,22 @@ export const SimulationComparison = ({
                 bestBalanceKey={bestBalance?.key ?? null}
               />
             </section>
-            {showEconomics ? (
-              <section ref={economicsRef} className="scroll-mt-4 space-y-2.5">
-                <h2 className="pt-1 font-display text-[22px] leading-tight">
-                  Økonomi i simuleringerne
-                </h2>
+            {orderedSimulations.length > 0 ? (
+              <section
+                ref={economicsRef}
+                className="w-fit max-w-full scroll-mt-4 space-y-2.5"
+              >
                 <ComparisonEconomics
-                  columns={ordered}
+                  columns={orderedSimulations}
                   profiles={profiles}
-                  farmingSystems={columnSimulations.map(
-                    (simulation) =>
-                      simulation?.fertiliser.farmingSystem ?? 'Konventionel',
+                  farmingSystems={orderedSimulations.map(
+                    (column) =>
+                      simulations.find((entry) => entry.id === column.key)
+                        ?.fertiliser.farmingSystem ?? 'Konventionel',
+                  )}
+                  statements={orderedSimulations.map(
+                    (column) =>
+                      simulationsFields.data?.[column.key]?.economicsStatement,
                   )}
                   highlightedKey={highlightedKey}
                   onHighlight={setHighlightedKey}
