@@ -257,6 +257,14 @@ describe('describeNNormLevel', () => {
         years: 5,
       }),
     ).toMatchObject({ value: '75 %', note: '3 af 5 år' })
+    expect(
+      describeNNormLevel({
+        kind: 'partial',
+        pct: 100,
+        responseYears: 3,
+        years: 5,
+      }),
+    ).toEqual({ value: '100 %' })
   })
 })
 

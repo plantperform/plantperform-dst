@@ -127,9 +127,11 @@ export const describeNNormLevel = (level: NNormLevel): NNormLevelText => {
     case 'level':
       return { value: `${formatNumber(level.pct)} %` }
     case 'partial': {
+      const value = `${formatNumber(level.pct)} %`
+      if (level.pct === 100) return { value }
       const years = `${level.responseYears} af ${level.years} år`
       return {
-        value: `${formatNumber(level.pct)} %`,
+        value,
         note: years,
         tooltip: `${formatNumber(level.pct)} % gælder de ${years}, hvor afgrøden har en udbyttekurve. Øvrige år gødskes til fuld norm eller har ingen norm.`,
       }
