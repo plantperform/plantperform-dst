@@ -16,7 +16,10 @@ import { cropGroupFor, shortCropName } from '@/lib/crop-groups'
 import {
   CURRENT_CALENDAR_YEAR,
   formatPerHa,
+  NO_ECONOMICS,
   perHaUnit,
+  rotationEconomicsMissing,
+  yearEconomicsMissing,
   yearNLoadKgHa,
 } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
@@ -38,15 +41,16 @@ const metricValue = (
   metric: YearMetric,
   yearValue: DisplayYearValue,
   field: FieldRecord,
-): number => {
+): number | null => {
   if (metric === 'leaching') return yearValue.leachingKgNHa
   if (metric === 'nLoad') {
     return yearNLoadKgHa(yearValue.leachingKgNHa, field.retention)
   }
-  return yearValue.dbDkkHa
+  return yearEconomicsMissing(yearValue) ? null : yearValue.dbDkkHa
 }
 
-const describeMetric = (metric: YearMetric, value: number): string => {
+const describeMetric = (metric: YearMetric, value: number | null): string => {
+  if (value === null) return NO_ECONOMICS
   if (metric === 'db2') return `DB2 ${formatPerHa(value, 'db2')}`
   if (metric === 'leaching') {
     return `Udvaskning ${formatPerHa(value, 'leaching')}`
@@ -97,7 +101,7 @@ export const FieldYearStrip = ({
 }: FieldYearStripProps) => {
   const metricOptions = METRIC_OPTIONS.filter((option) =>
     option.value === 'db2'
-      ? !hideEconomics && !field.economicsMissing
+      ? !hideEconomics && !rotationEconomicsMissing(yearValues ?? [])
       : field.quotaEligible,
   )
   const [chosenMetric, setMetric] = useState<YearMetric>('nLoad')
@@ -108,15 +112,20 @@ export const FieldYearStrip = ({
     metricOptions.length > 0 &&
     yearValues !== undefined &&
     yearValues.length > 0
-  const values = field.cropRotation.map((_, index) => {
-    const yearValue = hasValues ? yearValues?.[index] : undefined
-    return yearValue ? metricValue(metric, yearValue, field) : null
-  })
+  const years = field.cropRotation.map((_, index) =>
+    hasValues ? yearValues?.[index] : undefined,
+  )
+  const values = years.map((yearValue) =>
+    yearValue ? metricValue(metric, yearValue, field) : null,
+  )
   const counted = values.filter((value): value is number => value !== null)
   const maxValue = Math.max(0, ...counted)
+  const averaged = years.flatMap((yearValue) =>
+    yearValue ? [metricValue(metric, yearValue, field) ?? 0] : [],
+  )
   const meanValue =
-    counted.length > 0
-      ? counted.reduce((sum, value) => sum + value, 0) / counted.length
+    averaged.length > 0
+      ? averaged.reduce((sum, value) => sum + value, 0) / averaged.length
       : null
   const scale = columnScale(metric, values)
   const yearCovers = rotationCovers(
@@ -201,7 +210,7 @@ export const FieldYearStrip = ({
             }${
               undersownCropName !== null ? ` (udlæg: ${undersownCropName})` : ''
             }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}${
-              value !== null ? ` · ${describeMetric(metric, value)}` : ''
+              years[index] ? ` · ${describeMetric(metric, value)}` : ''
             }`
             const ratio =
               value !== null && maxValue > 0 ? Math.max(0, value) / maxValue : 0

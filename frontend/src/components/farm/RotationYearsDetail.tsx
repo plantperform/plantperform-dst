@@ -18,6 +18,7 @@ import {
   nNormTargetKgNHa,
   NO_ECONOMICS,
   ROTATION_START_CALENDAR_YEAR,
+  yearEconomicsMissing,
   yearNLoadKgHa,
   yieldResponse,
 } from '@/lib/field-domain'
@@ -248,7 +249,7 @@ const KeyMetricsSection = ({
   const yieldAmount = num(year.dbDetail.yieldAmount)
   const yieldUnit = String(year.dbDetail.yieldUnit ?? '')
   const isFodderCrop = yieldUnit === 'FE/ha'
-  const economicsMissing = year.dbDetail.economicsMissing === true
+  const economicsMissing = yearEconomicsMissing(year)
   const precedingCropValue = year.precedingCropValueKgNHa
   // Manure has two parts: a utilised/mineral part that counts toward
   // satisfying the norm like mineral fertiliser, and an organically bound part
