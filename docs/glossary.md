@@ -67,8 +67,11 @@ field" column is the name on the wire.
 | sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
 | mellemafgrøde eller tidlig såning | `intermediateOrEarlySowing`, `INTERMEDIATE_OR_EARLY_SOWING`, `isIntermediateOrEarlySowingYear` | `mellemafgroede_eller_tidlig_saaning` | A history year whose reported catch crop came before an autumn-sown crop: one of the two, which the source does not say; drawn split down the middle in the colours of both |
-| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `cropCover` (plantedække), `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing` |
-| stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
+| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The colours and definitions are in `winter-cover.ts` |
+| vintersæd | `winterCereal` | | W=1 and W=7 (after grass) in NLES5: winter cereal covers the soil |
+| græs, raps og roer | `grassRapeBeets` | | W=6 and W=8 in NLES5: grass, clover grass, winter rape or beets stand long into the autumn, or grass is ploughed late |
+| undersået græs og brak | `undersownOrFallow` | | W=4 in NLES5 without a catch crop, and a grass reported as udlæg |
+| stub | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain. Only the area without efterafgrøde, since a catch crop sown in the stubble takes its place |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
 | regn forfrugtsværdien med | `includePrecedingCropValue` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
