@@ -19,6 +19,8 @@ import {
   summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
+  isFieldCalculated,
+  withoutCalculation,
   applyFieldYearValues,
   formatLockTooltip,
   rotationEconomicsMissing,
@@ -410,5 +412,22 @@ describe('N-norm level per mark', () => {
   it('reads the level from the candidate ID', () => {
     expect(fieldNNormPct(field({ rotationId: '315:4:80' }))).toBe(80)
     expect(fieldNNormPct(field({ rotationId: null }))).toBeNull()
+  })
+})
+
+describe('withoutCalculation', () => {
+  it('clears the farm figures so the marker show as not calculated', () => {
+    const [cleared] = withoutCalculation([
+      field({ id: 'a', db2: 500, nLoad: 40, leaching: 30, feedUnits: 900 }),
+    ])
+    expect(cleared).toMatchObject({
+      id: 'a',
+      rotationId: null,
+      db2: 0,
+      nLoad: 0,
+      leaching: 0,
+      feedUnits: 0,
+    })
+    expect(isFieldCalculated(cleared, true)).toBe(false)
   })
 })
