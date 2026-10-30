@@ -676,7 +676,9 @@ describe('simulation wizard steps', () => {
     ])
     // An unchecked crop is opted out: every crop of a rotation must be checked.
     await check('Afgrøder', 'Vinterhvede')
-    expect(container.textContent).toContain('Ingen sædskifter passer til valget')
+    expect(container.textContent).toContain(
+      'Ingen sædskifter passer til valget',
+    )
     await check('Afgrøder', 'Vinterraps')
     expect(container.textContent).toContain('1 sædskifte passer til valget')
     await click('Næste')
@@ -745,7 +747,9 @@ describe('simulation wizard steps', () => {
     expect(checkedCrops('Afgrøder')).toEqual([true, true, true, false, false])
 
     // Majs and Vinterraps are opted out, so neither rotation fits yet.
-    expect(container.textContent).toContain('Ingen sædskifter passer til valget')
+    expect(container.textContent).toContain(
+      'Ingen sædskifter passer til valget',
+    )
     await check('Afgrøder', 'Vinterraps')
     expect(container.textContent).toContain('1 sædskifte passer til valget')
 

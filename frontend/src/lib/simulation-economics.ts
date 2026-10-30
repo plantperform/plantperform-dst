@@ -66,7 +66,9 @@ export const simulationEconomicsEffect = (
         areaHa: area.areaHa,
         deltaDkk: Math.round(effect.deltaDkkHa * area.areaHa),
         changes: changes.filter((change) =>
-          change.cropLabels.includes(cropLabel(effect.cropCode, effect.cropName)),
+          change.cropLabels.includes(
+            cropLabel(effect.cropCode, effect.cropName),
+          ),
         ),
       },
     ]

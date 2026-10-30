@@ -393,9 +393,8 @@ export const GuideMachinesStep = ({
           })}
           <p className={FOOT_CLASS}>
             Tallene er for {cropLabel(crop.cropCode, crop.cropName)}. En fælles
-            pris gælder for alle de
-            afgrøder, der står ved den. Mængderne rettes på profilens side.{' '}
-            {SOIL_VARIANTS_NOTE}
+            pris gælder for alle de afgrøder, der står ved den. Mængderne rettes
+            på profilens side. {SOIL_VARIANTS_NOTE}
           </p>
         </div>
       </div>

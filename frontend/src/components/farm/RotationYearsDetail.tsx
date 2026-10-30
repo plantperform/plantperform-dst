@@ -91,8 +91,7 @@ const fullTabLabel = (
   year: RotationYear,
   index: number,
   calendarYear: number,
-): string =>
-  `År ${index + 1} (${calendarYear}) - ${rotationYearLabel(year)}`
+): string => `År ${index + 1} (${calendarYear}) - ${rotationYearLabel(year)}`
 
 const calculateNLoad = (
   lNuar: number,
