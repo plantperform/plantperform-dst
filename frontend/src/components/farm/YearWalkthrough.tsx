@@ -55,6 +55,10 @@ import {
   type RotationShare,
 } from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
+import {
+  summarizeWinterCover,
+  type WinterCoverShare,
+} from '@/lib/winter-cover-overview'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 
@@ -462,6 +466,7 @@ type YearPanelProps = {
   fieldCount: number
   yearFieldCount: number | null
   cropShares: CropShare[]
+  winterCoverShares: WinterCoverShare[]
   rotationShares: RotationShare[]
   lastRun: OptimizeSimulationResponse | null
   history: boolean
@@ -485,6 +490,7 @@ const YearPanel = ({
   fieldCount,
   yearFieldCount,
   cropShares,
+  winterCoverShares,
   rotationShares,
   lastRun,
   history,
@@ -539,11 +545,15 @@ const YearPanel = ({
         : scoped
           ? 'Gennemsnit pr. år mod kvoten'
           : 'Gennemsnit pr. år mod hvert oplands kvote'
+  const ringNote =
+    showCrops && !pending && winterCoverShares.length > 0
+      ? ', indre ring: vinterdække'
+      : ''
   const subtitle = showRotations
     ? scoped
       ? `Areal pr. sædskifte i ${scopeLabel}, andel af oplandets areal`
       : 'Areal pr. sædskifte, andel af bedriftens areal'
-    : dataSubtitle
+    : `${dataSubtitle}${ringNote}`
 
   const pendingNote = column
     ? history
@@ -647,7 +657,10 @@ const YearPanel = ({
                   )
                 ) : showCrops ? (
                   cropShares.length > 0 ? (
-                    <CropDistribution shares={cropShares} />
+                    <CropDistribution
+                      shares={cropShares}
+                      winterCover={winterCoverShares}
+                    />
                   ) : !pending ? (
                     <p className="text-[11px] leading-4 text-muted-foreground">
                       Ingen afgrøder at vise.
@@ -809,6 +822,11 @@ export const YearWalkthrough = ({
       ),
     [fields, yearValues, selectedColumn, cropLevel],
   )
+  const winterCoverShares = useMemo(
+    () =>
+      summarizeWinterCover(fields, yearValues, selectedColumn?.index ?? null),
+    [fields, yearValues, selectedColumn],
+  )
   const rotationShares = useMemo(
     () => summarizeRotationDistribution(fields, rotationOptions),
     [fields, rotationOptions],
@@ -911,6 +929,7 @@ export const YearWalkthrough = ({
       ? countFieldsWithYearValues(selectedColumn.entry.year)
       : null,
     cropShares,
+    winterCoverShares,
     rotationShares,
     lastRun,
     history,

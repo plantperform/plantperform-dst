@@ -67,12 +67,13 @@ field" column is the name on the wire.
 | sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
 | mellemafgrøde eller tidlig såning | `intermediateOrEarlySowing`, `INTERMEDIATE_OR_EARLY_SOWING`, `isIntermediateOrEarlySowingYear` | `mellemafgroede_eller_tidlig_saaning` | A history year whose reported catch crop came before an autumn-sown crop: one of the two, which the source does not say; drawn split down the middle in the colours of both |
-| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The colours and definitions are in `winter-cover.ts` |
+| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The band under the crops and the inner ring of the crop donut use the same colours and definitions, from `winter-cover.ts` |
 | vintersæd | `winterCereal` | | W=1 and W=7 (after grass) in NLES5: winter cereal covers the soil |
 | græs, raps og roer | `grassRapeBeets` | | W=6 and W=8 in NLES5: grass, clover grass, winter rape or beets stand long into the autumn, or grass is ploughed late |
 | undersået græs og brak | `undersownOrFallow` | | W=4 in NLES5 without a catch crop, and a grass reported as udlæg |
 | stub | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain. Only the area without efterafgrøde, since a catch crop sown in the stubble takes its place |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
+| vinterdækfordeling | `WinterCoverShare`, `summarizeWinterCover` | | Area and share per vinterdække, the inner ring of the crop donut in Grupper and Afgrøder. Each mark-year counts once, and years with an unknown cover count for nothing |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
 | regn forfrugtsværdien med | `includePrecedingCropValue` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
 | indregn forfrugtsværdi (indregn_ffv) | `deducts_preceding_crop_value` | | Backend. Ja or Nej per crop in the master table. Nej for grass, seed grass, clover, lucerne and other perennial crops, which get no forfrugtsværdi deducted |
