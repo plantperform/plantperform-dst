@@ -20,7 +20,6 @@ import { Label } from '@/components/ui/label'
 import { cropGroupFor } from '@/lib/crop-groups'
 import {
   budgetSoilType,
-  categoryPrices,
   cropYieldPct,
   describePriceCrops,
   findPrice,
@@ -30,6 +29,7 @@ import {
   lineAmountDkkHa,
   lineQuantity,
   manurePrices,
+  mineralFertiliserPrices,
   priceValue,
   quantityUnitLabel,
   saleLine,
@@ -193,14 +193,8 @@ export const GuideFertiliserStep = ({
   overrides,
   onChange,
 }: StepProps) => {
-  const manure = manurePrices(assumptions)
-  const manureIds = new Set(manure.map((price) => price.id))
-  const prices = [
-    ...categoryPrices(assumptions, 'fertiliser').filter(
-      (price) => !manureIds.has(price.id),
-    ),
-    ...manure,
-  ]
+  const mineral = mineralFertiliserPrices(assumptions)
+  const prices = [...mineral, ...manurePrices(assumptions)]
 
   return (
     <div className="overflow-x-auto">
@@ -227,11 +221,10 @@ export const GuideFertiliserStep = ({
           </div>
         ))}
         <p className={FOOT_CLASS}>
-          Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
-          husdyrgødning dækker den en del af normen. Husdyrgødningens
-          udbringning og købspris er pr. ton og gælder både for konventionel og
-          økologisk drift, når en simulering bruger husdyrgødning. Standardens
-          købspris er 0 kr/ton.
+          {mineral.length > 0
+            ? 'Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med husdyrgødning dækker den en del af normen. Husdyrgødningens udbringning og købspris er pr. ton og gælder både for konventionel og økologisk drift, når en simulering bruger husdyrgødning.'
+            : 'Husdyrgødningen dækker hele kvælstofnormen. Udbringning og købspris er pr. ton.'}{' '}
+          Standardens købspris er 0 kr/ton.
         </p>
       </div>
     </div>

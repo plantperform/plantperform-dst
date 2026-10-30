@@ -26,6 +26,7 @@ import {
   lineGroupId,
   lineQuantity,
   manurePrices,
+  mineralFertiliserPrices,
   NO_OVERRIDES,
   parseEconomicsInput,
   parseYieldPctInput,
@@ -1086,6 +1087,34 @@ describe('gødning', () => {
     expect(priceValue(manure, bought, 'manurePurchase')).toBe(15)
     expect(priceValue(manure, bought, 'manureSpreading')).toBe(24)
     expect(manurePrices(WITH_WHEAT)).toEqual([])
+    expect(mineralFertiliserPrices(manure).map((price) => price.id)).toEqual([
+      'nitrogen',
+      'spreading',
+    ])
+  })
+
+  it('finds no handelsgødning prices when only husdyrgødning is spread', () => {
+    const organic: EconomicsAssumptions = {
+      ...ASSUMPTIONS,
+      prices: [
+        {
+          id: 'manureSpreading',
+          label: 'Udbringning, husdyrgødning',
+          unit: 'kr/ton',
+          valueDkk: 24,
+          source: 'SEGES',
+        },
+      ],
+      manureSpreadingPriceId: 'manureSpreading',
+      crops: [
+        crop(11, 'Vinterhvede', {
+          fertiliser: [
+            line('Udbringning, husdyrgødning', 20, 'ton/ha', 'manureSpreading'),
+          ],
+        }),
+      ],
+    }
+    expect(mineralFertiliserPrices(organic)).toEqual([])
   })
 
   it('names the standard svinegylle of an økologisk budget in the note', () => {
