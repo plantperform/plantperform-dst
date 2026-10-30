@@ -284,8 +284,9 @@ export const GuideYieldStep = ({
       })}
       <p className={FOOT_CLASS}>
         Procenten lægges oven på hver marks eget udbytte, som afhænger af
-        jordtype og vanding. Den ændrer mængden af kerne og halm og tørringen,
-        men ikke de andre omkostninger.
+        jordtype og vanding. Den ændrer mængden af kerne og halm og de
+        omkostninger, der afhænger af mængden, som tørring, halmpresning,
+        rensning, sortering og fragt. De andre omkostninger ændrer sig ikke.
       </p>
     </div>
   </div>

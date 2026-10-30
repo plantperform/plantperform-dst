@@ -146,7 +146,7 @@ field" column is the name on the wire.
 | stykpris | `UnitPrice`, `priceId` | `priceId` | Price per unit, e.g. kr/gang or kr/kg |
 | kilde | `source`, `cropSources` | `source` | Where a price comes from, e.g. SEGES Budgetkalkuler 2026 |
 | mængde | `quantity`, `quantityUnit`, `quantityId` | `quantityId` | Per hectare, e.g. 3 sprøjtninger |
-| følger udbyttet | `followsYield` | `followsYield` | Revenue and drying, which the yield percentage scales |
+| følger udbyttet | `followsYield` | `followsYield` | Revenue and the costs that depend on the amount, such as drying, pressing and freight, which the yield percentage scales |
 | salgspris | `saleLine` | | The first revenue line of a crop |
 | halmindtægt | `strawRevenue` | `halm_indtaegt` | The straw sold, part of the indtægt in a field's calculation detail |
 | frasorterede kartofler | `culledShare`, `culledPrice`, `yieldLines`, `standardYield` | `frasorteret_andel`, `frasorteret_pris` | The culls of a potato yield, sold at their own, much lower price. The yield is the sorted potatoes (the sale line) plus the culls |

@@ -1187,12 +1187,35 @@ describe('tørring', () => {
     ).toEqual({})
   })
 
-  it('tells that the drying follows the yield', () => {
+  it('tells that the costs depending on the amount follow the yield', () => {
     expect(yieldHint(NO_OVERRIDES, WHEAT)).toBe(
-      'Normen er 84 hkg pr. ha. Procenten ændrer mængden og tørringen, men ikke de andre omkostninger.',
+      'Normen er 84 hkg pr. ha. Procenten ændrer mængden og de omkostninger, der afhænger af den, men ikke de andre omkostninger.',
     )
     expect(yieldHint(withYieldPct(NO_OVERRIDES, WHEAT, 10), WHEAT)).toBe(
-      '+10 % giver 92,4 hkg pr. ha. Tørringen følger med, de andre omkostninger ændrer sig ikke.',
+      '+10 % giver 92,4 hkg pr. ha. De omkostninger, der afhænger af mængden, følger med, de andre ændrer sig ikke.',
+    )
+  })
+
+  it('counts a cost outside the drying that follows the yield', () => {
+    const barley = crop(1, 'Vårbyg', {
+      revenue: [
+        line('Udbytte', 66, 'hkg/ha', 'barleyPrice'),
+        line('Halm', 3500, 'kg/ha', 'strawPrice'),
+      ],
+      fieldWork: [line('Halmpresning', 3500, 'kg/ha', 'pressing')],
+    })
+    const pressed: CropEconomics = {
+      ...barley,
+      costs: {
+        ...barley.costs,
+        fieldWork: barley.costs.fieldWork.map((entry) => ({
+          ...entry,
+          followsYield: true,
+        })),
+      },
+    }
+    expect(yieldHint(NO_OVERRIDES, pressed)).toBe(
+      'Normen er 66 hkg kerne og 3.500 kg halm pr. ha. Procenten ændrer begge og de omkostninger, der afhænger af dem, men ikke de andre omkostninger.',
     )
   })
 })
