@@ -82,6 +82,7 @@ import {
 } from '@/lib/simulation-form'
 import {
   creationRequestIdentity,
+  updateOrRecreate,
   type CreationRequestIdentity,
 } from '@/lib/simulation-creation'
 import { cn } from '@/lib/utils'
@@ -380,17 +381,29 @@ export const NewScenarioPanel = ({
   const saveSimulation = async () => {
     const existing = savedSimulation.current ?? source
     const economicsModuleId = getValues().economicsProfileId
-    const input = {
+    const inputFor = (target: Simulation | null) => ({
       ...toCreateSimulationInput(getValues()),
       constraints,
       optimizationSettings: optimizationSettingsInput(optimizationSettings),
-      ...(existing &&
-      economicsProfiles.profileForSimulation(existing).id === economicsModuleId
+      ...(target &&
+      economicsProfiles.profileForSimulation(target).id === economicsModuleId
         ? {}
         : { economicsModuleId }),
+    })
+    const create = () => {
+      const input = inputFor(null)
+      return createSimulation(farmId, {
+        ...input,
+        requestId: (creationRequest.current = creationRequestIdentity(
+          input,
+          creationRequest.current,
+        )).requestId,
+      })
     }
-    return existing
-      ? updateSimulation(
+    if (!existing) return create()
+    return updateOrRecreate({
+      update: () =>
+        updateSimulation(
           farmId,
           existing.id,
           running
@@ -398,15 +411,17 @@ export const NewScenarioPanel = ({
                 expectedRevision: existing.revision,
                 name: getValues('name').trim(),
               }
-            : { ...input, expectedRevision: existing.revision },
-        )
-      : createSimulation(farmId, {
-          ...input,
-          requestId: (creationRequest.current = creationRequestIdentity(
-            input,
-            creationRequest.current,
-          )).requestId,
-        })
+            : { ...inputFor(existing), expectedRevision: existing.revision },
+        ),
+      create,
+      // Only a simulation this panel saved itself; the one being edited is
+      // still the user's to find.
+      canRecreate: !running && existing.id !== source?.id,
+      onRecreate: () => {
+        savedSimulation.current = null
+        creationRequest.current = null
+      },
+    })
   }
 
   const startOptimization = async (simulation: Simulation) => {
