@@ -13,6 +13,7 @@ import { formatFieldCount, isFieldCalculated } from '@/lib/field-domain'
 import {
   formatElapsed,
   optimizationRunName,
+  type OptimizationKind,
 } from '@/lib/optimization-run'
 import { cn } from '@/lib/utils'
 
@@ -35,6 +36,7 @@ export const OptimizationRunElapsed = ({ run }: RunProps) => {
 type OptimizationBannerProps = {
   farmId: string
   simulationId: string
+  optimizationKind: OptimizationKind | undefined
   run: OptimizationRun | undefined
   fields: FieldRecord[] | undefined
   className?: string
@@ -45,6 +47,7 @@ type OptimizationBannerProps = {
 export const OptimizationBanner = ({
   farmId,
   simulationId,
+  optimizationKind,
   run,
   fields,
   className,
@@ -110,7 +113,9 @@ export const OptimizationBanner = ({
       <Button
         size="xs"
         variant="outline"
-        onClick={() => startDefaultRun(farmId, simulationId, fields)}
+        onClick={() =>
+          startDefaultRun(farmId, simulationId, fields, optimizationKind)
+        }
       >
         Kør Optimér
       </Button>
