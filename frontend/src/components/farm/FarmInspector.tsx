@@ -59,7 +59,11 @@ import {
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
 import { nNormLevelByFieldId, type NNormLevel } from '@/lib/n-norm-level'
 import { useEscapeKey } from '@/hooks/use-escape-key'
-import { rotationOptionsOf } from '@/lib/rotation-overview'
+import {
+  rotationColorsOf,
+  rotationOptionsOf,
+  summarizeRotationDistribution,
+} from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
 
 type FarmInspectorProps = {
@@ -316,6 +320,16 @@ export const FarmInspector = ({
     () => rotationOptionsOf(rotationCategories ?? []),
     [rotationCategories],
   )
+  // Of the whole farm, so a sædskifte has the same colour in the Sædskifter tab
+  // (also with an opland chosen) and on the map.
+  const rotationShares = useMemo(
+    () => summarizeRotationDistribution(fields, rotationOptions),
+    [fields, rotationOptions],
+  )
+  const rotationColors = useMemo(
+    () => rotationColorsOf(rotationShares),
+    [rotationShares],
+  )
   const listFields =
     effectiveSelectedYearIndex !== null && yearValues
       ? applyFieldYearValues(fields, yearValues, effectiveSelectedYearIndex)
@@ -472,6 +486,7 @@ export const FarmInspector = ({
               catchmentTotalsByYear={catchmentTotalsByYear}
               yearValues={yearValues}
               rotationOptions={rotationOptions}
+              rotationColors={rotationColors}
               selectedYearIndex={selectedYearIndex}
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentLabel={catchmentLabel}

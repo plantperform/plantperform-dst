@@ -7,9 +7,14 @@ import type {
 } from '@/api/types'
 import { emptyMeasures } from '@/lib/field-domain'
 import {
+  NO_ROTATION_COLOR,
+  rotationColorsOf,
+  rotationKey,
+  rotationLabel,
   rotationOptionsOf,
   rotationVariantOf,
   summarizeRotationDistribution,
+  type RotationShare,
 } from '@/lib/rotation-overview'
 
 const field = (overrides: Partial<FieldRecord>): FieldRecord => ({
@@ -53,6 +58,72 @@ describe('rotationVariantOf', () => {
 
   it('keeps an id without colons whole', () => {
     expect(rotationVariantOf('current')).toBe('current')
+  })
+})
+
+describe('rotationLabel', () => {
+  it('names a rotation by its number', () => {
+    expect(rotationLabel('315')).toBe('Sædskifte 315')
+  })
+
+  it('names the permanent crops and the fields without a rotation', () => {
+    expect(rotationLabel('permanent')).toBe('Permanente sædskifter')
+    expect(rotationLabel(null)).toBe('Uden sædskifte')
+  })
+})
+
+describe('rotationKey', () => {
+  it('keeps the rotation and gives the fields without one their own key', () => {
+    expect(rotationKey('315')).toBe('315')
+    expect(rotationKey(null)).toBe('none')
+  })
+})
+
+describe('rotationColorsOf', () => {
+  const sharesOf = (variants: (string | null)[]): RotationShare[] =>
+    variants.map((rotationVariant) => ({
+      rotationVariant,
+      cropSequence: null,
+      areaHa: 1,
+      share: 1 / variants.length,
+      fieldCount: 1,
+    }))
+
+  it('hands out the colours in the order of the shares', () => {
+    const colors = rotationColorsOf(sharesOf(['315', '42', '7']))
+    expect(new Set(colors.values()).size).toBe(3)
+    expect([...colors.keys()]).toEqual(['315', '42', '7'])
+  })
+
+  it('gives the fields without a rotation the grey and uses up no colour', () => {
+    const withGap = rotationColorsOf(sharesOf(['315', null, '42']))
+    const without = rotationColorsOf(sharesOf(['315', '42']))
+    expect(withGap.get('none')).toBe(NO_ROTATION_COLOR)
+    expect(withGap.get('42')).toBe(without.get('42'))
+  })
+
+  it('starts the colours over when there are more rotations than colours', () => {
+    const variants = Array.from({ length: 12 }, (_, index) => `${index + 1}`)
+    const colors = rotationColorsOf(sharesOf(variants))
+    expect(colors.get('11')).toBe(colors.get('1'))
+    expect(colors.get('12')).toBe(colors.get('2'))
+    expect(colors.get('2')).not.toBe(colors.get('1'))
+  })
+
+  it('colours the rotations of the whole farm the same in any scope', () => {
+    const farm = [
+      field({ id: 'a', rotationId: '315:4:80', areaHa: 5 }),
+      field({ id: 'b', rotationId: '42:1:100', areaHa: 3 }),
+      field({ id: 'c', rotationId: null, areaHa: 1 }),
+    ]
+    const colors = rotationColorsOf(
+      summarizeRotationDistribution(farm, rotations),
+    )
+    const scoped = summarizeRotationDistribution([farm[1]], rotations)
+    expect(
+      scoped.map((share) => colors.get(rotationKey(share.rotationVariant))),
+    ).toEqual([colors.get('42')])
+    expect(colors.get('42')).not.toBe(colors.get('315'))
   })
 })
 

@@ -1,14 +1,20 @@
 import { useState } from 'react'
 
 import { AppTooltip } from '@/components/ui/app-tooltip'
-import { BRAND_COLORS } from '@/lib/brand-colors'
 import {
   formatFieldCount,
   formatHectares,
   formatShare,
   formatWholeNumber,
 } from '@/lib/field-domain'
-import type { RotationShare } from '@/lib/rotation-overview'
+import {
+  NO_ROTATION_COLOR,
+  PERMANENT_ROTATION,
+  rotationColorsOf,
+  rotationKey,
+  rotationLabel,
+  type RotationShare,
+} from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
 
 const DONUT_RADIUS = 40
@@ -16,34 +22,13 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 const DONUT_GAP = 0.8
 const DONUT_WIDTH = 16
 
-const ROTATION_COLORS = [
-  BRAND_COLORS.water,
-  BRAND_COLORS.forest,
-  BRAND_COLORS.carrot,
-  BRAND_COLORS.berry,
-  BRAND_COLORS.waterTertiary,
-  BRAND_COLORS.soil,
-  BRAND_COLORS.forestTertiary,
-  BRAND_COLORS.sun,
-  BRAND_COLORS.redBrown,
-  BRAND_COLORS.freshGreen,
-]
-const NO_ROTATION_COLOR = '#B8B2A7'
-
 const formatArea = (areaHa: number) =>
   areaHa > 0 && areaHa < 0.1 ? '< 0,1' : formatHectares(areaHa)
 
-const shareKey = (entry: RotationShare) => entry.rotationVariant ?? 'none'
-
-// The backend uses "permanent" as the rotation number of permanent crops.
-const PERMANENT_ROTATION = 'permanent'
+const shareKey = (entry: RotationShare) => rotationKey(entry.rotationVariant)
 
 const shareLabel = (entry: RotationShare) =>
-  entry.rotationVariant === null
-    ? 'Uden sædskifte'
-    : entry.rotationVariant === PERMANENT_ROTATION
-      ? 'Permanente sædskifter'
-      : `Sædskifte ${entry.rotationVariant}`
+  rotationLabel(entry.rotationVariant)
 
 // The donut hole only has room for a short name.
 const shortShareLabel = (entry: RotationShare) =>
@@ -67,22 +52,21 @@ const shareTooltip = (entry: RotationShare) => (
 
 type RotationDistributionProps = {
   shares: RotationShare[]
+  // The colour of each rotation (see rotationColorsOf). Hand it the colours of
+  // the whole farm to keep them as on the map when the shares are of one opland.
+  colors?: Map<string, string>
 }
 
-export const RotationDistribution = ({ shares }: RotationDistributionProps) => {
+export const RotationDistribution = ({
+  shares,
+  colors: farmColors,
+}: RotationDistributionProps) => {
   const [hovered, setHovered] = useState<string | null>(null)
   const totalHa = shares.reduce((sum, entry) => sum + entry.areaHa, 0)
   const active = shares.find((entry) => shareKey(entry) === hovered)
-  const colors = new Map<string, string>()
-  let colorIndex = 0
-  for (const entry of shares) {
-    colors.set(
-      shareKey(entry),
-      entry.rotationVariant === null
-        ? NO_ROTATION_COLOR
-        : ROTATION_COLORS[colorIndex++ % ROTATION_COLORS.length],
-    )
-  }
+  const colors = farmColors ?? rotationColorsOf(shares)
+  const colorOf = (entry: RotationShare) =>
+    colors.get(shareKey(entry)) ?? NO_ROTATION_COLOR
   const gap = shares.length > 1 ? DONUT_GAP : 0
   // Rows with no area have no slice, so a farm of zero ha gets an empty ring.
   const arcs = shares
@@ -111,7 +95,7 @@ export const RotationDistribution = ({ shares }: RotationDistributionProps) => {
               cy="50"
               r={DONUT_RADIUS}
               fill="none"
-              stroke={colors.get(shareKey(entry))}
+              stroke={colorOf(entry)}
               strokeWidth={DONUT_WIDTH}
               strokeDasharray={`${length} ${DONUT_CIRCUMFERENCE - length}`}
               strokeDashoffset={-start}
@@ -151,7 +135,7 @@ export const RotationDistribution = ({ shares }: RotationDistributionProps) => {
       <ul aria-label="Sædskifter" className="flex w-full flex-col">
         {shares.map((entry) => {
           const withoutRotation = entry.rotationVariant === null
-          const color = colors.get(shareKey(entry))
+          const color = colorOf(entry)
           return (
             <AppTooltip key={shareKey(entry)} content={shareTooltip(entry)}>
               <li
