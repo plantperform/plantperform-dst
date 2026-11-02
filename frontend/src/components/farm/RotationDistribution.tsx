@@ -9,6 +9,7 @@ import {
 } from '@/lib/field-domain'
 import {
   NO_ROTATION_COLOR,
+  cropSequenceText,
   PERMANENT_ROTATION,
   rotationColorsOf,
   rotationKey,
@@ -40,11 +41,7 @@ const shareTooltip = (entry: RotationShare) => (
   <span className="flex flex-col gap-0.5">
     <span className="font-medium">{shareLabel(entry)}</span>
     {entry.cropSequence ? (
-      <span>
-        {entry.cropSequence
-          .map((crop, index) => `${index + 1}. ${crop}`)
-          .join(' → ')}
-      </span>
+      <span>{cropSequenceText(entry.cropSequence)}</span>
     ) : null}
     <span>{formatFieldCount(entry.fieldCount)}</span>
   </span>
