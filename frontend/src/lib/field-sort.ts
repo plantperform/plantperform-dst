@@ -5,6 +5,7 @@ import type {
 } from '@/components/farm/field-list-state'
 import { fieldDisplayName, perHa } from '@/lib/field-domain'
 import { fieldNNormSortValue, type NNormLevel } from '@/lib/n-norm-level'
+import { fieldRotationVariant } from '@/lib/rotation-overview'
 
 const nameCollator = new Intl.Collator('da-DK', {
   numeric: true,
@@ -102,6 +103,12 @@ const comparePrimary = (
         right.catchmentId,
         sort.direction,
         catchmentLabel,
+      )
+    case 'rotationVariant':
+      return compareNullableName(
+        fieldRotationVariant(left),
+        fieldRotationVariant(right),
+        sort.direction,
       )
     case 'nNormPct':
       return compareNullableNumber(

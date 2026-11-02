@@ -6,6 +6,7 @@ export type FieldsSortKey =
   | 'cropCode'
   | 'cropYear'
   | 'catchment'
+  | 'rotationVariant'
   | 'nNormPct'
   | 'db2'
   | 'nLoad'
@@ -41,6 +42,7 @@ export const FERTILISER_COLUMN_IDS = [
 
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
+  'rotationVariant',
   'nNormPct',
   'db2',
   'quotaStatus',
@@ -56,10 +58,16 @@ export const OPTIONAL_COLUMN_IDS = [
   'soilTypeNumber',
 ]
 
-const SIMULATION_ONLY_COLUMN_IDS = ['nNormPct', 'db2', ...FERTILISER_COLUMN_IDS]
+const SIMULATION_ONLY_COLUMN_IDS = [
+  'rotationVariant',
+  'nNormPct',
+  'db2',
+  ...FERTILISER_COLUMN_IDS,
+]
 
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
+  'rotationVariant',
   'nNormPct',
   'db2',
   'quotaStatus',
