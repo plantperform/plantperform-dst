@@ -468,6 +468,7 @@ type YearPanelProps = {
   cropShares: CropShare[]
   winterCoverShares: WinterCoverShare[]
   rotationShares: RotationShare[]
+  rotationColors: Map<string, string> | undefined
   lastRun: OptimizeSimulationResponse | null
   history: boolean
   unavailableMessage: string | null
@@ -492,6 +493,7 @@ const YearPanel = ({
   cropShares,
   winterCoverShares,
   rotationShares,
+  rotationColors,
   lastRun,
   history,
   unavailableMessage,
@@ -649,7 +651,10 @@ const YearPanel = ({
                 ) : null}
                 {showRotations ? (
                   rotationShares.length > 0 ? (
-                    <RotationDistribution shares={rotationShares} />
+                    <RotationDistribution
+                      shares={rotationShares}
+                      colors={rotationColors}
+                    />
                   ) : (
                     <p className="text-[11px] leading-4 text-muted-foreground">
                       Ingen marker at vise.
@@ -726,6 +731,8 @@ type YearWalkthroughProps = {
   catchmentTotalsByYear?: CatchmentTotalsByYear
   yearValues?: FieldYearValues
   rotationOptions?: RotationOption[]
+  // The colour of each rotation across the whole farm, as on the map.
+  rotationColors?: Map<string, string>
   splitPanels?: boolean
   collapsed: boolean
 }
@@ -745,6 +752,7 @@ export const YearWalkthrough = ({
   catchmentTotalsByYear,
   yearValues,
   rotationOptions = NO_ROTATION_OPTIONS,
+  rotationColors,
   splitPanels = false,
   collapsed,
 }: YearWalkthroughProps) => {
@@ -931,6 +939,7 @@ export const YearWalkthrough = ({
     cropShares,
     winterCoverShares,
     rotationShares,
+    rotationColors,
     lastRun,
     history,
     unavailableMessage,

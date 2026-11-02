@@ -3,6 +3,14 @@ import type {
   RotationCategoryOption,
   RotationOption,
 } from '@/api/types'
+import { BRAND_COLORS } from '@/lib/brand-colors'
+
+// The backend uses "permanent" as the rotation number of permanent crops.
+export const PERMANENT_ROTATION = 'permanent'
+
+// Stands for the fields without a rotation wherever a rotation is a key or a
+// map property. No rotation number is ever "none".
+export const NO_ROTATION_KEY = 'none'
 
 export type RotationShare = {
   // Null for the fields that have no rotation selected.
@@ -18,6 +26,16 @@ export type RotationShare = {
 // of the same rotation apart.
 export const rotationVariantOf = (rotationId: string): string =>
   rotationId.split(':')[0]
+
+export const rotationKey = (rotationVariant: string | null): string =>
+  rotationVariant ?? NO_ROTATION_KEY
+
+export const rotationLabel = (rotationVariant: string | null): string =>
+  rotationVariant === null
+    ? 'Uden sædskifte'
+    : rotationVariant === PERMANENT_ROTATION
+      ? 'Permanente sædskifter'
+      : `Sædskifte ${rotationVariant}`
 
 // A rotation can be listed under more than one category; keep the first.
 export const rotationOptionsOf = (
@@ -83,4 +101,38 @@ export const summarizeRotationDistribution = (
       })
     )
   })
+}
+
+const ROTATION_COLORS = [
+  BRAND_COLORS.water,
+  BRAND_COLORS.forest,
+  BRAND_COLORS.carrot,
+  BRAND_COLORS.berry,
+  BRAND_COLORS.waterTertiary,
+  BRAND_COLORS.soil,
+  BRAND_COLORS.forestTertiary,
+  BRAND_COLORS.sun,
+  BRAND_COLORS.redBrown,
+  BRAND_COLORS.freshGreen,
+]
+export const NO_ROTATION_COLOR = '#B8B2A7'
+
+// The colours go to the rotations in the order of the shares, so the largest
+// rotation gets the first one. Hand it the shares of the whole farm, not of one
+// opland: the donut and the map then show a rotation in the same colour whatever
+// the scope. With more rotations than colours the colours start over.
+export const rotationColorsOf = (
+  shares: RotationShare[],
+): Map<string, string> => {
+  const colors = new Map<string, string>()
+  let next = 0
+  for (const share of shares) {
+    colors.set(
+      rotationKey(share.rotationVariant),
+      share.rotationVariant === null
+        ? NO_ROTATION_COLOR
+        : ROTATION_COLORS[next++ % ROTATION_COLORS.length],
+    )
+  }
+  return colors
 }
