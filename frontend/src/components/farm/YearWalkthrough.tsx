@@ -637,7 +637,7 @@ const YearPanel = ({
                   value={view}
                   options={viewOptions}
                   onValueChange={onViewChange}
-                  labelClassName="hidden @md:inline"
+                  labelClassName="hidden @lg:inline"
                 />
               ) : null}
             </div>
