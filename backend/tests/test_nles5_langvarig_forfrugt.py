@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.services.nles5.bridge_v2 import _resolve_mp, _resolve_w
+from app.services.nles5.bridge_v2 import _resolve_m, _resolve_mp, _resolve_w
 
 GRAES = 252
 KLOVERGRAES = 260
@@ -18,7 +18,9 @@ BRAK_PARAMS = {"M": 6, "W": 4, "MP": 2, "W_efteraar": 5}
 VINTERHVEDE_PARAMS = {"M": 1, "W": None, "MP": 1, "W_efteraar": 1, "W_efter_graes": 7}
 VAARBYG_PARAMS = {"M": 2, "W": None, "MP": 2}
 MAJS_PARAMS = {"M": 8, "W": 3, "MP": 2}
-KARTOFLER_PARAMS = {"M": 7, "W": 6, "MP": 2}
+KARTOFLER_PARAMS = {"M": 2, "W": 3, "MP": 2}
+VAARRUG_HELSAED = 225
+LUCERNEFROE = 127
 GRAES_UDEGRISE_PARAMS = {"M": 11, "W": 3, "MP": 3, "W_efteraar": 3}
 
 # Udlægskoder as the afgrøde table holds them (Bilag 2, table 7).
@@ -43,6 +45,22 @@ class ResolveMpTest(unittest.TestCase):
 
     def test_no_langvarig_forforfrugt_keeps_the_forfrugt_mp(self) -> None:
         self.assertEqual(_resolve_mp(VAARBYG_PARAMS, VAARBYG, VINTERHVEDE), 2)
+
+    def test_lucernefroe_two_years_after_graes_gets_mp4(self) -> None:
+        self.assertEqual(_resolve_mp({"MP": 2}, LUCERNEFROE, GRAES), 4)
+
+
+class ResolveMTest(unittest.TestCase):
+    """M after græs: the afgrøde's own override, from Afgrødetabel 14-10 (Prod vers 2)."""
+
+    def test_kartofler_after_graes_are_m12(self) -> None:
+        self.assertEqual(_resolve_m(KARTOFLER, KARTOFLER_PARAMS, GRAES), 12)
+
+    def test_kartofler_otherwise_keep_their_own_m(self) -> None:
+        self.assertEqual(_resolve_m(KARTOFLER, KARTOFLER_PARAMS, VINTERHVEDE), 2)
+
+    def test_vaarrug_helsaed_after_graes_is_m12(self) -> None:
+        self.assertEqual(_resolve_m(VAARRUG_HELSAED, {"M": 2}, GRAES), 12)
 
 
 @patch("app.services.nles5.bridge_v2.afgroede_normer.lookup_crop_params", _lookup)
@@ -85,12 +103,12 @@ class ResolveWTest(unittest.TestCase):
 
     def test_fixed_w_beats_vintersaed_sown_after_the_afgroede(self) -> None:
         w = _resolve_w(KARTOFLER, KARTOFLER_PARAMS, VINTERHVEDE, VINTERHVEDE_PARAMS, None)
-        self.assertEqual(w, 6)
+        self.assertEqual(w, 3)
 
     def test_fixed_w_beats_an_efterafgroede(self) -> None:
         self.assertEqual(_resolve_w(MAJS, MAJS_PARAMS, VAARBYG, VAARBYG_PARAMS, 968), 3)
         self.assertEqual(
-            _resolve_w(KARTOFLER, KARTOFLER_PARAMS, VAARBYG, VAARBYG_PARAMS, 968), 6
+            _resolve_w(KARTOFLER, KARTOFLER_PARAMS, VAARBYG, VAARBYG_PARAMS, 968), 3
         )
 
     def test_efterafgroede_after_an_afgroede_without_fixed_w(self) -> None:
