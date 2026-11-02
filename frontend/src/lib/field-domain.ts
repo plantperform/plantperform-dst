@@ -375,6 +375,7 @@ export const changedFieldIds = (
 export const withoutCalculation = (fields: FieldRecord[]): FieldRecord[] =>
   fields.map((field) => ({
     ...field,
+    cropRotation: [],
     rotationId: null,
     db2: 0,
     nLoad: 0,

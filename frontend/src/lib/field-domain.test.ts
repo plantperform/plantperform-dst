@@ -418,10 +418,25 @@ describe('N-norm level per mark', () => {
 describe('withoutCalculation', () => {
   it('clears the farm figures so the marker show as not calculated', () => {
     const [cleared] = withoutCalculation([
-      field({ id: 'a', db2: 500, nLoad: 40, leaching: 30, feedUnits: 900 }),
+      field({
+        id: 'a',
+        cropRotation: [
+          {
+            cropCode: 11,
+            cropName: 'Vinterhvede',
+            undersownCropCode: null,
+            undersownCropName: null,
+          },
+        ],
+        db2: 500,
+        nLoad: 40,
+        leaching: 30,
+        feedUnits: 900,
+      }),
     ])
     expect(cleared).toMatchObject({
       id: 'a',
+      cropRotation: [],
       rotationId: null,
       db2: 0,
       nLoad: 0,
