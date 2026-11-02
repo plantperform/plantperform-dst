@@ -39,6 +39,7 @@ import {
   NUM_ROTATION_YEARS,
   QUOTA_STATUS_LABELS,
   QUOTA_STATUS_STYLES,
+  quotaLineHeightPct,
   quotaStatusLevel,
   resolveFarmQuota,
   summarizeCropDistribution,
@@ -66,8 +67,6 @@ const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 const COMPACT_VIEWPORT_HEIGHT = 960
 
 const NO_ROTATION_OPTIONS: RotationOption[] = []
-
-const QUOTA_LINE_PCT = 34
 
 type PanelView = 'nLoad' | CropShareLevel | 'rotation'
 
@@ -148,8 +147,19 @@ const catchmentYearLevel = (
   return yearFieldCount < expectedFieldCount ? 'partial' : level
 }
 
-const barWidthClass = (count: number): string =>
-  count > 6 ? 'w-1.5' : count > 4 ? 'w-2.5' : count > 3 ? 'w-3' : 'w-4'
+const WIDE_BAR_YEAR_COUNT = 4
+
+const barWidthClass = (count: number, wide: boolean): string => {
+  if (!wide) {
+    return count > 6 ? 'w-1.5' : count > 4 ? 'w-2.5' : count > 3 ? 'w-3' : 'w-4'
+  }
+  return cn(
+    'min-w-1.5 flex-1',
+    count > 4 ? 'max-w-[22px]' : count > 2 ? 'max-w-8' : 'max-w-10',
+  )
+}
+
+const quotaRatio = (row: CatchmentYear): number => row.nLoadKg / row.quotaKgN
 
 const describeYearQuota = (
   quotaCatchmentCount: number,
@@ -176,14 +186,20 @@ type QuotaBarProps = {
   title: string
   colorClass: string
   widthClass: string
+  quotaLinePct: number
 }
 
-const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
+const QuotaBar = ({
+  row,
+  title,
+  colorClass,
+  widthClass,
+  quotaLinePct,
+}: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
-  const ratio = row.nLoadKg / row.quotaKgN
-  const heightPct = Math.min(100, ratio * QUOTA_LINE_PCT)
-  const overPct =
-    ratio > 1 ? ((heightPct - QUOTA_LINE_PCT) / heightPct) * 100 : 0
+  const ratio = quotaRatio(row)
+  const heightPct = Math.min(100, ratio * quotaLinePct)
+  const overPct = ratio > 1 ? ((heightPct - quotaLinePct) / heightPct) * 100 : 0
   return (
     <AppTooltip content={title}>
       <span
@@ -888,7 +904,17 @@ export const YearWalkthrough = ({
       catchmentYears(column.entry).some((row) => row.level === 'over'),
   ).length
   const barAreaHeight = compact ? 'h-24' : 'h-[124px]'
-  const barWidth = barWidthClass(catchments.length)
+  const wideBars = columns.length <= WIDE_BAR_YEAR_COUNT
+  const barWidth = barWidthClass(catchments.length, wideBars)
+  const quotaLinePct = quotaLineHeightPct(
+    columns.flatMap((column) =>
+      column.entry
+        ? catchmentYears(column.entry)
+            .filter((row) => row.quotaKgN > 0)
+            .map(quotaRatio)
+        : [],
+    ),
+  )
   const periodLabel =
     columns.length > 0
       ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
@@ -1124,15 +1150,13 @@ export const YearWalkthrough = ({
             ))}
             {quotaCatchmentCount > 0 ? (
               <>
-                {quotaCatchmentCount === 1 ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      aria-hidden="true"
-                      className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
-                    />
-                    Oplandets kvote
-                  </span>
-                ) : null}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
+                  />
+                  {quotaCatchmentCount === 1 ? 'Oplandets kvote' : 'Egen kvote'}
+                </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
@@ -1178,6 +1202,9 @@ export const YearWalkthrough = ({
                 const isSelected = selectedYearIndex === column.index
                 const entry = column.entry
                 const rows = entry ? catchmentYears(entry) : []
+                const overCount = rows.filter(
+                  (row) => row.level === 'over',
+                ).length
                 const title = yearTitle(column)
                 const tabIndex = yearTabIndex(position)
                 const dimmed = selectedPosition >= 0 && !isSelected
@@ -1206,14 +1233,15 @@ export const YearWalkthrough = ({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          'relative flex w-full items-end justify-center gap-1 border-b border-border/70',
+                          'relative flex w-full items-end justify-center border-b border-border/70',
+                          wideBars ? 'gap-1.5 px-[8%]' : 'gap-1',
                           barAreaHeight,
                         )}
                       >
-                        {quotaCatchmentCount === 1 ? (
+                        {quotaCatchmentCount > 0 && !loading ? (
                           <span
-                            className="pointer-events-none absolute inset-x-0 z-20 border-t-[1.5px] border-dashed border-foreground/45"
-                            style={{ bottom: `${QUOTA_LINE_PCT}%` }}
+                            className="pointer-events-none absolute inset-x-0 z-20 border-t-[1.5px] border-dashed border-foreground/45 motion-safe:transition-[bottom] motion-safe:duration-300"
+                            style={{ bottom: `${quotaLinePct}%` }}
                           />
                         ) : null}
                         {loading
@@ -1241,6 +1269,7 @@ export const YearWalkthrough = ({
                                   row.catchment.catchmentId,
                                 )}
                                 widthClass={barWidth}
+                                quotaLinePct={quotaLinePct}
                               />
                             ))}
                       </span>
@@ -1255,20 +1284,30 @@ export const YearWalkthrough = ({
                       >
                         {column.calendarYear}
                       </span>
-                      {history ? null : (
-                        <span
-                          aria-hidden="true"
-                          className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
-                        >
-                          {loading ? (
-                            <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
-                          ) : entry ? (
-                            `DB2 ${formatCompactDkk(entry.totalDb2)}`
-                          ) : (
-                            '-'
-                          )}
-                        </span>
-                      )}
+                      <span
+                        aria-hidden="true"
+                        className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+                      >
+                        {loading ? (
+                          <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
+                        ) : !entry ? (
+                          '-'
+                        ) : history ? (
+                          <>
+                            {formatWholeNumber(entry.totalNLoadKg)} kg N
+                            {overCount > 0 ? (
+                              <span className={QUOTA_STATUS_STYLES.over.text}>
+                                {' · '}
+                                {quotaCatchmentCount === 1
+                                  ? 'over kvoten'
+                                  : `${overCount} ${overCount === 1 ? 'opland' : 'oplande'} over kvoten`}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          `DB2 ${formatCompactDkk(entry.totalDb2)}`
+                        )}
+                      </span>
                     </button>
                   </AppTooltip>
                 )

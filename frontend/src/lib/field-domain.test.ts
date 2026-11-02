@@ -17,6 +17,7 @@ import {
   formatPerHa,
   formatSigned,
   formatWholeNumber,
+  quotaLineHeightPct,
   summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
@@ -149,6 +150,15 @@ describe('changedFieldIds', () => {
       }),
     ]
     expect(changedFieldIds(simulation, history)).toEqual(new Set(['other']))
+  })
+})
+
+describe('quotaLineHeightPct', () => {
+  it('lifts the quota line until the highest bar fills the chart', () => {
+    expect(quotaLineHeightPct([0.6, 0.9])).toBe(70)
+    expect(quotaLineHeightPct([0.8, 2])).toBe(44)
+    expect(quotaLineHeightPct([1, 4])).toBe(34)
+    expect(quotaLineHeightPct([])).toBe(70)
   })
 })
 
