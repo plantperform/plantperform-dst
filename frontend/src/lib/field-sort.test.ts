@@ -174,4 +174,21 @@ describe('compareFields', () => {
       expect(sorted.map(({ id }) => id)).toEqual(expected[direction])
     }
   })
+
+  it('sorts by sædskifte nr. as numbers, with no sædskifte last', () => {
+    const fields = [
+      { ...field('none', 1, 0), rotationId: null },
+      { ...field('permanent', 1, 0), rotationId: 'permanent:252:100' },
+      { ...field('315', 1, 0), rotationId: '315:4:80' },
+      { ...field('32', 1, 0), rotationId: '32:1:100' },
+    ]
+    const idsSortedBy = (direction: 'asc' | 'desc') =>
+      [...fields]
+        .sort((left, right) =>
+          compareFields(left, right, { key: 'rotationVariant', direction }),
+        )
+        .map(({ id }) => id)
+    expect(idsSortedBy('asc')).toEqual(['32', '315', 'permanent', 'none'])
+    expect(idsSortedBy('desc')).toEqual(['permanent', '315', '32', 'none'])
+  })
 })

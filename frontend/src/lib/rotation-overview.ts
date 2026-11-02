@@ -27,6 +27,11 @@ export type RotationShare = {
 export const rotationVariantOf = (rotationId: string): string =>
   rotationId.split(':')[0]
 
+export const fieldRotationVariant = (
+  field: Pick<FieldRecord, 'rotationId'>,
+): string | null =>
+  field.rotationId === null ? null : rotationVariantOf(field.rotationId)
+
 export const rotationKey = (rotationVariant: string | null): string =>
   rotationVariant ?? NO_ROTATION_KEY
 
@@ -72,8 +77,7 @@ export const summarizeRotationDistribution = (
   >()
   let totalHa = 0
   for (const field of fields) {
-    const variant =
-      field.rotationId === null ? null : rotationVariantOf(field.rotationId)
+    const variant = fieldRotationVariant(field)
     const totals = totalsByVariant.get(variant) ?? { areaHa: 0, fieldCount: 0 }
     totals.areaHa += field.areaHa
     totals.fieldCount += 1

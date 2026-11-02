@@ -50,6 +50,10 @@ import {
   type NNormLevel,
   type NNormLevelText,
 } from '@/lib/n-norm-level'
+import {
+  fieldRotationVariant,
+  PERMANENT_ROTATION,
+} from '@/lib/rotation-overview'
 import { textWidth } from '@/lib/text-width'
 import { cn } from '@/lib/utils'
 
@@ -691,6 +695,35 @@ export const buildFarmFieldsColumns = ({
       ],
     },
   })
+
+  if (isSimulationView) {
+    const rotationVariantText = (field: FieldRecord) => {
+      const variant = fieldRotationVariant(field)
+      return variant === PERMANENT_ROTATION ? 'Permanent' : variant
+    }
+    list.push({
+      id: 'rotationVariant',
+      accessorFn: fieldRotationVariant,
+      header: ({ column }) => (
+        <SortableColumnHeaderContent
+          label="Sædskifte nr."
+          align="right"
+          column={column}
+        />
+      ),
+      cell: ({ row }) =>
+        rotationVariantText(row.original) ?? (
+          <span className="text-muted-foreground">-</span>
+        ),
+      footer: () => null,
+      meta: {
+        headerClassName: cn(NUMERIC_HEADER_CLASS, 'whitespace-nowrap'),
+        cellClassName: NUMERIC_CELL_CLASS,
+        toggleLabel: 'Sædskifte nr.',
+        widthHints: [(field) => textWidth(rotationVariantText(field) ?? '-')],
+      },
+    })
+  }
 
   list.push({
     id: 'cropCode',
