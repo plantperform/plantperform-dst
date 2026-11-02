@@ -8,7 +8,10 @@ import type {
   YearlyOptimizeSimulationInput,
 } from '@/api/types'
 import type { CropAreaViolation } from '@/lib/crop-area-limits'
-import type { OptimizationChanges } from '@/lib/optimization-run'
+import type {
+  OptimizationChanges,
+  OptimizationKind,
+} from '@/lib/optimization-run'
 import {
   optimizeSimulationInput,
   yearlyOptimizeSimulationInput,
@@ -91,16 +94,23 @@ export const useOptimizationRunActions = () => {
   return { startRun, dismissRun, markStale }
 }
 
-const DEFAULT_OPTIMIZATION_REQUEST: OptimizationRunRequest = {
-  kind: 'optimize',
-  input: {},
-}
+export const defaultOptimizationRequest = (
+  kind: OptimizationKind | undefined,
+): OptimizationRunRequest =>
+  kind === 'yearly'
+    ? { kind: 'yearly', input: {} }
+    : { kind: 'optimize', input: {} }
 
 export const useStartDefaultOptimization = () => {
   const { startRun } = useOptimizationRunActions()
-  return (farmId: string, simulationId: string, fieldsBefore: FieldRecord[]) =>
+  return (
+    farmId: string,
+    simulationId: string,
+    fieldsBefore: FieldRecord[],
+    kind: OptimizationKind | undefined,
+  ) =>
     startRun({
-      ...DEFAULT_OPTIMIZATION_REQUEST,
+      ...defaultOptimizationRequest(kind),
       farmId,
       simulationId,
       fieldsBefore,

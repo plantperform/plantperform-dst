@@ -424,6 +424,7 @@ export const FarmInspector = ({
             <OptimizationBanner
               farmId={farm.id}
               simulationId={selectedSimulation.id}
+              optimizationKind={selectedSimulation.optimizationSettings?.kind}
               run={optimizationRun}
               fields={fieldsLoading || fieldsError ? undefined : fields}
             />
