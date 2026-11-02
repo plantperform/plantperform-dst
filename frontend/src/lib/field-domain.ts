@@ -453,6 +453,19 @@ export const quotaStatusLevel = (
   return 'ok'
 }
 
+const MIN_QUOTA_LINE_PCT = 34
+const MAX_QUOTA_LINE_PCT = 70
+const HIGHEST_QUOTA_BAR_PCT = 88
+
+export const quotaLineHeightPct = (quotaRatios: number[]): number =>
+  Math.min(
+    MAX_QUOTA_LINE_PCT,
+    Math.max(
+      MIN_QUOTA_LINE_PCT,
+      HIGHEST_QUOTA_BAR_PCT / Math.max(0, ...quotaRatios),
+    ),
+  )
+
 export const aggregateQuotaStatusLevel = (
   nLoad: number,
   quotaKgn: number,
