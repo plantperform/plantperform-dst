@@ -37,6 +37,10 @@ export const rotationLabel = (rotationVariant: string | null): string =>
       ? 'Permanente sædskifter'
       : `Sædskifte ${rotationVariant}`
 
+// The crops of a rotation in the order of the years: "1. Vinterhvede → 2. Vårbyg".
+export const cropSequenceText = (cropSequence: string[]): string =>
+  cropSequence.map((crop, index) => `${index + 1}. ${crop}`).join(' → ')
+
 // A rotation can be listed under more than one category; keep the first.
 export const rotationOptionsOf = (
   categories: RotationCategoryOption[],
@@ -101,6 +105,20 @@ export const summarizeRotationDistribution = (
       })
     )
   })
+}
+
+// The crops of the rotation a field follows, null when the field has no
+// rotation or the rotation is not among the options.
+export const cropSequenceOf = (
+  rotationId: string | null,
+  shares: RotationShare[],
+): string[] | null => {
+  if (rotationId === null) return null
+  const rotationVariant = rotationVariantOf(rotationId)
+  return (
+    shares.find((share) => share.rotationVariant === rotationVariant)
+      ?.cropSequence ?? null
+  )
 }
 
 const ROTATION_COLORS = [

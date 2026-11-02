@@ -2,6 +2,12 @@ import type { ExpressionSpecification } from 'maplibre-gl'
 
 import { BRAND_COLORS, UI_COLORS } from '@/lib/brand-colors'
 import { CROP_GROUP_INDEX, presentCropGroups } from '@/lib/crop-groups'
+import {
+  NO_ROTATION_COLOR,
+  rotationKey,
+  rotationLabel,
+  type RotationShare,
+} from '@/lib/rotation-overview'
 
 export type ColorAttribute =
   | 'none'
@@ -12,6 +18,7 @@ export type ColorAttribute =
   | 'nLoadLimitKgNHa'
   | 'db2'
   | 'catchment'
+  | 'rotation'
   | 'rotationChanged'
   | 'inTakeoutPlan'
   | 'quotaEligible'
@@ -57,7 +64,7 @@ type NumericBin = {
 }
 
 type CategoryBin = {
-  value: number
+  value: number | string
   color: string
   label: string
 }
@@ -417,8 +424,30 @@ export const buildYearCropSpec = (
   }
 }
 
+// One colour per sædskifte, the same as in the Sædskifter tab. The shares and
+// colours are the whole farm's, so a field keeps its colour whatever the scope.
+export const buildRotationSpec = (
+  shares: RotationShare[],
+  colors: Map<string, string>,
+): CategorySpec => ({
+  kind: 'category',
+  label: 'Sædskifte',
+  unit: '',
+  source: 'farm',
+  property: 'rotationVariant',
+  bins: shares.map((share) => {
+    const key = rotationKey(share.rotationVariant)
+    return {
+      value: key,
+      color: colors.get(key) ?? NO_ROTATION_COLOR,
+      label: rotationLabel(share.rotationVariant),
+    }
+  }),
+  fallbackColor: NO_ROTATION_COLOR,
+})
+
 export const COLOR_SPECS: Record<
-  Exclude<ColorAttribute, 'none' | 'yearCrop'>,
+  Exclude<ColorAttribute, 'none' | 'yearCrop' | 'rotation'>,
   ColorSpec
 > = {
   retention: RETENTION,
@@ -444,6 +473,7 @@ export const ATTRIBUTE_OPTIONS: { value: ColorAttribute; label: string }[] = [
   { value: 'nLoad', label: 'Udledning' },
   { value: 'db2', label: 'DB2' },
   { value: 'catchment', label: 'Vandopland' },
+  { value: 'rotation', label: 'Sædskifte' },
   { value: 'rotationChanged', label: 'Ændret sædskifte' },
   { value: 'inTakeoutPlan', label: 'Omlægning' },
   { value: 'quotaEligible', label: 'Kvotegivende areal' },
@@ -606,6 +636,18 @@ export const toFiniteNumber = (raw: unknown): number | null => {
   return value !== null && Number.isFinite(value) ? value : null
 }
 
+// A bin matches the raw value as it is, or as a number: a property such as the
+// sædskifte is a string, the others are numbers that may arrive as strings.
+const categoryBinFor = (
+  spec: CategorySpec,
+  raw: unknown,
+): CategoryBin | undefined => {
+  const value = toFiniteNumber(raw)
+  return spec.bins.find(
+    (bin) => bin.value === raw || (value !== null && bin.value === value),
+  )
+}
+
 export const describeSpecValue = (
   spec: ColorSpec,
   raw: unknown,
@@ -613,11 +655,9 @@ export const describeSpecValue = (
   if (spec.kind === 'hashed') {
     return raw === null || raw === undefined || raw === '' ? null : String(raw)
   }
+  if (spec.kind === 'category') return categoryBinFor(spec, raw)?.label ?? null
   const value = toFiniteNumber(raw)
   if (value === null) return null
-  if (spec.kind === 'category') {
-    return spec.bins.find((bin) => bin.value === value)?.label ?? null
-  }
   const formatted = formatNumber.format(value)
   return spec.unit ? `${formatted} ${spec.unit}` : formatted
 }
@@ -642,11 +682,10 @@ export const specColorFor = (spec: ColorSpec, raw: unknown): string | null => {
       : (HASHED_COLORS_BY_PROPERTY[spec.property]?.get(value) ??
           spec.fallbackColor)
   }
-  if (value === null) return spec.fallbackColor
   if (spec.kind === 'category') {
-    return spec.bins.find((bin) => bin.value === value)?.color ?? spec.fallbackColor
+    return categoryBinFor(spec, raw)?.color ?? spec.fallbackColor
   }
-  if (value < 0) return spec.fallbackColor
+  if (value === null || value < 0) return spec.fallbackColor
   const sortedBins = [...spec.bins].sort((a, b) => a.max - b.max)
   return sortedBins.find((bin) => value < bin.max)?.color ?? spec.aboveColor
 }

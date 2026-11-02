@@ -9,6 +9,7 @@ import {
   quotaStatusLevel,
 } from '@/lib/field-domain'
 import { YEAR_QUOTA_STATUS_VALUES } from '@/lib/map-coloring'
+import { NO_ROTATION_KEY, rotationVariantOf } from '@/lib/rotation-overview'
 
 // A selected year's values. With them, Udvaskning and Udledning colour the
 // map by that year instead of the field's average.
@@ -282,6 +283,10 @@ export const fieldsToFeatureCollection = (
           ),
           nLoad: quotaValue(yearNLoadKgHa, field.nLoad),
           db2: field.economicsMissing ? null : perHa(field.db2),
+          rotationVariant:
+            field.rotationId === null
+              ? NO_ROTATION_KEY
+              : rotationVariantOf(field.rotationId),
           rotationChanged: changedFieldIds?.has(field.id) ? 1 : 0,
           inTakeoutPlan: field.inTakeoutPlan !== 'nej' ? 1 : 0,
           quotaEligible: field.quotaEligible ? 1 : 0,

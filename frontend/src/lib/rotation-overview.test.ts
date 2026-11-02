@@ -7,6 +7,8 @@ import type {
 } from '@/api/types'
 import { emptyMeasures } from '@/lib/field-domain'
 import {
+  cropSequenceOf,
+  cropSequenceText,
   NO_ROTATION_COLOR,
   rotationColorsOf,
   rotationKey,
@@ -76,6 +78,58 @@ describe('rotationKey', () => {
   it('keeps the rotation and gives the fields without one their own key', () => {
     expect(rotationKey('315')).toBe('315')
     expect(rotationKey(null)).toBe('none')
+  })
+})
+
+describe('cropSequenceText', () => {
+  it('numbers the crops in the order of the years', () => {
+    expect(cropSequenceText(['Vinterhvede', 'Vårbyg'])).toBe(
+      '1. Vinterhvede → 2. Vårbyg',
+    )
+  })
+
+  it('numbers a crop that comes back once for each year', () => {
+    expect(cropSequenceText(['Vårbyg', 'Raps', 'Vårbyg'])).toBe(
+      '1. Vårbyg → 2. Raps → 3. Vårbyg',
+    )
+  })
+
+  it('is empty for a rotation without crops', () => {
+    expect(cropSequenceText([])).toBe('')
+  })
+})
+
+describe('cropSequenceOf', () => {
+  const shares = summarizeRotationDistribution(
+    [
+      field({ id: 'a', rotationId: '315:4:80' }),
+      field({ id: 'b', rotationId: '999:1:80' }),
+      field({ id: 'c', rotationId: null }),
+    ],
+    rotations,
+  )
+
+  it('gives the crops of the rotation a field follows, whichever candidate it is', () => {
+    expect(cropSequenceOf('315:4:80', shares)).toEqual([
+      'Vinterhvede',
+      'Vårbyg',
+    ])
+    expect(cropSequenceOf('315:7:100', shares)).toEqual([
+      'Vinterhvede',
+      'Vårbyg',
+    ])
+  })
+
+  it('has none for a field without a rotation', () => {
+    expect(cropSequenceOf(null, shares)).toBeNull()
+  })
+
+  it('has none for a rotation missing from the options', () => {
+    expect(cropSequenceOf('999:1:80', shares)).toBeNull()
+  })
+
+  it('has none for a rotation that no field of the farm follows', () => {
+    expect(cropSequenceOf('42:1:90', shares)).toBeNull()
   })
 })
 
