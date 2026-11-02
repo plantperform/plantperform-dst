@@ -78,11 +78,11 @@ export const RotationDistribution = ({
     }))
     .filter(({ entry }) => entry.share > 0)
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 @lg:flex-row @lg:gap-3 @xl:gap-5">
       <svg
         aria-hidden="true"
         viewBox="0 0 100 100"
-        className="size-28 shrink-0 @md:size-36"
+        className="size-28 shrink-0 @lg:sticky @lg:top-0 @lg:self-start @xl:size-36"
         onMouseLeave={() => setHovered(null)}
       >
         {arcs.map(({ entry, length, offset: start }) => (
@@ -129,7 +129,10 @@ export const RotationDistribution = ({
           {active ? shortShareLabel(active) : 'i alt'}
         </text>
       </svg>
-      <ul aria-label="Sædskifter" className="flex w-full flex-col">
+      <ul
+        aria-label="Sædskifter"
+        className="flex w-full min-w-0 flex-col @lg:w-auto @lg:flex-1"
+      >
         {shares.map((entry) => {
           const withoutRotation = entry.rotationVariant === null
           const color = colorOf(entry)
@@ -174,18 +177,6 @@ export const RotationDistribution = ({
                     {entry.cropSequence.join(' → ')}
                   </p>
                 ) : null}
-                <span
-                  aria-hidden="true"
-                  className="h-1 overflow-hidden rounded-full bg-muted"
-                >
-                  <span
-                    className="block h-full rounded-full"
-                    style={{
-                      width: `${entry.share * 100}%`,
-                      backgroundColor: color,
-                    }}
-                  />
-                </span>
               </li>
             </AppTooltip>
           )
