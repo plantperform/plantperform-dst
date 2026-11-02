@@ -71,6 +71,14 @@ def large_metadata():
     return metadata
 
 
+def load_migration(filename):
+    path = Path(__file__).parents[1] / "database/migrations/versions" / filename
+    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
 class ProjectionTests(unittest.TestCase):
     def test_compact_metadata_matches_full_area_bounds_and_lock_fallbacks(self):
         for active_len in (0, 1, 2, 3, 8):
@@ -336,6 +344,13 @@ class ProjectionTests(unittest.TestCase):
             ),
             expected_totals,
         )
+
+    def test_history_totals_are_keyed_by_the_three_history_years(self):
+        history = SimpleNamespace(years=rich_candidate().years[:3], active_len=3)
+        totals = read_models.yearly_totals(
+            [field("history")], {"history": read_models.compact_years(history)}, history=True
+        )
+        self.assertEqual([total["year"] for total in totals], [2024, 2025, 2026])
 
 
 class ReadModelTests(DatabaseTests):
@@ -1278,12 +1293,7 @@ class ReadModelTests(DatabaseTests):
         self.assertEqual(read_model_store.get_simulation_view("farm", "sim", EMAIL), before)
 
     def test_migration_round_trip_preserves_source_and_does_not_calculate(self):
-        path = (
-            Path(__file__).parents[1] / "database/migrations/versions/20261012_0002_read_models.py"
-        )
-        spec = importlib.util.spec_from_file_location("read_model_migration", path)
-        migration = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(migration)
+        migration = load_migration("20261012_0002_read_models.py")
         with self.engine.begin() as connection:
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
@@ -1292,3 +1302,19 @@ class ReadModelTests(DatabaseTests):
             self.assertIn("field_historical_detail", inspect(connection).get_table_names())
             self.assertIsNone(connection.execute(select(views.c.data)).scalar_one())
             self.assertEqual(connection.execute(select(farm_views.c.status)).scalar_one(), "queued")
+
+    def test_three_year_history_migration_recalculates_each_farm_on_its_next_load(self):
+        read_model_worker.execute(self.history_inputs(), CONTEXT)
+        migration = load_migration("20261102_0001_three_year_crop_history.py")
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.upgrade()
+        read_model_store.recover_local_preparations()
+        view = read_model_store.get_farm_view("farm", EMAIL)
+        self.assertEqual((view["status"], view["data"]), ("queued", None))
+        with self.assertRaises(ReadModelNotReadyError):
+            repository.get_field_historical_years("farm", "history-0", EMAIL)
+        calculated = self.years.call_count
+        response = TestClient(main.app).get("/api/v0/farms/farm/view")
+        self.assertEqual(response.json()["status"], "done")
+        self.assertEqual(self.years.call_count, calculated + 2)

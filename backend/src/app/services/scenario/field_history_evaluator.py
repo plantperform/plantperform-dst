@@ -1,5 +1,5 @@
 """Evaluate a mark's "Aktuel" state (DB2/udvaskning/FEN) from its actual
-crop_history (2017-2026) and historical gødning allocation (Bilag 3), without a
+crop_history (2022-2026) and historical gødning allocation (Bilag 3), without a
 scenarie/gødning slider. Used to populate FieldRecord.db2/n_load/leaching/fen
 through "Tilføj marker" instead of the former hard-coded zeros.
 
@@ -48,10 +48,10 @@ from app.services.rotations.historical_secondary_crop import (
 )
 from app.services.rotations.historisk_goedning import lookup_historisk_n_input
 
-# Latest year with actual crop_history. The eight positions are the eight years
-# through this year (2019-2026), so position 0 (2019) still has two actual prior
-# years (2018, 2017) for f1/f2/g1/g2/m1/m2.
+# The history covers these years. The first year (2024) still has two actual
+# prior years (2023, 2022) for f1/f2/g1/g2/m1/m2.
 REAL_HISTORY_END_YEAR = 2026
+REAL_HISTORY_YEARS = range(2024, REAL_HISTORY_END_YEAR + 1)
 
 
 def _history_n_input(
@@ -99,11 +99,9 @@ def evaluate_real_history_for_field(
         reported = (secondary_crop_history or {}).get(str(year))
         return historical_secondary_crop(reported, code_for(year), code_for(year + 1))
 
-    start_year = REAL_HISTORY_END_YEAR - 7  # 2019
     years: list[RotationCandidateYearResult] = []
 
-    for i in range(8):
-        this_year = start_year + i
+    for this_year in REAL_HISTORY_YEARS:
         prev_year, prev2_year = this_year - 1, this_year - 2
         this_code = code_for(this_year)
         prev_code = code_for(prev_year)

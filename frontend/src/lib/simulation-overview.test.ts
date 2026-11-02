@@ -56,10 +56,10 @@ describe('summarizeCatchmentYearStatuses', () => {
 
   it('keeps the calendar years of the crop history', () => {
     const totals: CatchmentTotalsByYear = new Map([
-      [7, years({ 2019: [80, 100], 2021: [105, 100] })],
+      [7, years({ 2024: [80, 100], 2026: [105, 100] })],
     ])
     expect(summarizeCatchmentYearStatuses(totals, true)).toEqual([
-      { catchmentId: 7, level: 'over', overYears: [2021] },
+      { catchmentId: 7, level: 'over', overYears: [2026] },
     ])
   })
 

@@ -122,7 +122,7 @@ def prepare(simulation, fields, setup_fields, contexts):
                 setup["fixed"] = {
                     "crop_rotation": [y.year.model_dump(mode="json") for y in selected.years],
                     "rotation_id": selected.ref.to_id(),
-                    **repository._locked_candidate_figures(field, selected),
+                    **repository._candidate_figures(field, selected),
                 }
         # Old valuations and winners are historical outputs, never new alternatives.
         setup.pop("economics_candidate", None)

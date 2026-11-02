@@ -101,10 +101,11 @@ export const yearNLoadKgHa = (
 ): number => leachingKgNHa * (1 - (retention ?? 0) / 100)
 
 // Starting calendar year for the actual history in the "Aktuel" field overview
-// (must match field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7 in the
-// backend). The eight positions are the field's actual 2019-2026 crops, not a
+// (must match field_history_evaluator.py::REAL_HISTORY_YEARS in the backend).
+// The three positions are the field's actual 2024-2026 crops, not a
 // forward-looking scenario rotation.
-export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
+export const REAL_HISTORY_START_CALENDAR_YEAR = 2024
+export const NUM_HISTORY_YEARS = 3
 
 export const firstCalendarYear = (history: boolean): number =>
   history ? REAL_HISTORY_START_CALENDAR_YEAR : ROTATION_START_CALENDAR_YEAR
@@ -334,13 +335,20 @@ export const groupRotationsByCategory = (
   return groups
 }
 
+const sameRotationYear = (left: RotationYear, right: RotationYear) =>
+  left.cropCode === right.cropCode &&
+  left.undersownCropCode === right.undersownCropCode
+
 export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>
   left.length === right.length &&
-  left.every(
-    (year, index) =>
-      year.cropCode === right[index].cropCode &&
-      year.undersownCropCode === right[index].undersownCropCode,
-  )
+  left.every((year, index) => sameRotationYear(year, right[index]))
+
+const repeatsHistory = (rotation: RotationYear[], history: RotationYear[]) =>
+  rotation.length === 0 || history.length === 0
+    ? rotation.length === history.length
+    : rotation.every((year, index) =>
+        sameRotationYear(year, history[index % history.length]),
+      )
 
 export const changedFieldIds = (
   viewFields: FieldRecord[],
@@ -359,7 +367,7 @@ export const changedFieldIds = (
     const liveRotation = liveRotationByImk.get(field.imkId)
     if (!liveRotation) continue
     if (
-      !rotationsEqual(field.cropRotation, liveRotation) ||
+      !repeatsHistory(field.cropRotation, liveRotation) ||
       !measuresEqual(field.measures, emptyMeasures())
     ) {
       changed.add(field.id)

@@ -8,10 +8,10 @@ import type {
 import { COST_CATEGORIES, formatDbDkk, formatSignedDkk } from '@/lib/economics'
 import {
   formatFieldCount,
-  formatSigned,
   formatWholeNumber,
   groupFieldsByCatchment,
   isFieldCalculated,
+  NUM_HISTORY_YEARS,
   NUM_ROTATION_YEARS,
   perHa,
   perHaUnit,
@@ -33,6 +33,8 @@ import {
 export const MAX_COMPARED_SIMULATIONS = 3
 
 export const COMPARISON_PERIOD = `${ROTATION_START_CALENDAR_YEAR}-${ROTATION_START_CALENDAR_YEAR + NUM_ROTATION_YEARS - 1}`
+
+export const HISTORY_PERIOD = `${REAL_HISTORY_START_CALENDAR_YEAR}-${REAL_HISTORY_START_CALENDAR_YEAR + NUM_HISTORY_YEARS - 1}`
 
 export const parseComparisonIds = (value: string | null): string[] =>
   (value ?? '')
@@ -373,9 +375,6 @@ export const sortComparison = <T extends SortCandidate>(
 }
 
 export const formatYears = (count: number): string => `${count} år`
-
-export const formatYearsDelta = (difference: number): string =>
-  `${formatSigned(difference, String)} år`
 
 export type ComparisonVerdictInput = {
   best: { title: string; yearsOver: number | null }

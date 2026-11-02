@@ -7,6 +7,7 @@ from app.domain.read_model import EconomicsStatement, FieldYearValue
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
+from app.services.scenario.field_history_evaluator import REAL_HISTORY_YEARS
 
 # The leaching detail keys the year strip needs to draw what covers the soil
 # after harvest.
@@ -226,7 +227,7 @@ def yearly_totals(fields, field_years, *, history=False):
     totals = {}
     for field in fields:
         for index, year in enumerate(field_years.get(field.id, [])):
-            key = 2019 + index if history else index + 1
+            key = REAL_HISTORY_YEARS.start + index if history else index + 1
             bucket = totals.setdefault(
                 key,
                 {
