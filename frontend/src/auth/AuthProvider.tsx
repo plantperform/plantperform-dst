@@ -35,6 +35,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   useEffect(() => {
+    if (!isLoading) document.getElementById('app-splash')?.remove()
+  }, [isLoading])
+
+  useEffect(() => {
     if (!user) return
     const refreshTimer = window.setInterval(() => {
       void refreshAccessToken()
