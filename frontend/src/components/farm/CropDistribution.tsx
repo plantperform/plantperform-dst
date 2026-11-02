@@ -1,6 +1,7 @@
 import { Fragment, useState, type CSSProperties } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { ShareDonut } from '@/components/farm/ShareDonut'
 import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { cropEdgeColor, shortCropName } from '@/lib/crop-groups'
@@ -15,16 +16,6 @@ import {
 import type { WinterCoverShare } from '@/lib/winter-cover-overview'
 import { cn } from '@/lib/utils'
 
-const DONUT_GAP = 0.8
-const DONUT_EDGE = 0.6
-// The crop ring gets thinner when the winter cover ring sits inside it, so the
-// hole in the middle keeps its size.
-const DONUT_RADIUS = 40
-const DONUT_WIDTH = 16
-const RINGED_DONUT_RADIUS = 44
-const RINGED_DONUT_WIDTH = 12
-const COVER_RING_RADIUS = 34.5
-const COVER_RING_WIDTH = 5
 const TWO_COLUMN_MIN_ROWS = 6
 const ROW_CLASS_NAME = 'col-span-4 grid grid-cols-subgrid px-1'
 
@@ -73,26 +64,6 @@ export const CropDistribution = ({
   const activeCover =
     winterCover.find((entry) => entry.id === hoveredCover) ?? null
   const ringed = winterCover.length > 0
-  const radius = ringed ? RINGED_DONUT_RADIUS : DONUT_RADIUS
-  const ringWidth = ringed ? RINGED_DONUT_WIDTH : DONUT_WIDTH
-  const circumference = 2 * Math.PI * radius
-  const coverCircumference = 2 * Math.PI * COVER_RING_RADIUS
-  const coverGap = winterCover.length > 1 ? DONUT_GAP : 0
-  const coverArcs: {
-    entry: WinterCoverShare
-    length: number
-    offset: number
-  }[] = []
-  let coverOffset = 0
-  for (const entry of winterCover) {
-    const length = entry.share * coverCircumference
-    coverArcs.push({
-      entry,
-      length: Math.max(length - coverGap, 0.5),
-      offset: coverOffset,
-    })
-    coverOffset += length
-  }
   const twoColumns = shares.length >= TWO_COLUMN_MIN_ROWS
   const firstColumnSize = twoColumns
     ? Math.ceil(shares.length / 2)
@@ -103,14 +74,6 @@ export const CropDistribution = ({
         ? '@sm:pr-2'
         : '@sm:border-l @sm:pl-2'
       : ''
-  const gap = shares.length > 1 ? DONUT_GAP : 0
-  const arcs: { entry: CropShare; length: number; offset: number }[] = []
-  let offset = 0
-  for (const entry of shares) {
-    const length = entry.share * circumference
-    arcs.push({ entry, length: Math.max(length - gap, 0.5), offset })
-    offset += length
-  }
   return (
     <div
       className={cn(
@@ -120,118 +83,54 @@ export const CropDistribution = ({
           : '@md:flex-row @md:gap-5',
       )}
     >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 100 100"
+      <ShareDonut
         className={cn(
           'size-28 shrink-0',
           twoColumns
             ? '@lg:sticky @lg:top-0 @lg:self-start @xl:size-36'
             : '@md:sticky @md:top-0 @md:self-start @md:size-36',
         )}
-        onMouseLeave={() => {
+        slices={shares.map((entry) => ({
+          id: entry.id,
+          share: entry.share,
+          color: entry.color,
+          edgeColor: cropEdgeColor(entry.color),
+        }))}
+        innerSlices={winterCover.map((entry) => ({
+          id: entry.id,
+          share: entry.share,
+          color: entry.color,
+          tooltip: `${entry.label} · ${formatNumber(entry.areaHa)} ha · ${formatShare(entry.share)}. ${entry.description}`,
+        }))}
+        hovered={hovered}
+        hoveredInner={hoveredCover}
+        onHover={(id) => {
+          setHovered(id)
+          setHoveredCover(null)
+        }}
+        onHoverInner={(id) => {
+          setHovered(null)
+          setHoveredCover(id)
+        }}
+        onLeave={() => {
           setHovered(null)
           setHoveredCover(null)
         }}
-      >
-        {arcs.map(({ entry, length, offset: start }) => {
-          // The fill arc sits inside a slightly wider arc in the edge colour,
-          // shortened at both ends, so every slice gets an outline.
-          const fillLength = Math.max(length - 2 * DONUT_EDGE, 0.25)
-          return (
-            <g
-              key={entry.id}
-              transform="rotate(-90 50 50)"
-              className={cn(
-                'motion-safe:transition-opacity',
-                hovered !== null && hovered !== entry.id && 'opacity-45',
-              )}
-              onMouseEnter={() => {
-                setHovered(entry.id)
-                setHoveredCover(null)
-              }}
-            >
-              <circle
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="none"
-                stroke={cropEdgeColor(entry.color)}
-                strokeWidth={ringWidth}
-                strokeDasharray={`${length} ${circumference - length}`}
-                strokeDashoffset={-start}
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="none"
-                stroke={entry.color}
-                strokeWidth={ringWidth - 2 * DONUT_EDGE}
-                strokeDasharray={`${fillLength} ${circumference - fillLength}`}
-                strokeDashoffset={-(start + DONUT_EDGE)}
-              />
-            </g>
-          )
-        })}
-        {coverArcs.map(({ entry, length, offset: start }) => (
-          <AppTooltip
-            key={entry.id}
-            content={`${entry.label} · ${formatNumber(entry.areaHa)} ha · ${formatShare(entry.share)}. ${entry.description}`}
-          >
-            <circle
-              cx="50"
-              cy="50"
-              r={COVER_RING_RADIUS}
-              fill="none"
-              stroke={entry.color}
-              strokeWidth={COVER_RING_WIDTH}
-              strokeDasharray={`${length} ${coverCircumference - length}`}
-              strokeDashoffset={-start}
-              transform="rotate(-90 50 50)"
-              className={cn(
-                'motion-safe:transition-opacity',
-                hoveredCover !== null &&
-                  hoveredCover !== entry.id &&
-                  'opacity-45',
-              )}
-              onMouseEnter={() => {
-                setHovered(null)
-                setHoveredCover(entry.id)
-              }}
-            />
-          </AppTooltip>
-        ))}
-        <text
-          x="50"
-          y="49"
-          textAnchor="middle"
-          fontSize="13"
-          fontWeight="600"
-          fill="currentColor"
-          className="tabular-nums"
-        >
-          {active
+        value={
+          active
             ? formatShare(active.share)
             : activeCover
               ? formatShare(activeCover.share)
-              : `${formatWholeNumber(totalHa)} ha`}
-        </text>
-        <text
-          x="50"
-          y="59"
-          textAnchor="middle"
-          fontSize="6.5"
-          fill="currentColor"
-          opacity="0.7"
-        >
-          {active
+              : `${formatWholeNumber(totalHa)} ha`
+        }
+        label={
+          active
             ? shortCropName(active.label)
             : activeCover
               ? shortCropName(activeCover.label)
-              : 'i alt'}
-        </text>
-      </svg>
+              : 'i alt'
+        }
+      />
       <div
         className={cn(
           'flex w-full min-w-0 flex-col gap-3',

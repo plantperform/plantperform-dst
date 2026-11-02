@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { ShareDonut } from '@/components/farm/ShareDonut'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   formatFieldCount,
@@ -17,11 +18,6 @@ import {
   type RotationShare,
 } from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
-
-const DONUT_RADIUS = 40
-const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
-const DONUT_GAP = 0.8
-const DONUT_WIDTH = 16
 
 const formatArea = (areaHa: number) =>
   areaHa > 0 && areaHa < 0.1 ? '< 0,1' : formatHectares(areaHa)
@@ -64,71 +60,28 @@ export const RotationDistribution = ({
   const colors = farmColors ?? rotationColorsOf(shares)
   const colorOf = (entry: RotationShare) =>
     colors.get(shareKey(entry)) ?? NO_ROTATION_COLOR
-  const gap = shares.length > 1 ? DONUT_GAP : 0
-  // Rows with no area have no slice, so a farm of zero ha gets an empty ring.
-  const arcs = shares
-    .map((entry, index) => ({
-      entry,
-      length: Math.max(entry.share * DONUT_CIRCUMFERENCE - gap, 0.5),
-      offset:
-        shares
-          .slice(0, index)
-          .reduce((sum, earlier) => sum + earlier.share, 0) *
-        DONUT_CIRCUMFERENCE,
-    }))
-    .filter(({ entry }) => entry.share > 0)
   return (
     <div className="flex flex-col items-center gap-3 @lg:flex-row @lg:gap-3 @xl:gap-5">
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 100 100"
+      <ShareDonut
         className="size-28 shrink-0 @lg:sticky @lg:top-0 @lg:self-start @xl:size-36"
-        onMouseLeave={() => setHovered(null)}
-      >
-        {arcs.map(({ entry, length, offset: start }) => (
-          <AppTooltip key={shareKey(entry)} content={shareTooltip(entry)}>
-            <circle
-              cx="50"
-              cy="50"
-              r={DONUT_RADIUS}
-              fill="none"
-              stroke={colorOf(entry)}
-              strokeWidth={DONUT_WIDTH}
-              strokeDasharray={`${length} ${DONUT_CIRCUMFERENCE - length}`}
-              strokeDashoffset={-start}
-              transform="rotate(-90 50 50)"
-              className={cn(
-                'motion-safe:transition-opacity',
-                hovered !== null && hovered !== shareKey(entry) && 'opacity-45',
-              )}
-              onMouseEnter={() => setHovered(shareKey(entry))}
-            />
-          </AppTooltip>
-        ))}
-        <text
-          x="50"
-          y="49"
-          textAnchor="middle"
-          fontSize="13"
-          fontWeight="600"
-          fill="currentColor"
-          className="tabular-nums"
-        >
-          {active
+        slices={shares
+          .filter((entry) => entry.share > 0)
+          .map((entry) => ({
+            id: shareKey(entry),
+            share: entry.share,
+            color: colorOf(entry),
+            tooltip: shareTooltip(entry),
+          }))}
+        hovered={hovered}
+        onHover={setHovered}
+        onLeave={() => setHovered(null)}
+        value={
+          active
             ? formatShare(active.share)
-            : `${formatWholeNumber(totalHa)} ha`}
-        </text>
-        <text
-          x="50"
-          y="59"
-          textAnchor="middle"
-          fontSize="6.5"
-          fill="currentColor"
-          opacity="0.7"
-        >
-          {active ? shortShareLabel(active) : 'i alt'}
-        </text>
-      </svg>
+            : `${formatWholeNumber(totalHa)} ha`
+        }
+        label={active ? shortShareLabel(active) : 'i alt'}
+      />
       <ul
         aria-label="Sædskifter"
         className="flex w-full min-w-0 flex-col @lg:w-auto @lg:flex-1"
