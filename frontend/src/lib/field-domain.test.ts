@@ -4,6 +4,7 @@ import type { FieldRecord, FieldYearValue, RotationCandidateYearResult } from '@
 import { fromWire } from '@/api/wire'
 import { fieldFertiliser } from '@/lib/fertiliser-overview'
 import {
+  changedFieldIds,
   computeFieldTotals,
   emptyMeasures,
   fieldFigure,
@@ -121,6 +122,33 @@ describe('computeFieldTotals', () => {
       calculatedAreaHa: 5,
       nLoadAreaHa: 2,
     })
+  })
+})
+
+describe('changedFieldIds', () => {
+  const rotation = (...cropCodes: number[]) =>
+    cropCodes.map((cropCode) => ({
+      cropCode,
+      cropName: '',
+      undersownCropCode: null,
+      undersownCropName: null,
+    }))
+
+  it('keeps a rotation that repeats the shorter crop history unchanged', () => {
+    const history = [field({ imkId: 1, cropRotation: rotation(252, 252, 252) })]
+    const simulation = [
+      field({
+        id: 'same',
+        imkId: 1,
+        cropRotation: rotation(...Array(8).fill(252)),
+      }),
+      field({
+        id: 'other',
+        imkId: 1,
+        cropRotation: rotation(252, 1, 252, 252),
+      }),
+    ]
+    expect(changedFieldIds(simulation, history)).toEqual(new Set(['other']))
   })
 })
 

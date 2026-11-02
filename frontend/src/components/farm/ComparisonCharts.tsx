@@ -21,7 +21,7 @@ import {
   perHaUnit,
   totalsPerHa,
 } from '@/lib/field-domain'
-import { COMPARISON_PERIOD } from '@/lib/simulation-comparison'
+import { COMPARISON_PERIOD, HISTORY_PERIOD } from '@/lib/simulation-comparison'
 import { cn } from '@/lib/utils'
 
 const DB2_NLOAD_HEIGHT = 260
@@ -62,7 +62,7 @@ const CropDistributionCard = ({
   return (
     <ChartCard
       title="Afgrødefordeling"
-      description={`Andel af arealet, gennemsnit for ${COMPARISON_PERIOD}.`}
+      description={`Andel af arealet, gennemsnit for ${COMPARISON_PERIOD} og for afgrødehistorikken ${HISTORY_PERIOD}.`}
     >
       <Chart
         definition={cropDistributionChart(
@@ -132,7 +132,7 @@ export const ComparisonCharts = ({
     <div className="grid gap-6 @3xl:grid-cols-2">
       <ChartCard
         title="Dækningsbidrag og udledning"
-        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. Den stiplede linje er afgrødehistorikkens udledning, og til venstre for den er udledningen lavere.`}
+        description={`Gennemsnit pr. år for ${COMPARISON_PERIOD}. Den stiplede linje er afgrødehistorikkens udledning for ${HISTORY_PERIOD}, og til venstre for den er udledningen lavere.`}
       >
         <p className={cn(AXIS_CAPTION_CLASS, 'mb-1')}>
           Dækningsbidrag, {perHaUnit('db2')}

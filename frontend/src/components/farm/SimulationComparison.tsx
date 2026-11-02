@@ -37,6 +37,7 @@ import {
   catchmentQuotas,
   COMPARISON_PERIOD,
   defaultComparisonIds,
+  HISTORY_PERIOD,
   describeComparisonVerdict,
   describeEconomicsVerdict,
   describeFeedUnitRequirement,
@@ -184,7 +185,7 @@ export const SimulationComparison = ({
     const history: ComparisonColumn = {
       key: HISTORY_COLUMN_KEY,
       title: 'Afgrødehistorik',
-      subtitle: `Fremskrevet til ${COMPARISON_PERIOD}`,
+      subtitle: `Gennemsnit for ${HISTORY_PERIOD}`,
       simulationId: undefined,
       fields,
       totals: computeFieldTotals(fields, false),
@@ -330,7 +331,7 @@ export const SimulationComparison = ({
             <h1 className="font-display text-4xl tracking-tight">Sammenlign</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               Gennemsnit pr. år for {COMPARISON_PERIOD}. Forskelle er i forhold
-              til afgrødehistorikken.
+              til afgrødehistorikken for {HISTORY_PERIOD}.
             </p>
           </div>
           <SimulationComparisonPicker

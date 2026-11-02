@@ -35,11 +35,12 @@ import {
   formatQuotaAmount,
   formatQuotaPercent,
   formatWholeNumber,
+  NUM_HISTORY_YEARS,
+  NUM_ROTATION_YEARS,
   QUOTA_STATUS_LABELS,
   QUOTA_STATUS_STYLES,
   quotaStatusLevel,
   resolveFarmQuota,
-  ROTATION_CALENDAR_YEARS,
   summarizeCropDistribution,
   type CatchmentQuota,
   type CatchmentTotalsByYear,
@@ -106,7 +107,7 @@ const buildColumns = (
   history: boolean,
 ): YearColumn[] => {
   const startCalendarYear = firstCalendarYear(history)
-  const yearCount = ROTATION_CALENDAR_YEARS.length
+  const yearCount = history ? NUM_HISTORY_YEARS : NUM_ROTATION_YEARS
   const entriesByIndex = new Map<number, YearlySummaryEntry>()
   for (const entry of entries ?? []) {
     const index = history ? entry.year - startCalendarYear : entry.year - 1

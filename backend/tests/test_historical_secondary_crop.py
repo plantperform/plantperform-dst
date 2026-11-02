@@ -128,7 +128,7 @@ class HistoricalSecondaryCropTests(unittest.TestCase):
     "calculate_db",
     lambda *args, **kwargs: {"db": 0.0, "udbytte": 0.0, "udbytteenhed": ""},
 )
-class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
+class HistoryEvaluatorTests(unittest.TestCase):
     def evaluate(
         self, crop_history: dict, secondary_crop_history: dict, **kwargs
     ) -> tuple[list, dict]:
@@ -160,12 +160,25 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
             [(INTERMEDIATE_CROP, None), (None, INTERMEDIATE_CROP), (CATCH_CROP, None)],
         )
         self.assertEqual(
-            [(y.year.udlaeg_kode, y.year.udlaeg_navn) for y in years[-3:]],
+            [(y.year.udlaeg_kode, y.year.udlaeg_navn) for y in years],
             [
                 (INTERMEDIATE_CROP, "Mellemafgrøde/tidlig såning"),
                 (None, None),
                 (CATCH_CROP, "Efterafgrøder, pligtige, husdyr, målrettede"),
             ],
+        )
+
+    def test_shows_2024_to_2026_with_2022_and_2023_as_preceding_crops(self) -> None:
+        years, calls = self.evaluate(
+            {"2022": VINTERRAPS, "2023": VINTERHVEDE, "2024": VAARBYG, "2026": VAARBYG},
+            {},
+        )
+
+        self.assertEqual(len(years), 3)
+        self.assertEqual(sorted(calls), [2024, 2026])
+        self.assertEqual(
+            (calls[2024]["prev_afgrode_kode"], calls[2024]["prev_prev_afgrode_kode"]),
+            (VINTERHVEDE, VINTERRAPS),
         )
 
     def test_marks_a_catch_crop_before_an_autumn_sown_crop_as_either_measure(self) -> None:
@@ -175,7 +188,7 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [y.leaching_detail.get("mellemafgroede_eller_tidlig_saaning") for y in years[-3:]],
+            [y.leaching_detail.get("mellemafgroede_eller_tidlig_saaning") for y in years],
             [True, None, None],
         )
 
@@ -186,9 +199,9 @@ class HistoryEvaluatorSecondaryCropTests(unittest.TestCase):
             show_either_measure=False,
         )
 
-        self.assertNotIn("mellemafgroede_eller_tidlig_saaning", years[-3].leaching_detail)
+        self.assertNotIn("mellemafgroede_eller_tidlig_saaning", years[0].leaching_detail)
         self.assertEqual(
-            (years[-3].year.udlaeg_kode, years[-3].year.udlaeg_navn),
+            (years[0].year.udlaeg_kode, years[0].year.udlaeg_navn),
             (INTERMEDIATE_CROP, "Mellemafgrøde"),
         )
 

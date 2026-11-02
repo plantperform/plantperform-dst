@@ -25,7 +25,6 @@ import {
   formatFeedUnits,
   formatKgN,
   formatStatementLine,
-  formatYearsDelta,
   hasMissingYearValues,
   haveSameFieldPlans,
   listComparedCatchments,
@@ -259,12 +258,12 @@ const years = (entries: Record<number, [nLoadKg: number, quotaKgN: number]>) =>
   )
 
 describe('alignCatchmentYears', () => {
-  it('lays the crop history 2019-2026 over 2027-2034', () => {
+  it('lays the crop history 2024-2026 over 2027-2029', () => {
     const totals: CatchmentTotalsByYear = new Map([
-      [7, years({ 2019: [10, 100], 2026: [20, 100] })],
+      [7, years({ 2024: [10, 100], 2026: [20, 100] })],
     ])
     expect(alignCatchmentYears(totals, true)).toEqual(
-      new Map([[7, years({ 2027: [10, 100], 2034: [20, 100] })]]),
+      new Map([[7, years({ 2027: [10, 100], 2029: [20, 100] })]]),
     )
   })
 
@@ -522,14 +521,6 @@ describe('describeCurveLegend', () => {
       text: 'Ingen tal',
       level: null,
     })
-  })
-})
-
-describe('formatYearsDelta', () => {
-  it('signs the change in years over the quota', () => {
-    expect(formatYearsDelta(-6)).toBe('−6 år')
-    expect(formatYearsDelta(0)).toBe('±0 år')
-    expect(formatYearsDelta(2)).toBe('+2 år')
   })
 })
 
