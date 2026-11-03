@@ -366,8 +366,12 @@ export const changedFieldIds = (
     if (field.imkId === null) continue
     const liveRotation = liveRotationByImk.get(field.imkId)
     if (!liveRotation) continue
+    const rotation =
+      field.rotationId === null
+        ? field.cropRotation.slice(-liveRotation.length)
+        : field.cropRotation
     if (
-      !repeatsHistory(field.cropRotation, liveRotation) ||
+      !repeatsHistory(rotation, liveRotation) ||
       !measuresEqual(field.measures, emptyMeasures())
     ) {
       changed.add(field.id)

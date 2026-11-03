@@ -151,6 +151,21 @@ describe('changedFieldIds', () => {
     ]
     expect(changedFieldIds(simulation, history)).toEqual(new Set(['other']))
   })
+
+  it('compares a saved history without a rotation on its last years', () => {
+    const history = [field({ imkId: 1, cropRotation: rotation(1, 11, 22) })]
+    const savedHistory = rotation(5, 6, 7, 8, 9, 1, 11, 22)
+    const simulation = [
+      field({
+        id: 'unoptimized',
+        imkId: 1,
+        rotationId: null,
+        cropRotation: savedHistory,
+      }),
+      field({ id: 'rotation', imkId: 1, cropRotation: savedHistory }),
+    ]
+    expect(changedFieldIds(simulation, history)).toEqual(new Set(['rotation']))
+  })
 })
 
 describe('quotaLineHeightPct', () => {
