@@ -123,6 +123,7 @@ field" column is the name on the wire.
 | gødningsoverblik | `FertiliserFigures`, `fieldFertiliser`, `fertiliserByFieldId` | | The Gødning column group in the mark list, per year or the average per year |
 | organisk bundet | `manureOrganicBoundKgNHa` | `husdyrgodningOrganiskBundetKgnHa` | |
 | efterårstildeling | `autumnAllocations`, `AutumnAllocation`, `AutumnAllocationDraft`, `autumnAllocationEnabled`, `autumnAllocation` glossary term | `autumnAllocations` | Part of a crop's norm spread after 1 August before its harvest. It counts in the crop's norm and costs, but in the leaching of the year before (MNCA) |
+| heraf efterårstildeling | `autumnAllocatedKgNHa`, `usesAutumnAllocation`, `autumnAllocated` column | `autumnAllocatedKgNHa` | The crop's own N that was spread the autumn before |
 | afgrøder til efterårstildeling | `AutumnCropOption`, `useAutumnCrops`, `listedAutumnCrops`, `autumnCropGroups` | | Raps, frøgræs, græs and vinterkorn in the chosen rotations |
 | gødning om efteråret | `AutumnFertiliser`, `forcedAutumnFertiliser` | | `'mineral'` is handelsgødning, `'manure'` husdyrgødning |
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |

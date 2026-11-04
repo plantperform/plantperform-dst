@@ -227,6 +227,7 @@ const DefinitionRow = ({
 // expanded from here rather than shown by default.
 const KeyMetricsSection = ({
   year,
+  nextCropName,
   calendarYear,
   areaHa,
   retention,
@@ -235,6 +236,7 @@ const KeyMetricsSection = ({
   footer,
 }: {
   year: RotationCandidateYearResult
+  nextCropName?: string
   calendarYear: number
   areaHa: number
   retention: number | null
@@ -255,6 +257,8 @@ const KeyMetricsSection = ({
   const manureUtilised = year.appliedManureUtilisedKgNHa
   const mineralFertiliser = year.appliedMineralFertiliserKgNHa
   const organicBound = year.manureOrganicBoundKgNHa
+  const autumnAllocated = year.autumnAllocatedKgNHa ?? 0
+  const autumnForNextCrop = num(year.leachingDetail.MNCA)
   const appliedFertiliser = manureUtilised + mineralFertiliser
   const availableN = precedingCropValue + appliedFertiliser
 
@@ -376,6 +380,15 @@ const KeyMetricsSection = ({
               />
             </div>
           ) : null}
+          {autumnAllocated > 0 ? (
+            <DefinitionRow
+              label={`Heraf efterårstildeling ${calendarYear - 1}`}
+              term="autumnAllocation"
+              value={`${fmt(autumnAllocated, 0)} kg N/ha`}
+              muted
+              title="Tæller med i normen for dette år, men i udvaskningen for året før (MNCA)"
+            />
+          ) : null}
           <DefinitionRow
             label="Tilgængeligt N"
             value={`${fmt(availableN, 0)} kg N/ha`}
@@ -386,6 +399,19 @@ const KeyMetricsSection = ({
             }
             title={`Forfrugt ${fmt(precedingCropValue, 0)} + mineralsk andel af organisk gødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
+          {autumnForNextCrop > 0 ? (
+            <DefinitionRow
+              label={`Efterårstildeling ${calendarYear}`}
+              term="autumnAllocation"
+              value={`${fmt(autumnForNextCrop, 0)} kg N/ha`}
+              note={
+                nextCropName
+                  ? `til ${shortCropName(nextCropName)} ${calendarYear + 1}`
+                  : 'til næste afgrøde'
+              }
+              title="Tæller med i normen for næste afgrøde, men i udvaskningen for dette år (MNCA)"
+            />
+          ) : null}
           {response ? (
             <DefinitionRow
               label="Udbytte"
@@ -1376,6 +1402,7 @@ export const RotationYearsDetail = ({
 
       <KeyMetricsSection
         year={year}
+        nextCropName={years[(yearIndex + 1) % years.length].year.cropName}
         calendarYear={startCalendarYear + yearIndex}
         areaHa={areaHa}
         retention={retention}

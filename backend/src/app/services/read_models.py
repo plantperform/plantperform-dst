@@ -42,6 +42,7 @@ def compact_years(candidate):
                     "tildelt_husdyrgodning_udnyttet_kgn_ha",
                     "tildelt_handelsgodning_kgn_ha",
                     "husdyrgodning_organisk_bundet_kgn_ha",
+                    "autumn_allocated_kg_n_ha",
                     "husdyrgodning_ton_pr_ha",
                     "afgrode_norm_kgn_ha",
                     "n_norm_pct",

@@ -487,6 +487,16 @@ const FERTILISER_COLUMNS: FertiliserColumnConfig[] = [
     format: formatWholeNumber,
   },
   {
+    id: 'autumnAllocated',
+    heading: 'Efterårstildeling',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    tooltip:
+      'Den del af handelsgødning og organisk gødning, der er udbragt efteråret før høståret. Den tæller i afgrødens norm og omkostninger, men i udvaskningen for året før.',
+    pick: (figures) => figures.autumnAllocatedKgNHa,
+    format: formatWholeNumber,
+  },
+  {
     id: 'availableN',
     heading: 'Tilgængeligt N',
     unit: 'kg N/ha',

@@ -95,7 +95,8 @@ describe('stored compact field years', () => {
       .toMatchObject({ totalDb2: 2000, totalNLoadKg: 20, totalFeedUnits: 250 })
     expect(fieldFertiliser([year], 0)).toEqual({
       cropNormKgNHa: 100, precedingCropValueKgNHa: 10, mineralFertiliserKgNHa: 60,
-      manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, manureTonsPerHa: 5,
+      manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, autumnAllocatedKgNHa: 0,
+      manureTonsPerHa: 5,
     })
   })
 })
