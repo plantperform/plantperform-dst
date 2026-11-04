@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,12 @@ from app.domain.base import CamelModel
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
 from app.domain.simulation import GodningSettings
 from app.services.nles5.bridge_v2 import _FMAJS_HOVEDAFGRODE_KODER
-from app.services.rotations import afgroede_normer, saedskifte_kategorier, saedskifte_library
+from app.services.rotations import (
+    afgroede_normer,
+    autumn_n,
+    saedskifte_kategorier,
+    saedskifte_library,
+)
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
@@ -110,6 +115,14 @@ _VIRKEMIDDEL_UDLAEG_OPTIONS: tuple[AfgrodeKodeOption, ...] = (
 )
 
 
+class AutumnCropOption(CamelModel):
+    afgrode_kode: int
+    navn: str
+    group: str
+    norm_min_kg_n_ha: float
+    norm_max_kg_n_ha: float
+
+
 class GodningPresetOption(CamelModel):
     navn: str
     godning: GodningSettings
@@ -162,6 +175,8 @@ def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
         )
     return options
 
+
+_ALL_JB_NUMBERS = list(range(1, 13))
 
 # Fixed N-norm% levels for the N-norm% checklist in "Nyt scenarie".
 # These were previously derived from the sædskifte lookup file's N-norm% rows
@@ -218,6 +233,35 @@ def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
             ),
         ),
     ]
+
+
+@router.get("/autumn-crops", response_model=list[AutumnCropOption])
+def list_autumn_crops(
+    _: FarmMember,
+    jbnr: Annotated[list[int] | None, Query()] = None,
+    only_organic: bool = False,
+) -> list[AutumnCropOption]:
+    """Return the crops that can take part of their N-norm in autumn.
+
+    Each has its N-norm range on the given soil types, or on all of them when
+    none is given. A crop without a norm has nothing to move and is left out.
+    """
+    options = []
+    for group, codes in autumn_n.AUTUMN_CROP_GROUPS:
+        for code in codes:
+            norms = autumn_n.norm_range(code, jbnr or _ALL_JB_NUMBERS, only_organic)
+            if norms is None:
+                continue
+            options.append(
+                AutumnCropOption(
+                    afgrode_kode=code,
+                    navn=afgroede_normer.lookup_crop_params(code).get("navn", str(code)),
+                    group=group,
+                    norm_min_kg_n_ha=norms[0],
+                    norm_max_kg_n_ha=norms[1],
+                )
+            )
+    return options
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
