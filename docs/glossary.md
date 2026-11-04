@@ -122,6 +122,9 @@ field" column is the name on the wire.
 | tilgængeligt N | `availableNKgNHa`, `availableNShareOfNorm` | | Forfrugtsværdi plus the tildelt N that counts toward the norm |
 | gødningsoverblik | `FertiliserFigures`, `fieldFertiliser`, `fertiliserByFieldId` | | The Gødning column group in the mark list, per year or the average per year |
 | organisk bundet | `manureOrganicBoundKgNHa` | `husdyrgodningOrganiskBundetKgnHa` | |
+| efterårstildeling | `autumnAllocations`, `AutumnAllocation`, `AutumnAllocationDraft`, `autumnAllocationEnabled`, `autumnAllocation` glossary term | `autumnAllocations` | Part of a crop's norm spread after 1 August before its harvest. It counts in the crop's norm and costs, but in the leaching of the year before (MNCA) |
+| afgrøder til efterårstildeling | `AutumnCropOption`, `useAutumnCrops`, `listedAutumnCrops`, `autumnCropGroups` | | Raps, frøgræs, græs and vinterkorn in the chosen rotations |
+| gødning om efteråret | `AutumnFertiliser`, `forcedAutumnFertiliser` | | `'mineral'` is handelsgødning, `'manure'` husdyrgødning |
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
 | udbringning af husdyrgødning, pr. ton | `manureSpreading`, `manureSpreadingPriceId` | `manureSpreadingPriceId` | The price per tonne of spreading husdyrgødning, set in the Gødning step on both driftsformer |
 | købspris for husdyrgødning, pr. ton | `manurePurchase`, `manurePurchasePriceId` | `manurePurchasePriceId` | What a tonne of husdyrgødning costs to buy, standard 0 kr/ton |

@@ -62,6 +62,7 @@ vi.mock('@/api/hooks', () => ({
   useRotationCategories: () => queries.categories,
   useRotationNNormPercentages: () => queries.reference,
   useFertiliserPresets: () => queries.reference,
+  useAutumnCrops: () => ({ data: [], isLoading: false }),
   useCropCodes: () => queries.reference,
   useRotationCandidateOptions: () => queries.reference,
   useFarmEmissions: () => queries.reference,
