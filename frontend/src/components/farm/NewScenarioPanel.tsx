@@ -6,6 +6,7 @@ import { mutate } from 'swr'
 import {
   simulationsKey,
   simulationViewKey,
+  useAutumnCrops,
   useCropCodes,
   useFarmFields,
   useStoredSimulationFields,
@@ -47,6 +48,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { AutumnAllocationFields } from '@/components/farm/AutumnAllocationFields'
 import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { formatNumber, formatWholeNumber } from '@/lib/field-domain'
 import {
@@ -63,9 +65,12 @@ import {
   catchCropSowingDateOf,
   chosenCropsFor,
   fertiliserFieldsForChoice,
+  forcedAutumnFertiliser,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  keepListedAutumnDrafts,
+  listedAutumnCrops,
   offersNoFertiliser,
   organicFertiliserChoice,
   simulationFormSchema,
@@ -143,6 +148,9 @@ export const NewScenarioPanel = ({
     : needsStoredFields
       ? (storedFields.data ?? [])
       : fields
+  const soilTypeNumbers = Array.from(
+    new Set(effectiveFields.flatMap((field) => field.soilTypeNumber ?? [])),
+  ).sort((left, right) => left - right)
   const { startRun } = useOptimizationRunActions()
   const run = useOptimizationRun(source?.id)
   const running =
@@ -198,6 +206,11 @@ export const NewScenarioPanel = ({
     reValidateMode: 'onChange',
   })
   const values = useWatch({ control }) as SimulationFormValues
+  const autumnCrops = useAutumnCrops(
+    farmId,
+    soilTypeNumbers,
+    values.farmingSystem === 'Økologisk' || values.onlyOrganic,
+  )
   const economicsProfile =
     economicsProfiles.findProfile(values.economicsProfileId) ?? STANDARD_PROFILE
 
@@ -369,10 +382,22 @@ export const NewScenarioPanel = ({
     }
   }
 
+  const applyRotationVariants = (rotationVariants: string[]) => {
+    updateValue('rotationVariants', rotationVariants)
+    if (!autumnCrops.data) return
+    updateValue(
+      'autumnAllocations',
+      keepListedAutumnDrafts(
+        getValues('autumnAllocations'),
+        listedAutumnCrops(autumnCrops.data, categories, rotationVariants),
+      ),
+    )
+  }
+
   const cropChoice: CropChoice = { chosenCrops: values.chosenCrops }
   const applyRotationChoice = (next: RotationChoice) => {
     updateValue('chosenCrops', next.chosenCrops)
-    updateValue('rotationVariants', next.rotationVariants)
+    applyRotationVariants(next.rotationVariants)
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
@@ -758,9 +783,7 @@ export const NewScenarioPanel = ({
             farmingSystem={values.farmingSystem}
             cropChoice={cropChoice}
             rotationVariants={values.rotationVariants}
-            onRotationVariantsChange={(next) =>
-              updateValue('rotationVariants', next)
-            }
+            onRotationVariantsChange={applyRotationVariants}
             error={errors.rotationVariants?.message}
           />
         ) : null}
@@ -1062,6 +1085,26 @@ export const NewScenarioPanel = ({
                 </span>
               </label>
             </div>
+
+            <AutumnAllocationFields
+              crops={listedAutumnCrops(
+                autumnCrops.data ?? [],
+                categories,
+                values.rotationVariants,
+              )}
+              loading={autumnCrops.isLoading}
+              loadFailed={Boolean(autumnCrops.error)}
+              enabled={values.autumnAllocationEnabled}
+              allocations={values.autumnAllocations}
+              forcedFertiliser={forcedAutumnFertiliser(values)}
+              error={errors.autumnAllocations?.message}
+              onEnabledChange={(enabled) =>
+                updateValue('autumnAllocationEnabled', enabled)
+              }
+              onAllocationsChange={(next) =>
+                updateValue('autumnAllocations', next)
+              }
+            />
           </div>
         ) : null}
 

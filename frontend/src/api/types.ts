@@ -198,12 +198,29 @@ export type OptimizationConstraints = {
   globallyAllowedRotationIds: string[] | null
 }
 
+export type AutumnFertiliser = 'mineral' | 'manure'
+
+export type AutumnAllocation = {
+  cropCode: number
+  kgNHa: number
+  fertiliser: AutumnFertiliser
+}
+
+export type AutumnCropOption = {
+  cropCode: number
+  name: string
+  group: string
+  normMinKgNHa: number
+  normMaxKgNHa: number
+}
+
 export type FertiliserSettings = {
   farmingSystem: 'Konventionel' | 'Økologisk'
   orgMineralN: number
   mineralSharePct: number
   onlyOrganic: boolean
   nContentKgPerTon: number
+  autumnAllocations?: AutumnAllocation[]
 }
 
 export type FertiliserPresetOption = {

@@ -38,6 +38,7 @@ import type {
   SimulationView,
   SavedResultView,
   CropAreaRange,
+  AutumnCropOption,
   CropCodeOption,
   Farm,
   FarmMember,
@@ -540,6 +541,33 @@ export const rotationNNormPercentagesKey = (farmId?: string) => {
 
 export const useRotationNNormPercentages = (farmId?: string) =>
   useSWR<string[]>(rotationNNormPercentagesKey(farmId), fetcher)
+
+export const autumnCropsKey = (
+  farmId?: string,
+  soilTypeNumbers: number[] = [],
+  onlyOrganic = false,
+) => {
+  if (!farmId) return null
+
+  const params = new URLSearchParams()
+  for (const soilTypeNumber of soilTypeNumbers) {
+    params.append('jbnr', String(soilTypeNumber))
+  }
+  if (onlyOrganic) params.set('only_organic', 'true')
+  const query = params.toString()
+
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/autumn-crops${query ? `?${query}` : ''}`
+}
+
+export const useAutumnCrops = (
+  farmId?: string,
+  soilTypeNumbers?: number[],
+  onlyOrganic?: boolean,
+) =>
+  useSWR<AutumnCropOption[]>(
+    autumnCropsKey(farmId, soilTypeNumbers, onlyOrganic),
+    fetcher,
+  )
 
 export const cropCodesKey = (farmId?: string) => {
   if (!farmId) return null

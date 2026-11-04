@@ -42,6 +42,12 @@ const glossary = {
       'Ved gødskning under 100 % af N-normen reduceres udbyttet. Dette gælder på nuværende tidspunkt kun afgrøder med en tilknyttet udbyttekurve: konventionelt korn, raps, majs, kartofler, roer og græs samt økologisk korn, raps og græs.\n\n' +
       'Øvrige afgrøder gødskes altid op til fuld N-norm og står i listen som «100 %» med «ingen udbyttekurve». Afgrøder uden N-norm eller med en norm på 0 kg N, fx brak og ærter, står som «-». Ændringer i proteinindholdet påvirker endnu ikke salgsprisen.',
   },
+  autumnAllocation: {
+    title: 'Efterårstildeling',
+    description:
+      'Kvælstof udbragt efter 1. august. Det tæller med i normen for afgrøden, der høstes året efter, men i udvaskningen for det år, det udbringes.\n\n' +
+      'Mineralsk N vægter mere om efteråret end om foråret. Den organiske del af husdyrgødning vægter det samme og lægges i det år, gødningen udbringes.',
+  },
   nContentPerTon: {
     title: 'Mineralsk N-indhold',
     description:

@@ -40,6 +40,7 @@ import {
   selectedCountsByCategory,
   selectedRotations,
   stepIndexOf,
+  autumnAllocationLabel,
   toCreateSimulationInput,
   yesNo,
   type SimulationFormStepId,
@@ -214,6 +215,13 @@ export const SimulationSummary = ({
           <p>
             Forfrugtsværdi: {precedingCropValueLabel(includePrecedingCropValue)}
             {includePrecedingCropValue ? null : <NotInCalculationNote />}
+          </p>
+          <p>
+            Efterårstildeling:{' '}
+            {autumnAllocationLabel(
+              fertiliser.autumnAllocations ?? [],
+              cropLabelFor,
+            )}
           </p>
         </Section>
 

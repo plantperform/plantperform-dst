@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type {
+  AutumnCropOption,
+  AutumnFertiliser,
   FarmingSystem,
   FertiliserPresetOption,
   RotationCategoryOption,
@@ -8,6 +10,10 @@ import type {
 } from '@/api/types'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
+  AUTUMN_N_EXTRA_LEACHING_PCT,
+  autumnAllocationLabel,
+  autumnCropGroups,
+  autumnDraftFor,
   catchCropSowingLabel,
   chosenCropsFor,
   combinationCount,
@@ -18,10 +24,13 @@ import {
   excludedCropCodesAfter,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  forcedAutumnFertiliser,
   groupSelection,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  keepListedAutumnDrafts,
+  listedAutumnCrops,
   matchingRotationCount,
   nNormPercentagesFor,
   NO_FERTILISER,
@@ -40,6 +49,7 @@ import {
   toCreateSimulationInput,
   toggleGroup,
   toggleNNormPercentage,
+  withAutumnDraft,
   withCropChoice,
   withFarmingSystem,
   type SimulationFormValues,
@@ -624,6 +634,160 @@ describe('summary labels', () => {
   })
 })
 
+describe('efterårstildeling', () => {
+  const winterRape: AutumnCropOption = {
+    cropCode: 22,
+    name: 'Vinterraps',
+    group: 'Vinterraps',
+    normMinKgNHa: 110,
+    normMaxKgNHa: 159,
+  }
+  const winterWheat: AutumnCropOption = {
+    cropCode: 11,
+    name: 'Vinterhvede',
+    group: 'Vinterkorn',
+    normMinKgNHa: 120,
+    normMaxKgNHa: 175,
+  }
+  const draft = (
+    cropCode: number,
+    kgNHa: string,
+    fertiliser: AutumnFertiliser = 'mineral',
+  ) => ({ cropCode, kgNHa, fertiliser })
+  const conventional = {
+    farmingSystem: 'Konventionel' as const,
+    fertiliserChoice: 'Svinegylle',
+    onlyOrganic: false,
+    orgMineralN: '150',
+  }
+
+  it('sends nothing while it is off', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        autumnAllocations: [draft(22, '40')],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([])
+  })
+
+  it('sends the crops with an amount', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        ...conventional,
+        autumnAllocationEnabled: true,
+        autumnAllocations: [
+          draft(22, '40', 'manure'),
+          draft(11, ''),
+          draft(10, '0'),
+        ],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliser: 'manure' }])
+  })
+
+  it('sends the only kind of gødning there is', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        fertiliserChoice: NO_FERTILISER,
+        autumnAllocationEnabled: true,
+        autumnAllocations: [draft(22, '40', 'manure')],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliser: 'mineral' }])
+  })
+
+  it('only offers a choice where both kinds of gødning exist', () => {
+    expect(forcedAutumnFertiliser(conventional)).toBeNull()
+    expect(
+      forcedAutumnFertiliser({
+        ...conventional,
+        fertiliserChoice: NO_FERTILISER,
+      }),
+    ).toBe('mineral')
+    expect(forcedAutumnFertiliser({ ...conventional, orgMineralN: '0' })).toBe(
+      'mineral',
+    )
+    expect(forcedAutumnFertiliser({ ...conventional, onlyOrganic: true })).toBe(
+      'manure',
+    )
+    expect(
+      forcedAutumnFertiliser({ ...conventional, farmingSystem: 'Økologisk' }),
+    ).toBe('manure')
+  })
+
+  it('lists the crops of the chosen rotations', () => {
+    const rotation = (rotationVariant: string, cropSequence: string[]) => ({
+      rotationVariant,
+      cropSequence,
+      activeLen: cropSequence.length,
+    })
+    const categories: RotationCategoryOption[] = [
+      {
+        category: 'Plante',
+        croppingSystem: 'Konventionel',
+        rotationCount: 2,
+        rotations: [
+          rotation('1', ['Vårbyg', 'Vinterraps']),
+          rotation('2', ['Vinterhvede']),
+        ],
+      },
+    ]
+
+    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1'])).toEqual([winterRape])
+    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1', '2'])).toEqual([
+      winterRape,
+      winterWheat,
+    ])
+  })
+
+  it('drops the amount of a crop that left the rotations', () => {
+    expect(
+      keepListedAutumnDrafts([draft(22, '40'), draft(11, '15')], [winterWheat]),
+    ).toEqual([draft(11, '15')])
+  })
+
+  it('groups the crops in their order', () => {
+    expect(autumnCropGroups([winterRape, winterWheat]).map(({ group }) => group)).toEqual([
+      'Vinterraps',
+      'Vinterkorn',
+    ])
+  })
+
+  it('replaces the draft of a crop', () => {
+    expect(
+      withAutumnDraft([draft(22, '40')], draft(22, '30', 'manure')),
+    ).toEqual([draft(22, '30', 'manure')])
+    expect(autumnDraftFor([], 22)).toEqual(draft(22, ''))
+  })
+
+  it('checks the amounts only while it is on', () => {
+    const values = {
+      ...filledValues,
+      autumnAllocations: [draft(22, '-5')],
+    }
+    const stepIndex = stepIndexOf('nitrogen')
+
+    expect(isStepValid(stepIndex, values)).toBe(true)
+    expect(
+      isStepValid(stepIndex, { ...values, autumnAllocationEnabled: true }),
+    ).toBe(false)
+  })
+
+  it('names the allocations', () => {
+    expect(autumnAllocationLabel([], String)).toBe('Fra')
+    expect(
+      autumnAllocationLabel(
+        [{ cropCode: 22, kgNHa: 40, fertiliser: 'mineral' }],
+        (code) => `Afgrøde ${code}`,
+      ),
+    ).toBe('Afgrøde 22: 40 kg N/ha, handelsgødning')
+  })
+
+  it('states the extra weight of autumn N', () => {
+    expect(Math.round(AUTUMN_N_EXTRA_LEACHING_PCT)).toBe(217)
+  })
+})
+
 describe('toCreateSimulationInput', () => {
   it('starts on Standard and keeps the economics profile out of the request', () => {
     expect(DEFAULT_SIMULATION_FORM_VALUES.economicsProfileId).toBe(
@@ -657,6 +821,7 @@ describe('toCreateSimulationInput', () => {
         mineralSharePct: 70,
         onlyOrganic: true,
         nContentKgPerTon: 5,
+        autumnAllocations: [],
       },
       catchCropSowingDate: '20/8',
       catchCropDailyBasis: false,
@@ -682,6 +847,7 @@ describe('toCreateSimulationInput', () => {
       mineralSharePct: 100,
       onlyOrganic: false,
       nContentKgPerTon: 6,
+      autumnAllocations: [],
     })
   })
 
@@ -774,6 +940,26 @@ describe('simulationToFormValues', () => {
   }
   const offered = ['50', '60', '70', '80', '85', '90', '95', '100']
 
+  it('reads the efterårstildeling back from a saved simulation', () => {
+    const saved: Simulation = {
+      ...simulation,
+      fertiliser: {
+        ...simulation.fertiliser,
+        autumnAllocations: [{ cropCode: 22, kgNHa: 40, fertiliser: 'manure' }],
+      },
+    }
+    const values = simulationToFormValues(saved, [kvaeggylle], offered)
+
+    expect(values.autumnAllocationEnabled).toBe(true)
+    expect(values.autumnAllocations).toEqual([
+      { cropCode: 22, kgNHa: '40', fertiliser: 'manure' },
+    ])
+    expect(
+      simulationToFormValues(simulation, [kvaeggylle], offered)
+        .autumnAllocationEnabled,
+    ).toBe(false)
+  })
+
   it('fills the form so the copy gets the same grundlag', () => {
     const values = simulationToFormValues(simulation, [kvaeggylle], offered)
     expect(values.fertiliserChoice).toBe('Kvæggylle')
@@ -781,7 +967,7 @@ describe('simulationToFormValues', () => {
       name: 'Test2 (kopi)',
       allowedRotationVariants: ['10', '20'],
       allowedNNormPercentages: ['100', '95', '85'],
-      fertiliser: kvaeggylle.fertiliser,
+      fertiliser: { ...kvaeggylle.fertiliser, autumnAllocations: [] },
       catchCropSowingDate: '28/8',
       catchCropDailyBasis: false,
       precisionFarming: true,
