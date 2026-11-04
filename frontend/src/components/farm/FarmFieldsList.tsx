@@ -41,6 +41,7 @@ import {
   OPTIONAL_COLUMN_IDS,
   readStoredColumnVisibility,
   storeColumnVisibility,
+  withoutAutumnAllocationColumn,
   withoutManureColumns,
   type FieldsSortKey,
   type FieldsSortState,
@@ -68,7 +69,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fertiliserByFieldId, usesManure } from '@/lib/fertiliser-overview'
+import {
+  fertiliserByFieldId,
+  usesAutumnAllocation,
+  usesManure,
+} from '@/lib/fertiliser-overview'
 import {
   catchmentRuns,
   changedFieldIds,
@@ -382,13 +387,14 @@ export const FarmFieldsList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSimulationView])
 
-  const shownColumnVisibility = useMemo(
-    () =>
-      usesManure(yearValues)
-        ? columnVisibility
-        : withoutManureColumns(columnVisibility),
-    [columnVisibility, yearValues],
-  )
+  const shownColumnVisibility = useMemo(() => {
+    const withManure = usesManure(yearValues)
+      ? columnVisibility
+      : withoutManureColumns(columnVisibility)
+    return usesAutumnAllocation(yearValues)
+      ? withManure
+      : withoutAutumnAllocationColumn(withManure)
+  }, [columnVisibility, yearValues])
 
   const rowCallbacks = useRef({
     onSelectedFieldChange,

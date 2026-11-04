@@ -26,6 +26,7 @@ class FieldYearValue(CamelModel):
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0
     tildelt_handelsgodning_kgn_ha: float = 0
     husdyrgodning_organisk_bundet_kgn_ha: float = 0
+    autumn_allocated_kg_n_ha: float = 0
     husdyrgodning_ton_pr_ha: float = 0
     afgrode_norm_kgn_ha: float | None = None
     n_norm_pct: float = 100

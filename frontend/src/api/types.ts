@@ -405,6 +405,7 @@ export type RotationCandidateYearResult = {
   appliedManureUtilisedKgNHa: number
   appliedMineralFertiliserKgNHa: number
   manureOrganicBoundKgNHa: number
+  autumnAllocatedKgNHa?: number
   manureTonsPerHa: number
   cropNormKgNHa: number | null
   nNormPct: number
@@ -413,7 +414,8 @@ export type RotationCandidateYearResult = {
 export type FieldYearValue = Pick<RotationCandidateYearResult,
   'year' | 'leachingKgNHa' | 'dbDkkHa' | 'precedingCropValueKgNHa' |
   'appliedManureUtilisedKgNHa' | 'appliedMineralFertiliserKgNHa' |
-  'manureOrganicBoundKgNHa' | 'manureTonsPerHa' | 'cropNormKgNHa' | 'nNormPct'> & {
+  'manureOrganicBoundKgNHa' | 'autumnAllocatedKgNHa' | 'manureTonsPerHa' |
+  'cropNormKgNHa' | 'nNormPct'> & {
   feedUnitsPerHa: number
   winterCover: Record<string, unknown>
   economicsMissing?: boolean

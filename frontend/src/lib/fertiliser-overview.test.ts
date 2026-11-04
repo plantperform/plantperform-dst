@@ -7,6 +7,7 @@ import {
   fertiliserByFieldId,
   fieldFertiliser,
   totalFertiliser,
+  usesAutumnAllocation,
   usesManure,
 } from '@/lib/fertiliser-overview'
 import { emptyMeasures } from '@/lib/field-domain'
@@ -58,6 +59,28 @@ const field = (id: string, areaHa: number): FieldRecord => ({
   geometry: null,
 })
 
+describe('autumn allocation', () => {
+  it('averages the crops part from the autumn before', () => {
+    const years = [
+      yearResult({ autumnAllocatedKgNHa: 30 }),
+      yearResult(),
+    ]
+
+    expect(fieldFertiliser(years, null)?.autumnAllocatedKgNHa).toBe(15)
+    expect(fieldFertiliser(years, 0)?.autumnAllocatedKgNHa).toBe(30)
+  })
+
+  it('tells whether a simulation has any', () => {
+    expect(usesAutumnAllocation({ a: [yearResult()] })).toBe(false)
+    expect(
+      usesAutumnAllocation({
+        a: [yearResult(), yearResult({ autumnAllocatedKgNHa: 30 })],
+      }),
+    ).toBe(true)
+    expect(usesAutumnAllocation(undefined)).toBe(false)
+  })
+})
+
 describe('fieldFertiliser', () => {
   const years = [
     yearResult({
@@ -85,6 +108,7 @@ describe('fieldFertiliser', () => {
       mineralFertiliserKgNHa: 30,
       manureUtilisedKgNHa: 0,
       manureOrganicBoundKgNHa: 0,
+      autumnAllocatedKgNHa: 0,
       manureTonsPerHa: 0,
     })
   })
@@ -96,6 +120,7 @@ describe('fieldFertiliser', () => {
       mineralFertiliserKgNHa: 65,
       manureUtilisedKgNHa: 25,
       manureOrganicBoundKgNHa: 15,
+      autumnAllocatedKgNHa: 0,
       manureTonsPerHa: 10,
     })
   })
