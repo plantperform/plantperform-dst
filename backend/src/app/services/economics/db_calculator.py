@@ -610,10 +610,9 @@ def calculate_db(
     gødning itself at its purchase price per tonne.
 
     only_organic: The scenarie's gødning selection (Phase 13 GodningSettings),
-    not the same as driftsform. This value, not driftsform, determines whether
-    handelsgødning may top MNCS up beyond the organisk allocation. A simulering
-    marked Økologisk can have only_organic=False and must then include the cost
-    of the remaining handelsgødning.
+    not the same as driftsform. True means handelsgødning does not top MNCS up
+    beyond the organisk allocation, also on a konventionel simulering. An
+    økologisk afgrøde never has handelsgødning, whatever this says.
 
     udlaeg_kode: The rotation position's udlægskode, also passed to
     bridge_v2.evaluate_leaching_position. It determines whether an additional
@@ -735,12 +734,12 @@ def calculate_db(
 
     # Itemized rows behind each category total for the UI calculation
     # walkthrough, showing which entries actually total categories such as
-    # "Gødning" or "Markarbejde". only_organic, not driftsform, determines
-    # whether handelsgødning may top MNCS up. A simulering marked Økologisk can
-    # have only_organic=False (Phase 13 decoupled the settings) and must then
-    # price the remaining handelsgødning just like a konventionel simulering.
+    # "Gødning" or "Markarbejde".
     goedning_linjer: list[dict] = []
-    handelsgodning_n = 0.0 if only_organic else max(0.0, mncs - org_mineral_n_applied) + mnca
+    no_mineral_fertiliser = only_organic or driftsform == OEKOLOGISK
+    handelsgodning_n = (
+        0.0 if no_mineral_fertiliser else max(0.0, mncs - org_mineral_n_applied) + mnca
+    )
     economic_n = quantities.get(
         quantity_id(afgrodekode, "fertiliser", "mineralN"), handelsgodning_n
     )
