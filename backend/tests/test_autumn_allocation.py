@@ -9,6 +9,7 @@ os.environ.setdefault(
     "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
 )
 
+from app.api.v0 import rotation_candidates
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.domain.simulation import GodningSettings
 from app.services.rotations import autumn_n
@@ -73,6 +74,64 @@ class StandsInAutumnTests(unittest.TestCase):
 
     def test_spring_crop_after_grass_does_not_stand(self) -> None:
         self.assertFalse(autumn_n.stands_in_autumn(VAARBYG, KLOEVERGRAES, None))
+
+
+class NormRangeTests(unittest.TestCase):
+    def test_gives_the_lowest_and_highest_norm_on_the_soil_types(self) -> None:
+        norms = {1: {"n_norm": 110.0}, 4: {"n_norm": 159.0}, 6: {"n_norm": 180.0}}
+        with patch.object(
+            autumn_n.afgroede_normer,
+            "lookup_norm",
+            lambda crop, jb_number, irrigated, only_organic: norms.get(jb_number),
+        ):
+            self.assertEqual(autumn_n.norm_range(VINTERRAPS, [1, 4], False), (110.0, 159.0))
+
+    def test_a_crop_without_a_norm_has_no_range(self) -> None:
+        with patch.object(
+            autumn_n.afgroede_normer, "lookup_norm", lambda *args: {"n_norm": 0.0}
+        ):
+            self.assertIsNone(autumn_n.norm_range(VINTERRAPS, [1], False))
+
+
+class AutumnCropsEndpointTests(unittest.TestCase):
+    def options(self, norms, **query):
+        self.soil_types = []
+
+        def norm_range(crop, jb_numbers, only_organic):
+            self.soil_types = jb_numbers
+            return norms.get(crop)
+
+        with (
+            patch.object(autumn_n, "norm_range", norm_range),
+            patch.object(
+                rotation_candidates.afgroede_normer,
+                "lookup_crop_params",
+                lambda code: {"navn": f"Afgrøde {code}"},
+            ),
+        ):
+            return rotation_candidates.list_autumn_crops(None, **query)
+
+    def test_lists_the_crops_with_a_norm_by_group(self) -> None:
+        options = self.options(
+            {VINTERHVEDE: (120.0, 175.0), VINTERRAPS: (110.0, 159.0)}, jbnr=[4],
+        )
+
+        self.assertEqual(
+            [
+                (option.afgrode_kode, option.navn, option.group, option.norm_max_kg_n_ha)
+                for option in options
+            ],
+            [
+                (VINTERRAPS, "Afgrøde 22", "Vinterraps", 159.0),
+                (VINTERHVEDE, "Afgrøde 11", "Vinterkorn", 175.0),
+            ],
+        )
+        self.assertEqual(self.soil_types, [4])
+
+    def test_without_soil_types_it_covers_them_all(self) -> None:
+        self.options({})
+
+        self.assertEqual(self.soil_types, list(range(1, 13)))
 
 
 class GodningSettingsTests(unittest.TestCase):
