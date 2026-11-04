@@ -228,8 +228,10 @@ class RealHistoryLookbackTests(unittest.TestCase):
 def fake_n_inputs(*args, **kwargs) -> dict:
     return {
         "mncs": 100.0,
-        "mnca": 0.0,
         "g0": 0.0,
+        "autumn_n": 0.0,
+        "autumn_g0": 0.0,
+        "autumn_mineral_n": 0.0,
         "net_n": 100.0,
         "org_mineral_n_applied": 0.0,
         "fv_forfrugt": 0.0,

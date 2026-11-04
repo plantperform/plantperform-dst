@@ -22,13 +22,13 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
     RotationYear,
 )
-from app.domain.simulation import GodningSettings
+from app.domain.simulation import AutumnPlan, GodningSettings
 from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
 from app.services.economics.udbytterespons import KONVENTIONEL, OEKOLOGISK, har_udbytterespons
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
-from app.services.rotations import afgroede_normer, saedskifte_library
+from app.services.rotations import afgroede_normer, autumn_n, saedskifte_library
 from app.services.rotations.historical_secondary_crop import historical_secondary_crop
 from app.services.virkemidler import virkemiddel_tilladt
 
@@ -72,8 +72,10 @@ def compute_n_inputs(
     only_organic: bool,
     irrigated: bool = False,
     driftsform: str = KONVENTIONEL,
+    autumn_kg_n: float = 0.0,
+    autumn_manure: bool = False,
 ) -> dict:
-    """Calculate {mncs, mnca, g0, net_n, org_mineral_n_applied} for one position.
+    """Calculate the N inputs of one position's crop, such as mncs, g0 and autumn_n.
 
     N-norm%: the scenarie's n_norm_pct is the total available N, forfrugtsværdi
     included. kvote_n = n_norm × N-norm%, and only the part the forfrugt does
@@ -102,8 +104,14 @@ def compute_n_inputs(
         both min(org_mineral_n, net_scaled), with no handelsgødning top-up.
     G0 is always based on eff_org: eff_org × (100−mineralsk_andel%)/mineralsk_andel%.
 
-    MNCA (autumn mineral N) is not part of the gødning choice in the original
-    model. It is a separate, independent input that defaults to 0.
+    autumn_kg_n moves that much of the crop's N to the autumn before it, at most
+    all of it: mncs and g0 are what is left in spring, and autumn_n and autumn_g0
+    what the year before gets (see evaluate_sequence_for_mark), and
+    autumn_mineral_n the handelsgødning among it.
+    org_mineral_n_applied stays the crop's whole husdyrgødning. Where there is
+    only one kind of gødning the moved N is that kind, whatever autumn_manure
+    says. Autumn husdyrgødning comes out of the crop's own husdyrgødning; autumn
+    handelsgødning leaves less room for it, as gødning stops at the norm.
     """
     norm = afgroede_normer.lookup_norm(afgrode_kode, jbnr, irrigated, only_organic)
     prev_norm = (
@@ -118,7 +126,8 @@ def compute_n_inputs(
 
     if not norm or norm["n_norm"] is None:
         return {
-            "mncs": 0.0, "mnca": 0.0, "g0": 0.0, "net_n": None, "org_mineral_n_applied": 0.0,
+            "mncs": 0.0, "g0": 0.0, "autumn_n": 0.0, "autumn_g0": 0.0,
+            "autumn_mineral_n": 0.0, "net_n": None, "org_mineral_n_applied": 0.0,
             "fv_forfrugt": fv_forfrugt, "n_norm": None,
         }
 
@@ -134,8 +143,11 @@ def compute_n_inputs(
     if driftsform == OEKOLOGISK:
         eff_org = net_scaled
     elif org_mineral_n <= 0:
+        crop_n = 0.0 if only_organic else net_scaled
+        autumn_n_kg = min(autumn_kg_n, crop_n)
         return {
-            "mncs": 0.0 if only_organic else net_scaled, "mnca": 0.0, "g0": 0.0,
+            "mncs": crop_n - autumn_n_kg, "g0": 0.0,
+            "autumn_n": autumn_n_kg, "autumn_g0": 0.0, "autumn_mineral_n": autumn_n_kg,
             "net_n": net_n, "org_mineral_n_applied": 0.0,
             "fv_forfrugt": fv_forfrugt, "n_norm": norm["n_norm"],
         }
@@ -151,17 +163,27 @@ def compute_n_inputs(
     # up to the norm. org_mineral_n is an upper limit on allocated utilized N,
     # not a fixed applied quantity. G0 must therefore reflect the organically
     # bound remainder of the quantity actually allocated (eff_org), not the cap.
-    g0 = eff_org * (pool_pct / mineralsk_andel_pct)
+    if only_organic or driftsform == OEKOLOGISK or autumn_manure:
+        autumn_n_kg = min(autumn_kg_n, eff_org)
+        autumn_org = autumn_n_kg
+    else:
+        autumn_n_kg = min(autumn_kg_n, net_scaled)
+        autumn_org = 0.0
+        eff_org = min(eff_org, net_scaled - autumn_n_kg)
+    g0 = (eff_org - autumn_org) * (pool_pct / mineralsk_andel_pct)
+    autumn_g0 = autumn_org * (pool_pct / mineralsk_andel_pct)
 
     if only_organic:
-        mncs = eff_org
+        crop_n = eff_org
     else:
-        mncs = net_scaled  # Organisk gødning + handelsgødning always total the full norm
+        crop_n = net_scaled  # Organisk gødning + handelsgødning always total the full norm
 
     return {
-        "mncs": mncs,
-        "mnca": 0.0,
+        "mncs": crop_n - autumn_n_kg,
         "g0": g0,
+        "autumn_n": autumn_n_kg,
+        "autumn_g0": autumn_g0,
+        "autumn_mineral_n": autumn_n_kg - autumn_org,
         "net_n": net_n,
         "org_mineral_n_applied": eff_org,
         "fv_forfrugt": fv_forfrugt,
@@ -193,6 +215,7 @@ def evaluate_sequence_for_mark(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    autumn_plan: AutumnPlan = (),
 ) -> RotationCandidateEvaluation:
     """Evaluate eight positions with udvaskning and DB plus cycle averages.
 
@@ -212,6 +235,15 @@ def evaluate_sequence_for_mark(
     still uses the scenarie's unchanged gødning choices. The 2026 catch crop
     the mark reported is position 0's previous secondary crop. Omitting
     real_history keeps the previous behavior of purely cyclic lookback.
+
+    autumn_plan moves part of a crop's N to the autumn before it. NLES5 counts
+    a year from April to March, so position i gets the autumn N of next year's
+    crop as MNCA, and the organically bound part of autumn husdyrgødning in its
+    G0, and next year's crop keeps the rest for spring. Yield, cost and the
+    allocated figures follow the crop, whichever year the N was spread. Whether
+    a crop stands in autumn follows the cycle, also for position 0, so all N
+    moved is both taken from one year and added to another. The first crop's
+    autumn is 2026, which is not part of the eight years.
     """
     n_norm_pct = float(result_ref.n_norm_pct)
 
@@ -253,6 +285,17 @@ def evaluate_sequence_for_mark(
             )
         return udlaeg_seq[idx % active_len]
 
+    autumn_by_crop = {code: (kg_n, manure) for code, kg_n, manure in autumn_plan}
+
+    def autumn_for(i: int) -> tuple[float, bool]:
+        code = afgrode_seq[i]
+        cycle_prev = (i - 1) % active_len
+        if code in autumn_by_crop and autumn_n.stands_in_autumn(
+            code, afgrode_seq[cycle_prev], udlaeg_seq[cycle_prev]
+        ):
+            return autumn_by_crop[code]
+        return 0.0, False
+
     n_inputs = [
         compute_n_inputs(
             afgrode_seq[i],
@@ -265,8 +308,13 @@ def evaluate_sequence_for_mark(
             only_organic,
             irrigated,
             driftsform,
+            *autumn_for(i),
         )
         for i in range(8)
+    ]
+    mnca = [n_inputs[(i + 1) % active_len]["autumn_n"] for i in range(8)]
+    g0_by_year = [
+        n_inputs[i]["g0"] + n_inputs[(i + 1) % active_len]["autumn_g0"] for i in range(8)
     ]
 
     def lookback(i: int, offset: int) -> tuple[int | None, float, float, float]:
@@ -286,12 +334,7 @@ def evaluate_sequence_for_mark(
         wrapped = idx % active_len
         code = afgrode_seq[wrapped]
         f = afgroede_normer.lookup_nfix(code, jbnr, irrigated) if code is not None else 0.0
-        return (
-            code,
-            f,
-            n_inputs[wrapped]["mncs"] + n_inputs[wrapped]["mnca"],
-            n_inputs[wrapped]["g0"],
-        )
+        return code, f, n_inputs[wrapped]["mncs"] + mnca[wrapped], g0_by_year[wrapped]
 
     years: list[RotationCandidateYearResult] = []
     for i in range(8):
@@ -317,8 +360,8 @@ def evaluate_sequence_for_mark(
                 prev_udlaeg_kode=prev_udlaeg_for(i),
                 jbnr=jbnr,
                 mncs=n_inputs[i]["mncs"],
-                mnca=n_inputs[i]["mnca"],
-                g0=n_inputs[i]["g0"],
+                mnca=mnca[i],
+                g0=g0_by_year[i],
                 m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
                 irrigated=irrigated,
                 fdato=fdato, precision_dagsbasis=precision_dagsbasis,
@@ -336,8 +379,9 @@ def evaluate_sequence_for_mark(
         # the only part that counts toward the norm, like handelsgødning. g0 is
         # the remaining organically bound part; it does not count toward the
         # norm but enters L_nuar through G0/G1/G2 above.
+        crop_n = n_inputs[i]["mncs"] + n_inputs[i]["autumn_n"]
         tildelt_husdyrgodning_udnyttet = n_inputs[i]["org_mineral_n_applied"]
-        tildelt_handelsgodning = max(0.0, n_inputs[i]["mncs"] - tildelt_husdyrgodning_udnyttet)
+        tildelt_handelsgodning = max(0.0, crop_n - tildelt_husdyrgodning_udnyttet)
         # Tonnage overview of the husdyrgødning actually allocated to this
         # position. This intentionally uses tildelt_husdyrgodning_udnyttet
         # (eff_org, this position's norm-limited allocation), not the raw
@@ -353,7 +397,8 @@ def evaluate_sequence_for_mark(
         )
         db = calculate_db(
             this_code, driftsform, jbnr,
-            mncs=n_inputs[i]["mncs"], mnca=n_inputs[i]["mnca"], irrigated=irrigated,
+            mncs=crop_n - n_inputs[i]["autumn_mineral_n"],
+            mnca=n_inputs[i]["autumn_mineral_n"], irrigated=irrigated,
             org_mineral_n_applied=tildelt_husdyrgodning_udnyttet,
             udlaeg_kode=udl_code, only_organic=only_organic,
             praecisionsjordbrug=praecisionsjordbrug,
@@ -377,7 +422,8 @@ def evaluate_sequence_for_mark(
             forfrugtsvaerdi_kgn_ha=n_inputs[i]["fv_forfrugt"],
             tildelt_husdyrgodning_udnyttet_kgn_ha=tildelt_husdyrgodning_udnyttet,
             tildelt_handelsgodning_kgn_ha=tildelt_handelsgodning,
-            husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"],
+            husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"] + n_inputs[i]["autumn_g0"],
+            autumn_allocated_kg_n_ha=n_inputs[i]["autumn_n"],
             husdyrgodning_ton_pr_ha=husdyrgodning_ton,
             afgrode_norm_kgn_ha=n_inputs[i]["n_norm"],
             n_norm_pct=n_norm_pct,
@@ -429,6 +475,7 @@ def evaluate_candidate_for_mark(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    autumn_plan: AutumnPlan = (),
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a sædskifte candidate over eight yearly positions.
 
@@ -460,6 +507,7 @@ def evaluate_candidate_for_mark(
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
         economics_key=economics_key,
+        autumn_plan=autumn_plan,
     )
 
 
@@ -492,6 +540,7 @@ def evaluate_with_overrides(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    autumn_plan: AutumnPlan = (),
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a candidate after applying manual changes to the library result.
 
@@ -556,6 +605,7 @@ def evaluate_with_overrides(
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
         economics_key=economics_key,
+        autumn_plan=autumn_plan,
     )
 
 
@@ -638,6 +688,7 @@ def generate_candidates_for_field(
             org_n_topsoil=org_n_topsoil,
             s_soil=s_soil,
             economics_key=economics_key,
+            autumn_plan=godning.autumn_plan(),
         )
         for item in prepared
     ]
@@ -685,4 +736,5 @@ def generate_permanent_crop_candidate(
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
         economics_key=economics_key,
+        autumn_plan=godning.autumn_plan(),
     )

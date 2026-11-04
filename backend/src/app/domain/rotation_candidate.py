@@ -54,6 +54,9 @@ class RotationCandidateYearResult(CamelModel):
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0.0
     tildelt_handelsgodning_kgn_ha: float = 0.0
     husdyrgodning_organisk_bundet_kgn_ha: float = 0.0
+    # The part of the crop's own N, in the figures above, that was spread the
+    # autumn before. It enters NLES5 as the MNCA of the year before this one.
+    autumn_allocated_kg_n_ha: float = 0.0
     # Tonnage overview (streamlit_app.py's "Reference — ton-overblik"): the
     # norm-limited quantity of husdyrgødning allocated at this rotation position
     # (the position's utilized N from husdyrgødning divided by the gødning's N

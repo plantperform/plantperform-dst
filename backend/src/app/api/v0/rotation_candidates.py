@@ -391,6 +391,7 @@ def evaluate_rotation_candidates(
                 percolation_by_kategori=percolation,
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
+                autumn_plan=request.godning.autumn_plan(),
             )
             for ref in request.candidate_refs
         ]

@@ -33,7 +33,8 @@ def evaluation_args(simulation, registry, real_history, jbnr):
     soil = repository._soil_data_for_context(registry)
     percolation, org_n, s_soil = soil if soil else (None, None, None)
     return {
-        **simulation.godning.model_dump(),
+        **simulation.godning.model_dump(exclude={"autumn_allocations"}),
+        "autumn_plan": simulation.godning.autumn_plan(),
         "jbnr": jbnr,
         "fdato": simulation.eea_fdato,
         "precision_dagsbasis": simulation.eea_precision_dagsbasis,
