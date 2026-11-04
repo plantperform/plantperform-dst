@@ -545,6 +545,7 @@ def _load_prisliste() -> dict[str, dict]:
 _STORED_LINE_KEYS = ("kategori", "behandling", "udgift_kr_ha")
 _N_POST = "Handelsgødning, kvælstof (N)"
 _N_UDBRINGNING_POST = "Handelsgødning, udbringning"
+_BUDGET_SPREADING = "Gødningsspredning"
 _MAJSHELSAED_KODE = 216
 
 
@@ -599,7 +600,9 @@ def calculate_db(
     (`mncs - org_mineral_n_applied`) is priced at the N price of
     handelsgødning; the gylle portion incurs only application costs. This also
     applies to konventionelle gylle categories, such as svinegylle/kvæggylle
-    sædskifter, not only økologiske ones.
+    sædskifter, not only økologiske ones. The budget's Gødningsspredning under
+    Markarbejde is the spreading of the handelsgødning; only an afgrøde whose
+    budget has none is priced one from the price list.
 
     husdyrgodning_ton_pr_ha: Tonnes of husdyrgødning spread per ha, the
     utilized N divided by the gødning's utilized N per tonne. The application
@@ -718,6 +721,18 @@ def calculate_db(
     sorteret_udbytte = udbytte - frasorteret_udbytte
     indtaegt = sorteret_udbytte * salgspris + frasorteret_udbytte * frasorteret_pris + halm_indtaegt
 
+    budget_lines = _lookup_omkostningslinjer(
+        kalkule_kode,
+        driftsform,
+        jbnr,
+        irrigated,
+        kvalitet,
+        **({"economics": economics} if economics_key else {}),
+    )
+    budget_spreadings = sum(
+        line["maengde"] for line in budget_lines if line["behandling"] == _BUDGET_SPREADING
+    )
+
     # Itemized rows behind each category total for the UI calculation
     # walkthrough, showing which entries actually total categories such as
     # "Gødning" or "Markarbejde". only_organic, not driftsform, determines
@@ -729,11 +744,11 @@ def calculate_db(
     economic_n = quantities.get(
         quantity_id(afgrodekode, "fertiliser", "mineralN"), handelsgodning_n
     )
+    spreading = 1.0 if handelsgodning_n > 0 and not budget_spreadings else 0.0
     economic_spreading = quantities.get(
-        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"),
-        1.0 if handelsgodning_n > 0 else 0.0,
+        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"), spreading
     )
-    if handelsgodning_n > 0 or economic_n > 0 or economic_spreading > 0:
+    if handelsgodning_n > 0 or economic_n > 0:
         goedning_linjer.append(
             list_line(
                 "Gødning",
@@ -744,12 +759,13 @@ def calculate_db(
                 navn="Handelsgødning, N",
             )
         )
+    if economic_spreading > 0:
         goedning_linjer.append(
             list_line(
                 "Gødning",
                 "Udbringning, handelsgødning",
                 _N_UDBRINGNING_POST,
-                quantity=1.0 if handelsgodning_n > 0 else 0.0,
+                quantity=spreading,
                 purpose="mineralSpreading",
             )
         )
@@ -817,17 +833,7 @@ def calculate_db(
             "foelger_udbytte": True,
         }
 
-    linjer = [
-        follow_yield(line)
-        for line in _lookup_omkostningslinjer(
-            kalkule_kode,
-            driftsform,
-            jbnr,
-            irrigated,
-            kvalitet,
-            **({"economics": economics} if economics_key else {}),
-        )
-    ]
+    linjer = [follow_yield(line) for line in budget_lines]
     udlaeg_kategori = _udlaeg_kategori(udlaeg_kode, afgrodekode)
     if udlaeg_kategori:
         for kategori, behandling, post in (

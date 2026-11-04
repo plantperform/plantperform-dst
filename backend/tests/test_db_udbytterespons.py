@@ -20,6 +20,17 @@ PRISLISTE = {
 }
 
 
+def budget_spreadings(count: float) -> list[dict]:
+    return [
+        {
+            "kategori": "Markarbejde",
+            "behandling": "Gødningsspredning",
+            "udgift_kr_ha": count * 109.0,
+            "maengde": count,
+        }
+    ]
+
+
 class CalculateDbYieldResponseTests(unittest.TestCase):
     def setUp(self) -> None:
         db_calculator.calculate_db.cache_clear()
@@ -51,6 +62,28 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(result["udbytte"], 53.85, places=2)
         self.assertEqual(result["tilgaengelig_n"], 140.0)
+
+    def spreading(self, count, **values) -> dict[str, float]:
+        with patch.object(
+            db_calculator,
+            "_lookup_omkostningslinjer",
+            lambda *args, **kwargs: budget_spreadings(count) if count else [],
+        ):
+            result = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1, **values)
+        return {
+            line["behandling"]: line["udgift_kr_ha"]
+            for line in result["linjer"]
+            if line["kategori"] == "Gødning" and "Udbringning" in line["behandling"]
+        }
+
+    def test_the_budgets_spreading_is_not_priced_again(self) -> None:
+        self.assertEqual(self.spreading(1, mncs=175.0), {})
+
+    def test_a_budget_without_spreading_pays_one_from_the_price_list(self) -> None:
+        self.assertEqual(self.spreading(0, mncs=175.0), {"Udbringning, handelsgødning": 100.0})
+
+    def test_without_handelsgoedning_there_is_nothing_to_spread(self) -> None:
+        self.assertEqual(self.spreading(0, mncs=100.0, org_mineral_n_applied=100.0), {})
 
     def test_drying_follows_the_yield(self) -> None:
         lines = [
