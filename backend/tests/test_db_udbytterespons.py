@@ -85,6 +85,12 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
     def test_without_handelsgoedning_there_is_nothing_to_spread(self) -> None:
         self.assertEqual(self.spreading(0, mncs=100.0, org_mineral_n_applied=100.0), {})
 
+    def test_oekologisk_never_has_handelsgoedning(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Økologisk", 1, mncs=175.0, mnca=40.0, only_organic=False,
+        )
+        self.assertEqual(result["goedning"], 0.0)
+
     def test_drying_follows_the_yield(self) -> None:
         lines = [
             {
