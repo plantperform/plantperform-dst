@@ -482,6 +482,7 @@ def _expand_yearly_options(
                     org_n_topsoil=org_n_topsoil,
                     s_soil=s_soil,
                     economics_key=economics_key,
+                    autumn_plan=godning.autumn_plan(),
                 )
             )
             if variant is None:

@@ -559,6 +559,7 @@ def post_farm_simulation_field_preview_rotation(
         org_n_topsoil=org_n_topsoil,
         s_soil=s_soil,
         economics_key=simulation.economics_snapshot.overrides.cache_key(),
+        autumn_plan=godning.autumn_plan(),
     )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")

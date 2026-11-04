@@ -590,10 +590,13 @@ def calculate_db(
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
-    mncs: Total spring-applied mineral N in kg N/ha (handelsgødning plus any
-    utilized organisk N). The default is the afgrøde's own 100% Bilag 1 N norm
-    for the given JB-nr and is later replaced by the actual MNCS for a specific
-    sædskifte position.
+    mncs: Mineral N in kg N/ha apart from `mnca`: handelsgødning spread in spring
+    plus any utilized organisk N, also from autumn. The default is the afgrøde's
+    own 100% Bilag 1 N norm for the given JB-nr and is later replaced by the
+    actual MNCS for a specific sædskifte position.
+
+    mnca: The afgrøde's own handelsgødning spread the autumn before, in kg N/ha.
+    It belongs to this afgrøde's yield and costs.
 
     org_mineral_n_applied: The portion of `mncs` supplied by organisk gødning
     (gylle) rather than handelsgødning. Only the remainder
