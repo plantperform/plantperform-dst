@@ -545,7 +545,10 @@ def _load_prisliste() -> dict[str, dict]:
 _STORED_LINE_KEYS = ("kategori", "behandling", "udgift_kr_ha")
 _N_POST = "Handelsgødning, kvælstof (N)"
 _N_UDBRINGNING_POST = "Handelsgødning, udbringning"
+_AUTUMN_SPREADING_LABEL = "Udbringning, handelsgødning, efterår"
 _BUDGET_SPREADING = "Gødningsspredning"
+# A budget with this many spreadings is taken to include the one in autumn.
+_SPREADINGS_WITH_AUTUMN = 3
 _MAJSHELSAED_KODE = 216
 
 
@@ -596,7 +599,8 @@ def calculate_db(
     actual MNCS for a specific sædskifte position.
 
     mnca: The afgrøde's own handelsgødning spread the autumn before, in kg N/ha.
-    It belongs to this afgrøde's yield and costs.
+    It belongs to this afgrøde's yield and costs. It takes a spreading of its
+    own, unless the budget's spreadings already cover the autumn.
 
     org_mineral_n_applied: The portion of `mncs` supplied by organisk gødning
     (gylle) rather than handelsgødning. Only the remainder
@@ -740,15 +744,15 @@ def calculate_db(
     # "Gødning" or "Markarbejde".
     goedning_linjer: list[dict] = []
     no_mineral_fertiliser = only_organic or driftsform == OEKOLOGISK
-    handelsgodning_n = (
-        0.0 if no_mineral_fertiliser else max(0.0, mncs - org_mineral_n_applied) + mnca
-    )
+    spring_mineral_n = 0.0 if no_mineral_fertiliser else max(0.0, mncs - org_mineral_n_applied)
+    autumn_mineral_n = 0.0 if no_mineral_fertiliser else mnca
+    handelsgodning_n = spring_mineral_n + autumn_mineral_n
     economic_n = quantities.get(
         quantity_id(afgrodekode, "fertiliser", "mineralN"), handelsgodning_n
     )
-    spreading = 1.0 if handelsgodning_n > 0 and not budget_spreadings else 0.0
+    spring_spreading = 1.0 if spring_mineral_n > 0 and not budget_spreadings else 0.0
     economic_spreading = quantities.get(
-        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"), spreading
+        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"), spring_spreading
     )
     if handelsgodning_n > 0 or economic_n > 0:
         goedning_linjer.append(
@@ -767,9 +771,13 @@ def calculate_db(
                 "Gødning",
                 "Udbringning, handelsgødning",
                 _N_UDBRINGNING_POST,
-                quantity=spreading,
+                quantity=spring_spreading,
                 purpose="mineralSpreading",
             )
+        )
+    if autumn_mineral_n > 0 and budget_spreadings < _SPREADINGS_WITH_AUTUMN:
+        goedning_linjer.append(
+            list_line("Gødning", _AUTUMN_SPREADING_LABEL, _N_UDBRINGNING_POST)
         )
     if (
         husdyrgodning_ton_pr_ha > 0

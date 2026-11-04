@@ -85,6 +85,30 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
     def test_without_handelsgoedning_there_is_nothing_to_spread(self) -> None:
         self.assertEqual(self.spreading(0, mncs=100.0, org_mineral_n_applied=100.0), {})
 
+    def test_autumn_handelsgoedning_takes_one_more_spreading(self) -> None:
+        self.assertEqual(
+            self.spreading(2, mncs=135.0, mnca=40.0),
+            {"Udbringning, handelsgødning, efterår": 100.0},
+        )
+
+    def test_three_spreadings_include_the_one_in_autumn(self) -> None:
+        self.assertEqual(self.spreading(3, mncs=135.0, mnca=40.0), {})
+
+    def test_a_budget_without_spreading_pays_for_spring_and_autumn(self) -> None:
+        self.assertEqual(
+            self.spreading(0, mncs=135.0, mnca=40.0),
+            {
+                "Udbringning, handelsgødning": 100.0,
+                "Udbringning, handelsgødning, efterår": 100.0,
+            },
+        )
+
+    def test_autumn_n_is_part_of_the_crops_available_n_and_cost(self) -> None:
+        moved = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1, mncs=135.0, mnca=40.0)
+        self.assertEqual(moved["tilgaengelig_n"], 175.0)
+        self.assertEqual(moved["udbytte"], 57.0)
+        self.assertEqual(moved["linjer"][0]["udgift_kr_ha"], 1750.0)
+
     def test_oekologisk_never_has_handelsgoedning(self) -> None:
         result = db_calculator.calculate_db(
             VINTERHVEDE, "Økologisk", 1, mncs=175.0, mnca=40.0, only_organic=False,
