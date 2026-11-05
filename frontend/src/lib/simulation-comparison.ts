@@ -609,12 +609,20 @@ export const STATEMENT_RESULT: StatementLine = {
   amount: (statement) => statement.db,
 }
 
+// An amount per year in the statement's unit: per ha of its area, or in total.
+export const formatStatementAmount = (
+  statement: EconomicsStatement,
+  amount: number,
+  unit: StatementUnit,
+  format: (value: number) => string = formatDbDkk,
+): string | null => {
+  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
+  return value === null ? null : format(value)
+}
+
 export const formatStatementLine = (
   statement: EconomicsStatement,
   line: StatementLine,
   unit: StatementUnit,
-): string | null => {
-  const amount = line.amount(statement)
-  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
-  return value === null ? null : (line.format ?? formatDbDkk)(value)
-}
+): string | null =>
+  formatStatementAmount(statement, line.amount(statement), unit, line.format)

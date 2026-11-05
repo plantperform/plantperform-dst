@@ -28,6 +28,7 @@ import {
   quotaLimitLinePct,
   quotaTradeBand,
   quotaTradeKgIn,
+  quotaTradeAmounts,
   quotaTradePayment,
   quotaTradeVaries,
   tradePriceDkkPerKg,
@@ -156,6 +157,21 @@ describe('kvotehandel results', () => {
     expect(
       describeSeparateQuotas(resolveFarmQuota(fields, true, limitFor(30))),
     ).toBe('alle 2 oplande under grænsen')
+  })
+
+  it('splits the payment into what buying cost and selling earned', () => {
+    // Bought 120 kg N at 35 kr every year; sold 50 kg N at 35,5 kr.
+    expect(quotaTradeAmounts([buy, sell])).toEqual({
+      bought: 4_200,
+      sold: 1_775,
+    })
+    // A trade that buys 30 kg N in one year and sells 40 kg N in the others.
+    const mixed = { ...buy, tradeKgByYear: byYear(30, -40) }
+    expect(quotaTradeAmounts([mixed])).toEqual({
+      bought: (30 * 35) / 8,
+      sold: (7 * 40 * 30) / 8,
+    })
+    expect(quotaTradeAmounts([])).toEqual({ bought: 0, sold: 0 })
   })
 
   it('pays a trade at the price of its direction', () => {
