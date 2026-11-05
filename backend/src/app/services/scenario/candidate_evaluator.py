@@ -28,7 +28,7 @@ from app.services.economics.db_calculator import calculate_db
 from app.services.economics.udbytterespons import KONVENTIONEL, OEKOLOGISK, har_udbytterespons
 from app.services.nles5 import bridge_v2
 from app.services.nles5.engine import LowNitrogenModelError
-from app.services.rotations import afgroede_normer, autumn_n, saedskifte_library
+from app.services.rotations import afgroede_normer, autumn_n, custom, saedskifte_library
 from app.services.rotations.historical_secondary_crop import historical_secondary_crop
 from app.services.virkemidler import virkemiddel_tilladt
 
@@ -252,9 +252,17 @@ def evaluate_sequence_for_mark(
     # no effect, no establishment cost, and no udlæg shown.
     udlaeg_seq = list(udlaeg_seq)
     udlaeg_navn_seq = list(udlaeg_navn_seq)
+    following_crop = afgrode_seq[0]
+    source_ref = base_ref or result_ref
+    if custom.is_custom(source_ref.saedskiftevariant) and not overrides:
+        source_variant, _ = custom.resolve_variant(source_ref.saedskiftevariant, source_ref.variant)
+        following_crop = source_variant.positions[
+            (start_year - 1 + 8) % len(source_variant.positions)
+        ].afgrode_kode
     for i in range(8):
         if not virkemiddel_tilladt(
-            udlaeg_seq[i], afgrode_seq[i], afgrode_seq[(i + 1) % active_len],
+            udlaeg_seq[i], afgrode_seq[i],
+            following_crop if i == 7 else afgrode_seq[(i + 1) % active_len],
         ):
             udlaeg_seq[i] = udlaeg_navn_seq[i] = None
 
@@ -404,6 +412,7 @@ def evaluate_sequence_for_mark(
             praecisionsjordbrug=praecisionsjordbrug,
             forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
             husdyrgodning_ton_pr_ha=husdyrgodning_ton,
+            **({"rotation_crop": True} if custom.contains_crop(this_code) else {}),
             **({"economics_key": economics_key} if economics_key else {}),
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
@@ -425,6 +434,7 @@ def evaluate_sequence_for_mark(
             husdyrgodning_organisk_bundet_kgn_ha=n_inputs[i]["g0"] + n_inputs[i]["autumn_g0"],
             autumn_allocated_kg_n_ha=n_inputs[i]["autumn_n"],
             husdyrgodning_ton_pr_ha=husdyrgodning_ton,
+            **({"rotation_crop": True} if custom.contains_crop(this_code) else {}),
             afgrode_norm_kgn_ha=n_inputs[i]["n_norm"],
             n_norm_pct=n_norm_pct,
         ))
@@ -559,6 +569,7 @@ def evaluate_with_overrides(
     otherwise its actual afgrøde sequence would share an ID with the different
     start_year=1 candidate in the stored candidate set.
     """
+    custom.validate_overrides(base_ref, overrides, start_year, driftsform)
     raw_rotation = _rotation_for_ref(base_ref, start_year)
     raw_rotation = _strip_disabled_virkemidler(raw_rotation, tidlig_saaning, mellemafgrode)
     active_len = saedskifte_library.rotation_active_len(raw_rotation)
@@ -620,29 +631,31 @@ def prepare_candidates(
     saedskiftevarianter, n_norm_procenter, tidlig_saaning=True, mellemafgrode=True
 ) -> tuple[PreparedCandidate, ...]:
     """Resolve and deduplicate field-independent candidate inputs once per job."""
-    prepared = []
-    seen_ref_ids = set()
-    seen_rotation_by_n_norm = {}
-    for saedskiftevariant in saedskiftevarianter:
-        for variant in saedskifte_library.list_variants(saedskiftevariant):
-            raw = saedskifte_library.generate_rotation(saedskiftevariant, variant)
-            rotation = tuple(_strip_disabled_virkemidler(raw, tidlig_saaning, mellemafgrode))
-            active_len = saedskifte_library.rotation_active_len(rotation)
-            for n_norm_pct in n_norm_procenter:
-                ref = RotationCandidateRef(
-                    saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct
-                )
-                ref_id = ref.to_id()
-                if ref_id in seen_ref_ids:
-                    continue
-                seen_ref_ids.add(ref_id)
-                seen = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
-                if rotation in seen:
-                    continue
-                seen.add(rotation)
-                if active_len:
-                    prepared.append(PreparedCandidate(ref, rotation, active_len))
-    return tuple(prepared)
+    with custom.measure_scope(tidlig_saaning, mellemafgrode):
+        custom.check_expansion(saedskiftevarianter, n_norm_procenter)
+        prepared = []
+        seen_ref_ids = set()
+        seen_rotation_by_n_norm = {}
+        for saedskiftevariant in saedskiftevarianter:
+            for variant in saedskifte_library.list_variants(saedskiftevariant):
+                raw = saedskifte_library.generate_rotation(saedskiftevariant, variant)
+                rotation = tuple(_strip_disabled_virkemidler(raw, tidlig_saaning, mellemafgrode))
+                active_len = saedskifte_library.rotation_active_len(rotation)
+                for n_norm_pct in n_norm_procenter:
+                    ref = RotationCandidateRef(
+                        saedskiftevariant=saedskiftevariant, variant=variant, n_norm_pct=n_norm_pct
+                    )
+                    ref_id = ref.to_id()
+                    if ref_id in seen_ref_ids:
+                        continue
+                    seen_ref_ids.add(ref_id)
+                    seen = seen_rotation_by_n_norm.setdefault(n_norm_pct, set())
+                    if rotation in seen:
+                        continue
+                    seen.add(rotation)
+                    if active_len:
+                        prepared.append(PreparedCandidate(ref, rotation, active_len))
+        return tuple(prepared)
 
 
 def generate_candidates_for_field(

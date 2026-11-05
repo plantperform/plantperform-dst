@@ -1,11 +1,7 @@
-import os
 import unittest
 from unittest.mock import patch
 
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+psycopg://dst2:dst2@localhost:5432/dst2",
-)
+import database_test_environment  # noqa: F401 -- configure the database before app imports
 
 from app.services.economics import db_calculator
 
@@ -54,6 +50,16 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         result = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1, mncs=175.0)
         self.assertEqual(result["udbytte"], 57.0)
         self.assertEqual(result["udbytte_faktor"], 1.0)
+
+    def test_custom_rotation_economics_does_not_pollute_the_default_cache(self) -> None:
+        with patch.object(db_calculator, "mangler_oekonomi", return_value=True):
+            custom = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1,
+                                                rotation_crop=True)
+
+            ordinary = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1)
+
+        self.assertFalse(custom["economics_missing"])
+        self.assertTrue(ordinary["economics_missing"])
 
     def test_available_n_below_the_norm_lowers_yield(self) -> None:
         # 80 % kvote after vinterraps: 122 kg applied + 18 kg forfrugt = 140 kg.

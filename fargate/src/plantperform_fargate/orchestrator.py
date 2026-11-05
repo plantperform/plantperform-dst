@@ -3,6 +3,7 @@
 import math
 from collections import defaultdict
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from app.data import repository
 from app.data.optimizer_inputs import OptimizerCandidate, OptimizerYear
@@ -12,6 +13,7 @@ from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
 from app.services.rotations import saedskifte_library
+from app.services.rotations.custom import with_snapshot_rotations
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
 from plantperform_fargate.deadline import check_deadline, solver_time_limit
@@ -259,6 +261,7 @@ def _quota_shortfall_error(
     )
 
 
+@with_snapshot_rotations
 def run_optimization(
     farm_id: str,
     simulation_id: str,
@@ -590,6 +593,7 @@ def _locked_yearly_field_contribution(
     )
 
 
+@with_snapshot_rotations
 def run_yearly_optimization(
     farm_id: str,
     simulation_id: str,
@@ -621,8 +625,6 @@ def run_yearly_optimization(
 
     candidates_by_field_id = {fc.field_id: fc for fc in field_candidates}
     if hasattr(snapshot, "contexts"):
-        from types import SimpleNamespace
-
         soil_data_by_imk_id = {
             field.imk_id: repository._soil_data_for_context(SimpleNamespace(**context))
             for field in fields

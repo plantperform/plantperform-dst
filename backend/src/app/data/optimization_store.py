@@ -1,15 +1,18 @@
 """Execution leases and recovery. Always lock setup before result."""
 
 import logging
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import func, select, update
 
-from app.data.db import SessionLocal
+from app.data import read_model_store, repository, saedskifte_store
+from app.data.db import SessionLocal, field_table
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
-from app.data.simulation_store import _fields
+from app.data.simulation_store import _fields, split_field
+from app.domain.field import FieldRecord
 from app.domain.optimization import (
     LEASE_DURATION_SECONDS,
     MAX_JOB_ATTEMPTS,
@@ -20,6 +23,7 @@ from app.domain.optimization import (
     OptimizationLeaseActiveError,
     OptimizationTerminalError,
 )
+from app.domain.simulation import Simulation
 
 logger = logging.getLogger(__name__)
 
@@ -255,14 +259,6 @@ def _execution_setup(session, simulation_id, run_id, token, revision, *, include
 
 def load_snapshot(simulation_id, run_id, token, revision):
     """Capture stable fields and small registry context, never read candidate caches."""
-    from copy import deepcopy
-
-    from app.data import read_model_store, repository
-    from app.data.db import field_table
-    from app.data.simulation_store import split_field
-    from app.domain.field import FieldRecord
-    from app.domain.simulation import Simulation
-
     with SessionLocal.begin() as session:
         setup = _execution_setup(session, simulation_id, run_id, token, revision, include_data=True)
         if setup is None:
@@ -377,6 +373,8 @@ def finish(
         if output is not None:
             # Keep successful provenance when later submissions replace result.run_id.
             output = {**output, "run_id": run_id, "result_revision": revision}
+            if saedskifte_store.snapshots_outdated(session, output.get("rotation_groups", {})):
+                values["status"] = "outdated"
             values.update(output=output, result_revision=revision)
         session.execute(
             update(results).where(results.c.simulation_id == simulation_id).values(**values)
@@ -386,9 +384,7 @@ def finish(
                 session.execute(
                     update(setups).where(setups.c.id == simulation_id).values(fields=setup_fields)
                 )
-            from app.data.read_model_store import publish_optimization
-
-            publish_optimization(session, simulation_id, revision, run_id, output)
+            read_model_store.publish_optimization(session, simulation_id, revision, run_id, output)
         return True
 
 

@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from app.data import repository, simulation_store
 from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
 from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints
+from app.services.rotations.custom import simulation_scope, with_simulation_rotations
 from app.services.scenario import candidate_evaluator
 from plantperform_fargate.deadline import check_deadline
 from plantperform_fargate.orchestrator import OptimizationInfeasibleError
@@ -49,6 +51,7 @@ def evaluation_args(simulation, registry, real_history, jbnr):
     }
 
 
+@with_simulation_rotations
 def prepare(simulation, fields, setup_fields, contexts):
     simulation.constraints = simulation_store.merge_constraints(
         OptimizationConstraints(),
@@ -97,12 +100,17 @@ def prepare(simulation, fields, setup_fields, contexts):
                 if key == "fixed_candidate" and field.allowed_rotation_ids:
                     conflicts.append(field.name)
                 continue
-            updated = candidate_evaluator.evaluate_with_overrides(
-                source,
-                old.overrides,
-                start_year=old.start_year,
-                **args,
-            )
+            try:
+                updated = candidate_evaluator.evaluate_with_overrides(
+                    source,
+                    old.overrides,
+                    start_year=old.start_year,
+                    **args,
+                )
+            except RotationDefinitionError:
+                if field.allowed_rotation_ids:
+                    conflicts.append(field.name)
+                continue
             if updated is not None:
                 setup[key] = updated.model_dump(mode="json")
                 full = simulation_store.merge_candidates(full, setup[key])
@@ -148,6 +156,11 @@ def prepare(simulation, fields, setup_fields, contexts):
 
 
 def hydrate(snapshot, selected):
+    with simulation_scope(snapshot.simulation):
+        return _hydrate(snapshot, selected)
+
+
+def _hydrate(snapshot, selected):
     result = {}
     rows = {row.field_id: row for row in snapshot.candidates}
     for field_id, candidate in selected.items():

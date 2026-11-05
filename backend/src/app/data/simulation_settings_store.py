@@ -5,11 +5,20 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from sqlalchemy import insert, select, update
 
-from app.data import repository, simulation_store
+from app.data import (
+    creation_store,
+    economics_store,
+    read_model_store,
+    repository,
+    saedskifte_store,
+    simulation_store,
+)
 from app.data.db import farm_table
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.domain.creation import CreationConflictError
 from app.domain.simulation import Simulation
+from app.services.rotations import custom
 
 REQUEST_TO_SETUP = {
     "saedskiftevarianter": "rotation_saedskiftevarianter",
@@ -37,9 +46,15 @@ def create(farm_id, request, email):
         existing = simulation_store._get_simulation(session, farm_id, simulation_id, email)
         if existing is not None:
             return existing
-        from app.data.economics_store import resolve_snapshot
-
-        snapshot = resolve_snapshot(session, request.economics_module_id, email)
+        rotation_groups = saedskifte_store.resolve_selected(
+            session, request.saedskiftevarianter, email=email
+        )
+        with (
+            custom.rotation_scope(rotation_groups, request.godning.driftsform),
+            custom.measure_scope(request.tidlig_saaning, request.mellemafgrode),
+        ):
+            custom.check_expansion(request.saedskiftevarianter, request.n_norm_procenter)
+        snapshot = economics_store.resolve_snapshot(session, request.economics_module_id, email)
         settings = request.model_dump(
             mode="json",
             exclude={
@@ -78,9 +93,7 @@ def create(farm_id, request, email):
         )
         session.execute(insert(results).values(simulation_id=simulation_id))
         # A settings-only simulation does not require display preparation.
-        from app.data.read_model_store import publish_simulation
-
-        publish_simulation(
+        read_model_store.publish_simulation(
             session,
             simulation_id,
             0,
@@ -118,14 +131,19 @@ def update_settings(farm_id, simulation_id, request, email):
         patch = request.model_dump(mode="json", exclude_unset=True, exclude={"expected_revision"})
         patch = {REQUEST_TO_SETUP.get(key, key): value for key, value in patch.items()}
         if "economics_module_id" in patch:
-            from app.data.economics_store import resolve_snapshot
-
-            patch["economics_module_id"] = resolve_snapshot(
+            patch["economics_module_id"] = economics_store.resolve_snapshot(
                 session,
                 patch["economics_module_id"],
                 email,
             ).source_id
         current = Simulation.model_validate(row.data).model_dump(mode="json")
+        if "rotation_saedskiftevarianter" in patch:
+            saedskifte_store.resolve_selected(
+                session,
+                patch["rotation_saedskiftevarianter"],
+                email=email,
+                existing=current["rotation_saedskiftevarianter"],
+            )
         # PATCH updates nested settings too; omitted values keep their saved meaning.
         for key in ("constraints", "godning", "optimization_settings"):
             if key in patch:
@@ -135,12 +153,20 @@ def update_settings(farm_id, simulation_id, request, email):
             return simulation_store._get_simulation(session, farm_id, simulation_id, email)
         calculations_changed = bool(changed.keys() - {"name"})
         if calculations_changed:
-            from app.data.creation_store import require_ready
-
-            require_ready(session, simulation_id)
+            creation_store.require_ready(session, simulation_id)
             require_idle(session, simulation_id)
         data = {**row.data, **changed}
-        Simulation.model_validate(data)
+        resolved = Simulation.model_validate(data)
+        rotation_groups = saedskifte_store.resolve_selected(
+            session, resolved.rotation_saedskiftevarianter
+        )
+        with (
+            custom.rotation_scope(rotation_groups, resolved.godning.driftsform),
+            custom.measure_scope(resolved.tidlig_saaning, resolved.mellemafgrode),
+        ):
+            custom.check_expansion(
+                resolved.rotation_saedskiftevarianter, resolved.rotation_n_norm_procenter
+            )
         session.execute(update(setups).where(setups.c.id == simulation_id).values(data=data))
         if calculations_changed:
             simulation_store.invalidate(session, simulation_id)
@@ -148,9 +174,6 @@ def update_settings(farm_id, simulation_id, request, email):
 
 
 def recover_creation(farm_id, simulation_id, email, *, expected_revision=None):
-    from app.data.read_model_store import publish_simulation
-    from app.domain.creation import CreationConflictError
-
     with repository.SessionLocal.begin() as session:
         if not repository._member_exists(session, farm_id, email):
             return None
@@ -185,7 +208,7 @@ def recover_creation(farm_id, simulation_id, email, *, expected_revision=None):
                 creation_status="done",
             )
         )
-        publish_simulation(
+        read_model_store.publish_simulation(
             session,
             simulation_id,
             revision,

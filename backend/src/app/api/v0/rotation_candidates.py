@@ -5,23 +5,26 @@ from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.auth import AuthenticatedUser, current_user
+from app.data import saedskifte_store
 from app.data.db import get_db
 from app.data.registry_repository import get_registry_fields
 from app.data.repository import get_farm, get_registry_soil_data_batch, list_fields
 from app.domain.base import CamelModel
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
+from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import GodningSettings
-from app.services.nles5.bridge_v2 import _FMAJS_HOVEDAFGRODE_KODER
 from app.services.rotations import (
     afgroede_normer,
     autumn_n,
+    choices,
+    custom,
     saedskifte_kategorier,
     saedskifte_library,
 )
+from app.services.rotations.choices import AfgrodeKodeOption
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
-from app.services.virkemidler import virkemiddel_tilladt
 
 router = APIRouter(prefix="/farms/{farm_id}/rotation-candidates", tags=["rotation candidates"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
@@ -52,12 +55,16 @@ class FieldRotationCandidates(CamelModel):
 
 
 class RotationCandidateOption(CamelModel):
+    can_copy: bool = False
+    name: str | None = None
     ref: RotationCandidateRef
     active_len: int
     crop_sequence: list[str]
 
 
 class SaedskifteOption(CamelModel):
+    can_copy: bool = False
+    name: str | None = None
     saedskiftevariant: str
     crop_sequence: list[str]
     active_len: int
@@ -68,51 +75,6 @@ class RotationKategoriOption(CamelModel):
     dyrkningssystem: str
     antal_saedskifter: int
     saedskifter: list[SaedskifteOption]
-
-
-class AfgrodeKodeOption(CamelModel):
-    code: int
-    navn: str
-
-
-# Real afgrødekoder valid as a sekundær afgrøde/udlæg (Afgrødetabellens egen
-# "Efterafgr"-flag, minus 921 "Bar jord" and the "Efterafgrøde type" family
-# (950-954/968) below - those two groups have their own PUMR eligibility
-# rules (Tabel A, felt A32) applied separately in list_udlaeg_koder.
-# Hardcoded here rather than a new DB flag, matching how the virkemiddel-
-# markers below are already hardcoded in bridge_v2.py
-# (_MELLEMAFGROEDE_UDLAEG_KODER m.fl.) - Del 4 flytter dette til datalaget.
-_REAL_UDLAEG_KODER: frozenset[int] = frozenset({
-    922, 943, 944, 945, 946, 960, 961, 962, 963, 964, 965, 966, 970,
-})
-
-# PUMR, Tabel A, felt A32 "Vinterplantedække": "Skemavalidering: Kun
-# økologer må have lov til at vælge afgrødekoden for Bar jord kode 921."
-_BAR_JORD_KODE = 921
-
-# PUMR, felt A32's "Efterafgrøde type"-undertype, valgt når Virkemiddel
-# (A77) = "Efterafgrøder" (0). Yderligere indsnævret af hovedafgrødens egen
-# majs-status og Grund6Procent-flag (docs/nles5-kategorier.md's
-# udlægskode-afsnit):
-# - Majs som hovedafgrøde: kun 953/954 må vælges.
-# - Grund6Procent=1: alle 6 må vælges.
-# - Grund6Procent=0 (og ikke majs): kun 950/951/952/968 må vælges.
-_EFTERAFGRODE_TYPE_KODER: frozenset[int] = frozenset({950, 951, 952, 968, 953, 954})
-_MAJS_EFTERAFGRODE_KODER: frozenset[int] = frozenset({953, 954})
-_GRUND6PROCENT_FALSE_EFTERAFGRODE_KODER: frozenset[int] = frozenset({950, 951, 952, 968})
-
-# Virkemiddel-markører (ikke rigtige afgrødekoder) som stadig er gyldige
-# sekundær-afgrøde-valg i dag, jf. bridge_v2.py's _MELLEMAFGROEDE_UDLAEG_KODER/
-# _TIDLIG_SAANING_UDLAEG_KODER. Alle fem (ikke kun mellemafgrøde/tidlig
-# såning) skal med her, ellers kan pickeren ikke vise/vælge en position der
-# allerede bruger en af dem (docs/nles5-kategorier.md's udlægskode-afsnit).
-_VIRKEMIDDEL_UDLAEG_OPTIONS: tuple[AfgrodeKodeOption, ...] = (
-    AfgrodeKodeOption(code=9682, navn="Mellemafgrøde"),
-    AfgrodeKodeOption(code=9684, navn="Mellemafgrøde e. frøgræs"),
-    AfgrodeKodeOption(code=9683, navn="Tidlig såning"),
-    AfgrodeKodeOption(code=9680, navn="Efterafgrøde e. frøgræs"),
-    AfgrodeKodeOption(code=2000, navn="Udlæg til frø"),
-)
 
 
 class AutumnCropOption(CamelModel):
@@ -145,12 +107,14 @@ def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
         for code, _udl, _udl_navn in raw[:active_len]
     ]
     return SaedskifteOption(
-        saedskiftevariant=saedskiftevariant, crop_sequence=names, active_len=active_len,
+        saedskiftevariant=saedskiftevariant,
+        crop_sequence=names,
+        active_len=active_len,
     )
 
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
-def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
+def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKategoriOption]:
     """Return the four sædskifte categories (driftsform + gødning level).
 
     Each category contains its individual sædskifte options with afgrøde-sequence
@@ -173,6 +137,35 @@ def list_rotation_kategorier(_: FarmMember) -> list[RotationKategoriOption]:
                 saedskifter=saedskifter,
             )
         )
+    groups, copyable = saedskifte_store.available_for_farm(farm_id, user.email)
+    for category in options:
+        for option in category.saedskifter:
+            option.can_copy = option.saedskiftevariant in copyable
+    for group in groups.values():
+        variant = group.variants[0]
+        preview = SaedskifteOption(
+            saedskiftevariant=group.id,
+            name=group.name,
+            can_copy=group.id in copyable,
+            active_len=len(variant.positions),
+            crop_sequence=[
+                afgroede_normer.lookup_crop_params(p.afgrode_kode).get("navn", "")
+                for p in variant.positions
+            ],
+        )
+        category = next(
+            (entry for entry in options if entry.kategori == custom.CUSTOM_CATEGORY), None
+        )
+        if category is None:
+            category = RotationKategoriOption(
+                kategori=custom.CUSTOM_CATEGORY,
+                dyrkningssystem="",
+                antal_saedskifter=0,
+                saedskifter=[],
+            )
+            options.append(category)
+        category.saedskifter.append(preview)
+        category.antal_saedskifter += 1
     return options
 
 
@@ -266,22 +259,7 @@ def list_autumn_crops(
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
 def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
-    """Return real afgrødekoder (Bilag 1/NUAR) usable as a hovedafgrøde.
-
-    Filtered on Afgrødetabellens own "Hovedafgrøde" flag, sorted by name for
-    the afgrøde dropdown in the live Phase 10 "Rediger manuelt" calculation.
-    Administrative/efterafgrøde-only codes (fx "Bar jord", "Ugyldig
-    afgrødekode") are excluded even though they carry a fallback NUAR M
-    value, since that value alone doesn't mean the code is a legitimate
-    hovedafgrøde choice.
-    """
-    names = afgroede_normer.crop_names_from_normer()
-    options = [
-        AfgrodeKodeOption(code=code, navn=navn)
-        for code, navn in names.items()
-        if afgroede_normer.lookup_crop_params(code).get("er_hovedafgrode")
-    ]
-    return sorted(options, key=lambda o: o.navn)
+    return choices.list_afgrode_koder()
 
 
 @router.get("/udlaeg-koder", response_model=list[AfgrodeKodeOption])
@@ -291,85 +269,44 @@ def list_udlaeg_koder(
     driftsform: str | None = None,
     naeste_afgrode_kode: int | None = None,
 ) -> list[AfgrodeKodeOption]:
-    """Return the valid sekundær afgrøde/udlæg choices for the "Rediger
-    manuelt" picker: real efterafgrøde-type afgrødekoder plus the five
-    virkemiddel-markers (mellemafgrøde/tidlig såning/…) still recognized by
-    bridge_v2.py. Sorted by name, like /afgrode-koder.
-
-    hovedafgrode_kode and driftsform apply the PUMR Tabel A, felt A32
-    "Vinterplantedække" eligibility rules for the position currently being
-    edited (docs/nles5-kategorier.md's udlægskode-afsnit): "Bar jord" (921)
-    for økologiske marker and, for every driftsform, after græs in Bilag 2,
-    table 8, where it marks the græs as ploughed after the harvest (W8 ved
-    ompløjning, see bridge_v2._resolve_w), and the "Efterafgrøde type" family
-    (950-954/968) narrowed by the hovedafgrøde's own majs-status and
-    Grund6Procent-flag. Mellemafgrøde and tidlig såning are offered only where
-    virkemidler.virkemiddel_tilladt allows them after the hovedafgrøde and
-    before naeste_afgrode_kode (next year's afgrøde). Every parameter is
-    optional - omitting one skips only the rule(s) that depend on it, for
-    callers that don't yet know the position's hovedafgrøde/driftsform.
-    """
-    names = afgroede_normer.crop_names_from_normer()
-    options = [
-        AfgrodeKodeOption(code=code, navn=navn)
-        for code, navn in names.items()
-        if code in _REAL_UDLAEG_KODER
-    ]
-
-    after_ploughable_graes = hovedafgrode_kode is not None and bool(
-        afgroede_normer.lookup_crop_params(hovedafgrode_kode).get("W_omploejning")
-    )
-    if driftsform == "Økologisk" or after_ploughable_graes:
-        bar_jord_navn = names.get(_BAR_JORD_KODE)
-        if bar_jord_navn is not None:
-            options.append(AfgrodeKodeOption(code=_BAR_JORD_KODE, navn=bar_jord_navn))
-
-    if hovedafgrode_kode is None:
-        allowed_efterafgrode_koder = _EFTERAFGRODE_TYPE_KODER
-    elif hovedafgrode_kode in _FMAJS_HOVEDAFGRODE_KODER:
-        allowed_efterafgrode_koder = _MAJS_EFTERAFGRODE_KODER
-    elif afgroede_normer.lookup_crop_params(hovedafgrode_kode).get("grund6procent"):
-        allowed_efterafgrode_koder = _EFTERAFGRODE_TYPE_KODER
-    else:
-        allowed_efterafgrode_koder = _GRUND6PROCENT_FALSE_EFTERAFGRODE_KODER
-    options.extend(
-        AfgrodeKodeOption(code=code, navn=names[code])
-        for code in allowed_efterafgrode_koder
-        if code in names
-    )
-
-    options.extend(
-        option
-        for option in _VIRKEMIDDEL_UDLAEG_OPTIONS
-        if hovedafgrode_kode is None
-        or virkemiddel_tilladt(option.code, hovedafgrode_kode, naeste_afgrode_kode)
-    )
-    return sorted(options, key=lambda o: o.navn)
+    return choices.list_udlaeg_koder(hovedafgrode_kode, driftsform, naeste_afgrode_kode)
 
 
 @router.get("", response_model=list[RotationCandidateOption])
-def list_candidate_refs(_: FarmMember) -> list[RotationCandidateOption]:
+def list_candidate_refs(farm_id: str, user: FarmMember) -> list[RotationCandidateOption]:
     """Return all available sædskifte candidates for troubleshooting/debugging,
     with a short afgrøde-sequence preview for each candidate.
 
     No udvaskning/DB calculation is performed here; use POST .../evaluate on a
     selected subset instead.
     """
-    options: list[RotationCandidateOption] = []
-    for s, v in saedskifte_library.list_all_saedskifte_refs():
-        raw = saedskifte_library.get_raw_rotation(s, v)
-        active_len = saedskifte_library.rotation_active_len(raw)
-        names = [
-            afgroede_normer.lookup_crop_params(code).get("navn", str(code))
-            for code, _udl, _udl_navn in raw[:active_len]
+    groups, copyable = saedskifte_store.available_for_farm(farm_id, user.email)
+    with custom.rotation_scope(groups):
+        custom.check_expansion(groups, _N_NORM_PROCENTER)
+        refs = saedskifte_library.list_all_saedskifte_refs() + [
+            (key, variant) for key in groups for variant in saedskifte_library.list_variants(key)
         ]
-        for n in _N_NORM_PROCENTER:
-            options.append(RotationCandidateOption(
-                ref=RotationCandidateRef(saedskiftevariant=s, variant=v, n_norm_pct=n),
-                active_len=active_len,
-                crop_sequence=names,
-            ))
-    return options
+        options = []
+        for group_id, variant in refs:
+            raw = saedskifte_library.get_raw_rotation(group_id, variant)
+            active_len = saedskifte_library.rotation_active_len(raw)
+            names = [
+                afgroede_normer.lookup_crop_params(code).get("navn", str(code))
+                for code, _, _ in raw[:active_len]
+            ]
+            for percentage in _N_NORM_PROCENTER:
+                options.append(
+                    RotationCandidateOption(
+                        ref=RotationCandidateRef(
+                            saedskiftevariant=group_id, variant=variant, n_norm_pct=percentage
+                        ),
+                        active_len=active_len,
+                        crop_sequence=names,
+                        can_copy=group_id in copyable,
+                        name=groups[group_id].name if group_id in groups else None,
+                    )
+                )
+        return options
 
 
 @router.post("/evaluate", response_model=list[FieldRotationCandidates])
@@ -401,47 +338,56 @@ def evaluate_rotation_candidates(
     )
     soil_data_by_imk_id = get_registry_soil_data_batch(imk_ids)
 
-    results: list[FieldRotationCandidates] = []
-    for field in selected:
-        registry = registries_by_imk_id.get(field.imk_id) if field.imk_id is not None else None
-        jbnr = jbnr_for_registry(registry)
-        real_history = (
-            real_history_lookback(
-                registry.crop_history,
-                jbnr,
-                registry.goedningsregion,
-                registry.oeko,
-                registry.secondary_crop_history,
+    groups = saedskifte_store.resolve_for_farm(
+        farm_id, [ref.saedskiftevariant for ref in request.candidate_refs], user.email
+    )
+    if sum(custom.is_custom(ref.saedskiftevariant) for ref in request.candidate_refs) > 4096:
+        raise RotationDefinitionError("At most 4096 custom candidates are allowed")
+    with custom.rotation_scope(groups, request.godning.driftsform):
+        results: list[FieldRotationCandidates] = []
+        for field in selected:
+            registry = registries_by_imk_id.get(field.imk_id) if field.imk_id is not None else None
+            jbnr = jbnr_for_registry(registry)
+            real_history = (
+                real_history_lookback(
+                    registry.crop_history,
+                    jbnr,
+                    registry.goedningsregion,
+                    registry.oeko,
+                    registry.secondary_crop_history,
+                )
+                if registry is not None
+                else None
             )
-            if registry is not None
-            else None
-        )
-        soil_data = soil_data_by_imk_id.get(field.imk_id)
-        percolation, org_n_topsoil, s_soil = (
-            soil_data if soil_data is not None else (None, None, None)
-        )
-        candidates = [
-            evaluate_candidate_for_mark(
-                ref,
-                jbnr=jbnr,
-                driftsform=request.godning.driftsform,
-                org_mineral_n=request.godning.org_mineral_n,
-                mineralsk_andel_pct=request.godning.mineralsk_andel_pct,
-                only_organic=request.godning.only_organic,
-                n_indhold_kg_per_ton=request.godning.n_indhold_kg_per_ton,
-                start_year=request.start_year,
-                irrigated=request.irrigated,
-                real_history=real_history,
-                percolation_by_kategori=percolation,
-                org_n_topsoil=org_n_topsoil,
-                s_soil=s_soil,
-                autumn_plan=request.godning.autumn_plan(),
+            soil_data = soil_data_by_imk_id.get(field.imk_id)
+            percolation, org_n_topsoil, s_soil = (
+                soil_data if soil_data is not None else (None, None, None)
             )
-            for ref in request.candidate_refs
-        ]
-        results.append(FieldRotationCandidates(
-            field_id=field.id, jbnr=jbnr,
-            candidates=[c for c in candidates if c is not None],
-        ))
+            candidates = [
+                evaluate_candidate_for_mark(
+                    ref,
+                    jbnr=jbnr,
+                    driftsform=request.godning.driftsform,
+                    org_mineral_n=request.godning.org_mineral_n,
+                    mineralsk_andel_pct=request.godning.mineralsk_andel_pct,
+                    only_organic=request.godning.only_organic,
+                    n_indhold_kg_per_ton=request.godning.n_indhold_kg_per_ton,
+                    start_year=request.start_year,
+                    irrigated=request.irrigated,
+                    real_history=real_history,
+                    percolation_by_kategori=percolation,
+                    org_n_topsoil=org_n_topsoil,
+                    s_soil=s_soil,
+                    autumn_plan=request.godning.autumn_plan(),
+                )
+                for ref in request.candidate_refs
+            ]
+            results.append(
+                FieldRotationCandidates(
+                    field_id=field.id,
+                    jbnr=jbnr,
+                    candidates=[c for c in candidates if c is not None],
+                )
+            )
 
-    return results
+        return results

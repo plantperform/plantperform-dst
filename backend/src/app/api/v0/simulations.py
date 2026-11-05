@@ -6,7 +6,7 @@ from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
-from app.data import economics_recalculation_store
+from app.data import economics_recalculation_store, simulation_settings_store
 from app.data.read_model_store import (
     get_simulation_view,
     require_simulation_view_ready,
@@ -70,6 +70,8 @@ from app.services.optimization.jobs import (
     submit,
 )
 from app.services.rotations import afgroede_normer
+from app.services.rotations.custom import simulation_scope
+from app.services.scenario import options
 from app.services.scenario.candidate_evaluator import (
     evaluate_with_overrides,
 )
@@ -173,10 +175,10 @@ def post_farm_simulation(
 def patch_farm_simulation(
     farm_id: str, simulation_id: str, request: UpdateSimulationRequest, user: CurrentUser
 ):
-    from app.data.simulation_settings_store import update_settings
-
     try:
-        simulation = update_settings(farm_id, simulation_id, request, user.email)
+        simulation = simulation_settings_store.update_settings(
+            farm_id, simulation_id, request, user.email
+        )
     except (SetupRevisionConflictError, CreationNotReadyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except EconomicsModuleNotFoundError as error:
@@ -389,12 +391,13 @@ def get_farm_simulation_yearly_optimization_candidates(
     simulation_id: str,
     user: CurrentUser,
 ) -> list[YearlyOptimizationKategoriOption]:
-    from app.services.scenario.options import catalog
-
     simulation = get_simulation(farm_id, simulation_id, user.email)
     if simulation is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-    return [YearlyOptimizationKategoriOption.model_validate(value) for value in catalog(simulation)]
+    return [
+        YearlyOptimizationKategoriOption.model_validate(value)
+        for value in options.catalog(simulation)
+    ]
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
@@ -539,28 +542,29 @@ def post_farm_simulation_field_preview_rotation(
     percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
 
     godning = simulation.godning
-    candidate = evaluate_with_overrides(
-        request.base_ref,
-        request.overrides,
-        jbnr=candidates_row.jbnr,
-        driftsform=godning.driftsform,
-        org_mineral_n=godning.org_mineral_n,
-        mineralsk_andel_pct=godning.mineralsk_andel_pct,
-        only_organic=godning.only_organic,
-        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
-        fdato=simulation.eea_fdato,
-        precision_dagsbasis=simulation.eea_precision_dagsbasis,
-        praecisionsjordbrug=simulation.praecisionsjordbrug,
-        tidlig_saaning=simulation.tidlig_saaning,
-        mellemafgrode=simulation.mellemafgrode,
-        start_year=request.start_year,
-        real_history=candidates_row.real_history,
-        percolation_by_kategori=percolation,
-        org_n_topsoil=org_n_topsoil,
-        s_soil=s_soil,
-        economics_key=simulation.economics_snapshot.overrides.cache_key(),
-        autumn_plan=godning.autumn_plan(),
-    )
+    with simulation_scope(simulation):
+        candidate = evaluate_with_overrides(
+            request.base_ref,
+            request.overrides,
+            jbnr=candidates_row.jbnr,
+            driftsform=godning.driftsform,
+            org_mineral_n=godning.org_mineral_n,
+            mineralsk_andel_pct=godning.mineralsk_andel_pct,
+            only_organic=godning.only_organic,
+            n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+            fdato=simulation.eea_fdato,
+            precision_dagsbasis=simulation.eea_precision_dagsbasis,
+            praecisionsjordbrug=simulation.praecisionsjordbrug,
+            tidlig_saaning=simulation.tidlig_saaning,
+            mellemafgrode=simulation.mellemafgrode,
+            start_year=request.start_year,
+            real_history=candidates_row.real_history,
+            percolation_by_kategori=percolation,
+            org_n_topsoil=org_n_topsoil,
+            s_soil=s_soil,
+            economics_key=simulation.economics_snapshot.overrides.cache_key(),
+            autumn_plan=godning.autumn_plan(),
+        )
     if candidate is None:
         raise HTTPException(status_code=422, detail="Rotationen kunne ikke beregnes")
 

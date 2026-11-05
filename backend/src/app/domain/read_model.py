@@ -11,6 +11,7 @@ from app.domain.farm import Farm
 from app.domain.field import FieldRecord
 from app.domain.optimization import OptimizeSimulationResponse
 from app.domain.rotation_candidate import RotationYear
+from app.domain.saedskifte import RotationGroupSnapshot
 from app.domain.simulation import Simulation
 
 
@@ -58,6 +59,8 @@ class RotationChoice(CamelModel):
     variant: str
     crop_sequence: list[str]
     active_len: int
+    can_copy: bool = False
+    name: str | None = None
 
 
 class RotationChoiceCategory(CamelModel):
@@ -81,6 +84,7 @@ class EconomicsStatement(CamelModel):
 
 
 class SavedResultView(CamelModel):
+    rotation_groups: dict[str, RotationGroupSnapshot] = Field(default_factory=dict)
     economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     run_id: str
     result_revision: int
@@ -97,6 +101,7 @@ class FarmViewData(CamelModel):
 
 
 class SimulationViewData(FarmViewData):
+    rotation_options_error: str | None = None
     crop_area_ranges: list[CropAreaRangeValue]
     yearly_optimization_candidates: list[RotationChoiceCategory]
     saved_result: SavedResultView | None = None

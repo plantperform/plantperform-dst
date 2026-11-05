@@ -3,10 +3,14 @@
 import math
 from collections import defaultdict
 from copy import deepcopy
+from types import SimpleNamespace
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Text, case, cast, delete, func, literal, select, update
+from sqlalchemy.dialects.postgresql import ARRAY, JSONPATH
 
+from app.data import creation_store, read_model_store, repository, simulation_settings_store
+from app.data.db import simulation_read_model_table as views
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.creation import CreationNotReadyError
@@ -23,6 +27,7 @@ from app.domain.rotation_candidate import (
     SimulationFieldCandidates,
 )
 from app.domain.simulation import OptimizationConstraints, Simulation
+from app.services.soil.jbnr import FALLBACK_JBNR
 
 OUTPUT_KEYS = ("crop_rotation", "rotation_id", "db2", "n_load", "leaching", "fen")
 DEFAULT_VALUES = dict(crop_rotation=[], rotation_id=None, db2=0, n_load=0, leaching=0, fen=0)
@@ -30,13 +35,6 @@ DEFAULT_VALUES = dict(crop_rotation=[], rotation_id=None, db2=0, n_load=0, leach
 
 class SetupRevisionConflictError(Exception):
     pass
-
-
-def _common():
-    # Import lazily: repository exposes this store's public methods as its facade.
-    from app.data import repository
-
-    return repository
 
 
 def split_field(data: dict) -> dict:
@@ -90,6 +88,7 @@ def read_result(row) -> SimulationResult:
             "response": output.get("response"),
             "fields_before": output.get("fields_before", []),
             "economics_snapshot": output.get("economics_snapshot", {}),
+            "rotation_groups": output.get("rotation_groups", {}),
             "selected_candidates": output.get("selected_candidates", {}),
         }
     )
@@ -117,25 +116,19 @@ def _row(
         setups.c.id == simulation_id,
         setups.c.farm_id == farm_id,
     )
-    if not _common()._member_exists(session, farm_id, email):
+    if not repository._member_exists(session, farm_id, email):
         return None
     if lock:
         query = query.with_for_update()
     row = session.execute(query).first()
     if row is not None and (lock or ready):
-        from app.data.creation_store import require_ready
-
-        require_ready(session, simulation_id)
+        creation_store.require_ready(session, simulation_id)
         if editable:
-            from app.data.simulation_settings_store import require_idle
-
-            require_idle(session, simulation_id)
+            simulation_settings_store.require_idle(session, simulation_id)
     return row
 
 
 def _model(session, simulation_id, row):
-    from app.data.db import simulation_read_model_table as views
-
     result = session.execute(
         select(
             *[results.c[name] for name in SimulationResultSummary.model_fields],
@@ -178,21 +171,17 @@ def invalidate(session, simulation_id):
         )
         .values(status="outdated", lease_token=None, lease_expires_at=None)
     )
-    from app.data.read_model_store import invalidate_simulation
-
-    invalidate_simulation(session, simulation_id)
+    read_model_store.invalidate_simulation(session, simulation_id)
 
 
 def get_simulation(farm_id, simulation_id, email):
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         return _get_simulation(session, farm_id, simulation_id, email)
 
 
 def list_simulations(farm_id, email):
-    from app.data.db import simulation_read_model_table as views
-
-    with _common().SessionLocal() as session:
-        if not _common()._farm_exists(session, farm_id, email):
+    with repository.SessionLocal() as session:
+        if not repository._farm_exists(session, farm_id, email):
             return None
         rows = session.execute(
             select(setups.c.id, setups.c.data, setups.c.revision, setups.c.creation_status)
@@ -238,7 +227,7 @@ def list_simulations(farm_id, email):
 
 
 def get_result(farm_id, simulation_id, email, *, include_output=True):
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email) is None:
             return None
         columns = (
@@ -267,16 +256,13 @@ def _fields(session, simulation_id):
 
 
 def list_simulation_fields(farm_id, simulation_id, email):
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, ready=True) is None:
             return None
         return _fields(session, simulation_id)
 
 
 def _field(session, simulation_id, field_id):
-    from sqlalchemy import cast, literal
-    from sqlalchemy.dialects.postgresql import JSONPATH
-
     setup = setups.c.fields[field_id] - "fixed_candidate" - "manual_candidate"
     previous = func.jsonb_path_query_first(
         results.c.output,
@@ -300,16 +286,14 @@ def _field(session, simulation_id, field_id):
 
 
 def get_simulation_field(farm_id, simulation_id, field_id, email):
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
         return _field(session, simulation_id, field_id)
 
 
 def get_simulation_field_context(farm_id, simulation_id, field_id, email):
-    from types import SimpleNamespace
-
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
         setup = session.execute(
@@ -318,15 +302,13 @@ def get_simulation_field_context(farm_id, simulation_id, field_id, email):
         if setup is None:
             return None
         if "calculation_context" in setup:
-            registry = _common().saved_registry_context(setup["calculation_context"])
+            registry = repository.saved_registry_context(setup["calculation_context"])
         else:
-            registry = _common()._registry_context_for_imk_id(session, setup.get("imk_id"))
-        from app.services.soil.jbnr import FALLBACK_JBNR
-
+            registry = repository._registry_context_for_imk_id(session, setup.get("imk_id"))
         jbnr = registry.jbnr if registry and registry.jbnr is not None else FALLBACK_JBNR
-        history = _common()._real_history_for_context(registry, jbnr) if registry else None
+        history = repository._real_history_for_context(registry, jbnr) if registry else None
         return SimpleNamespace(
-            jbnr=jbnr, real_history=history, soil_data=_common()._soil_data_for_context(registry)
+            jbnr=jbnr, real_history=history, soil_data=repository._soil_data_for_context(registry)
         )
 
 
@@ -347,7 +329,7 @@ def merge_candidates(
 
 def selected_evaluations(farm_id, simulation_id, email):
     """Read only the chosen evaluations, from selected reports and current field overlays."""
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
         fields = _fields(session, simulation_id)
@@ -378,10 +360,6 @@ def selected_evaluations(farm_id, simulation_id, email):
 
 
 def _selected_candidate(session, simulation_id, field_id, rotation_id):
-    from sqlalchemy import case
-
-    from app.data.read_model_store import insert_json
-
     ref = RotationCandidateRef.from_id(rotation_id)
     overlays = (
         setups.c.fields[field_id]["fixed_candidate"],
@@ -391,7 +369,7 @@ def _selected_candidate(session, simulation_id, field_id, rotation_id):
     )
     chosen = func.coalesce(
         *[
-            case((value["ref"] == insert_json(ref.model_dump(mode="json")), value))
+            case((value["ref"] == read_model_store.insert_json(ref.model_dump(mode="json")), value))
             for value in overlays
         ]
     )
@@ -402,20 +380,20 @@ def _selected_candidate(session, simulation_id, field_id, rotation_id):
 
 
 def get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, email):
-    with _common().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         if _row(session, farm_id, simulation_id, email, include_data=False, ready=True) is None:
             return None
         field = _field(session, simulation_id, field_id)
         if field is None:
             return None
         if field.rotation_id is None:
-            raise _common().FieldNotOptimizedError
+            raise repository.FieldNotOptimizedError
         return _selected_candidate(session, simulation_id, field_id, field.rotation_id)
 
 
 def delete_simulation(farm_id, simulation_id, email):
-    with _common().SessionLocal.begin() as session:
-        if not _common()._farm_exists(session, farm_id, email):
+    with repository.SessionLocal.begin() as session:
+        if not repository._farm_exists(session, farm_id, email):
             return None
         return (
             session.execute(
@@ -431,7 +409,7 @@ def delete_simulation(farm_id, simulation_id, email):
 def merge_constraints(saved, patch, field_count):
     merged = OptimizationConstraints.model_validate(
         {
-            **_common()._dump(saved),
+            **repository._dump(saved),
             **patch.model_dump(mode="json", exclude_unset=True),
         }
     )
@@ -447,7 +425,7 @@ def merge_constraints(saved, patch, field_count):
 
 
 def update_simulation_constraints(farm_id, simulation_id, constraints, email):
-    with _common().SessionLocal.begin() as session:
+    with repository.SessionLocal.begin() as session:
         row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
         if row is None:
             return None
@@ -463,7 +441,7 @@ def update_simulation_constraints(farm_id, simulation_id, constraints, email):
             "globally_allowed_rotation_ids" in supplied
             and merged.globally_allowed_rotation_ids is not None
         ):
-            farm = _common()._get_farm(session, farm_id, email)
+            farm = repository._get_farm(session, farm_id, email)
             library_ids = {rotation.id for rotation in farm.rotation_library}
             for rotation_id in merged.globally_allowed_rotation_ids:
                 if rotation_id not in library_ids:
@@ -472,7 +450,7 @@ def update_simulation_constraints(farm_id, simulation_id, constraints, email):
             update(setups)
             .where(setups.c.id == simulation_id)
             .values(
-                data={**row.data, "constraints": _common()._dump(merged)},
+                data={**row.data, "constraints": repository._dump(merged)},
             )
         )
         invalidate(session, simulation_id)
@@ -485,7 +463,7 @@ def _save_field(session, simulation_id, field, candidate=None):
     ).one()
     revision = row.revision
     previous = row[0] or {}
-    setup_field = split_field(_common()._dump(field))
+    setup_field = split_field(repository._dump(field))
     for key in (
         "manual_candidate",
         "economics_candidate",
@@ -508,16 +486,14 @@ def _save_field(session, simulation_id, field, candidate=None):
             selected = _selected_candidate(session, simulation_id, field.id, field.rotation_id)
         if selected is not None:
             setup_field["fixed_candidate"] = (
-                _common()._dump(selected) if not isinstance(selected, dict) else selected
+                repository._dump(selected) if not isinstance(selected, dict) else selected
             )
     else:
         # Keep edited values until a successful run at the new input revision replaces them.
-        setup_field["baseline"] = {key: _common()._dump(field)[key] for key in OUTPUT_KEYS}
+        setup_field["baseline"] = {key: repository._dump(field)[key] for key in OUTPUT_KEYS}
         setup_field["baseline_revision"] = revision + 1
         if previous.get("fixed_candidate"):
             setup_field["manual_candidate"] = previous["fixed_candidate"]
-    from app.data import read_model_store
-
     session.execute(
         update(setups)
         .where(setups.c.id == simulation_id)
@@ -533,13 +509,13 @@ def _save_field(session, simulation_id, field, candidate=None):
 
 
 def update_simulation_field(farm_id, simulation_id, field_id, request, email):
-    with _common().SessionLocal.begin() as session:
+    with repository.SessionLocal.begin() as session:
         if _row(session, farm_id, simulation_id, email, lock=True, editable=True) is None:
             return None
         existing = _field(session, simulation_id, field_id)
         if existing is None:
             return None
-        field = existing.model_copy(update=_common()._partial_update(request), deep=True)
+        field = existing.model_copy(update=repository._partial_update(request), deep=True)
         validate_measures_for_rotation(field.measures, field.crop_rotation)
         if field.rotation_id:
             if field.area_ha != existing.area_ha and existing.area_ha:
@@ -610,8 +586,6 @@ def _fit_settings(data, before, after):
 
 
 def _change_field_set(session, simulation_id, row, before, after, **values):
-    from app.data import read_model_store
-
     data = _fit_settings(row.data, before, after)
     if data != row.data:
         values["data"] = data
@@ -621,9 +595,6 @@ def _change_field_set(session, simulation_id, row, before, after, **values):
 
 
 def add_simulation_fields(farm_id, simulation_id, requests, email):
-    from app.data import read_model_store
-
-    repository = _common()
     with repository.SessionLocal() as session:
         row = _row(session, farm_id, simulation_id, email, ready=True)
         if row is None:
@@ -675,10 +646,7 @@ def add_simulation_fields(farm_id, simulation_id, requests, email):
 
 
 def remove_simulation_fields(farm_id, simulation_id, field_ids, email):
-    from sqlalchemy import Text, literal
-    from sqlalchemy.dialects.postgresql import ARRAY
-
-    with _common().SessionLocal.begin() as session:
+    with repository.SessionLocal.begin() as session:
         row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
         if row is None:
             return None
@@ -703,7 +671,7 @@ def remove_simulation_fields(farm_id, simulation_id, field_ids, email):
 def save_manual_rotation(
     farm_id, simulation_id, field_id, candidate, request, email, expected_revision
 ):
-    with _common().SessionLocal.begin() as session:
+    with repository.SessionLocal.begin() as session:
         row = _row(session, farm_id, simulation_id, email, lock=True, editable=True)
         if row is None:
             return None
@@ -714,6 +682,6 @@ def save_manual_rotation(
         existing = _field(session, simulation_id, field_id)
         if existing is None:
             return None
-        field = existing.model_copy(update=_common()._partial_update(request), deep=True)
+        field = existing.model_copy(update=repository._partial_update(request), deep=True)
         validate_measures_for_rotation(field.measures, field.crop_rotation)
         return field if _save_field(session, simulation_id, field, candidate) else None

@@ -8,6 +8,7 @@ from app.domain.creation import CreationStatus
 from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
 from app.domain.optimization import OptimizationSettings, SimulationResultSummary
+from app.domain.saedskifte import RotationGroupSnapshot
 
 # (afgrode_kode, kg N/ha, is husdyrgødning): hashable for the evaluator's caches.
 AutumnPlan = tuple[tuple[int, float, bool], ...]
@@ -161,6 +162,8 @@ class OptimizationConstraints(CamelModel):
 
 
 class Simulation(CamelModel):
+    # Server-resolved inputs: None means resolve latest; a job captures an explicit map.
+    rotation_groups: dict[str, RotationGroupSnapshot] | None = None
     fields_initialized: bool = True  # Legacy simulations already have their field snapshot.
     optimization_settings: OptimizationSettings = Field(default_factory=OptimizationSettings)
     economics_module_id: str = "standard"

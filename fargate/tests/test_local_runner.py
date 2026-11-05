@@ -1,10 +1,11 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import call, patch
 from uuid import uuid4
 
 from app.data import optimization_store
 from app.domain.optimization import DeliveryOutcome, ExecutionResult
+from app.domain.simulation import Simulation
 from plantperform_fargate import worker
 from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
@@ -12,6 +13,7 @@ from plantperform_fargate.deadline import (
     remaining_time,
     solver_time_limit,
 )
+from plantperform_fargate.preparation import PreparedSnapshot
 
 
 class LocalExecutionTests(unittest.TestCase):
@@ -108,12 +110,14 @@ class LocalExecutionTests(unittest.TestCase):
         }
         remaining_ms = [70_000]
         context = SimpleNamespace(get_remaining_time_in_millis=lambda: remaining_ms[0])
-        snapshot = MagicMock()
-        snapshot.__getitem__.side_effect = lambda index: (
-            SimpleNamespace(economics_snapshot=MagicMock()) if index == 0 else []
+        snapshot = PreparedSnapshot(
+            simulation=Simulation(id="sim", farm_id="farm", name="Test", created_at="2026-11-04"),
+            fields=[],
+            candidates=[],
+            contexts={},
+            setup_fields={},
+            fields_before=[],
         )
-        snapshot.fields_before = []
-        snapshot.setup_fields = {}
 
         def solve(*args, **kwargs):
             self.assertEqual(args[2], 3600)

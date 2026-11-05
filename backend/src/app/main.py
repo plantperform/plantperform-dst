@@ -14,6 +14,11 @@ from app.data.optimization_store import recover_local_optimization_runs
 from app.data.read_model_store import recover_local_preparations
 from app.domain.creation import CreationActiveError
 from app.domain.read_model import ReadModelNotReadyError
+from app.domain.saedskifte import (
+    RotationDefinitionError,
+    RotationGroupConflictError,
+    RotationGroupNotFoundError,
+)
 from app.domain.soil import MissingSoilDataError
 from app.request_metrics import RequestMetrics
 from app.services.calculation import CalculationFailedError
@@ -87,3 +92,18 @@ app.add_middleware(
 )
 
 app.include_router(v0_router, prefix="/api/v0")
+
+
+@app.exception_handler(RotationGroupNotFoundError)
+async def rotation_not_found(_, error):
+    return JSONResponse(status_code=404, content={"detail": "Rotation group not found"})
+
+
+@app.exception_handler(RotationGroupConflictError)
+async def rotation_conflict(_, error):
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(RotationDefinitionError)
+async def invalid_rotation(_, error):
+    return JSONResponse(status_code=422, content={"detail": str(error)})

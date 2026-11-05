@@ -1,21 +1,23 @@
 """Persist small views; read paths never build them or load candidate documents."""
 
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam, select, update
+from sqlalchemy.dialects.postgresql import JSONB, insert
 
+from app.data import creation_store, repository, saedskifte_store, simulation_store
+from app.data.db import farm_member_table, farm_table, field_historical_detail_table, field_table
 from app.data.db import farm_read_model_table as farm_views
-from app.data.db import farm_table, field_historical_detail_table, field_table
 from app.data.db import simulation_read_model_table as simulation_views
+from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.domain.creation import CreationActiveError
+from app.domain.field import FieldRecord
+from app.domain.optimization import SimulationResultSummary
 from app.domain.read_model import ReadModelNotReadyError, preparation_job
 from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.saedskifte import RotationDefinitionError
+from app.domain.simulation import Simulation
 from app.services import read_models
-
-
-def _repository():
-    from app.data import repository
-
-    return repository
+from app.services.scenario import options
 
 
 def initialize_farm(session, farm_id):
@@ -84,7 +86,7 @@ def require_farm_ready(session, farm_id):
 
 
 def require_simulation_view_ready(simulation_id, revision):
-    with _repository().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         row = session.execute(
             select(
                 simulation_views.c.status,
@@ -97,7 +99,6 @@ def require_simulation_view_ready(simulation_id, revision):
 
 
 def get_farm_view(farm_id, email, *, include_data=True):
-    repository = _repository()
     with repository.SessionLocal() as session:
         if not repository._member_exists(session, farm_id, email):
             return None
@@ -130,11 +131,6 @@ def get_farm_view(farm_id, email, *, include_data=True):
 
 
 def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
-    from app.data.db import farm_member_table
-    from app.data.db import simulation_result_table as results
-    from app.domain.optimization import SimulationResultSummary
-    from app.domain.simulation import Simulation
-
     columns = [
         setups.c.data.label("setup_data"),
         setups.c.revision,
@@ -156,7 +152,7 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
     source = setups.join(farm_member_table, farm_member_table.c.farm_id == setups.c.farm_id)
     source = source.outerjoin(results, results.c.simulation_id == setups.c.id)
     source = source.outerjoin(simulation_views, simulation_views.c.simulation_id == setups.c.id)
-    with _repository().SessionLocal() as session:
+    with repository.SessionLocal() as session:
         row = session.execute(
             select(*columns)
             .select_from(source)
@@ -195,9 +191,42 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
         status = "missing"
     view_data = row.view_data if include_data and status == "done" else None
     if view_data is not None:
-        from app.services.scenario.options import catalog
-
-        view_data = {**view_data, "yearly_optimization_candidates": catalog(simulation)}
+        try:
+            simulation = simulation.model_copy(
+                update={
+                    "rotation_groups": saedskifte_store.load_selected(
+                        simulation.rotation_saedskiftevarianter
+                    )
+                }
+            )
+            ranges = view_data.get("crop_area_ranges", [])
+            if simulation.rotation_groups or (view_data.get("saved_result") or {}).get(
+                "rotation_groups"
+            ):
+                with repository.SessionLocal() as session:
+                    setup_fields = session.execute(
+                        select(setups.c.fields).where(setups.c.id == simulation_id)
+                    ).scalar_one()
+                fields = [
+                    FieldRecord.model_validate(value) for value in view_data.get("fields", [])
+                ]
+                ranges = read_models.combine_contributions(
+                    options.contributions(simulation, fields, setup_fields)
+                )
+            view_data = {
+                **view_data,
+                "yearly_optimization_candidates": options.catalog(simulation),
+                "crop_area_ranges": ranges,
+                "rotation_options_error": None,
+            }
+        except RotationDefinitionError as error:
+            # Invalid future choices must not hide a previously calculated result.
+            view_data = {
+                **view_data,
+                "yearly_optimization_candidates": [],
+                "crop_area_ranges": [],
+                "rotation_options_error": str(error),
+            }
     return {
         "simulation": simulation,
         "input_revision": row.revision,
@@ -227,8 +256,8 @@ def farm_part(farm_id, email, key):
 
 
 def historical_detail(farm_id, field_id, email):
-    with _repository().SessionLocal() as session:
-        if not _repository()._member_exists(session, farm_id, email):
+    with repository.SessionLocal() as session:
+        if not repository._member_exists(session, farm_id, email):
             return None
         require_farm_ready(session, farm_id)
         return session.execute(
@@ -270,7 +299,12 @@ def publish_simulation(session, simulation_id, revision, data, prepared):
 
 
 def publish_optimization(session, simulation_id, revision, run_id, output):
-    data, prepared = build_simulation(session, simulation_id)
+    if output.get("rotation_groups"):
+        data, prepared = build_simulation(
+            session, simulation_id, rotation_groups=output["rotation_groups"]
+        )
+    else:
+        data, prepared = build_simulation(session, simulation_id)
     publish_simulation(session, simulation_id, revision, data, prepared)
 
 
@@ -294,19 +328,11 @@ def refresh_simulation_view(session, simulation_id):
 
 
 def insert_json(value):
-    from sqlalchemy import bindparam
-    from sqlalchemy.dialects.postgresql import JSONB
-
     return bindparam(None, value, type_=JSONB, unique=True)
 
 
-def build_simulation(session, simulation_id):
+def build_simulation(session, simulation_id, *, rotation_groups=None):
     """Build displays from selected results and cheap library sequences only."""
-    from app.data import simulation_store
-    from app.data.db import simulation_result_table as results
-    from app.domain.simulation import Simulation
-    from app.services.scenario.options import contributions as area_contributions
-
     fields = simulation_store._fields(session, simulation_id)
     setup = session.execute(
         select(setups.c.data, setups.c.fields, results.c.output)
@@ -314,8 +340,13 @@ def build_simulation(session, simulation_id):
         .where(setups.c.id == simulation_id)
     ).one()
     simulation = Simulation.model_validate(setup.data)
+    simulation.rotation_groups = (
+        saedskifte_store.resolve_selected(session, simulation.rotation_saedskiftevarianter)
+        if rotation_groups is None
+        else rotation_groups
+    )
     output = setup.output or {}
-    contributions = area_contributions(simulation, fields, setup.fields)
+    contributions = options.contributions(simulation, fields, setup.fields)
     years = {}
     for field in fields:
         if field.rotation_id:
@@ -360,6 +391,7 @@ def build_simulation(session, simulation_id):
             "response": response,
             "fields_before": output.get("fields_before", []),
             "economics_snapshot": output.get("economics_snapshot", {}),
+            "rotation_groups": output.get("rotation_groups", {}),
             "field_years": field_years,
             "economics_statement": read_models.economics_statement(response["fields"], selected),
         }
@@ -431,19 +463,19 @@ def schedule_preparation(session, kind, entity_id, *, refresh=False):
 
 
 def recover_local_preparations():
-    from app.data.creation_store import execution_session
-    from app.domain.creation import CreationActiveError
-
     for table, key, prefix in (
         (farm_views, farm_views.c.farm_id, "farm-history:"),
         (simulation_views, simulation_views.c.simulation_id, ""),
     ):
-        with _repository().SessionLocal() as session:
+        with repository.SessionLocal() as session:
             ids = session.execute(select(key).where(table.c.status.in_(("queued", "running"))))
             ids = list(ids.scalars())
         for entity_id in ids:
             try:
-                with execution_session(prefix + entity_id) as session, session.begin():
+                with (
+                    creation_store.execution_session(prefix + entity_id) as session,
+                    session.begin(),
+                ):
                     session.execute(
                         update(table)
                         .where(key == entity_id, table.c.status.in_(("queued", "running")))

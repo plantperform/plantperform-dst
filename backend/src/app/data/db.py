@@ -459,6 +459,31 @@ economics_module_member_table = Table(
     Index("ix_economics_module_member_email", "email"),
 )
 
+saedskifte_rotation_group_table = Table(
+    "saedskifte_rotation_group",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("driftsform", Text),
+    Column("variants", JSONB, nullable=False),
+    Column("revision", Integer, nullable=False, server_default="0"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint("length(trim(name)) > 0", name="ck_saedskifte_rotation_group_name"),
+)
+
+saedskifte_rotation_group_member_table = Table(
+    "saedskifte_rotation_group_member",
+    metadata,
+    Column(
+        "group_id", Text,
+        ForeignKey("saedskifte_rotation_group.id", ondelete="CASCADE"), nullable=False,
+    ),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    PrimaryKeyConstraint("group_id", "email"),
+    Index("ix_saedskifte_rotation_group_member_email", "email"),
+)
+
 email_verification_token_table = Table(
     "email_verification_token",
     metadata,

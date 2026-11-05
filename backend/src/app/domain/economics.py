@@ -1,5 +1,6 @@
 """Shared economics modules and simulation-owned, frozen override snapshots."""
 
+import json
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -29,6 +30,7 @@ class EconomicsCalculationInputs(CamelModel):
     kvalitet: str = ""
     praecisionsjordbrug: bool = False
     forfrugtsvaerdi: float = 0
+    rotation_crop: bool = False
     husdyrgodning_ton_pr_ha: float = 0
 
 
@@ -39,8 +41,6 @@ class EconomicsOverrides(CamelModel):
     yield_pct: dict[str, YieldPercentage] = Field(default_factory=dict)
 
     def cache_key(self) -> str:
-        import json
-
         if not any((self.prices, self.quantities, self.yield_pct)):
             return ""
         return json.dumps(self.model_dump(), sort_keys=True, separators=(",", ":"))

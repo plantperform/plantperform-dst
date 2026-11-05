@@ -1,11 +1,14 @@
+from contextlib import nullcontext
 from copy import deepcopy
 from types import SimpleNamespace
 from uuid import uuid4
 
 from pydantic import BaseModel
 from sqlalchemy import delete, func, insert, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.data import read_model_store, simulation_settings_store, simulation_store
 from app.data.db import (
     SessionLocal,
     app_user_table,
@@ -14,51 +17,6 @@ from app.data.db import (
     field_table,
     registry_field_table,
 )
-from app.data.simulation_store import (
-    _get_simulation as _get_simulation,
-)
-from app.data.simulation_store import (
-    add_simulation_fields as add_simulation_fields,
-)
-from app.data.simulation_store import (
-    delete_simulation as delete_simulation,
-)
-from app.data.simulation_store import (
-    get_simulation as get_simulation,
-)
-from app.data.simulation_store import (
-    get_simulation_field as get_simulation_field,
-)
-from app.data.simulation_store import (
-    get_simulation_field_candidate_detail as get_simulation_field_candidate_detail,
-)
-from app.data.simulation_store import (
-    get_simulation_field_context as get_simulation_field_context,
-)
-from app.data.simulation_store import (
-    list_simulation_fields as list_simulation_fields,
-)
-from app.data.simulation_store import (
-    list_simulations as list_simulations,
-)
-from app.data.simulation_store import (
-    remove_simulation_fields as remove_simulation_fields,
-)
-from app.data.simulation_store import (
-    save_manual_rotation as save_manual_rotation,
-)
-from app.data.simulation_store import (
-    selected_evaluations as selected_evaluations,
-)
-from app.data.simulation_store import (
-    split_field as split_field,
-)
-from app.data.simulation_store import (
-    update_simulation_constraints as update_simulation_constraints,
-)
-from app.data.simulation_store import (
-    update_simulation_field as update_simulation_field,
-)
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.field import (
     CreateFieldRequest,
@@ -66,6 +24,7 @@ from app.domain.field import (
 )
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
+    RotationCandidateRef,
     RotationCandidateYearResult,
     SimulationFieldCandidates,
 )
@@ -77,6 +36,7 @@ from app.domain.simulation import (
 from app.domain.soil import MissingSoilDataError, RegistrySoilData, registry_soil_data
 from app.services.rotations import saedskifte_library
 from app.services.rotations.afgroede_normer import is_permanent_afgrode
+from app.services.rotations.custom import with_simulation_rotations
 from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import (
     generate_candidates_for_field,
@@ -297,9 +257,7 @@ def create_farm(request: CreateFarmRequest, email: str) -> Farm:
         session.execute(
             insert(farm_member_table).values(farm_id=farm.id, email=email),
         )
-        from app.data.read_model_store import initialize_farm
-
-        initialize_farm(session, farm.id)
+        read_model_store.initialize_farm(session, farm.id)
 
     return farm
 
@@ -395,9 +353,7 @@ def _historical_field(
 
 
 def get_field_historical_years(farm_id: str, field_id: str, email: str):
-    from app.data.read_model_store import historical_detail
-
-    values = historical_detail(farm_id, field_id, email)
+    values = read_model_store.historical_detail(farm_id, field_id, email)
     return (
         [RotationCandidateYearResult.model_validate(value) for value in values]
         if values is not None
@@ -406,21 +362,13 @@ def get_field_historical_years(farm_id: str, field_id: str, email: str):
 
 
 def get_farm_historical_yearly_summary(farm_id: str, email: str):
-    from app.data.read_model_store import farm_part
-
-    return farm_part(farm_id, email, "yearly_summary")
+    return read_model_store.farm_part(farm_id, email, "yearly_summary")
 
 
 def register_fields(
     farm_id: str, requests: list[CreateFieldRequest], email: str, *, execution_session=None
 ):
     """Register a batch; the caller prepares its history after the reservation commits."""
-    from contextlib import nullcontext
-
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-    from app.data import read_model_store
-
     owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
     with owner as session, session.begin():
         if _get_farm(session, farm_id, email) is None:
@@ -466,8 +414,6 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str):
 
 
 def detach_field(farm_id: str, field_id: str, email: str, *, execution_session=None) -> bool | None:
-    from contextlib import nullcontext
-
     owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
     with owner as session, session.begin():
         if not _farm_exists(session, farm_id, email):
@@ -483,9 +429,7 @@ def detach_field(farm_id: str, field_id: str, email: str, *, execution_session=N
             ),
         )
         if result.rowcount:
-            from app.data.read_model_store import invalidate_farm
-
-            invalidate_farm(session, farm_id)
+            read_model_store.invalidate_farm(session, farm_id)
         return result.rowcount > 0
 
 
@@ -531,8 +475,6 @@ def baseline_simulation_candidate(field, registry_row, *, economics_key=""):
         secondary_crop_history=registry_row.secondary_crop_history,
         show_either_measure=False,
     )
-    from app.domain.rotation_candidate import RotationCandidateRef
-
     return RotationCandidateEvaluation(
         ref=RotationCandidateRef(
             saedskiftevariant="history", variant=str(field.imk_id), n_norm_pct="100"
@@ -655,9 +597,7 @@ def create_simulation(
     request: CreateSimulationRequest,
     email: str,
 ) -> Simulation | None:
-    from app.data.simulation_settings_store import create
-
-    return create(farm_id, request, email)
+    return simulation_settings_store.create(farm_id, request, email)
 
 
 def list_scenario_afgrodekoder(
@@ -698,6 +638,7 @@ def list_scenario_afgrodekoder(
     return scenario_afgrodekoder(simulation)
 
 
+@with_simulation_rotations
 def scenario_afgrodekoder(simulation) -> set[int]:
     codes: set[int] = set()
     for saedskiftevariant in simulation.rotation_saedskiftevarianter:
@@ -770,3 +711,73 @@ def remove_farm_member(farm_id: str, email: str, member_email: str) -> str:
             )
         )
         return "removed" if result.rowcount else "member_not_found"
+
+
+def _get_simulation(session, farm_id, simulation_id, email):
+    return simulation_store._get_simulation(session, farm_id, simulation_id, email)
+
+
+def add_simulation_fields(farm_id, simulation_id, requests, email):
+    return simulation_store.add_simulation_fields(farm_id, simulation_id, requests, email)
+
+
+def delete_simulation(farm_id, simulation_id, email):
+    return simulation_store.delete_simulation(farm_id, simulation_id, email)
+
+
+def get_simulation(farm_id, simulation_id, email):
+    return simulation_store.get_simulation(farm_id, simulation_id, email)
+
+
+def get_simulation_field(farm_id, simulation_id, field_id, email):
+    return simulation_store.get_simulation_field(farm_id, simulation_id, field_id, email)
+
+
+def get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, email):
+    return simulation_store.get_simulation_field_candidate_detail(
+        farm_id, simulation_id, field_id, email
+    )
+
+
+def get_simulation_field_context(farm_id, simulation_id, field_id, email):
+    return simulation_store.get_simulation_field_context(farm_id, simulation_id, field_id, email)
+
+
+def list_simulation_fields(farm_id, simulation_id, email):
+    return simulation_store.list_simulation_fields(farm_id, simulation_id, email)
+
+
+def list_simulations(farm_id, email):
+    return simulation_store.list_simulations(farm_id, email)
+
+
+def remove_simulation_fields(farm_id, simulation_id, field_ids, email):
+    return simulation_store.remove_simulation_fields(farm_id, simulation_id, field_ids, email)
+
+
+def save_manual_rotation(
+    farm_id, simulation_id, field_id, candidate, request, email, expected_revision
+):
+    return simulation_store.save_manual_rotation(
+        farm_id, simulation_id, field_id, candidate, request, email, expected_revision
+    )
+
+
+def selected_evaluations(farm_id, simulation_id, email):
+    return simulation_store.selected_evaluations(farm_id, simulation_id, email)
+
+
+def split_field(data: dict) -> dict:
+    return simulation_store.split_field(data)
+
+
+def update_simulation_constraints(farm_id, simulation_id, constraints, email):
+    return simulation_store.update_simulation_constraints(
+        farm_id, simulation_id, constraints, email
+    )
+
+
+def update_simulation_field(farm_id, simulation_id, field_id, request, email):
+    return simulation_store.update_simulation_field(
+        farm_id, simulation_id, field_id, request, email
+    )
