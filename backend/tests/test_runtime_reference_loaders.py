@@ -59,7 +59,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
     def test_master_csv_loaders_parse_the_wide_afgroedekode_format(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             master = Path(directory) / "master.csv"
-            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row()])
+            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row()], delimiter=";")
 
             norm_rows, nfix_rows, nuar_rows = parse_afgroede_normer(master)
             runoff_rows = parse_afstromningskategorier(master)
@@ -87,7 +87,10 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
     def test_nfix_rows_carry_a_vanding_the_runtime_lookup_finds(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             master = Path(directory) / "master.csv"
-            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row(nfix_normgrp3="9")])
+            write_csv(
+                master, MASTER_CSV_HEADERS, [master_csv_row(nfix_normgrp3="9")], delimiter=";",
+            )
+
             _, nfix_rows, _ = parse_afgroede_normer(master)
 
         # lookup_nfix only matches these vanding values; anything else silently
@@ -111,7 +114,9 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
                         }
                     )
                 ],
+                delimiter=";",
             )
+
             _, _, nuar_rows = parse_afgroede_normer(master)
 
         self.assertEqual(nuar_rows[0][12:14], (False, False))
@@ -123,8 +128,12 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             write_csv(
                 master, MASTER_CSV_HEADERS,
                 [master_csv_row(er_permanent_afgroede="Ja")],
+                delimiter=";",
             )
-            self.assertEqual(parse_permanente_afgrodekoder(master), [(1, "Vårbyg")])
+
+            permanent_rows = parse_permanente_afgrodekoder(master)
+
+        self.assertEqual(permanent_rows, [(1, "Vårbyg")])
 
     def test_oekonomital_loaders_split_on_kilde_tabel(self) -> None:
         afgroedebundet_headers = [
@@ -222,7 +231,9 @@ class PraecisionsgoedskningFlagTests(unittest.TestCase):
                     master_csv_row(AfgroedeKode=str(code), **{"Praec.goedsk.eff.": value})
                     for code, value in ((1, "1"), (22, "2"), (5, "3"), (260, "0"))
                 ],
+                delimiter=";",
             )
+
             _, _, nuar_rows = parse_afgroede_normer(master)
 
         self.assertEqual(
