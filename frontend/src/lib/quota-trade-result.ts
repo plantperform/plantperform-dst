@@ -103,41 +103,39 @@ export const QUOTA_TRADE_LABELS: Record<QuotaTradeKind, string> = {
 export const quotaTradeKind = (tradeKg: number): QuotaTradeKind | null =>
   tradeKg > 0 ? 'bought' : tradeKg < 0 ? 'sold' : null
 
-// The limit after a trade, as the run set it: the year's cap moved by the
-// trade.
+// A kvote moved by a trade.
 export type TradedLimit = {
-  // The opland's cap in the year before the trade.
+  // The kvote the trade moved, rounded to whole kg N as the run's cap is by
+  // default, or any other limit a bar is drawn to.
   capKgN: number
   tradeKg: number
 }
 
-// The limit a trading opland is held to: its cap moved by the trade. The
+// The limit a trading opland is held to: its kvote moved by the trade. The
 // kvote status measures against it, so bought kvote that covers the
-// udledning is not over the limit, and udledning above sold kvote is.
+// udledning is not over the limit, and udledning above sold kvote is. A cap
+// raised under Grænser does not move it: that kvote is not the farm's.
 export const limitAfterTradeKgN = (limit: TradedLimit) =>
   limit.capKgN + limit.tradeKg
 
-// An opland's limit in a calendar year after the run's trades: the cap it
-// traded from, moved by the year's trade. An opland that does not trade is
-// held to its kvote.
+// An opland's limit in a calendar year after the run's trades: its kvote,
+// rounded to whole kg N, moved by the year's trade. An opland that does not
+// trade is held to its kvote.
 export const limitAfterTradesFor =
-  (trades: SimulationQuotaTrade[], caps: CatchmentYearlyNLoadCaps[]) =>
+  (trades: SimulationQuotaTrade[]) =>
   (catchmentId: number, calendarYear: number, quotaKgN: number): number => {
     const trade = trades.find((entry) => entry.catchmentId === catchmentId)
     if (!trade) return quotaKgN
     return limitAfterTradeKgN({
-      capKgN: quotaCapKgN(caps, catchmentId, calendarYear, quotaKgN),
+      capKgN: Math.round(quotaKgN),
       tradeKg: quotaTradeKgIn(trade, calendarYear),
     })
   }
 
 // The same limit as limitAfterTradesFor, averaged over the period, for a
 // status of the average year.
-export const averageLimitAfterTradesFor = (
-  trades: SimulationQuotaTrade[],
-  caps: CatchmentYearlyNLoadCaps[],
-) => {
-  const limitFor = limitAfterTradesFor(trades, caps)
+export const averageLimitAfterTradesFor = (trades: SimulationQuotaTrade[]) => {
+  const limitFor = limitAfterTradesFor(trades)
   return (catchmentId: number, quotaKgN: number): number =>
     ROTATION_CALENDAR_YEARS.reduce(
       (sum, year) => sum + limitFor(catchmentId, year, quotaKgN),
@@ -150,26 +148,6 @@ export const averageLimitAfterTradesFor = (
 export const describeAfterTrade = (tradeKg: number) => {
   const kind = quotaTradeKind(tradeKg)
   return kind === null ? '' : kind === 'bought' ? 'efter køb' : 'efter salg'
-}
-
-// The cap a run moves by a trade: the one saved under Grænser for the
-// calendar year, or the kvote rounded to whole kg N when the opland has none.
-// With calendarYear null, the average over the period.
-export const quotaCapKgN = (
-  caps: CatchmentYearlyNLoadCaps[],
-  catchmentId: number | null,
-  calendarYear: number | null,
-  quotaKgN: number,
-): number => {
-  const saved = caps.find(
-    (cap) => cap.catchmentId === catchmentId,
-  )?.maxNLoadByYear
-  const capIn = (year: number) => saved?.[year] ?? Math.round(quotaKgN)
-  if (calendarYear !== null) return capIn(calendarYear)
-  return (
-    ROTATION_CALENDAR_YEARS.reduce((sum, year) => sum + capIn(year), 0) /
-    ROTATION_CALENDAR_YEARS.length
-  )
 }
 
 // An opland's own limit in a calendar year: the cap saved under Grænser, or
@@ -193,9 +171,8 @@ export const yearLimitKgN = (
   )
 }
 
-// Where an opland's limit before any trade sits on a bar drawn so the original
-// kvote sits at quotaLinePct of its height: its cap when it trades, else the
-// kvote.
+// Where a limit before any trade sits on a bar drawn so the kvote sits at
+// quotaLinePct of its height. Without a limit, at the kvote.
 export const quotaLimitLinePct = (
   quotaKgN: number,
   limit: TradedLimit | null,

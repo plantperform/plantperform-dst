@@ -154,7 +154,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('marks bought and sold kvote apart from the udledning and names them', async () => {
     await render([trade(1, 30), trade(2, -40)])
-    expect(legend()).toContain('Loft før kvotehandel')
+    expect(legend()).toContain('Oprindelig kvote')
     expect(legend()).toContain('Købt kvote')
     expect(legend()).toContain('Solgt kvote')
     // One band in the year's bar and one in the legend, for each kind.
@@ -204,45 +204,43 @@ describe('kvotehandel in the Årsgennemgang', () => {
       ),
     },
   ]
-  const limitLines = () =>
-    [...container.querySelectorAll<HTMLElement>('span[data-limit-line]')].map(
+  const capLines = () =>
+    [...container.querySelectorAll<HTMLElement>('span[data-cap-line]')].map(
       (line) => line.style.bottom,
     )
 
-  it('measures a trade from the cap under Grænser, not the kvote', async () => {
-    // Opland 1 lets out 120 kg N; its kvote is 100 kg N.
-    // A cap of 150 kg N less 20 kg N sold still covers it.
+  it('measures a trade from the kvote, whatever the cap under Grænser', async () => {
+    // Opland 1 lets out 120 kg N; its kvote is 100 kg N. A raised cap does
+    // not count: 100 kg N less 20 kg N sold leaves it over.
     await render([trade(1, -20)], cap(150))
-    expect(overParts()).toBe(0)
-    // Measured from the kvote, the same sale would leave it over.
-    await render([trade(1, -20)])
     expect(overParts()).toBe(1)
-    // A cap of 50 kg N with 30 kg N bought does not cover it.
+    // 100 kg N and 30 kg N bought covers it, even under a lower cap.
     await render([trade(1, 30)], cap(50))
-    expect(overParts()).toBe(1)
+    expect(overParts()).toBe(0)
   })
 
-  it('marks each bar’s limit before the trade at its own cap', async () => {
+  it('marks a cap under Grænser that differs from the kvote', async () => {
     // The kvote of 100 kg N sits at 34 % of each bar, so opland 1's cap of
-    // 150 kg N sits at 51 %; opland 2 trades nothing and keeps its kvote.
-    await render([trade(1, -20)], cap(150))
-    expect(limitLines()).toEqual(['51%', '34%'])
-    // Without a saved cap, a trading opland's limit is its kvote.
-    await render([trade(1, -20)])
-    expect(limitLines()).toEqual(['34%', '34%'])
+    // 150 kg N sits at 51 %; opland 2 has no cap of its own.
+    await render(undefined, cap(150))
+    expect(capLines()).toEqual(['51%'])
+    expect(legend()).toContain('Loft under Grænser')
+    // A cap equal to the kvote is not marked.
+    await render(undefined, cap(100))
+    expect(capLines()).toEqual([])
+    expect(legend()).not.toContain('Loft under Grænser')
   })
 
-  it('names each opland’s trade against its cap for the whole farm', async () => {
-    // A cap of 150 kg N in every year; opland 2 trades nothing.
-    // Under its titled section, with its share of the cap after the row's
-    // own percentage.
+  it('names each opland’s trade against its kvote for the whole farm', async () => {
+    // Opland 2 trades nothing. Under its titled section, with its share of
+    // the kvote after the row's own percentage; a cap does not change it.
     await render([trade(1, 30, 60)], cap(150))
-    expect(panel()).toContain('KvotehandelKøbt gns. 56 kg N/år+38 %')
+    expect(panel()).toContain('KvotehandelKøbt gns. 56 kg N/år+56 %')
     // Opland 2 has no section.
     expect(panel().split('Kvotehandel').length - 1).toBe(1)
-    // The selected first year buys 30 kg N of the 150 kg N cap.
+    // The selected first year buys 30 kg N of the 100 kg N kvote.
     await render([trade(1, 30, 60)], cap(150), { year: 0 })
-    expect(panel()).toContain('KvotehandelKøbt 30 kg N+20 %')
+    expect(panel()).toContain('KvotehandelKøbt 30 kg N+30 %')
     await render([trade(1, -30)], undefined, { year: 0 })
     expect(panel()).toContain('KvotehandelSolgt 30 kg N−30 %')
     // A year without a trade says so, with no share.
@@ -256,7 +254,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(panel()).not.toContain('År over kvoten')
     expect(panel()).not.toContain('Marker')
     expect(panel()).toContain('Kvote pr. ha')
-    expect(panel()).toContain('Købt kvote30 kg N (+20 % af loftet)')
+    expect(panel()).toContain('Købt kvote30 kg N (+30 % af kvoten)')
     expect(panel()).toContain('Pris30 kr/kg N')
     // 30 kg N at 30 kr.
     expect(panel()).toContain('Udgift900 kr')
@@ -322,29 +320,32 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(panel()).toContain('Udgift gns. pr. år1.500 kr')
   })
 
-  it('measures each year against its own limit under Grænser', async () => {
-    // Opland 1 lets out 120 kg N: over its kvote of 100 kg N, but within a
-    // cap of 150 kg N set for the year.
+  it('measures each year against the kvote and shows a different cap beside it', async () => {
+    // Opland 1 lets out 120 kg N: over its kvote of 100 kg N, though within
+    // a cap of 150 kg N set for the year. The cap does not hide it.
     await render(undefined, cap(150), { year: 0 })
-    expect(panel()).toContain('120 af 150 kg N')
-    expect(panel()).toContain('80 %')
-    expect(panel()).not.toContain('120 %')
-    expect(overParts()).toBe(0)
-    // Picked on its own, the summary measures against the same cap.
+    expect(panel()).toContain('120 af 100 kg N')
+    expect(panel()).toContain('120 %')
+    expect(overParts()).toBe(1)
+    // Picked on its own: over the kvote, with the cap named as information.
     await render(undefined, cap(150), { year: 0, scoped: true })
-    expect(panel()).toContain('80 %')
-    expect(panel()).toContain('30 kg N tilbage')
-    // A lower cap makes it over, though it is within its kvote.
+    expect(panel()).toContain('120 %over kvote')
+    expect(panel()).toContain('skal ned med 20 kg N')
+    expect(panel()).toContain('Loft under Grænser: 150 kg N')
+    // A lower cap changes nothing but the information.
     await render(undefined, cap(60), { year: 0, scoped: true })
-    expect(panel()).toContain('200 %')
-    expect(panel()).toContain('skal ned med 60 kg N')
+    expect(panel()).toContain('skal ned med 20 kg N')
+    expect(panel()).toContain('Loft under Grænser: 60 kg N')
+    // A cap equal to the kvote is not mentioned.
+    await render(undefined, cap(100), { year: 0, scoped: true })
+    expect(panel()).not.toContain('Loft under Grænser')
   })
 
   it('stays as before without kvotehandel', async () => {
     await render()
     expect(legend()).not.toContain('Købt kvote')
-    expect(legend()).not.toContain('Loft før kvotehandel')
-    expect(limitLines()).toEqual([])
+    expect(legend()).not.toContain('Oprindelig kvote')
+    expect(capLines()).toEqual([])
     expect(bands('border-amber-500')).toBe(0)
     expect(overParts()).toBe(1)
   })
