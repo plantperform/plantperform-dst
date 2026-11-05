@@ -776,11 +776,22 @@ export type FarmQuota = {
   overCount: number
 }
 
+// limitFor: the limit an opland is held to per year, given its kvote per
+// year; the status measures against it. Without one, the kvote is the limit.
 export const resolveFarmQuota = (
   fields: FieldRecord[],
   isSimulationView: boolean,
+  limitFor?: (catchmentId: number, quotaKgN: number) => number,
 ): FarmQuota => {
   const totals = computeFieldTotals(fields, isSimulationView)
+  // The totals with each opland's kvote replaced by its limit, for the level.
+  const limited = (catchmentId: number, catchmentTotals: FieldTotals) =>
+    limitFor
+      ? {
+          ...catchmentTotals,
+          nLoadQuotaKgN: limitFor(catchmentId, catchmentTotals.nLoadQuotaKgN),
+        }
+      : catchmentTotals
   const catchments = groupFieldsByCatchment(fields, isSimulationView).flatMap(
     ({ catchmentId, totals: catchmentTotals }) =>
       catchmentId !== null &&
@@ -789,7 +800,9 @@ export const resolveFarmQuota = (
             {
               catchmentId,
               totals: catchmentTotals,
-              level: totalsQuotaStatusLevel(catchmentTotals),
+              level: totalsQuotaStatusLevel(
+                limited(catchmentId, catchmentTotals),
+              ),
             },
           ]
         : [],
@@ -799,11 +812,18 @@ export const resolveFarmQuota = (
   const overCount = catchments.filter(
     (catchment) => catchment.level === 'over',
   ).length
+  const farmLimitKgN = catchments.reduce(
+    (sum, { catchmentId, totals: catchmentTotals }) =>
+      sum +
+      limited(catchmentId, catchmentTotals).nLoadQuotaKgN -
+      catchmentTotals.nLoadQuotaKgN,
+    totals.nLoadQuotaKgN,
+  )
   return {
     totals,
     level: separate
       ? combineQuotaStatusLevels(levels)
-      : totalsQuotaStatusLevel(totals),
+      : totalsQuotaStatusLevel({ ...totals, nLoadQuotaKgN: farmLimitKgN }),
     quotaKgN: separate ? null : totals.nLoadQuotaKgN,
     catchments,
     overCount,

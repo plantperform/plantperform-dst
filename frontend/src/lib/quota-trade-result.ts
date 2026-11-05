@@ -111,6 +111,47 @@ export type TradedLimit = {
   tradeKg: number
 }
 
+// The limit a trading opland is held to: its cap moved by the trade. The
+// kvote status measures against it, so bought kvote that covers the
+// udledning is not over the limit, and udledning above sold kvote is.
+export const limitAfterTradeKgN = (limit: TradedLimit) =>
+  limit.capKgN + limit.tradeKg
+
+// An opland's limit in a calendar year after the run's trades: the cap it
+// traded from, moved by the year's trade. An opland that does not trade is
+// held to its kvote.
+export const limitAfterTradesFor =
+  (trades: SimulationQuotaTrade[], caps: CatchmentYearlyNLoadCaps[]) =>
+  (catchmentId: number, calendarYear: number, quotaKgN: number): number => {
+    const trade = trades.find((entry) => entry.catchmentId === catchmentId)
+    if (!trade) return quotaKgN
+    return limitAfterTradeKgN({
+      capKgN: quotaCapKgN(caps, catchmentId, calendarYear, quotaKgN),
+      tradeKg: quotaTradeKgIn(trade, calendarYear),
+    })
+  }
+
+// The same limit as limitAfterTradesFor, averaged over the period, for a
+// status of the average year.
+export const averageLimitAfterTradesFor = (
+  trades: SimulationQuotaTrade[],
+  caps: CatchmentYearlyNLoadCaps[],
+) => {
+  const limitFor = limitAfterTradesFor(trades, caps)
+  return (catchmentId: number, quotaKgN: number): number =>
+    ROTATION_CALENDAR_YEARS.reduce(
+      (sum, year) => sum + limitFor(catchmentId, year, quotaKgN),
+      0,
+    ) / ROTATION_CALENDAR_YEARS.length
+}
+
+// "efter køb" or "efter salg" for a status measured after a trade; empty
+// when nothing was traded.
+export const describeAfterTrade = (tradeKg: number) => {
+  const kind = quotaTradeKind(tradeKg)
+  return kind === null ? '' : kind === 'bought' ? 'efter køb' : 'efter salg'
+}
+
 // The cap a run moves by a trade: the one saved under Grænser for the
 // calendar year, or the kvote rounded to whole kg N when the opland has none.
 // With calendarYear null, the average over the period.

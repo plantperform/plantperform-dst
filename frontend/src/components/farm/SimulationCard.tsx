@@ -7,7 +7,12 @@ import {
   useSimulationView,
 } from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
-import type { FieldRecord, Simulation } from '@/api/types'
+import type {
+  CatchmentYearlyNLoadCaps,
+  FieldRecord,
+  Simulation,
+  SimulationQuotaTrade,
+} from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
@@ -37,7 +42,10 @@ import {
   type FarmQuota,
   type FieldTotals,
 } from '@/lib/field-domain'
-import { latestQuotaTrades } from '@/lib/quota-trade-result'
+import {
+  latestQuotaTrades,
+  limitAfterTradesFor,
+} from '@/lib/quota-trade-result'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeFieldChanges,
@@ -66,12 +74,18 @@ type CatchmentStatusListProps = {
   farmId: string
   simulationId: string
   fields: FieldRecord[]
+  // The latest run's kvotehandel and the caps it traded from: an opland that
+  // traded is over in a year only above its cap after the trade.
+  quotaTrades: SimulationQuotaTrade[]
+  quotaCaps: CatchmentYearlyNLoadCaps[]
 }
 
 const CatchmentStatusList = ({
   farmId,
   simulationId,
   fields,
+  quotaTrades,
+  quotaCaps,
 }: CatchmentStatusListProps) => {
   const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
@@ -81,6 +95,7 @@ const CatchmentStatusList = ({
         summarizeCatchmentYearTotals(fields, yearValues.data, false),
         false,
         partialCatchmentQuotas(fields, true),
+        limitAfterTradesFor(quotaTrades, quotaCaps),
       )
         .map((status) => ({
           status,
@@ -194,6 +209,8 @@ const SimulationFigures = ({
         farmId={farmId}
         simulationId={simulation.id}
         fields={fields}
+        quotaTrades={quotaTrades}
+        quotaCaps={simulation.optimizationSettings?.maxNLoadByCatchment ?? []}
       />
     </>
   )
