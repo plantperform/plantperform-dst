@@ -2,17 +2,22 @@ import type {
   FieldRecord,
   OptimizationSettings,
   QuotaTrade,
+  QuotaTradePrices,
 } from '@/api/types'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 
-// What the Kvotehandel step edits. A catchment keeps its price while it is
+// What the Kvotehandel step edits. A catchment keeps its prices while it is
 // switched off or cannot trade, so going back and forth loses nothing; only
-// quotaTradesFrom decides what is saved.
+// quotaTradesFrom decides what is saved. An empty sell price sells at the buy
+// price.
 export type QuotaTradeDraft = {
   enabled: boolean
   // One choice for every catchment that trades.
   sameEachYear: boolean
-  catchments: Record<number, { enabled: boolean; price: string }>
+  catchments: Record<
+    number,
+    { enabled: boolean; buyPrice: string; sellPrice: string }
+  >
 }
 
 // A new kvotehandel chooses its amount for each year.
@@ -33,7 +38,14 @@ export const quotaTradeDraftFrom = (
         catchments: Object.fromEntries(
           trades.map((trade) => [
             trade.catchmentId,
-            { enabled: true, price: String(trade.priceDkkPerKg) },
+            {
+              enabled: true,
+              buyPrice: String(trade.buyPriceDkkPerKg),
+              sellPrice:
+                trade.sellPriceDkkPerKg === trade.buyPriceDkkPerKg
+                  ? ''
+                  : String(trade.sellPriceDkkPerKg),
+            },
           ]),
         ),
       }
@@ -85,6 +97,20 @@ export const originalCapRange = (
 const parsePrice = (price: string) =>
   price.trim() === '' ? NaN : Number(price.replace(',', '.'))
 
+const parsePrices = (entry: {
+  buyPrice: string
+  sellPrice: string
+}): QuotaTradePrices => {
+  const buyPriceDkkPerKg = parsePrice(entry.buyPrice)
+  return {
+    buyPriceDkkPerKg,
+    sellPriceDkkPerKg:
+      entry.sellPrice.trim() === ''
+        ? buyPriceDkkPerKg
+        : parsePrice(entry.sellPrice),
+  }
+}
+
 const tradingCatchments = (
   draft: QuotaTradeDraft,
   settings: OptimizationSettings,
@@ -109,7 +135,7 @@ export const quotaTradesFrom = (
 ): QuotaTrade[] =>
   tradingCatchments(draft, settings, fields).map((entry) => ({
     catchmentId: entry.catchmentId,
-    priceDkkPerKg: parsePrice(entry.price),
+    ...parsePrices(entry),
     sameEachYear: draft.sameEachYear,
   }))
 
@@ -122,12 +148,20 @@ export const quotaTradeError = (
   const trading = tradingCatchments(draft, settings, fields)
   if (trading.length === 0)
     return 'Vælg mindst ét kystvandopland, der skal handle kvote.'
+  const prices = trading.map(parsePrices)
   if (
-    trading.some((entry) => {
-      const price = parsePrice(entry.price)
-      return !Number.isFinite(price) || price < 0
-    })
+    prices.some((price) =>
+      [price.buyPriceDkkPerKg, price.sellPriceDkkPerKg].some(
+        (value) => !Number.isFinite(value) || value < 0,
+      ),
+    )
   )
-    return 'Prisen skal være et tal på mindst 0 kr/kg N.'
+    return 'Priserne skal være tal på mindst 0 kr/kg N.'
+  // Mirrors the backend: selling above the buy price would pay for buying
+  // and selling the same kvote.
+  if (
+    prices.some((price) => price.sellPriceDkkPerKg > price.buyPriceDkkPerKg)
+  )
+    return 'Salgsprisen må ikke være højere end købsprisen.'
   return null
 }

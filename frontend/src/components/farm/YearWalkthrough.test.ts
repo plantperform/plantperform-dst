@@ -32,24 +32,31 @@ const field = (id: string, catchmentId: number, nLoad: number) =>
     allowedRotationIds: [],
   }) as unknown as FieldRecord
 
-// laterKg: what the years after the first trade, when it differs.
+// laterKg: what the years after the first trade, when it differs. The
+// payment is the average per year, each year at its direction's price, as a
+// run reports it.
 const trade = (
   catchmentId: number,
   tradeKg: number,
   laterKg = tradeKg,
-): SimulationQuotaTrade => ({
-  catchmentId,
-  catchmentName: null,
-  tradeKgByYear: Object.fromEntries(
-    ROTATION_CALENDAR_YEARS.map((year, index) => [
-      year,
-      index === 0 ? tradeKg : laterKg,
-    ]),
-  ),
-  priceDkkPerKg: 30,
-  sameEachYear: tradeKg === laterKg,
-  paymentDkkPerYear: 30 * tradeKg,
-})
+  { buy, sell } = { buy: 30, sell: 30 },
+): SimulationQuotaTrade => {
+  const kgs = ROTATION_CALENDAR_YEARS.map((_, index) =>
+    index === 0 ? tradeKg : laterKg,
+  )
+  return {
+    catchmentId,
+    catchmentName: null,
+    tradeKgByYear: Object.fromEntries(
+      ROTATION_CALENDAR_YEARS.map((year, index) => [year, kgs[index]]),
+    ),
+    buyPriceDkkPerKg: buy,
+    sellPriceDkkPerKg: sell,
+    sameEachYear: tradeKg === laterKg,
+    paymentDkkPerYear:
+      kgs.reduce((sum, kg) => sum + kg * (kg > 0 ? buy : sell), 0) / kgs.length,
+  }
+}
 
 const yearTotals: CatchmentTotalsByYear = new Map([
   [1, { 1: { nLoadKg: 120, quotaKgN: 100, fieldCount: 1 } }],
@@ -260,6 +267,28 @@ describe('kvotehandel in the Årsgennemgang', () => {
     // Selling earns.
     await render([trade(1, -30)], undefined, { scoped: true, year: 0 })
     expect(panel()).toContain('Indtægt900 kr')
+  })
+
+  it('prices each year at its direction and averages what the run paid', async () => {
+    const prices = { buy: 30, sell: 20 }
+    // A year that sells 30 kg N at 20 kr, and one that buys 60 kg N at 30 kr.
+    await render([trade(1, -30, 60, prices)], cap(150), {
+      scoped: true,
+      year: 0,
+    })
+    expect(panel()).toContain('Pris20 kr/kg N')
+    expect(panel()).toContain('Indtægt600 kr')
+    await render([trade(1, 60, -30, prices)], cap(150), {
+      scoped: true,
+      year: 0,
+    })
+    expect(panel()).toContain('Pris30 kr/kg N')
+    expect(panel()).toContain('Udgift1.800 kr')
+    // The first year sells and the other seven buy.
+    // (7 * 1.800 - 600) / 8 kr, at both prices.
+    await render([trade(1, -30, 60, prices)], cap(150), { scoped: true })
+    expect(panel()).toContain('Priskøb 30, salg 20 kr/kg N')
+    expect(panel()).toContain('Udgift gns. pr. år1.500 kr')
   })
 
   it('measures each year against its own limit under Grænser', async () => {

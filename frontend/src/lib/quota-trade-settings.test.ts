@@ -63,29 +63,47 @@ describe('kvotehandel settings', () => {
       enabled: true,
       sameEachYear: true,
       catchments: {
-        1: { enabled: true, price: '35,5' },
-        2: { enabled: false, price: '20' },
-        3: { enabled: true, price: '10' },
+        1: { enabled: true, buyPrice: '35,5', sellPrice: '30' },
+        2: { enabled: false, buyPrice: '20', sellPrice: '' },
+        3: { enabled: true, buyPrice: '10', sellPrice: '' },
       },
     }
+    const saved = {
+      catchmentId: 1,
+      buyPriceDkkPerKg: 35.5,
+      sellPriceDkkPerKg: 30,
+    }
     expect(quotaTradesFrom(draft, yearly, fields)).toEqual([
-      { catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: true },
+      { ...saved, sameEachYear: true },
     ])
     expect(
       quotaTradesFrom({ ...draft, sameEachYear: false }, yearly, fields),
-    ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: false }])
+    ).toEqual([{ ...saved, sameEachYear: false }])
     expect(quotaTradesFrom(draft, average, fields)).toEqual([])
     expect(
       quotaTradesFrom({ ...draft, enabled: false }, yearly, fields),
     ).toEqual([])
   })
 
-  it('asks for a catchment and a price of at least 0', () => {
+  it('sells at the buy price when no sell price is given', () => {
+    const [trade] = quotaTradesFrom(
+      {
+        enabled: true,
+        sameEachYear: true,
+        catchments: { 1: { enabled: true, buyPrice: '35', sellPrice: ' ' } },
+      },
+      yearly,
+      fields,
+    )
+    expect(trade).toMatchObject({ buyPriceDkkPerKg: 35, sellPriceDkkPerKg: 35 })
+  })
+
+  it('asks for a catchment and prices of at least 0, selling at most at the buy price', () => {
     expect(quotaTradeError(NO_QUOTA_TRADE_DRAFT, yearly, fields)).toBeNull()
-    const draft = (price: string) => ({
+    const draft = (buyPrice: string, sellPrice = '') => ({
       enabled: true,
       sameEachYear: true,
-      catchments: { 1: { enabled: true, price } },
+      catchments: { 1: { enabled: true, buyPrice, sellPrice } },
     })
     expect(
       quotaTradeError(
@@ -94,24 +112,53 @@ describe('kvotehandel settings', () => {
         fields,
       ),
     ).toContain('Vælg mindst ét kystvandopland')
-    for (const price of ['', '-1', 'abc'])
-      expect(quotaTradeError(draft(price), yearly, fields)).toContain(
-        'Prisen skal være et tal',
+    for (const [buy, sell] of [
+      ['', ''],
+      ['-1', ''],
+      ['abc', ''],
+      ['30', '-1'],
+      ['30', 'abc'],
+    ])
+      expect(quotaTradeError(draft(buy, sell), yearly, fields)).toContain(
+        'Priserne skal være tal',
       )
     expect(quotaTradeError(draft('0'), yearly, fields)).toBeNull()
+    expect(quotaTradeError(draft('30', '30'), yearly, fields)).toBeNull()
+    expect(quotaTradeError(draft('30', '35'), yearly, fields)).toBe(
+      'Salgsprisen må ikke være højere end købsprisen.',
+    )
     // Only the yearly optimization trades, so nothing is asked otherwise.
     expect(quotaTradeError(draft(''), average, fields)).toBeNull()
   })
 
   it('opens saved trades as a draft and round trips them through the API names', () => {
-    const trades = [{ catchmentId: 1, priceDkkPerKg: 35, sameEachYear: false }]
+    const trades = [
+      {
+        catchmentId: 1,
+        buyPriceDkkPerKg: 35,
+        sellPriceDkkPerKg: 30,
+        sameEachYear: false,
+      },
+    ]
     expect(quotaTradeDraftFrom([])).toBe(NO_QUOTA_TRADE_DRAFT)
     const draft = quotaTradeDraftFrom(trades)
     expect(draft.sameEachYear).toBe(false)
     expect(quotaTradesFrom(draft, yearly, fields)).toEqual(trades)
+    // Equal prices open with the sell price left to follow the buy price.
+    expect(
+      quotaTradeDraftFrom([{ ...trades[0], sellPriceDkkPerKg: 35 }])
+        .catchments[1].sellPrice,
+    ).toBe('')
     const settings = { ...yearly, quotaTrades: trades }
     expect(toWire(settings)).toMatchObject({
-      quotaTrades: [{ kystvandId: 1, priceKrPerKg: 35, sameEachYear: false }],
+      quotaTrades: [
+        {
+          kystvandId: 1,
+          buyPriceKrPerKg: 35,
+          sellPriceKrPerKg: 30,
+          sameEachYear: false,
+        },
+      ],
     })
     expect(fromWire(toWire(settings))).toEqual(settings)
   })
@@ -120,7 +167,9 @@ describe('kvotehandel settings', () => {
     // A new kvotehandel chooses an amount for each year.
     expect(NO_QUOTA_TRADE_DRAFT.sameEachYear).toBe(false)
     expect(
-      quotaTradeDraftFrom([{ catchmentId: 1, priceDkkPerKg: 35 }]).sameEachYear,
+      quotaTradeDraftFrom([
+        { catchmentId: 1, buyPriceDkkPerKg: 35, sellPriceDkkPerKg: 35 },
+      ]).sameEachYear,
     ).toBe(true)
   })
 })

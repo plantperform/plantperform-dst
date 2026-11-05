@@ -49,7 +49,8 @@ const SHARED_NAMES: Record<string, string> = {
   avgFen: 'avgFeedUnits',
   fenFeHa: 'feedUnitsPerHa',
   journalnr: 'journalNumber',
-  priceKrPerKg: 'priceDkkPerKg',
+  buyPriceKrPerKg: 'buyPriceDkkPerKg',
+  sellPriceKrPerKg: 'sellPriceDkkPerKg',
 }
 
 const RESPONSE_ONLY_NAMES: Record<string, string> = {

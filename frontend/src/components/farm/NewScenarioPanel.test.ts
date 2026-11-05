@@ -848,7 +848,7 @@ describe('simulation wizard steps', () => {
       expect(container.textContent).toContain('Ingen kvotehandel')
     })
 
-    it('saves the chosen catchment and price once both are given', async () => {
+    it('saves the chosen catchment and its prices once they are given', async () => {
       await mount(yearly)
       await click('Kvotehandel')
       expect(container.textContent).not.toContain('Kystvandopland 1')
@@ -869,12 +869,19 @@ describe('simulation wizard steps', () => {
       await tick('Kystvandopland 1')
       await click('Næste')
       expect(currentStep()).toBe('Kvotehandel')
-      expect(container.textContent).toContain('Prisen skal være et tal')
-      await change('Pris (kr/kg N pr. år)', '35.5')
+      expect(container.textContent).toContain('Priserne skal være tal')
+      await change('Købspris (kr/kg N pr. år)', '35.5')
+      await change('Salgspris (kr/kg N pr. år)', '40')
+      await click('Næste')
+      expect(currentStep()).toBe('Kvotehandel')
+      expect(container.textContent).toContain(
+        'Salgsprisen må ikke være højere end købsprisen.',
+      )
+      await change('Salgspris (kr/kg N pr. år)', '30')
       await click('Næste')
       expect(currentStep()).toBe('Bekræft')
       expect(container.textContent).toContain(
-        'Kystvandopland 1 · 35,5 kr/kg N pr. år',
+        'Kystvandopland 1 · køb 35,5, salg 30 kr/kg N pr. år',
       )
       // A new kvotehandel chooses the amount for each year.
       expect(container.textContent).toContain(
@@ -883,7 +890,14 @@ describe('simulation wizard steps', () => {
       await click('Gem')
       expect(
         queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
-      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 35.5, sameEachYear: false }])
+      ).toEqual([
+        {
+          catchmentId: 1,
+          buyPriceDkkPerKg: 35.5,
+          sellPriceDkkPerKg: 30,
+          sameEachYear: false,
+        },
+      ])
     })
 
     it('trades the same amount every year when ticked', async () => {
@@ -897,7 +911,9 @@ describe('simulation wizard steps', () => {
         ...yearly,
         optimizationSettings: {
           ...yearly.optimizationSettings,
-          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+          quotaTrades: [
+            { catchmentId: 1, buyPriceDkkPerKg: 40, sellPriceDkkPerKg: 40 },
+          ],
         },
       })
       await click('Kvotehandel')
@@ -918,15 +934,24 @@ describe('simulation wizard steps', () => {
       await click('Gem')
       expect(
         queries.update.mock.calls[0][2].optimizationSettings.quotaTrades,
-      ).toEqual([{ catchmentId: 1, priceDkkPerKg: 40, sameEachYear: true }])
+      ).toEqual([
+        {
+          catchmentId: 1,
+          buyPriceDkkPerKg: 40,
+          sellPriceDkkPerKg: 40,
+          sameEachYear: true,
+        },
+      ])
     })
 
-    it('stops trading a catchment once a year has no limit, keeping its price', async () => {
+    it('stops trading a catchment once a year has no limit, keeping its prices', async () => {
       await mount({
         ...yearly,
         optimizationSettings: {
           ...yearly.optimizationSettings,
-          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+          quotaTrades: [
+            { catchmentId: 1, buyPriceDkkPerKg: 40, sellPriceDkkPerKg: 40 },
+          ],
         },
       })
       await click('Grænser')
@@ -949,7 +974,9 @@ describe('simulation wizard steps', () => {
         ...average,
         optimizationSettings: {
           ...average.optimizationSettings,
-          quotaTrades: [{ catchmentId: 1, priceDkkPerKg: 40 }],
+          quotaTrades: [
+            { catchmentId: 1, buyPriceDkkPerKg: 40, sellPriceDkkPerKg: 40 },
+          ],
         },
       })
       await click('Bekræft')
