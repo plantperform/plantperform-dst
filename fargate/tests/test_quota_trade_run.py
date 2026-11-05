@@ -20,7 +20,10 @@ def _field(kystvand_id, kvotegivende=True):
 class QuotaTradeInputTests(unittest.TestCase):
     def test_a_tradable_opland_reaches_the_solver(self):
         inputs = _quota_trade_inputs([_field(1)], {1: (100.0,) * NUM_YEARS}, (TRADE,), NAMES)
-        self.assertEqual(inputs, (QuotaTradeInput(kystvand_id=1, price_kr_per_kg=35),))
+        self.assertEqual(
+            inputs,
+            (QuotaTradeInput(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=35),),
+        )
 
     def test_a_trade_by_year_reaches_the_solver_as_one(self):
         by_year = TRADE.model_copy(update={"same_each_year": False})
