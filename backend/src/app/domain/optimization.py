@@ -65,18 +65,46 @@ class KystvandoplandYearlyNLoadCaps(CamelModel):
     max_n_load_by_year: dict[int, float] = Field(default_factory=dict)
 
 
-class QuotaTradeSetting(CamelModel):
-    """Kvotehandel at a fixed price for one kystvandopland in Års-optimering.
+def _one_price_as_both(data):
+    """Read a kvotehandel saved with one price as buying and selling at it."""
+    if isinstance(data, dict):
+        for old, buy, sell in (
+            ("price_kr_per_kg", "buy_price_kr_per_kg", "sell_price_kr_per_kg"),
+            ("priceKrPerKg", "buyPriceKrPerKg", "sellPriceKrPerKg"),
+        ):
+            if old in data:
+                data = {buy: data[old], sell: data[old]} | data
+                del data[old]
+    return data
 
-    The run chooses a trade in whole kg N for each year that moves the opland's
-    cap in that year, and pays price_kr_per_kg for each kg per year. With
-    same_each_year the trade is one amount for every year.
+
+class QuotaTradeSetting(CamelModel):
+    """Kvotehandel at fixed prices for one kystvandopland in Års-optimering.
+
+    The run chooses in whole kg N for each year how much kvote to buy or sell,
+    which moves the opland's cap in that year. Bought kvote costs
+    buy_price_kr_per_kg and sold kvote earns sell_price_kr_per_kg, per kg and
+    year. With same_each_year the trade is one amount for every year.
     """
 
     kystvand_id: int
-    price_kr_per_kg: float = Field(ge=0, allow_inf_nan=False)
+    buy_price_kr_per_kg: float = Field(ge=0, allow_inf_nan=False)
+    sell_price_kr_per_kg: float = Field(ge=0, allow_inf_nan=False)
     # Settings saved before trades could differ by year traded the same amount.
     same_each_year: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_one_price(cls, data):
+        return _one_price_as_both(data)
+
+    @model_validator(mode="after")
+    def validate_prices(self):
+        # Selling above the buy price would pay for buying and selling the
+        # same kg without end.
+        if self.sell_price_kr_per_kg > self.buy_price_kr_per_kg:
+            raise ValueError("Salgsprisen må ikke være højere end købsprisen")
+        return self
 
 
 class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
@@ -143,11 +171,17 @@ class SimulationQuotaTrade(CamelModel):
     kystvand_id: int
     kystvand_navn: str | None = None
     trade_kg_by_year: dict[int, int]
-    price_kr_per_kg: float
+    buy_price_kr_per_kg: float
+    sell_price_kr_per_kg: float
     same_each_year: bool
     # The average per year, like objective_db2; negative when the trades sell
     # more than they buy.
     payment_kr_per_year: float
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_one_price(cls, data):
+        return _one_price_as_both(data)
 
 
 class OptimizeSimulationResponse(CamelModel):
