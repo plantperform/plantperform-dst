@@ -64,18 +64,18 @@ const AutumnCropRow = ({
           aria-label={`Gødning om efteråret for ${label}`}
           className="flex flex-wrap gap-x-3 gap-y-1 text-xs"
         >
-          {(['mineral', 'manure'] as const).map((fertiliser) => (
+          {(['mineral', 'manure'] as const).map((fertiliserType) => (
             <label
-              key={fertiliser}
+              key={fertiliserType}
               className="flex cursor-pointer items-center gap-1.5"
             >
               <input
                 type="radio"
                 name={`autumn-fertiliser-${crop.cropCode}`}
-                checked={draft.fertiliser === fertiliser}
-                onChange={() => onChange({ ...draft, fertiliser })}
+                checked={draft.fertiliserType === fertiliserType}
+                onChange={() => onChange({ ...draft, fertiliserType })}
               />
-              {AUTUMN_FERTILISER_LABELS[fertiliser]}
+              {AUTUMN_FERTILISER_LABELS[fertiliserType]}
             </label>
           ))}
         </span>

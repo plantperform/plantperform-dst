@@ -203,7 +203,7 @@ export type AutumnFertiliser = 'mineral' | 'manure'
 export type AutumnAllocation = {
   cropCode: number
   kgNHa: number
-  fertiliser: AutumnFertiliser
+  fertiliserType: AutumnFertiliser
 }
 
 export type AutumnCropOption = {

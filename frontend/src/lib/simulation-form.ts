@@ -70,7 +70,7 @@ export const copiedNNormPercentages = (
 export type AutumnAllocationDraft = {
   cropCode: number
   kgNHa: string
-  fertiliser: AutumnFertiliser
+  fertiliserType: AutumnFertiliser
 }
 
 // Number inputs are kept as the strings the user typed, so an empty or
@@ -195,7 +195,7 @@ const nitrogenSchema = z
       z.object({
         cropCode: z.number(),
         kgNHa: z.string(),
-        fertiliser: z.enum(['mineral', 'manure']),
+        fertiliserType: z.enum(['mineral', 'manure']),
       }),
     ),
   })
@@ -669,7 +669,7 @@ export const autumnDraftFor = (
   drafts.find((draft) => draft.cropCode === cropCode) ?? {
     cropCode,
     kgNHa: '',
-    fertiliser: 'mineral',
+    fertiliserType: 'mineral',
   }
 
 export const withAutumnDraft = (
@@ -699,7 +699,7 @@ const autumnAllocationsOf = (
     .map((draft) => ({
       cropCode: draft.cropCode,
       kgNHa: Number(draft.kgNHa),
-      fertiliser: forced ?? draft.fertiliser,
+      fertiliserType: forced ?? draft.fertiliserType,
     }))
 }
 
@@ -711,8 +711,8 @@ export const autumnAllocationLabel = (
     ? 'Fra'
     : allocations
         .map(
-          ({ cropCode, kgNHa, fertiliser }) =>
-            `${cropLabelFor(cropCode)}: ${formatNumber(kgNHa)} kg N/ha, ${AUTUMN_FERTILISER_LABELS[fertiliser].toLocaleLowerCase('da-DK')}`,
+          ({ cropCode, kgNHa, fertiliserType }) =>
+            `${cropLabelFor(cropCode)}: ${formatNumber(kgNHa)} kg N/ha, ${AUTUMN_FERTILISER_LABELS[fertiliserType].toLocaleLowerCase('da-DK')}`,
         )
         .join(' · ')
 
