@@ -25,7 +25,6 @@ import {
   formatTradeShareOfCap,
   latestQuotaTrades,
   quotaBarHeights,
-  quotaCapKgN,
   quotaLimitLinePct,
   quotaTradeBand,
   quotaTradeKgIn,
@@ -109,17 +108,17 @@ describe('kvotehandel results', () => {
     expect(describeQuotaPayment(4_200, true)).toBe('Betaler gns. 4.200 kr/år')
   })
 
-  it('holds a trading opland to its cap moved by the year’s trade', () => {
-    const year = ROTATION_CALENDAR_YEARS[0]
-    const limitFor = limitAfterTradesFor(
-      [{ ...buy, tradeKgByYear: byYear(30, 50) }],
-      [{ catchmentId: 1, maxNLoadByYear: { [year]: 150 } }],
-    )
-    // The cap under Grænser in the first year, else the rounded kvote.
-    expect(limitFor(1, year, 99.6)).toBe(180)
-    expect(limitFor(1, ROTATION_CALENDAR_YEARS[1], 99.6)).toBe(150)
+  it('holds a trading opland to its kvote moved by the year’s trade', () => {
+    const [first, second] = ROTATION_CALENDAR_YEARS
+    const limitFor = limitAfterTradesFor([
+      { ...buy, tradeKgByYear: byYear(30, 50) },
+    ])
+    // The kvote rounded to whole kg N, like the run's default cap, moved by
+    // the trade; a cap raised under Grænser does not count.
+    expect(limitFor(1, first, 99.6)).toBe(130)
+    expect(limitFor(1, second, 99.6)).toBe(150)
     // An opland that does not trade keeps its kvote.
-    expect(limitFor(2, year, 99.6)).toBe(99.6)
+    expect(limitFor(2, first, 99.6)).toBe(99.6)
     expect(limitAfterTradeKgN({ capKgN: 100, tradeKg: -30 })).toBe(70)
     expect(describeAfterTrade(30)).toBe('efter køb')
     expect(describeAfterTrade(-30)).toBe('efter salg')
@@ -147,10 +146,9 @@ describe('kvotehandel results', () => {
     // Opland 1 buys 30 kg N in the first year and 10 kg N after it: 12.5 kg N
     // on average covers its 20 kg N over the kvote only in part.
     const limitFor = (laterKg: number) =>
-      averageLimitAfterTradesFor(
-        [{ ...buy, tradeKgByYear: byYear(30, laterKg) }],
-        [],
-      )
+      averageLimitAfterTradesFor([
+        { ...buy, tradeKgByYear: byYear(30, laterKg) },
+      ])
     expect(limitFor(10)(1, 100)).toBe(112.5)
     expect(
       describeSeparateQuotas(resolveFarmQuota(fields, true, limitFor(10))),
@@ -203,19 +201,6 @@ describe('kvotehandel results', () => {
     // Seven years of 120 kg and one of -40 kg.
     expect(quotaTradeKgIn(trade, null)).toBe((7 * 120 - 40) / 8)
     expect(quotaTradeKgIn(trade, 1990)).toBe(0)
-  })
-
-  it('takes the cap a trade moves from Grænser, or else the kvote', () => {
-    const [first, second] = ROTATION_CALENDAR_YEARS
-    const caps = [
-      { catchmentId: 1, maxNLoadByYear: { ...everyYear(337), [first]: 150 } },
-    ]
-    expect(quotaCapKgN(caps, 1, first, 336.7)).toBe(150)
-    expect(quotaCapKgN(caps, 1, second, 336.7)).toBe(337)
-    // The period's average cap.
-    expect(quotaCapKgN(caps, 1, null, 336.7)).toBe((150 + 7 * 337) / 8)
-    // No cap under Grænser: the kvote rounded to whole kg N, like the run.
-    expect(quotaCapKgN(caps, 2, first, 99.6)).toBe(100)
   })
 
   it('takes each year’s own limit from Grænser, or else the kvote', () => {

@@ -7,12 +7,7 @@ import {
   useSimulationView,
 } from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
-import type {
-  CatchmentYearlyNLoadCaps,
-  FieldRecord,
-  Simulation,
-  SimulationQuotaTrade,
-} from '@/api/types'
+import type { FieldRecord, Simulation, SimulationQuotaTrade } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
@@ -74,10 +69,9 @@ type CatchmentStatusListProps = {
   farmId: string
   simulationId: string
   fields: FieldRecord[]
-  // The latest run's kvotehandel and the caps it traded from: an opland that
-  // traded is over in a year only above its cap after the trade.
+  // The latest run's kvotehandel: an opland that traded is over in a year
+  // only above its kvote moved by the trade.
   quotaTrades: SimulationQuotaTrade[]
-  quotaCaps: CatchmentYearlyNLoadCaps[]
 }
 
 const CatchmentStatusList = ({
@@ -85,7 +79,6 @@ const CatchmentStatusList = ({
   simulationId,
   fields,
   quotaTrades,
-  quotaCaps,
 }: CatchmentStatusListProps) => {
   const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
@@ -95,7 +88,7 @@ const CatchmentStatusList = ({
         summarizeCatchmentYearTotals(fields, yearValues.data, false),
         false,
         partialCatchmentQuotas(fields, true),
-        limitAfterTradesFor(quotaTrades, quotaCaps),
+        limitAfterTradesFor(quotaTrades),
       )
         .map((status) => ({
           status,
@@ -210,7 +203,6 @@ const SimulationFigures = ({
         simulationId={simulation.id}
         fields={fields}
         quotaTrades={quotaTrades}
-        quotaCaps={simulation.optimizationSettings?.maxNLoadByCatchment ?? []}
       />
     </>
   )

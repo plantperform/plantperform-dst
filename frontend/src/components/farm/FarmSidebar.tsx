@@ -646,7 +646,7 @@ const SimulationMenuItem = ({
     summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   // The view the fields come from; a trading opland's status measures against
-  // its limit after the latest run's kvotehandel.
+  // its kvote moved by the latest run's kvotehandel.
   const view = useSimulationView(
     farmId,
     isSimulationReady(simulation) ? simulation.id : undefined,
@@ -660,10 +660,7 @@ const SimulationMenuItem = ({
         simulationFields,
         true,
         quotaTrades.length > 0
-          ? averageLimitAfterTradesFor(
-              quotaTrades,
-              simulation.optimizationSettings?.maxNLoadByCatchment ?? [],
-            )
+          ? averageLimitAfterTradesFor(quotaTrades)
           : undefined,
       )
     : null
