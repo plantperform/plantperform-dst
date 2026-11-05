@@ -26,6 +26,23 @@ export const latestQuotaTrades = (
 export const quotaTradePayment = (trades: SimulationQuotaTrade[]) =>
   trades.reduce((sum, trade) => sum + trade.paymentDkkPerYear, 0)
 
+// What buying cost and what selling earned, each the average per year and at
+// least 0. bought - sold is the trades' payment.
+export const quotaTradeAmounts = (
+  trades: SimulationQuotaTrade[],
+): { bought: number; sold: number } => {
+  let bought = 0
+  let sold = 0
+  for (const trade of trades) {
+    const kgs = tradeKgs(trade)
+    for (const kg of kgs) {
+      if (kg > 0) bought += (kg * trade.buyPriceDkkPerKg) / kgs.length
+      else sold += (-kg * trade.sellPriceDkkPerKg) / kgs.length
+    }
+  }
+  return { bought, sold }
+}
+
 const tradeKgs = (trade: SimulationQuotaTrade) =>
   Object.values(trade.tradeKgByYear)
 
