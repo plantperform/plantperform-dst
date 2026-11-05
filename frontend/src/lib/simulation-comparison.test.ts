@@ -24,6 +24,7 @@ import {
   describeFeedUnitRequirement,
   formatFeedUnits,
   formatKgN,
+  formatStatementAmount,
   formatStatementLine,
   hasMissingYearValues,
   haveSameFieldPlans,
@@ -827,6 +828,15 @@ describe('formatStatementLine', () => {
     expect(
       figure('Dækningsbidrag', 'perHa', { ...statement, db: -2_000 }),
     ).toBe('−50')
+  })
+
+  it('shows any amount in the statement’s unit', () => {
+    // A kvote payment of 8.000 kr a year on 40 ha.
+    expect(formatStatementAmount(statement, -8_000, 'perHa')).toBe('−200')
+    expect(formatStatementAmount(statement, -8_000, 'total')).toBe('−8.000')
+    expect(
+      formatStatementAmount({ ...statement, areaHa: 0 }, -8_000, 'perHa'),
+    ).toBeNull()
   })
 
   it('has no figure per hectare without a calculated area', () => {

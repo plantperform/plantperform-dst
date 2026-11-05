@@ -15,12 +15,18 @@ import {
   SegmentedControl,
   type SegmentedControlOption,
 } from '@/components/ui/segmented-control'
-import { compareProfileChanges, formatCropLabels } from '@/lib/economics'
+import {
+  compareProfileChanges,
+  formatCropLabels,
+  formatSignedDkk,
+} from '@/lib/economics'
 import {
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
+import { quotaTradeAmounts, quotaTradePayment } from '@/lib/quota-trade-result'
 import {
+  formatStatementAmount,
   formatStatementLine,
   STATEMENT_GROUPS,
   STATEMENT_RESULT,
@@ -99,6 +105,30 @@ export const ComparisonEconomics = ({
         })),
       )
     : []
+
+  // Kvotehandel shows only when a simulation traded; the others show 0 in it.
+  const traded = table.columns.some((column) => column.quotaTrades.length > 0)
+  const amountRow = (
+    label: string,
+    amountOf: (index: number) => number,
+    style: typeof LINE_ROW,
+    format?: (value: number) => string,
+  ) => (
+    <ComparisonFigureRow key={label} label={label} {...style} {...table}>
+      {(_, index) => {
+        const statement = statements[index]
+        return statement
+          ? formatStatementAmount(statement, amountOf(index), unit, format)
+          : null
+      }}
+    </ComparisonFigureRow>
+  )
+  const tradeAmounts = table.columns.map((column) =>
+    quotaTradeAmounts(column.quotaTrades),
+  )
+  const payments = table.columns.map((column) =>
+    quotaTradePayment(column.quotaTrades),
+  )
 
   const statementRow = (line: StatementLine, style: typeof LINE_ROW) => (
     <ComparisonFigureRow
@@ -179,7 +209,45 @@ export const ComparisonEconomics = ({
             {statementRow(group.total, TOTAL_ROW)}
           </Fragment>
         ))}
-        {statementRow(STATEMENT_RESULT, RESULT_ROW)}
+        {traded ? (
+          <>
+            <ComparisonFigureRow
+              label="Kvotehandel"
+              className={cn('border-y', BAND_CLASS)}
+              labelClassName="py-2 font-display text-[15px]"
+              {...table}
+            >
+              {() => null}
+            </ComparisonFigureRow>
+            {amountRow(
+              'Købt kvote',
+              (index) => -tradeAmounts[index].bought,
+              LINE_ROW,
+            )}
+            {amountRow(
+              'Solgt kvote',
+              (index) => tradeAmounts[index].sold,
+              LINE_ROW,
+              formatSignedDkk,
+            )}
+            {amountRow(
+              'Kvotehandel i alt',
+              (index) => -payments[index],
+              TOTAL_ROW,
+              formatSignedDkk,
+            )}
+            {amountRow(
+              'Dækningsbidrag inkl. kvotehandel',
+              (index) => {
+                const statement = statements[index]
+                return statement ? statement.db - payments[index] : 0
+              },
+              RESULT_ROW,
+            )}
+          </>
+        ) : (
+          statementRow(STATEMENT_RESULT, RESULT_ROW)
+        )}
       </ComparisonColumnsTable>
     </>
   )
