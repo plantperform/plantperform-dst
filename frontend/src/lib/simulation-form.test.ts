@@ -652,8 +652,8 @@ describe('efterårstildeling', () => {
   const draft = (
     cropCode: number,
     kgNHa: string,
-    fertiliser: AutumnFertiliser = 'mineral',
-  ) => ({ cropCode, kgNHa, fertiliser })
+    fertiliserType: AutumnFertiliser = 'mineral',
+  ) => ({ cropCode, kgNHa, fertiliserType })
   const conventional = {
     farmingSystem: 'Konventionel' as const,
     fertiliserChoice: 'Svinegylle',
@@ -682,7 +682,7 @@ describe('efterårstildeling', () => {
           draft(10, '0'),
         ],
       }).fertiliser?.autumnAllocations,
-    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliser: 'manure' }])
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliserType: 'manure' }])
   })
 
   it('sends the only kind of gødning there is', () => {
@@ -693,7 +693,7 @@ describe('efterårstildeling', () => {
         autumnAllocationEnabled: true,
         autumnAllocations: [draft(22, '40', 'manure')],
       }).fertiliser?.autumnAllocations,
-    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliser: 'mineral' }])
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliserType: 'mineral' }])
   })
 
   it('only offers a choice where both kinds of gødning exist', () => {
@@ -777,7 +777,7 @@ describe('efterårstildeling', () => {
     expect(autumnAllocationLabel([], String)).toBe('Fra')
     expect(
       autumnAllocationLabel(
-        [{ cropCode: 22, kgNHa: 40, fertiliser: 'mineral' }],
+        [{ cropCode: 22, kgNHa: 40, fertiliserType: 'mineral' }],
         (code) => `Afgrøde ${code}`,
       ),
     ).toBe('Afgrøde 22: 40 kg N/ha, handelsgødning')
@@ -945,14 +945,16 @@ describe('simulationToFormValues', () => {
       ...simulation,
       fertiliser: {
         ...simulation.fertiliser,
-        autumnAllocations: [{ cropCode: 22, kgNHa: 40, fertiliser: 'manure' }],
+        autumnAllocations: [
+          { cropCode: 22, kgNHa: 40, fertiliserType: 'manure' },
+        ],
       },
     }
     const values = simulationToFormValues(saved, [kvaeggylle], offered)
 
     expect(values.autumnAllocationEnabled).toBe(true)
     expect(values.autumnAllocations).toEqual([
-      { cropCode: 22, kgNHa: '40', fertiliser: 'manure' },
+      { cropCode: 22, kgNHa: '40', fertiliserType: 'manure' },
     ])
     expect(
       simulationToFormValues(simulation, [kvaeggylle], offered)

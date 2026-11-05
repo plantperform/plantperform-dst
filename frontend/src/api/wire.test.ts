@@ -81,6 +81,25 @@ describe('toWire', () => {
     ).toEqual({ kystvandId: 7, godning: { mineralskAndelPct: 40 } })
   })
 
+  it('keeps the gødning of an efterårstildeling apart from the settings', () => {
+    const fertiliser = {
+      mineralSharePct: 40,
+      autumnAllocations: [
+        { cropCode: 22, kgNHa: 40, fertiliserType: 'manure' },
+      ],
+    }
+
+    expect(toWire({ fertiliser })).toEqual({
+      godning: {
+        mineralskAndelPct: 40,
+        autumnAllocations: [
+          { afgrodeKode: 22, kgNHa: 40, fertiliser: 'manure' },
+        ],
+      },
+    })
+    expect(fromWire(toWire({ fertiliser }))).toEqual({ fertiliser })
+  })
+
   it('keeps a name that only responses translate', () => {
     expect(toWire({ name: 'Bakkegården' })).toEqual({ name: 'Bakkegården' })
   })

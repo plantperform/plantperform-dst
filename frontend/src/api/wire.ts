@@ -33,6 +33,7 @@ const SHARED_NAMES: Record<string, string> = {
   eeaFdato: 'catchCropSowingDate',
   eeaPrecisionDagsbasis: 'catchCropDailyBasis',
   godning: 'fertiliser',
+  fertiliser: 'fertiliserType',
   mineralskAndelPct: 'mineralSharePct',
   nIndholdKgPerTon: 'nContentKgPerTon',
   tildeltHusdyrgodningUdnyttetKgnHa: 'appliedManureUtilisedKgNHa',
