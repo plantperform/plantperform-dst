@@ -26,6 +26,26 @@ export type CreateFarmInput = {
   cvr: string | null
 }
 
+export type FarmCopyLookup = {
+  cvr: '12345678'
+  name: string
+  ownerName: string
+}
+
+export type CopyFarmInput = FarmCopyLookup & {
+  sourceFarmId: string
+  requestId: string
+}
+
+export type FarmCopyPreview = {
+  sourceFarm: Farm
+  fieldCount: number
+  areaHa: number
+  simulationCount: number
+  savedResultCount: number
+  hasUnfinishedCalculations: boolean
+}
+
 export type CatchmentEmissions = {
   catchmentId: number | null
   catchmentName: string | null

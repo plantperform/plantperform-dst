@@ -5,6 +5,7 @@ from pydantic import Field, field_validator
 from starlette.status import HTTP_204_NO_CONTENT
 
 from app.auth import AuthenticatedUser, current_user
+from app.data import farm_copy_store
 from app.data.repository import (
     add_farm_member,
     create_farm,
@@ -17,6 +18,13 @@ from app.data.repository import (
 )
 from app.domain.base import CamelModel
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
+from app.domain.farm_copy import (
+    CopyFarmRequest,
+    FarmCopyConflictError,
+    FarmCopyLookup,
+    FarmCopyNotFoundError,
+    FarmCopyPreview,
+)
 from app.domain.read_model import FarmView
 from app.services.preparation_jobs import get_or_prepare_farm_view, retry_history
 
@@ -51,6 +59,30 @@ def post_farm(
     user: CurrentUser,
 ) -> Farm:
     return create_farm(request, user.email)
+
+
+@router.post("/copy/preview", response_model=FarmCopyPreview)
+def preview_farm_copy(request: FarmCopyLookup, user: CurrentUser):
+    try:
+        return farm_copy_store.preview(request)
+    except FarmCopyNotFoundError as error:
+        raise HTTPException(
+            status_code=404, detail="Ingen bedrift matcher navnet og ejeren. Ret oplysningerne."
+        ) from error
+    except FarmCopyConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/copy", response_model=Farm, status_code=201)
+def copy_farm(request: CopyFarmRequest, user: CurrentUser):
+    try:
+        return farm_copy_store.copy_farm(request, user.email)
+    except FarmCopyNotFoundError as error:
+        raise HTTPException(
+            status_code=404, detail="Ingen bedrift matcher navnet og ejeren. Ret oplysningerne."
+        ) from error
+    except FarmCopyConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/{farm_id}", response_model=Farm)
