@@ -208,8 +208,18 @@ class SimulationFieldSetTests(DatabaseTests):
             json=[new_field(7, catchment=1, quota=10), new_field(8, catchment=2, quota=20)],
         )
         trades = [
-            {"kystvand_id": 1, "price_kr_per_kg": 35, "same_each_year": True},
-            {"kystvand_id": 2, "price_kr_per_kg": 40, "same_each_year": False},
+            {
+                "kystvand_id": 1,
+                "buy_price_kr_per_kg": 35,
+                "sell_price_kr_per_kg": 30,
+                "same_each_year": True,
+            },
+            {
+                "kystvand_id": 2,
+                "buy_price_kr_per_kg": 40,
+                "sell_price_kr_per_kg": 40,
+                "same_each_year": False,
+            },
         ]
         self.save("optimization_settings", kind="yearly", quota_trades=trades)
 

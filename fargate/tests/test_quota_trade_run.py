@@ -10,7 +10,7 @@ from plantperform_fargate.models import QuotaTradeInput
 from plantperform_fargate.orchestrator import _quota_trade_inputs
 
 NAMES = {1: "Limfjorden"}
-TRADE = QuotaTradeSetting(kystvand_id=1, price_kr_per_kg=35)
+TRADE = QuotaTradeSetting(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=30)
 
 
 def _field(kystvand_id, kvotegivende=True):
@@ -22,7 +22,7 @@ class QuotaTradeInputTests(unittest.TestCase):
         inputs = _quota_trade_inputs([_field(1)], {1: (100.0,) * NUM_YEARS}, (TRADE,), NAMES)
         self.assertEqual(
             inputs,
-            (QuotaTradeInput(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=35),),
+            (QuotaTradeInput(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=30),),
         )
 
     def test_a_trade_by_year_reaches_the_solver_as_one(self):
@@ -56,7 +56,7 @@ class QuotaTradeWorkerTests(unittest.TestCase):
             "parameters": {
                 "expected_revision": 0,
                 "run_id": run_id,
-                "quotaTrades": [{"kystvandId": 1, "priceKrPerKg": 35}],
+                "quotaTrades": [{"kystvandId": 1, "buyPriceKrPerKg": 35, "sellPriceKrPerKg": 30}],
             },
         }
         snapshot = MagicMock()
@@ -69,9 +69,10 @@ class QuotaTradeWorkerTests(unittest.TestCase):
             kystvand_id=1,
             kystvand_navn="Limfjorden",
             trade_kg_by_year={2027 + y: -50 for y in range(NUM_YEARS)},
-            price_kr_per_kg=35,
+            buy_price_kr_per_kg=35,
+            sell_price_kr_per_kg=30,
             same_each_year=True,
-            payment_kr_per_year=-1_750,
+            payment_kr_per_year=-1_500,
         )
         solved = SimpleNamespace(
             output=SimpleNamespace(
