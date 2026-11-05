@@ -68,6 +68,13 @@ def _same_trade_bounds(bounds_by_year: list[tuple[int, int]]) -> tuple[int, int]
     )
 
 
+def _trade_payment(trade: QuotaTradeInput, trade_kg: int) -> float:
+    """What a year's net trade costs, negative when it sells."""
+    if trade_kg >= 0:
+        return trade.buy_price_kr_per_kg * trade_kg
+    return trade.sell_price_kr_per_kg * trade_kg
+
+
 def _infeasible_output(status: str) -> YearlyOptimizationOutput:
     return YearlyOptimizationOutput(
         status=status,
@@ -190,10 +197,17 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             raise ValueError(
                 f"Kvotehandel needs kvotegivende marker in kystvandopland {trade.kystvand_id}"
             )
+        if trade.sell_price_kr_per_kg > trade.buy_price_kr_per_kg:
+            raise ValueError(
+                f"Kvotehandel in kystvandopland {trade.kystvand_id} sells above its buy price"
+            )
 
-    # One trade variable per year; a trade that is the same each year uses one
-    # variable for all of them.
-    trade_vars_by_year: dict[int, list[cp_model.IntVar]] = {}
+    # A bought and a sold amount per year; a trade that is the same each year
+    # uses one of each for all of them. With the buy price at least the sell
+    # price, buying and selling in the same year never pays, so the solver
+    # does at most one of them.
+    bought_vars_by_year: dict[int, list[cp_model.IntVar]] = {}
+    sold_vars_by_year: dict[int, list[cp_model.IntVar]] = {}
     for kystvand_id, caps in caps_by_kystvand.items():
         year_totals = kvotegivende_n_load_by_kystvand_year.get(kystvand_id)
         if year_totals is None:
@@ -203,12 +217,18 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             bounds = _trade_bounds_by_year(input, trade, caps)
             if trade.same_each_year:
                 lower, upper = _same_trade_bounds(bounds)
-                trade_var = model.NewIntVar(lower, upper, f"quota_trade_{kystvand_id}")
-                trade_vars_by_year[kystvand_id] = [trade_var] * NUM_YEARS
+                bought = model.NewIntVar(0, upper, f"quota_bought_{kystvand_id}")
+                sold = model.NewIntVar(0, -lower, f"quota_sold_{kystvand_id}")
+                bought_vars_by_year[kystvand_id] = [bought] * NUM_YEARS
+                sold_vars_by_year[kystvand_id] = [sold] * NUM_YEARS
             else:
-                trade_vars_by_year[kystvand_id] = [
-                    model.NewIntVar(lower, upper, f"quota_trade_{kystvand_id}_{y}")
-                    for y, (lower, upper) in enumerate(bounds)
+                bought_vars_by_year[kystvand_id] = [
+                    model.NewIntVar(0, upper, f"quota_bought_{kystvand_id}_{y}")
+                    for y, (_, upper) in enumerate(bounds)
+                ]
+                sold_vars_by_year[kystvand_id] = [
+                    model.NewIntVar(0, -lower, f"quota_sold_{kystvand_id}_{y}")
+                    for y, (lower, _) in enumerate(bounds)
                 ]
         for y in range(NUM_YEARS):
             cap = caps[y]
@@ -217,9 +237,8 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             if trade is None:
                 model.Add(year_totals[y] <= _scale(cap))
             else:
-                model.Add(
-                    year_totals[y] <= _scale(cap) + SCALE * trade_vars_by_year[kystvand_id][y]
-                )
+                net = bought_vars_by_year[kystvand_id][y] - sold_vars_by_year[kystvand_id][y]
+                model.Add(year_totals[y] <= _scale(cap) + SCALE * net)
 
     if constraints.db2_swing_pct is not None:
         pct = constraints.db2_swing_pct
@@ -242,8 +261,9 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     # that year. The swing limit above stays on the crops' DB2, also when the
     # trade varies by year: the limit is about the crops' income varying.
     quota_payment = sum(
-        _scale(trades[kystvand_id].price_kr_per_kg) * sum(year_vars)
-        for kystvand_id, year_vars in trade_vars_by_year.items()
+        _scale(trades[kystvand_id].buy_price_kr_per_kg) * sum(bought_vars_by_year[kystvand_id])
+        - _scale(trades[kystvand_id].sell_price_kr_per_kg) * sum(sold_vars_by_year[kystvand_id])
+        for kystvand_id in bought_vars_by_year
     )
     model.Maximize(total_db2 - quota_payment)
 
@@ -310,14 +330,15 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
     )
 
     quota_trades = []
-    for kystvand_id in trade_vars_by_year:
+    for kystvand_id in bought_vars_by_year:
         trade = trades[kystvand_id]
         caps = caps_by_kystvand[kystvand_id]
         year_totals = kvotegivende_n_load_by_kystvand_year[kystvand_id]
         bounds = _trade_bounds_by_year(input, trade, caps)
         # Within the gap limit the solver may keep a few kg of trade the plan
-        # does not use. The smallest trade that still covers the chosen plan
-        # always pays less, so report that one.
+        # does not use, or buy and sell the same kg at equal prices. The
+        # smallest net trade that still covers the chosen plan never pays
+        # more, so report that one: bought when it is positive, sold when not.
         needed = [
             -((_scale(caps[y]) - solver.Value(year_totals[y])) // SCALE) for y in range(NUM_YEARS)
         ]
@@ -330,9 +351,11 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             QuotaTradeResult(
                 kystvand_id=kystvand_id,
                 trade_kg_by_year=trade_kg_by_year,
-                price_kr_per_kg=trade.price_kr_per_kg,
+                buy_price_kr_per_kg=trade.buy_price_kr_per_kg,
+                sell_price_kr_per_kg=trade.sell_price_kr_per_kg,
                 same_each_year=trade.same_each_year,
-                payment_kr_per_year=trade.price_kr_per_kg * sum(trade_kg_by_year) / NUM_YEARS,
+                payment_kr_per_year=sum(_trade_payment(trade, kg) for kg in trade_kg_by_year)
+                / NUM_YEARS,
             )
         )
 
