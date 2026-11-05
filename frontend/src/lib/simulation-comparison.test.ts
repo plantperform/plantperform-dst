@@ -355,6 +355,32 @@ describe('summarizeCatchmentComparison', () => {
     })
   })
 
+  it('measures each year against the kvote moved by a trade', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [7, years({ 2027: [120, 100], 2028: [140, 100], 2029: [80, 100] })],
+    ])
+    // Bought 30 kg N each year, but sold 30 kg N in 2029.
+    const trades: Record<number, number> = { 2027: 30, 2028: 30, 2029: -30 }
+    const comparison = summarizeCatchmentComparison(
+      7,
+      totals,
+      undefined,
+      (_, year, quotaKgN) => quotaKgN + trades[year],
+    )
+    // 2027 is covered; 2028 is still over, and 2029 is over after the sale.
+    expect(comparison?.status).toEqual({
+      catchmentId: 7,
+      level: 'over',
+      overYears: [2028, 2029],
+    })
+    // The percentage stays of the kvote, the level follows the limit.
+    expect(comparison?.years.slice(0, 3)).toEqual([
+      { year: 2027, quotaPct: 120, level: 'near' },
+      { year: 2028, quotaPct: 140, level: 'over' },
+      { year: 2029, quotaPct: 80, level: 'over' },
+    ])
+  })
+
   it('keeps a year over the full quota when the catchment is partly calculated', () => {
     const totals: CatchmentTotalsByYear = new Map([
       [7, years({ 2027: [160, 100], 2028: [70, 100] })],
@@ -428,6 +454,29 @@ describe('summarizeColumnQuota', () => {
       yearsOver: 2,
       catchmentsOver: 1,
     })
+  })
+
+  it('counts a year covered by bought kvote as not over', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [3, years({ 2027: [110, 100], 2028: [120, 100] })],
+    ])
+    // 15 kg N bought each year covers 2027 but not 2028.
+    expect(
+      summarizeColumnQuota(
+        [3],
+        totals,
+        new Map(),
+        (_, __, quota) => quota + 15,
+      ),
+    ).toEqual({ yearsOver: 1, catchmentsOver: 1 })
+    expect(
+      summarizeColumnQuota(
+        [3],
+        totals,
+        new Map(),
+        (_, __, quota) => quota + 20,
+      ),
+    ).toEqual({ yearsOver: 0, catchmentsOver: 0 })
   })
 })
 

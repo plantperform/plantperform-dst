@@ -35,6 +35,7 @@ import {
   type FeedUnitRequirementPlacement,
 } from '@/lib/simulation-comparison'
 import type { CatchmentYearStatus } from '@/lib/simulation-overview'
+import { limitAfterTradesFor } from '@/lib/quota-trade-result'
 import { cn } from '@/lib/utils'
 
 const statusClass = (status: CatchmentYearStatus) =>
@@ -81,6 +82,9 @@ const CatchmentRow = ({
           catchment.catchmentId,
           column.catchments,
           column.partialQuotas.get(catchment.catchmentId),
+          column.quotaTrades.length > 0
+            ? limitAfterTradesFor(column.quotaTrades)
+            : undefined,
         ),
   )
   return (
