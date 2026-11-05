@@ -1,4 +1,4 @@
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, SimulationQuotaTrade } from '@/api/types'
 import type {
   CatchmentTotalsByYear,
   CropShare,
@@ -22,6 +22,9 @@ export type ComparedColumn = {
   onRetry: () => void
   yearsOver: number | null
   catchmentsOver: number | null
+  // The kvotehandel of the saved run the column's figures come from: its
+  // payment is taken off totals.db2, and its kvote counts in the years over.
+  quotaTrades: SimulationQuotaTrade[]
 }
 
 export const columnFigure = (

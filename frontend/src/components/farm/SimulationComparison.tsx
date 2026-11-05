@@ -9,7 +9,12 @@ import {
   type FieldsBySimulationId,
 } from '@/api/hooks'
 import { combineProgress, type RequestProgress } from '@/api/request-progress'
-import type { FieldRecord, FieldYearValues, Simulation } from '@/api/types'
+import type {
+  FieldRecord,
+  FieldYearValues,
+  Simulation,
+  SimulationQuotaTrade,
+} from '@/api/types'
 import { BackLink } from '@/components/BackLink'
 import { CatchmentQuotaTable } from '@/components/farm/CatchmentQuotaTable'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
@@ -23,6 +28,10 @@ import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { LoadError } from '@/components/ui/load-error'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import {
+  limitAfterTradesFor,
+  quotaTradePayment,
+} from '@/lib/quota-trade-result'
 import {
   changedFieldIds,
   computeFieldTotals,
@@ -61,6 +70,8 @@ const NO_SIMULATION_FIELDS: FieldsBySimulationId = {}
 const NO_FIELDS: FieldRecord[] = []
 const EMPTY_CATCHMENTS: CatchmentTotalsByYear = new Map()
 
+const NO_QUOTA_TRADES: SimulationQuotaTrade[] = []
+
 type ComparisonColumn = {
   key: string
   title: string
@@ -71,6 +82,7 @@ type ComparisonColumn = {
   requirement: string | null
   changedCount: number | null
   yearValues?: FieldYearValues
+  quotaTrades: SimulationQuotaTrade[]
 }
 
 type ColumnYearFigures = Pick<
@@ -191,11 +203,16 @@ export const SimulationComparison = ({
       totals: computeFieldTotals(fields, false),
       requirement: null,
       changedCount: null,
+      quotaTrades: NO_QUOTA_TRADES,
     }
     const chosen = selectedSimulations.flatMap((simulation) => {
       const { id } = simulation
       const simulationFields = fieldsBySimulationId?.[id]
       if (!simulationFields) return []
+      // The trades of the saved run the column's fields come from.
+      const quotaTrades =
+        simulationsFields.data?.[id]?.response.quotaTrades ?? NO_QUOTA_TRADES
+      const totals = computeFieldTotals(simulationFields, true)
       return [
         {
           key: id,
@@ -204,9 +221,14 @@ export const SimulationComparison = ({
           simulationId: id,
           fields: simulationFields,
           yearValues: simulationsFields.data?.[id]?.fieldYears,
-          totals: computeFieldTotals(simulationFields, true),
+          // The dækningsbidrag including kvotehandel: what the farm keeps.
+          totals: {
+            ...totals,
+            db2: totals.db2 - quotaTradePayment(quotaTrades),
+          },
           requirement: describeFeedUnitRequirement(simulation.constraints),
           changedCount: changedFieldIds(simulationFields, fields).size,
+          quotaTrades,
         },
       ]
     })
@@ -258,6 +280,9 @@ export const SimulationComparison = ({
             catchmentIds,
             slot.catchments,
             slot.partialQuotas,
+            column.quotaTrades.length > 0
+              ? limitAfterTradesFor(column.quotaTrades)
+              : undefined,
           )
     return {
       key: column.key,
@@ -275,6 +300,7 @@ export const SimulationComparison = ({
       onRetry: slot.onRetry,
       yearsOver: quota?.yearsOver ?? null,
       catchmentsOver: quota?.catchmentsOver ?? null,
+      quotaTrades: column.quotaTrades,
     }
   })
   const [history, ...simulationColumns] = compared
