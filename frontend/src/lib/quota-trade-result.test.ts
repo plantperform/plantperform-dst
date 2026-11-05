@@ -15,6 +15,7 @@ import {
   describeQuotaTrade,
   describeQuotaTradeAmount,
   describeTradeKg,
+  describeTradePrices,
   formatTradeShareOfCap,
   latestQuotaTrades,
   quotaBarHeights,
@@ -24,6 +25,7 @@ import {
   quotaTradeKgIn,
   quotaTradePayment,
   quotaTradeVaries,
+  tradePriceDkkPerKg,
   yearLimitKgN,
 } from '@/lib/quota-trade-result'
 
@@ -40,7 +42,8 @@ const buy: SimulationQuotaTrade = {
   catchmentId: 1,
   catchmentName: 'Kolding Fjord, indre',
   tradeKgByYear: everyYear(120),
-  priceDkkPerKg: 35,
+  buyPriceDkkPerKg: 35,
+  sellPriceDkkPerKg: 30,
   sameEachYear: true,
   paymentDkkPerYear: 4_200,
 }
@@ -48,7 +51,8 @@ const sell: SimulationQuotaTrade = {
   catchmentId: 2,
   catchmentName: null,
   tradeKgByYear: everyYear(-50),
-  priceDkkPerKg: 35.5,
+  buyPriceDkkPerKg: 40,
+  sellPriceDkkPerKg: 35.5,
   sameEachYear: true,
   paymentDkkPerYear: -1_775,
 }
@@ -65,7 +69,8 @@ describe('kvotehandel results', () => {
           kystvandId: 1,
           kystvandNavn: 'Kolding Fjord, indre',
           tradeKgByYear: everyYear(120),
-          priceKrPerKg: 35,
+          buyPriceKrPerKg: 35,
+          sellPriceKrPerKg: 30,
           sameEachYear: true,
           paymentKrPerYear: 4_200,
         },
@@ -94,6 +99,15 @@ describe('kvotehandel results', () => {
     expect(describeQuotaPayment(4_200, true)).toBe('Betaler gns. 4.200 kr/år')
   })
 
+  it('pays a trade at the price of its direction', () => {
+    expect(tradePriceDkkPerKg(buy, 120)).toBe(35)
+    expect(tradePriceDkkPerKg(buy, -50)).toBe(30)
+    expect(describeTradePrices(buy)).toBe('køb 35, salg 30 kr/kg N')
+    expect(
+      describeTradePrices({ buyPriceDkkPerKg: 35, sellPriceDkkPerKg: 35 }),
+    ).toBe('35 kr/kg N')
+  })
+
   it('describes a trade that differs between years by its range', () => {
     const trade = (first: number, rest: number) => ({
       ...buy,
@@ -106,11 +120,12 @@ describe('kvotehandel results', () => {
     expect(describeQuotaTrade(trade(0, 50))).toBe(
       'Køb 0–50 kg N/år · 35 kr/kg N',
     )
+    // Selling shows the sell price, and buying and selling both prices.
     expect(describeQuotaTrade(trade(-40, -100))).toBe(
-      'Salg 40–100 kg N/år · 35 kr/kg N',
+      'Salg 40–100 kg N/år · 30 kr/kg N',
     )
     expect(describeQuotaTrade(trade(-40, 120))).toBe(
-      'Køb op til 120 og salg op til 40 kg N/år · 35 kr/kg N',
+      'Køb op til 120 og salg op til 40 kg N/år · køb 35, salg 30 kr/kg N',
     )
     expect(quotaTradeVaries(trade(90, 50))).toBe(true)
     // Chosen year by year, but the same in every year.

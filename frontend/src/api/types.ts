@@ -282,12 +282,18 @@ export type OptimizationSettings = {
   quotaTrades: QuotaTrade[]
 }
 
-// Kvotehandel at a fixed price: the yearly optimization may buy or sell kvote
-// in the catchment at priceDkkPerKg per kg N per year, an amount it chooses
-// for each year, or one amount for every year with sameEachYear.
-export type QuotaTrade = {
+// The prices of a kvotehandel, per kg N per year. The sell price is never
+// above the buy price.
+export type QuotaTradePrices = {
+  buyPriceDkkPerKg: number
+  sellPriceDkkPerKg: number
+}
+
+// Kvotehandel at fixed prices: the yearly optimization may buy kvote in the
+// catchment at the buy price or sell it at the sell price, an amount it
+// chooses for each year, or one amount for every year with sameEachYear.
+export type QuotaTrade = QuotaTradePrices & {
   catchmentId: number
-  priceDkkPerKg: number
   // Trades saved before this setting existed are the same each year.
   sameEachYear?: boolean
 }
@@ -324,14 +330,13 @@ export type OptimizeSimulationResponse = {
   quotaTrades?: SimulationQuotaTrade[]
 }
 
-// A kvotehandel a yearly run chose, per calendar year: > 0 buys, < 0 sells.
-// The payment is the average per year, negative when the trade sells more
-// than it buys.
-export type SimulationQuotaTrade = {
+// A kvotehandel a yearly run chose, per calendar year: > 0 buys at the buy
+// price, < 0 sells at the sell price. The payment is the average per year,
+// negative when the trade sells more than it buys.
+export type SimulationQuotaTrade = QuotaTradePrices & {
   catchmentId: number
   catchmentName: string | null
   tradeKgByYear: Record<number, number>
-  priceDkkPerKg: number
   sameEachYear: boolean
   paymentDkkPerYear: number
 }

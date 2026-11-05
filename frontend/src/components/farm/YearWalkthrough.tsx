@@ -52,6 +52,7 @@ import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import {
   describeQuotaTradeAmount,
   describeTradeKg,
+  describeTradePrices,
   formatTradeShareOfCap,
   QUOTA_TRADE_LABELS,
   quotaBarHeights,
@@ -60,6 +61,7 @@ import {
   quotaLimitLinePct,
   quotaTradeKgIn,
   quotaTradeKind,
+  tradePriceDkkPerKg,
   type QuotaTradeKind,
   type TradedLimit,
   yearLimitKgN,
@@ -147,8 +149,8 @@ type CatchmentYear = {
   // The cap the run held a trading opland to and the trade that moved it;
   // null when the opland does not trade.
   tradedLimit: TradedLimit | null
-  // Kr per kg N of the opland's trade; null when it does not trade.
-  tradePriceDkkPerKg: number | null
+  // The opland's kvotehandel; null when it does not trade.
+  trade: SimulationQuotaTrade | null
 }
 
 const catchmentYearLevel = (
@@ -289,16 +291,20 @@ const ScopedFact = ({
 // it cost or earned.
 const ScopedQuotaTrade = ({
   limit,
-  priceDkkPerKg,
+  trade,
   average,
 }: {
   limit: TradedLimit
-  priceDkkPerKg: number
+  trade: SimulationQuotaTrade
   average: boolean
 }) => {
   const kind = quotaTradeKind(limit.tradeKg)
   const perYear = average ? ' gns. pr. år' : ''
-  const payment = limit.tradeKg * priceDkkPerKg
+  // A year pays at the price of its direction. On average the years can
+  // both buy and sell, so the run's own average payment is used.
+  const payment = average
+    ? trade.paymentDkkPerYear
+    : limit.tradeKg * tradePriceDkkPerKg(trade, limit.tradeKg)
   const share = formatTradeShareOfCap(limit)
   return (
     <div className="flex flex-col gap-2 border-t pt-2.5">
@@ -321,7 +327,11 @@ const ScopedQuotaTrade = ({
           />
           <ScopedFact
             label="Pris"
-            value={`${formatNumber(priceDkkPerKg)} kr/kg N`}
+            value={
+              average
+                ? describeTradePrices(trade)
+                : `${formatNumber(tradePriceDkkPerKg(trade, limit.tradeKg))} kr/kg N`
+            }
           />
           <ScopedFact
             label={`${payment > 0 ? 'Udgift' : 'Indtægt'}${perYear}`}
@@ -380,10 +390,10 @@ const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
           }
         />
       </dl>
-      {row.tradedLimit && row.tradePriceDkkPerKg !== null ? (
+      {row.tradedLimit && row.trade ? (
         <ScopedQuotaTrade
           limit={row.tradedLimit}
-          priceDkkPerKg={row.tradePriceDkkPerKg}
+          trade={row.trade}
           average={column === null}
         />
       ) : null}
@@ -907,8 +917,7 @@ export const YearWalkthrough = ({
             ? entry.year
             : firstCalendarYear(false) + entry.year - 1
       const tradeKg = tradeKgFor(catchment.catchmentId, calendarYear)
-      const tradePriceDkkPerKg =
-        tradeFor(catchment.catchmentId)?.priceDkkPerKg ?? null
+      const trade = tradeFor(catchment.catchmentId) ?? null
       const tradedLimitFor = (quotaKgN: number): TradedLimit | null =>
         tradeFor(catchment.catchmentId) === undefined
           ? null
@@ -938,7 +947,7 @@ export const YearWalkthrough = ({
             : catchment.level,
           tradeKg,
           tradedLimit: tradedLimitFor(quotaKgN),
-          tradePriceDkkPerKg,
+          trade,
         }
       }
       const yearTotals = catchmentTotalsByYear?.get(catchment.catchmentId)?.[
@@ -961,7 +970,7 @@ export const YearWalkthrough = ({
         ),
         tradeKg,
         tradedLimit: tradedLimitFor(quotaKgN),
-        tradePriceDkkPerKg,
+        trade,
       }
     })
 

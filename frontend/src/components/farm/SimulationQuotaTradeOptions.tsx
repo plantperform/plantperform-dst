@@ -55,7 +55,11 @@ export function SimulationQuotaTradeOptions({
       catchments: {
         ...draft.catchments,
         [catchmentId]: {
-          ...(draft.catchments[catchmentId] ?? { enabled: false, price: '' }),
+          ...(draft.catchments[catchmentId] ?? {
+            enabled: false,
+            buyPrice: '',
+            sellPrice: '',
+          }),
           ...value,
         },
       },
@@ -75,8 +79,9 @@ export function SimulationQuotaTradeOptions({
         <span>
           <span className="font-medium">Brug kvotehandel</span>
           <span className="block text-xs text-muted-foreground">
-            Optimeringen må købe eller sælge udledningskvote til en fast pris i
-            de kystvandoplande, du vælger. Prisen betales pr. kg N pr. år.
+            Optimeringen må købe udledningskvote til købsprisen eller sælge den
+            til salgsprisen i de kystvandoplande, du vælger. Priserne gælder pr.
+            kg N pr. år. Mellem de to priser beholder oplandet sin egen kvote.
           </span>
         </span>
       </label>
@@ -149,21 +154,39 @@ export function SimulationQuotaTradeOptions({
                   </span>
                 </label>
                 {trading ? (
-                  <label className="ml-7 block max-w-48 space-y-1 text-xs">
-                    Pris (kr/kg N pr. år)
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={entry?.price ?? ''}
-                      onChange={(event) => {
-                        if (catchmentId !== null)
-                          patchCatchment(catchmentId, {
-                            price: event.target.value,
-                          })
-                      }}
-                    />
-                  </label>
+                  <div className="ml-7 grid max-w-96 grid-cols-2 gap-3">
+                    <label className="block space-y-1 text-xs">
+                      Købspris (kr/kg N pr. år)
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={entry?.buyPrice ?? ''}
+                        onChange={(event) => {
+                          if (catchmentId !== null)
+                            patchCatchment(catchmentId, {
+                              buyPrice: event.target.value,
+                            })
+                        }}
+                      />
+                    </label>
+                    <label className="block space-y-1 text-xs">
+                      Salgspris (kr/kg N pr. år)
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="Som købsprisen"
+                        value={entry?.sellPrice ?? ''}
+                        onChange={(event) => {
+                          if (catchmentId !== null)
+                            patchCatchment(catchmentId, {
+                              sellPrice: event.target.value,
+                            })
+                        }}
+                      />
+                    </label>
+                  </div>
                 ) : null}
               </div>
             )
