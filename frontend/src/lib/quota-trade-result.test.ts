@@ -3,13 +3,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import type {
+  FieldRecord,
   SavedResultView,
   Simulation,
   SimulationQuotaTrade,
 } from '@/api/types'
 import { fromWire } from '@/api/wire'
 import { QuotaTradeFigures } from '@/components/farm/QuotaTradeFigures'
-import { ROTATION_CALENDAR_YEARS, type FieldTotals } from '@/lib/field-domain'
+import {
+  describeSeparateQuotas,
+  resolveFarmQuota,
+  ROTATION_CALENDAR_YEARS,
+  type FieldTotals,
+} from '@/lib/field-domain'
 import {
   describeQuotaPayment,
   describeQuotaTrade,
@@ -26,6 +32,10 @@ import {
   quotaTradePayment,
   quotaTradeVaries,
   tradePriceDkkPerKg,
+  describeAfterTrade,
+  limitAfterTradeKgN,
+  limitAfterTradesFor,
+  averageLimitAfterTradesFor,
   yearLimitKgN,
 } from '@/lib/quota-trade-result'
 
@@ -97,6 +107,57 @@ describe('kvotehandel results', () => {
     expect(describeQuotaPayment(4_200)).toBe('Betaler 4.200 kr/år')
     expect(describeQuotaPayment(-1_775)).toBe('Modtager 1.775 kr/år')
     expect(describeQuotaPayment(4_200, true)).toBe('Betaler gns. 4.200 kr/år')
+  })
+
+  it('holds a trading opland to its cap moved by the year’s trade', () => {
+    const year = ROTATION_CALENDAR_YEARS[0]
+    const limitFor = limitAfterTradesFor(
+      [{ ...buy, tradeKgByYear: byYear(30, 50) }],
+      [{ catchmentId: 1, maxNLoadByYear: { [year]: 150 } }],
+    )
+    // The cap under Grænser in the first year, else the rounded kvote.
+    expect(limitFor(1, year, 99.6)).toBe(180)
+    expect(limitFor(1, ROTATION_CALENDAR_YEARS[1], 99.6)).toBe(150)
+    // An opland that does not trade keeps its kvote.
+    expect(limitFor(2, year, 99.6)).toBe(99.6)
+    expect(limitAfterTradeKgN({ capKgN: 100, tradeKg: -30 })).toBe(70)
+    expect(describeAfterTrade(30)).toBe('efter køb')
+    expect(describeAfterTrade(-30)).toBe('efter salg')
+    expect(describeAfterTrade(0)).toBe('')
+  })
+
+  it('counts an opland over its limit only after its trade, on average', () => {
+    const field = (catchmentId: number, nLoad: number) =>
+      ({
+        id: `field-${catchmentId}`,
+        catchmentId,
+        rotationId: 'rotation',
+        quotaEligible: true,
+        nLoadQuotaKgN: 100,
+        nLoad,
+        db2: 0,
+        leaching: nLoad,
+        feedUnits: 0,
+        areaHa: 1,
+      }) as FieldRecord
+    const fields = [field(1, 120), field(2, 80)]
+    expect(describeSeparateQuotas(resolveFarmQuota(fields, true))).toBe(
+      '1 af 2 oplande over grænsen',
+    )
+    // Opland 1 buys 30 kg N in the first year and 10 kg N after it: 12.5 kg N
+    // on average covers its 20 kg N over the kvote only in part.
+    const limitFor = (laterKg: number) =>
+      averageLimitAfterTradesFor(
+        [{ ...buy, tradeKgByYear: byYear(30, laterKg) }],
+        [],
+      )
+    expect(limitFor(10)(1, 100)).toBe(112.5)
+    expect(
+      describeSeparateQuotas(resolveFarmQuota(fields, true, limitFor(10))),
+    ).toBe('1 af 2 oplande over grænsen')
+    expect(
+      describeSeparateQuotas(resolveFarmQuota(fields, true, limitFor(30))),
+    ).toBe('alle 2 oplande under grænsen')
   })
 
   it('pays a trade at the price of its direction', () => {

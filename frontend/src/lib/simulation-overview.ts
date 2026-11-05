@@ -33,10 +33,19 @@ export type CatchmentYearStatus = {
   overYears: number[]
 }
 
+// The limit an opland is held to in a calendar year, given its kvote that
+// year. Without one, the kvote is the limit.
+export type YearLimitFor = (
+  catchmentId: number,
+  calendarYear: number,
+  quotaKgN: number,
+) => number
+
 export const summarizeCatchmentYearStatuses = (
   totalsByYear: CatchmentTotalsByYear,
   history: boolean,
   partialQuotas: ReadonlyMap<number, number> = new Map(),
+  limitFor: YearLimitFor = (_, __, quotaKgN) => quotaKgN,
 ): CatchmentYearStatus[] => {
   const catchmentIds = new Set(partialQuotas.keys())
   for (const catchmentId of totalsByYear.keys()) {
@@ -53,15 +62,13 @@ export const summarizeCatchmentYearStatuses = (
     for (const [year, totals] of Object.entries(byYear)) {
       const yearQuotaKgN = fullQuotaKgN ?? totals.quotaKgN
       if (yearQuotaKgN <= 0) continue
+      const calendarYear = history
+        ? Number(year)
+        : ROTATION_START_CALENDAR_YEAR + Number(year) - 1
+      const yearLimitKgN = limitFor(catchmentId, calendarYear, yearQuotaKgN)
       nLoadKg += totals.nLoadKg
-      quotaKgN += yearQuotaKgN
-      if (totals.nLoadKg > yearQuotaKgN) {
-        overYears.push(
-          history
-            ? Number(year)
-            : ROTATION_START_CALENDAR_YEAR + Number(year) - 1,
-        )
-      }
+      quotaKgN += yearLimitKgN
+      if (totals.nLoadKg > yearLimitKgN) overYears.push(calendarYear)
     }
     const level: CatchmentQuotaLevel =
       overYears.length > 0

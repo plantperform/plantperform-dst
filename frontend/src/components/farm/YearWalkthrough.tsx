@@ -50,10 +50,12 @@ import {
 import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import {
+  describeAfterTrade,
   describeQuotaTradeAmount,
   describeTradeKg,
   describeTradePrices,
   formatTradeShareOfCap,
+  limitAfterTradeKgN,
   QUOTA_TRADE_LABELS,
   quotaBarHeights,
   quotaTradeBand,
@@ -138,13 +140,15 @@ type CatchmentYear = {
   nLoadKg: number
   // The kvote; the bars are drawn to it.
   quotaKgN: number
-  // The opland's own limit in the year, which the percentage and level
-  // measure against: its cap under Grænser, or the kvote where none is set.
+  // The opland's own limit in the year, which the percentage measures
+  // against: its cap under Grænser, or the kvote where none is set.
   limitKgN: number
+  // The limit the level measures against: limitKgN, moved by the trade for
+  // an opland that trades.
+  statusLimitKgN: number
   level: QuotaStatusLevel
   // Kvote the run bought (> 0) or sold (< 0) in this year, or on average per
-  // year for the whole period; the level above still measures against the
-  // limit before the trade.
+  // year for the whole period.
   tradeKg: number
   // The cap the run held a trading opland to and the trade that moved it;
   // null when the opland does not trade.
@@ -352,8 +356,20 @@ type ScopedSummaryProps = {
 const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
   const style = QUOTA_STATUS_STYLES[row.level]
   const { areaHa } = row.catchment.totals
-  const difference = formatWholeNumber(Math.abs(row.nLoadKg - row.limitKgN))
-  const over = row.nLoadKg > row.limitKgN
+  // The percentage is of the cap before any trade, like "Hele bedriften";
+  // the status and what is left measure against the limit after it.
+  const difference = formatWholeNumber(
+    Math.abs(row.nLoadKg - row.statusLimitKgN),
+  )
+  const over = row.nLoadKg > row.statusLimitKgN
+  const tradeKind = row.tradedLimit
+    ? quotaTradeKind(row.tradedLimit.tradeKg)
+    : null
+  const tradeShare =
+    row.tradedLimit && tradeKind ? formatTradeShareOfCap(row.tradedLimit) : null
+  const afterTrade = row.tradedLimit
+    ? describeAfterTrade(row.tradedLimit.tradeKg)
+    : ''
   return (
     <div className="flex flex-col gap-3 border-t pt-2.5">
       <div className="flex flex-col gap-1">
@@ -363,13 +379,27 @@ const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
           </span>
           <span className="text-xs font-medium">
             {QUOTA_STATUS_LABELS[row.level].toLowerCase()}
+            {afterTrade ? ` ${afterTrade}` : ''}
           </span>
         </div>
+        {tradeShare && tradeKind ? (
+          <AppTooltip content="Andel af loftet før kvotehandel">
+            <p
+              className={cn(
+                'w-fit text-[13px] font-semibold tabular-nums',
+                QUOTA_TRADE_TEXT_CLASSES[tradeKind],
+              )}
+            >
+              {tradeShare} {QUOTA_TRADE_LABELS[tradeKind].toLowerCase()}
+            </p>
+          </AppTooltip>
+        ) : null}
         <p className="text-xs text-pretty text-muted-foreground tabular-nums">
           {formatQuotaAmount(row.nLoadKg, row.limitKgN, formatWholeNumber)}
           {over
             ? `, skal ned med ${difference} kg N`
             : `, ${difference} kg N tilbage`}
+          {afterTrade ? ` ${afterTrade}` : ''}
         </p>
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-2.5">
@@ -932,9 +962,17 @@ export const YearWalkthrough = ({
             }
       const limitFor = (quotaKgN: number) =>
         yearLimitKgN(quotaCaps, catchment.catchmentId, calendarYear, quotaKgN)
+      // A trading opland's status measures against its limit after the
+      // trade, like its bar, which is red only above it.
+      const statusLimitFor = (
+        limitKgN: number,
+        tradedLimit: TradedLimit | null,
+      ) => (tradedLimit ? limitAfterTradeKgN(tradedLimit) : limitKgN)
       if (entry === null) {
         const quotaKgN = catchment.totals.nLoadQuotaKgN
         const limitKgN = limitFor(quotaKgN)
+        const tradedLimit = tradedLimitFor(quotaKgN)
+        const statusLimitKgN = statusLimitFor(limitKgN, tradedLimit)
         const nLoadKg = catchment.totals.nLoad
         const measured = ['ok', 'near', 'over'].includes(catchment.level)
         return {
@@ -942,11 +980,12 @@ export const YearWalkthrough = ({
           nLoadKg,
           quotaKgN,
           limitKgN,
+          statusLimitKgN,
           level: measured
-            ? quotaStatusLevel(nLoadKg, limitKgN, true)
+            ? quotaStatusLevel(nLoadKg, statusLimitKgN, true)
             : catchment.level,
           tradeKg,
-          tradedLimit: tradedLimitFor(quotaKgN),
+          tradedLimit,
           trade,
         }
       }
@@ -957,19 +996,23 @@ export const YearWalkthrough = ({
       const quotaKgN = yearTotals?.quotaKgN ?? 0
       // No kvote, no limit: a cap saved for the opland does not make one.
       const limitKgN = quotaKgN > 0 ? limitFor(quotaKgN) : 0
+      const tradedLimit = tradedLimitFor(quotaKgN)
+      const statusLimitKgN =
+        quotaKgN > 0 ? statusLimitFor(limitKgN, tradedLimit) : 0
       return {
         catchment,
         nLoadKg,
         quotaKgN,
         limitKgN,
+        statusLimitKgN,
         level: catchmentYearLevel(
           nLoadKg,
-          limitKgN,
+          statusLimitKgN,
           yearTotals?.fieldCount ?? 0,
           catchment.totals.fieldCount,
         ),
         tradeKg,
-        tradedLimit: tradedLimitFor(quotaKgN),
+        tradedLimit,
         trade,
       }
     })

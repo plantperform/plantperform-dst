@@ -54,6 +54,26 @@ describe('summarizeCatchmentYearStatuses', () => {
     ])
   })
 
+  it('measures each year against the limit after a kvotehandel', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [7, years({ 1: [110, 100], 2: [130, 100], 3: [60, 100] })],
+    ])
+    // Bought 20 kg N each year: only 2028 is still over. Selling 50 kg N in
+    // 2029 makes that year over too.
+    const trades = { 2027: 20, 2028: 20, 2029: -50 }
+    expect(
+      summarizeCatchmentYearStatuses(
+        totals,
+        false,
+        new Map(),
+        (catchmentId, calendarYear, quotaKgN) =>
+          catchmentId === 7
+            ? quotaKgN + trades[calendarYear as keyof typeof trades]
+            : quotaKgN,
+      ),
+    ).toEqual([{ catchmentId: 7, level: 'over', overYears: [2028, 2029] }])
+  })
+
   it('keeps the calendar years of the crop history', () => {
     const totals: CatchmentTotalsByYear = new Map([
       [7, years({ 2019: [80, 100], 2021: [105, 100] })],
