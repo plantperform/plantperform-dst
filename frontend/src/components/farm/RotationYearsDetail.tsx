@@ -9,6 +9,7 @@ import { WinterCoverSwatch } from '@/components/farm/WinterCoverBand'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { shortCropName } from '@/lib/crop-groups'
+import { rotationYearLabel } from '@/lib/crop-label'
 import {
   customisedBreakdownLine,
   type BreakdownRow,
@@ -16,7 +17,9 @@ import {
 } from '@/lib/economics'
 import {
   nNormTargetKgNHa,
+  NO_ECONOMICS,
   ROTATION_START_CALENDAR_YEAR,
+  yearEconomicsMissing,
   yearNLoadKgHa,
   yieldResponse,
 } from '@/lib/field-domain'
@@ -88,10 +91,7 @@ const fullTabLabel = (
   year: RotationYear,
   index: number,
   calendarYear: number,
-): string =>
-  `År ${index + 1} (${calendarYear}) - ${year.cropName}${
-    year.undersownCropName ? ` (${year.undersownCropName})` : ''
-  }`
+): string => `År ${index + 1} (${calendarYear}) - ${rotationYearLabel(year)}`
 
 const calculateNLoad = (
   lNuar: number,
@@ -227,6 +227,7 @@ const DefinitionRow = ({
 // expanded from here rather than shown by default.
 const KeyMetricsSection = ({
   year,
+  nextCropName,
   calendarYear,
   areaHa,
   retention,
@@ -235,6 +236,7 @@ const KeyMetricsSection = ({
   footer,
 }: {
   year: RotationCandidateYearResult
+  nextCropName?: string
   calendarYear: number
   areaHa: number
   retention: number | null
@@ -247,6 +249,7 @@ const KeyMetricsSection = ({
   const yieldAmount = num(year.dbDetail.yieldAmount)
   const yieldUnit = String(year.dbDetail.yieldUnit ?? '')
   const isFodderCrop = yieldUnit === 'FE/ha'
+  const economicsMissing = yearEconomicsMissing(year)
   const precedingCropValue = year.precedingCropValueKgNHa
   // Manure has two parts: a utilised/mineral part that counts toward
   // satisfying the norm like mineral fertiliser, and an organically bound part
@@ -254,6 +257,8 @@ const KeyMetricsSection = ({
   const manureUtilised = year.appliedManureUtilisedKgNHa
   const mineralFertiliser = year.appliedMineralFertiliserKgNHa
   const organicBound = year.manureOrganicBoundKgNHa
+  const autumnAllocated = year.autumnAllocatedKgNHa ?? 0
+  const autumnForNextCrop = num(year.leachingDetail.MNCA)
   const appliedFertiliser = manureUtilised + mineralFertiliser
   const availableN = precedingCropValue + appliedFertiliser
 
@@ -298,13 +303,17 @@ const KeyMetricsSection = ({
           <BigMetricTile
             label={`DB2 (${calendarYear})`}
             term="db2"
-            value={`${fmt(year.dbDkkHa, 0)} kr/ha`}
+            value={
+              economicsMissing ? NO_ECONOMICS : `${fmt(year.dbDkkHa, 0)} kr/ha`
+            }
             caption={
-              !yieldAmount
-                ? 'Normudbytte -'
-                : response
-                  ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
-                  : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
+              economicsMissing
+                ? undefined
+                : !yieldAmount
+                  ? 'Normudbytte -'
+                  : response
+                    ? `Udbytte ${fmt(yieldAmount, 0)} ${yieldUnit} - ${fmt(response.factor * 100, 1)} % af normudbytte ${fmt(response.normYield, 0)}`
+                    : `Normudbytte ${fmt(yieldAmount, 0)} ${yieldUnit}`
             }
           />
         )}
@@ -323,14 +332,14 @@ const KeyMetricsSection = ({
             term="nNorm"
             value={cropNorm !== null ? `${fmt(cropNorm, 0)} kg N/ha` : '-'}
           />
-          {cropNorm !== null && !hideNNormLevel ? (
+          {cropNorm !== null && cropNorm > 0 && !hideNNormLevel ? (
             <DefinitionRow
               label="N-norm%"
               term="nNormLevel"
               value={
                 hasYieldResponse
                   ? `${fmt(year.nNormPct, 0)} % = ${fmt(nNormTargetKgNHa(cropNorm, year.nNormPct), 0)} kg N/ha`
-                  : '100 % (fuld norm)'
+                  : '100 % (ingen udbyttekurve)'
               }
             />
           ) : null}
@@ -371,6 +380,15 @@ const KeyMetricsSection = ({
               />
             </div>
           ) : null}
+          {autumnAllocated > 0 ? (
+            <DefinitionRow
+              label={`Heraf efterårstildeling ${calendarYear - 1}`}
+              term="autumnAllocation"
+              value={`${fmt(autumnAllocated, 0)} kg N/ha`}
+              muted
+              title="Tæller med i normen for dette år, men i udvaskningen for året før (MNCA)"
+            />
+          ) : null}
           <DefinitionRow
             label="Tilgængeligt N"
             value={`${fmt(availableN, 0)} kg N/ha`}
@@ -381,6 +399,19 @@ const KeyMetricsSection = ({
             }
             title={`Forfrugt ${fmt(precedingCropValue, 0)} + mineralsk andel af organisk gødning ${fmt(manureUtilised, 0)} + handelsgødning ${fmt(mineralFertiliser, 0)}`}
           />
+          {autumnForNextCrop > 0 ? (
+            <DefinitionRow
+              label={`Efterårstildeling ${calendarYear}`}
+              term="autumnAllocation"
+              value={`${fmt(autumnForNextCrop, 0)} kg N/ha`}
+              note={
+                nextCropName
+                  ? `til ${shortCropName(nextCropName)} ${calendarYear + 1}`
+                  : 'til næste afgrøde'
+              }
+              title="Tæller med i normen for næste afgrøde, men i udvaskningen for dette år (MNCA)"
+            />
+          ) : null}
           {response ? (
             <DefinitionRow
               label="Udbytte"
@@ -1090,6 +1121,17 @@ const EconomicDetailSection = ({
   cropCode: number
 }) => {
   const customisedLine = useCustomisedLine(cropCode)
+  if (detail.economicsMissing) {
+    return (
+      <div className="space-y-1.5 border-t pt-3">
+        <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
+        <p className="text-sm">
+          Afgrøden har ingen økonomi i økonomitallene, så der er ikke beregnet
+          et dækningsbidrag.
+        </p>
+      </div>
+    )
+  }
   const customisedLabel = (label: string, row: BreakdownRow) => (
     <CustomisedLabel
       label={label}
@@ -1101,13 +1143,25 @@ const EconomicDetailSection = ({
   const unit = String(detail.yieldUnit ?? '')
   const response = yieldResponse(yieldAmount, detail.yieldFactor)
   const salePrice = num(detail.salePrice)
+  const culledShare = num(detail.culledShare)
+  const culledPrice = num(detail.culledPrice)
+  const strawRevenue = num(detail.strawRevenue)
+  const priceUnit = `kr/${(unit || 'enhed').replace(/\/ha$/, '')}`
+  const revenueFormula = [
+    culledShare > 0
+      ? 'sorterede × salgspris + frasorterede × salgspris'
+      : 'udbytte × salgspris',
+    ...(strawRevenue > 0 ? ['halm × halmpris'] : []),
+  ].join(' + ')
   const revenue = num(detail.revenue)
   const subsidy = num(detail.subsidy)
   const fertiliserCost = num(detail.fertiliserCost)
+  const otherFertilisers = num(detail.otherFertilisers)
   const seed = num(detail.seed)
   const cropProtection = num(detail.cropProtection)
   const fieldWork = num(detail.fieldWork)
   const drying = num(detail.drying)
+  const other = num(detail.other)
   const totalCosts = num(detail.totalCosts)
   const db = num(detail.db)
 
@@ -1120,8 +1174,8 @@ const EconomicDetailSection = ({
       <SectionHeading>5. Dækningsbidrag for marken</SectionHeading>
       <p className="text-sm">
         Indtægt og tilskud, minus omkostninger til gødning, udsæd, planteværn,
-        markarbejde og tørring, giver dækningsbidraget (DB2) pr. hektar - ganget
-        med markens areal til sidst.
+        markarbejde, tørring og andet, giver dækningsbidraget (DB2) pr. hektar -
+        ganget med markens areal til sidst.
       </p>
       {detail.yieldNormMissing ? (
         <p className="text-xs text-warning-strong">
@@ -1139,12 +1193,27 @@ const EconomicDetailSection = ({
             value: `${fmt(yieldAmount, 1)} ${unit}`,
           },
           {
-            label: customisedLabel('Salgspris', { kind: 'salePrice' }),
-            value: `${fmt(salePrice, 2)} kr/${unit || 'enhed'}`,
+            label: customisedLabel(
+              culledShare > 0 ? 'Salgspris, sorterede kartofler' : 'Salgspris',
+              { kind: 'salePrice' },
+            ),
+            value: `${fmt(salePrice, 2)} ${priceUnit}`,
           },
+          ...(culledShare > 0
+            ? [
+                {
+                  label: 'Salgspris, frasorterede kartofler',
+                  detail: `${fmt(culledShare * 100, 1)} % af udbyttet`,
+                  value: `${fmt(culledPrice, 2)} ${priceUnit}`,
+                },
+              ]
+            : []),
+          ...(strawRevenue > 0
+            ? [{ label: 'Halm', value: `+${fmt(strawRevenue, 0)} kr/ha` }]
+            : []),
           {
             label: customisedLabel('Indtægt', { kind: 'revenue' }),
-            detail: 'udbytte × salgspris',
+            detail: revenueFormula,
             value: `${fmt(revenue, 0)} kr/ha`,
             strong: true,
           },
@@ -1161,6 +1230,14 @@ const EconomicDetailSection = ({
           lines={linesFor('Gødning')}
           cropCode={cropCode}
         />
+        {otherFertilisers > 0 ? (
+          <CategoryBreakdownRow
+            label="Andre gødningsstoffer"
+            total={otherFertilisers}
+            lines={linesFor('Andre gødningsstoffer')}
+            cropCode={cropCode}
+          />
+        ) : null}
         <CategoryBreakdownRow
           label="Udsæd"
           total={seed}
@@ -1185,6 +1262,14 @@ const EconomicDetailSection = ({
           lines={linesFor('Tørring/lagring')}
           cropCode={cropCode}
         />
+        {other > 0 ? (
+          <CategoryBreakdownRow
+            label="Andet"
+            total={other}
+            lines={linesFor('Andet')}
+            cropCode={cropCode}
+          />
+        ) : null}
       </div>
       <DetailTable
         rows={[
@@ -1317,6 +1402,7 @@ export const RotationYearsDetail = ({
 
       <KeyMetricsSection
         year={year}
+        nextCropName={years[(yearIndex + 1) % years.length].year.cropName}
         calendarYear={startCalendarYear + yearIndex}
         areaHa={areaHa}
         retention={retention}

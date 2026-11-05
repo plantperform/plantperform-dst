@@ -25,10 +25,32 @@ def quantity_id(crop, namespace, *parts):
     return f"{crop}/{identifier(namespace, *parts)}"
 
 
+PRICE_PER_GANG_UNIT = "kr/gang pr. ha"
+
+
 def price_unit(unit):
     if not unit:
         return "kr/enhed"
-    return unit if "/" in unit else f"kr/{unit}"
+    unit = unit if "/" in unit else f"kr/{unit}"
+    # A rate per gang is the price of one pass over one ha.
+    return PRICE_PER_GANG_UNIT if unit == "kr/gang" else unit
+
+
+# The imported name of a price-list post stays its identity, so saved overrides
+# keep applying. Only what the user reads is renamed.
+_POST_LABELS = {"Grundbeløb (basis)": "Økologisk arealstøtte – basis"}
+
+
+def post_label(post):
+    return _POST_LABELS.get(post, post)
+
+
+_FERTILISER_QUANTITY_UNITS = {
+    "mineralN": "kg N/ha",
+    "mineralSpreading": "ha",
+    "manureSpreading": "ton/ha",
+    "manurePurchase": "ton/ha",
+}
 
 
 def assumptions():
@@ -146,7 +168,7 @@ def assumptions():
             key = identifier("list", row.post)
             prices[key] = dict(
                 id=key,
-                label=row.post,
+                label=post_label(row.post),
                 value=row.pris,
                 unit=price_unit(row.enhed),
                 source=row.kilde,
@@ -163,13 +185,13 @@ def assumptions():
                 )
         # Fertilizer quantities are priced independently from physical N allocations.
         for crop in crops:
-            for purpose in ("mineralN", "mineralSpreading", "manureSpreading"):
+            for purpose in ("mineralN", "mineralSpreading", "manureSpreading", "manurePurchase"):
                 qty = quantity_id(crop, "fertiliser", purpose)
                 quantities[qty] = dict(
                     id=qty,
                     lineId=qty.split("/", 1)[1],
                     value=None,
-                    unit="kg N/ha" if purpose == "mineralN" else "ha",
+                    unit=_FERTILISER_QUANTITY_UNITS[purpose],
                     context=dict(cropCode=crop),
                     dynamic=True,
                 )

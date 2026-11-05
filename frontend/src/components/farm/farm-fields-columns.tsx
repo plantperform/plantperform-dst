@@ -22,7 +22,6 @@ import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
   fieldDisplayName,
-  fieldNNormPct,
   fieldOwnerName,
   firstCalendarYear,
   formatLockTooltip,
@@ -34,6 +33,7 @@ import {
   getFieldQuotaStatus,
   isFieldCalculated,
   isFieldLocked,
+  NO_ECONOMICS,
   perHaUnit,
   totalsFigure,
   type FarmQuota,
@@ -43,6 +43,17 @@ import {
   type QuotaStatus,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
+import { cropLabel } from '@/lib/crop-label'
+import {
+  describeNNormLevel,
+  fieldNNormSortValue,
+  type NNormLevel,
+  type NNormLevelText,
+} from '@/lib/n-norm-level'
+import {
+  fieldRotationVariant,
+  PERMANENT_ROTATION,
+} from '@/lib/rotation-overview'
 import { textWidth } from '@/lib/text-width'
 import { cn } from '@/lib/utils'
 
@@ -103,6 +114,10 @@ const uniqueCropNames = (rotation: FieldRecord['cropRotation']): string[] => {
   }
   return seenNames
 }
+
+const uniqueCropLabels = (rotation: FieldRecord['cropRotation']): string[] => [
+  ...new Set(rotation.map((year) => cropLabel(year.cropCode, year.cropName))),
+]
 
 const cropFirstWord = (name: string): string =>
   name
@@ -233,9 +248,9 @@ const numericMetricColumn = (
   const { key, label, heading, emptyCell, quotaGated } = config
   const contentOf = (field: FieldRecord): CellContent => {
     if (quotaGated && !field.quotaEligible) return EXCLUDED_FROM_CALCULATION
-    return isFieldCalculated(field, isSimulationView)
-      ? fieldFigure(field, key)
-      : null
+    if (!isFieldCalculated(field, isSimulationView)) return null
+    if (key === 'db2' && field.economicsMissing) return NO_ECONOMICS
+    return fieldFigure(field, key)
   }
   return {
     accessorKey: key,
@@ -274,7 +289,7 @@ const renderRotationSwatches = (
       highlightIndex={highlightIndex}
       tileClassName="size-4 full:size-[18px]"
     />
-    <AppTooltip content={uniqueCropNames(rotation).join(' · ')}>
+    <AppTooltip content={uniqueCropLabels(rotation).join(' · ')}>
       <span className="hidden min-w-0 max-w-40 truncate text-sm full:block">
         {uniqueCropNamesLabel(rotation)}
       </span>
@@ -472,6 +487,16 @@ const FERTILISER_COLUMNS: FertiliserColumnConfig[] = [
     format: formatWholeNumber,
   },
   {
+    id: 'autumnAllocated',
+    heading: 'Efterårstildeling',
+    unit: 'kg N/ha',
+    totalUnit: 'kg N',
+    tooltip:
+      'Den del af handelsgødning og organisk gødning, der er udbragt efteråret før høståret. Den tæller i afgrødens norm og omkostninger, men i udvaskningen for året før.',
+    pick: (figures) => figures.autumnAllocatedKgNHa,
+    format: formatWholeNumber,
+  },
+  {
     id: 'availableN',
     heading: 'Tilgængeligt N',
     unit: 'kg N/ha',
@@ -576,6 +601,7 @@ export type FarmFieldsColumnsArgs = {
   selectedYearIndex: number | null
   fields: FieldRecord[]
   fertiliser: Map<string, FertiliserFigures>
+  nNormLevels: Map<string, NNormLevel>
   fertiliserLoading: boolean
   quota: FarmQuota
   catchmentLabel: (catchmentId: number | null) => string
@@ -589,6 +615,7 @@ export const buildFarmFieldsColumns = ({
   selectedYearIndex,
   fields,
   fertiliser,
+  nNormLevels,
   fertiliserLoading,
   quota,
   catchmentLabel,
@@ -618,6 +645,8 @@ export const buildFarmFieldsColumns = ({
   const highlightIndex = selectedYearIndex
   const selectedCalendarYear =
     highlightIndex !== null ? rotationStartYear + highlightIndex : null
+  const selectedYearLabel =
+    selectedCalendarYear !== null ? String(selectedCalendarYear) : 'vælg et år'
   const selectedYearOf = (field: FieldRecord) =>
     highlightIndex !== null ? field.cropRotation[highlightIndex] : undefined
 
@@ -677,15 +706,85 @@ export const buildFarmFieldsColumns = ({
     },
   })
 
+  if (isSimulationView) {
+    const rotationVariantText = (field: FieldRecord) => {
+      const variant = fieldRotationVariant(field)
+      return variant === PERMANENT_ROTATION ? 'Permanent' : variant
+    }
+    list.push({
+      id: 'rotationVariant',
+      accessorFn: fieldRotationVariant,
+      header: ({ column }) => (
+        <SortableColumnHeaderContent
+          label="Sædskifte nr."
+          align="right"
+          column={column}
+        />
+      ),
+      cell: ({ row }) =>
+        rotationVariantText(row.original) ?? (
+          <span className="text-muted-foreground">-</span>
+        ),
+      footer: () => null,
+      meta: {
+        headerClassName: cn(NUMERIC_HEADER_CLASS, 'whitespace-nowrap'),
+        cellClassName: NUMERIC_CELL_CLASS,
+        toggleLabel: 'Sædskifte nr.',
+        widthHints: [(field) => textWidth(rotationVariantText(field) ?? '-')],
+      },
+    })
+  }
+
+  list.push({
+    id: 'cropCode',
+    accessorFn: (field) => selectedYearOf(field)?.cropCode ?? null,
+    header: ({ column }) => (
+      <SortableColumnHeaderContent
+        label="Afgrødekode"
+        unit={selectedYearLabel}
+        align="right"
+        column={column}
+        disabled={highlightIndex === null}
+      />
+    ),
+    cell: ({ row }) => {
+      const year = selectedYearOf(row.original)
+      return year ? (
+        year.cropCode
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      )
+    },
+    footer: () => null,
+    meta: {
+      headerClassName: cn(
+        NUMERIC_HEADER_CLASS,
+        'whitespace-nowrap',
+        highlightIndex === null && 'hidden full:table-cell',
+      ),
+      cellClassName: cn(
+        NUMERIC_CELL_CLASS,
+        highlightIndex === null && 'hidden full:table-cell',
+      ),
+      widthHints: [
+        (field) => {
+          const year = selectedYearOf(field)
+          return year ? textWidth(String(year.cropCode)) : 0
+        },
+      ],
+    },
+  })
+
   list.push({
     id: 'cropYear',
-    header: () => (
-      <div className="flex flex-col">
-        <span>Afgrøde</span>
-        <span className={HEADER_SUBLINE_CLASS}>
-          {selectedCalendarYear !== null ? selectedCalendarYear : 'vælg et år'}
-        </span>
-      </div>
+    accessorFn: (field) => selectedYearOf(field)?.cropName ?? null,
+    header: ({ column }) => (
+      <SortableColumnHeaderContent
+        label="Afgrøde"
+        unit={selectedYearLabel}
+        column={column}
+        disabled={highlightIndex === null}
+      />
     ),
     cell: ({ row }) => {
       const year = selectedYearOf(row.original)
@@ -701,7 +800,6 @@ export const buildFarmFieldsColumns = ({
       )
     },
     footer: () => null,
-    enableSorting: false,
     meta: {
       headerClassName: cn(
         HEADER_CELL_CLASS,
@@ -723,26 +821,50 @@ export const buildFarmFieldsColumns = ({
   })
 
   if (isSimulationView) {
+    const levelTextOf = (field: FieldRecord): NNormLevelText | null => {
+      const level = nNormLevels.get(field.id)
+      return level ? describeNNormLevel(level) : null
+    }
+    const levelFigureOf = (field: FieldRecord): PerHaFigure | null => {
+      const text = levelTextOf(field)
+      return text === null || text.muted
+        ? null
+        : { value: text.value, total: text.note }
+    }
     list.push({
       id: 'nNormPct',
-      accessorFn: (field) => fieldNNormPct(field),
+      accessorFn: (field) => fieldNNormSortValue(field, nNormLevels),
       header: ({ column }) => (
         <SortableColumnHeaderContent label="N-norm%" column={column} />
       ),
       cell: ({ row }) => {
-        const pct = fieldNNormPct(row.original)
-        return pct === null ? (
-          <span className="text-muted-foreground">-</span>
+        if (fertiliserLoading) return loadingFigure
+        const text = levelTextOf(row.original)
+        if (text === null)
+          return <span className="text-muted-foreground">-</span>
+        const figure = levelFigureOf(row.original)
+        const content = figure ? (
+          renderMetricFigure(figure, 'cell')
         ) : (
-          `${formatNumber(pct)} %`
+          <span className="text-muted-foreground">{text.value}</span>
+        )
+        return text.tooltip ? (
+          <AppTooltip content={text.tooltip}>
+            <div>{content}</div>
+          </AppTooltip>
+        ) : (
+          content
         )
       },
       // A level per mark, not something to total.
       footer: () => null,
       meta: {
-        headerClassName: cn(NUMERIC_HEADER_CLASS, 'w-16 whitespace-nowrap'),
-        cellClassName: cn(NUMERIC_CELL_CLASS, 'w-16'),
+        headerClassName: cn(NUMERIC_HEADER_CLASS, 'whitespace-nowrap'),
+        cellClassName: NUMERIC_CELL_CLASS,
         toggleLabel: 'N-norm%',
+        widthHints: fertiliserLoading
+          ? undefined
+          : contentWidthHints(levelFigureOf),
       },
     })
     list.push(

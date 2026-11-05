@@ -24,8 +24,9 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
-from app.services.economics.overrides import identifier, quantity_id
+from app.services.economics.overrides import identifier, post_label, price_unit, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
+from app.services.rotations import saedskifte_library
 from app.services.virkemidler import praecisionsgoedskning_tilladt
 
 KONVENTIONEL = "Konventionel"
@@ -51,8 +52,35 @@ _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
 # Husdyrgødning is spread per tonne: the price list's trailing-hose rate times
-# the tonnes applied (utilized N / the gødning's utilized N per tonne).
+# the tonnes applied (utilized N / the gødning's utilized N per tonne). Buying
+# it is priced the same way, at a standard of 0 kr/tonne.
 _GYLLE_UDBRINGNING_POST = "Gylleudbringning, slæbeslanger"
+_GYLLE_UDBRINGNING_LABEL = "Udbringning, husdyrgødning"
+_GYLLE_KOEB_POST = "Husdyrgødning, køb"
+_GYLLE_KOEB_LABEL = "Husdyrgødning, køb"
+
+# The Halmpresning quantity is the kg of straw the budget presses.
+_HALMPRESNING = "Halmpresning"
+# Besides drying and storage, these are priced per kg of the harvest.
+_PER_KG_HARVESTED = frozenset({"Rensning", "Sortering af kartofler", "Fragt"})
+_KG_PER_HKG = 100
+# The irrigation rows are SEGES' "vandet" sheet. Some crops, such as potatoes,
+# have it as their only JB1-4 sheet, so an unirrigated field would pick it up.
+_VANDING = "Vanding"
+
+# Potatoes are sorted before they are sold, and the culls (frasorterede
+# kartofler) sell at a fraction of the sorted price, which is its own
+# salgspris row. SEGES culls 6.600 of 43.700 kg konventionelle spisekartofler,
+# 5.700 of 37.800 kg læggekartofler and, økologisk, 3.500 of 23.500 kg
+# læggekartofler; the økologiske spisekartofler calculation sells no culls.
+_FRASORTERET_KVALITET = "Frasorterede"
+_FRASORTERET_ANDEL = {
+    (149, KONVENTIONEL): 0.151,
+    (152, KONVENTIONEL): 0.151,
+    (149, OEKOLOGISK): 0.149,
+}
+_SORTEREDE_KARTOFLER = "Sorterede kartofler"
+_FRASORTEREDE_KARTOFLER = "Frasorterede kartofler"
 
 # Fallback only when the master table has no organic row for a crop/JB pair.
 _OEKO_UDBYTTE_REDUKTION = 0.32
@@ -103,7 +131,8 @@ def clear_lookup_cache() -> None:
         _load_halmudbytte,
         _load_arbejdssatser,
         _load_arbejdsmaengder,
-        _migrerede_afgrodekoder,
+        _migrerede_budgetter,
+        _afgroeder_i_saedskifter,
         _load_dyrkningsomkostninger,
         _load_prisliste,
         soil_variants,
@@ -192,7 +221,28 @@ def _load_halmudbytte() -> dict[tuple[int, str], float]:
     return lookup
 
 
-def _lookup_halm_udbytte(afgrodekode: int, jbnr: int, irrigated: bool) -> float:
+def _lookup_halm_udbytte(
+    afgrodekode: int,
+    jbnr: int,
+    irrigated: bool,
+    driftsform: str = KONVENTIONEL,
+    kvalitet: str = "",
+) -> float:
+    """Kg straw per ha that is sold, which is also the straw the budget presses.
+
+    The budget's Halmpresning quantity is that straw, so the sale and the
+    pressing share one amount. It matters for økologisk, whose straw is below
+    the konventionel halmudbytte. Without a pressing line the halmudbytte applies.
+    """
+    maengder = _load_arbejdsmaengder()
+    for jordbonitet in _jordbonitet_kandidater(jbnr, irrigated):
+        rows = maengder.get((afgrodekode, driftsform, jordbonitet, kvalitet))
+        if rows is None:
+            continue
+        pressing = next((row for row in rows if row["behandling"] == _HALMPRESNING), None)
+        if pressing is not None:
+            return pressing["antal"]
+        break
     lookup = _load_halmudbytte()
     for jordbonitet in _jordbonitet_kandidater(jbnr, irrigated):
         hit = lookup.get((afgrodekode, jordbonitet))
@@ -291,8 +341,13 @@ def soil_variants() -> dict[str, tuple[tuple[str, float], ...]]:
 
 
 @lru_cache(maxsize=1)
-def _migrerede_afgrodekoder() -> frozenset[int]:
-    return frozenset(code for code, _, _, _ in _load_arbejdsmaengder())
+def _migrerede_budgetter() -> frozenset[tuple[int, str]]:
+    """The (afgrødekode, driftsform) pairs priced from arbejdsmængder.
+
+    A driftsform without arbejdsmængder for the afgrøde falls back to the flat
+    dyrkningsomkostninger of that driftsform, whatever the other one has.
+    """
+    return frozenset((code, driftsform) for code, driftsform, _, _ in _load_arbejdsmaengder())
 
 
 @lru_cache(maxsize=1)
@@ -353,7 +408,7 @@ def _lookup_omkostningslinjer(
 ) -> list[dict]:
     prices = (economics or {}).get("prices", {})
     quantities = (economics or {}).get("quantities", {})
-    if afgrodekode not in _migrerede_afgrodekoder():
+    if (afgrodekode, driftsform) not in _migrerede_budgetter():
         lines = []
         for row in _load_dyrkningsomkostninger().get((afgrodekode, driftsform), []):
             pris_id = identifier(
@@ -383,6 +438,8 @@ def _lookup_omkostningslinjer(
             continue
         lines = []
         for row in rows:
+            if not irrigated and row["behandling"].startswith(_VANDING):
+                continue
             maengde_id = quantity_id(
                 afgrodekode,
                 "work",
@@ -409,6 +466,66 @@ def _lookup_omkostningslinjer(
     return []
 
 
+def har_omkostningsbudget(afgrodekode: int, driftsform: str) -> bool:
+    """Whether the økonomital hold a cost budget for the afgrøde and driftsform."""
+    kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
+    return (kode, driftsform) in _migrerede_budgetter() or bool(
+        _load_dyrkningsomkostninger().get((kode, driftsform))
+    )
+
+
+@lru_cache(maxsize=1)
+def _afgroeder_i_saedskifter() -> frozenset[int]:
+    """The afgrøder some sædskifte grows, which the simulations choose between."""
+    return frozenset(
+        int(position[0])
+        for saedskifte, variant in saedskifte_library.list_all_saedskifte_refs()
+        for position in saedskifte_library.get_raw_rotation(saedskifte, variant)
+        if position[0]
+    )
+
+
+def mangler_oekonomi(afgrodekode: int, driftsform: str) -> bool:
+    """Whether an afgrøde has no real economics, so no dækningsbidrag.
+
+    Without a cost budget an afgrøde would get a dækningsbidrag made of the
+    grundbetaling and a price that nothing was subtracted from. The afgrøder a
+    sædskifte grows are kept, budget or not: the simulations compare their
+    dækningsbidrag, and a figure of 0 would only steer the optimization away
+    from them.
+    """
+    if har_omkostningsbudget(afgrodekode, driftsform):
+        return False
+    return afgrodekode not in _afgroeder_i_saedskifter()
+
+
+def manure_prices() -> dict[str, dict | None]:
+    """The two husdyrgødning prices per tonne a profile can set.
+
+    They are listed whether or not a budget row uses them: the standard budget
+    spreads no husdyrgødning, but a simulation that does uses the prices, on
+    both driftsformer. A price missing from an older price list is None.
+    """
+    prisliste = _load_prisliste()
+
+    def price(post: str, label: str) -> dict | None:
+        entry = prisliste.get(post)
+        if entry is None:
+            return None
+        return dict(
+            id=identifier("list", post),
+            label=label,
+            unit=price_unit(entry["enhed"]),
+            value=entry["pris"],
+            source=entry["kilde"],
+        )
+
+    return {
+        "spreading": price(_GYLLE_UDBRINGNING_POST, _GYLLE_UDBRINGNING_LABEL),
+        "purchase": price(_GYLLE_KOEB_POST, _GYLLE_KOEB_LABEL),
+    }
+
+
 @lru_cache(maxsize=1)
 def _load_prisliste() -> dict[str, dict]:
     """Map post to price-list data for both Omkostning and Tilskud."""
@@ -428,6 +545,10 @@ def _load_prisliste() -> dict[str, dict]:
 _STORED_LINE_KEYS = ("kategori", "behandling", "udgift_kr_ha")
 _N_POST = "Handelsgødning, kvælstof (N)"
 _N_UDBRINGNING_POST = "Handelsgødning, udbringning"
+_AUTUMN_SPREADING_LABEL = "Udbringning, handelsgødning, efterår"
+_BUDGET_SPREADING = "Gødningsspredning"
+# A budget with this many spreadings is taken to include the one in autumn.
+_SPREADINGS_WITH_AUTUMN = 3
 _MAJSHELSAED_KODE = 216
 
 
@@ -472,27 +593,33 @@ def calculate_db(
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
-    mncs: Total spring-applied mineral N in kg N/ha (handelsgødning plus any
-    utilized organisk N). The default is the afgrøde's own 100% Bilag 1 N norm
-    for the given JB-nr and is later replaced by the actual MNCS for a specific
-    sædskifte position.
+    mncs: Mineral N in kg N/ha apart from `mnca`: handelsgødning spread in spring
+    plus any utilized organisk N, also from autumn. The default is the afgrøde's
+    own 100% Bilag 1 N norm for the given JB-nr and is later replaced by the
+    actual MNCS for a specific sædskifte position.
+
+    mnca: The afgrøde's own handelsgødning spread the autumn before, in kg N/ha.
+    It belongs to this afgrøde's yield and costs. It takes a spreading of its
+    own, unless the budget's spreadings already cover the autumn.
 
     org_mineral_n_applied: The portion of `mncs` supplied by organisk gødning
     (gylle) rather than handelsgødning. Only the remainder
     (`mncs - org_mineral_n_applied`) is priced at the N price of
     handelsgødning; the gylle portion incurs only application costs. This also
     applies to konventionelle gylle categories, such as svinegylle/kvæggylle
-    sædskifter, not only økologiske ones.
+    sædskifter, not only økologiske ones. The budget's Gødningsspredning under
+    Markarbejde is the spreading of the handelsgødning; only an afgrøde whose
+    budget has none is priced one from the price list.
 
     husdyrgodning_ton_pr_ha: Tonnes of husdyrgødning spread per ha, the
     utilized N divided by the gødning's utilized N per tonne. The application
-    is priced per tonne at the price list's trailing-hose rate.
+    is priced per tonne at the price list's trailing-hose rate, and the
+    gødning itself at its purchase price per tonne.
 
     only_organic: The scenarie's gødning selection (Phase 13 GodningSettings),
-    not the same as driftsform. This value, not driftsform, determines whether
-    handelsgødning may top MNCS up beyond the organisk allocation. A simulering
-    marked Økologisk can have only_organic=False and must then include the cost
-    of the remaining handelsgødning.
+    not the same as driftsform. True means handelsgødning does not top MNCS up
+    beyond the organisk allocation, also on a konventionel simulering. An
+    økologisk afgrøde never has handelsgødning, whatever this says.
 
     udlaeg_kode: The rotation position's udlægskode, also passed to
     bridge_v2.evaluate_leaching_position. It determines whether an additional
@@ -503,6 +630,10 @@ def calculate_db(
     mncs and mnca it is the available N that the udbyttenorm is scaled by for
     crops with a yield-response curve (see economics.udbytterespons). Below
     the N-norm their yield drops; every other crop keeps its full udbyttenorm.
+
+    An afgrøde without a cost budget that no sædskifte grows (see
+    mangler_oekonomi) gets no indtægt, tilskud or omkostninger and a
+    dækningsbidrag of 0, and `economics_missing` is true.
     """
     economics = json.loads(economics_key) if economics_key else {}
     prices = economics.get("prices", {})
@@ -540,10 +671,21 @@ def calculate_db(
     )
     kalkule_kode = _KALKULE_KODE.get(afgrodekode, afgrodekode)
     pris = _lookup_salgspris(kalkule_kode, driftsform, kvalitet)
+    frasorteret_andel = _FRASORTERET_ANDEL.get((kalkule_kode, driftsform), 0.0)
+    frasorteret = (
+        _lookup_salgspris(kalkule_kode, driftsform, _FRASORTERET_KVALITET)
+        if frasorteret_andel and not kvalitet
+        else None
+    )
+    if frasorteret is None:
+        frasorteret_andel = 0.0
+    frasorteret_pris = (
+        prices.get(frasorteret["sale_id"], frasorteret["salgspris"]) if frasorteret else 0.0
+    )
 
     salgspris = prices.get(pris.get("sale_id"), pris["salgspris"]) if pris else 0.0
     halm_pris = prices.get(pris.get("straw_id"), pris["halm_pris_kr_kg"]) if pris else 0.0
-    halm_udbytte = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated)
+    halm_udbytte = _lookup_halm_udbytte(kalkule_kode, jbnr, irrigated, driftsform, kvalitet)
     halm_indtaegt = halm_udbytte * halm_pris * yield_factor
     if norm is not None:
         udbytte = norm["udbyttenorm"] or 0.0
@@ -581,24 +723,38 @@ def calculate_db(
         udbytte *= faktor
 
     udbytte *= yield_factor
-    indtaegt = udbytte * salgspris + halm_indtaegt
+    frasorteret_udbytte = udbytte * frasorteret_andel
+    sorteret_udbytte = udbytte - frasorteret_udbytte
+    indtaegt = sorteret_udbytte * salgspris + frasorteret_udbytte * frasorteret_pris + halm_indtaegt
+
+    budget_lines = _lookup_omkostningslinjer(
+        kalkule_kode,
+        driftsform,
+        jbnr,
+        irrigated,
+        kvalitet,
+        **({"economics": economics} if economics_key else {}),
+    )
+    budget_spreadings = sum(
+        line["maengde"] for line in budget_lines if line["behandling"] == _BUDGET_SPREADING
+    )
 
     # Itemized rows behind each category total for the UI calculation
     # walkthrough, showing which entries actually total categories such as
-    # "Gødning" or "Markarbejde". only_organic, not driftsform, determines
-    # whether handelsgødning may top MNCS up. A simulering marked Økologisk can
-    # have only_organic=False (Phase 13 decoupled the settings) and must then
-    # price the remaining handelsgødning just like a konventionel simulering.
+    # "Gødning" or "Markarbejde".
     goedning_linjer: list[dict] = []
-    handelsgodning_n = 0.0 if only_organic else max(0.0, mncs - org_mineral_n_applied) + mnca
+    no_mineral_fertiliser = only_organic or driftsform == OEKOLOGISK
+    spring_mineral_n = 0.0 if no_mineral_fertiliser else max(0.0, mncs - org_mineral_n_applied)
+    autumn_mineral_n = 0.0 if no_mineral_fertiliser else mnca
+    handelsgodning_n = spring_mineral_n + autumn_mineral_n
     economic_n = quantities.get(
         quantity_id(afgrodekode, "fertiliser", "mineralN"), handelsgodning_n
     )
+    spring_spreading = 1.0 if spring_mineral_n > 0 and not budget_spreadings else 0.0
     economic_spreading = quantities.get(
-        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"),
-        1.0 if handelsgodning_n > 0 else 0.0,
+        quantity_id(afgrodekode, "fertiliser", "mineralSpreading"), spring_spreading
     )
-    if handelsgodning_n > 0 or economic_n > 0 or economic_spreading > 0:
+    if handelsgodning_n > 0 or economic_n > 0:
         goedning_linjer.append(
             list_line(
                 "Gødning",
@@ -609,14 +765,19 @@ def calculate_db(
                 navn="Handelsgødning, N",
             )
         )
+    if economic_spreading > 0:
         goedning_linjer.append(
             list_line(
                 "Gødning",
                 "Udbringning, handelsgødning",
                 _N_UDBRINGNING_POST,
-                quantity=1.0 if handelsgodning_n > 0 else 0.0,
+                quantity=spring_spreading,
                 purpose="mineralSpreading",
             )
+        )
+    if autumn_mineral_n > 0 and budget_spreadings < _SPREADINGS_WITH_AUTUMN:
+        goedning_linjer.append(
+            list_line("Gødning", _AUTUMN_SPREADING_LABEL, _N_UDBRINGNING_POST)
         )
     if (
         husdyrgodning_ton_pr_ha > 0
@@ -625,34 +786,64 @@ def calculate_db(
         goedning_linjer.append(
             list_line(
                 "Gødning",
-                "Udbringning, husdyrgødning",
+                _GYLLE_UDBRINGNING_LABEL,
                 _GYLLE_UDBRINGNING_POST,
                 quantity=husdyrgodning_ton_pr_ha,
                 purpose="manureSpreading",
             )
         )
+    if (
+        husdyrgodning_ton_pr_ha > 0
+        or quantities.get(quantity_id(afgrodekode, "fertiliser", "manurePurchase"), 0.0) > 0
+    ):
+        # Optional: an older price list has no purchase price, which then is 0.
+        goedning_linjer.append(
+            list_line(
+                "Gødning",
+                _GYLLE_KOEB_LABEL,
+                _GYLLE_KOEB_POST,
+                quantity=husdyrgodning_ton_pr_ha,
+                purpose="manurePurchase",
+                optional=True,
+            )
+        )
     goedning = sum(line["udgift_kr_ha"] for line in goedning_linjer)
 
-    # Drying is priced per kg of the normudbytte, so it follows the yield
-    # response. Copies, since the static cost rows are cached.
-    linjer = [
-        {
+    # Drying, storage, cleaning, sorting and freight priced per kg are the kg
+    # actually harvested, so they take the yield after the response and the yield
+    # percentage, not the kg of the budget's own yield. Other drying follows the
+    # yield response. Pressing is priced per kg of straw, which follows the yield
+    # percentage like the straw sold. Copies, since the static cost rows are cached.
+    def follow_yield(line: dict) -> dict:
+        per_kg_harvested = line.get("enhed") == "kr/kg" and (
+            line["kategori"] == "Tørring/lagring" or line["behandling"] in _PER_KG_HARVESTED
+        )
+        if (
+            per_kg_harvested
+            and line["maengde_id"] not in quantities
+            and udbytteenhed.startswith("hkg")
+        ):
+            harvested_kg = udbytte * _KG_PER_HKG
+            return {
+                **line,
+                "udgift_kr_ha": harvested_kg * line["pris"],
+                "maengde": harvested_kg,
+                "foelger_udbytte": True,
+            }
+        if line["kategori"] == "Tørring/lagring" or per_kg_harvested:
+            scale = faktor * yield_factor
+        elif line["behandling"] == _HALMPRESNING:
+            scale = yield_factor
+        else:
+            return line
+        return {
             **line,
-            "udgift_kr_ha": line["udgift_kr_ha"] * faktor * yield_factor,
-            "maengde": line["maengde"] * faktor * yield_factor,
+            "udgift_kr_ha": line["udgift_kr_ha"] * scale,
+            "maengde": line["maengde"] * scale,
             "foelger_udbytte": True,
         }
-        if line["kategori"] == "Tørring/lagring"
-        else line
-        for line in _lookup_omkostningslinjer(
-            kalkule_kode,
-            driftsform,
-            jbnr,
-            irrigated,
-            kvalitet,
-            **({"economics": economics} if economics_key else {}),
-        )
-    ]
+
+    linjer = [follow_yield(line) for line in budget_lines]
     udlaeg_kategori = _udlaeg_kategori(udlaeg_kode, afgrodekode)
     if udlaeg_kategori:
         for kategori, behandling, post in (
@@ -675,12 +866,27 @@ def calculate_db(
     andre_goedningsstoffer = sum(
         line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andre gødningsstoffer"
     )
+    andet = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andet")
 
-    tilskud_linjer = [
-        list_line("Tilskud", post, post) for post in _tilskud_poster(afgrodekode, driftsform)
-    ]
+    ingen_oekonomi = mangler_oekonomi(afgrodekode, driftsform)
+    if ingen_oekonomi:
+        # Nothing to subtract from: no economics at all, rather than a
+        # dækningsbidrag of the sales value and the grundbetaling.
+        indtaegt = halm_indtaegt = goedning = andre_goedningsstoffer = 0.0
+        udsaed = plantevaern = markarbejde = toerring = andet = 0.0
+        alle_linjer = []
+    tilskud_linjer = (
+        []
+        if ingen_oekonomi
+        else [
+            list_line("Tilskud", post, post, navn=post_label(post))
+            for post in _tilskud_poster(afgrodekode, driftsform)
+        ]
+    )
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
-    omkostninger = udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer
+    omkostninger = (
+        udsaed + goedning + plantevaern + markarbejde + toerring + andre_goedningsstoffer + andet
+    )
     db = indtaegt + tilskud - omkostninger
 
     if itemized:
@@ -689,13 +895,27 @@ def calculate_db(
             indtaegt_linjer.append(
                 _linje(
                     "Indtægt",
-                    "Udbytte",
-                    udbytte,
+                    _SORTEREDE_KARTOFLER if frasorteret else "Udbytte",
+                    sorteret_udbytte,
                     salgspris,
                     pris_id=pris.get("sale_id"),
                     maengde_id=None,
                     enhed=pris.get("enhed"),
                     kilde=pris.get("kilde"),
+                    foelger_udbytte=True,
+                )
+            )
+        if frasorteret is not None and udbytte:
+            indtaegt_linjer.append(
+                _linje(
+                    "Indtægt",
+                    _FRASORTEREDE_KARTOFLER,
+                    frasorteret_udbytte,
+                    frasorteret_pris,
+                    pris_id=frasorteret["sale_id"],
+                    maengde_id=None,
+                    enhed=frasorteret["enhed"],
+                    kilde=frasorteret["kilde"],
                     foelger_udbytte=True,
                 )
             )
@@ -713,6 +933,8 @@ def calculate_db(
                     foelger_udbytte=True,
                 )
             )
+        if ingen_oekonomi:
+            indtaegt_linjer = []
         detail = {"indtaegt_linjer": indtaegt_linjer, "tilskud_linjer": tilskud_linjer}
     else:
         alle_linjer = [{key: line[key] for key in _STORED_LINE_KEYS} for line in alle_linjer]
@@ -745,6 +967,8 @@ def calculate_db(
         "udbytte_faktor": faktor,
         "tilgaengelig_n": tilgaengelig_n,
         "salgspris": salgspris,
+        "frasorteret_andel": frasorteret_andel,
+        "frasorteret_pris": frasorteret_pris,
         "halm_indtaegt": round(halm_indtaegt, 0),
         "indtaegt": round(indtaegt, 0),
         "tilskud": round(tilskud, 0),
@@ -755,8 +979,10 @@ def calculate_db(
         "plantevaern": round(plantevaern, 0),
         "markarbejde": round(markarbejde, 0),
         "toerring": round(toerring, 0),
+        "andet": round(andet, 0),
         "omkostninger_total": round(omkostninger, 0),
         "db": round(db, 0),
+        "economics_missing": ingen_oekonomi,
         "linjer": alle_linjer,
         **detail,
     }

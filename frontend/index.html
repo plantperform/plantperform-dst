@@ -1,12 +1,108 @@
 <!doctype html>
-<html lang="en">
+<html lang="da">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/brand-mark.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PlantPerform</title>
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 0 24px;
+        background: hsl(42 36% 95%);
+        color: hsl(30 15% 11%);
+        font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      }
+      #app-splash .mark {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 30px;
+        line-height: 36px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      #app-splash .track {
+        width: 240px;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 9999px;
+        background: hsl(42 36% 89%);
+      }
+      #app-splash .track div {
+        width: 33.333%;
+        height: 100%;
+        border-radius: 9999px;
+        background: hsl(208 47% 30%);
+      }
+      #app-splash p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 20px;
+        color: hsl(30 11% 35%);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        #app-splash .track div {
+          animation: app-splash-slide 1.5s ease-in-out infinite;
+        }
+      }
+      @keyframes app-splash-slide {
+        from {
+          translate: -100%;
+        }
+        to {
+          translate: 300%;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-splash">
+      <div class="mark">
+        <img src="/brand-mark.svg" alt="" width="52" height="52" />
+        PlantPerform
+      </div>
+      <div class="track" aria-hidden="true"><div></div></div>
+      <p id="app-splash-text" role="status">Et øjeblik...</p>
+    </div>
+    <script>
+      ;(() => {
+        const texts = [
+          [/^\/$/, 'Henter dine bedrifter...'],
+          [/^\/farms\/new\/?$/, 'Gør klar til en ny bedrift...'],
+          [/^\/farms\/[^/]+\/?$/, 'Henter bedriftens marker...'],
+          [/^\/farms\/[^/]+\/simulations\/?$/, 'Henter dine simuleringer...'],
+          [
+            /^\/farms\/[^/]+\/simulations\/compare\/?$/,
+            'Henter sammenligningen...',
+          ],
+          [/^\/farms\/[^/]+\/economics\/?$/, 'Henter økonomien...'],
+          [
+            /^\/farms\/[^/]+\/economics\/[^/]+\/?$/,
+            'Henter økonomiprofilen...',
+          ],
+          [
+            /^\/farms\/[^/]+\/economics\/[^/]+\/guide\/?$/,
+            'Åbner guiden til økonomiprofilen...',
+          ],
+          [
+            /^\/farms\/[^/]+\/about\/?$/,
+            'Henter oplysningerne om bedriften...',
+          ],
+        ]
+        const match = texts.find(([pattern]) => pattern.test(location.pathname))
+        if (match) {
+          document.getElementById('app-splash-text').textContent = match[1]
+        }
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

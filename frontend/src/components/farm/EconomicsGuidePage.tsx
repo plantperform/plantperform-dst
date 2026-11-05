@@ -45,7 +45,7 @@ import {
 import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import {
   applyOverrideEdits,
-  FERTILISER_NOTE,
+  fertiliserNote,
   formatCropCount,
   formatDbDkk,
   NO_OVERRIDES,
@@ -63,6 +63,7 @@ import {
   STANDARD_SOURCE,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
+import { cropLabel } from '@/lib/crop-label'
 import { ROTATION_START_CALENDAR_YEAR } from '@/lib/field-domain'
 import { cn } from '@/lib/utils'
 
@@ -76,7 +77,7 @@ const STEPS = [
     id: 2,
     label: 'Gødning',
     intro:
-      'Skriv dine priser på handelsgødning og udbringning, hvis de afviger fra standarden.',
+      'Skriv dine gødningspriser, hvis de afviger fra standarden. Husdyrgødningens udbringning og køb er pr. ton.',
   },
   {
     id: 3,
@@ -146,10 +147,10 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
                 )}
               >
                 <TruncatedTooltip
-                  content={effect.cropName}
+                  content={cropLabel(effect.cropCode, effect.cropName)}
                   className="truncate"
                 >
-                  {effect.cropName}
+                  {cropLabel(effect.cropCode, effect.cropName)}
                 </TruncatedTooltip>
                 <span className="text-right text-muted-foreground">
                   {formatDbDkk(effect.dbDkkHa - effect.deltaDkkHa)}
@@ -427,8 +428,8 @@ const Guide = ({
               </h2>
               <p className="mt-1.5 text-[13px] text-muted-foreground">
                 Det, marken tjener pr. ha: udbytte gange salgspris plus tilskud,
-                minus gødning, udsæd, planteværn, markarbejde og tørring.{' '}
-                {FERTILISER_NOTE}
+                minus gødning, udsæd, planteværn, markarbejde, tørring og andet.{' '}
+                {fertiliserNote(assumptions)}
               </p>
             </section>
           </aside>

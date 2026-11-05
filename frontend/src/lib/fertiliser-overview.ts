@@ -16,6 +16,9 @@ export type FertiliserFigures = {
   manureUtilisedKgNHa: number
   // The organically bound part, which does not count toward the norm.
   manureOrganicBoundKgNHa: number
+  // The part of the crop's handelsgødning and utilised manure that was spread
+  // the autumn before. It follows the crop, like its norm and costs.
+  autumnAllocatedKgNHa: number
   manureTonsPerHa: number
 }
 
@@ -27,6 +30,7 @@ const yearFertiliser = (
   mineralFertiliserKgNHa: yearResult.appliedMineralFertiliserKgNHa,
   manureUtilisedKgNHa: yearResult.appliedManureUtilisedKgNHa,
   manureOrganicBoundKgNHa: yearResult.manureOrganicBoundKgNHa,
+  autumnAllocatedKgNHa: yearResult.autumnAllocatedKgNHa ?? 0,
   manureTonsPerHa: yearResult.manureTonsPerHa,
 })
 
@@ -56,6 +60,7 @@ export const fieldFertiliser = (
     mineralFertiliserKgNHa: average((f) => f.mineralFertiliserKgNHa),
     manureUtilisedKgNHa: average((f) => f.manureUtilisedKgNHa),
     manureOrganicBoundKgNHa: average((f) => f.manureOrganicBoundKgNHa),
+    autumnAllocatedKgNHa: average((f) => f.autumnAllocatedKgNHa),
     manureTonsPerHa: average((f) => f.manureTonsPerHa),
   }
 }
@@ -83,6 +88,13 @@ export const usesManure = (
         yearResult.appliedManureUtilisedKgNHa !== 0 ||
         yearResult.manureOrganicBoundKgNHa !== 0,
     ),
+  )
+
+export const usesAutumnAllocation = (
+  yearsByFieldId: FieldYearValues | undefined,
+): boolean =>
+  Object.values(yearsByFieldId ?? {}).some((years) =>
+    years.some((yearResult) => (yearResult.autumnAllocatedKgNHa ?? 0) > 0),
   )
 
 // Forfrugt plus the tildelt N that counts toward the norm.

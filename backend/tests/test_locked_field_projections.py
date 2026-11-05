@@ -54,7 +54,7 @@ def _stored_setup(session) -> dict:
 
 class PermanentFieldLockTests(unittest.TestCase):
     def test_locked_permanent_field_stores_its_projection_not_its_history(self) -> None:
-        # The farm field still carries its "Aktuel" figures from 2019-2026.
+        # The farm field still carries its "Aktuel" figures from 2024-2026.
         farm_field = {
             "id": "farm-field",
             "farm_id": "farm",
@@ -106,6 +106,105 @@ class PermanentFieldLockTests(unittest.TestCase):
         self.assertEqual(field.leaching, 10 * 4)
         self.assertEqual(field.n_load, 10 * 4 * 0.75)
         self.assertEqual(field.fen, 3200 * 4)
+
+    def test_a_context_saved_before_catch_crops_prepares_without_them(self) -> None:
+        saved_before_catch_crops = repository.saved_registry_context(
+            {
+                "jbnr": 4,
+                "goedningsregion": None,
+                "oeko": False,
+                "kvotegivende": True,
+                "crop_history": {"2026": 1},
+                "percolation_by_kategori": None,
+                "org_n_topsoil": None,
+                "s_soil": None,
+            }
+        )
+        years = _permanent_candidate().years
+        with (
+            patch.object(repository, "_soil_data_for_context", return_value=None),
+            patch.object(repository, "real_history_lookback", return_value={}) as lookback,
+            patch.object(repository, "is_permanent_afgrode", return_value=False),
+            patch.object(
+                repository, "evaluate_real_history_for_field", return_value=years
+            ) as history,
+        ):
+            from app.domain.field import FieldRecord
+
+            setup, _ = repository.prepare_simulation_field(
+                FieldRecord(
+                    id="field",
+                    farm_id="farm",
+                    name="55-0",
+                    area_ha=4,
+                    db2=0,
+                    n_load=0,
+                    leaching=0,
+                    crop_rotation=[year.year for year in years],
+                ),
+                saved_before_catch_crops,
+                CreateSimulationRequest(name="Saved before catch crops"),
+            )
+
+        lookback.assert_called_once_with({"2026": 1}, 4, None, False, None)
+        self.assertIsNone(history.call_args.kwargs["secondary_crop_history"])
+        self.assertIn("baseline_candidate", setup)
+
+    def test_a_field_saved_with_eight_history_years_is_calculated_on_the_last_three(self) -> None:
+        saved = [RotationYear(afgrode_kode=code, afgrode_navn=str(code)) for code in range(1, 9)]
+        years = [
+            RotationCandidateYearResult(
+                year=RotationYear(afgrode_kode=code, afgrode_navn=str(code)),
+                leaching_kg_n_ha=leaching,
+                leaching_detail={},
+                db_kr_ha=1000,
+                db_detail={"udbytte": 100, "udbytteenhed": "FE/ha"},
+            )
+            for code, leaching in ((6, 30), (7, 60), (8, 90))
+        ]
+        registry_row = SimpleNamespace(
+            jbnr=4,
+            crop_history={"2019": 99, "2026": 99},
+            secondary_crop_history={},
+            goedningsregion=None,
+            oeko=False,
+        )
+        with (
+            patch.object(repository, "_soil_data_for_context", return_value=None),
+            patch.object(repository, "real_history_lookback", return_value={}),
+            patch.object(repository, "is_permanent_afgrode", return_value=False),
+            patch.object(
+                repository, "evaluate_real_history_for_field", return_value=years
+            ) as history,
+        ):
+            from app.domain.field import FieldRecord
+
+            setup, _ = repository.prepare_simulation_field(
+                FieldRecord(
+                    id="field",
+                    farm_id="farm",
+                    name="55-0",
+                    area_ha=2,
+                    retention=50,
+                    db2=0,
+                    n_load=0,
+                    leaching=0,
+                    crop_rotation=saved,
+                ),
+                registry_row,
+                CreateSimulationRequest(name="Saved with eight years"),
+            )
+
+        crop_history = history.call_args.args[0]
+        self.assertEqual(
+            [crop_history[str(year)] for year in (2019, 2024, 2025, 2026)], [99, 6, 7, 8]
+        )
+        baseline = setup["baseline"]
+        self.assertEqual([year["afgrode_kode"] for year in baseline["crop_rotation"]], [6, 7, 8])
+        self.assertEqual(
+            (baseline["leaching"], baseline["n_load"], baseline["db2"], baseline["fen"]),
+            (60 * 2, 60 * 2 * 0.5, 1000 * 2, 100 * 2),
+        )
 
 
 class YearlySummaryTests(unittest.TestCase):

@@ -6,6 +6,8 @@ import { mutate } from 'swr'
 import {
   simulationsKey,
   simulationViewKey,
+  useAutumnCrops,
+  useCropCodes,
   useFarmFields,
   useStoredSimulationFields,
   useFertiliserPresets,
@@ -34,6 +36,7 @@ import {
 } from '@/lib/quota-trade-settings'
 import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
 import type {
+  CropCodeOption,
   FieldRecord,
   FertiliserSettings,
   RotationCategoryOption,
@@ -51,6 +54,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
 import { StepDialog, type StepDialogStep } from '@/components/ui/step-dialog'
+import { AutumnAllocationFields } from '@/components/farm/AutumnAllocationFields'
 import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { formatNumber, formatWholeNumber } from '@/lib/field-domain'
 import {
@@ -67,9 +71,12 @@ import {
   catchCropSowingDateOf,
   chosenCropsFor,
   fertiliserFieldsForChoice,
+  forcedAutumnFertiliser,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  keepListedAutumnDrafts,
+  listedAutumnCrops,
   offersNoFertiliser,
   organicFertiliserChoice,
   simulationFormSchema,
@@ -86,6 +93,7 @@ import {
 } from '@/lib/simulation-form'
 import {
   creationRequestIdentity,
+  updateOrRecreate,
   type CreationRequestIdentity,
 } from '@/lib/simulation-creation'
 import { cn } from '@/lib/utils'
@@ -105,6 +113,7 @@ const LIMITS_STEP_INDEX = stepIndexOf('limits')
 const QUOTA_TRADE_STEP_INDEX = stepIndexOf('quotaTrade')
 
 const NO_CATEGORIES: RotationCategoryOption[] = []
+const NO_CROP_CODES: CropCodeOption[] = []
 
 const FERTILISER_FIELDS: (keyof SimulationFormValues)[] = [
   'fertiliserChoice',
@@ -146,6 +155,9 @@ export const NewScenarioPanel = ({
     : needsStoredFields
       ? (storedFields.data ?? [])
       : fields
+  const soilTypeNumbers = Array.from(
+    new Set(effectiveFields.flatMap((field) => field.soilTypeNumber ?? [])),
+  ).sort((left, right) => left - right)
   const { startRun } = useOptimizationRunActions()
   const run = useOptimizationRun(source?.id)
   const running =
@@ -168,6 +180,7 @@ export const NewScenarioPanel = ({
   const nNormQuery = useRotationNNormPercentages(farmId)
   const presetsQuery = useFertiliserPresets(farmId)
   const economicsProfiles = useEconomicsProfiles()
+  const cropCodes = useCropCodes(farmId).data ?? NO_CROP_CODES
   const categories = categoriesQuery.data ?? NO_CATEGORIES
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
@@ -203,6 +216,11 @@ export const NewScenarioPanel = ({
     reValidateMode: 'onChange',
   })
   const values = useWatch({ control }) as SimulationFormValues
+  const autumnCrops = useAutumnCrops(
+    farmId,
+    soilTypeNumbers,
+    values.farmingSystem === 'Økologisk' || values.onlyOrganic,
+  )
   const economicsProfile =
     economicsProfiles.findProfile(values.economicsProfileId) ?? STANDARD_PROFILE
 
@@ -401,14 +419,22 @@ export const NewScenarioPanel = ({
     }
   }
 
-  const cropChoice: CropChoice = {
-    chosenCrops: values.chosenCrops,
-    optedOutCrops: values.optedOutCrops,
+  const applyRotationVariants = (rotationVariants: string[]) => {
+    updateValue('rotationVariants', rotationVariants)
+    if (!autumnCrops.data) return
+    updateValue(
+      'autumnAllocations',
+      keepListedAutumnDrafts(
+        getValues('autumnAllocations'),
+        listedAutumnCrops(autumnCrops.data, categories, rotationVariants),
+      ),
+    )
   }
+
+  const cropChoice: CropChoice = { chosenCrops: values.chosenCrops }
   const applyRotationChoice = (next: RotationChoice) => {
     updateValue('chosenCrops', next.chosenCrops)
-    updateValue('optedOutCrops', next.optedOutCrops)
-    updateValue('rotationVariants', next.rotationVariants)
+    applyRotationVariants(next.rotationVariants)
   }
 
   const catchCropSowingDate = catchCropSowingDateOf(values)
@@ -417,17 +443,29 @@ export const NewScenarioPanel = ({
   const saveSimulation = async () => {
     const existing = savedSimulation.current ?? source
     const economicsModuleId = getValues().economicsProfileId
-    const input = {
+    const inputFor = (target: Simulation | null) => ({
       ...toCreateSimulationInput(getValues()),
       constraints,
       optimizationSettings: optimizationSettingsInput(settingsWithTrades),
-      ...(existing &&
-      economicsProfiles.profileForSimulation(existing).id === economicsModuleId
+      ...(target &&
+      economicsProfiles.profileForSimulation(target).id === economicsModuleId
         ? {}
         : { economicsModuleId }),
+    })
+    const create = () => {
+      const input = inputFor(null)
+      return createSimulation(farmId, {
+        ...input,
+        requestId: (creationRequest.current = creationRequestIdentity(
+          input,
+          creationRequest.current,
+        )).requestId,
+      })
     }
-    return existing
-      ? updateSimulation(
+    if (!existing) return create()
+    return updateOrRecreate({
+      update: () =>
+        updateSimulation(
           farmId,
           existing.id,
           running
@@ -435,15 +473,17 @@ export const NewScenarioPanel = ({
                 expectedRevision: existing.revision,
                 name: getValues('name').trim(),
               }
-            : { ...input, expectedRevision: existing.revision },
-        )
-      : createSimulation(farmId, {
-          ...input,
-          requestId: (creationRequest.current = creationRequestIdentity(
-            input,
-            creationRequest.current,
-          )).requestId,
-        })
+            : { ...inputFor(existing), expectedRevision: existing.revision },
+        ),
+      create,
+      // Only a simulation this panel saved itself; the one being edited is
+      // still the user's to find.
+      canRecreate: !running && existing.id !== source?.id,
+      onRecreate: () => {
+        savedSimulation.current = null
+        creationRequest.current = null
+      },
+    })
   }
 
   const startOptimization = async (simulation: Simulation) => {
@@ -765,6 +805,7 @@ export const NewScenarioPanel = ({
         {!referenceBlocked && stepId === 'crops' ? (
           <CropChoicePicker
             categories={categories}
+            cropCodes={cropCodes}
             farmingSystem={values.farmingSystem}
             choice={cropChoice}
             onChoiceChange={(choice) =>
@@ -785,9 +826,7 @@ export const NewScenarioPanel = ({
             farmingSystem={values.farmingSystem}
             cropChoice={cropChoice}
             rotationVariants={values.rotationVariants}
-            onRotationVariantsChange={(next) =>
-              updateValue('rotationVariants', next)
-            }
+            onRotationVariantsChange={applyRotationVariants}
             error={errors.rotationVariants?.message}
           />
         ) : null}
@@ -1089,6 +1128,26 @@ export const NewScenarioPanel = ({
                 </span>
               </label>
             </div>
+
+            <AutumnAllocationFields
+              crops={listedAutumnCrops(
+                autumnCrops.data ?? [],
+                categories,
+                values.rotationVariants,
+              )}
+              loading={autumnCrops.isLoading}
+              loadFailed={Boolean(autumnCrops.error)}
+              enabled={values.autumnAllocationEnabled}
+              allocations={values.autumnAllocations}
+              forcedFertiliser={forcedAutumnFertiliser(values)}
+              error={errors.autumnAllocations?.message}
+              onEnabledChange={(enabled) =>
+                updateValue('autumnAllocationEnabled', enabled)
+              }
+              onAllocationsChange={(next) =>
+                updateValue('autumnAllocations', next)
+              }
+            />
           </div>
         ) : null}
 

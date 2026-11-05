@@ -3,7 +3,10 @@ import type { VisibilityState } from '@tanstack/react-table'
 export type FieldsSortKey =
   | 'name'
   | 'areaHa'
+  | 'cropCode'
+  | 'cropYear'
   | 'catchment'
+  | 'rotationVariant'
   | 'nNormPct'
   | 'db2'
   | 'nLoad'
@@ -27,6 +30,7 @@ export const DEFAULT_FIELDS_SORT: FieldsSortState = {
 }
 
 const MANURE_COLUMN_IDS = ['manureUtilised', 'manureTons']
+const AUTUMN_ALLOCATION_COLUMN_ID = 'autumnAllocated'
 
 // The Gødning group's columns, shown and hidden together.
 export const FERTILISER_COLUMN_IDS = [
@@ -34,11 +38,13 @@ export const FERTILISER_COLUMN_IDS = [
   'precedingCropValue',
   'mineralFertiliser',
   'availableN',
+  AUTUMN_ALLOCATION_COLUMN_ID,
   ...MANURE_COLUMN_IDS,
 ]
 
 export const OPTIONAL_COLUMN_IDS = [
   'cropRotation',
+  'rotationVariant',
   'nNormPct',
   'db2',
   'quotaStatus',
@@ -54,10 +60,16 @@ export const OPTIONAL_COLUMN_IDS = [
   'soilTypeNumber',
 ]
 
-const SIMULATION_ONLY_COLUMN_IDS = ['nNormPct', 'db2', ...FERTILISER_COLUMN_IDS]
+const SIMULATION_ONLY_COLUMN_IDS = [
+  'rotationVariant',
+  'nNormPct',
+  'db2',
+  ...FERTILISER_COLUMN_IDS,
+]
 
 const SIMULATION_DEFAULT_VISIBLE_COLUMNS = new Set([
   'cropRotation',
+  'rotationVariant',
   'nNormPct',
   'db2',
   'quotaStatus',
@@ -99,7 +111,12 @@ export const readStoredColumnVisibility = (
     const entries = parsed as Record<string, unknown>
     return Object.fromEntries(
       OPTIONAL_COLUMN_IDS.map((id) => {
-        const value = entries[id]
+        // A Gødning column added later follows the rest of its group.
+        const value =
+          entries[id] ??
+          (FERTILISER_COLUMN_IDS.includes(id)
+            ? entries.mineralFertiliser
+            : undefined)
         return [
           id,
           typeof value === 'boolean' &&
@@ -120,6 +137,10 @@ export const withoutManureColumns = (
   ...visibility,
   ...Object.fromEntries(MANURE_COLUMN_IDS.map((id) => [id, false])),
 })
+
+export const withoutAutumnAllocationColumn = (
+  visibility: VisibilityState,
+): VisibilityState => ({ ...visibility, [AUTUMN_ALLOCATION_COLUMN_ID]: false })
 
 export const storeColumnVisibility = (
   isSimulationView: boolean,

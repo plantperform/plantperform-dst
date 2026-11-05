@@ -941,6 +941,26 @@ class LifecycleTests(DatabaseTests):
         self.assertEqual(self.result().status, "in_progress")
         self.assertIsNone(self.row().output)
 
+    def test_manual_editing_reads_the_saved_catch_crops(self):
+        context = {
+            "jbnr": 4,
+            "goedningsregion": None,
+            "oeko": False,
+            "kvotegivende": True,
+            "crop_history": {"2026": 1},
+            "secondary_crop_history": {"2026": 968},
+            "percolation_by_kategori": None,
+            "org_n_topsoil": None,
+            "s_soil": None,
+        }
+        with self.sessions.begin() as session:
+            fields = session.execute(select(setups.c.fields)).scalar_one()
+            fields["field-b"]["calculation_context"] = context
+            session.execute(update(setups).values(fields=fields))
+        with patch.object(repository, "real_history_lookback", return_value={}) as lookback:
+            store.get_simulation_field_context("farm", "sim", "field-b", EMAIL)
+        lookback.assert_called_once_with({"2026": 1}, 4, None, False, {"2026": 968})
+
     def submit_and_execute(self, yearly=False):
         run = self.submit(self.request(yearly=yearly), "yearly" if yearly else "optimize")
         worker.execute("sim", run.run_id, CONTEXT)

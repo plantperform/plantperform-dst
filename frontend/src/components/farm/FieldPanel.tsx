@@ -24,6 +24,7 @@ import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { DisclosureButton } from '@/components/ui/disclosure-button'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   EXCLUDED_FROM_CALCULATION,
   fieldFigure,
@@ -223,7 +224,11 @@ export const FieldPanel = ({
             <FieldNameEditor
               farmId={farmId}
               field={field}
-              simulationId={isSimulationView ? simulationId : undefined}
+              simulationId={
+                isSimulationView && simulation?.fieldsInitialized !== false
+                  ? simulationId
+                  : undefined
+              }
             />
             <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {metaParts.map((part, index) => (
@@ -358,7 +363,8 @@ export const FieldPanel = ({
                     group={cropGroupFor(firstYear.cropCode, firstYear.cropName)}
                   />
                   <span>
-                    {restartYear}: forfra med {firstYear.cropName}
+                    {restartYear}: forfra med{' '}
+                    {cropLabel(firstYear.cropCode, firstYear.cropName)}
                   </span>
                 </div>
               ) : null}

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { FieldRecord } from '@/api/types'
 import { emptyMeasures } from '@/lib/field-domain'
 import { compareFields } from '@/lib/field-sort'
+import type { NNormLevel } from '@/lib/n-norm-level'
 
 const field = (id: string, areaHa: number, db2: number): FieldRecord => ({
   id,
@@ -61,5 +62,133 @@ describe('compareFields', () => {
       compareFields(left, right, { key: 'nNormPct', direction: 'asc' }),
     )
     expect(sorted.map(({ id }) => id)).toEqual(['reduced', 'full', 'none'])
+  })
+
+  describe('by the crop of the selected year', () => {
+    const withCrop = (
+      id: string,
+      cropCode: number,
+      cropName: string,
+    ): FieldRecord => ({
+      ...field(id, 1, 0),
+      cropRotation: [
+        {
+          cropCode: 1,
+          cropName: 'Første',
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+        {
+          cropCode,
+          cropName,
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+      ],
+    })
+    const spring = withCrop('spring', 210, 'Vårbyg, helsæd')
+    const wheat = withCrop('wheat', 11, 'Vinterhvede')
+    const barley = withCrop('barley', 101, 'Vinterbyg')
+    const none = field('none', 1, 0)
+
+    const idsSortedBy = (
+      key: 'cropCode' | 'cropYear',
+      direction: 'asc' | 'desc',
+      selectedYearIndex: number | null,
+    ) =>
+      [none, spring, wheat, barley]
+        .sort((left, right) =>
+          compareFields(
+            left,
+            right,
+            { key, direction },
+            undefined,
+            selectedYearIndex,
+          ),
+        )
+        .map(({ id }) => id)
+
+    it('sorts by afgrødekode with marker without a crop last', () => {
+      expect(idsSortedBy('cropCode', 'asc', 1)).toEqual([
+        'wheat',
+        'barley',
+        'spring',
+        'none',
+      ])
+      expect(idsSortedBy('cropCode', 'desc', 1)).toEqual([
+        'spring',
+        'barley',
+        'wheat',
+        'none',
+      ])
+    })
+
+    it('sorts by crop name with marker without a crop last', () => {
+      expect(idsSortedBy('cropYear', 'asc', 1)).toEqual([
+        'barley',
+        'wheat',
+        'spring',
+        'none',
+      ])
+      expect(idsSortedBy('cropYear', 'desc', 1)).toEqual([
+        'spring',
+        'wheat',
+        'barley',
+        'none',
+      ])
+    })
+
+    it('falls back to the usual order until a year is selected', () => {
+      const byId = ['barley', 'none', 'spring', 'wheat']
+      expect(idsSortedBy('cropCode', 'asc', null)).toEqual(byId)
+      expect(idsSortedBy('cropYear', 'desc', null)).toEqual(byId)
+    })
+  })
+
+  it('sorts by the N-norm level the list shows, with no norm last', () => {
+    // The candidate IDs say 75 and 85, which the list does not show for these.
+    const grass = { ...field('grass', 1, 0), rotationId: '1:1:75' }
+    const brak = { ...field('brak', 1, 0), rotationId: '1:1:85' }
+    const reduced = { ...field('reduced', 1, 0), rotationId: '1:1:90' }
+    const noValues = { ...field('noValues', 1, 0), rotationId: '1:1:100' }
+    const levels = new Map<string, NNormLevel>([
+      ['grass', { kind: 'fullNorm' }],
+      ['brak', { kind: 'noNorm' }],
+      ['reduced', { kind: 'level', pct: 90 }],
+    ])
+    const expected = {
+      asc: ['reduced', 'grass', 'brak', 'noValues'],
+      desc: ['grass', 'reduced', 'brak', 'noValues'],
+    }
+    for (const direction of ['asc', 'desc'] as const) {
+      const sorted = [noValues, brak, grass, reduced].sort((left, right) =>
+        compareFields(
+          left,
+          right,
+          { key: 'nNormPct', direction },
+          undefined,
+          null,
+          levels,
+        ),
+      )
+      expect(sorted.map(({ id }) => id)).toEqual(expected[direction])
+    }
+  })
+
+  it('sorts by sædskifte nr. as numbers, with no sædskifte last', () => {
+    const fields = [
+      { ...field('none', 1, 0), rotationId: null },
+      { ...field('permanent', 1, 0), rotationId: 'permanent:252:100' },
+      { ...field('315', 1, 0), rotationId: '315:4:80' },
+      { ...field('32', 1, 0), rotationId: '32:1:100' },
+    ]
+    const idsSortedBy = (direction: 'asc' | 'desc') =>
+      [...fields]
+        .sort((left, right) =>
+          compareFields(left, right, { key: 'rotationVariant', direction }),
+        )
+        .map(({ id }) => id)
+    expect(idsSortedBy('asc')).toEqual(['32', '315', 'permanent', 'none'])
+    expect(idsSortedBy('desc')).toEqual(['permanent', '315', '32', 'none'])
   })
 })

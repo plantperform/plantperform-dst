@@ -296,7 +296,7 @@ describe('kvotehandel results', () => {
   })
 
   it('takes the payments off the crops’ DB2 on the card', () => {
-    const totals = { db2: 100_000, calculatedAreaHa: 10 } as FieldTotals
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
     const html = renderToStaticMarkup(
       createElement(QuotaTradeFigures, {
         trades: [buy, sell],

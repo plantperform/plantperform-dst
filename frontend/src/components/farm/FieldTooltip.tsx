@@ -54,9 +54,11 @@ const describeYearQuotaStatus = (status: number | null): string => {
   return ` - ${label.charAt(0).toLowerCase()}${label.slice(1)}`
 }
 
+// Sædskifte has a block of its own in the tooltip, so no row.
 const tooltipSpecFor = (attribute: ColorAttribute): ColorSpec | null =>
   attribute === 'none' ||
   attribute === 'catchment' ||
+  attribute === 'rotation' ||
   attribute === 'yearCrop' ||
   attribute === 'yearNLoad'
     ? null
@@ -190,6 +192,10 @@ type FieldTooltipProps = {
   rotationName: string | null
   catchmentLabel: (catchmentId: number | null) => string
   colorBy: ColorAttribute
+  // The scheme of the Sædskifte colouring, which depends on the farm's fields.
+  rotationSpec: ColorSpec | null
+  // The crops of the hovered field's sædskifte, shown with the Sædskifte colouring.
+  rotationCropSequence: string[] | null
   isSimulationView: boolean
   selectedCalendarYear: number | null
   yearValuesLoading: boolean
@@ -201,6 +207,8 @@ export const FieldTooltip = ({
   rotationName,
   catchmentLabel,
   colorBy,
+  rotationSpec,
+  rotationCropSequence,
   isSimulationView,
   selectedCalendarYear,
   yearValuesLoading,
@@ -219,6 +227,19 @@ export const FieldTooltip = ({
     selectedCalendarYear,
   )
   const colourKey = colourRowKey(colorBy, selectedCalendarYear)
+  const rotationRaw =
+    colorBy === 'rotation' && rotationSpec && field
+      ? rawSpecValue(rotationSpec, hovered)
+      : undefined
+  const rotationBlock =
+    rotationSpec && rotationRaw !== undefined
+      ? {
+          color:
+            specColorFor(rotationSpec, rotationRaw) ??
+            rotationSpec.fallbackColor,
+          label: describeSpecValue(rotationSpec, rotationRaw) ?? 'ingen værdi',
+        }
+      : null
 
   return (
     <div className="min-w-60 text-xs whitespace-nowrap">
@@ -289,6 +310,30 @@ export const FieldTooltip = ({
           )
         })}
       </dl>
+      {rotationBlock ? (
+        <div className="max-w-72 border-t px-3 py-2 whitespace-normal">
+          <div className="flex items-center gap-1.5 font-semibold text-primary">
+            <span
+              aria-hidden="true"
+              className="size-2 shrink-0 rounded-sm"
+              style={{ backgroundColor: rotationBlock.color }}
+            />
+            {rotationBlock.label}
+          </div>
+          {rotationCropSequence ? (
+            <div className="mt-1 text-muted-foreground">
+              {rotationCropSequence.map((crop, index) => (
+                <Fragment key={index}>
+                  {index > 0 ? ' → ' : null}
+                  <span className="whitespace-nowrap">
+                    {index + 1}. {crop}
+                  </span>
+                </Fragment>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {selectedCalendarYear !== null ? (
         <div className="border-t px-3 py-2">
           <div className="font-medium">

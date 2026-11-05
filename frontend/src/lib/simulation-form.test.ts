@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type {
+  AutumnCropOption,
+  AutumnFertiliser,
   FarmingSystem,
   FertiliserPresetOption,
   RotationCategoryOption,
@@ -8,6 +10,10 @@ import type {
 } from '@/api/types'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
+  AUTUMN_N_EXTRA_LEACHING_PCT,
+  autumnAllocationLabel,
+  autumnCropGroups,
+  autumnDraftFor,
   catchCropSowingLabel,
   chosenCropsFor,
   combinationCount,
@@ -15,11 +21,16 @@ import {
   cropsForFarmingSystem,
   CUSTOM_FERTILISER,
   DEFAULT_SIMULATION_FORM_VALUES,
+  excludedCropCodesAfter,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  forcedAutumnFertiliser,
+  groupSelection,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
+  keepListedAutumnDrafts,
+  listedAutumnCrops,
   matchingRotationCount,
   nNormPercentagesFor,
   NO_FERTILISER,
@@ -27,7 +38,6 @@ import {
   offersNoFertiliser,
   organicFertiliserChoice,
   organicFertiliserNLabel,
-  otherCrops,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
@@ -37,7 +47,9 @@ import {
   simulationToFormValues,
   stepIndexOf,
   toCreateSimulationInput,
+  toggleGroup,
   toggleNNormPercentage,
+  withAutumnDraft,
   withCropChoice,
   withFarmingSystem,
   type SimulationFormValues,
@@ -151,7 +163,10 @@ describe('step schemas', () => {
 
   it('requires 100 % and at most two lower N-norm levels', () => {
     expect(
-      messageFor({ ...filledValues, nNormPercentages: ['80'] }, 'nNormPercentages'),
+      messageFor(
+        { ...filledValues, nNormPercentages: ['80'] },
+        'nNormPercentages',
+      ),
     ).toBe('100 % skal altid være med')
     expect(
       messageFor(
@@ -356,7 +371,9 @@ describe('farming system mismatch warning', () => {
   })
 
   it('never counts brak, which belongs to every category', () => {
-    expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Konventionel')).toBe(0)
+    expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Konventionel')).toBe(
+      0,
+    )
     expect(farmingSystemMismatchCount(CATEGORIES, ['1'], 'Økologisk')).toBe(0)
   })
 
@@ -393,36 +410,25 @@ describe('crop choice', () => {
     ])
   })
 
-  it('lists the other crops in the rotations with a chosen crop', () => {
-    expect(otherCrops(CATEGORIES, ['Kløvergræs'])).toEqual(['Havre', 'Vårbyg'])
-    expect(otherCrops(CATEGORIES, [])).toEqual([])
+  it('counts the rotations whose crops are all chosen', () => {
+    const count = (chosenCrops: string[]) =>
+      matchingRotationCount(CATEGORIES, { chosenCrops })
+    // A crop that is not chosen is opted out, so one missing crop is enough.
+    expect(count(['Kløvergræs'])).toBe(0)
+    expect(count(['Kløvergræs', 'Vårbyg'])).toBe(1)
+    expect(count(['Kløvergræs', 'Vårbyg', 'Havre'])).toBe(2)
+    expect(count(['Brak'])).toBe(1)
+    expect(count([])).toBe(0)
   })
 
-  it('counts the rotations with a chosen crop and no opted-out one', () => {
-    expect(
-      matchingRotationCount(CATEGORIES, {
-        chosenCrops: ['Kløvergræs'],
-        optedOutCrops: [],
-      }),
-    ).toBe(2)
-    expect(
-      matchingRotationCount(CATEGORIES, {
-        chosenCrops: ['Kløvergræs'],
-        optedOutCrops: ['Havre'],
-      }),
-    ).toBe(1)
-  })
-
-  it('drops the selected rotations and opt-outs that no longer apply', () => {
+  it('drops the selected rotations that no longer fit the crops', () => {
     expect(
       withCropChoice(CATEGORIES, {
         chosenCrops: ['Vårbyg', 'Kløvergræs'],
-        optedOutCrops: ['Havre', 'Majs'],
         rotationVariants: ['10', '20', '30'],
       }),
     ).toEqual({
       chosenCrops: ['Kløvergræs', 'Vårbyg'],
-      optedOutCrops: ['Havre'],
       rotationVariants: ['10'],
     })
   })
@@ -433,19 +439,16 @@ describe('crop choice', () => {
         CATEGORIES,
         {
           chosenCrops: ['Havre', 'Kløvergræs'],
-          optedOutCrops: [],
           rotationVariants: ['30'],
         },
         'Konventionel',
       ),
     ).toEqual({
       chosenCrops: ['Kløvergræs'],
-      optedOutCrops: [],
-      rotationVariants: ['30'],
+      rotationVariants: [],
     })
     const nothingChosen = {
       chosenCrops: [],
-      optedOutCrops: [],
       rotationVariants: ['10'],
     }
     expect(withFarmingSystem(CATEGORIES, nothingChosen, 'Økologisk')).toBe(
@@ -460,6 +463,47 @@ describe('crop choice', () => {
         farmingSystem: 'Konventionel',
       }),
     ).toEqual(['Kløvergræs', 'Vårbyg'])
+  })
+})
+
+describe('selecting a group of crops', () => {
+  const group = ['Vinterhvede', 'Vinterbyg']
+
+  it('tells whether none, some or all of the group are selected', () => {
+    expect(groupSelection(['Majs'], group)).toBe('none')
+    expect(groupSelection(['Majs', 'Vinterbyg'], group)).toBe('some')
+    expect(groupSelection(['Vinterbyg', 'Vinterhvede', 'Majs'], group)).toBe(
+      'all',
+    )
+  })
+
+  it('selects the rest of a group that is not fully selected', () => {
+    expect(toggleGroup(['Majs'], group)).toEqual([
+      'Majs',
+      'Vinterhvede',
+      'Vinterbyg',
+    ])
+    expect(toggleGroup(['Vinterbyg'], group)).toEqual([
+      'Vinterbyg',
+      'Vinterhvede',
+    ])
+  })
+
+  it('clears a group that is fully selected and keeps the other crops', () => {
+    expect(toggleGroup(['Majs', 'Vinterhvede', 'Vinterbyg'], group)).toEqual([
+      'Majs',
+    ])
+  })
+})
+
+describe('excluded crops', () => {
+  it('excludes the listed crops that are no longer included', () => {
+    expect(excludedCropCodesAfter([], [11, 22, 1], [11, 1])).toEqual([22])
+    expect(excludedCropCodesAfter([22], [11, 22, 1], [])).toEqual([11, 22, 1])
+  })
+
+  it('includes the listed crops again and keeps other exclusions', () => {
+    expect(excludedCropCodesAfter([22, 310], [11, 22], [11, 22])).toEqual([310])
   })
 })
 
@@ -500,7 +544,10 @@ describe('candidate count', () => {
   it('multiplies rotations, N-norm levels and fields', () => {
     expect(
       combinationCount(
-        { rotationVariants: ['10', '20', '1'], nNormPercentages: ['80', '100'] },
+        {
+          rotationVariants: ['10', '20', '1'],
+          nNormPercentages: ['80', '100'],
+        },
         12,
       ),
     ).toBe(72)
@@ -508,10 +555,7 @@ describe('candidate count', () => {
 
   it('is zero while one of the three is empty', () => {
     expect(
-      combinationCount(
-        { rotationVariants: [], nNormPercentages: ['100'] },
-        12,
-      ),
+      combinationCount({ rotationVariants: [], nNormPercentages: ['100'] }, 12),
     ).toBe(0)
     expect(
       combinationCount({ rotationVariants: ['10'], nNormPercentages: [] }, 12),
@@ -590,6 +634,160 @@ describe('summary labels', () => {
   })
 })
 
+describe('efterårstildeling', () => {
+  const winterRape: AutumnCropOption = {
+    cropCode: 22,
+    name: 'Vinterraps',
+    group: 'Vinterraps',
+    normMinKgNHa: 110,
+    normMaxKgNHa: 159,
+  }
+  const winterWheat: AutumnCropOption = {
+    cropCode: 11,
+    name: 'Vinterhvede',
+    group: 'Vinterkorn',
+    normMinKgNHa: 120,
+    normMaxKgNHa: 175,
+  }
+  const draft = (
+    cropCode: number,
+    kgNHa: string,
+    fertiliserType: AutumnFertiliser = 'mineral',
+  ) => ({ cropCode, kgNHa, fertiliserType })
+  const conventional = {
+    farmingSystem: 'Konventionel' as const,
+    fertiliserChoice: 'Svinegylle',
+    onlyOrganic: false,
+    orgMineralN: '150',
+  }
+
+  it('sends nothing while it is off', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        autumnAllocations: [draft(22, '40')],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([])
+  })
+
+  it('sends the crops with an amount', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        ...conventional,
+        autumnAllocationEnabled: true,
+        autumnAllocations: [
+          draft(22, '40', 'manure'),
+          draft(11, ''),
+          draft(10, '0'),
+        ],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliserType: 'manure' }])
+  })
+
+  it('sends the only kind of gødning there is', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        fertiliserChoice: NO_FERTILISER,
+        autumnAllocationEnabled: true,
+        autumnAllocations: [draft(22, '40', 'manure')],
+      }).fertiliser?.autumnAllocations,
+    ).toEqual([{ cropCode: 22, kgNHa: 40, fertiliserType: 'mineral' }])
+  })
+
+  it('only offers a choice where both kinds of gødning exist', () => {
+    expect(forcedAutumnFertiliser(conventional)).toBeNull()
+    expect(
+      forcedAutumnFertiliser({
+        ...conventional,
+        fertiliserChoice: NO_FERTILISER,
+      }),
+    ).toBe('mineral')
+    expect(forcedAutumnFertiliser({ ...conventional, orgMineralN: '0' })).toBe(
+      'mineral',
+    )
+    expect(forcedAutumnFertiliser({ ...conventional, onlyOrganic: true })).toBe(
+      'manure',
+    )
+    expect(
+      forcedAutumnFertiliser({ ...conventional, farmingSystem: 'Økologisk' }),
+    ).toBe('manure')
+  })
+
+  it('lists the crops of the chosen rotations', () => {
+    const rotation = (rotationVariant: string, cropSequence: string[]) => ({
+      rotationVariant,
+      cropSequence,
+      activeLen: cropSequence.length,
+    })
+    const categories: RotationCategoryOption[] = [
+      {
+        category: 'Plante',
+        croppingSystem: 'Konventionel',
+        rotationCount: 2,
+        rotations: [
+          rotation('1', ['Vårbyg', 'Vinterraps']),
+          rotation('2', ['Vinterhvede']),
+        ],
+      },
+    ]
+
+    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1'])).toEqual([winterRape])
+    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1', '2'])).toEqual([
+      winterRape,
+      winterWheat,
+    ])
+  })
+
+  it('drops the amount of a crop that left the rotations', () => {
+    expect(
+      keepListedAutumnDrafts([draft(22, '40'), draft(11, '15')], [winterWheat]),
+    ).toEqual([draft(11, '15')])
+  })
+
+  it('groups the crops in their order', () => {
+    expect(autumnCropGroups([winterRape, winterWheat]).map(({ group }) => group)).toEqual([
+      'Vinterraps',
+      'Vinterkorn',
+    ])
+  })
+
+  it('replaces the draft of a crop', () => {
+    expect(
+      withAutumnDraft([draft(22, '40')], draft(22, '30', 'manure')),
+    ).toEqual([draft(22, '30', 'manure')])
+    expect(autumnDraftFor([], 22)).toEqual(draft(22, ''))
+  })
+
+  it('checks the amounts only while it is on', () => {
+    const values = {
+      ...filledValues,
+      autumnAllocations: [draft(22, '-5')],
+    }
+    const stepIndex = stepIndexOf('nitrogen')
+
+    expect(isStepValid(stepIndex, values)).toBe(true)
+    expect(
+      isStepValid(stepIndex, { ...values, autumnAllocationEnabled: true }),
+    ).toBe(false)
+  })
+
+  it('names the allocations', () => {
+    expect(autumnAllocationLabel([], String)).toBe('Fra')
+    expect(
+      autumnAllocationLabel(
+        [{ cropCode: 22, kgNHa: 40, fertiliserType: 'mineral' }],
+        (code) => `Afgrøde ${code}`,
+      ),
+    ).toBe('Afgrøde 22: 40 kg N/ha, handelsgødning')
+  })
+
+  it('states the extra weight of autumn N', () => {
+    expect(Math.round(AUTUMN_N_EXTRA_LEACHING_PCT)).toBe(217)
+  })
+})
+
 describe('toCreateSimulationInput', () => {
   it('starts on Standard and keeps the economics profile out of the request', () => {
     expect(DEFAULT_SIMULATION_FORM_VALUES.economicsProfileId).toBe(
@@ -623,6 +821,7 @@ describe('toCreateSimulationInput', () => {
         mineralSharePct: 70,
         onlyOrganic: true,
         nContentKgPerTon: 5,
+        autumnAllocations: [],
       },
       catchCropSowingDate: '20/8',
       catchCropDailyBasis: false,
@@ -648,6 +847,7 @@ describe('toCreateSimulationInput', () => {
       mineralSharePct: 100,
       onlyOrganic: false,
       nContentKgPerTon: 6,
+      autumnAllocations: [],
     })
   })
 
@@ -740,6 +940,28 @@ describe('simulationToFormValues', () => {
   }
   const offered = ['50', '60', '70', '80', '85', '90', '95', '100']
 
+  it('reads the efterårstildeling back from a saved simulation', () => {
+    const saved: Simulation = {
+      ...simulation,
+      fertiliser: {
+        ...simulation.fertiliser,
+        autumnAllocations: [
+          { cropCode: 22, kgNHa: 40, fertiliserType: 'manure' },
+        ],
+      },
+    }
+    const values = simulationToFormValues(saved, [kvaeggylle], offered)
+
+    expect(values.autumnAllocationEnabled).toBe(true)
+    expect(values.autumnAllocations).toEqual([
+      { cropCode: 22, kgNHa: '40', fertiliserType: 'manure' },
+    ])
+    expect(
+      simulationToFormValues(simulation, [kvaeggylle], offered)
+        .autumnAllocationEnabled,
+    ).toBe(false)
+  })
+
   it('fills the form so the copy gets the same grundlag', () => {
     const values = simulationToFormValues(simulation, [kvaeggylle], offered)
     expect(values.fertiliserChoice).toBe('Kvæggylle')
@@ -747,7 +969,7 @@ describe('simulationToFormValues', () => {
       name: 'Test2 (kopi)',
       allowedRotationVariants: ['10', '20'],
       allowedNNormPercentages: ['100', '95', '85'],
-      fertiliser: kvaeggylle.fertiliser,
+      fertiliser: { ...kvaeggylle.fertiliser, autumnAllocations: [] },
       catchCropSowingDate: '28/8',
       catchCropDailyBasis: false,
       precisionFarming: true,
@@ -771,7 +993,11 @@ describe('simulationToFormValues', () => {
       simulationToFormValues(
         {
           ...simulation,
-          fertiliser: { ...simulation.fertiliser, orgMineralN, mineralSharePct },
+          fertiliser: {
+            ...simulation.fertiliser,
+            orgMineralN,
+            mineralSharePct,
+          },
         },
         [kvaeggylle],
         offered,
@@ -833,7 +1059,9 @@ describe('simulationToFormValues', () => {
 
 describe('saving simulation settings', () => {
   it('does not couple saving to optimization', () => {
-    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty('optimizeOnCreate')
+    expect(toCreateSimulationInput(filledValues)).not.toHaveProperty(
+      'optimizeOnCreate',
+    )
   })
 
   it('validates the review step independently of the action', () => {

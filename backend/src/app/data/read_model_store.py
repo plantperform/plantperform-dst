@@ -348,16 +348,20 @@ def build_simulation(session, simulation_id):
     ).scalar_one_or_none()
     saved = previous
     if output.get("response") is not None:
+        selected = {
+            key: RotationCandidateEvaluation.model_validate(value)
+            for key, value in output.get("selected_candidates", {}).items()
+        }
+        field_years = {key: read_models.compact_years(value) for key, value in selected.items()}
+        response = read_models.flag_fields_without_economics(output["response"], field_years)
         saved = {
             "run_id": output.get("run_id") or f"legacy:{simulation_id}",
             "result_revision": output.get("result_revision", 0),
-            "response": output["response"],
+            "response": response,
             "fields_before": output.get("fields_before", []),
             "economics_snapshot": output.get("economics_snapshot", {}),
-            "field_years": {
-                key: read_models.compact_years(RotationCandidateEvaluation.model_validate(value))
-                for key, value in output.get("selected_candidates", {}).items()
-            },
+            "field_years": field_years,
+            "economics_statement": read_models.economics_statement(response["fields"], selected),
         }
     data, contributions = read_models.simulation_data(
         fields, {}, years, saved, catalog=[], contributions=contributions

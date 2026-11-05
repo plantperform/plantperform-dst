@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
 import type {
+  AutumnAllocation,
+  AutumnCropOption,
+  AutumnFertiliser,
   CreateSimulationInput,
   FarmingSystem,
   FertiliserPresetOption,
@@ -11,7 +14,10 @@ import type {
 } from '@/api/types'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import { formatNumber } from '@/lib/field-domain'
-import { SOWING_DATE_INTERVALS } from '@/lib/nles5-detail-labels'
+import {
+  NTHETA_COEFFICIENTS,
+  SOWING_DATE_INTERVALS,
+} from '@/lib/nles5-detail-labels'
 
 // 'none' and 'custom' are fixed choices; any other value is a preset name.
 export const NO_FERTILISER = 'none'
@@ -61,14 +67,20 @@ export const copiedNNormPercentages = (
       .slice(0, MAX_REDUCED_N_NORM_LEVELS),
   )
 
+export type AutumnAllocationDraft = {
+  cropCode: number
+  kgNHa: string
+  fertiliserType: AutumnFertiliser
+}
+
 // Number inputs are kept as the strings the user typed, so an empty or
 // half-typed field is not silently turned into a number.
 export type SimulationFormValues = {
   name: string
   farmingSystem: FarmingSystem
   economicsProfileId: string
+  // The crops the farm will grow. A crop that is not chosen is opted out.
   chosenCrops: string[]
-  optedOutCrops: string[]
   // Unique across categories: a variant such as brak ("1") belongs to several
   // categories but is selected once.
   rotationVariants: string[]
@@ -79,6 +91,8 @@ export type SimulationFormValues = {
   onlyOrganic: boolean
   nContentKgPerTon: string
   includePrecedingCropValue: boolean
+  autumnAllocationEnabled: boolean
+  autumnAllocations: AutumnAllocationDraft[]
   catchCropDailyBasis: boolean
   catchCropSowingInterval: string
   catchCropSowingDate: string
@@ -92,7 +106,6 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   farmingSystem: 'Konventionel',
   economicsProfileId: STANDARD_PROFILE_ID,
   chosenCrops: [],
-  optedOutCrops: [],
   rotationVariants: [],
   nNormPercentages: [FULL_N_NORM],
   fertiliserChoice: NO_FERTILISER,
@@ -101,6 +114,8 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   onlyOrganic: false,
   nContentKgPerTon: '6',
   includePrecedingCropValue: true,
+  autumnAllocationEnabled: false,
+  autumnAllocations: [],
   catchCropDailyBasis: false,
   catchCropSowingInterval: SOWING_DATE_INTERVALS[0].date,
   catchCropSowingDate: '20/8',
@@ -175,8 +190,26 @@ const nitrogenSchema = z
         { message: 'Vælg højst to niveauer under 100 %' },
       ),
     includePrecedingCropValue: z.boolean(),
+    autumnAllocationEnabled: z.boolean(),
+    autumnAllocations: z.array(
+      z.object({
+        cropCode: z.number(),
+        kgNHa: z.string(),
+        fertiliserType: z.enum(['mineral', 'manure']),
+      }),
+    ),
   })
   .superRefine((values, ctx) => {
+    if (
+      values.autumnAllocationEnabled &&
+      values.autumnAllocations.some(({ kgNHa }) => !(Number(kgNHa) >= 0))
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['autumnAllocations'],
+        message: 'Angiv 0 eller mere for hver afgrøde',
+      })
+    }
     const organic = values.farmingSystem === 'Økologisk'
     // Without organic fertiliser the numbers are fixed and hidden.
     if (values.fertiliserChoice === NO_FERTILISER) {
@@ -229,16 +262,13 @@ export const SIMULATION_FORM_STEPS = [
     label: 'Afgrøder',
     schema: z.object({
       chosenCrops: z.array(z.string()).min(1, 'Vælg mindst en afgrøde'),
-      optedOutCrops: z.array(z.string()),
     }),
   },
   {
     id: 'rotations',
     label: 'Sædskifter',
     schema: z.object({
-      rotationVariants: z
-        .array(z.string())
-        .min(1, 'Vælg mindst ét sædskifte'),
+      rotationVariants: z.array(z.string()).min(1, 'Vælg mindst ét sædskifte'),
     }),
   },
   {
@@ -302,7 +332,11 @@ export const simulationFormSchema = z
       const result = step.schema.safeParse(values)
       if (result.success) continue
       for (const issue of result.error.issues) {
-        ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+        ctx.addIssue({
+          code: 'custom',
+          path: issue.path,
+          message: issue.message,
+        })
       }
     }
   })
@@ -311,6 +345,34 @@ export const toggleValue = (values: string[], value: string): string[] =>
   values.includes(value)
     ? values.filter((current) => current !== value)
     : [...values, value]
+
+export type GroupSelection = 'none' | 'some' | 'all'
+
+export const groupSelection = (
+  values: string[],
+  group: string[],
+): GroupSelection => {
+  const selected = group.filter((value) => values.includes(value)).length
+  if (selected === 0) return 'none'
+  return selected === group.length ? 'all' : 'some'
+}
+
+// A group is selected as a whole, or cleared when all of it already is.
+export const toggleGroup = (values: string[], group: string[]): string[] =>
+  groupSelection(values, group) === 'all'
+    ? values.filter((value) => !group.includes(value))
+    : [...values, ...group.filter((value) => !values.includes(value))]
+
+// Only the crops of the chosen rotations are listed for exclusion, so the
+// exclusion of any other crop stays as it is.
+export const excludedCropCodesAfter = (
+  excludedCodes: number[],
+  listedCodes: number[],
+  includedCodes: number[],
+): number[] => [
+  ...excludedCodes.filter((code) => !listedCodes.includes(code)),
+  ...listedCodes.filter((code) => !includedCodes.includes(code)),
+]
 
 export const selectedInCategory = (
   category: RotationCategoryOption,
@@ -322,10 +384,7 @@ export const selectedInCategory = (
   ).length
 }
 
-export type CropChoice = Pick<
-  SimulationFormValues,
-  'chosenCrops' | 'optedOutCrops'
->
+export type CropChoice = Pick<SimulationFormValues, 'chosenCrops'>
 
 export type RotationChoice = CropChoice &
   Pick<SimulationFormValues, 'rotationVariants'>
@@ -351,9 +410,6 @@ const cropsIn = (rotations: RotationOption[]): string[] =>
     new Set(rotations.flatMap((rotation) => rotation.cropSequence)),
   ).sort(byDanishName)
 
-const hasAnyCrop = (rotation: RotationOption, crops: string[]): boolean =>
-  rotation.cropSequence.some((crop) => crops.includes(crop))
-
 export const cropsForFarmingSystem = (
   categories: RotationCategoryOption[],
   farmingSystem: FarmingSystem,
@@ -364,11 +420,14 @@ export const cropsForFarmingSystem = (
       .flatMap((category) => category.rotations),
   )
 
+// A crop that is not chosen is opted out, so a rotation fits only when every
+// crop in it is chosen.
 const matchesCropChoice = (
   rotation: RotationOption,
-  { chosenCrops, optedOutCrops }: CropChoice,
+  { chosenCrops }: CropChoice,
 ): boolean =>
-  hasAnyCrop(rotation, chosenCrops) && !hasAnyCrop(rotation, optedOutCrops)
+  rotation.cropSequence.length > 0 &&
+  rotation.cropSequence.every((crop) => chosenCrops.includes(crop))
 
 export const categoriesMatchingCropChoice = (
   categories: RotationCategoryOption[],
@@ -381,16 +440,6 @@ export const categoriesMatchingCropChoice = (
     return rotations.length > 0 ? [{ ...category, rotations }] : []
   })
 
-export const otherCrops = (
-  categories: RotationCategoryOption[],
-  chosenCrops: string[],
-): string[] =>
-  cropsIn(
-    [...rotationsByVariant(categories).values()].filter((rotation) =>
-      hasAnyCrop(rotation, chosenCrops),
-    ),
-  ).filter((crop) => !chosenCrops.includes(crop))
-
 export const matchingRotationCount = (
   categories: RotationCategoryOption[],
   choice: CropChoice,
@@ -399,15 +448,9 @@ export const matchingRotationCount = (
 
 export const withCropChoice = (
   categories: RotationCategoryOption[],
-  { chosenCrops, optedOutCrops, rotationVariants }: RotationChoice,
+  { chosenCrops, rotationVariants }: RotationChoice,
 ): RotationChoice => {
-  const others = otherCrops(categories, chosenCrops)
-  const choice = {
-    chosenCrops: [...chosenCrops].sort(byDanishName),
-    optedOutCrops: optedOutCrops
-      .filter((crop) => others.includes(crop))
-      .sort(byDanishName),
-  }
+  const choice = { chosenCrops: [...chosenCrops].sort(byDanishName) }
   const byVariant = rotationsByVariant(categories)
   return {
     ...choice,
@@ -576,6 +619,109 @@ export const isPresetModified = (
   )
 }
 
+// One kg of mineral N weighs this much more in NLES5's N term in autumn than in
+// spring. Everything else in a year's leaching is the same for both.
+export const AUTUMN_N_EXTRA_LEACHING_PCT =
+  (NTHETA_COEFFICIENTS.bCA / NTHETA_COEFFICIENTS.bCS - 1) * 100
+
+export const AUTUMN_FERTILISER_LABELS: Record<AutumnFertiliser, string> = {
+  mineral: 'Handelsgødning',
+  manure: 'Husdyrgødning',
+}
+
+// With only one kind of gødning there is nothing to choose between. Konventionel
+// with a cap of 0 has no husdyrgødning, whatever the fertiliser choice is called.
+export const forcedAutumnFertiliser = (
+  values: Pick<
+    SimulationFormValues,
+    'farmingSystem' | 'fertiliserChoice' | 'onlyOrganic' | 'orgMineralN'
+  >,
+): AutumnFertiliser | null => {
+  if (values.farmingSystem === 'Økologisk' || values.onlyOrganic) {
+    return 'manure'
+  }
+  return values.fertiliserChoice === NO_FERTILISER ||
+    !(Number(values.orgMineralN) > 0)
+    ? 'mineral'
+    : null
+}
+
+// Only the crops of the chosen rotations are offered.
+export const listedAutumnCrops = (
+  crops: AutumnCropOption[],
+  categories: RotationCategoryOption[],
+  rotationVariants: string[],
+): AutumnCropOption[] => {
+  const names = new Set(
+    selectedRotations(categories, rotationVariants).flatMap(
+      (rotation) => rotation.cropSequence,
+    ),
+  )
+  return crops.filter((crop) => names.has(crop.name))
+}
+
+export const autumnCropGroups = (
+  crops: AutumnCropOption[],
+): { group: string; crops: AutumnCropOption[] }[] =>
+  Array.from(new Set(crops.map((crop) => crop.group)), (group) => ({
+    group,
+    crops: crops.filter((crop) => crop.group === group),
+  }))
+
+export const autumnDraftFor = (
+  drafts: AutumnAllocationDraft[],
+  cropCode: number,
+): AutumnAllocationDraft =>
+  drafts.find((draft) => draft.cropCode === cropCode) ?? {
+    cropCode,
+    kgNHa: '',
+    fertiliserType: 'mineral',
+  }
+
+export const withAutumnDraft = (
+  drafts: AutumnAllocationDraft[],
+  next: AutumnAllocationDraft,
+): AutumnAllocationDraft[] => [
+  ...drafts.filter((draft) => draft.cropCode !== next.cropCode),
+  next,
+]
+
+// A crop that left the chosen rotations takes its amount with it.
+export const keepListedAutumnDrafts = (
+  drafts: AutumnAllocationDraft[],
+  listed: AutumnCropOption[],
+): AutumnAllocationDraft[] =>
+  drafts.filter((draft) =>
+    listed.some((crop) => crop.cropCode === draft.cropCode),
+  )
+
+const autumnAllocationsOf = (
+  values: SimulationFormValues,
+): AutumnAllocation[] => {
+  if (!values.autumnAllocationEnabled) return []
+  const forced = forcedAutumnFertiliser(values)
+  return values.autumnAllocations
+    .filter((draft) => Number(draft.kgNHa) > 0)
+    .map((draft) => ({
+      cropCode: draft.cropCode,
+      kgNHa: Number(draft.kgNHa),
+      fertiliserType: forced ?? draft.fertiliserType,
+    }))
+}
+
+export const autumnAllocationLabel = (
+  allocations: AutumnAllocation[],
+  cropLabelFor: (cropCode: number) => string,
+): string =>
+  allocations.length === 0
+    ? 'Fra'
+    : allocations
+        .map(
+          ({ cropCode, kgNHa, fertiliserType }) =>
+            `${cropLabelFor(cropCode)}: ${formatNumber(kgNHa)} kg N/ha, ${AUTUMN_FERTILISER_LABELS[fertiliserType].toLocaleLowerCase('da-DK')}`,
+        )
+        .join(' · ')
+
 export const catchCropSowingDateOf = (values: SimulationFormValues): string =>
   values.catchCropDailyBasis
     ? values.catchCropSowingDate
@@ -619,6 +765,7 @@ export const toCreateSimulationInput = (
       nContentKgPerTon: withoutFertiliser
         ? Number(DEFAULT_SIMULATION_FORM_VALUES.nContentKgPerTon)
         : Number(values.nContentKgPerTon),
+      autumnAllocations: autumnAllocationsOf(values),
     },
     catchCropSowingDate: catchCropSowingDateOf(values),
     catchCropDailyBasis: values.catchCropDailyBasis,
@@ -665,6 +812,7 @@ export const simulationToFormValues = (
   offeredNNormPercentages: string[],
 ): SimulationFormValues => {
   const { fertiliser, catchCropDailyBasis, catchCropSowingDate } = simulation
+  const autumnAllocations = fertiliser.autumnAllocations ?? []
   const isInterval = SOWING_DATE_INTERVALS.some(
     (interval) => interval.date === catchCropSowingDate,
   )
@@ -689,6 +837,11 @@ export const simulationToFormValues = (
     mineralSharePct: String(fertiliser.mineralSharePct),
     onlyOrganic: fertiliser.onlyOrganic,
     nContentKgPerTon: String(fertiliser.nContentKgPerTon),
+    autumnAllocationEnabled: autumnAllocations.length > 0,
+    autumnAllocations: autumnAllocations.map((allocation) => ({
+      ...allocation,
+      kgNHa: String(allocation.kgNHa),
+    })),
     catchCropDailyBasis,
     catchCropSowingInterval:
       !catchCropDailyBasis && isInterval

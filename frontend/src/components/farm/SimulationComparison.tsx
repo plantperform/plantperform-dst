@@ -22,7 +22,7 @@ import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state
 import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
 import { SimulationComparisonPicker } from '@/components/farm/SimulationComparisonPicker'
 import { LoadError } from '@/components/ui/load-error'
-import { STANDARD_PROFILE, STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
+import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   changedFieldIds,
   computeFieldTotals,
@@ -37,6 +37,7 @@ import {
   catchmentQuotas,
   COMPARISON_PERIOD,
   defaultComparisonIds,
+  HISTORY_PERIOD,
   describeComparisonVerdict,
   describeEconomicsVerdict,
   describeFeedUnitRequirement,
@@ -184,17 +185,17 @@ export const SimulationComparison = ({
     const history: ComparisonColumn = {
       key: HISTORY_COLUMN_KEY,
       title: 'Afgrødehistorik',
-      subtitle: `Fremskrevet til ${COMPARISON_PERIOD}`,
+      subtitle: `Gennemsnit for ${HISTORY_PERIOD}`,
       simulationId: undefined,
       fields,
       totals: computeFieldTotals(fields, false),
       requirement: null,
       changedCount: null,
     }
-    const chosen = ids.flatMap((id): ComparisonColumn[] => {
-      const simulation = simulations.find((candidate) => candidate.id === id)
+    const chosen = selectedSimulations.flatMap((simulation) => {
+      const { id } = simulation
       const simulationFields = fieldsBySimulationId?.[id]
-      if (!simulation || !simulationFields) return []
+      if (!simulationFields) return []
       return [
         {
           key: id,
@@ -210,7 +211,12 @@ export const SimulationComparison = ({
       ]
     })
     return [history, ...chosen]
-  }, [fields, fieldsBySimulationId, ids, simulations, simulationsFields.data])
+  }, [
+    fields,
+    fieldsBySimulationId,
+    selectedSimulations,
+    simulationsFields.data,
+  ])
 
   const catchmentLabel = useCatchmentLabel(farmId, fields)
   const quotaByCatchment = useMemo(() => catchmentQuotas(fields), [fields])
@@ -289,45 +295,30 @@ export const SimulationComparison = ({
           ).length,
           simulationCount: simulationColumns.length,
         })
-  const ordered = [
-    history,
-    ...sortComparison(candidates, sort).map(({ column }) => column),
-  ]
-  const columnSimulations = ordered.map((column) =>
-    column.history
-      ? undefined
-      : simulations.find((entry) => entry.id === column.key),
-  )
-  const profiles = ordered.map((column) =>
-    column.history
-      ? STANDARD_PROFILE
-      : economics.appliedProfile({
-          economicsSnapshot:
-            simulationsFields.data?.[column.key]?.economicsSnapshot,
-        }),
-  )
-  const showEconomics = profiles.some(
-    (profile) => profile.id !== STANDARD_PROFILE_ID,
+  const ranked = sortComparison(candidates, sort).map(({ column }) => column)
+  const profiles = simulationColumns.map((column) =>
+    economics.appliedProfile({
+      economicsSnapshot:
+        simulationsFields.data?.[column.key]?.economicsSnapshot,
+    }),
   )
   const economicsVerdict = describeEconomicsVerdict(
-    ordered
-      .map((column, index) => ({
-        title: column.title,
-        ownProfileName:
-          profiles[index].id === STANDARD_PROFILE_ID
-            ? null
-            : profiles[index].name,
-        fields: column.fields,
-      }))
-      .slice(1),
+    simulationColumns.map((column, index) => ({
+      title: column.title,
+      ownProfileName:
+        profiles[index].id === STANDARD_PROFILE_ID
+          ? null
+          : profiles[index].name,
+      fields: column.fields,
+    })),
   )
   const requirements = placeFeedUnitRequirements(
-    ordered.map((column) => column.requirement),
+    compared.map((column) => column.requirement),
   )
   const showFeedUnits =
     requirements.label !== null ||
     requirements.cells.some((cell) => cell !== null) ||
-    ordered.some((column) => column.totals.feedUnits !== 0)
+    compared.some((column) => column.totals.feedUnits !== 0)
 
   return (
     <div className="@container min-h-0 flex-1 overflow-y-auto">
@@ -340,7 +331,7 @@ export const SimulationComparison = ({
             <h1 className="font-display text-4xl tracking-tight">Sammenlign</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               Gennemsnit pr. år for {COMPARISON_PERIOD}. Forskelle er i forhold
-              til afgrødehistorikken.
+              til afgrødehistorikken for {HISTORY_PERIOD}.
             </p>
           </div>
           <SimulationComparisonPicker
@@ -395,7 +386,7 @@ export const SimulationComparison = ({
               </div>
             ) : null}
             <ComparisonRanking
-              columns={ordered}
+              columns={[history, ...ranked]}
               bestBalanceKey={bestBalance?.key ?? null}
               catchmentCount={catchments.length}
               sort={sort}
@@ -404,7 +395,7 @@ export const SimulationComparison = ({
               onHighlight={setHighlightedKey}
             />
             <ComparisonCharts
-              columns={ordered}
+              columns={compared}
               bestBalanceKey={bestBalance?.key ?? null}
               highlightedKey={highlightedKey}
               onHighlight={setHighlightedKey}
@@ -414,7 +405,7 @@ export const SimulationComparison = ({
                 År over kvoten pr. opland
               </h2>
               <CatchmentQuotaTable
-                columns={ordered}
+                columns={compared}
                 catchments={catchments}
                 quotaByCatchment={quotaByCatchment}
                 showFeedUnits={showFeedUnits}
@@ -424,17 +415,22 @@ export const SimulationComparison = ({
                 bestBalanceKey={bestBalance?.key ?? null}
               />
             </section>
-            {showEconomics ? (
-              <section ref={economicsRef} className="scroll-mt-4 space-y-2.5">
-                <h2 className="pt-1 font-display text-[22px] leading-tight">
-                  Økonomi i simuleringerne
-                </h2>
+            {simulationColumns.length > 0 ? (
+              <section
+                ref={economicsRef}
+                className="w-fit max-w-full scroll-mt-4 space-y-2.5"
+              >
                 <ComparisonEconomics
-                  columns={ordered}
+                  columns={simulationColumns}
                   profiles={profiles}
-                  farmingSystems={columnSimulations.map(
-                    (simulation) =>
-                      simulation?.fertiliser.farmingSystem ?? 'Konventionel',
+                  farmingSystems={simulationColumns.map(
+                    (column) =>
+                      simulations.find((entry) => entry.id === column.key)
+                        ?.fertiliser.farmingSystem ?? 'Konventionel',
+                  )}
+                  statements={simulationColumns.map(
+                    (column) =>
+                      simulationsFields.data?.[column.key]?.economicsStatement,
                   )}
                   highlightedKey={highlightedKey}
                   onHighlight={setHighlightedKey}

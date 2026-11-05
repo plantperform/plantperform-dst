@@ -1,7 +1,6 @@
 """Transient candidates. Only selected evaluations cross the persistence boundary."""
 
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 from app.data import repository, simulation_store
 from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
@@ -34,7 +33,8 @@ def evaluation_args(simulation, registry, real_history, jbnr):
     soil = repository._soil_data_for_context(registry)
     percolation, org_n, s_soil = soil if soil else (None, None, None)
     return {
-        **simulation.godning.model_dump(),
+        **simulation.godning.model_dump(exclude={"autumn_allocations"}),
+        "autumn_plan": simulation.godning.autumn_plan(),
         "jbnr": jbnr,
         "fdato": simulation.eea_fdato,
         "precision_dagsbasis": simulation.eea_precision_dagsbasis,
@@ -72,7 +72,7 @@ def prepare(simulation, fields, setup_fields, contexts):
     conflicts = []
     for field in fields:
         check_deadline()
-        registry = SimpleNamespace(**contexts[field.id]) if contexts.get(field.id) else None
+        registry = repository.saved_registry_context(contexts.get(field.id))
         setup, full = repository.prepare_simulation_field(
             field,
             registry,
@@ -84,11 +84,13 @@ def prepare(simulation, fields, setup_fields, contexts):
         args = evaluation_args(simulation, registry, full.real_history, full.jbnr)
         for key in ("manual_candidate", "fixed_candidate"):
             value = previous.get(key)
-            if not value or value["ref"]["saedskiftevariant"] == "permanent":
+            if not value or (
+                value["ref"]["saedskiftevariant"] == "permanent" and not value.get("base_ref")
+            ):
                 continue
             old = RotationCandidateEvaluation.model_validate(value)
             source = old.base_ref or old.ref
-            if (
+            if source.saedskiftevariant != "permanent" and (
                 source.saedskiftevariant not in simulation.rotation_saedskiftevarianter
                 or source.n_norm_pct not in simulation.rotation_n_norm_procenter
             ):
@@ -117,10 +119,11 @@ def prepare(simulation, fields, setup_fields, contexts):
                 conflicts.append(field.name)
             else:
                 setup["fixed_candidate"] = selected.model_dump(mode="json")
+                setup["allowed_rotation_ids"] = field.allowed_rotation_ids
                 setup["fixed"] = {
                     "crop_rotation": [y.year.model_dump(mode="json") for y in selected.years],
                     "rotation_id": selected.ref.to_id(),
-                    **repository._locked_candidate_figures(field, selected),
+                    **repository._candidate_figures(field, selected),
                 }
         # Old valuations and winners are historical outputs, never new alternatives.
         setup.pop("economics_candidate", None)
@@ -154,8 +157,7 @@ def hydrate(snapshot, selected):
                 snapshot.setup_fields[field_id]["fixed_candidate"],
             )
             continue
-        context = snapshot.contexts.get(field_id)
-        registry = SimpleNamespace(**context) if context else None
+        registry = repository.saved_registry_context(snapshot.contexts.get(field_id))
         row = rows[field_id]
         value = candidate_evaluator.evaluate_with_overrides(
             candidate.base_ref or candidate.ref,

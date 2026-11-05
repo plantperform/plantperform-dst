@@ -3,10 +3,11 @@
 from types import SimpleNamespace
 
 from app.domain.field import FieldRecord
-from app.domain.read_model import FieldYearValue
+from app.domain.read_model import EconomicsStatement, FieldYearValue
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
+from app.services.scenario.field_history_evaluator import REAL_HISTORY_YEARS
 
 # The leaching detail keys the year strip needs to draw what covers the soil
 # after harvest.
@@ -27,7 +28,9 @@ def compact_years(candidate):
             year=y.year,
             leaching_kg_n_ha=y.leaching_kg_n_ha,
             db_kr_ha=y.db_kr_ha,
+            economics_missing=bool(getattr(y, "db_detail", {}).get("economics_missing")),
             fen_fe_ha=y.fen_fe_ha,
+            has_yield_response=getattr(y, "db_detail", {}).get("udbytterespons"),
             **{
                 key: getattr(
                     y,
@@ -39,6 +42,7 @@ def compact_years(candidate):
                     "tildelt_husdyrgodning_udnyttet_kgn_ha",
                     "tildelt_handelsgodning_kgn_ha",
                     "husdyrgodning_organisk_bundet_kgn_ha",
+                    "autumn_allocated_kg_n_ha",
                     "husdyrgodning_ton_pr_ha",
                     "afgrode_norm_kgn_ha",
                     "n_norm_pct",
@@ -52,6 +56,25 @@ def compact_years(candidate):
         ).model_dump(mode="json")
         for y in candidate.years[: candidate.active_len]
     ]
+
+
+_STATEMENT_LINES = EconomicsStatement.model_fields.keys() - {"area_ha", "db"}
+
+
+def economics_statement(fields, candidates):
+    statement = dict.fromkeys(EconomicsStatement.model_fields, 0.0)
+    for field in fields:
+        candidate = candidates.get(field["id"])
+        cycle = candidate.years[: candidate.active_len] if candidate else []
+        if field.get("rotation_id") is None or field.get("economics_missing") or not cycle:
+            continue
+        weight = field["area_ha"] / len(cycle)
+        statement["area_ha"] += field["area_ha"]
+        statement["db"] += field["db2"]
+        for year in cycle:
+            for line in _STATEMENT_LINES:
+                statement[line] += weight * (year.db_detail.get(line) or 0)
+    return statement
 
 
 def candidate_metadata(candidate):
@@ -186,11 +209,26 @@ def combine_contributions(contributions):
     return [combined[code] for code in sorted(combined)]
 
 
+def _without_economics(years):
+    """A mark has no economics when every year of its rotation has none."""
+    return bool(years) and all(year.get("economics_missing") for year in years)
+
+
+def flag_fields_without_economics(response, field_years):
+    return {
+        **response,
+        "fields": [
+            {**field, "economics_missing": _without_economics(field_years.get(field["id"], []))}
+            for field in response["fields"]
+        ],
+    }
+
+
 def yearly_totals(fields, field_years, *, history=False):
     totals = {}
     for field in fields:
         for index, year in enumerate(field_years.get(field.id, [])):
-            key = 2019 + index if history else index + 1
+            key = REAL_HISTORY_YEARS.start + index if history else index + 1
             bucket = totals.setdefault(
                 key,
                 {
@@ -275,7 +313,12 @@ def simulation_data(
             for field in fields
         }
     data = {
-        "fields": [field.model_dump(mode="json") for field in fields],
+        "fields": [
+            field.model_copy(
+                update={"economics_missing": _without_economics(field_years.get(field.id, []))}
+            ).model_dump(mode="json")
+            for field in fields
+        ],
         "field_years": field_years,
         "yearly_summary": yearly_totals(fields, field_years),
         "crop_area_ranges": combine_contributions(contributions),

@@ -9,6 +9,7 @@ type SortHeaderButtonProps = {
   align?: 'left' | 'right'
   sorted: false | SortDirection
   onToggle: () => void
+  disabled?: boolean
 }
 
 export const SortHeaderButton = ({
@@ -17,6 +18,7 @@ export const SortHeaderButton = ({
   align = 'left',
   sorted,
   onToggle,
+  disabled = false,
 }: SortHeaderButtonProps) => {
   const glyph = sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : ''
 
@@ -24,8 +26,10 @@ export const SortHeaderButton = ({
     <button
       type="button"
       onClick={onToggle}
+      disabled={disabled}
       className={cn(
-        '-mx-1 flex w-full items-start gap-1 rounded px-1 py-0.5 text-left whitespace-nowrap hover:text-foreground',
+        '-mx-1 flex w-full items-start gap-1 rounded px-1 py-0.5 text-left whitespace-nowrap',
+        !disabled && 'hover:text-foreground',
         align === 'right' && 'justify-end text-right',
         sorted && 'text-foreground',
       )}
@@ -52,13 +56,15 @@ export const SortableColumnHeaderContent = ({
   unit,
   align,
   column,
+  disabled = false,
 }: {
   label: string
   unit?: string
   align?: 'left' | 'right'
   column: Column<FieldRecord, unknown>
+  disabled?: boolean
 }) => {
-  const sorted = column.getIsSorted()
+  const sorted = disabled ? false : column.getIsSorted()
   return (
     <SortHeaderButton
       label={label}
@@ -66,6 +72,7 @@ export const SortableColumnHeaderContent = ({
       align={align}
       sorted={sorted}
       onToggle={() => column.toggleSorting(sorted === 'asc')}
+      disabled={disabled}
     />
   )
 }

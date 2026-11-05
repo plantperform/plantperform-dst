@@ -29,6 +29,34 @@ describe('fromWire', () => {
     })
   })
 
+  it('names every cost category of a dækningsbidrag', () => {
+    expect(
+      fromWire({
+        goedning: 1,
+        andre_goedningsstoffer: 2,
+        udsaed: 3,
+        plantevaern: 4,
+        markarbejde: 5,
+        toerring: 6,
+        andet: 7,
+      }),
+    ).toEqual({
+      fertiliserCost: 1,
+      otherFertilisers: 2,
+      seed: 3,
+      cropProtection: 4,
+      fieldWork: 5,
+      drying: 6,
+      other: 7,
+    })
+  })
+
+  it('names the regnskab lines the backend sends in camelCase', () => {
+    expect(
+      fromWire({ omkostningerTotal: 310, andreGoedningsstoffer: 20 }),
+    ).toEqual({ totalCosts: 310, otherFertilisers: 20 })
+  })
+
   it('leaves a geometry as the backend sent it', () => {
     const geometry = {
       type: 'Polygon',
@@ -51,6 +79,25 @@ describe('toWire', () => {
     expect(
       toWire({ catchmentId: 7, fertiliser: { mineralSharePct: 40 } }),
     ).toEqual({ kystvandId: 7, godning: { mineralskAndelPct: 40 } })
+  })
+
+  it('keeps the gødning of an efterårstildeling apart from the settings', () => {
+    const fertiliser = {
+      mineralSharePct: 40,
+      autumnAllocations: [
+        { cropCode: 22, kgNHa: 40, fertiliserType: 'manure' },
+      ],
+    }
+
+    expect(toWire({ fertiliser })).toEqual({
+      godning: {
+        mineralskAndelPct: 40,
+        autumnAllocations: [
+          { afgrodeKode: 22, kgNHa: 40, fertiliser: 'manure' },
+        ],
+      },
+    })
+    expect(fromWire(toWire({ fertiliser }))).toEqual({ fertiliser })
   })
 
   it('keeps a name that only responses translate', () => {

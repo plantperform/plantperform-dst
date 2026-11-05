@@ -4,11 +4,14 @@ import {
   useState,
   type ComponentProps,
   type FormEvent,
+  type ReactNode,
 } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { mutate } from 'swr'
 
 import { ApiError } from '@/api/client'
+import { economicsModulesKey } from '@/api/economics'
+import { COPY_CVR } from '@/api/farm-copy'
 import {
   farmsKey,
   useFarms,
@@ -17,11 +20,12 @@ import {
 } from '@/api/hooks'
 import { createFarm, createFieldsFromRegistry } from '@/api/mutations'
 import { waitForFarmHistory } from '@/api/views'
-import type { RegistryField } from '@/api/types'
+import type { Farm, RegistryField } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import { AppBar, AppBarCurrent } from '@/components/AppBar'
 import { BackLink } from '@/components/BackLink'
 import { RegistryFieldsMap } from '@/components/farm/RegistryFieldsMap'
+import { FarmCopyConfirmation } from '@/components/farm/FarmCopyConfirmation'
 import {
   CreateStatus,
   LookupEmpty,
@@ -187,7 +191,10 @@ export const CreateFarmPage = () => {
       ? urlCvr
       : null
   const activeStep = lookupCvr === null ? 0 : 1
-  const search = useRegistryFieldsByCvr(lookupCvr ?? undefined, 500)
+  const search = useRegistryFieldsByCvr(
+    lookupCvr === COPY_CVR ? undefined : (lookupCvr ?? undefined),
+    500,
+  )
   const details = useRegistryFieldsBulk(
     (search.data ?? []).map((field) => field.imkId),
   )
@@ -260,13 +267,29 @@ export const CreateFarmPage = () => {
     setChecked('create')
     const invalid = farmBasicsErrors(form.name, form.ownerName, form.cvr)
     if (Object.keys(invalid).length > 0) return
+    if (form.cvr === COPY_CVR) {
+      navigate(
+        { search: `?cvr=${COPY_CVR}` },
+        { state: { prefill: form, from: origin } },
+      )
+      return
+    }
     void create(form, [])
   }
 
-  const renderLookup = (cvr: string) => {
+  const copied = async (farm: Farm) => {
+    await Promise.allSettled([mutate(farmsKey), mutate(economicsModulesKey)])
+    leaveGuard.release()
+    showToast(`${farm.name} er oprettet`)
+    navigate(`/farms/${farm.id}`, { replace: true })
+  }
+
+  let lookupContent: ReactNode = null
+  if (lookupCvr !== null && lookupCvr !== COPY_CVR) {
+    const cvr = lookupCvr
     const farm = { ...lookupForm, cvr }
     if (creating && found && found.length > 0) {
-      return (
+      lookupContent = (
         <>
           <StepHeading title={`Opretter ${farm.name.trim()}`}>
             Det tager typisk 10 til 20 sekunder.
@@ -274,9 +297,8 @@ export const CreateFarmPage = () => {
           <LookupProgress phase="creating" fieldCount={found.length} />
         </>
       )
-    }
-    if (search.data?.length === 0 && lookupStep > 0) {
-      return (
+    } else if (search.data?.length === 0 && lookupStep > 0) {
+      lookupContent = (
         <LookupEmpty
           cvr={cvr}
           creating={creating}
@@ -289,9 +311,13 @@ export const CreateFarmPage = () => {
           onCreateEmpty={() => void create(farm, [])}
         />
       )
-    }
-    if (found && summary && !lookupError && lookupStep >= LOOKUP_RESULT_STEP) {
-      return (
+    } else if (
+      found &&
+      summary &&
+      !lookupError &&
+      lookupStep >= LOOKUP_RESULT_STEP
+    ) {
+      lookupContent = (
         <LookupFound
           farmName={farm.name.trim()}
           summary={summary}
@@ -299,35 +325,36 @@ export const CreateFarmPage = () => {
           onCreate={() => void create(farm, found)}
         />
       )
+    } else {
+      lookupContent = (
+        <>
+          <StepHeading title={`Henter markerne for CVR ${formatCvr(cvr)}`}>
+            Det tager normalt kun nogle få sekunder.
+          </StepHeading>
+          <LookupProgress
+            phase={
+              lookupStep === 0
+                ? 'searching'
+                : lookupStep === 1
+                  ? 'details'
+                  : 'found'
+            }
+            fieldCount={lookupStep > 0 ? (search.data?.length ?? null) : null}
+            error={
+              lookupError && lookupStep >= lookupProgress ? (
+                <LoadError
+                  message={`Opslaget stoppede undervejs, og intet er oprettet.${lookupError instanceof ApiError ? ` Fejlkode ${lookupError.status}.` : ''}`}
+                  onRetry={() =>
+                    void (search.error ? search.mutate() : details.mutate())
+                  }
+                  retrying={search.isValidating || details.isValidating}
+                />
+              ) : undefined
+            }
+          />
+        </>
+      )
     }
-    return (
-      <>
-        <StepHeading title={`Henter markerne for CVR ${formatCvr(cvr)}`}>
-          Det tager normalt kun nogle få sekunder.
-        </StepHeading>
-        <LookupProgress
-          phase={
-            lookupStep === 0
-              ? 'searching'
-              : lookupStep === 1
-                ? 'details'
-                : 'found'
-          }
-          fieldCount={lookupStep > 0 ? (search.data?.length ?? null) : null}
-          error={
-            lookupError && lookupStep >= lookupProgress ? (
-              <LoadError
-                message={`Opslaget stoppede undervejs, og intet er oprettet.${lookupError instanceof ApiError ? ` Fejlkode ${lookupError.status}.` : ''}`}
-                onRetry={() =>
-                  void (search.error ? search.mutate() : details.mutate())
-                }
-                retrying={search.isValidating || details.isValidating}
-              />
-            ) : undefined
-          }
-        />
-      </>
-    )
   }
 
   return (
@@ -349,7 +376,17 @@ export const CreateFarmPage = () => {
               >
                 Tilbage
               </BackLink>
-              {renderLookup(lookupCvr)}
+              {lookupCvr === COPY_CVR ? (
+                <FarmCopyConfirmation
+                  key={`${location.key}:${lookupForm.name}:${lookupForm.ownerName}`}
+                  input={{ ...lookupForm, cvr: COPY_CVR }}
+                  creating={creating}
+                  onCreating={setCreating}
+                  onCreated={copied}
+                />
+              ) : (
+                lookupContent
+              )}
             </>
           ) : (
             <>

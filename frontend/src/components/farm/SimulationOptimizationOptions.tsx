@@ -11,10 +11,13 @@ import {
   catchmentKey,
   sameCapEveryYear,
 } from '@/components/farm/catchment-options'
+import { CropGroupChecklist } from '@/components/farm/CropGroupChecklist'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadError } from '@/components/ui/load-error'
+import { cropLabel, cropLabelByCode } from '@/lib/crop-label'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+import { excludedCropCodesAfter } from '@/lib/simulation-form'
 
 // One cap for every year, unless "Forskellig grænse pr. år" is ticked. The
 // one cap is the maks. udledning under Regler (onEveryYearChange). A cap saved
@@ -121,8 +124,17 @@ export function SimulationOptimizationOptions({
       .filter((option) => variants.includes(option.ref.rotationVariant))
       .flatMap((option) => option.cropSequence),
   )
+  const listedCrops = (crops.data ?? []).filter((crop) => names.has(crop.name))
   const patch = (value: Partial<OptimizationSettings>) =>
     onSettingsChange({ ...settings, ...value })
+  const setIncludedCrops = (included: string[]) =>
+    patch({
+      excludedCropCodes: excludedCropCodesAfter(
+        settings.excludedCropCodes,
+        listedCrops.map((crop) => crop.code),
+        included.map(Number),
+      ),
+    })
   const setYearlyCap = (
     catchmentId: number | null,
     maxNLoadByYear: Record<number, number>,
@@ -267,8 +279,7 @@ export function SimulationOptimizationOptions({
             className="grid grid-cols-[1fr_6rem_6rem_auto] items-end gap-2"
           >
             <span className="text-sm">
-              {crops.data?.find((crop) => crop.code === limit.cropCode)?.name ??
-                limit.cropCode}
+              {cropLabelByCode(limit.cropCode, crops.data ?? [])}
             </span>
             {(['minAreaHa', 'maxAreaHa'] as const).map((key, index) => (
               <label key={key} className="space-y-1 text-xs">
@@ -343,13 +354,18 @@ export function SimulationOptimizationOptions({
             )
             .map((crop) => (
               <option key={crop.code} value={crop.code}>
-                {crop.name}
+                {cropLabel(crop.code, crop.name)}
               </option>
             ))}
         </select>
       </fieldset>
       <div className="space-y-2">
-        <Label>Afgrøder i de valgte sædskifter</Label>
+        <Label className="leading-snug">
+          Afgrøder i de valgte sædskifter{' '}
+          <span className="font-normal text-muted-foreground">
+            (fjern fluebenet, hvis afgrøden ikke skal indgå i simuleringen)
+          </span>
+        </Label>
         {crops.error || options.error ? (
           <LoadError
             message="Kunne ikke hente afgrøder."
@@ -362,27 +378,19 @@ export function SimulationOptimizationOptions({
         {crops.isLoading || options.isLoading ? (
           <p className="text-sm text-muted-foreground">Henter afgrøder...</p>
         ) : null}
-        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
-          {(crops.data ?? [])
-            .filter((crop) => names.has(crop.name))
-            .map((crop) => (
-              <label key={crop.code} className="flex gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!settings.excludedCropCodes.includes(crop.code)}
-                  onChange={(event) =>
-                    patch({
-                      excludedCropCodes: event.target.checked
-                        ? settings.excludedCropCodes.filter(
-                            (code) => code !== crop.code,
-                          )
-                        : [...settings.excludedCropCodes, crop.code],
-                    })
-                  }
-                />
-                {crop.name}
-              </label>
-            ))}
+        <div className="max-h-72 overflow-y-auto rounded-md border p-2">
+          <CropGroupChecklist
+            label="Afgrøder i de valgte sædskifter"
+            items={listedCrops.map((crop) => ({
+              key: String(crop.code),
+              code: crop.code,
+              name: crop.name,
+            }))}
+            selected={listedCrops
+              .filter((crop) => !settings.excludedCropCodes.includes(crop.code))
+              .map((crop) => String(crop.code))}
+            onChange={setIncludedCrops}
+          />
         </div>
       </div>
     </div>

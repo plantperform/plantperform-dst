@@ -14,6 +14,7 @@ import {
   type EconomicsAssumptions,
   type EconomicsLine,
   type SoilVariant,
+  type StandardManure,
 } from '@/lib/economics'
 
 type BudgetLine = Omit<EconomicsLine, 'id' | 'priceId'> & {
@@ -40,6 +41,9 @@ type CropBudgets = {
     value: number
     source: string | null
   }[]
+  manureSpreadingPriceId: string | null
+  manurePurchasePriceId: string | null
+  standardManure: StandardManure | null
   crops: CropBudget[]
   soilVariants: Record<string, SoilVariant[]>
 }
@@ -79,6 +83,9 @@ const toAssumptions = (budgets: CropBudgets): EconomicsAssumptions => ({
     ...price,
     valueDkk: value,
   })),
+  manureSpreadingPriceId: budgets.manureSpreadingPriceId,
+  manurePurchasePriceId: budgets.manurePurchasePriceId,
+  standardManure: budgets.standardManure,
   crops: budgets.crops.map((crop) => ({
     cropCode: crop.cropCode,
     cropName: crop.cropName,

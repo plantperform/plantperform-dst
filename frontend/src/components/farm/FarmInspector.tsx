@@ -1,10 +1,11 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { mutate } from 'swr'
 
 import {
   simulationViewKey,
   useFarmHistoricalYearlySummary,
   useFieldYearValues,
+  useRotationCategories,
   useSimulationView,
   useSimulationYearlySummary,
 } from '@/api/hooks'
@@ -57,8 +58,14 @@ import {
   summarizeFieldYears,
 } from '@/lib/field-domain'
 import { compareFields, type CatchmentLabel } from '@/lib/field-sort'
+import { nNormLevelByFieldId, type NNormLevel } from '@/lib/n-norm-level'
 import { latestQuotaTrades } from '@/lib/quota-trade-result'
 import { useEscapeKey } from '@/hooks/use-escape-key'
+import {
+  rotationColorsOf,
+  rotationOptionsOf,
+  summarizeRotationDistribution,
+} from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
 
 type FarmInspectorProps = {
@@ -102,9 +109,18 @@ const sortListFields = (
   sort: FieldsSortState,
   catchmentLabel: CatchmentLabel,
   highlightedCatchmentKey: string | null,
+  selectedYearIndex: number | null,
+  nNormLevels: Map<string, NNormLevel> | undefined,
 ) => {
   const sorted = [...fields].sort((left, right) =>
-    compareFields(left, right, sort, catchmentLabel),
+    compareFields(
+      left,
+      right,
+      sort,
+      catchmentLabel,
+      selectedYearIndex,
+      nNormLevels,
+    ),
   )
   const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
   if (highlightedCatchmentKey === null) return ordered
@@ -298,6 +314,24 @@ export const FarmInspector = ({
     fields,
     showYearWalkthrough,
   )
+  // Only the Sædskifter tab needs these, and the afgrødehistorik has none.
+  const { data: rotationCategories } = useRotationCategories(
+    isSimulationView ? farm.id : undefined,
+  )
+  const rotationOptions = useMemo(
+    () => rotationOptionsOf(rotationCategories ?? []),
+    [rotationCategories],
+  )
+  // Of the whole farm, so a sædskifte has the same colour in the Sædskifter tab
+  // (also with an opland chosen) and on the map.
+  const rotationShares = useMemo(
+    () => summarizeRotationDistribution(fields, rotationOptions),
+    [fields, rotationOptions],
+  )
+  const rotationColors = useMemo(
+    () => rotationColorsOf(rotationShares),
+    [rotationShares],
+  )
   const listFields =
     effectiveSelectedYearIndex !== null && yearValues
       ? applyFieldYearValues(fields, yearValues, effectiveSelectedYearIndex)
@@ -307,6 +341,11 @@ export const FarmInspector = ({
     fieldsSort,
     catchmentLabel,
     effectiveHighlightedCatchmentKey,
+    effectiveSelectedYearIndex,
+    // The N-norm% column sorts by what it shows, so the list needs the years.
+    fieldsSort.key === 'nNormPct'
+      ? nNormLevelByFieldId(listFields, yearValues, effectiveSelectedYearIndex)
+      : undefined,
   )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,
@@ -427,6 +466,7 @@ export const FarmInspector = ({
             <OptimizationBanner
               farmId={farm.id}
               simulationId={selectedSimulation.id}
+              optimizationKind={selectedSimulation.optimizationSettings?.kind}
               run={optimizationRun}
               fields={fieldsLoading || fieldsError ? undefined : fields}
             />
@@ -463,6 +503,8 @@ export const FarmInspector = ({
               collapsed={overviewCollapsed}
               catchmentTotalsByYear={catchmentTotalsByYear}
               yearValues={yearValues}
+              rotationOptions={rotationOptions}
+              rotationColors={rotationColors}
               selectedYearIndex={selectedYearIndex}
               onSelectedYearIndexChange={onSelectedYearIndexChange}
               catchmentLabel={catchmentLabel}
@@ -489,13 +531,18 @@ export const FarmInspector = ({
             />
             </>
           ) : null}
-          {fieldsLoading ? (
-            <FarmFieldsSkeleton message={loadingMessage} />
-          ) : summaryMissing ? (
+          {summaryMissing && !fieldsLoading && fields.length > 0 ? (
             <SimulationSummaryMissing
               onOpenSettings={() => onOptimizeDialogOpenChange(true)}
             />
-          ) : fieldsError ? (
+          ) : null}
+          {fieldsLoading ? (
+            <FarmFieldsSkeleton message={loadingMessage} />
+          ) : summaryMissing && fields.length === 0 ? (
+            <SimulationSummaryMissing
+              onOpenSettings={() => onOptimizeDialogOpenChange(true)}
+            />
+          ) : fieldsError && !summaryMissing ? (
             <LoadError
               message="Kunne ikke hente simuleringens marker."
               onRetry={onRetryFields}
@@ -556,6 +603,8 @@ export const FarmInspector = ({
                   selectedYearIndex={effectiveSelectedYearIndex}
                   yearValues={yearValues}
                   yearValuesLoading={yearValuesLoading}
+                  rotationShares={rotationShares}
+                  rotationColors={rotationColors}
                   selectedFieldId={selectedFieldId}
                   onSelectedFieldChange={selectFieldFromMap}
                   hoveredFieldId={hoveredFieldId}

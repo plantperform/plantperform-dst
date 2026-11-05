@@ -3,7 +3,9 @@ import type {
   FieldsSortDirection,
   FieldsSortState,
 } from '@/components/farm/field-list-state'
-import { fieldDisplayName, fieldNNormPct, perHa } from '@/lib/field-domain'
+import { fieldDisplayName, perHa } from '@/lib/field-domain'
+import { fieldNNormSortValue, type NNormLevel } from '@/lib/n-norm-level'
+import { fieldRotationVariant } from '@/lib/rotation-overview'
 
 const nameCollator = new Intl.Collator('da-DK', {
   numeric: true,
@@ -37,6 +39,24 @@ const compareName = (
   return direction === 'asc' ? result : -result
 }
 
+const compareNullableName = (
+  left: string | null,
+  right: string | null,
+  direction: FieldsSortDirection,
+) => {
+  if (left === null && right === null) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return compareName(left, right, direction)
+}
+
+// The crop the list shows for the selected year; none until a year is chosen.
+const selectedYearCrop = (
+  field: FieldRecord,
+  selectedYearIndex: number | null,
+) =>
+  selectedYearIndex === null ? undefined : field.cropRotation[selectedYearIndex]
+
 export type CatchmentLabel = (catchmentId: number | null) => string
 
 const compareCatchment = (
@@ -57,12 +77,26 @@ const comparePrimary = (
   right: FieldRecord,
   sort: FieldsSortState,
   catchmentLabel?: CatchmentLabel,
+  selectedYearIndex: number | null = null,
+  nNormLevels?: Map<string, NNormLevel>,
 ) => {
   switch (sort.key) {
     case 'name':
       return compareName(fieldDisplayName(left), fieldDisplayName(right), sort.direction)
     case 'areaHa':
       return compareNumber(left.areaHa, right.areaHa, sort.direction)
+    case 'cropCode':
+      return compareNullableNumber(
+        selectedYearCrop(left, selectedYearIndex)?.cropCode ?? null,
+        selectedYearCrop(right, selectedYearIndex)?.cropCode ?? null,
+        sort.direction,
+      )
+    case 'cropYear':
+      return compareNullableName(
+        selectedYearCrop(left, selectedYearIndex)?.cropName ?? null,
+        selectedYearCrop(right, selectedYearIndex)?.cropName ?? null,
+        sort.direction,
+      )
     case 'catchment':
       return compareCatchment(
         left.catchmentId,
@@ -70,10 +104,16 @@ const comparePrimary = (
         sort.direction,
         catchmentLabel,
       )
+    case 'rotationVariant':
+      return compareNullableName(
+        fieldRotationVariant(left),
+        fieldRotationVariant(right),
+        sort.direction,
+      )
     case 'nNormPct':
       return compareNullableNumber(
-        fieldNNormPct(left),
-        fieldNNormPct(right),
+        fieldNNormSortValue(left, nNormLevels),
+        fieldNNormSortValue(right, nNormLevels),
         sort.direction,
       )
     case 'nLoad':
@@ -86,8 +126,12 @@ const comparePrimary = (
     case 'db2':
     case 'feedUnits':
       return compareNullableNumber(
-        perHa(left[sort.key], left.areaHa),
-        perHa(right[sort.key], right.areaHa),
+        sort.key === 'db2' && left.economicsMissing
+          ? null
+          : perHa(left[sort.key], left.areaHa),
+        sort.key === 'db2' && right.economicsMissing
+          ? null
+          : perHa(right[sort.key], right.areaHa),
         sort.direction,
       )
     case 'nLoadQuotaKgN':
@@ -122,8 +166,17 @@ export const compareFields = (
   right: FieldRecord,
   sort: FieldsSortState,
   catchmentLabel?: CatchmentLabel,
+  selectedYearIndex: number | null = null,
+  nNormLevels?: Map<string, NNormLevel>,
 ) => {
-  const primary = comparePrimary(left, right, sort, catchmentLabel)
+  const primary = comparePrimary(
+    left,
+    right,
+    sort,
+    catchmentLabel,
+    selectedYearIndex,
+    nNormLevels,
+  )
   if (primary !== 0) return primary
   const imkTie = compareNullableNumber(left.imkId, right.imkId, 'asc')
   if (imkTie !== 0) return imkTie

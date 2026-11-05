@@ -47,6 +47,7 @@ import {
   type CropAreaViolation,
 } from '@/lib/crop-area-limits'
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import { cn } from '@/lib/utils'
 
 const NO_LIMITS_TEXT = 'Ingen krav endnu'
@@ -112,8 +113,8 @@ export const CropAreaLimits = ({
     .filter((crop) => !limitedCodes.has(crop.code))
     .map((crop) => ({
       key: String(crop.code),
-      label: crop.name,
-      title: `${crop.name} (${crop.code})`,
+      label: cropLabel(crop.code, crop.name),
+      title: cropLabel(crop.code, crop.name),
       colors: [cropGroupColor(crop.code, crop.name)],
       icon: <CropGroupTile group={cropGroupFor(crop.code, crop.name)} />,
       meta: currentCropAreaLabel(currentCropAreaHa(fields, crop.code)),
@@ -141,8 +142,10 @@ export const CropAreaLimits = ({
   }
 
   const rows = inputs.map((input) => {
-    const name =
-      nameByCode.get(input.cropCode) ?? `Afgrødekode ${input.cropCode}`
+    const knownName = nameByCode.get(input.cropCode)
+    const name = knownName ?? `Afgrødekode ${input.cropCode}`
+    const label =
+      knownName !== undefined ? cropLabel(input.cropCode, knownName) : name
     const draft = hectareDraft(input, totalAreaHa)
     const range = rangeByCode.get(input.cropCode)
     const limitError =
@@ -155,7 +158,7 @@ export const CropAreaLimits = ({
     const wholeFieldWarning = cropAreaLimitWarning(draft, totalAreaHa, sums)
     return {
       input,
-      name,
+      label,
       group: cropGroupFor(input.cropCode, name),
       current: currentCropAreaLabel(currentCropAreaHa(fields, input.cropCode)),
       changed: !sameLimit(
@@ -224,7 +227,7 @@ export const CropAreaLimits = ({
                   className="mt-px"
                 />
               }
-              label={row.name}
+              label={row.label}
               note={row.current}
               value={
                 parts ? (
@@ -267,7 +270,7 @@ export const CropAreaLimits = ({
                 />
                 <div className="min-w-0">
                   <div className="truncate text-[13px] font-semibold">
-                    {row.name}
+                    {row.label}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {row.current}
@@ -279,7 +282,7 @@ export const CropAreaLimits = ({
                 variant="ghost"
                 size="icon"
                 className="size-7 shrink-0 text-muted-foreground"
-                aria-label={`Fjern kravet til ${row.name}`}
+                aria-label={`Fjern kravet til ${row.label}`}
                 onClick={() => removeInput(index)}
               >
                 <X className="size-3.5" aria-hidden="true" />
@@ -287,7 +290,7 @@ export const CropAreaLimits = ({
             </div>
             <div
               role="group"
-              aria-label={`Areal for ${row.name}`}
+              aria-label={`Areal for ${row.label}`}
               className="mt-2 grid grid-cols-[minmax(0,1fr)_12px_minmax(0,1fr)_auto] items-center gap-1.5"
               onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -301,7 +304,7 @@ export const CropAreaLimits = ({
                 step="any"
                 value={row.input.min}
                 placeholder="Min."
-                aria-label={`Min. for ${row.name} i ${row.input.unit}`}
+                aria-label={`Min. for ${row.label} i ${row.input.unit}`}
                 aria-describedby={describedBy}
                 className="h-9 px-2.5"
                 onChange={(event) =>
@@ -320,7 +323,7 @@ export const CropAreaLimits = ({
                 step="any"
                 value={row.input.max}
                 placeholder="Maks."
-                aria-label={`Maks. for ${row.name} i ${row.input.unit}`}
+                aria-label={`Maks. for ${row.label} i ${row.input.unit}`}
                 aria-describedby={describedBy}
                 className="h-9 px-2.5"
                 onChange={(event) =>
@@ -328,7 +331,7 @@ export const CropAreaLimits = ({
                 }
               />
               <SegmentedControl
-                aria-label={`Enhed for ${row.name}`}
+                aria-label={`Enhed for ${row.label}`}
                 value={row.input.unit}
                 options={UNIT_OPTIONS}
                 labelClassName=""

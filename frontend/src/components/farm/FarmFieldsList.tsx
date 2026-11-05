@@ -41,6 +41,7 @@ import {
   OPTIONAL_COLUMN_IDS,
   readStoredColumnVisibility,
   storeColumnVisibility,
+  withoutAutumnAllocationColumn,
   withoutManureColumns,
   type FieldsSortKey,
   type FieldsSortState,
@@ -68,7 +69,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fertiliserByFieldId, usesManure } from '@/lib/fertiliser-overview'
+import {
+  fertiliserByFieldId,
+  usesAutumnAllocation,
+  usesManure,
+} from '@/lib/fertiliser-overview'
 import {
   catchmentRuns,
   changedFieldIds,
@@ -88,6 +93,7 @@ import {
   withGaps,
   withGroupRows,
 } from '@/lib/field-list-rows'
+import { nNormLevelByFieldId } from '@/lib/n-norm-level'
 import { cn } from '@/lib/utils'
 
 type ColumnToggle = {
@@ -350,6 +356,14 @@ export const FarmFieldsList = ({
     [isSimulationView, sortedFields, yearValues, selectedYearIndex],
   )
 
+  const nNormLevels = useMemo(
+    () =>
+      isSimulationView
+        ? nNormLevelByFieldId(sortedFields, yearValues, selectedYearIndex)
+        : new Map(),
+    [isSimulationView, sortedFields, yearValues, selectedYearIndex],
+  )
+
   const runStarts = useMemo(
     () =>
       new Map(
@@ -373,13 +387,14 @@ export const FarmFieldsList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSimulationView])
 
-  const shownColumnVisibility = useMemo(
-    () =>
-      usesManure(yearValues)
-        ? columnVisibility
-        : withoutManureColumns(columnVisibility),
-    [columnVisibility, yearValues],
-  )
+  const shownColumnVisibility = useMemo(() => {
+    const withManure = usesManure(yearValues)
+      ? columnVisibility
+      : withoutManureColumns(columnVisibility)
+    return usesAutumnAllocation(yearValues)
+      ? withManure
+      : withoutAutumnAllocationColumn(withManure)
+  }, [columnVisibility, yearValues])
 
   const rowCallbacks = useRef({
     onSelectedFieldChange,
@@ -427,6 +442,7 @@ export const FarmFieldsList = ({
         selectedYearIndex,
         fields: sortedFields,
         fertiliser,
+        nNormLevels,
         fertiliserLoading: yearValuesLoading,
         quota,
         catchmentLabel,
@@ -439,6 +455,7 @@ export const FarmFieldsList = ({
       selectedYearIndex,
       sortedFields,
       fertiliser,
+      nNormLevels,
       yearValuesLoading,
       quota,
       catchmentLabel,

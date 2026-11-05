@@ -79,6 +79,7 @@ import {
   readableTextColor,
   shortCropName,
 } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   ATTRIBUTE_OPTIONS,
   COLOR_SPECS,
@@ -86,6 +87,7 @@ import {
   HOVER_FIELD_LINE_COLOR,
   buildCatchmentFillOpacity,
   buildFillColor,
+  buildRotationSpec,
   buildYearCropSpec,
   colorLegendLabel,
   formatLegendUnit,
@@ -96,6 +98,7 @@ import {
   type ColorAttribute,
   type ColorSpec,
 } from '@/lib/map-coloring'
+import { cropSequenceOf, type RotationShare } from '@/lib/rotation-overview'
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('da-DK', { maximumFractionDigits: 2 }).format(value)
@@ -224,6 +227,10 @@ type FarmFieldsMapProps = {
   selectedYearIndex?: number | null
   yearValues?: FieldYearValues
   yearValuesLoading?: boolean
+  // The sædskifter of the whole farm and their colours, as in the Sædskifter
+  // tab, for the Sædskifte colouring of a simulation.
+  rotationShares?: RotationShare[]
+  rotationColors?: Map<string, string>
   selectedFieldId: string | null
   onSelectedFieldChange: (fieldId: string | null) => void
   hoveredFieldId: string | null
@@ -239,6 +246,9 @@ type FarmFieldsMapProps = {
 
 const defaultColorByForMode = (mode: FarmInspectorMode): ColorAttribute =>
   mode === 'rules' ? 'fieldLocked' : 'none'
+
+const NO_ROTATION_SHARES: RotationShare[] = []
+const NO_ROTATION_COLORS = new globalThis.Map<string, string>()
 
 type ColorBySelection = {
   forMode: FarmInspectorMode
@@ -296,6 +306,8 @@ export const FarmFieldsMap = ({
   selectedYearIndex = null,
   yearValues,
   yearValuesLoading = false,
+  rotationShares = NO_ROTATION_SHARES,
+  rotationColors = NO_ROTATION_COLORS,
   selectedFieldId,
   onSelectedFieldChange,
   hoveredFieldId,
@@ -358,7 +370,10 @@ export const FarmFieldsMap = ({
       ? colorBySelection.value
       : defaultColorByForMode(mode)
   const colorBy =
-    selectedColorBy === 'db2' && !isSimulationView ? 'none' : selectedColorBy
+    (selectedColorBy === 'db2' || selectedColorBy === 'rotation') &&
+    !isSimulationView
+      ? 'none'
+      : selectedColorBy
   if (previousHasSelectedYear !== hasSelectedYear) {
     setPreviousHasSelectedYear(hasSelectedYear)
     if (hasSelectedYear) {
@@ -399,10 +414,17 @@ export const FarmFieldsMap = ({
           ),
     [fields, yearIndex],
   )
+  const rotationSpec = useMemo(
+    () => buildRotationSpec(rotationShares, rotationColors),
+    [rotationShares, rotationColors],
+  )
+  // Only a simulation has sædskifter, so db2 and the sædskifte are left out of
+  // the afgrødehistorik.
   const colorOptions = ATTRIBUTE_OPTIONS.filter(
     (option) =>
       (hasSelectedYear || !isYearColorAttribute(option.value)) &&
-      (isSimulationView || option.value !== 'db2'),
+      (isSimulationView ||
+        (option.value !== 'db2' && option.value !== 'rotation')),
   )
 
   const activeColorSpec: ColorSpec | null =
@@ -410,7 +432,9 @@ export const FarmFieldsMap = ({
       ? null
       : colorBy === 'yearCrop'
         ? yearCropSpec
-        : COLOR_SPECS[colorBy]
+        : colorBy === 'rotation'
+          ? rotationSpec
+          : COLOR_SPECS[colorBy]
   const farmThemedColor = activeColorSpec
     ? buildFillColor(activeColorSpec)
     : null
@@ -431,6 +455,10 @@ export const FarmFieldsMap = ({
         (rotation) => rotation.id === hoveredRecord.rotationId,
       )?.name ?? null)
     : null
+  const hoveredRotationCropSequence = cropSequenceOf(
+    hoveredRecord?.rotationId ?? null,
+    rotationShares,
+  )
 
   // Zoomed-out dots grow slightly with zoom before handing over to polygons.
   const registryPointRadius: ExpressionSpecification = [
@@ -534,7 +562,7 @@ export const FarmFieldsMap = ({
           field,
           point,
           name: shortCropName(year.cropName),
-          fullName: year.cropName,
+          fullName: cropLabel(year.cropCode, year.cropName),
           color: cropGroupColor(year.cropCode, year.cropName),
         },
       ]
@@ -1741,6 +1769,8 @@ export const FarmFieldsMap = ({
                 rotationName={hoveredRotationName}
                 catchmentLabel={catchmentLabel}
                 colorBy={colorBy}
+                rotationSpec={rotationSpec}
+                rotationCropSequence={hoveredRotationCropSequence}
                 isSimulationView={isSimulationView}
                 selectedCalendarYear={selectedCalendarYear}
                 yearValuesLoading={yearValuesLoading}

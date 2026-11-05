@@ -94,13 +94,13 @@ export const EconomicsNumberField = ({
 
 type YieldPctFieldProps = {
   pct: number
-  cropName: string
+  cropLabel: string
   onCommit: (pct: number) => void
 }
 
 export const YieldPctField = ({
   pct,
-  cropName,
+  cropLabel,
   onCommit,
 }: YieldPctFieldProps) => (
   <div className="flex items-start justify-end gap-1.5 leading-7">
@@ -109,7 +109,7 @@ export const YieldPctField = ({
       variant="outline"
       size="icon"
       className="size-7"
-      aria-label={`Sænk udbyttet for ${cropName} ${YIELD_PCT_STEP} %`}
+      aria-label={`Sænk udbyttet for ${cropLabel} ${YIELD_PCT_STEP} %`}
       onClick={() => onCommit(stepYieldPct(pct, -1))}
     >
       <Minus className="size-3.5" aria-hidden="true" />
@@ -117,7 +117,7 @@ export const YieldPctField = ({
     <EconomicsNumberField
       value={pct}
       standard={0}
-      label={`${YIELD_ADJUSTMENT_LABEL} for ${cropName} i %`}
+      label={`${YIELD_ADJUSTMENT_LABEL} for ${cropLabel} i %`}
       format={formatYieldPct}
       parse={parseYieldPctInput}
       onCommit={onCommit}
@@ -128,7 +128,7 @@ export const YieldPctField = ({
       variant="outline"
       size="icon"
       className="size-7"
-      aria-label={`Hæv udbyttet for ${cropName} ${YIELD_PCT_STEP} %`}
+      aria-label={`Hæv udbyttet for ${cropLabel} ${YIELD_PCT_STEP} %`}
       onClick={() => onCommit(stepYieldPct(pct, 1))}
     >
       <Plus className="size-3.5" aria-hidden="true" />

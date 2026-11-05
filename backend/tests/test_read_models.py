@@ -71,6 +71,14 @@ def large_metadata():
     return metadata
 
 
+def load_migration(filename):
+    path = Path(__file__).parents[1] / "database/migrations/versions" / filename
+    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
 class ProjectionTests(unittest.TestCase):
     def test_compact_metadata_matches_full_area_bounds_and_lock_fallbacks(self):
         for active_len in (0, 1, 2, 3, 8):
@@ -246,6 +254,54 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(years[0]["tildelt_husdyrgodning_udnyttet_kgn_ha"], 20)
         self.assertLess(len(json.dumps(years)), len(full.model_dump_json()) / 3)
 
+    def test_compact_years_keep_whether_the_n_norm_level_cut_the_yield(self):
+        full = rich_candidate()
+        full.years[0].db_detail["udbytterespons"] = True
+        full.years[1].db_detail["udbytterespons"] = False
+        years = read_models.compact_years(full)
+        self.assertIs(years[0]["has_yield_response"], True)
+        self.assertIs(years[1]["has_yield_response"], False)
+        self.assertIsNone(years[2]["has_yield_response"])
+
+    def test_economics_statement_adds_each_calculated_fields_average_year_by_area(self):
+        value = candidate(200)
+        value.active_len = 2
+        for year, (revenue, fertiliser) in zip(
+            value.years[:2], ((1000, 300), (1400, 500)), strict=True
+        ):
+            year.db_detail = {
+                "indtaegt": revenue,
+                "tilskud": 100,
+                "goedning": fertiliser,
+                "udsaed": 200,
+                "omkostninger_total": fertiliser + 200,
+            }
+        calculated = field("calculated").model_copy(
+            update={"rotation_id": value.ref.to_id(), "db2": 1400}
+        )
+        missing = field("missing").model_copy(update={"rotation_id": value.ref.to_id()})
+        fields = [f.model_dump(mode="json") for f in (calculated, field("uncalculated"), missing)]
+        statement = read_models.economics_statement(
+            fields, {"calculated": value, "uncalculated": value}
+        )
+        self.assertEqual(
+            statement,
+            {
+                "area_ha": 2,
+                "indtaegt": 2400,
+                "tilskud": 200,
+                "goedning": 800,
+                "andre_goedningsstoffer": 0,
+                "udsaed": 400,
+                "plantevaern": 0,
+                "markarbejde": 0,
+                "toerring": 0,
+                "andet": 0,
+                "omkostninger_total": 1200,
+                "db": 1400,
+            },
+        )
+
     def test_compact_years_keep_an_inferred_mellemafgroede_or_tidlig_saaning(self):
         full = rich_candidate()
         full.years[0].leaching_detail["mellemafgroede_eller_tidlig_saaning"] = True
@@ -288,6 +344,13 @@ class ProjectionTests(unittest.TestCase):
             ),
             expected_totals,
         )
+
+    def test_history_totals_are_keyed_by_the_three_history_years(self):
+        history = SimpleNamespace(years=rich_candidate().years[:3], active_len=3)
+        totals = read_models.yearly_totals(
+            [field("history")], {"history": read_models.compact_years(history)}, history=True
+        )
+        self.assertEqual([total["year"] for total in totals], [2024, 2025, 2026])
 
 
 class ReadModelTests(DatabaseTests):
@@ -333,7 +396,7 @@ class ReadModelTests(DatabaseTests):
         )
         self.assertIsNone(replaced.error)
 
-    def publish_result(self):
+    def publish_result(self, without_economics=()):
         value = rich_candidate()
         fields = [
             field(id).model_copy(
@@ -348,6 +411,10 @@ class ReadModelTests(DatabaseTests):
             )
             for id in ("field-b", "field-a")
         ]
+        selected = {f.id: value.model_dump(mode="json") for f in fields}
+        for field_id in without_economics:
+            for year in selected[field_id]["years"]:
+                year["db_detail"]["economics_missing"] = True
         output = {
             "response": {
                 "status": "OPTIMAL",
@@ -359,7 +426,7 @@ class ReadModelTests(DatabaseTests):
                 "assignments": [],
             },
             "fields_before": [field(f.id).model_dump(mode="json") for f in fields],
-            "selected_candidates": {f.id: value.model_dump(mode="json") for f in fields},
+            "selected_candidates": selected,
         }
         run = self.submit()
         _, _, token = optimization_store.claim("sim", run.run_id)
@@ -527,6 +594,27 @@ class ReadModelTests(DatabaseTests):
             self.assertIsNone(
                 read_model_store.schedule_preparation(session, "prepare_simulation_view", "sim")
             )
+
+    def test_saved_result_shows_the_economics_of_its_selected_rotations(self):
+        self.publish_result()
+        view = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view").json()
+        saved = view["data"]["savedResult"]
+        statement = saved["economicsStatement"]
+        self.assertEqual(statement["areaHa"], 4)
+        self.assertEqual(statement["db"], saved["response"]["objectiveDb2"])
+        self.assertEqual(statement["omkostningerTotal"], 0)
+        self.assertEqual(statement["andreGoedningsstoffer"], 0)
+
+    def test_saved_result_counts_only_the_fields_with_economics(self):
+        self.publish_result(without_economics=["field-a"])
+        view = TestClient(main.app).get("/api/v0/farms/farm/simulations/sim/view").json()
+        saved = view["data"]["savedResult"]
+        self.assertEqual(
+            {f["id"]: f["economicsMissing"] for f in saved["response"]["fields"]},
+            {"field-a": True, "field-b": False},
+        )
+        self.assertEqual(saved["economicsStatement"]["areaHa"], 2)
+        self.assertEqual(saved["economicsStatement"]["db"], 400)
 
     def test_backfill_after_failed_new_run_preserves_successful_provenance(self):
         _, successful, _, _ = self.publish_result()
@@ -1205,12 +1293,7 @@ class ReadModelTests(DatabaseTests):
         self.assertEqual(read_model_store.get_simulation_view("farm", "sim", EMAIL), before)
 
     def test_migration_round_trip_preserves_source_and_does_not_calculate(self):
-        path = (
-            Path(__file__).parents[1] / "database/migrations/versions/20261012_0002_read_models.py"
-        )
-        spec = importlib.util.spec_from_file_location("read_model_migration", path)
-        migration = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(migration)
+        migration = load_migration("20261012_0002_read_models.py")
         with self.engine.begin() as connection:
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
@@ -1219,3 +1302,19 @@ class ReadModelTests(DatabaseTests):
             self.assertIn("field_historical_detail", inspect(connection).get_table_names())
             self.assertIsNone(connection.execute(select(views.c.data)).scalar_one())
             self.assertEqual(connection.execute(select(farm_views.c.status)).scalar_one(), "queued")
+
+    def test_three_year_history_migration_recalculates_each_farm_on_its_next_load(self):
+        read_model_worker.execute(self.history_inputs(), CONTEXT)
+        migration = load_migration("20261102_0001_three_year_crop_history.py")
+        with self.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.upgrade()
+        read_model_store.recover_local_preparations()
+        view = read_model_store.get_farm_view("farm", EMAIL)
+        self.assertEqual((view["status"], view["data"]), ("queued", None))
+        with self.assertRaises(ReadModelNotReadyError):
+            repository.get_field_historical_years("farm", "history-0", EMAIL)
+        calculated = self.years.call_count
+        response = TestClient(main.app).get("/api/v0/farms/farm/view")
+        self.assertEqual(response.json()["status"], "done")
+        self.assertEqual(self.years.call_count, calculated + 2)

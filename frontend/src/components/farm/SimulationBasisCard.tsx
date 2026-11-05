@@ -1,11 +1,14 @@
 import { SlidersHorizontal, Pencil } from 'lucide-react'
 import { useId } from 'react'
 
-import type { Simulation } from '@/api/types'
+import { useCropCodes } from '@/api/hooks'
+import type { CropCodeOption, Simulation } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { Button } from '@/components/ui/button'
+import { cropLabelByCode } from '@/lib/crop-label'
 import { formatNumber } from '@/lib/field-domain'
 import {
+  autumnAllocationLabel,
   catchCropSowingLabel,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
@@ -19,7 +22,10 @@ type BasisValue = {
   term?: GlossaryTerm
 }
 
-const basisValues = (simulation: Simulation): BasisValue[] => {
+const basisValues = (
+  simulation: Simulation,
+  cropCodes: CropCodeOption[],
+): BasisValue[] => {
   const { fertiliser } = simulation
   return [
     {
@@ -57,6 +63,13 @@ const basisValues = (simulation: Simulation): BasisValue[] => {
           },
         ]),
     {
+      label: 'Efterårstildeling',
+      term: 'autumnAllocation',
+      value: autumnAllocationLabel(fertiliser.autumnAllocations ?? [], (code) =>
+        cropLabelByCode(code, cropCodes),
+      ),
+    },
+    {
       label: 'Efterafgrøde',
       term: 'catchCrop',
       value: catchCropSowingLabel(
@@ -80,6 +93,7 @@ export const SimulationBasisCard = ({
   onEditBasis,
 }: SimulationBasisCardProps) => {
   const id = useId()
+  const cropCodes = useCropCodes(simulation.farmId).data ?? []
 
   return (
     <section
@@ -114,7 +128,7 @@ export const SimulationBasisCard = ({
           manuelle valg bevares.
         </p>
         <dl className="grid grid-cols-3 gap-x-4 gap-y-3 px-5 pt-3 pb-4 pl-11.5">
-          {basisValues(simulation).map((value) => (
+          {basisValues(simulation, cropCodes).map((value) => (
             <div key={value.label} className="min-w-0">
               <dt className="flex items-center gap-1 text-xs text-muted-foreground">
                 {value.label}

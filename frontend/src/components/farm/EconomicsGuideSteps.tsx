@@ -18,9 +18,9 @@ import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   budgetSoilType,
-  categoryPrices,
   cropYieldPct,
   describePriceCrops,
   findPrice,
@@ -29,13 +29,17 @@ import {
   isPriceCustomised,
   lineAmountDkkHa,
   lineQuantity,
+  manurePrices,
+  mineralFertiliserPrices,
   priceValue,
   quantityUnitLabel,
   saleLine,
   SOIL_VARIANTS_NOTE,
+  standardYield,
   withPriceOverride,
   withYieldPct,
   yieldHint,
+  yieldLines,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsOverrides,
@@ -62,7 +66,7 @@ const CropName = ({ crop, children }: CropNameProps) => (
   <span className="flex min-w-0 items-center gap-2">
     <CropGroupTile group={cropGroupFor(crop.cropCode, crop.cropName)} />
     <span className="min-w-0">
-      <span className="block">{crop.cropName}</span>
+      <span className="block">{cropLabel(crop.cropCode, crop.cropName)}</span>
       {children}
     </span>
   </span>
@@ -124,38 +128,59 @@ export const GuidePricesStep = ({
           <span className="text-right">Din pris</span>
         </div>
         {assumptions.crops.map((crop) => {
-          const sale = saleLine(crop)
-          const price = sale && findPrice(assumptions, sale.priceId)
-          if (!price) return null
+          const sales = yieldLines(crop).flatMap((line) => {
+            const price = findPrice(assumptions, line.priceId)
+            return price ? [{ line, price }] : []
+          })
+          if (sales.length === 0) return null
+          const [first] = sales
+          const label = cropLabel(crop.cropCode, crop.cropName)
           return (
             <div key={crop.cropCode} className="border-b">
-              <PriceRow
-                price={price}
-                value={sharedPrice.shownPrice(
-                  price.id,
-                  priceValue(assumptions, overrides, price.id),
-                )}
-                label={`Din salgspris for ${crop.cropName} i ${price.unit}`}
-                onCommit={(value) => sharedPrice.commitPrice(price.id, value)}
-              >
-                <CropName crop={crop}>
-                  <button
-                    type="button"
-                    aria-label={`Se alle poster for ${crop.cropName}`}
-                    className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
-                    onClick={() => onOpenCrop(crop.cropCode)}
+              {sales.map(({ line, price }) => (
+                <div key={line.id}>
+                  <PriceRow
+                    price={price}
+                    value={sharedPrice.shownPrice(
+                      price.id,
+                      priceValue(assumptions, overrides, price.id),
+                    )}
+                    label={`Din salgspris for ${label}${sales.length > 1 ? `, ${line.label.toLowerCase()},` : ''} i ${price.unit}`}
+                    onCommit={(value) =>
+                      sharedPrice.commitPrice(price.id, value)
+                    }
                   >
-                    Se alle poster
-                  </button>
-                </CropName>
-              </PriceRow>
-              <SharedPriceConfirm
-                assumptions={assumptions}
-                overrides={overrides}
-                sharedPrice={sharedPrice}
-                priceId={price.id}
-                className="px-5 pb-3"
-              />
+                    {line === first.line ? (
+                      <CropName crop={crop}>
+                        {sales.length > 1 ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {line.label}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label={`Se alle poster for ${label}`}
+                          className={cn(TEXT_LINK_CLASS, 'text-left text-xs')}
+                          onClick={() => onOpenCrop(crop.cropCode)}
+                        >
+                          Se alle poster
+                        </button>
+                      </CropName>
+                    ) : (
+                      <span className="pl-[26px] text-xs text-muted-foreground">
+                        {line.label}
+                      </span>
+                    )}
+                  </PriceRow>
+                  <SharedPriceConfirm
+                    assumptions={assumptions}
+                    overrides={overrides}
+                    sharedPrice={sharedPrice}
+                    priceId={price.id}
+                    className="px-5 pb-3"
+                  />
+                </div>
+              ))}
             </div>
           )
         })}
@@ -169,38 +194,44 @@ export const GuideFertiliserStep = ({
   assumptions,
   overrides,
   onChange,
-}: StepProps) => (
-  <div className="overflow-x-auto">
-    <div className="min-w-130">
-      <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
-        <span>Gødning</span>
-        <span className="text-right">Standardens pris</span>
-        <span className="text-right">Din pris</span>
-      </div>
-      {categoryPrices(assumptions, 'fertiliser').map((price) => (
-        <div key={price.id} className="border-b">
-          <PriceRow
-            price={price}
-            value={priceValue(assumptions, overrides, price.id)}
-            label={`Din pris for ${price.label} i ${price.unit}`}
-            onCommit={(value) =>
-              onChange((current) =>
-                withPriceOverride(assumptions, current, price.id, value),
-              )
-            }
-          >
-            <span>{price.label}</span>
-          </PriceRow>
+}: StepProps) => {
+  const mineral = mineralFertiliserPrices(assumptions)
+  const prices = [...mineral, ...manurePrices(assumptions)]
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-130">
+        <div className={cn(PRICES_GRID_CLASS, GRID_HEAD_CLASS)}>
+          <span>Gødning</span>
+          <span className="text-right">Standardens pris</span>
+          <span className="text-right">Din pris</span>
         </div>
-      ))}
-      <p className={FOOT_CLASS}>
-        Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med
-        husdyrgødning dækker den en del af normen. Husdyrgødningen har endnu
-        ingen pris, men udbringningen af den regnes pr. ton.
-      </p>
+        {prices.map((price) => (
+          <div key={price.id} className="border-b">
+            <PriceRow
+              price={price}
+              value={priceValue(assumptions, overrides, price.id)}
+              label={`Din pris for ${price.label} i ${price.unit}`}
+              onCommit={(value) =>
+                onChange((current) =>
+                  withPriceOverride(assumptions, current, price.id, value),
+                )
+              }
+            >
+              <span>{price.label}</span>
+            </PriceRow>
+          </div>
+        ))}
+        <p className={FOOT_CLASS}>
+          {mineral.length > 0
+            ? 'Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med husdyrgødning dækker den en del af normen. Husdyrgødningens udbringning og købspris er pr. ton og gælder både for konventionel og økologisk drift, når en simulering bruger husdyrgødning.'
+            : 'Husdyrgødningen dækker hele kvælstofnormen. Udbringning og købspris er pr. ton.'}{' '}
+          Standardens købspris er 0 kr/ton.
+        </p>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 const YIELD_GRID_CLASS =
   'grid grid-cols-[minmax(9rem,1fr)_11rem_11rem] items-center gap-x-4 px-5'
@@ -228,12 +259,12 @@ export const GuideYieldStep = ({
           >
             <CropName crop={crop} />
             <span className="text-right text-muted-foreground tabular-nums">
-              {formatEconomicsNumber(grain.quantity)} {grain.quantityUnit} på{' '}
-              {budgetSoilType(assumptions)}
+              {formatEconomicsNumber(standardYield(crop))} {grain.quantityUnit}{' '}
+              på {budgetSoilType(assumptions)}
             </span>
             <YieldPctField
               pct={pct}
-              cropName={crop.cropName}
+              cropLabel={cropLabel(crop.cropCode, crop.cropName)}
               onCommit={(value) =>
                 onChange((current) => withYieldPct(current, crop, value))
               }
@@ -248,8 +279,9 @@ export const GuideYieldStep = ({
       })}
       <p className={FOOT_CLASS}>
         Procenten lægges oven på hver marks eget udbytte, som afhænger af
-        jordtype og vanding. Den ændrer mængden af kerne og halm og tørringen,
-        men ikke de andre omkostninger.
+        jordtype og vanding. Den ændrer mængden af kerne og halm og de
+        omkostninger, der afhænger af mængden, som tørring, halmpresning,
+        rensning, sortering og fragt. De andre omkostninger ændrer sig ikke.
       </p>
     </div>
   </div>
@@ -290,7 +322,7 @@ export const GuideMachinesStep = ({
         >
           {crops.map((entry) => (
             <option key={entry.cropCode} value={entry.cropCode}>
-              {entry.cropName}
+              {cropLabel(entry.cropCode, entry.cropName)}
             </option>
           ))}
         </select>
@@ -360,9 +392,9 @@ export const GuideMachinesStep = ({
             )
           })}
           <p className={FOOT_CLASS}>
-            Tallene er for {crop.cropName}. En fælles pris gælder for alle de
-            afgrøder, der står ved den. Mængderne rettes på profilens side.{' '}
-            {SOIL_VARIANTS_NOTE}
+            Tallene er for {cropLabel(crop.cropCode, crop.cropName)}. En fælles
+            pris gælder for alle de afgrøder, der står ved den. Mængderne rettes
+            på profilens side. {SOIL_VARIANTS_NOTE}
           </p>
         </div>
       </div>

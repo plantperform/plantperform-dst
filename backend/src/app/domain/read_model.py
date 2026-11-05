@@ -18,14 +18,21 @@ class FieldYearValue(CamelModel):
     year: RotationYear
     leaching_kg_n_ha: float
     db_kr_ha: float
+    # An afgrøde without a cost budget that no sædskifte grows: db_kr_ha is 0
+    # and means no figure.
+    economics_missing: bool = False
     fen_fe_ha: float
     forfrugtsvaerdi_kgn_ha: float = 0
     tildelt_husdyrgodning_udnyttet_kgn_ha: float = 0
     tildelt_handelsgodning_kgn_ha: float = 0
     husdyrgodning_organisk_bundet_kgn_ha: float = 0
+    autumn_allocated_kg_n_ha: float = 0
     husdyrgodning_ton_pr_ha: float = 0
     afgrode_norm_kgn_ha: float | None = None
     n_norm_pct: float = 100
+    # Whether the year's afgrøde has a yield-response curve, so n_norm_pct can
+    # cut its N and yield. None in read models prepared before the flag existed.
+    has_yield_response: bool | None = None
     winter_cover: dict = Field(default_factory=dict)
 
 
@@ -58,6 +65,21 @@ class RotationChoiceCategory(CamelModel):
     saedskifter: list[RotationChoice]
 
 
+class EconomicsStatement(CamelModel):
+    area_ha: float
+    indtaegt: float
+    tilskud: float
+    goedning: float
+    andre_goedningsstoffer: float
+    udsaed: float
+    plantevaern: float
+    markarbejde: float
+    toerring: float
+    andet: float
+    omkostninger_total: float
+    db: float
+
+
 class SavedResultView(CamelModel):
     economics_snapshot: EconomicsSnapshot = Field(default_factory=EconomicsSnapshot)
     run_id: str
@@ -65,6 +87,7 @@ class SavedResultView(CamelModel):
     response: OptimizeSimulationResponse
     fields_before: list[FieldRecord]
     field_years: dict[str, list[FieldYearValue]]
+    economics_statement: EconomicsStatement | None = None
 
 
 class FarmViewData(CamelModel):

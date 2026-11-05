@@ -2,8 +2,9 @@ import type { FieldRecord } from '@/api/types'
 import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import { cn } from '@/lib/utils'
-import { rotationCovers, shownUndersownCropName } from '@/lib/winter-cover'
+import { rotationCovers, shownUndersownCropLabel } from '@/lib/winter-cover'
 
 type RotationSwatchesProps = {
   rotation: FieldRecord['cropRotation']
@@ -24,9 +25,9 @@ export const RotationSwatches = ({
       {rotation.map((year, index) => {
         const calendarYear = startYear + index
         const covers = yearCovers?.[index] ?? []
-        const undersownCropName = shownUndersownCropName(year)
-        const title = `${calendarYear}: ${year.cropName}${
-          undersownCropName !== null ? ` (udlæg: ${undersownCropName})` : ''
+        const undersownLabel = shownUndersownCropLabel(year)
+        const title = `${calendarYear}: ${cropLabel(year.cropCode, year.cropName)}${
+          undersownLabel !== null ? ` (udlæg: ${undersownLabel})` : ''
         }${covers.map((yearCover) => ` · ${yearCover.cover.label}`).join('')}`
         const isHighlighted = highlightIndex === index
         return (

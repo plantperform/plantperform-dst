@@ -20,6 +20,17 @@ PRISLISTE = {
 }
 
 
+def budget_spreadings(count: float) -> list[dict]:
+    return [
+        {
+            "kategori": "Markarbejde",
+            "behandling": "Gødningsspredning",
+            "udgift_kr_ha": count * 109.0,
+            "maengde": count,
+        }
+    ]
+
+
 class CalculateDbYieldResponseTests(unittest.TestCase):
     def setUp(self) -> None:
         db_calculator.calculate_db.cache_clear()
@@ -33,6 +44,7 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
             "_lookup_omkostningslinjer": lambda *args, **kwargs: [],
             "_load_prisliste": lambda: PRISLISTE,
             "_tilskud_poster": lambda *args, **kwargs: [],
+            "mangler_oekonomi": lambda *args, **kwargs: False,
         }.items():
             patcher = patch.object(db_calculator, name, value)
             patcher.start()
@@ -50,6 +62,58 @@ class CalculateDbYieldResponseTests(unittest.TestCase):
         )
         self.assertAlmostEqual(result["udbytte"], 53.85, places=2)
         self.assertEqual(result["tilgaengelig_n"], 140.0)
+
+    def spreading(self, count, **values) -> dict[str, float]:
+        with patch.object(
+            db_calculator,
+            "_lookup_omkostningslinjer",
+            lambda *args, **kwargs: budget_spreadings(count) if count else [],
+        ):
+            result = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1, **values)
+        return {
+            line["behandling"]: line["udgift_kr_ha"]
+            for line in result["linjer"]
+            if line["kategori"] == "Gødning" and "Udbringning" in line["behandling"]
+        }
+
+    def test_the_budgets_spreading_is_not_priced_again(self) -> None:
+        self.assertEqual(self.spreading(1, mncs=175.0), {})
+
+    def test_a_budget_without_spreading_pays_one_from_the_price_list(self) -> None:
+        self.assertEqual(self.spreading(0, mncs=175.0), {"Udbringning, handelsgødning": 100.0})
+
+    def test_without_handelsgoedning_there_is_nothing_to_spread(self) -> None:
+        self.assertEqual(self.spreading(0, mncs=100.0, org_mineral_n_applied=100.0), {})
+
+    def test_autumn_handelsgoedning_takes_one_more_spreading(self) -> None:
+        self.assertEqual(
+            self.spreading(2, mncs=135.0, mnca=40.0),
+            {"Udbringning, handelsgødning, efterår": 100.0},
+        )
+
+    def test_three_spreadings_include_the_one_in_autumn(self) -> None:
+        self.assertEqual(self.spreading(3, mncs=135.0, mnca=40.0), {})
+
+    def test_a_budget_without_spreading_pays_for_spring_and_autumn(self) -> None:
+        self.assertEqual(
+            self.spreading(0, mncs=135.0, mnca=40.0),
+            {
+                "Udbringning, handelsgødning": 100.0,
+                "Udbringning, handelsgødning, efterår": 100.0,
+            },
+        )
+
+    def test_autumn_n_is_part_of_the_crops_available_n_and_cost(self) -> None:
+        moved = db_calculator.calculate_db(VINTERHVEDE, "Konventionel", 1, mncs=135.0, mnca=40.0)
+        self.assertEqual(moved["tilgaengelig_n"], 175.0)
+        self.assertEqual(moved["udbytte"], 57.0)
+        self.assertEqual(moved["linjer"][0]["udgift_kr_ha"], 1750.0)
+
+    def test_oekologisk_never_has_handelsgoedning(self) -> None:
+        result = db_calculator.calculate_db(
+            VINTERHVEDE, "Økologisk", 1, mncs=175.0, mnca=40.0, only_organic=False,
+        )
+        self.assertEqual(result["goedning"], 0.0)
 
     def test_drying_follows_the_yield(self) -> None:
         lines = [
@@ -120,6 +184,33 @@ class CalculateDbManureSpreadingTests(CalculateDbYieldResponseTests):
             VINTERHVEDE, "Konventionel", 1, mncs=120.0, itemized=True
         )
         self.assertEqual(self.manure_lines(result), [])
+        self.assertEqual(self.purchase_lines(result), [])
+
+    def purchase_lines(self, result: dict) -> list[dict]:
+        return [line for line in result["linjer"] if line["behandling"] == "Husdyrgødning, køb"]
+
+    def spread(self, driftsform: str) -> dict:
+        return db_calculator.calculate_db(
+            VINTERHVEDE, driftsform, 1, mncs=120.0, org_mineral_n_applied=120.0,
+            only_organic=driftsform == "Økologisk", husdyrgodning_ton_pr_ha=20.0, itemized=True,
+        )
+
+    def test_manure_is_bought_per_tonne_on_both_driftsformer(self) -> None:
+        prisliste = {**PRISLISTE, "Husdyrgødning, køb": {"pris": 15.0, "enhed": "ton"}}
+        for driftsform in ("Konventionel", "Økologisk"):
+            db_calculator.calculate_db.cache_clear()
+            with self.subTest(driftsform=driftsform):
+                with patch.object(db_calculator, "_load_prisliste", lambda: prisliste):
+                    result = self.spread(driftsform)
+                [line] = self.purchase_lines(result)
+                self.assertEqual(line["udgift_kr_ha"], 20.0 * 15.0)
+                self.assertEqual(result["goedning"], 20.0 * 24.0 + 20.0 * 15.0)
+
+    def test_manure_is_free_without_a_purchase_price(self) -> None:
+        for driftsform in ("Konventionel", "Økologisk"):
+            with self.subTest(driftsform=driftsform):
+                [line] = self.purchase_lines(self.spread(driftsform))
+                self.assertEqual(line["udgift_kr_ha"], 0.0)
 
 
 if __name__ == "__main__":

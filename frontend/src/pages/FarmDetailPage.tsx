@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Link,
   Navigate,
@@ -49,6 +49,7 @@ import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSimulationActions } from '@/components/farm/simulation-actions'
 import { SimulationComparison } from '@/components/farm/SimulationComparison'
 import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
+import { withoutCalculation } from '@/lib/field-domain'
 import { isSimulationReady } from '@/lib/simulation-creation'
 import { SimulationOverview } from '@/components/farm/SimulationOverview'
 import {
@@ -150,6 +151,16 @@ const FarmDetail = () => {
     Boolean(selectedSimulation && isSimulationReady(selectedSimulation)),
   )
   const simulationFields = simulationFieldsData ?? []
+  // A saved simulation that has not been optimized has no field snapshot yet,
+  // and its view is either missing or empty; show the farm's marker instead of
+  // an empty page.
+  const hasNoFieldSnapshot =
+    selectedSimulation?.fieldsInitialized === false &&
+    (simulationSummaryMissing || simulationFields.length === 0)
+  const unoptimizedSimulationFields = useMemo(
+    () => (hasNoFieldSnapshot ? withoutCalculation(fieldsData ?? []) : null),
+    [hasNoFieldSnapshot, fieldsData],
+  )
   const [mode, setMode] = useState<FarmInspectorMode>('values')
   const { view, changeView, listSlack, changeListSlack } = useSplitLayout()
   const [splitAvailable, setSplitAvailable] = useState(true)
@@ -201,7 +212,9 @@ const FarmDetail = () => {
   const isReady =
     farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
   const activeFields =
-    activeSelection.kind === 'current' ? fields : simulationFields
+    activeSelection.kind === 'current'
+      ? fields
+      : (unoptimizedSimulationFields ?? simulationFields)
   const activeFieldsLoading =
     activeSelection.kind === 'simulation' && simulationFieldsLoading
 
@@ -482,7 +495,9 @@ const FarmDetail = () => {
                     }
                     simulations={simulations}
                     fieldsLoading={simulationFieldsLoading}
-                    summaryMissing={simulationSummaryMissing}
+                    summaryMissing={
+                      simulationSummaryMissing || hasNoFieldSnapshot
+                    }
                     fieldsError={
                       Boolean(simulationFieldsError) &&
                       simulationFieldsData === undefined

@@ -22,6 +22,7 @@ import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   dbDeltaScale,
   describeProfileChanges,
@@ -80,8 +81,11 @@ const DbEffectList = ({ effects, scale }: DbEffectListProps) => {
               <CropGroupTile
                 group={cropGroupFor(effect.cropCode, effect.cropName)}
               />
-              <TruncatedTooltip content={effect.cropName} className="truncate">
-                {effect.cropName}
+              <TruncatedTooltip
+                content={cropLabel(effect.cropCode, effect.cropName)}
+                className="truncate"
+              >
+                {cropLabel(effect.cropCode, effect.cropName)}
               </TruncatedTooltip>
             </span>
             <DbDeltaBar delta={effect.deltaDkkHa} scale={scale} />

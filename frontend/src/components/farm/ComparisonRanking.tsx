@@ -27,11 +27,10 @@ import {
 } from '@/lib/field-domain'
 import {
   bestColumnIndex,
-  COMPARISON_PERIOD,
   COMPARISON_SORT_LABELS,
   formatKgN,
   formatYears,
-  formatYearsDelta,
+  HISTORY_PERIOD,
   shareOfMax,
   type BestDirection,
   type ComparisonSort,
@@ -81,7 +80,6 @@ const METRICS: Metric[] = [
     label: 'År over kvoten',
     valueOf: (column) => column.yearsOver,
     format: formatYears,
-    describeDelta: (value, history) => formatYearsDelta(value - history),
     direction: 'lowest',
     bestWord: 'færrest',
     barClass: QUOTA_STATUS_STYLES.over.dot,
@@ -105,7 +103,7 @@ const MetricCell = ({
   max,
   catchmentCount,
 }: MetricCellProps) => {
-  if (column.history && !metric.describeDelta) return null
+  if (column.history && metric.key === 'db2') return null
   const value = metric.valueOf(column)
   if (value === null) {
     return metric.key === 'yearsOver' && column.catchments === undefined ? (
@@ -325,7 +323,7 @@ export const ComparisonRanking = ({
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {column.history
-                  ? `Udgangspunkt · fremskrevet til ${COMPARISON_PERIOD}`
+                  ? `Udgangspunkt · ${HISTORY_PERIOD}`
                   : column.subtitle}
               </span>
               {column.key === bestBalanceKey && simulations.length > 1 ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FieldRecord } from '@/api/types'
+import type { EconomicsStatement, FieldRecord } from '@/api/types'
 import {
   emptyMeasures,
   formatCompactDkk,
@@ -24,7 +24,7 @@ import {
   describeFeedUnitRequirement,
   formatFeedUnits,
   formatKgN,
-  formatYearsDelta,
+  formatStatementLine,
   hasMissingYearValues,
   haveSameFieldPlans,
   listComparedCatchments,
@@ -35,11 +35,14 @@ import {
   resolveComparisonIds,
   shareOfMax,
   sortComparison,
+  STATEMENT_GROUPS,
+  STATEMENT_RESULT,
   summarizeCatchmentComparison,
   summarizeColumnQuota,
   toggleComparisonId,
   type CatchmentYearQuota,
   type ComparisonSort,
+  type StatementUnit,
 } from '@/lib/simulation-comparison'
 
 const field = (id: string, rotationId: string | null): FieldRecord => ({
@@ -255,12 +258,12 @@ const years = (entries: Record<number, [nLoadKg: number, quotaKgN: number]>) =>
   )
 
 describe('alignCatchmentYears', () => {
-  it('lays the crop history 2019-2026 over 2027-2034', () => {
+  it('lays the crop history 2024-2026 over 2027-2029', () => {
     const totals: CatchmentTotalsByYear = new Map([
-      [7, years({ 2019: [10, 100], 2026: [20, 100] })],
+      [7, years({ 2024: [10, 100], 2026: [20, 100] })],
     ])
     expect(alignCatchmentYears(totals, true)).toEqual(
-      new Map([[7, years({ 2027: [10, 100], 2034: [20, 100] })]]),
+      new Map([[7, years({ 2027: [10, 100], 2029: [20, 100] })]]),
     )
   })
 
@@ -521,14 +524,6 @@ describe('describeCurveLegend', () => {
   })
 })
 
-describe('formatYearsDelta', () => {
-  it('signs the change in years over the quota', () => {
-    expect(formatYearsDelta(-6)).toBe('−6 år')
-    expect(formatYearsDelta(0)).toBe('±0 år')
-    expect(formatYearsDelta(2)).toBe('+2 år')
-  })
-})
-
 describe('describeComparisonVerdict', () => {
   const test3 = { title: 'Test3', yearsOver: 0 }
 
@@ -741,6 +736,53 @@ describe('describeEconomicsVerdict', () => {
         column('Afgrødehistorik', null),
         column('Mere vintersæd', null),
       ]),
+    ).toBeNull()
+  })
+})
+
+describe('formatStatementLine', () => {
+  const statement: EconomicsStatement = {
+    areaHa: 40,
+    revenue: 600_000,
+    subsidy: 40_000,
+    fertiliserCost: 100_000,
+    otherFertilisers: 0,
+    seed: 30_000,
+    cropProtection: 50_000,
+    fieldWork: 120_000,
+    drying: 10_000,
+    other: 0,
+    totalCosts: 310_000,
+    db: 330_000,
+  }
+  const figure = (label: string, unit: StatementUnit, from = statement) => {
+    const line = [
+      ...STATEMENT_GROUPS.flatMap(({ lines, total }) => [...lines, total]),
+      STATEMENT_RESULT,
+    ].find((candidate) => candidate.label === label)!
+    return formatStatementLine(from, line, unit)
+  }
+
+  it('shows each line per hectare or for the whole simulation', () => {
+    expect(figure('Indtægt', 'perHa')).toBe('15.000')
+    expect(figure('Tilskud', 'perHa')).toBe('+1.000')
+    expect(figure('Indtægter i alt', 'perHa')).toBe('16.000')
+    expect(figure('Gødning', 'total')).toBe('−100.000')
+    expect(figure('Markarbejde', 'total')).toBe('−120.000')
+    expect(figure('Omkostninger i alt', 'total')).toBe('−310.000')
+    expect(figure('Dækningsbidrag', 'total')).toBe('330.000')
+  })
+
+  it('shows a line without costs as 0 and a deficit with a minus', () => {
+    expect(figure('Andre gødningsstoffer', 'perHa')).toBe('0')
+    expect(
+      figure('Dækningsbidrag', 'perHa', { ...statement, db: -2_000 }),
+    ).toBe('−50')
+  })
+
+  it('has no figure per hectare without a calculated area', () => {
+    expect(
+      figure('Dækningsbidrag', 'perHa', { ...statement, areaHa: 0 }),
     ).toBeNull()
   })
 })

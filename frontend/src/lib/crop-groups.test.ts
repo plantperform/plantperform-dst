@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest'
 
-import { classifyCrop } from '@/lib/crop-groups'
+import { classifyCrop, groupCrops } from '@/lib/crop-groups'
+
+describe('groupCrops', () => {
+  const wholeCrop = { code: 210, name: 'Vårbyg, helsæd' }
+  const wheat = { code: 11, name: 'Vinterhvede' }
+  const barley = { code: 1, name: 'Vårbyg' }
+  const potatoes = { name: 'Kartofler' }
+
+  it('groups the crops in the order of the groups, keeping their own order', () => {
+    expect(
+      groupCrops([wholeCrop, wheat, barley, potatoes]).map(
+        ({ group, crops }) => [group.id, crops],
+      ),
+    ).toEqual([
+      ['springCereal', [barley]],
+      ['winterCereal', [wheat]],
+      ['potato', [potatoes]],
+      ['wholeCropSilage', [wholeCrop]],
+    ])
+  })
+
+  it('lets the afgrødekode decide when the crop has one', () => {
+    expect(groupCrops([wholeCrop])[0].group.id).toBe('wholeCropSilage')
+    expect(groupCrops([{ name: wholeCrop.name }])[0].group.id).toBe(
+      'springCereal',
+    )
+  })
+
+  it('leaves out groups without a crop', () => {
+    expect(groupCrops([])).toEqual([])
+  })
+})
 
 describe('classifyCrop', () => {
   it('does not find a keyword inside another word', () => {
@@ -13,8 +44,6 @@ describe('classifyCrop', () => {
   })
 
   it('finds a keyword at the start or the end of a word', () => {
-    expect(classifyCrop(709, 'Grønkorn af vinterrug')).toBe('winterCereal')
-    expect(classifyCrop(710, 'Grønkorn af hybridrug')).toBe('springCereal')
     expect(classifyCrop(423, 'Sukkermajs')).toBe('maize')
     expect(classifyCrop(424, 'Ærter, konsum')).toBe('legume')
     expect(classifyCrop(596, 'Elefantgræs')).toBe('grass')
@@ -39,6 +68,15 @@ describe('classifyCrop', () => {
     expect(classifyCrop(210, 'Vårbyg, helsæd')).toBe('wholeCropSilage')
     expect(classifyCrop(222, 'Vinterrug, helsæd')).toBe('wholeCropSilage')
     expect(classifyCrop(230, 'Blanding af vårkorn, grønkorn')).toBe(
+      'wholeCropSilage',
+    )
+  })
+
+  it('puts grønkorn of a single cereal under Helsæd whatever the species', () => {
+    expect(classifyCrop(701, 'Grønkorn af vårbyg')).toBe('wholeCropSilage')
+    expect(classifyCrop(709, 'Grønkorn af vinterrug')).toBe('wholeCropSilage')
+    expect(classifyCrop(710, 'Grønkorn af hybridrug')).toBe('wholeCropSilage')
+    expect(classifyCrop(711, 'Grønkorn af vintertriticale')).toBe(
       'wholeCropSilage',
     )
   })

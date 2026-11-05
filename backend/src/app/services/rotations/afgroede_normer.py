@@ -13,11 +13,6 @@ from app.data.db import (
     afgroede_table,
 )
 
-# Potatoes use M7 in NLES5: the supplerende høring of October 2026 moved them
-# from M2 to M7 (and W3 to W6) in Bilag 2. W is not changed here. The rule
-# always applies and overrides any other M values.
-KARTOFFEL_KODER: frozenset = frozenset({149, 150, 151, 152, 154, 155, 156})
-
 _VANDING_PRIORITY = {
     True: ["Vandet", "Ikke særskilt vanding", "Uvandet"],
     False: ["Uvandet", "Ikke særskilt vanding", "Vandet"],
@@ -34,13 +29,6 @@ _DRIFTSFORM_PRIORITY = {
 
 def _missing_lookup(table_name: str, task_name: str) -> RuntimeError:
     return RuntimeError(f"{table_name} is empty; run pixi run {task_name}")
-
-
-def apply_kartoffel_regel(sample: dict) -> dict:
-    """Return the sample with M=7 for potato codes and other fields unchanged."""
-    if sample.get("crop_code") in KARTOFFEL_KODER:
-        return {**sample, "M": 7}
-    return sample
 
 
 @lru_cache(maxsize=1)

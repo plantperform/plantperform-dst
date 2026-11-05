@@ -10,10 +10,11 @@ import {
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
 import { cropGroupFor } from '@/lib/crop-groups'
+import { cropLabel } from '@/lib/crop-label'
 import {
   cropDbChange,
   cropTotals,
-  FERTILISER_NOTE,
+  fertiliserNote,
   formatDbDkk,
   formatSignedDkk,
   isCropCustomised,
@@ -82,7 +83,9 @@ const CropsOverview = ({
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
-                <span className="min-w-0 truncate">{crop.cropName}</span>
+                <span className="min-w-0 truncate">
+                  {cropLabel(crop.cropCode, crop.cropName)}
+                </span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
               </span>
               <span className="text-right">
@@ -109,7 +112,7 @@ const CropsOverview = ({
         })}
       </div>
       <p className="bg-muted/30 px-5 py-2.5 text-[11px] text-muted-foreground">
-        {FERTILISER_NOTE}
+        {fertiliserNote(assumptions)}
       </p>
     </div>
   )
@@ -166,7 +169,9 @@ export const EconomicsAssumptionsEditor = ({
                 <CropGroupTile
                   group={cropGroupFor(crop.cropCode, crop.cropName)}
                 />
-                <span className="min-w-0 flex-1">{crop.cropName}</span>
+                <span className="min-w-0 flex-1">
+                  {cropLabel(crop.cropCode, crop.cropName)}
+                </span>
                 {isCropCustomised(overrides, crop) ? <CustomisedDot /> : null}
               </button>
             </li>
@@ -176,7 +181,9 @@ export const EconomicsAssumptionsEditor = ({
 
       <section
         aria-label={
-          active ? `Priser og mængder for ${active.cropName}` : 'Alle afgrøder'
+          active
+            ? `Priser og mængder for ${cropLabel(active.cropCode, active.cropName)}`
+            : 'Alle afgrøder'
         }
         className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
       >

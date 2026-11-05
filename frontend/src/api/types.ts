@@ -26,6 +26,26 @@ export type CreateFarmInput = {
   cvr: string | null
 }
 
+export type FarmCopyLookup = {
+  cvr: '12345678'
+  name: string
+  ownerName: string
+}
+
+export type CopyFarmInput = FarmCopyLookup & {
+  sourceFarmId: string
+  requestId: string
+}
+
+export type FarmCopyPreview = {
+  sourceFarm: Farm
+  fieldCount: number
+  areaHa: number
+  simulationCount: number
+  savedResultCount: number
+  hasUnfinishedCalculations: boolean
+}
+
 export type CatchmentEmissions = {
   catchmentId: number | null
   catchmentName: string | null
@@ -86,6 +106,9 @@ export type FieldRecord = {
   measures: FieldMeasures
   allowedRotationIds: string[]
   db2: number
+  // Every year of the rotation is an afgrøde without a cost budget that no
+  // sædskifte grows, so db2 is 0 and means no figure.
+  economicsMissing?: boolean
   nLoad: number
   leaching: number
   feedUnits: number
@@ -195,12 +218,29 @@ export type OptimizationConstraints = {
   globallyAllowedRotationIds: string[] | null
 }
 
+export type AutumnFertiliser = 'mineral' | 'manure'
+
+export type AutumnAllocation = {
+  cropCode: number
+  kgNHa: number
+  fertiliserType: AutumnFertiliser
+}
+
+export type AutumnCropOption = {
+  cropCode: number
+  name: string
+  group: string
+  normMinKgNHa: number
+  normMaxKgNHa: number
+}
+
 export type FertiliserSettings = {
   farmingSystem: 'Konventionel' | 'Økologisk'
   orgMineralN: number
   mineralSharePct: number
   onlyOrganic: boolean
   nContentKgPerTon: number
+  autumnAllocations?: AutumnAllocation[]
 }
 
 export type FertiliserPresetOption = {
@@ -418,6 +458,7 @@ export type RotationCandidateYearResult = {
   appliedManureUtilisedKgNHa: number
   appliedMineralFertiliserKgNHa: number
   manureOrganicBoundKgNHa: number
+  autumnAllocatedKgNHa?: number
   manureTonsPerHa: number
   cropNormKgNHa: number | null
   nNormPct: number
@@ -426,9 +467,13 @@ export type RotationCandidateYearResult = {
 export type FieldYearValue = Pick<RotationCandidateYearResult,
   'year' | 'leachingKgNHa' | 'dbDkkHa' | 'precedingCropValueKgNHa' |
   'appliedManureUtilisedKgNHa' | 'appliedMineralFertiliserKgNHa' |
-  'manureOrganicBoundKgNHa' | 'manureTonsPerHa' | 'cropNormKgNHa' | 'nNormPct'> & {
+  'manureOrganicBoundKgNHa' | 'autumnAllocatedKgNHa' | 'manureTonsPerHa' |
+  'cropNormKgNHa' | 'nNormPct'> & {
   feedUnitsPerHa: number
   winterCover: Record<string, unknown>
+  economicsMissing?: boolean
+  // Missing in read models prepared before the backend sent it.
+  hasYieldResponse?: boolean | null
 }
 
 // Detailed calculations also satisfy the display inputs used by older fixtures.
@@ -448,6 +493,21 @@ export type FarmViewData = {
   yearlySummary: YearlySummaryEntry[]
 }
 
+export type EconomicsStatement = {
+  areaHa: number
+  revenue: number
+  subsidy: number
+  fertiliserCost: number
+  otherFertilisers: number
+  seed: number
+  cropProtection: number
+  fieldWork: number
+  drying: number
+  other: number
+  totalCosts: number
+  db: number
+}
+
 export type SavedResultView = {
   runId: string
   resultRevision: number
@@ -455,6 +515,7 @@ export type SavedResultView = {
   fieldsBefore: FieldRecord[]
   fieldYears: FieldYearValues
   economicsSnapshot?: EconomicsSnapshot
+  economicsStatement?: EconomicsStatement | null
 }
 
 export type SimulationViewData = FarmViewData & {

@@ -1,4 +1,5 @@
 from copy import deepcopy
+from types import SimpleNamespace
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -83,6 +84,7 @@ from app.services.scenario.candidate_evaluator import (
 )
 from app.services.scenario.field_history_evaluator import (
     REAL_HISTORY_END_YEAR,
+    REAL_HISTORY_YEARS,
     evaluate_real_history_for_field,
 )
 from app.services.soil.jbnr import FALLBACK_JBNR
@@ -154,6 +156,20 @@ def _soil_data_for_context(row) -> RegistrySoilData | None:
     if row is None:
         return None
     return registry_soil_data(row.percolation_by_kategori, row.org_n_topsoil, row.s_soil)
+
+
+def saved_registry_context(value):
+    return SimpleNamespace(**{"secondary_crop_history": None, **value}) if value else None
+
+
+def _real_history_for_context(row, jbnr):
+    return real_history_lookback(
+        row.crop_history or {},
+        jbnr,
+        row.goedningsregion,
+        bool(row.oeko),
+        row.secondary_crop_history,
+    )
 
 
 def get_registry_soil_data(imk_id: int | None) -> RegistrySoilData | None:
@@ -473,11 +489,11 @@ def detach_field(farm_id: str, field_id: str, email: str, *, execution_session=N
         return result.rowcount > 0
 
 
-def _locked_candidate_figures(
+def _candidate_figures(
     field: FieldRecord,
     candidate: RotationCandidateEvaluation,
 ) -> dict[str, float]:
-    """A mark's db2/n_load/leaching/fen for the candidate it is locked to.
+    """A mark's db2/n_load/leaching/fen for one candidate.
 
     Same area/retention scaling as Optimér's _build_options and
     apply_manual_rotation: one cycle-average year for the whole mark.
@@ -494,12 +510,13 @@ def _locked_candidate_figures(
 
 def baseline_simulation_candidate(field, registry_row, *, economics_key=""):
     """Capture economic inputs for an unoptimized simulation's historical baseline."""
-    if registry_row is None or not field.crop_rotation or len(field.crop_rotation) != 8:
+    if registry_row is None or len(field.crop_rotation) < len(REAL_HISTORY_YEARS):
         return None
     jbnr = registry_row.jbnr if registry_row.jbnr is not None else FALLBACK_JBNR
     crop_history = dict(registry_row.crop_history or {})
-    for index, year in enumerate(field.crop_rotation):
-        crop_history[str(REAL_HISTORY_END_YEAR - 7 + index)] = year.afgrode_kode or None
+    shown = field.crop_rotation[-len(REAL_HISTORY_YEARS) :]
+    for calendar_year, year in zip(REAL_HISTORY_YEARS, shown, strict=True):
+        crop_history[str(calendar_year)] = year.afgrode_kode or None
     soil = _soil_data_for_context(registry_row)
     percolation, org_n_topsoil, s_soil = soil if soil is not None else (None, None, None)
     years = evaluate_real_history_for_field(
@@ -550,13 +567,7 @@ def prepare_simulation_field(
     candidates: list[RotationCandidateEvaluation] = []
     real_history = None
     if registry_row is not None:
-        real_history = real_history_lookback(
-            registry_row.crop_history or {},
-            jbnr,
-            registry_row.goedningsregion,
-            bool(registry_row.oeko),
-            registry_row.secondary_crop_history,
-        )
+        real_history = _real_history_for_context(registry_row, jbnr)
 
         # A mark whose latest real afgrøde is permanent (ikke-omdrift -
         # e.g. frugtplantage, skov, permanent græs) has no meaningful
@@ -584,14 +595,14 @@ def prepare_simulation_field(
                     "rotation_id": locked_id,
                     "allowed_rotation_ids": [locked_id],
                     # Without this, crop_rotation keeps whatever "Tilføj
-                    # marker" seeded it with - the mark's actual 2019-2026
+                    # marker" seeded it with - the mark's actual 2024-2026
                     # history (see evaluate_real_history_for_field above) -
                     # instead of the forward-looking locked afgrøde. The two
                     # only coincidentally match when the history happens to
                     # already be a flat repeat of the 2026 afgrøde.
                     "crop_rotation": [y.year for y in permanent_candidate.years],
                     # Store the same projected figures used by optimization.
-                    **_locked_candidate_figures(copied_field, permanent_candidate),
+                    **_candidate_figures(copied_field, permanent_candidate),
                 },
             )
 
@@ -623,8 +634,8 @@ def prepare_simulation_field(
         if baseline is not None:
             setup["baseline_candidate"] = _dump(baseline)
             setup["baseline"].update(
-                db2=baseline.avg_db_kr_ha * copied_field.area_ha,
-                fen=baseline.avg_fen * copied_field.area_ha,
+                crop_rotation=setup["baseline"]["crop_rotation"][-len(REAL_HISTORY_YEARS) :],
+                **_candidate_figures(copied_field, baseline),
             )
     field_candidates = SimulationFieldCandidates(
         field_id=copied_field.id,

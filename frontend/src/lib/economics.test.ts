@@ -13,6 +13,7 @@ import {
   dbDeltaScale,
   describePriceCrops,
   describeProfileChanges,
+  fertiliserNote,
   formatChangeCount,
   formatDbDkk,
   formatEconomicsNumber,
@@ -24,10 +25,13 @@ import {
   isYieldCustomised,
   lineGroupId,
   lineQuantity,
+  manurePrices,
+  mineralFertiliserPrices,
   NO_OVERRIDES,
   parseEconomicsInput,
   parseYieldPctInput,
   priceCrops,
+  priceValue,
   profileChanges,
   profileChangesTitle,
   profileDbEffect,
@@ -36,6 +40,7 @@ import {
   sharedCustomisedPrices,
   sharedPriceEffect,
   standardLineQuantity,
+  standardYield,
   stepYieldPct,
   withoutCropChanges,
   withoutProfileChange,
@@ -46,6 +51,7 @@ import {
   withoutProfileChanges,
   YIELD_ADJUSTMENT_ID,
   yieldHint,
+  yieldLines,
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
@@ -75,6 +81,7 @@ const crop = (
     fertiliser?: EconomicsLine[]
     fieldWork?: EconomicsLine[]
     drying?: EconomicsLine[]
+    other?: EconomicsLine[]
   },
 ): CropEconomics => {
   const ownQuantity = (entry: EconomicsLine) => ({
@@ -100,6 +107,7 @@ const crop = (
         ...ownQuantity(entry),
         followsYield: true,
       })),
+      other: (parts.other ?? []).map(ownQuantity),
     },
   }
 }
@@ -185,6 +193,34 @@ const WITH_BARLEY: EconomicsAssumptions = {
   crops: [...ASSUMPTIONS.crops, BARLEY],
 }
 
+const POTATOES = crop(152, 'Spisekartofler', {
+  revenue: [
+    line('Sorterede kartofler', 371, 'hkg/ha', 'sortedPrice'),
+    line('Frasorterede kartofler', 66, 'hkg/ha', 'culledPrice'),
+  ],
+})
+const WITH_POTATOES: EconomicsAssumptions = {
+  ...ASSUMPTIONS,
+  prices: [
+    ...ASSUMPTIONS.prices,
+    {
+      id: 'sortedPrice',
+      label: 'Salgspris, sorterede kartofler',
+      unit: 'kr/hkg',
+      valueDkk: 150,
+      source: 'SEGES',
+    },
+    {
+      id: 'culledPrice',
+      label: 'Salgspris, frasorterede kartofler',
+      unit: 'kr/hkg',
+      valueDkk: 13,
+      source: 'SEGES',
+    },
+  ],
+  crops: [...ASSUMPTIONS.crops, POTATOES],
+}
+
 const WHEAT = crop(11, 'Vinterhvede', {
   revenue: [line('Udbytte', 84, 'hkg/ha', 'wheatPrice')],
   fertiliser: [
@@ -236,6 +272,30 @@ describe('cropTotals', () => {
     expect(totals.subsidyDkkHa).toBe(1575)
     expect(totals.costsDkkHa.fieldWork).toBe(1945)
     expect(totals.totalCostsDkkHa).toBe(1945)
+  })
+
+  it('counts the costs in the category Andet in the total costs', () => {
+    const fenced = crop(251, 'Permanent græs', {
+      fieldWork: [line('ploughing', 1, 'gange', 'ploughing')],
+      other: [line('Hegn/vedligehold', 1, 'ha', 'fencing')],
+    })
+    const assumptions: EconomicsAssumptions = {
+      ...ASSUMPTIONS,
+      prices: [
+        ...ASSUMPTIONS.prices,
+        {
+          id: 'fencing',
+          label: 'Hegn/vedligehold',
+          unit: 'kr/ha',
+          valueDkk: 150,
+          source: 'SEGES',
+        },
+      ],
+      crops: [...ASSUMPTIONS.crops, fenced],
+    }
+    const totals = cropTotals(assumptions, NO_OVERRIDES, fenced)
+    expect(totals.costsDkkHa.other).toBe(150)
+    expect(totals.totalCostsDkkHa).toBe(totals.costsDkkHa.fieldWork + 150)
   })
 
   it('changes every crop that uses a shared price', () => {
@@ -532,6 +592,39 @@ describe('yieldHint', () => {
     )
     expect(yieldHint(NO_OVERRIDES, PEAS)).toBe('')
   })
+
+  it('counts the culled potatoes in the yield, not only the sorted ones', () => {
+    expect(yieldLines(POTATOES).map((entry) => entry.label)).toEqual([
+      'Sorterede kartofler',
+      'Frasorterede kartofler',
+    ])
+    expect(standardYield(POTATOES)).toBe(437)
+    expect(standardYield(BARLEY)).toBe(66)
+    expect(yieldHint(NO_OVERRIDES, POTATOES)).toBe(
+      'Normen er 437 hkg pr. ha. Procenten ændrer mængden, men ikke omkostningerne.',
+    )
+    expect(yieldHint(withYieldPct(NO_OVERRIDES, POTATOES, 10), POTATOES)).toBe(
+      '+10 % giver 480,7 hkg pr. ha. Omkostningerne ændrer sig ikke.',
+    )
+  })
+
+  it('sends both potato prices to the prices step', () => {
+    const overrides = withPriceOverride(
+      WITH_POTATOES,
+      withPriceOverride(WITH_POTATOES, NO_OVERRIDES, 'culledPrice', 20),
+      'sortedPrice',
+      160,
+    )
+    expect(
+      profileChanges(WITH_POTATOES, overrides).map((change) => [
+        change.label,
+        change.guideStep,
+      ]),
+    ).toEqual([
+      ['Salgspris, sorterede kartofler', 1],
+      ['Salgspris, frasorterede kartofler', 1],
+    ])
+  })
 })
 
 describe('soil variants', () => {
@@ -627,7 +720,7 @@ describe('soil variants', () => {
     ).toMatchObject([
       {
         key: 'price:ploughing',
-        cropNames: ['Vinterraps', 'Ærter', 'Ærter på sand'],
+        cropLabels: ['22 - Vinterraps', '30 - Ærter', '31 - Ærter på sand'],
       },
     ])
   })
@@ -700,7 +793,7 @@ describe('profileChanges', () => {
         key: 'yield:22',
         kind: 'yield',
         label: 'Udbytte i forhold til normen',
-        cropNames: ['Vinterraps'],
+        cropLabels: ['22 - Vinterraps'],
         from: '0 %',
         to: '+10 %',
         guideStep: 3,
@@ -709,7 +802,7 @@ describe('profileChanges', () => {
         key: 'price:rapeseedPrice',
         kind: 'price',
         label: 'Salgspris',
-        cropNames: ['Vinterraps'],
+        cropLabels: ['22 - Vinterraps'],
         from: '335 kr/hkg',
         to: '350 kr/hkg',
         guideStep: 1,
@@ -718,7 +811,7 @@ describe('profileChanges', () => {
         key: 'price:ploughing',
         kind: 'price',
         label: 'Pløjning med pakning',
-        cropNames: ['Vinterraps', 'Ærter'],
+        cropLabels: ['22 - Vinterraps', '30 - Ærter'],
         from: '825 kr/gang',
         to: '700 kr/gang',
         guideStep: 4,
@@ -727,7 +820,7 @@ describe('profileChanges', () => {
         key: 'quantity:30/spraying',
         kind: 'quantity',
         label: 'spraying, mængde',
-        cropNames: ['Ærter'],
+        cropLabels: ['30 - Ærter'],
         from: '2 gange',
         to: '3 gange',
         guideStep: null,
@@ -827,12 +920,12 @@ describe('profileChanges', () => {
   it('sums up the changes of a profile by kind', () => {
     const change = (
       kind: ProfileChange['kind'],
-      cropName: string,
+      cropLabel: string,
     ): ProfileChange => ({
-      key: `${kind}:${cropName}`,
+      key: `${kind}:${cropLabel}`,
       kind,
       label: '',
-      cropNames: [cropName],
+      cropLabels: [cropLabel],
       from: '',
       to: '',
       guideStep: null,
@@ -903,8 +996,8 @@ describe('shared prices', () => {
     expect(
       sharedPriceEffect(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
     ).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 70 },
-      { cropName: 'Ærter', deltaDkkHa: 20 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 70 },
+      { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 20 },
     ])
   })
 
@@ -921,8 +1014,8 @@ describe('shared prices', () => {
       ),
     ).toEqual(['ploughing'])
     expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 175 },
-      { cropName: 'Ærter', deltaDkkHa: 175 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 175 },
+      { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 175 },
     ])
 
     const moreSpraying = withQuantityOverride(
@@ -936,12 +1029,14 @@ describe('shared prices', () => {
       [],
     )
     expect(cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual([
-      { cropName: 'Vinterraps', deltaDkkHa: 160 },
+      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 },
     ])
   })
 
   it('names the crops of a price, or all of them at once', () => {
-    expect(describePriceCrops(ASSUMPTIONS, 'rapeseedPrice')).toBe('Vinterraps')
+    expect(describePriceCrops(ASSUMPTIONS, 'rapeseedPrice')).toBe(
+      '22 - Vinterraps',
+    )
     expect(describePriceCrops(ASSUMPTIONS, 'ploughing')).toBe('Alle 2 afgrøder')
   })
 })
@@ -958,6 +1053,116 @@ describe('gødning', () => {
     expect(
       categoryPrices(WITH_WHEAT, 'fertiliser').map((price) => price.id),
     ).toEqual(['nitrogen', 'spreading'])
+  })
+
+  it('lists the husdyrgødning prices per tonne although no budget row uses them', () => {
+    const manure: EconomicsAssumptions = {
+      ...WITH_WHEAT,
+      prices: [
+        ...WITH_WHEAT.prices,
+        {
+          id: 'manureSpreading',
+          label: 'Udbringning, husdyrgødning',
+          unit: 'kr/ton',
+          valueDkk: 24,
+          source: 'SEGES',
+        },
+        {
+          id: 'manurePurchase',
+          label: 'Husdyrgødning, køb',
+          unit: 'kr/ton',
+          valueDkk: 0,
+          source: 'Bruger-angivet',
+        },
+      ],
+      manureSpreadingPriceId: 'manureSpreading',
+      manurePurchasePriceId: 'manurePurchase',
+    }
+    expect(manurePrices(manure).map((price) => price.id)).toEqual([
+      'manureSpreading',
+      'manurePurchase',
+    ])
+    expect(
+      categoryPrices(manure, 'fertiliser').map((price) => price.id),
+    ).toEqual(['nitrogen', 'spreading'])
+    const bought = withPriceOverride(manure, NO_OVERRIDES, 'manurePurchase', 15)
+    expect(priceValue(manure, bought, 'manurePurchase')).toBe(15)
+    expect(priceValue(manure, bought, 'manureSpreading')).toBe(24)
+    expect(manurePrices(WITH_WHEAT)).toEqual([])
+    expect(mineralFertiliserPrices(manure).map((price) => price.id)).toEqual([
+      'nitrogen',
+      'spreading',
+    ])
+  })
+
+  it('finds no handelsgødning prices when only husdyrgødning is spread', () => {
+    const organic: EconomicsAssumptions = {
+      ...ASSUMPTIONS,
+      prices: [
+        {
+          id: 'manureSpreading',
+          label: 'Udbringning, husdyrgødning',
+          unit: 'kr/ton',
+          valueDkk: 24,
+          source: 'SEGES',
+        },
+      ],
+      manureSpreadingPriceId: 'manureSpreading',
+      crops: [
+        crop(11, 'Vinterhvede', {
+          fertiliser: [
+            line('Udbringning, husdyrgødning', 20, 'ton/ha', 'manureSpreading'),
+          ],
+        }),
+      ],
+    }
+    expect(mineralFertiliserPrices(organic)).toEqual([])
+  })
+
+  it('names the standard svinegylle of an økologisk budget in the note', () => {
+    expect(fertiliserNote(WITH_WHEAT)).toContain('handelsgødning')
+    expect(fertiliserNote(WITH_WHEAT)).not.toContain('hele kvælstofnormen')
+    expect(
+      fertiliserNote({ standardManure: { name: 'Svinegylle', nKgPerTon: 6 } }),
+    ).toContain(
+      'svinegylle, der dækker hele kvælstofnormen med 6 kg udnyttet N pr. ton',
+    )
+  })
+
+  it('lists a changed husdyrgødning price as a change, and restores it', () => {
+    const manure: EconomicsAssumptions = {
+      ...WITH_WHEAT,
+      prices: [
+        ...WITH_WHEAT.prices,
+        {
+          id: 'manurePurchase',
+          label: 'Husdyrgødning, køb',
+          unit: 'kr/ton',
+          valueDkk: 0,
+          source: 'Bruger-angivet',
+        },
+      ],
+      manurePurchasePriceId: 'manurePurchase',
+    }
+    expect(profileChanges(manure, NO_OVERRIDES)).toEqual([])
+    const bought = withPriceOverride(manure, NO_OVERRIDES, 'manurePurchase', 15)
+    const changes = profileChanges(manure, bought)
+    expect(changes).toEqual([
+      {
+        key: 'price:manurePurchase',
+        kind: 'price',
+        label: 'Husdyrgødning, køb',
+        cropLabels: [],
+        appliesTo: 'Simuleringer med husdyrgødning',
+        from: '0 kr/ton',
+        to: '15 kr/ton',
+        guideStep: 2,
+      },
+    ])
+    expect(describeProfileChanges(changes)).toBe('1 pris')
+    expect(withoutProfileChange(manure, bought, changes[0])).toEqual(
+      NO_OVERRIDES,
+    )
   })
 
   it('finds the handelsgødning line although the backend adds the amount to its name', () => {
@@ -1013,12 +1218,35 @@ describe('tørring', () => {
     ).toEqual({})
   })
 
-  it('tells that the drying follows the yield', () => {
+  it('tells that the costs depending on the amount follow the yield', () => {
     expect(yieldHint(NO_OVERRIDES, WHEAT)).toBe(
-      'Normen er 84 hkg pr. ha. Procenten ændrer mængden og tørringen, men ikke de andre omkostninger.',
+      'Normen er 84 hkg pr. ha. Procenten ændrer mængden og de omkostninger, der afhænger af den, men ikke de andre omkostninger.',
     )
     expect(yieldHint(withYieldPct(NO_OVERRIDES, WHEAT, 10), WHEAT)).toBe(
-      '+10 % giver 92,4 hkg pr. ha. Tørringen følger med, de andre omkostninger ændrer sig ikke.',
+      '+10 % giver 92,4 hkg pr. ha. De omkostninger, der afhænger af mængden, følger med, de andre ændrer sig ikke.',
+    )
+  })
+
+  it('counts a cost outside the drying that follows the yield', () => {
+    const barley = crop(1, 'Vårbyg', {
+      revenue: [
+        line('Udbytte', 66, 'hkg/ha', 'barleyPrice'),
+        line('Halm', 3500, 'kg/ha', 'strawPrice'),
+      ],
+      fieldWork: [line('Halmpresning', 3500, 'kg/ha', 'pressing')],
+    })
+    const pressed: CropEconomics = {
+      ...barley,
+      costs: {
+        ...barley.costs,
+        fieldWork: barley.costs.fieldWork.map((entry) => ({
+          ...entry,
+          followsYield: true,
+        })),
+      },
+    }
+    expect(yieldHint(NO_OVERRIDES, pressed)).toBe(
+      'Normen er 66 hkg kerne og 3.500 kg halm pr. ha. Procenten ændrer begge og de omkostninger, der afhænger af dem, men ikke de andre omkostninger.',
     )
   })
 })

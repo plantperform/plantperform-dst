@@ -123,10 +123,24 @@ class SoilVariant(CamelModel):
     value: float
 
 
+class StandardManure(CamelModel):
+    """The husdyrgødning an økologisk budget without a simulation is fertilised with.
+
+    It covers the whole N-norm, at `n_kg_per_ton` utilized N per tonne.
+    """
+
+    name: str
+    n_kg_per_ton: float
+
+
 class CropBudgets(CamelModel):
     jb_nr: int | None
     farming_system: str
     prices: list[BudgetPrice]
+    # The husdyrgødning prices per tonne, always in `prices`, on either driftsform.
+    manure_spreading_price_id: str | None = None
+    manure_purchase_price_id: str | None = None
+    standard_manure: StandardManure | None = None
     crops: list[CropBudget]
     soil_variants: dict[str, list[SoilVariant]]
 

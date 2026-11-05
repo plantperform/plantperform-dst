@@ -9,6 +9,17 @@ from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
 from app.domain.optimization import OptimizationSettings, SimulationResultSummary
 
+# (afgrode_kode, kg N/ha, is husdyrgødning): hashable for the evaluator's caches.
+AutumnPlan = tuple[tuple[int, float, bool], ...]
+
+
+class AutumnAllocation(CamelModel):
+    """The part of a crop's N-norm spread in the autumn before its harvest."""
+
+    afgrode_kode: int = Field(gt=0)
+    kg_n_ha: float = Field(gt=0, allow_inf_nan=False)
+    fertiliser: Literal["mineral", "manure"] = "mineral"
+
 
 class GodningSettings(CamelModel):
     """Scenario-level gødning selection (Phase 13).
@@ -28,6 +39,24 @@ class GodningSettings(CamelModel):
     # 1016-1018): the gødning's N content, used to convert kg N to tonnes of
     # gødning. The default matches the old app; kvæggylle is typically 4-7.
     n_indhold_kg_per_ton: float = Field(default=6.0, gt=0)
+    # Empty means efterårstildeling is off and the whole norm is spread in spring.
+    autumn_allocations: list[AutumnAllocation] = Field(default_factory=list)
+
+    @field_validator("autumn_allocations")
+    @classmethod
+    def validate_autumn_allocations(
+        cls, value: list[AutumnAllocation],
+    ) -> list[AutumnAllocation]:
+        codes = [allocation.afgrode_kode for allocation in value]
+        if len(codes) != len(set(codes)):
+            raise ValueError("Autumn allocations must use unique afgrode_kode values")
+        return value
+
+    def autumn_plan(self) -> AutumnPlan:
+        return tuple(
+            (allocation.afgrode_kode, allocation.kg_n_ha, allocation.fertiliser == "manure")
+            for allocation in self.autumn_allocations
+        )
 
 
 class CropPercentageConstraint(CamelModel):

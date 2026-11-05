@@ -135,6 +135,7 @@ const CODE_RANGES: readonly CodeRange[] = [
   [280, 283, 'beet'],
   [170, 299, 'grass'],
   [300, 329, 'fallow'],
+  [701, 711, 'wholeCropSilage'],
   [988, 994, 'fallow'],
 ]
 
@@ -210,6 +211,28 @@ export const presentCropGroups = (
     crops.map((crop) => classifyCrop(crop.cropCode, crop.cropName)),
   )
   return CROP_GROUPS.filter((group) => present.has(group.id))
+}
+
+export type GroupedCrops<Crop> = {
+  group: CropGroupDefinition
+  crops: Crop[]
+}
+
+// Sorts crops into their groups, in the order of CROP_GROUPS, with only the
+// groups that have a crop. The crops keep their order within a group. The
+// afgrødekode decides the group when the crop has one; otherwise the name does.
+export const groupCrops = <Crop extends { code?: number; name: string }>(
+  crops: readonly Crop[],
+): GroupedCrops<Crop>[] => {
+  const cropsByGroup = new Map<CropGroup, Crop[]>()
+  for (const crop of crops) {
+    const group = classifyCrop(crop.code ?? 0, crop.name)
+    cropsByGroup.set(group, [...(cropsByGroup.get(group) ?? []), crop])
+  }
+  return CROP_GROUPS.flatMap((group) => {
+    const members = cropsByGroup.get(group.id)
+    return members ? [{ group, crops: members }] : []
+  })
 }
 
 const mixHex = (hex: string, target: string, amount: number): string => {

@@ -5,13 +5,14 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react'
-import { CalendarRange, Droplets, Layers, Wheat } from 'lucide-react'
+import { CalendarRange, Droplets, Layers, Repeat, Wheat } from 'lucide-react'
 
 import type {
   CatchmentYearlyNLoadCaps,
   FieldRecord,
   FieldYearValues,
   OptimizeSimulationResponse,
+  RotationOption,
   SimulationQuotaTrade,
   YearlySummaryEntry,
 } from '@/api/types'
@@ -20,6 +21,7 @@ import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
 import { CropDistribution } from '@/components/farm/CropDistribution'
 import { CropGroupIcon } from '@/components/farm/CropGroupTile'
 import { useOverviewCards } from '@/components/farm/overview-cards'
+import { RotationDistribution } from '@/components/farm/RotationDistribution'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import {
   SegmentedControl,
@@ -34,11 +36,13 @@ import {
   formatQuotaAmount,
   formatQuotaPercent,
   formatWholeNumber,
+  NUM_HISTORY_YEARS,
+  NUM_ROTATION_YEARS,
   QUOTA_STATUS_LABELS,
   QUOTA_STATUS_STYLES,
+  quotaLineHeightPct,
   quotaStatusLevel,
   resolveFarmQuota,
-  ROTATION_CALENDAR_YEARS,
   summarizeCropDistribution,
   type CatchmentQuota,
   type CatchmentTotalsByYear,
@@ -67,13 +71,21 @@ import {
   type TradedLimit,
   yearLimitKgN,
 } from '@/lib/quota-trade-result'
+import {
+  summarizeRotationDistribution,
+  type RotationShare,
+} from '@/lib/rotation-overview'
 import { cn } from '@/lib/utils'
+import {
+  summarizeWinterCover,
+  type WinterCoverShare,
+} from '@/lib/winter-cover-overview'
 
 const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 
 const COMPACT_VIEWPORT_HEIGHT = 960
 
-const QUOTA_LINE_PCT = 34
+const NO_ROTATION_OPTIONS: RotationOption[] = []
 
 // Kvote a run bought or sold: an outline from the original kvote to the traded
 // one, in colours none of the oplande or "Over kvoten" use. No fill, so the
@@ -83,26 +95,41 @@ const QUOTA_TRADE_BAND_CLASSES: Record<QuotaTradeKind, string> = {
   sold: 'border-emerald-600',
 }
 
-// The bands' colours, darker so text in them stays readable.
 // The cap under Grænser where it differs from the kvote.
 const CAP_LINE_CLASS = 'border-t-[1.5px] border-dotted border-sky-700'
 
+// The bands' colours, darker so text in them stays readable.
 const QUOTA_TRADE_TEXT_CLASSES: Record<QuotaTradeKind, string> = {
   bought: 'text-amber-700',
   sold: 'text-emerald-700',
 }
 
-type PanelView = 'nLoad' | CropShareLevel
+type PanelView = 'nLoad' | CropShareLevel | 'rotation'
 
 const CROP_LEVEL_OPTIONS: SegmentedControlOption<PanelView>[] = [
   { value: 'group', label: 'Grupper', icon: Layers },
   { value: 'crop', label: 'Afgrøder', icon: Wheat },
 ]
 
+const ROTATION_OPTION: SegmentedControlOption<PanelView> = {
+  value: 'rotation',
+  label: 'Sædskifter',
+  icon: Repeat,
+}
+
 const PANEL_VIEW_OPTIONS: SegmentedControlOption<PanelView>[] = [
   { value: 'nLoad', label: 'Udledning', icon: Droplets },
   ...CROP_LEVEL_OPTIONS,
 ]
+
+// The crop history has no rotations, so it has no Sædskifter tab.
+const panelViewOptions = (
+  options: SegmentedControlOption<PanelView>[],
+  history: boolean,
+) => (history ? options : [...options, ROTATION_OPTION])
+
+const isCropLevel = (view: PanelView): view is CropShareLevel =>
+  view === 'group' || view === 'crop'
 
 type YearColumn = {
   index: number
@@ -115,7 +142,7 @@ const buildColumns = (
   history: boolean,
 ): YearColumn[] => {
   const startCalendarYear = firstCalendarYear(history)
-  const yearCount = ROTATION_CALENDAR_YEARS.length
+  const yearCount = history ? NUM_HISTORY_YEARS : NUM_ROTATION_YEARS
   const entriesByIndex = new Map<number, YearlySummaryEntry>()
   for (const entry of entries ?? []) {
     const index = history ? entry.year - startCalendarYear : entry.year - 1
@@ -174,8 +201,33 @@ const catchmentYearLevel = (
   return yearFieldCount < expectedFieldCount ? 'partial' : level
 }
 
-const barWidthClass = (count: number): string =>
-  count > 6 ? 'w-1.5' : count > 4 ? 'w-2.5' : count > 3 ? 'w-3' : 'w-4'
+const WIDE_BAR_YEAR_COUNT = 4
+
+const barWidthClass = (count: number, wide: boolean): string => {
+  if (!wide) {
+    return count > 6 ? 'w-1.5' : count > 4 ? 'w-2.5' : count > 3 ? 'w-3' : 'w-4'
+  }
+  return cn(
+    'min-w-1.5 flex-1',
+    count > 4 ? 'max-w-[22px]' : count > 2 ? 'max-w-8' : 'max-w-10',
+  )
+}
+
+const quotaRatio = (row: CatchmentYear): number => row.nLoadKg / row.quotaKgN
+
+// A cap under Grænser other than the kvote: shown as information, since the
+// status always measures against the kvote.
+const capDiffers = (row: CatchmentYear) =>
+  row.quotaKgN > 0 && Math.abs(row.capKgN - row.quotaKgN) > 0.5
+
+// The highest part of a year's bar as a share of its kvote: the bar, the top
+// of a trade's band or the cap under Grænser, so the scale leaves room for all.
+const drawnRatio = (row: CatchmentYear): number =>
+  Math.max(
+    quotaRatio(row),
+    row.tradedLimit ? limitAfterTradeKgN(row.tradedLimit) / row.quotaKgN : 0,
+    capDiffers(row) ? row.capKgN / row.quotaKgN : 0,
+  )
 
 const describeYearQuota = (
   quotaCatchmentCount: number,
@@ -202,24 +254,26 @@ type QuotaBarProps = {
   title: string
   colorClass: string
   widthClass: string
+  quotaLinePct: number
 }
 
-// A cap under Grænser other than the kvote: shown as information, since the
-// status always measures against the kvote.
-const capDiffers = (row: CatchmentYear) =>
-  row.quotaKgN > 0 && Math.abs(row.capKgN - row.quotaKgN) > 0.5
-
-const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
+const QuotaBar = ({
+  row,
+  title,
+  colorClass,
+  widthClass,
+  quotaLinePct,
+}: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
   // Red only above the kvote, moved by any trade.
   const { heightPct, overPct } = quotaBarHeights(
     row.nLoadKg,
     row.quotaKgN,
     row.tradedLimit,
-    QUOTA_LINE_PCT,
+    quotaLinePct,
   )
   const band = row.tradedLimit
-    ? quotaTradeBand(row.quotaKgN, row.tradedLimit, QUOTA_LINE_PCT)
+    ? quotaTradeBand(row.quotaKgN, row.tradedLimit, quotaLinePct)
     : null
   return (
     <span
@@ -265,7 +319,7 @@ const QuotaBar = ({ row, title, colorClass, widthClass }: QuotaBarProps) => {
             bottom: `${quotaLimitLinePct(
               row.quotaKgN,
               { capKgN: row.capKgN, tradeKg: 0 },
-              QUOTA_LINE_PCT,
+              quotaLinePct,
             )}%`,
           }}
         />
@@ -654,6 +708,9 @@ type YearPanelProps = {
   fieldCount: number
   yearFieldCount: number | null
   cropShares: CropShare[]
+  winterCoverShares: WinterCoverShare[]
+  rotationShares: RotationShare[]
+  rotationColors: Map<string, string> | undefined
   lastRun: OptimizeSimulationResponse | null
   history: boolean
   unavailableMessage: string | null
@@ -675,6 +732,9 @@ const YearPanel = ({
   fieldCount,
   yearFieldCount,
   cropShares,
+  winterCoverShares,
+  rotationShares,
+  rotationColors,
   lastRun,
   history,
   unavailableMessage,
@@ -683,10 +743,13 @@ const YearPanel = ({
   onViewChange,
   style,
 }: YearPanelProps) => {
-  const showCrops = view !== 'nLoad'
+  const showCrops = isCropLevel(view)
+  const showRotations = view === 'rotation'
   const canShowNLoad =
     viewOptions?.some((option) => option.value === 'nLoad') ?? false
-  const fixedCrops = showCrops && !canShowNLoad
+  const canShowRotations =
+    viewOptions?.some((option) => option.value === 'rotation') ?? false
+  const fixedPanel = view !== 'nLoad' && !canShowNLoad
   const entry = column?.entry ?? null
   const scoped = scopeLabel !== null
   const pending =
@@ -701,11 +764,14 @@ const YearPanel = ({
       ? rows[0]
       : null
 
-  const title = column
-    ? String(column.calendarYear)
-    : (scopeLabel ?? (yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'))
+  // A field has one rotation, so the rotation shares do not follow the year.
+  const title = showRotations
+    ? (scopeLabel ?? 'Hele bedriften')
+    : column
+      ? String(column.calendarYear)
+      : (scopeLabel ?? (yearCount > 0 ? `Alle ${yearCount} år` : 'Alle år'))
   const levelLabel = view === 'crop' ? 'afgrøde' : 'afgrødegruppe'
-  const subtitle = pending
+  const dataSubtitle = pending
     ? column
       ? 'Ingen årstal for året'
       : 'Ikke beregnet endnu'
@@ -722,14 +788,23 @@ const YearPanel = ({
         : scoped
           ? 'Gennemsnit pr. år mod kvoten'
           : 'Gennemsnit pr. år mod hvert oplands kvote'
+  const ringNote =
+    showCrops && !pending && winterCoverShares.length > 0
+      ? ', indre ring: vinterdække'
+      : ''
+  const subtitle = showRotations
+    ? scoped
+      ? `Areal pr. sædskifte i ${scopeLabel}, andel af oplandets areal`
+      : 'Areal pr. sædskifte, andel af bedriftens areal'
+    : `${dataSubtitle}${ringNote}`
 
   const pendingNote = column
     ? history
       ? `Ingen historik for ${column.calendarYear}.`
       : `Ingen årstal for ${column.calendarYear} endnu.`
     : 'Ingen marker er beregnet endnu.'
-  const message = pending
-    ? fixedCrops
+  const dataMessage = pending
+    ? fixedPanel
       ? null
       : (unavailableMessage ?? pendingNote)
     : showCrops
@@ -739,6 +814,7 @@ const YearPanel = ({
         : column
           ? null
           : unavailableMessage
+  const message = showRotations ? null : dataMessage
 
   return (
     <aside
@@ -747,15 +823,23 @@ const YearPanel = ({
           ? 'Oversigt over årene'
           : view === 'nLoad'
             ? 'Udledning'
-            : 'Afgrøder'
+            : showRotations
+              ? 'Sædskifter'
+              : 'Afgrøder'
       }
       className="@container flex max-w-full min-w-72 flex-[1_1_18rem] flex-col rounded-2xl border bg-card px-4 pt-3.5 pb-3"
       style={style}
     >
       <div
-        key={loading ? 'loading' : (column?.index ?? 'all')}
-        role={fixedCrops ? undefined : 'status'}
-        aria-live={fixedCrops ? undefined : 'polite'}
+        key={
+          loading
+            ? 'loading'
+            : showRotations
+              ? 'rotation'
+              : (column?.index ?? 'all')
+        }
+        role={fixedPanel ? undefined : 'status'}
+        aria-live={fixedPanel ? undefined : 'polite'}
         className="flex min-h-0 flex-1 flex-col gap-2.5 motion-safe:animate-rise-in"
       >
         {loading ? (
@@ -783,15 +867,18 @@ const YearPanel = ({
               </div>
               {viewOptions && onViewChange ? (
                 <SegmentedControl
-                  aria-label={
-                    canShowNLoad
-                      ? 'Vis udledning, afgrødegrupper eller afgrøder'
-                      : 'Vis afgrødegrupper eller afgrøder'
-                  }
+                  aria-label={`Vis ${[
+                    ...(canShowNLoad ? ['udledning'] : []),
+                    'afgrødegrupper',
+                    'afgrøder',
+                    ...(canShowRotations ? ['sædskifter'] : []),
+                  ]
+                    .join(', ')
+                    .replace(/, ([^,]+)$/, ' eller $1')}`}
                   value={view}
                   options={viewOptions}
                   onValueChange={onViewChange}
-                  labelClassName="hidden @md:inline"
+                  labelClassName="hidden @lg:inline"
                 />
               ) : null}
             </div>
@@ -803,9 +890,23 @@ const YearPanel = ({
                     {message}
                   </p>
                 ) : null}
-                {showCrops ? (
+                {showRotations ? (
+                  rotationShares.length > 0 ? (
+                    <RotationDistribution
+                      shares={rotationShares}
+                      colors={rotationColors}
+                    />
+                  ) : (
+                    <p className="text-[11px] leading-4 text-muted-foreground">
+                      Ingen marker at vise.
+                    </p>
+                  )
+                ) : showCrops ? (
                   cropShares.length > 0 ? (
-                    <CropDistribution shares={cropShares} />
+                    <CropDistribution
+                      shares={cropShares}
+                      winterCover={winterCoverShares}
+                    />
                   ) : !pending ? (
                     <p className="text-[11px] leading-4 text-muted-foreground">
                       Ingen afgrøder at vise.
@@ -828,7 +929,7 @@ const YearPanel = ({
                     />
                   ))
                 ) : null}
-                {!showCrops &&
+                {view === 'nLoad' &&
                 entry &&
                 yearFieldCount !== null &&
                 yearFieldCount < fieldCount ? (
@@ -837,7 +938,7 @@ const YearPanel = ({
                     året.
                   </p>
                 ) : null}
-                {lastRun && !column && !showCrops ? (
+                {lastRun && !column && view === 'nLoad' ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
                     Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
                     {formatCompactDkk(lastRun.objectiveDb2)}, udledning{' '}
@@ -869,6 +970,9 @@ type YearWalkthroughProps = {
   scopeLabel?: string | null
   catchmentTotalsByYear?: CatchmentTotalsByYear
   yearValues?: FieldYearValues
+  rotationOptions?: RotationOption[]
+  // The colour of each rotation across the whole farm, as on the map.
+  rotationColors?: Map<string, string>
   splitPanels?: boolean
   collapsed: boolean
   // Kvotehandel of the simulation's latest run, drawn next to the kvote.
@@ -894,6 +998,8 @@ export const YearWalkthrough = ({
   scopeLabel = null,
   catchmentTotalsByYear,
   yearValues,
+  rotationOptions = NO_ROTATION_OPTIONS,
+  rotationColors,
   splitPanels = false,
   collapsed,
   quotaTrades = NO_QUOTA_TRADES,
@@ -901,8 +1007,11 @@ export const YearWalkthrough = ({
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const [panelView, setPanelView] = useState<PanelView>('nLoad')
-  const cropLevel: CropShareLevel = panelView === 'nLoad' ? 'group' : panelView
+  const [chosenPanelView, setPanelView] = useState<PanelView>('nLoad')
+  // The rotation tab is hidden in the crop history, so fall back from it.
+  const panelView: PanelView =
+    history && chosenPanelView === 'rotation' ? 'nLoad' : chosenPanelView
+  const cropLevel: CropShareLevel = isCropLevel(panelView) ? panelView : 'group'
 
   const columns = useMemo(
     () => buildColumns(loading ? undefined : entries, history),
@@ -940,11 +1049,6 @@ export const YearWalkthrough = ({
       )
     }),
   )
-  // Every bar is drawn to its own kvote at the same height, so one line across
-  // the year marks each opland's kvote. With trades it is the kvote the bands
-  // start from, for every opland.
-  const showQuotaLine = quotaCatchmentCount === 1 || tradeKinds.length > 0
-
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
       // A simulation's entries count rotation years from 1.
@@ -1040,6 +1144,15 @@ export const YearWalkthrough = ({
       ),
     [fields, yearValues, selectedColumn, cropLevel],
   )
+  const winterCoverShares = useMemo(
+    () =>
+      summarizeWinterCover(fields, yearValues, selectedColumn?.index ?? null),
+    [fields, yearValues, selectedColumn],
+  )
+  const rotationShares = useMemo(
+    () => summarizeRotationDistribution(fields, rotationOptions),
+    [fields, rotationOptions],
+  )
 
   const selectYear = (index: number | null) => {
     onSelectedYearIndexChange(index)
@@ -1088,7 +1201,17 @@ export const YearWalkthrough = ({
   )
   const yearCount = columns.filter((column) => column.entry !== null).length
   const barAreaHeight = compact ? 'h-24' : 'h-[124px]'
-  const barWidth = barWidthClass(catchments.length)
+  const wideBars = columns.length <= WIDE_BAR_YEAR_COUNT
+  const barWidth = barWidthClass(catchments.length, wideBars)
+  const quotaLinePct = quotaLineHeightPct(
+    columns.flatMap((column) =>
+      column.entry
+        ? catchmentYears(column.entry)
+            .filter((row) => row.quotaKgN > 0)
+            .map(drawnRatio)
+        : [],
+    ),
+  )
   const periodLabel =
     columns.length > 0
       ? `${columns[0].calendarYear}-${columns[columns.length - 1].calendarYear}`
@@ -1137,6 +1260,9 @@ export const YearWalkthrough = ({
       ? countFieldsWithYearValues(selectedColumn.entry.year)
       : null,
     cropShares,
+    winterCoverShares,
+    rotationShares,
+    rotationColors,
     lastRun,
     history,
     unavailableMessage,
@@ -1320,17 +1446,17 @@ export const YearWalkthrough = ({
             ))}
             {quotaCatchmentCount > 0 ? (
               <>
-                {showQuotaLine ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      aria-hidden="true"
-                      className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
-                    />
-                    {tradeKinds.length > 0
-                      ? 'Oprindelig kvote'
-                      : 'Oplandets kvote'}
-                  </span>
-                ) : null}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
+                  />
+                  {tradeKinds.length > 0
+                    ? 'Oprindelig kvote'
+                    : quotaCatchmentCount === 1
+                      ? 'Oplandets kvote'
+                      : 'Egen kvote'}
+                </span>
                 {showCapLines ? (
                   <span className="inline-flex items-center gap-1.5">
                     <span
@@ -1397,6 +1523,9 @@ export const YearWalkthrough = ({
                 const isSelected = selectedYearIndex === column.index
                 const entry = column.entry
                 const rows = entry ? catchmentYears(entry) : []
+                const overCount = rows.filter(
+                  (row) => row.level === 'over',
+                ).length
                 const title = yearTitle(column)
                 const tabIndex = yearTabIndex(position)
                 const dimmed = selectedPosition >= 0 && !isSelected
@@ -1425,14 +1554,15 @@ export const YearWalkthrough = ({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          'relative flex w-full items-end justify-center gap-1 border-b border-border/70',
+                          'relative flex w-full items-end justify-center border-b border-border/70',
+                          wideBars ? 'gap-1.5 px-[8%]' : 'gap-1',
                           barAreaHeight,
                         )}
                       >
-                        {showQuotaLine ? (
+                        {quotaCatchmentCount > 0 && !loading ? (
                           <span
-                            className="pointer-events-none absolute inset-x-0 z-30 border-t-[1.5px] border-dashed border-foreground/45"
-                            style={{ bottom: `${QUOTA_LINE_PCT}%` }}
+                            className="pointer-events-none absolute inset-x-0 z-30 border-t-[1.5px] border-dashed border-foreground/45 motion-safe:transition-[bottom] motion-safe:duration-300"
+                            style={{ bottom: `${quotaLinePct}%` }}
                           />
                         ) : null}
                         {loading
@@ -1460,6 +1590,7 @@ export const YearWalkthrough = ({
                                   row.catchment.catchmentId,
                                 )}
                                 widthClass={barWidth}
+                                quotaLinePct={quotaLinePct}
                               />
                             ))}
                       </span>
@@ -1474,20 +1605,30 @@ export const YearWalkthrough = ({
                       >
                         {column.calendarYear}
                       </span>
-                      {history ? null : (
-                        <span
-                          aria-hidden="true"
-                          className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
-                        >
-                          {loading ? (
-                            <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
-                          ) : entry ? (
-                            `DB2 ${formatCompactDkk(entry.totalDb2)}`
-                          ) : (
-                            '-'
-                          )}
-                        </span>
-                      )}
+                      <span
+                        aria-hidden="true"
+                        className="text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+                      >
+                        {loading ? (
+                          <span className="inline-block h-3 w-10 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
+                        ) : !entry ? (
+                          '-'
+                        ) : history ? (
+                          <>
+                            {formatWholeNumber(entry.totalNLoadKg)} kg N
+                            {overCount > 0 ? (
+                              <span className={QUOTA_STATUS_STYLES.over.text}>
+                                {' · '}
+                                {quotaCatchmentCount === 1
+                                  ? 'over kvoten'
+                                  : `${overCount} ${overCount === 1 ? 'opland' : 'oplande'} over kvoten`}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          `DB2 ${formatCompactDkk(entry.totalDb2)}`
+                        )}
+                      </span>
                     </button>
                   </AppTooltip>
                 )
@@ -1505,8 +1646,8 @@ export const YearWalkthrough = ({
           <YearPanel {...panelProps} view="nLoad" style={cardStyle(1)} />
           <YearPanel
             {...panelProps}
-            view={cropLevel}
-            viewOptions={CROP_LEVEL_OPTIONS}
+            view={panelView === 'nLoad' ? cropLevel : panelView}
+            viewOptions={panelViewOptions(CROP_LEVEL_OPTIONS, history)}
             onViewChange={setPanelView}
             style={cardStyle(2)}
           />
@@ -1515,7 +1656,7 @@ export const YearWalkthrough = ({
         <YearPanel
           {...panelProps}
           view={panelView}
-          viewOptions={PANEL_VIEW_OPTIONS}
+          viewOptions={panelViewOptions(PANEL_VIEW_OPTIONS, history)}
           onViewChange={setPanelView}
           style={cardStyle(1)}
         />

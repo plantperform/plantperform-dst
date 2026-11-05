@@ -46,6 +46,7 @@ from app.data.db import (
 )
 from app.domain.economics import (
     CreateEconomicsModuleRequest,
+    CropBudgets,
     EconomicsConflictError,
     EconomicsModuleNotFoundError,
     EconomicsOverrides,
@@ -53,7 +54,10 @@ from app.domain.economics import (
     SelectEconomicsRequest,
     UpdateEconomicsModuleRequest,
 )
+from app.domain.field import FieldRecord
+from app.domain.rotation_candidate import RotationCandidateYearResult, RotationYear
 from app.domain.simulation import CreateSimulationRequest, Simulation
+from app.services import read_models
 from app.services.calculation import CalculationFailedError
 from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
@@ -96,6 +100,51 @@ class EconomicsValidationTests(unittest.TestCase):
         self.assertEqual(CreateEconomicsModuleRequest(name=" Mine ").name, "Mine")
 
 
+class EconomicsMissingViewTests(unittest.TestCase):
+    @staticmethod
+    def year(missing):
+        return RotationCandidateYearResult(
+            year=RotationYear(afgrode_kode=900, afgrode_navn="900"),
+            leaching_kg_n_ha=0,
+            leaching_detail={},
+            db_kr_ha=0,
+            db_detail={"economics_missing": missing},
+        )
+
+    def test_the_year_values_carry_the_flag(self):
+        candidate = SimpleNamespace(years=[self.year(True), self.year(False)], active_len=2)
+        self.assertEqual(
+            [year["economics_missing"] for year in read_models.compact_years(candidate)],
+            [True, False],
+        )
+
+    def test_a_mark_has_no_economics_when_every_year_has_none(self):
+        def mark(field_id):
+            return FieldRecord(
+                id=field_id, farm_id="farm", db2=0, n_load=0, leaching=0, name=field_id, area_ha=2
+            )
+
+        def year(missing):
+            return dict(leaching_kg_n_ha=0, db_kr_ha=0, fen_fe_ha=0, economics_missing=missing)
+
+        field_years = {
+            "locked": [year(True)] * 8,
+            "mixed": [year(True), year(False)],
+            "uncalculated": [],
+        }
+        data, _ = read_models.simulation_data(
+            [mark(field_id) for field_id in field_years],
+            {},
+            field_years,
+            catalog=[],
+            contributions={},
+        )
+        self.assertEqual(
+            {field["id"]: field["economics_missing"] for field in data["fields"]},
+            {"locked": True, "mixed": False, "uncalculated": False},
+        )
+
+
 class EconomicsDatabaseTests(DatabaseTests):
     def setUp(self):
         super().setUp()
@@ -115,6 +164,11 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.enterContext(patch.object(calculator, "SessionLocal", self.sessions))
         self.enterContext(patch.object(overrides, "SessionLocal", self.sessions))
         self.enterContext(patch.object(budget, "SessionLocal", self.sessions))
+        self.enterContext(
+            patch.object(
+                calculator, "_afgroeder_i_saedskifter", return_value=frozenset({1, 11, 216})
+            )
+        )
         calculator.clear_lookup_cache()
         self.addCleanup(calculator.clear_lookup_cache)
         with self.sessions.begin() as session:
@@ -206,14 +260,15 @@ class EconomicsDatabaseTests(DatabaseTests):
                     udgift_kr_ha=100,
                 )
             )
-            for index, (post, price) in enumerate(
+            for index, (post, price, unit) in enumerate(
                 (
-                    ("Handelsgødning, kvælstof (N)", 10),
-                    ("Handelsgødning, udbringning", 100),
-                    ("Gylleudbringning, slæbeslanger", 20),
-                    ("Grundbetaling (estimat)", 1000),
-                    ("Grundbeløb (basis)", 500),
-                    ("Stivelseskartofler", 200),
+                    ("Handelsgødning, kvælstof (N)", 10, "kr/enhed"),
+                    ("Handelsgødning, udbringning", 100, "kr/enhed"),
+                    ("Grundbetaling (estimat)", 1000, "kr/enhed"),
+                    ("Grundbeløb (basis)", 500, "kr/enhed"),
+                    ("Stivelseskartofler", 200, "kr/enhed"),
+                    ("Gylleudbringning, slæbeslanger", 24, "ton"),
+                    ("Husdyrgødning, køb", 0, "ton"),
                 ),
                 1,
             ):
@@ -224,7 +279,7 @@ class EconomicsDatabaseTests(DatabaseTests):
                         kategori="Gødning",
                         type="Omkostning",
                         pris=price,
-                        enhed="kr/enhed",
+                        enhed=unit,
                     )
                 )
         app = FastAPI()
@@ -541,8 +596,22 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         self.assertNotIn(mineral_n, [line["quantityId"] for line in organic["crops"][0]["costs"]])
         defaults.update({price["id"]: price["value"] for price in organic["prices"]})
-        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says.
+        # Økologisk husdyrgødning covers the whole norm, whatever org_mineral_n says. Without a
+        # simulation the budget is fertilised with the standard svinegylle at 6 kg utilized N
+        # per tonne.
         organic_norm = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)["mncs"]
+        self.assertEqual(organic["standardManure"], dict(name="Svinegylle", nKgPerTon=6))
+        self.assertIsNone(budgets["standardManure"])
+        self.assertIsNone(manured["standardManure"])
+        spreading_quantity = overrides.quantity_id(1, "fertiliser", "manureSpreading")
+        self.assertEqual(
+            [
+                line["quantity"]
+                for line in organic["crops"][0]["costs"]
+                if line["quantityId"] == spreading_quantity
+            ],
+            [organic_norm / 6.0],
+        )
         self.assertEqual(
             priced_db(organic["crops"][0], EconomicsOverrides()),
             calculator.calculate_db(
@@ -554,6 +623,470 @@ class EconomicsDatabaseTests(DatabaseTests):
                 husdyrgodning_ton_pr_ha=organic_norm / 6.0,
             )["db"],
         )
+
+    def test_organic_budget_names_the_organic_area_support_and_keeps_its_identity(self):
+        fields = [
+            SimpleNamespace(jbnr=5, area_ha=10, crop_rotation=[SimpleNamespace(afgrode_kode=1)])
+        ]
+        url = "/api/v0/farms/farm/economics/budgets"
+        with (
+            patch.object(budget, "list_fields", return_value=fields),
+            patch.object(budget, "list_simulations", return_value=[]),
+        ):
+            conventional = self.client.get(url).json()
+            organic = self.client.get(url, params={"farmingSystem": "Økologisk"}).json()
+        basic = overrides.identifier("list", "Grundbetaling (estimat)")
+        support = overrides.identifier("list", "Grundbeløb (basis)")
+        label = "Økologisk arealstøtte – basis"
+        self.assertEqual(
+            [line["label"] for line in conventional["crops"][0]["subsidies"]],
+            ["Grundbetaling (estimat)"],
+        )
+        subsidies = organic["crops"][0]["subsidies"]
+        self.assertEqual(
+            [(line["label"], line["priceId"]) for line in subsidies],
+            [("Grundbetaling (estimat)", basic), (label, support)],
+        )
+        for prices in (organic["prices"], overrides.assumptions()["prices"]):
+            self.assertEqual(next(p["label"] for p in prices if p["id"] == support), label)
+
+    def test_a_driftsform_without_work_quantities_uses_its_own_flat_costs(self):
+        konventionel = calculator.calculate_db(1, "Konventionel", 5)
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(dyrkningsomkostning_table).values(
+                    source_order=50,
+                    afgroedekode=1,
+                    driftsform="Økologisk",
+                    kategori="Markarbejde",
+                    behandling="Såning og høst",
+                    udgift_kr_ha=1200,
+                )
+            )
+        calculator.clear_lookup_cache()
+        organic = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)
+        self.assertEqual(organic["markarbejde"], 1200)
+        self.assertEqual(calculator.calculate_db(1, "Konventionel", 5), konventionel)
+
+    def test_the_cost_category_andet_counts_in_the_costs_and_the_db(self):
+        with self.sessions.begin() as session:
+            for index, (kategori, behandling, udgift) in enumerate(
+                (("Markarbejde", "Såning og høst", 1200), ("Andet", "Hegn/vedligehold", 150)), 50
+            ):
+                session.execute(
+                    insert(dyrkningsomkostning_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Økologisk",
+                        kategori=kategori,
+                        behandling=behandling,
+                        udgift_kr_ha=udgift,
+                    )
+                )
+        calculator.clear_lookup_cache()
+        organic = calculator.calculate_db(1, "Økologisk", 5, only_organic=True)
+        self.assertEqual((organic["markarbejde"], organic["andet"]), (1200, 150))
+        self.assertEqual(organic["omkostninger_total"], 1350)
+        self.assertAlmostEqual(
+            organic["db"], organic["indtaegt"] + organic["tilskud"] - 1350, delta=1
+        )
+        self.assertEqual(calculator.calculate_db(1, "Konventionel", 5)["andet"], 0)
+
+    def test_irrigation_work_only_counts_for_an_irrigated_field(self):
+        # The JB1-4 sheet is the only one the crop has for a field on JB 3, and it is
+        # the irrigated sheet: it carries the irrigation rows.
+        with self.sessions.begin() as session:
+            for index, (behandling, antal) in enumerate(
+                (("Såning og høst", 1), ("Vanding pr millimeter", 100)), 60
+            ):
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Konventionel",
+                        jordbonitet="JB1-4",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling=behandling,
+                        antal=antal,
+                    )
+                )
+                session.execute(
+                    insert(arbejdssats_table).values(
+                        source_order=index,
+                        behandling=behandling,
+                        jordbonitet="JB1-4",
+                        afgroedekode=None,
+                        driftsform="",
+                        pris_kr_per_enhed=1000 if antal == 1 else 5,
+                        enhed="kr/gang" if antal == 1 else "kr/mm",
+                        kilde="SEGES",
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        def field_work(**kwargs):
+            result = calculator.calculate_db(1, "Konventionel", 3, **kwargs)
+            return result["markarbejde"], [
+                line["behandling"] for line in result["linjer"] if line["kategori"] == "Markarbejde"
+            ]
+
+        self.assertEqual(field_work(), (1000, ["Såning og høst"]))
+        self.assertEqual(
+            field_work(irrigated=True), (1500, ["Såning og høst", "Vanding pr millimeter"])
+        )
+
+    def test_the_straw_sold_is_the_straw_pressed_and_both_follow_the_yield(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(arbejdssats_table).values(
+                    source_order=2,
+                    behandling="Halmpresning",
+                    jordbonitet="JB5-6",
+                    afgroedekode=None,
+                    driftsform="",
+                    pris_kr_per_enhed=0.2,
+                    enhed="kr/kg",
+                    kilde="SEGES",
+                )
+            )
+            # Økologisk straw is below the konventionel halmudbytte of 1000 kg/ha.
+            straw = (("Konventionel", 1000), ("Økologisk", 600))
+            for index, (driftsform, kg) in enumerate(straw, 60):
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform=driftsform,
+                        jordbonitet="JB5-6",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling="Halmpresning",
+                        antal=kg,
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        for driftsform, kg in straw:
+            for yield_pct in (0, 20):
+                detail = calculator.calculate_db(
+                    1,
+                    driftsform,
+                    5,
+                    only_organic=driftsform == "Økologisk",
+                    itemized=True,
+                    economics_key=EconomicsOverrides(yieldPct={"1": yield_pct}).cache_key(),
+                )
+                lines = {line["behandling"]: line for line in detail["indtaegt_linjer"]}
+                lines.update({line["behandling"]: line for line in detail["linjer"]})
+                sold, pressed = lines["Halm"], lines["Halmpresning"]
+                with self.subTest(driftsform=driftsform, yield_pct=yield_pct):
+                    self.assertAlmostEqual(sold["maengde"], kg * (1 + yield_pct / 100))
+                    self.assertEqual(pressed["maengde"], sold["maengde"])
+                    self.assertAlmostEqual(pressed["udgift_kr_ha"], sold["maengde"] * 0.2)
+                    self.assertTrue(pressed["foelger_udbytte"])
+
+    def test_drying_per_kg_is_the_harvested_yield_unless_the_quantity_is_edited(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(arbejdssats_table).values(
+                    source_order=3,
+                    behandling="Tørring, korn",
+                    jordbonitet="JB5-6",
+                    afgroedekode=None,
+                    driftsform="",
+                    pris_kr_per_enhed=0.1,
+                    enhed="kr/kg",
+                    kilde="SEGES",
+                )
+            )
+            # The budget's own 5000 kg is below the 60 hkg the calculation harvests.
+            session.execute(
+                insert(arbejdsmaengde_table).values(
+                    source_order=70,
+                    afgroedekode=1,
+                    driftsform="Konventionel",
+                    jordbonitet="JB5-6",
+                    kvalitet="",
+                    kategori="Tørring/lagring",
+                    behandling="Tørring, korn",
+                    antal=5000,
+                )
+            )
+        calculator.clear_lookup_cache()
+
+        def drying(overrides_):
+            detail = calculator.calculate_db(
+                1, "Konventionel", 5, mncs=175, itemized=True, economics_key=overrides_.cache_key()
+            )
+            line = next(line for line in detail["linjer"] if line["behandling"] == "Tørring, korn")
+            return detail, line
+
+        for yield_pct in (0, 20):
+            detail, line = drying(EconomicsOverrides(yieldPct={"1": yield_pct}))
+            with self.subTest(yield_pct=yield_pct):
+                self.assertAlmostEqual(line["maengde"], detail["udbytte"] * 100)
+                self.assertAlmostEqual(line["maengde"], 6000 * (1 + yield_pct / 100))
+                self.assertAlmostEqual(line["udgift_kr_ha"], line["maengde"] * 0.1)
+                self.assertTrue(line["foelger_udbytte"])
+        edited = overrides.quantity_id(
+            1, "work", "Konventionel", "JB5-6", "", "Tørring/lagring", "Tørring, korn"
+        )
+        _, line = drying(EconomicsOverrides(quantities={edited: 4000}))
+        self.assertEqual(line["maengde"], 4000)
+
+    def test_cleaning_sorting_and_freight_per_kg_are_the_harvested_yield(self):
+        posts = {"Rensning": 0.06, "Sortering af kartofler": 0.27, "Fragt": 0.05}
+        with self.sessions.begin() as session:
+            for index, (post, price) in enumerate(posts.items(), 10):
+                session.execute(
+                    insert(arbejdssats_table).values(
+                        source_order=index,
+                        behandling=post,
+                        jordbonitet="JB5-6",
+                        afgroedekode=None,
+                        driftsform="",
+                        pris_kr_per_enhed=price,
+                        enhed="kr/kg",
+                        kilde="SEGES",
+                    )
+                )
+                session.execute(
+                    insert(arbejdsmaengde_table).values(
+                        source_order=index,
+                        afgroedekode=1,
+                        driftsform="Konventionel",
+                        jordbonitet="JB5-6",
+                        kvalitet="",
+                        kategori="Markarbejde",
+                        behandling=post,
+                        antal=44000,
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        for yield_pct in (0, 20):
+            detail = calculator.calculate_db(
+                1,
+                "Konventionel",
+                5,
+                mncs=175,
+                itemized=True,
+                economics_key=EconomicsOverrides(yieldPct={"1": yield_pct}).cache_key(),
+            )
+            lines = {line["behandling"]: line for line in detail["linjer"]}
+            for post, price in posts.items():
+                line = lines[post]
+                with self.subTest(post=post, yield_pct=yield_pct):
+                    self.assertAlmostEqual(line["maengde"], detail["udbytte"] * 100)
+                    self.assertAlmostEqual(line["maengde"], 6000 * (1 + yield_pct / 100))
+                    self.assertAlmostEqual(line["udgift_kr_ha"], line["maengde"] * price)
+                    self.assertTrue(line["foelger_udbytte"])
+
+    def test_a_rate_per_gang_is_priced_per_gang_pr_ha_and_counted_in_gange(self):
+        crop = budget.crop_budgets([1], 5, "Konventionel", False)["crops"][0]
+        ploughing = next(line for line in crop["costs"] if line["label"] == "Pløjning")
+        self.assertEqual(ploughing["quantityUnit"], "gange")
+        for prices in (
+            budget.crop_budgets([1], 5, "Konventionel", False)["prices"],
+            overrides.assumptions()["prices"],
+        ):
+            price = next(p for p in prices if p["id"] == ploughing["priceId"])
+            self.assertEqual(price["unit"], "kr/gang pr. ha")
+
+    def add_spisekartofler(self, *, with_culled_price):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(afgroede_table).values(
+                    afgroedekode=152, navn="Spisekartofler", udbytteenhed="hkg"
+                )
+            )
+            session.execute(
+                insert(afgroede_norm_lookup_table).values(
+                    source_order=20,
+                    jb_nr=5,
+                    afgroedekode=152,
+                    jb_gruppe="JB5-6",
+                    vanding="Uvandet",
+                    udbyttenorm=437,
+                    n_norm=145,
+                    driftsform="Konventionel",
+                )
+            )
+            prices = (("", 150), ("Frasorterede", 13)) if with_culled_price else (("", 150),)
+            for index, (kvalitet, price) in enumerate(prices, 20):
+                session.execute(
+                    insert(salgspris_table).values(
+                        source_order=index,
+                        afgroedekode=152,
+                        driftsform="Konventionel",
+                        kvalitet=kvalitet,
+                        salgspris=price,
+                        enhed="kr/hkg",
+                        halm_pris_kr_kg=0,
+                    )
+                )
+            session.execute(
+                insert(arbejdsmaengde_table).values(
+                    source_order=20,
+                    afgroedekode=152,
+                    driftsform="Konventionel",
+                    jordbonitet="JB5-6",
+                    kvalitet="",
+                    kategori="Markarbejde",
+                    behandling="Pløjning",
+                    antal=1,
+                )
+            )
+        calculator.clear_lookup_cache()
+
+    def test_potatoes_are_sold_as_sorted_and_frasorterede_at_their_own_prices(self):
+        self.add_spisekartofler(with_culled_price=True)
+        culled_price_id = overrides.identifier("sale", 152, "Konventionel", "Frasorterede")
+
+        def revenue(yield_pct=0, culled_price=None):
+            prices = {} if culled_price is None else {culled_price_id: culled_price}
+            detail = calculator.calculate_db(
+                152,
+                "Konventionel",
+                5,
+                mncs=145,
+                itemized=True,
+                economics_key=EconomicsOverrides(
+                    yieldPct={"152": yield_pct}, prices=prices
+                ).cache_key(),
+            )
+            return detail, detail["indtaegt_linjer"]
+
+        detail, (sorted_line, culled_line) = revenue()
+        self.assertEqual(
+            [sorted_line["navn"], culled_line["navn"]],
+            ["Sorterede kartofler", "Frasorterede kartofler"],
+        )
+        self.assertAlmostEqual(culled_line["maengde"], 437 * 0.151)
+        self.assertAlmostEqual(sorted_line["maengde"] + culled_line["maengde"], 437)
+        self.assertEqual((sorted_line["pris"], culled_line["pris"]), (150, 13))
+        self.assertAlmostEqual(
+            detail["indtaegt"], sorted_line["maengde"] * 150 + culled_line["maengde"] * 13, 0
+        )
+        self.assertAlmostEqual(detail["indtaegt"], 437 * 150 - culled_line["maengde"] * 137, 0)
+        self.assertEqual((detail["frasorteret_andel"], detail["frasorteret_pris"]), (0.151, 13))
+
+        # The culls follow the yield percentage and have a price of their own to set.
+        more, (sorted_more, culled_more) = revenue(yield_pct=10)
+        self.assertAlmostEqual(sorted_more["maengde"] + culled_more["maengde"], 437 * 1.1)
+        self.assertTrue(sorted_more["foelger_udbytte"] and culled_more["foelger_udbytte"])
+        _, (_, dearer) = revenue(culled_price=20)
+        self.assertEqual(dearer["pris"], 20)
+        self.assertEqual(dearer["pris_id"], culled_price_id)
+        self.assertIn(culled_price_id, {price["id"] for price in overrides.assumptions()["prices"]})
+
+        crop = budget.crop_budgets([152], 5, "Konventionel", False)
+        self.assertEqual(
+            [line["label"] for line in crop["crops"][0]["revenue"]],
+            ["Sorterede kartofler", "Frasorterede kartofler"],
+        )
+        prices = {price["id"]: price["label"] for price in crop["prices"]}
+        self.assertEqual(prices[culled_price_id], "Salgspris, frasorterede kartofler")
+
+    def test_potatoes_without_a_frasorterede_price_are_sold_whole_at_the_sorted_price(self):
+        self.add_spisekartofler(with_culled_price=False)
+        detail = calculator.calculate_db(152, "Konventionel", 5, mncs=145, itemized=True)
+        self.assertEqual([line["navn"] for line in detail["indtaegt_linjer"]], ["Udbytte"])
+        self.assertEqual(detail["indtaegt"], 437 * 150)
+        self.assertEqual(detail["frasorteret_andel"], 0)
+
+    def test_an_afgroede_without_a_cost_budget_has_no_economics_unless_a_saedskifte_grows_it(self):
+        # 900 has no budget, 901 has one, and 902 has none but is grown by a sædskifte.
+        calculator._afgroeder_i_saedskifter.return_value = frozenset({1, 902})
+        with self.sessions.begin() as session:
+            for index, code in enumerate((900, 901, 902), 10):
+                session.execute(
+                    insert(afgroede_table).values(
+                        afgroedekode=code, navn=str(code), udbytteenhed="FE/ha"
+                    )
+                )
+                session.execute(
+                    insert(afgroede_norm_lookup_table).values(
+                        source_order=index,
+                        jb_nr=5,
+                        afgroedekode=code,
+                        jb_gruppe="JB5-6",
+                        vanding="Uvandet",
+                        udbyttenorm=60,
+                        n_norm=175,
+                        driftsform="Konventionel",
+                    )
+                )
+                session.execute(
+                    insert(salgspris_table).values(
+                        source_order=index,
+                        afgroedekode=code,
+                        driftsform="Konventionel",
+                        kvalitet="",
+                        salgspris=100,
+                        enhed="kr/FE",
+                        halm_pris_kr_kg=0,
+                    )
+                )
+            session.execute(
+                insert(dyrkningsomkostning_table).values(
+                    source_order=60,
+                    afgroedekode=901,
+                    driftsform="Konventionel",
+                    kategori="Markarbejde",
+                    behandling="Slæt",
+                    udgift_kr_ha=800,
+                )
+            )
+        calculator.clear_lookup_cache()
+        without = calculator.calculate_db(900, "Konventionel", 5)
+        self.assertTrue(without["economics_missing"])
+        self.assertEqual(
+            [without[key] for key in ("indtaegt", "tilskud", "omkostninger_total", "db")],
+            [0, 0, 0, 0],
+        )
+        with_budget = calculator.calculate_db(901, "Konventionel", 5)
+        self.assertFalse(with_budget["economics_missing"])
+        self.assertEqual(with_budget["markarbejde"], 800)
+        self.assertNotEqual(with_budget["db"], 0)
+        grown = calculator.calculate_db(902, "Konventionel", 5)
+        self.assertFalse(grown["economics_missing"])
+        self.assertNotEqual(grown["db"], 0)
+        self.assertFalse(calculator.calculate_db(1, "Konventionel", 5)["economics_missing"])
+        crops = budget.crop_budgets([1, 900, 901, 902], 5, "Konventionel", False)["crops"]
+        self.assertEqual([crop["cropCode"] for crop in crops], [1, 901, 902])
+
+    def test_the_husdyrgoedning_prices_are_there_on_both_driftsformer_and_can_be_set(self):
+        spreading = overrides.identifier("list", "Gylleudbringning, slæbeslanger")
+        purchase = overrides.identifier("list", "Husdyrgødning, køb")
+        for system, only_organic in (("Konventionel", False), ("Økologisk", True)):
+            with self.subTest(system=system):
+                result = budget.crop_budgets([1], 5, system, only_organic)
+                CropBudgets.model_validate(result)
+                self.assertEqual(
+                    (result["manureSpreadingPriceId"], result["manurePurchasePriceId"]),
+                    (spreading, purchase),
+                )
+                prices = {price["id"]: price for price in result["prices"]}
+                self.assertEqual(
+                    [(prices[key]["unit"], prices[key]["value"]) for key in (spreading, purchase)],
+                    [("kr/ton", 24), ("kr/ton", 0)],
+                )
+        # Set like any other price, and used once a simulation spreads husdyrgødning.
+        changes = EconomicsOverrides(prices={spreading: 30, purchase: 15})
+        overrides.validate_identifiers(changes)
+        result = calculator.calculate_db(
+            1,
+            "Økologisk",
+            5,
+            mncs=120,
+            org_mineral_n_applied=120,
+            only_organic=True,
+            husdyrgodning_ton_pr_ha=10,
+            economics_key=changes.cache_key(),
+        )
+        self.assertEqual(result["goedning"], 10 * 30 + 10 * 15)
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))

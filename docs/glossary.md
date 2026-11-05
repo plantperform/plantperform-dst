@@ -57,12 +57,13 @@ field" column is the name on the wire.
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | afgrøde | crop | | |
-| afgrødevalg, valgte og fravalgte afgrøder | `CropChoice`, `chosenCrops`, `optedOutCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. Sædskifter then shows the rotations with at least one chosen crop and no opted-out one. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
+| afgrødevalg, valgte afgrøder | `CropChoice`, `chosenCrops`, `CropChoicePicker` | | The Afgrøder step in Ny simulering. A crop without a check mark is opted out, so Sædskifter shows the rotations where every crop is chosen. Not saved on the simulation, and unlike `excludedCropCodes` under Grænser it does not reach the optimization |
 | afgrødekode, -navn | `cropCode`, `cropName`, `CropCodeOption` | `afgrodeKode`, `afgrodeNavn` | |
+| afgrøde med kode | `cropLabel`, `rotationYearLabel`, `shownUndersownCropLabel`, `cropLabels` | | The full name with its afgrødekode in front, "210 - Vårbyg, helsæd". Used wherever the full name is shown; the short names (`shortCropName`) stay without the code, and the field list has the code in a column of its own |
 | normal såmåned | sowing month | | The crop table's month the crop is normally sown, stored as `afgroede.saamaaned` |
 | efterårssået | autumn-sown, `is_autumn_sown`, `AUTUMN_SOWING_MONTHS` | | Normal såmåned August to November |
-| afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor` | | The groups the map, the year strip and the crop distribution colour by |
-| helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and grønkorn blends. Majshelsæd counts as Majs |
+| afgrødegruppe | `CropGroup`, `classifyCrop`, `cropGroupFor`, `groupCrops`, `CropGroupChecklist` | | The groups the map, the year strip and the crop distribution colour by. The Afgrøder step and Grænser list their crops under them, with a checkbox for the whole group |
+| helsæd | `wholeCropSilage` | | Crop group for cereals and peas harvested whole for silage, and all grønkorn, blends and single species alike (afgrødekode 701–711, whatever the cereal). Majshelsæd counts as Majs |
 | afgrødefordeling | `CropShare`, `CropShareLevel`, `summarizeCropDistribution` | | Area and N load per crop group or per crop for a year, or the average per year |
 | afgrødearealkrav | `CropAreaLimit`, `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `CropAreaViolation`, `CropAreaRange` | `cropAreaLimits`, `minAreaHa`, `maxAreaHa`, `cropAreaViolations`, `crop-area-ranges` | Min. and/or max. hectares of one afgrødekode under Regler; percent is of the simulation's total area |
 | udlæg | `undersownCropCode`, `undersownCropName`, `undersownCropSet` | `udlaegKode`, `udlaegNavn`, `udlaegSet` | |
@@ -71,9 +72,13 @@ field" column is the name on the wire.
 | sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
 | mellemafgrøde eller tidlig såning | `intermediateOrEarlySowing`, `INTERMEDIATE_OR_EARLY_SOWING`, `isIntermediateOrEarlySowingYear` | `mellemafgroede_eller_tidlig_saaning` | A history year whose reported catch crop came before an autumn-sown crop: one of the two, which the source does not say; drawn split down the middle in the colours of both |
-| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `cropCover` (plantedække), `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing` |
-| stubmark | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain |
+| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The band under the crops and the inner ring of the crop donut use the same colours and definitions, from `winter-cover.ts` |
+| vintersæd | `winterCereal` | | W=1 and W=7 (after grass) in NLES5: winter cereal covers the soil |
+| græs, raps og roer | `grassRapeBeets` | | W=6 and W=8 in NLES5: grass, clover grass, winter rape or beets stand long into the autumn, or grass is ploughed late |
+| undersået græs og brak | `undersownOrFallow` | | W=4 in NLES5 without a catch crop, and a grass reported as udlæg |
+| stub | `stubble` | | W=5 in NLES5: stubble left with weeds and volunteer grain. Only the area without efterafgrøde, since a catch crop sown in the stubble takes its place |
 | bar jord | `bareSoil` | | W=2 and W=3 in NLES5 |
+| vinterdækfordeling | `WinterCoverShare`, `summarizeWinterCover` | | Area and share per vinterdække, the inner ring of the crop donut in Grupper and Afgrøder. Each mark-year counts once, and years with an unknown cover count for nothing |
 | forfrugtsværdi | `precedingCropValueKgNHa` | `forfrugtsvaerdiKgnHa` | |
 | regn forfrugtsværdien med | `includePrecedingCropValue` | `medregnForfrugtsvaerdi` | Proposed field; the backend does not read it yet |
 | indregn forfrugtsværdi (indregn_ffv) | `deducts_preceding_crop_value` | | Backend. Ja or Nej per crop in the master table. Nej for grass, seed grass, clover, lucerne and other perennial crops, which get no forfrugtsværdi deducted |
@@ -82,9 +87,17 @@ field" column is the name on the wire.
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |
 | N-norm | `nNormPct`, `nNormPercentages`, `allowedNNormPercentages` | `nNormPct`, `rotationNNormProcenter`, `nNormProcenter` | |
+| N-norm% i feltlisten | `NNormLevel`, `nNormLevelOf`, `nNormLevelByFieldId` | | What the level means for a mark in the selected year (or over its sædskifte): `noNorm` (brak or a norm of 0 kg N, shown "-"), `fullNorm` (no udbytterespons, "100 %"), `level`, or `partial` (only some years have a curve, "75 %" with "3 af 5 år") |
 | afgrødenorm | `cropNormKgNHa` | `afgrodeNormKgnHa` | |
 | reduceret norm | `reducedNorm` | | |
 | låst sædskifte | locked rotation | `allowedRotationIds` | |
+| sædskiftefordeling | `RotationShare`, `summarizeRotationDistribution`, `rotationVariantOf`, `rotationKey`, `rotationLabel` | | Area and share of the farm per sædskifte, shown in the Sædskifter tab of the overview. A mark's `rotationId` is `<rotationVariant>:<variant>:<nNormPct>` ("315:4:80"), and only the first part is the sædskifte, so candidates of the same one are merged. Marks without a rotationId are a last row, "Uden sædskifte". `farm.rotationLibrary` ids do not match `rotationId` |
+| sædskifte nr. | `rotationVariant` (list column and sort key), `fieldRotationVariant` | `rotationId` | The number of a mark's sædskifte, the first part of its `rotationId`, as a sortable column in a simulation's list. Permanente sædskifter show "Permanent", marks without a sædskifte "-" and sort last |
+| uden sædskifte | `rotationVariant: null` in `RotationShare` | `rotationId: null` | The last row of the Sædskifter tab: marks that have no sædskifte selected yet |
+| permanente sædskifter | `PERMANENT_ROTATION` (`lib/rotation-overview.ts`) | `saedskiftevariant` `"permanent"` | The row of the Sædskifter tab for permanent afgrøder, whose rotation number is the text "permanent" instead of a number |
+| afgrødefølge | crop sequence, `cropSequence`, `cropSequenceText`, `cropSequenceOf` | | The afgrøder of a sædskifte in the order of the years, written "1. Vinterhvede → 2. Vårbyg". It comes from `/rotation-candidates/kategorier` and is shown in the Sædskifter tab and in the hover of the map colouring. A sædskifte that is not among the options has none |
+| sædskiftefarve | `rotationColorsOf`, `NO_ROTATION_COLOR` | | The colour of a sædskifte, handed out in the order of the whole farm's shares, so an opland scope does not change it. The Sædskifter tab and the map colouring use the same colours. Marks without a sædskifte are grey, and with more than 10 sædskifter the colours start over |
+| farvelæg sædskifte | `'rotation'` in `ColorAttribute`, `buildRotationSpec`, `NO_ROTATION_KEY` | | "Farvelæg → Sædskifte" on the simulation map. The map property `rotationVariant` is the sædskifte number, `permanent`, or `none` for marks without a sædskifte |
 
 ## Measures
 
@@ -114,18 +127,27 @@ field" column is the name on the wire.
 | tilgængeligt N | `availableNKgNHa`, `availableNShareOfNorm` | | Forfrugtsværdi plus the tildelt N that counts toward the norm |
 | gødningsoverblik | `FertiliserFigures`, `fieldFertiliser`, `fertiliserByFieldId` | | The Gødning column group in the mark list, per year or the average per year |
 | organisk bundet | `manureOrganicBoundKgNHa` | `husdyrgodningOrganiskBundetKgnHa` | |
+| efterårstildeling | `autumnAllocations`, `AutumnAllocation`, `AutumnAllocationDraft`, `autumnAllocationEnabled`, `autumnAllocation` glossary term | `autumnAllocations` | Part of a crop's norm spread after 1 August before its harvest. It counts in the crop's norm and costs, but in the leaching of the year before (MNCA) |
+| heraf efterårstildeling | `autumnAllocatedKgNHa`, `usesAutumnAllocation`, `autumnAllocated` column | `autumnAllocatedKgNHa` | The crop's own N that was spread the autumn before |
+| afgrøder til efterårstildeling | `AutumnCropOption`, `useAutumnCrops`, `listedAutumnCrops`, `autumnCropGroups` | | Raps, frøgræs, græs and vinterkorn in the chosen rotations |
+| gødning om efteråret | `fertiliserType`, `AutumnFertiliser`, `forcedAutumnFertiliser` | `fertiliser` | `'mineral'` is handelsgødning, `'manure'` husdyrgødning |
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
+| udbringning af husdyrgødning, pr. ton | `manureSpreading`, `manureSpreadingPriceId` | `manureSpreadingPriceId` | The price per tonne of spreading husdyrgødning, set in the Gødning step on both driftsformer |
+| købspris for husdyrgødning, pr. ton | `manurePurchase`, `manurePurchasePriceId` | `manurePurchasePriceId` | What a tonne of husdyrgødning costs to buy, standard 0 kr/ton |
+| standard svinegylle | `StandardManure`, `standardManure` | `standardManure` | What an økologisk Standard budget without a simulation is fertilised with: svinegylle covering the whole N-norm, at 6 kg udnyttet N pr. ton |
 
 ## Economics
 
 | Danish term | English name in code | API field | Note |
 | --- | --- | --- | --- |
 | dækningsbidrag | `db2`, `dbDkkHa`, `avgDbDkkHa` | `db2`, `dbKrHa`, `avgDbKrHa` | DB2 kept as an acronym |
+| omkostningsbudget | cost budget, `har_omkostningsbudget` (backend) | | The afgrøde's arbejdsmængder or dyrkningsomkostninger in the økonomital for the driftsform. An afgrøde without one has no real economics, unless a sædskifte grows it |
+| ingen økonomi | `economicsMissing`, `NO_ECONOMICS` | `economicsMissing`, `economics_missing` in the calculation detail | An afgrøde without a cost budget that no sædskifte grows, such as bestøverbrak. Its DB2 of 0 means no figure, so the mark shows "Ingen økonomi" and is left out of the DB2 averages |
 | kr | `Dkk` suffix, `formatCompactDkk` | | |
 | udbytte | `yieldAmount` | `udbytte` | |
 | udbytteenhed | `yieldUnit` | `udbytteenhed` | |
 | manglende udbyttenorm | `yieldNormMissing` | `udbyttenorm_mangler` | |
-| udbytterespons | `hasYieldResponse` | `udbytterespons` | Whether the crop has a yield-response curve for N below the norm, for the simulation's driftsform |
+| udbytterespons | `hasYieldResponse` | `udbytterespons` | Whether the crop has a yield-response curve for N below the norm, for the simulation's driftsform. Also sent for every year of `fieldYears` (null in read models prepared before it existed) |
 | udbyttefaktor | `yieldFactor` | `udbytte_faktor` | Share of the normudbytte reached with the available N |
 | foderenheder (FEN) | `feedUnits`, `minFeedUnits`, `maxFeedUnits`, `totalFeedUnits`, `avgFeedUnits`, `isFodderCrop` | `fen`, `minFen`, `maxFen`, `totalFen`, `avgFen` | |
 | salgspris | `salePrice` | `salgspris` | |
@@ -136,16 +158,22 @@ field" column is the name on the wire.
 | planteværn | `cropProtection` | `plantevaern` | |
 | markarbejde | `fieldWork` | `markarbejde` | |
 | tørring | `drying` | `toerring` | |
-| omkostninger i alt | `totalCosts` | `omkostninger_total` | |
+| andre gødningsstoffer, omkostning | `otherFertilisers` | `andre_goedningsstoffer`, `andreGoedningsstoffer` | |
+| andet, omkostning | `other` | `andet` | The costs listed as Andet, such as Hegn/vedligehold on græs |
+| omkostninger i alt | `totalCosts` | `omkostninger_total`, `omkostningerTotal` | |
+| regnskab for en simulering | `EconomicsStatement`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger |
+| kr/ha eller kr i alt | `StatementUnit`, `STATEMENT_UNIT_LABELS` | | The unit the regnskab on Sammenlign is shown in |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
 | bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |
-| gødning, andre gødningsstoffer, udsæd, planteværn, markarbejde, tørring/lagring | `fertiliser`, `otherFertilisers`, `seed`, `cropProtection`, `fieldWork`, `drying` (`CostCategory`) | `category` | The cost groups of a crop |
+| gødning, andre gødningsstoffer, udsæd, planteværn, markarbejde, tørring/lagring, andet | `fertiliser`, `otherFertilisers`, `seed`, `cropProtection`, `fieldWork`, `drying`, `other` (`CostCategory`) | `category` | The cost groups of a crop |
 | stykpris | `UnitPrice`, `priceId` | `priceId` | Price per unit, e.g. kr/gang or kr/kg |
 | kilde | `source`, `cropSources` | `source` | Where a price comes from, e.g. SEGES Budgetkalkuler 2026 |
 | mængde | `quantity`, `quantityUnit`, `quantityId` | `quantityId` | Per hectare, e.g. 3 sprøjtninger |
-| følger udbyttet | `followsYield` | `followsYield` | Revenue and drying, which the yield percentage scales |
+| følger udbyttet | `followsYield` | `followsYield` | Revenue and the costs that depend on the amount, such as drying, pressing and freight, which the yield percentage scales |
 | salgspris | `saleLine` | | The first revenue line of a crop |
+| halmindtægt | `strawRevenue` | `halm_indtaegt` | The straw sold, part of the indtægt in a field's calculation detail |
+| frasorterede kartofler | `culledShare`, `culledPrice`, `yieldLines`, `standardYield` | `frasorteret_andel`, `frasorteret_pris` | The culls of a potato yield, sold at their own, much lower price. The yield is the sorted potatoes (the sale line) plus the culls |
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |

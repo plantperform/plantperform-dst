@@ -220,10 +220,16 @@ describe('kvotehandel in the Årsgennemgang', () => {
   })
 
   it('marks a cap under Grænser that differs from the kvote', async () => {
-    // The kvote of 100 kg N sits at 34 % of each bar, so opland 1's cap of
-    // 150 kg N sits at 51 %; opland 2 has no cap of its own.
+    // Opland 1's cap of 150 kg N sits at 1.5 times the height of its kvote
+    // line; opland 2 has no cap of its own.
     await render(undefined, cap(150))
-    expect(capLines()).toEqual(['51%'])
+    const kvoteLine = container.querySelector<HTMLElement>(
+      'span.absolute.border-dashed',
+    )
+    expect(capLines()).toHaveLength(1)
+    expect(parseFloat(capLines()[0])).toBeCloseTo(
+      1.5 * parseFloat(kvoteLine!.style.bottom),
+    )
     expect(legend()).toContain('Loft under Grænser')
     // A cap equal to the kvote is not marked.
     await render(undefined, cap(100))

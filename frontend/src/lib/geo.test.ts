@@ -95,4 +95,25 @@ describe('fieldsToFeatureCollection', () => {
       properties(field({ quotaEligible: false }), year({ a: 44 }, { a: 22 })),
     ).toMatchObject({ leaching: null, nLoad: null })
   })
+
+  it('gives a field the number of its sædskifte, whichever candidate it is', () => {
+    expect(properties(field({ rotationId: '315:4:80' }))).toMatchObject({
+      rotationVariant: '315',
+    })
+    expect(properties(field({ rotationId: '315:7:100' }))).toMatchObject({
+      rotationVariant: '315',
+    })
+  })
+
+  it('gives the permanent crops a sædskifte of their own', () => {
+    expect(
+      properties(field({ rotationId: 'permanent:210:100' })),
+    ).toMatchObject({ rotationVariant: 'permanent' })
+  })
+
+  it('gives a field without a sædskifte the value none', () => {
+    expect(properties(field({ rotationId: null }))).toMatchObject({
+      rotationVariant: 'none',
+    })
+  })
 })

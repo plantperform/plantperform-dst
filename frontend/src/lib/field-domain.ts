@@ -15,6 +15,7 @@ import {
   shortCropName,
   type CropGroupDefinition,
 } from '@/lib/crop-groups'
+import { cropLabel, rotationYearLabel } from '@/lib/crop-label'
 
 export const CROP_VALUES: Crop[] = [
   'CEREAL_WINTER',
@@ -100,10 +101,11 @@ export const yearNLoadKgHa = (
 ): number => leachingKgNHa * (1 - (retention ?? 0) / 100)
 
 // Starting calendar year for the actual history in the "Aktuel" field overview
-// (must match field_history_evaluator.py::REAL_HISTORY_END_YEAR - 7 in the
-// backend). The eight positions are the field's actual 2019-2026 crops, not a
+// (must match field_history_evaluator.py::REAL_HISTORY_YEARS in the backend).
+// The three positions are the field's actual 2024-2026 crops, not a
 // forward-looking scenario rotation.
-export const REAL_HISTORY_START_CALENDAR_YEAR = 2019
+export const REAL_HISTORY_START_CALENDAR_YEAR = 2024
+export const NUM_HISTORY_YEARS = 3
 
 export const firstCalendarYear = (history: boolean): number =>
   history ? REAL_HISTORY_START_CALENDAR_YEAR : ROTATION_START_CALENDAR_YEAR
@@ -204,15 +206,18 @@ export const formatLockTooltip = (field: FieldRecord): string => {
   const lines = [`${fieldDisplayName(field)} - låst sædskifte`]
 
   if (field.cropRotation.length > 0) {
-    lines.push(field.cropRotation.map(formatRotationYear).join(' - '))
+    lines.push(field.cropRotation.map(rotationYearLabel).join(' - '))
   }
 
   if (field.areaHa > 0) {
-    lines.push(
-      `DB2 ${formatPerHa(field.db2 / field.areaHa, 'db2')} · ` +
-        `Udledning ${formatPerHa(field.nLoad / field.areaHa, 'nLoad')} · ` +
-        `Udvaskning ${formatPerHa(field.leaching / field.areaHa, 'leaching')}`,
-    )
+    const figures = [
+      field.economicsMissing
+        ? null
+        : `DB2 ${formatPerHa(field.db2 / field.areaHa, 'db2')}`,
+      `Udledning ${formatPerHa(field.nLoad / field.areaHa, 'nLoad')}`,
+      `Udvaskning ${formatPerHa(field.leaching / field.areaHa, 'leaching')}`,
+    ]
+    lines.push(figures.filter((figure) => figure !== null).join(' · '))
   }
 
   lines.push('Optimér ændrer den ikke. Lås op under Regler.')
@@ -330,13 +335,20 @@ export const groupRotationsByCategory = (
   return groups
 }
 
+const sameRotationYear = (left: RotationYear, right: RotationYear) =>
+  left.cropCode === right.cropCode &&
+  left.undersownCropCode === right.undersownCropCode
+
 export const rotationsEqual = (left: RotationYear[], right: RotationYear[]) =>
   left.length === right.length &&
-  left.every(
-    (year, index) =>
-      year.cropCode === right[index].cropCode &&
-      year.undersownCropCode === right[index].undersownCropCode,
-  )
+  left.every((year, index) => sameRotationYear(year, right[index]))
+
+const repeatsHistory = (rotation: RotationYear[], history: RotationYear[]) =>
+  rotation.length === 0 || history.length === 0
+    ? rotation.length === history.length
+    : rotation.every((year, index) =>
+        sameRotationYear(year, history[index % history.length]),
+      )
 
 export const changedFieldIds = (
   viewFields: FieldRecord[],
@@ -354,8 +366,12 @@ export const changedFieldIds = (
     if (field.imkId === null) continue
     const liveRotation = liveRotationByImk.get(field.imkId)
     if (!liveRotation) continue
+    const rotation =
+      field.rotationId === null
+        ? field.cropRotation.slice(-liveRotation.length)
+        : field.cropRotation
     if (
-      !rotationsEqual(field.cropRotation, liveRotation) ||
+      !repeatsHistory(rotation, liveRotation) ||
       !measuresEqual(field.measures, emptyMeasures())
     ) {
       changed.add(field.id)
@@ -364,6 +380,20 @@ export const changedFieldIds = (
 
   return changed
 }
+
+// A simulation that has not been optimized yet has no field snapshot of its
+// own, so the farm's current marker stand in for it. The farm's figures are not
+// the simulation's, so they are cleared and the marker show as not calculated.
+export const withoutCalculation = (fields: FieldRecord[]): FieldRecord[] =>
+  fields.map((field) => ({
+    ...field,
+    cropRotation: [],
+    rotationId: null,
+    db2: 0,
+    nLoad: 0,
+    leaching: 0,
+    feedUnits: 0,
+  }))
 
 export const isFieldCalculated = (
   field: FieldRecord,
@@ -427,6 +457,19 @@ export const quotaStatusLevel = (
   return 'ok'
 }
 
+const MIN_QUOTA_LINE_PCT = 34
+const MAX_QUOTA_LINE_PCT = 70
+const HIGHEST_QUOTA_BAR_PCT = 88
+
+export const quotaLineHeightPct = (quotaRatios: number[]): number =>
+  Math.min(
+    MAX_QUOTA_LINE_PCT,
+    Math.max(
+      MIN_QUOTA_LINE_PCT,
+      HIGHEST_QUOTA_BAR_PCT / Math.max(0, ...quotaRatios),
+    ),
+  )
+
 export const aggregateQuotaStatusLevel = (
   nLoad: number,
   quotaKgn: number,
@@ -448,6 +491,8 @@ export type QuotaStatus = {
 }
 
 export const EXCLUDED_FROM_CALCULATION = 'Indgår ikke i beregningen'
+
+export const NO_ECONOMICS = 'Ingen økonomi'
 
 export const getFieldQuotaStatus = (
   field: FieldRecord,
@@ -543,6 +588,9 @@ export type FieldTotals = {
   areaHa: number
   calculatedAreaHa: number
   nLoadAreaHa: number
+  // The calculated area that has economics: an afgrøde without a cost budget
+  // has no DB2 to average.
+  economicsAreaHa: number
   db2: number
   nLoad: number
   leaching: number
@@ -562,6 +610,7 @@ export const computeFieldTotals = (
     areaHa: 0,
     calculatedAreaHa: 0,
     nLoadAreaHa: 0,
+    economicsAreaHa: 0,
     db2: 0,
     nLoad: 0,
     leaching: 0,
@@ -582,7 +631,10 @@ export const computeFieldTotals = (
     if (!isFieldCalculated(field, isSimulationView)) continue
     totals.calculatedCount += 1
     totals.calculatedAreaHa += field.areaHa
-    totals.db2 += field.db2
+    if (!field.economicsMissing) {
+      totals.economicsAreaHa += field.areaHa
+      totals.db2 += field.db2
+    }
     totals.feedUnits += field.feedUnits
     // A mark that is not quota eligible draws down no quota and must not
     // contribute to the N load it is compared against either - see
@@ -619,9 +671,11 @@ export const totalsPerHa = (
 ): number | null =>
   perHa(
     totals[metric],
-    metric === 'db2' || metric === 'feedUnits'
-      ? totals.calculatedAreaHa
-      : totals.nLoadAreaHa,
+    metric === 'db2'
+      ? totals.economicsAreaHa
+      : metric === 'feedUnits'
+        ? totals.calculatedAreaHa
+        : totals.nLoadAreaHa,
   )
 
 const formatMetricValue = (value: number, metric: PerHaMetric): string =>
@@ -653,21 +707,25 @@ export const fieldFigure = (
   field: FieldRecord,
   metric: PerHaMetric,
 ): PerHaFigure =>
-  perHaFigure(
-    perHa(field[metric], field.areaHa),
-    metric,
-    formatMetricTotal(field[metric], metric),
-  )
+  metric === 'db2' && field.economicsMissing
+    ? { value: NO_ECONOMICS }
+    : perHaFigure(
+        perHa(field[metric], field.areaHa),
+        metric,
+        formatMetricTotal(field[metric], metric),
+      )
 
 export const totalsFigure = (
   totals: FieldTotals,
   metric: PerHaMetric,
 ): PerHaFigure =>
-  perHaFigure(
-    totalsPerHa(totals, metric),
-    metric,
-    formatMetricTotal(totals[metric], metric),
-  )
+  metric === 'db2' && totals.calculatedCount > 0 && totals.economicsAreaHa === 0
+    ? { value: NO_ECONOMICS }
+    : perHaFigure(
+        totalsPerHa(totals, metric),
+        metric,
+        formatMetricTotal(totals[metric], metric),
+      )
 
 export const totalsQuotaStatusLevel = (totals: FieldTotals): QuotaStatusLevel =>
   aggregateQuotaStatusLevel(
@@ -863,6 +921,15 @@ export const yearFeedUnitsPerHa = (year: DisplayYearValue): number =>
     ? year.feedUnitsPerHa
     : year.dbDetail.yieldUnit === 'FE/ha' ? Number(year.dbDetail.yieldAmount) || 0 : 0
 
+export const yearEconomicsMissing = (year: DisplayYearValue): boolean =>
+  'feedUnitsPerHa' in year
+    ? year.economicsMissing === true
+    : year.dbDetail.economicsMissing === true
+
+export const rotationEconomicsMissing = (
+  years: readonly DisplayYearValue[],
+): boolean => years.length > 0 && years.every(yearEconomicsMissing)
+
 export const yearResultHasValues = (year: DisplayYearValue): boolean =>
   year.dbDkkHa !== 0 || year.leachingKgNHa !== 0 || yearFeedUnitsPerHa(year) !== 0
 
@@ -926,6 +993,7 @@ export const applyFieldYearValues = (
     return {
       ...field,
       db2: yearResult.dbDkkHa * field.areaHa,
+      economicsMissing: yearEconomicsMissing(yearResult),
       nLoad:
         yearNLoadKgHa(yearResult.leachingKgNHa, field.retention) *
         field.areaHa,
@@ -1046,10 +1114,12 @@ export const summarizeCropDistribution = (
       codesByShortName.set(shortName, (codesByShortName.get(shortName) ?? 0) + 1)
     }
   }
-  const labelFor = ({ fullName }: CropShareTotals) => {
+  const labelFor = (id: string, { fullName }: CropShareTotals) => {
     if (level === 'group') return fullName
     const shortName = shortCropName(fullName)
-    return (codesByShortName.get(shortName) ?? 0) > 1 ? fullName : shortName
+    return (codesByShortName.get(shortName) ?? 0) > 1
+      ? cropLabel(Number(id), fullName)
+      : shortName
   }
   const shadeIndexByGroup = new Map<string, number>()
   return [...totalsById.entries()]
@@ -1059,7 +1129,7 @@ export const summarizeCropDistribution = (
       shadeIndexByGroup.set(totals.group.id, shadeIndex + 1)
       return {
         id,
-        label: labelFor(totals),
+        label: labelFor(id, totals),
         group: totals.group,
         color: cropShadeColor(totals.group.color, shadeIndex),
         areaHa: totals.areaHa,

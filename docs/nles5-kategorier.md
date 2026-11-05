@@ -81,8 +81,8 @@ der giver en værdi:
    står ikke i PUMR's A60-tekst. Trinnet skal ligge før trin 3, ellers kan
    W8 aldrig gives.
 3. Fast W fra tabel 6 (`w`). PUMR's trin 2. Den slår alt vinterplantedække
-   efter afgrøden: kartofler og roer beholder W6 før vintersæd og med
-   efterafgrøde, majs beholder W3 med efterafgrøde, og brak beholder W4.
+   efter afgrøden: kartofler og majs beholder W3 og roer W6 før vintersæd og
+   med efterafgrøde, og brak beholder W4.
 4. Sekundær afgrøde (udlæg eller efterafgrøde) på positionen → dens tabel
    7-W (`w_efteraar`, fx 968 → W5 og 960-966 → W4) eller `_UDL_W_MAPPING`
    for lookupens egne markører (2000 → W4). Mellemafgrøde (9682/9684) og
@@ -125,6 +125,31 @@ I historikken 2025→2026 ændres 38.389 af 589.485 marker, især:
 
 Eksempel, spisekartofler på sandjord: uden vinterdække og før vinterhvede
 57,6 kg N/ha, med efterafgrøde 31,7 kg N/ha.
+
+Kartoffeltallene i denne opgørelse gælder høringens W6. Kartoflerne er siden
+vendt tilbage til SGAV's W3 (se opdateringen nedenfor).
+
+### Opdatering 2026-11-02 — Afgrødetabel 14-10 (Prod vers 2)
+
+SGAV's `Afgrødetabel2027_14_10_2026_Prod_vers_2.xlsx` er kilden, hvor den og den
+supplerende høring er uenige (afgjort med Anders 2026-11-02). Størst er
+forskellen for kartoflerne 149-156, som igen er M2 (M12 efter græs), W3 og WC2
+i stedet for høringens M7, W6 og WC1. `engine.py` tvinger ikke længere M7 for
+kartofler. Alle ændrede koder og de bevidste undtagelser står i
+`SGAV_PROD_VERS_2_OPDATERING.md`, som følger datazippen.
+
+Det betyder for reglerne ovenfor:
+
+- Trin 3 giver kartofler og majs W3. Grønkorn (701-711) har ikke længere en
+  fast W og får W ved trin 4-6, og 921 Bar jord har W3.
+- Brak (310, 324, 342, 345) og 127 Lucernefrø har tabel 7-W 4, og 988-994 og
+  996 har fast W6.
+- `_FORFRUGT_M_OVERRIDE` (M efter græs) har fået kartofler 149-152 og 154-156
+  samt 225 Vårrug, helsæd med M12.
+- `_MP4_BERETTIGET_KODER` har fået 127 Lucernefrø. 328 står stadig i listen, og
+  312, 327 og 328 i `_LANGVARIG_FORFRUGT_KODER`, så en markhistorik med de
+  udgåede koder regnes som før. De er fjernet fra hovedafgrødelisten
+  (`Hovedafgrøde` = 0).
 
 ## MP — Forfrugt-effekt (ηmp)
 

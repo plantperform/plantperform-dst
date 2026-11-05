@@ -4,6 +4,7 @@ import type { FieldRecord, FieldYearValue, RotationCandidateYearResult } from '@
 import { fromWire } from '@/api/wire'
 import { fieldFertiliser } from '@/lib/fertiliser-overview'
 import {
+  changedFieldIds,
   computeFieldTotals,
   emptyMeasures,
   fieldFigure,
@@ -16,10 +17,15 @@ import {
   formatPerHa,
   formatSigned,
   formatWholeNumber,
+  quotaLineHeightPct,
   summarizeCropDistribution,
   totalsFigure,
   totalsPerHa,
+  isFieldCalculated,
+  withoutCalculation,
   applyFieldYearValues,
+  formatLockTooltip,
+  rotationEconomicsMissing,
   summarizeFieldYears,
   yearFeedUnitsPerHa,
 } from '@/lib/field-domain'
@@ -89,8 +95,25 @@ describe('stored compact field years', () => {
       .toMatchObject({ totalDb2: 2000, totalNLoadKg: 20, totalFeedUnits: 250 })
     expect(fieldFertiliser([year], 0)).toEqual({
       cropNormKgNHa: 100, precedingCropValueKgNHa: 10, mineralFertiliserKgNHa: 60,
-      manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, manureTonsPerHa: 5,
+      manureUtilisedKgNHa: 30, manureOrganicBoundKgNHa: 15, autumnAllocatedKgNHa: 0,
+      manureTonsPerHa: 5,
     })
+  })
+})
+
+describe('formatLockTooltip', () => {
+  it('shows the crops of a locked rotation with their codes', () => {
+    const locked = field({
+      cropRotation: [
+        {
+          cropCode: 210,
+          cropName: 'Vårbyg, helsæd',
+          undersownCropCode: null,
+          undersownCropName: null,
+        },
+      ],
+    })
+    expect(formatLockTooltip(locked)).toContain('210 - Vårbyg, helsæd')
   })
 })
 
@@ -101,6 +124,57 @@ describe('computeFieldTotals', () => {
       calculatedAreaHa: 5,
       nLoadAreaHa: 2,
     })
+  })
+})
+
+describe('changedFieldIds', () => {
+  const rotation = (...cropCodes: number[]) =>
+    cropCodes.map((cropCode) => ({
+      cropCode,
+      cropName: '',
+      undersownCropCode: null,
+      undersownCropName: null,
+    }))
+
+  it('keeps a rotation that repeats the shorter crop history unchanged', () => {
+    const history = [field({ imkId: 1, cropRotation: rotation(252, 252, 252) })]
+    const simulation = [
+      field({
+        id: 'same',
+        imkId: 1,
+        cropRotation: rotation(...Array(8).fill(252)),
+      }),
+      field({
+        id: 'other',
+        imkId: 1,
+        cropRotation: rotation(252, 1, 252, 252),
+      }),
+    ]
+    expect(changedFieldIds(simulation, history)).toEqual(new Set(['other']))
+  })
+
+  it('compares a saved history without a rotation on its last years', () => {
+    const history = [field({ imkId: 1, cropRotation: rotation(1, 11, 22) })]
+    const savedHistory = rotation(5, 6, 7, 8, 9, 1, 11, 22)
+    const simulation = [
+      field({
+        id: 'unoptimized',
+        imkId: 1,
+        rotationId: null,
+        cropRotation: savedHistory,
+      }),
+      field({ id: 'rotation', imkId: 1, cropRotation: savedHistory }),
+    ]
+    expect(changedFieldIds(simulation, history)).toEqual(new Set(['rotation']))
+  })
+})
+
+describe('quotaLineHeightPct', () => {
+  it('lifts the quota line until the highest bar fills the chart', () => {
+    expect(quotaLineHeightPct([0.6, 0.9])).toBe(70)
+    expect(quotaLineHeightPct([0.8, 2])).toBe(44)
+    expect(quotaLineHeightPct([1, 4])).toBe(34)
+    expect(quotaLineHeightPct([])).toBe(70)
   })
 })
 
@@ -145,6 +219,73 @@ describe('totalsFigure', () => {
       value: '5 kg N/ha',
       total: '10 kg N i alt',
     })
+  })
+})
+
+describe('a field without economics', () => {
+  const locked = field({
+    id: 'locked',
+    areaHa: 4,
+    db2: 0,
+    nLoad: 8,
+    economicsMissing: true,
+  })
+
+  it('leaves its area out of the DB2 average and keeps it in the others', () => {
+    const totals = computeFieldTotals([fields[0], locked], true)
+    expect(totals).toMatchObject({
+      calculatedAreaHa: 6,
+      economicsAreaHa: 2,
+      db2: 2000,
+    })
+    expect(totalsPerHa(totals, 'db2')).toBe(1000)
+    expect(totalsPerHa(totals, 'feedUnits')).toBeCloseTo(100 / 6)
+  })
+
+  it('shows no DB2 figure, but the other figures as usual', () => {
+    expect(fieldFigure(locked, 'db2')).toEqual({ value: 'Ingen økonomi' })
+    expect(fieldFigure(locked, 'nLoad')).toEqual({
+      value: '2 kg N/ha',
+      total: '8 kg N i alt',
+    })
+  })
+
+  it('shows no DB2 total when no calculated field has economics', () => {
+    expect(totalsFigure(computeFieldTotals([locked], true), 'db2')).toEqual({
+      value: 'Ingen økonomi',
+    })
+  })
+
+  const year = (dbDkkHa: number, economicsMissing = false) =>
+    ({
+      dbDkkHa,
+      economicsMissing,
+      leachingKgNHa: 20,
+      feedUnitsPerHa: 0,
+      winterCover: {},
+    }) as FieldYearValue
+
+  it('treats one year without economics as no figure for that year', () => {
+    const applied = applyFieldYearValues(
+      [field({ id: 'wheat', areaHa: 2 }), field({ id: 'carrot', areaHa: 2 })],
+      { wheat: [year(6000)], carrot: [year(0, true)] },
+      0,
+    )
+    expect(fieldFigure(applied[1], 'db2')).toEqual({ value: 'Ingen økonomi' })
+    expect(totalsPerHa(computeFieldTotals(applied, true), 'db2')).toBe(6000)
+  })
+
+  it('takes every year to call a rotation without economics', () => {
+    expect(rotationEconomicsMissing([])).toBe(false)
+    expect(rotationEconomicsMissing([year(6000), year(0, true)])).toBe(false)
+    expect(rotationEconomicsMissing([year(0, true), year(0, true)])).toBe(true)
+    expect(
+      rotationEconomicsMissing([
+        {
+          dbDetail: { economicsMissing: true },
+        } as unknown as RotationCandidateYearResult,
+      ]),
+    ).toBe(true)
   })
 })
 
@@ -225,7 +366,7 @@ describe('summarizeCropDistribution', () => {
     expect(share.nLoadKgHa).toBeNull()
   })
 
-  it('keeps crops that share a short name apart, under their full names', () => {
+  it('keeps crops that share a short name apart, under their codes and full names', () => {
     const shares = summarizeCropDistribution(
       [field({ id: 'a', areaHa: 2 }), field({ id: 'b', areaHa: 3 })],
       {
@@ -236,8 +377,8 @@ describe('summarizeCropDistribution', () => {
       'crop',
     )
     expect(shares.map(({ id, label, areaHa }) => ({ id, label, areaHa }))).toEqual([
-      { id: '153', label: 'Kartofler, andre', areaHa: 3 },
-      { id: '151', label: 'Kartofler, stivelses-', areaHa: 2 },
+      { id: '153', label: '153 - Kartofler, andre', areaHa: 3 },
+      { id: '151', label: '151 - Kartofler, stivelses-', areaHa: 2 },
     ])
   })
 
@@ -325,5 +466,37 @@ describe('N-norm level per mark', () => {
   it('reads the level from the candidate ID', () => {
     expect(fieldNNormPct(field({ rotationId: '315:4:80' }))).toBe(80)
     expect(fieldNNormPct(field({ rotationId: null }))).toBeNull()
+  })
+})
+
+describe('withoutCalculation', () => {
+  it('clears the farm figures so the marker show as not calculated', () => {
+    const [cleared] = withoutCalculation([
+      field({
+        id: 'a',
+        cropRotation: [
+          {
+            cropCode: 11,
+            cropName: 'Vinterhvede',
+            undersownCropCode: null,
+            undersownCropName: null,
+          },
+        ],
+        db2: 500,
+        nLoad: 40,
+        leaching: 30,
+        feedUnits: 900,
+      }),
+    ])
+    expect(cleared).toMatchObject({
+      id: 'a',
+      cropRotation: [],
+      rotationId: null,
+      db2: 0,
+      nLoad: 0,
+      leaching: 0,
+      feedUnits: 0,
+    })
+    expect(isFieldCalculated(cleared, true)).toBe(false)
   })
 })

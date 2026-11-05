@@ -28,21 +28,26 @@ export type ComparedColumnsProps = {
 
 type ComparisonColumnsTableProps = ComparedColumnsProps & {
   label?: ReactNode
+  compact?: boolean
   children: ReactNode
 }
 
 export const ComparisonColumnsTable = ({
   label,
+  compact = false,
   columns,
   highlightedKey,
   onHighlight,
   children,
 }: ComparisonColumnsTableProps) => (
-  <Table containerClassName="rounded-lg border bg-card" className="table-fixed">
+  <Table
+    containerClassName="rounded-lg border bg-card"
+    className={compact ? 'w-auto min-w-full' : 'table-fixed'}
+  >
     <colgroup>
       <col className="w-56" />
       {columns.map((column) => (
-        <col key={column.key} />
+        <col key={column.key} className={compact ? 'w-44' : undefined} />
       ))}
     </colgroup>
     <TableHeader>
@@ -90,19 +95,28 @@ export const ComparisonColumnsTable = ({
 type ComparisonFigureRowProps = ComparedColumnsProps & {
   label: ReactNode
   note?: string | null
+  className?: string
+  labelClassName?: string
+  cellClassName?: string
   children: (column: ComparedColumn, index: number) => ReactNode
 }
 
 export const ComparisonFigureRow = ({
   label,
   note,
+  className,
+  labelClassName,
+  cellClassName,
   columns,
   highlightedKey,
   onHighlight,
   children,
 }: ComparisonFigureRowProps) => (
-  <TableRow className="border-border/60 hover:bg-transparent">
-    <TableHead scope="row" className={cn(LABEL_CELL_CLASS, 'py-3 text-[13px]')}>
+  <TableRow className={cn('border-border/60 hover:bg-transparent', className)}>
+    <TableHead
+      scope="row"
+      className={cn(LABEL_CELL_CLASS, 'py-3 text-[13px]', labelClassName)}
+    >
       {label}
       {note ? (
         <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -113,7 +127,11 @@ export const ComparisonFigureRow = ({
     {columns.map((column, index) => (
       <TableCell
         key={column.key}
-        className={cn(figureCellClass(column, highlightedKey), 'py-2.5')}
+        className={cn(
+          figureCellClass(column, highlightedKey),
+          'py-2.5',
+          cellClassName,
+        )}
         {...highlightHandlers(column.key, onHighlight)}
       >
         {children(column, index)}
