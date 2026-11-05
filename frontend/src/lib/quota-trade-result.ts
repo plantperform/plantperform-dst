@@ -1,5 +1,6 @@
 import type {
   CatchmentYearlyNLoadCaps,
+  QuotaTradePrices,
   SavedResultView,
   Simulation,
   SimulationQuotaTrade,
@@ -64,11 +65,32 @@ const describeTradeKgs = (trade: SimulationQuotaTrade) => {
   )} kg N/år`
 }
 
+// The price a trade of tradeKg is paid at: the buy price when it buys, the
+// sell price when it sells.
+export const tradePriceDkkPerKg = (
+  prices: QuotaTradePrices,
+  tradeKg: number,
+) => (tradeKg >= 0 ? prices.buyPriceDkkPerKg : prices.sellPriceDkkPerKg)
+
+// "35 kr/kg N", or "køb 35, salg 30 kr/kg N" when the prices differ.
+export const describeTradePrices = (prices: QuotaTradePrices) =>
+  prices.buyPriceDkkPerKg === prices.sellPriceDkkPerKg
+    ? `${formatNumber(prices.buyPriceDkkPerKg)} kr/kg N`
+    : `køb ${formatNumber(prices.buyPriceDkkPerKg)}, salg ${formatNumber(
+        prices.sellPriceDkkPerKg,
+      )} kr/kg N`
+
 export const describeQuotaTrade = (trade: SimulationQuotaTrade) => {
   const amount = describeTradeKgs(trade)
-  return amount === null
-    ? 'Ingen handel'
-    : `${amount} · ${formatNumber(trade.priceDkkPerKg)} kr/kg N`
+  if (amount === null) return 'Ingen handel'
+  const kgs = tradeKgs(trade)
+  const buys = kgs.some((kg) => kg > 0)
+  const sells = kgs.some((kg) => kg < 0)
+  const price =
+    buys && sells
+      ? describeTradePrices(trade)
+      : `${formatNumber(tradePriceDkkPerKg(trade, sells ? -1 : 1))} kr/kg N`
+  return `${amount} · ${price}`
 }
 
 export type QuotaTradeKind = 'bought' | 'sold'

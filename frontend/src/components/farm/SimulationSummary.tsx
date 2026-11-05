@@ -25,6 +25,7 @@ import {
 import { cropLabelByCode, cropLabelByName } from '@/lib/crop-label'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
+import { describeTradePrices } from '@/lib/quota-trade-result'
 import {
   CUSTOM_FERTILISER,
   NO_FERTILISER,
@@ -310,7 +311,7 @@ export const SimulationSummary = ({
                       (catchment) => catchment.catchmentId === trade.catchmentId,
                     )?.label ?? `Kystvandopland ${trade.catchmentId}`}
                   </span>{' '}
-                  · {formatNumber(trade.priceDkkPerKg)} kr/kg N pr. år
+                  · {describeTradePrices(trade)} pr. år
                 </p>
               ))}
               <p>
