@@ -277,7 +277,9 @@ def _quota_trade_inputs(
     return tuple(
         QuotaTradeInput(
             kystvand_id=trade.kystvand_id,
-            price_kr_per_kg=trade.price_kr_per_kg,
+            # Settings hold one price, so kvote is bought and sold at it.
+            buy_price_kr_per_kg=trade.price_kr_per_kg,
+            sell_price_kr_per_kg=trade.price_kr_per_kg,
             same_each_year=trade.same_each_year,
         )
         for trade in quota_trades
@@ -824,7 +826,7 @@ def run_yearly_optimization(
                     candidate_evaluator.START_CALENDAR_YEAR + y: kg
                     for y, kg in enumerate(trade.trade_kg_by_year)
                 },
-                price_kr_per_kg=trade.price_kr_per_kg,
+                price_kr_per_kg=trade.buy_price_kr_per_kg,
                 same_each_year=trade.same_each_year,
                 payment_kr_per_year=trade.payment_kr_per_year,
             )
