@@ -21,6 +21,12 @@ class OptimizerYear(CamelModel):
 
 class OptimizerCandidate(RotationCandidateEvaluation):
     years: list[OptimizerYear]
+    # Utilised N of each year (kg N/ha), which only the økologisk N ceiling
+    # needs; with_udnyttet_n fills it for a run that has one. It is kept off
+    # OptimizerYear on purpose: a fifth field per year makes pydantic's
+    # per-instance field set outgrow CPython's smallest set (216 to 728 bytes),
+    # about 180 MB more for a farm of 244 marks with 181 alternatives each.
+    udnyttet_n_kgn_ha_by_year: tuple[float, ...] = ()
 
 
 class OptimizerFieldCandidates(SimulationFieldCandidates):
@@ -61,6 +67,15 @@ def _with_yearly_fen(data: SimulationFieldCandidates, handler) -> dict:
 _OPTIMIZER_INPUT_ADAPTER = TypeAdapter(
     Annotated[SimulationFieldCandidates, WrapSerializer(_with_yearly_fen)]
 )
+
+
+def with_udnyttet_n(compact: dict, data: SimulationFieldCandidates) -> dict:
+    """Add each candidate's utilised N per year to its compact input, in place."""
+    for candidate, compact_candidate in zip(data.candidates, compact["candidates"], strict=True):
+        compact_candidate["udnyttet_n_kgn_ha_by_year"] = [
+            year.udnyttet_n_kgn_ha for year in candidate.years
+        ]
+    return compact
 
 
 def optimizer_input(data: SimulationFieldCandidates) -> dict:
