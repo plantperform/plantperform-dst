@@ -120,6 +120,7 @@ field" column is the name on the wire.
 | ingen organisk gødning | `'none'` fertiliser choice (`NO_FERTILISER`), `offersNoFertiliser` | | Ren handelsgødning; not offered for økologisk, which never uses handelsgødning |
 | organisk gødning, økologisk standardvalg | `organicFertiliserChoice` | | The first gødningstype, chosen when an økologisk simulation has none |
 | maks tilladt mineralsk N fra organisk gødning | `orgMineralN`, `capsOrganicFertiliserN`, `organicFertiliserNLabel` | `orgMineralN` | Konventionel only; økologisk organisk gødning covers the whole N-norm ("Hele N-normen") and sends 0 |
+| økologisk N-loft | `organicNCeiling`, `OrganicNCeiling`, `OrganicNCeilingChoice`, `organicNCeilingLabel`, `DEFAULT_ORGANIC_N_CEILING` | `oekoNLoft` | Økologisk only: the most udnyttet N the farm may average per ha harmoniareal under the arealstøtte. 107 kg N gives the basisstøtte; 65 kg N also gives the tillæg for reduceret N-tilførsel. The optimization holds the farm to it; konventionel ignores it |
 | mineralsk andel | `mineralSharePct` | `mineralskAndelPct` | |
 | N-indhold pr. ton | `nContentKgPerTon`, `nContentPerTon` glossary term | `nIndholdKgPerTon` | |
 | tildelt husdyrgødning, udnyttet | `appliedManureUtilisedKgNHa`, `manureUtilisedKgNHa` | `tildeltHusdyrgodningUdnyttetKgnHa` | Shown as "Org. gødning" in the Gødning columns |

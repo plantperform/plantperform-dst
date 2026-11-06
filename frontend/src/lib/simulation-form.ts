@@ -8,6 +8,7 @@ import type {
   FarmingSystem,
   FertiliserPresetOption,
   FertiliserSettings,
+  OrganicNCeiling,
   RotationCategoryOption,
   RotationOption,
   Simulation,
@@ -73,11 +74,17 @@ export type AutumnAllocationDraft = {
   fertiliserType: AutumnFertiliser
 }
 
+// The basic støtte's ceiling is what an økologisk simulation starts from.
+export const DEFAULT_ORGANIC_N_CEILING: OrganicNCeiling = 107
+
 // Number inputs are kept as the strings the user typed, so an empty or
 // half-typed field is not silently turned into a number.
 export type SimulationFormValues = {
   name: string
   farmingSystem: FarmingSystem
+  // Chosen for økologisk only; konventionel keeps the default and sends it
+  // unused.
+  organicNCeiling: OrganicNCeiling
   economicsProfileId: string
   // The crops the farm will grow. A crop that is not chosen is opted out.
   chosenCrops: string[]
@@ -104,6 +111,7 @@ export type SimulationFormValues = {
 export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   name: '',
   farmingSystem: 'Konventionel',
+  organicNCeiling: DEFAULT_ORGANIC_N_CEILING,
   economicsProfileId: STANDARD_PROFILE_ID,
   chosenCrops: [],
   rotationVariants: [],
@@ -167,6 +175,20 @@ export const organicFertiliserNLabel = (
   capsOrganicFertiliserN(fertiliser.farmingSystem)
     ? `${formatNumber(fertiliser.orgMineralN)} kg N/ha`
     : 'Hele N-normen'
+
+const ORGANIC_N_CEILING_SUPPORT: Record<OrganicNCeiling, string> = {
+  107: 'Basisstøtte',
+  65: 'Basisstøtte og N-tillæg',
+}
+
+// The ceiling a simulation holds the farm's average utilised N per ha
+// harmoniareal to, with the støtte it gives. Konventionel has none.
+export const organicNCeilingLabel = (
+  fertiliser: Pick<FertiliserSettings, 'farmingSystem' | 'organicNCeiling'>,
+): string | null =>
+  fertiliser.farmingSystem === 'Økologisk'
+    ? `${fertiliser.organicNCeiling} kg N/ha · ${ORGANIC_N_CEILING_SUPPORT[fertiliser.organicNCeiling]}`
+    : null
 
 const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
 
@@ -254,6 +276,7 @@ export const SIMULATION_FORM_STEPS = [
     schema: z.object({
       name: z.string().trim().min(1, 'Giv simuleringen et navn'),
       farmingSystem: z.enum(['Konventionel', 'Økologisk']),
+      organicNCeiling: z.union([z.literal(107), z.literal(65)]),
       economicsProfileId: z.string(),
     }),
   },
@@ -766,6 +789,11 @@ export const toCreateSimulationInput = (
         ? Number(DEFAULT_SIMULATION_FORM_VALUES.nContentKgPerTon)
         : Number(values.nContentKgPerTon),
       autumnAllocations: autumnAllocationsOf(values),
+      // Konventionel has no ceiling, so an earlier økologisk choice is not kept.
+      organicNCeiling:
+        values.farmingSystem === 'Økologisk'
+          ? values.organicNCeiling
+          : DEFAULT_ORGANIC_N_CEILING,
     },
     catchCropSowingDate: catchCropSowingDateOf(values),
     catchCropDailyBasis: values.catchCropDailyBasis,
@@ -820,6 +848,7 @@ export const simulationToFormValues = (
     ...DEFAULT_SIMULATION_FORM_VALUES,
     name: copiedSimulationName(simulation.name),
     farmingSystem: fertiliser.farmingSystem,
+    organicNCeiling: fertiliser.organicNCeiling,
     rotationVariants: simulation.rotationVariants,
     nNormPercentages: copiedNNormPercentages(
       simulation.nNormPercentages,

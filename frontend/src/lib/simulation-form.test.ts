@@ -38,6 +38,7 @@ import {
   offersNoFertiliser,
   organicFertiliserChoice,
   organicFertiliserNLabel,
+  organicNCeilingLabel,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
@@ -146,6 +147,20 @@ describe('step schemas', () => {
     )
     expect(
       isStepValid(stepIndexOf('basics'), { ...filledValues, name: '' }),
+    ).toBe(false)
+  })
+
+  it('accepts only the two N-loft of the økologisk arealstøtte', () => {
+    for (const organicNCeiling of [107, 65] as const) {
+      expect(
+        isStepValid(stepIndexOf('basics'), { ...filledValues, organicNCeiling }),
+      ).toBe(true)
+    }
+    expect(
+      isStepValid(stepIndexOf('basics'), {
+        ...filledValues,
+        organicNCeiling: 80 as never,
+      }),
     ).toBe(false)
   })
 
@@ -318,6 +333,7 @@ describe('fertiliser validation', () => {
         mineralSharePct: 70,
         onlyOrganic: false,
         nContentKgPerTon: 6,
+        organicNCeiling: 107,
       },
     }
     const values = {
@@ -353,6 +369,7 @@ describe('fertiliser validation', () => {
         mineralSharePct: 50,
         onlyOrganic: false,
         nContentKgPerTon: 5,
+        organicNCeiling: 107,
       },
     }
     expect(organicFertiliserChoice([preset])).toBe('Kvæggylle')
@@ -822,6 +839,7 @@ describe('toCreateSimulationInput', () => {
         onlyOrganic: true,
         nContentKgPerTon: 5,
         autumnAllocations: [],
+        organicNCeiling: 107,
       },
       catchCropSowingDate: '20/8',
       catchCropDailyBasis: false,
@@ -848,7 +866,28 @@ describe('toCreateSimulationInput', () => {
       onlyOrganic: false,
       nContentKgPerTon: 6,
       autumnAllocations: [],
+      organicNCeiling: 107,
     })
+  })
+
+  it('sends the N-loft the user chose for an økologisk simulering', () => {
+    const values: SimulationFormValues = {
+      ...filledValues,
+      farmingSystem: 'Økologisk',
+      fertiliserChoice: 'Kvæggylle',
+      organicNCeiling: 65,
+    }
+    expect(toCreateSimulationInput(values).fertiliser?.organicNCeiling).toBe(65)
+  })
+
+  it('sends the basic N-loft for konventionel, whatever an økologisk draft chose', () => {
+    const values: SimulationFormValues = {
+      ...filledValues,
+      organicNCeiling: 65,
+    }
+    expect(toCreateSimulationInput(values).fertiliser?.organicNCeiling).toBe(
+      107,
+    )
   })
 
   it('forces onlyOrganic for an økologisk simulering', () => {
@@ -910,6 +949,26 @@ describe('toCreateSimulationInput', () => {
   })
 })
 
+describe('organicNCeilingLabel', () => {
+  it('names the N-loft and the støtte it gives for økologisk', () => {
+    expect(
+      organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 107 }),
+    ).toBe('107 kg N/ha · Basisstøtte')
+    expect(
+      organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 65 }),
+    ).toBe('65 kg N/ha · Basisstøtte og N-tillæg')
+  })
+
+  it('has none for konventionel, which ignores the N-loft', () => {
+    expect(
+      organicNCeilingLabel({
+        farmingSystem: 'Konventionel',
+        organicNCeiling: 107,
+      }),
+    ).toBeNull()
+  })
+})
+
 describe('simulationToFormValues', () => {
   const kvaeggylle: FertiliserPresetOption = {
     name: 'Kvæggylle',
@@ -919,6 +978,7 @@ describe('simulationToFormValues', () => {
       mineralSharePct: 50,
       onlyOrganic: false,
       nContentKgPerTon: 5,
+      organicNCeiling: 107,
     },
   }
   const simulation: Simulation = {
@@ -1030,6 +1090,24 @@ describe('simulationToFormValues', () => {
       expect(values.orgMineralN).toBe('30')
     }
     expect(organic(0, 100).fertiliserChoice).toBe(CUSTOM_FERTILISER)
+  })
+
+  it('copies the N-loft of an økologisk simulation', () => {
+    const values = simulationToFormValues(
+      {
+        ...simulation,
+        fertiliser: {
+          ...simulation.fertiliser,
+          farmingSystem: 'Økologisk',
+          onlyOrganic: true,
+          organicNCeiling: 65,
+        },
+      },
+      [kvaeggylle],
+      offered,
+    )
+    expect(values.organicNCeiling).toBe(65)
+    expect(toCreateSimulationInput(values).fertiliser?.organicNCeiling).toBe(65)
   })
 
   it('keeps a sowing date on the daily basis', () => {

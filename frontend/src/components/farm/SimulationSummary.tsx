@@ -37,6 +37,7 @@ import {
   isPresetModified,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
+  organicNCeilingLabel,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedRotations,
@@ -127,6 +128,7 @@ export const SimulationSummary = ({
   const rotationVariants = input.allowedRotationVariants ?? []
   const nNormPercentages = input.allowedNNormPercentages ?? []
   const includePrecedingCropValue = input.includePrecedingCropValue !== false
+  const organicNCeiling = organicNCeilingLabel(fertiliser)
 
   const mismatchCount = farmingSystemMismatchCount(
     categories,
@@ -149,6 +151,9 @@ export const SimulationSummary = ({
           <p>
             {values.farmingSystem} · {formatFieldCount(fieldCount)}
           </p>
+          {organicNCeiling === null ? null : (
+            <p>Økologisk N-loft: {organicNCeiling}</p>
+          )}
           <p>Udledningskvote: {OPTIMIZATION_KIND_LABELS[settings.kind]}</p>
           <p>Økonomiprofil: {economicsProfile.name}</p>
         </Section>
