@@ -195,7 +195,11 @@ class EconomicsDatabaseTests(DatabaseTests):
             for index, (code, unit) in enumerate(((1, "hkg"), (11, "hkg"), (216, "FE/ha")), 1):
                 session.execute(
                     insert(afgroede_table).values(
-                        afgroedekode=code, navn=str(code), udbytteenhed=unit
+                        afgroedekode=code,
+                        navn=str(code),
+                        udbytteenhed=unit,
+                        grundbetaling=True,
+                        landbrugsareal=True,
                     )
                 )
                 session.execute(
@@ -660,6 +664,65 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         for prices in (organic["prices"], overrides.assumptions()["prices"]):
             self.assertEqual(next(p["label"] for p in prices if p["id"] == support), label)
+
+    def set_support_flags(self, code=None, **flags):
+        statement = update(afgroede_table).values(**flags)
+        if code is not None:
+            statement = statement.where(afgroede_table.c.afgroedekode == code)
+        with self.sessions.begin() as session:
+            session.execute(statement)
+        calculator.clear_lookup_cache()
+
+    def organic_support(self, code=1):
+        detail = calculator.calculate_db(code, "Økologisk", 5, only_organic=True, itemized=True)
+        lines = [
+            line for line in detail["tilskud_linjer"] if line["behandling"] == "Grundbeløb (basis)"
+        ]
+        return [line["udgift_kr_ha"] for line in lines], detail["tilskud"]
+
+    def test_the_organic_area_support_is_paid_on_eligible_afgroeder_only(self):
+        self.assertEqual(self.organic_support(), ([500], 1500))
+        eligible = dict(grundbetaling=True, landbrugsareal=True, art_4_4_c=0)
+        for reason, flags in (
+            ("no grundbetaling", dict(grundbetaling=False)),
+            ("not landbrugsareal", dict(landbrugsareal=False)),
+            ("reported under art. 4.4.c", dict(art_4_4_c=1)),
+            ("art. 4.4.c as a whole", dict(art_4_4_c=2)),
+        ):
+            with self.subTest(reason):
+                self.set_support_flags(1, **{**eligible, **flags})
+                self.assertEqual(self.organic_support(), ([], 1000))
+                self.assertEqual(calculator.calculate_db(1, "Konventionel", 5)["tilskud"], 1000)
+        self.set_support_flags(1, **eligible)
+        self.assertEqual(self.organic_support(), ([500], 1500))
+
+    def test_the_grass_codes_registered_without_organic_support_get_none(self):
+        with self.sessions.begin() as session:
+            for code in (305, 306, 307):
+                session.execute(
+                    insert(afgroede_table).values(
+                        afgroedekode=code,
+                        navn=str(code),
+                        udbytteenhed="hkg",
+                        grundbetaling=True,
+                        landbrugsareal=True,
+                    )
+                )
+        calculator.clear_lookup_cache()
+        self.assertEqual(
+            [calculator._tilskud_poster(code, "Økologisk") for code in (305, 306, 307)],
+            [
+                ["Grundbetaling (estimat)"],
+                ["Grundbetaling (estimat)"],
+                ["Grundbetaling (estimat)", "Grundbeløb (basis)"],
+            ],
+        )
+
+    def test_organic_economics_asks_for_the_support_flags_to_be_loaded(self):
+        self.set_support_flags(grundbetaling=False, landbrugsareal=False)
+        with self.assertRaisesRegex(RuntimeError, "load-afgroeder"):
+            calculator.calculate_db(1, "Økologisk", 5, only_organic=True)
+        self.assertEqual(calculator.calculate_db(1, "Konventionel", 5)["tilskud"], 1000)
 
     def test_a_driftsform_without_work_quantities_uses_its_own_flat_costs(self):
         konventionel = calculator.calculate_db(1, "Konventionel", 5)
