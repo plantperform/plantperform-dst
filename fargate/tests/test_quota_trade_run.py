@@ -41,7 +41,7 @@ class QuotaTradeInputTests(unittest.TestCase):
 
     def test_an_opland_with_a_year_without_a_cap_is_named(self):
         caps = (None,) + (100.0,) * (NUM_YEARS - 1)
-        with self.assertRaisesRegex(ValueError, "ikke grænse i alle år"):
+        with self.assertRaisesRegex(ValueError, "kræver en grænse i alle år"):
             _quota_trade_inputs([_field(1)], {1: caps}, (TRADE,), NAMES)
 
 

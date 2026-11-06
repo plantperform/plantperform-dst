@@ -125,7 +125,7 @@ def untradable_quota_reason(
     if not has_kvotegivende_marker:
         return "Ingen kvotegivende marker"
     if caps is not None and len(caps.max_n_load_by_year) < NUM_YEARS:
-        return "Ikke grænse i alle år"
+        return "Kræver en grænse i alle år"
     return None
 
 
