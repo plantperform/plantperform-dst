@@ -23,6 +23,10 @@ class RotationOption:
     n_load: float
     leaching: float
     fen: float
+    # Cycle averages of the whole mark: kg utilised N and ha harmoniareal. They
+    # only matter to the ceiling on the average utilised N per ha harmoniareal.
+    udnyttet_n: float = 0.0
+    harmoni_area_ha: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,8 @@ class FixedFieldContribution:
     kvotegivende: bool = True
     area_ha: float = 0.0
     crop_codes_by_year: tuple[int, ...] = ()
+    udnyttet_n: float = 0.0
+    harmoni_area_ha: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,9 @@ class ConstraintsInput:
     min_fen: float | None
     max_fen: float | None
     crop_area_limits: tuple[CropAreaLimit, ...] = ()
+    # The økologisk arealstøtte's ceiling on the farm's average utilised N, in
+    # kg per ha harmoniareal. None for a farm without one.
+    max_udnyttet_n_per_harmoni_ha: float | None = None
 
 
 @dataclass(frozen=True)
@@ -113,6 +122,9 @@ class YearlyRotationOption:
     leaching_by_year: tuple[float, ...]
     fen: float
     fen_by_year: tuple[float, ...]
+    # Per calendar year: kg utilised N and ha harmoniareal of the whole mark.
+    udnyttet_n_by_year: tuple[float, ...] = ()
+    harmoni_area_by_year: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -143,6 +155,8 @@ class FixedYearlyFieldContribution:
     kvotegivende: bool = True
     area_ha: float = 0.0
     crop_codes_by_year: tuple[int, ...] = ()
+    udnyttet_n_by_year: tuple[float, ...] = ()
+    harmoni_area_by_year: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -156,6 +170,8 @@ class YearlyConstraintsInput:
     crop_area_limits: tuple[CropAreaLimit, ...] = ()
     quota_trades: tuple[QuotaTradeSetting, ...] = ()
     kvote_by_kystvandopland: dict[int, float] = field(default_factory=dict)
+    # Held in every calendar year, like the udledning caps.
+    max_udnyttet_n_per_harmoni_ha: float | None = None
 
 
 @dataclass(frozen=True)
