@@ -590,6 +590,7 @@ def calculate_db(
     economics_key: str = "",
     itemized: bool = False,
     husdyrgodning_ton_pr_ha: float = 0.0,
+    rotation_crop: bool = False,
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -868,7 +869,7 @@ def calculate_db(
     )
     andet = sum(line["udgift_kr_ha"] for line in linjer if line["kategori"] == "Andet")
 
-    ingen_oekonomi = mangler_oekonomi(afgrodekode, driftsform)
+    ingen_oekonomi = not rotation_crop and mangler_oekonomi(afgrodekode, driftsform)
     if ingen_oekonomi:
         # Nothing to subtract from: no economics at all, rather than a
         # dækningsbidrag of the sales value and the grundbetaling.
@@ -955,6 +956,7 @@ def calculate_db(
             "praecisionsjordbrug": praecisionsjordbrug,
             "forfrugtsvaerdi": forfrugtsvaerdi,
             "husdyrgodning_ton_pr_ha": husdyrgodning_ton_pr_ha,
+            "rotation_crop": rotation_crop,
         },
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,

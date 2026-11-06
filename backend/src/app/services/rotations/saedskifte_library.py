@@ -7,7 +7,7 @@ file nor the database directory; they read the resulting lookup tables.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cache, lru_cache
+from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from app.data.db import (
     saedskifte_category_table,
     saedskifte_rotation_table,
 )
+from app.services.rotations import custom
 
 RawPosition = tuple[int | None, int | None, str | None]
 RawRotation = tuple[RawPosition, ...]
@@ -121,7 +122,6 @@ def _lookup_data() -> _LookupData:
 def clear_lookup_cache() -> None:
     """Clear process-local lookup caches after an administrative reload."""
     _lookup_data.cache_clear()
-    get_raw_rotation.cache_clear()
 
 
 def list_saedskifter() -> list[str]:
@@ -132,6 +132,8 @@ def list_saedskifter() -> list[str]:
 
 def list_variants(saedskifte: str) -> list[str]:
     """Return numerically sorted variants for a saedskiftevariant."""
+    if custom.is_custom(str(saedskifte)):
+        return custom.list_variants(str(saedskifte))
     values = {
         variant
         for saedskiftevariant, variant in _lookup_data().rotations
@@ -147,17 +149,23 @@ def list_all_saedskifte_refs() -> list[tuple[str, str]]:
 
 def get_kategori(saedskifte: str) -> list[str]:
     """Return the source categories for a saedskiftevariant."""
+    if custom.is_custom(str(saedskifte)):
+        custom.group(str(saedskifte))
+        return [custom.CUSTOM_CATEGORY]
     return list(_lookup_data().categories.get(str(saedskifte), ()))
 
 
 def get_driftsform(saedskifte: str) -> str | None:
     """Return the source driftsform label for a saedskiftevariant, if present."""
+    if custom.is_custom(str(saedskifte)):
+        return custom.group(str(saedskifte)).driftsform
     return _lookup_data().driftsforms.get(str(saedskifte))
 
 
-@cache
 def get_raw_rotation(saedskifte: str, variant: str) -> list[RawPosition]:
     """Return the eight raw positions, forward-filling crop codes as before."""
+    if custom.is_custom(str(saedskifte)):
+        return custom.raw_rotation(str(saedskifte), str(variant))
     triples = list(_lookup_data().rotations.get((str(saedskifte), str(variant)), ()))
     if not triples:
         return [(None, None, None)] * 8

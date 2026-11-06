@@ -9,6 +9,7 @@ from app.api.v0.healthz import router as healthz_router
 from app.api.v0.mars import router as mars_router
 from app.api.v0.registry import router as registry_router
 from app.api.v0.rotation_candidates import router as rotation_candidates_router
+from app.api.v0.saedskifte import router as saedskifte_router
 from app.api.v0.simulations import router as simulations_router
 
 router = APIRouter()
@@ -22,3 +23,4 @@ router.include_router(registry_router)
 router.include_router(mars_router)
 router.include_router(rotation_candidates_router)
 router.include_router(simulations_router)
+router.include_router(saedskifte_router)

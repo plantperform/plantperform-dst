@@ -19,6 +19,7 @@ from app.domain.optimization import (
 )
 from app.domain.soil import MissingSoilDataError
 from app.services.optimization.failures import is_transient
+from app.services.rotations.custom import simulation_scope
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
 from plantperform_fargate.deadline import (
     OptimizationDeadlineError,
@@ -106,91 +107,102 @@ def execute(
         if snapshot is None:
             outcome = "stale"
             return ExecutionResult(DeliveryOutcome.ACK)
-        check_deadline()
-        with _timed_phase("prepare_candidates", simulation_id, run_id):
-            snapshot = prepare(*snapshot)
-        request_type = (
-            YearlyOptimizeSimulationRequest
-            if row["kind"] == "yearly"
-            else OptimizeSimulationRequest
-        )
-        request = request_type.model_validate(row["parameters"])
-        # Duration belongs to the execution context, never saved client settings.
-        args = (farm_id, simulation_id, EXECUTION_TIMEOUT_SECONDS)
-        excluded = frozenset(request.excluded_afgrodekoder)
-        with _timed_phase("solve", simulation_id, run_id):
-            if row["kind"] == "yearly":
-                caps = {
-                    cap.kystvand_id: tuple(
-                        cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
-                        for i in range(NUM_YEARS)
+        with simulation_scope(snapshot[0]):
+            check_deadline()
+            with _timed_phase("prepare_candidates", simulation_id, run_id):
+                snapshot = prepare(*snapshot)
+            request_type = (
+                YearlyOptimizeSimulationRequest
+                if row["kind"] == "yearly"
+                else OptimizeSimulationRequest
+            )
+            request = request_type.model_validate(row["parameters"])
+            # Duration belongs to the execution context, never saved client settings.
+            args = (farm_id, simulation_id, EXECUTION_TIMEOUT_SECONDS)
+            excluded = frozenset(request.excluded_afgrodekoder)
+            with _timed_phase("solve", simulation_id, run_id):
+                if row["kind"] == "yearly":
+                    caps = {
+                        cap.kystvand_id: tuple(
+                            cap.max_n_load_by_year.get(START_CALENDAR_YEAR + i)
+                            for i in range(NUM_YEARS)
+                        )
+                        for cap in request.max_n_load_by_kystvandopland
+                    }
+                    solved = run_yearly_optimization(
+                        *args,
+                        caps,
+                        request.db2_swing_pct,
+                        excluded,
+                        row["requested_by"],
+                        snapshot=snapshot,
+                        quota_trades=tuple(request.quota_trades),
                     )
-                    for cap in request.max_n_load_by_kystvandopland
-                }
-                solved = run_yearly_optimization(
-                    *args,
-                    caps,
-                    request.db2_swing_pct,
-                    excluded,
-                    row["requested_by"],
-                    snapshot=snapshot,
-                    quota_trades=tuple(request.quota_trades),
-                )
-            else:
-                solved = run_optimization(*args, excluded, row["requested_by"], snapshot=snapshot)
-        check_deadline()
-        with _timed_phase(
-            "hydrate_winners",
-            simulation_id,
-            run_id,
-            field_count=len(snapshot[1]),
-            candidate_count=len(solved.selected_candidates),
-        ):
-            selected = hydrate(snapshot, solved.selected_candidates)
-        if selected is None:
-            outcome = "stale"
-            return ExecutionResult(DeliveryOutcome.ACK)
-        check_deadline()
-        response = OptimizeSimulationResponse(
-            status=solved.output.status,
-            objective_db2=solved.output.total_db2,
-            total_n_load_kg=solved.output.total_n_load_kg,
-            total_leaching_kg=solved.output.total_leaching_kg,
-            total_fen=solved.output.total_fen,
-            fields=list(solved.fields),
-            assignments=[
-                {"field_id": a.field_id, "rotation_id": a.rotation_id}
-                for a in solved.output.assignments
-            ],
-            total_db2_by_year={
-                START_CALENDAR_YEAR + i: v
-                for i, v in enumerate(getattr(solved.output, "total_db2_by_year", ()))
-            },
-            total_n_load_by_year={
-                START_CALENDAR_YEAR + i: v
-                for i, v in enumerate(getattr(solved.output, "total_n_load_by_year", ()))
-            },
-            quota_trades=list(getattr(solved, "quota_trades", ())),
-        )
-        with _timed_phase("persist_result", simulation_id, run_id, field_count=len(snapshot[1])):
-            saved = optimization_store.finish(
+                else:
+                    solved = run_optimization(
+                        *args, excluded, row["requested_by"], snapshot=snapshot
+                    )
+            check_deadline()
+            with _timed_phase(
+                "hydrate_winners",
                 simulation_id,
                 run_id,
-                token,
-                row["input_revision"],
-                setup_fields=snapshot.setup_fields,
-                output={
-                    "response": response.model_dump(mode="json"),
-                    "economics_snapshot": snapshot[0].economics_snapshot.model_dump(mode="json"),
-                    "fields_before": [
-                        field.model_dump(mode="json")
-                        for field in (snapshot.fields_before or snapshot[1])
-                    ],
-                    "selected_candidates": {
-                        key: value.model_dump(mode="json") for key, value in selected.items()
-                    },
+                field_count=len(snapshot[1]),
+                candidate_count=len(solved.selected_candidates),
+            ):
+                selected = hydrate(snapshot, solved.selected_candidates)
+            if selected is None:
+                outcome = "stale"
+                return ExecutionResult(DeliveryOutcome.ACK)
+            check_deadline()
+            response = OptimizeSimulationResponse(
+                status=solved.output.status,
+                objective_db2=solved.output.total_db2,
+                total_n_load_kg=solved.output.total_n_load_kg,
+                total_leaching_kg=solved.output.total_leaching_kg,
+                total_fen=solved.output.total_fen,
+                fields=list(solved.fields),
+                assignments=[
+                    {"field_id": a.field_id, "rotation_id": a.rotation_id}
+                    for a in solved.output.assignments
+                ],
+                total_db2_by_year={
+                    START_CALENDAR_YEAR + i: v
+                    for i, v in enumerate(getattr(solved.output, "total_db2_by_year", ()))
                 },
+                total_n_load_by_year={
+                    START_CALENDAR_YEAR + i: v
+                    for i, v in enumerate(getattr(solved.output, "total_n_load_by_year", ()))
+                },
+                quota_trades=list(getattr(solved, "quota_trades", ())),
             )
+            with _timed_phase(
+                "persist_result", simulation_id, run_id, field_count=len(snapshot[1])
+            ):
+                saved = optimization_store.finish(
+                    simulation_id,
+                    run_id,
+                    token,
+                    row["input_revision"],
+                    setup_fields=snapshot.setup_fields,
+                    output={
+                        "response": response.model_dump(mode="json"),
+                        "economics_snapshot": snapshot[0].economics_snapshot.model_dump(
+                            mode="json"
+                        ),
+                        "rotation_groups": {
+                            key: value.model_dump(mode="json")
+                            for key, value in (snapshot[0].rotation_groups or {}).items()
+                        },
+                        "fields_before": [
+                            field.model_dump(mode="json")
+                            for field in (snapshot.fields_before or snapshot[1])
+                        ],
+                        "selected_candidates": {
+                            key: value.model_dump(mode="json") for key, value in selected.items()
+                        },
+                    },
+                )
         outcome = "completed" if saved else "stale"
     except Exception as error:
         logger.exception("optimizer_attempt_failed run_id=%s", run_id)

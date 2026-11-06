@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.data.db import SessionLocal, afgroede_table
 from app.data.repository import list_fields, list_simulations, scenario_afgrodekoder
+from app.data.saedskifte_store import load_selected
 from app.domain.simulation import GodningSettings
 from app.services.economics.db_calculator import (
     OEKOLOGISK,
@@ -19,6 +20,7 @@ from app.services.economics.db_calculator import (
     soil_variants,
 )
 from app.services.economics.overrides import PRICE_PER_GANG_UNIT, price_unit
+from app.services.rotations import custom
 
 _PRICE_LABELS = {
     "Udbytte": "Salgspris",
@@ -95,6 +97,7 @@ def crop_budgets(
         crop = crops.get(code)
         if crop is None:
             continue
+        inputs["rotation_crop"] = custom.contains_crop(code)
         detail = calculate_db(code, farming_system, jb_nr, **inputs)
         if detail["economics_missing"]:
             continue
@@ -191,12 +194,15 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
     grown = _grown_areas(fields)
     possible = set().union(*(scenario_afgrodekoder(entry) for entry in simulations)) - set(grown)
     crop_codes = [code for code, _ in grown.most_common()] + sorted(possible)
-    return crop_budgets(
-        crop_codes,
-        jb_nr,
-        farming_system,
-        only_organic,
-        org_mineral_n,
-        n_indhold_kg_per_ton,
-        standard_manure,
-    )
+    groups = load_selected([group_id for entry in simulations
+                            for group_id in entry.rotation_saedskiftevarianter])
+    with custom.rotation_scope(groups, farming_system):
+        return crop_budgets(
+            crop_codes,
+            jb_nr,
+            farming_system,
+            only_organic,
+            org_mineral_n,
+            n_indhold_kg_per_ton,
+            standard_manure,
+        )

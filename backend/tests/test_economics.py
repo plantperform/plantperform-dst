@@ -21,7 +21,13 @@ from app import main
 from app.api.v0 import economics as api
 from app.auth import AuthenticatedUser, current_user
 from app.data import economics_recalculation_store as recalc_store
-from app.data import economics_store, read_model_store, repository
+from app.data import (
+    economics_store,
+    optimizer_inputs,
+    read_model_store,
+    repository,
+    simulation_settings_store,
+)
 from app.data.db import (
     afgroede_norm_lookup_table,
     afgroede_table,
@@ -37,6 +43,7 @@ from app.data.db import (
     metadata,
     prisliste_table,
     salgspris_table,
+    simulation_result_table,
 )
 from app.data.db import (
     simulation_result_table as results,
@@ -55,13 +62,20 @@ from app.domain.economics import (
     UpdateEconomicsModuleRequest,
 )
 from app.domain.field import FieldRecord
-from app.domain.rotation_candidate import RotationCandidateYearResult, RotationYear
+from app.domain.optimization import OptimizeSimulationRequest
+from app.domain.rotation_candidate import (
+    RotationCandidateEvaluation,
+    RotationCandidateYearResult,
+    RotationYear,
+    SimulationFieldCandidates,
+)
 from app.domain.simulation import CreateSimulationRequest, Simulation
 from app.services import read_models
 from app.services.calculation import CalculationFailedError
 from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
 from app.services.economics import runner as economics_worker
+from app.services.optimization import jobs as optimization_jobs
 from plantperform_fargate import worker as optimizer_worker
 
 OTHER = "other@example.com"
@@ -366,15 +380,12 @@ class EconomicsDatabaseTests(DatabaseTests):
                         year["db_detail"] = calculator.calculate_db(1, "Konventionel", 5, mncs=175)
                         year["db_kr_ha"] = year["db_detail"]["db"]
                     candidate["avg_db_kr_ha"] = year["db_kr_ha"]
-                from app.data.optimizer_inputs import optimizer_input
-                from app.domain.rotation_candidate import SimulationFieldCandidates
-
                 session.execute(
                     update(caches)
                     .where(caches.c.id == row.id)
                     .values(
                         data=data,
-                        optimizer_input=optimizer_input(
+                        optimizer_input=optimizer_inputs.optimizer_input(
                             SimulationFieldCandidates.model_validate(data)
                         ),
                     )
@@ -524,13 +535,13 @@ class EconomicsDatabaseTests(DatabaseTests):
             ),
             SimpleNamespace(jbnr=3, area_ha=8, crop_rotation=[SimpleNamespace(afgrode_kode=999)]),
         ]
-        godning = SimpleNamespace(
-            driftsform="Konventionel",
-            only_organic=False,
-            org_mineral_n=50,
-            n_indhold_kg_per_ton=5.0,
+        simulation = Simulation(
+            id="sim", farm_id="farm", name="Budget", created_at="2026-11-04",
+            godning={
+                "driftsform": "Konventionel", "only_organic": False,
+                "org_mineral_n": 50, "n_indhold_kg_per_ton": 5.0,
+            },
         )
-        simulation = SimpleNamespace(id="sim", godning=godning)
         url = "/api/v0/farms/farm/economics/budgets"
         with (
             patch.object(budget, "list_fields", return_value=fields),
@@ -1149,20 +1160,14 @@ class EconomicsDatabaseTests(DatabaseTests):
             UpdateEconomicsModuleRequest(expectedRevision=0, prices=None, name="Changed"),
             EMAIL,
         )
-        from app.data.read_model_store import get_simulation_view
-
-        view = get_simulation_view("farm", "sim", EMAIL)
+        view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
         self.assertEqual(view["status"], "done")
         self.assertIsNotNone(view["data"])
         self.queue.send_message.assert_not_called()
 
     def test_creation_and_optimization_keep_captured_economics_snapshot(self):
-        from app.data.simulation_settings_store import create
-        from app.domain.optimization import OptimizeSimulationRequest
-        from app.services.optimization import jobs as optimization_jobs
-
         module = self.module(prices={SALE: 150})
-        created = create(
+        created = simulation_settings_store.create(
             "farm", CreateSimulationRequest(name="frozen", economics_module_id=module.id), EMAIL
         )
         economics_store.update_module(
@@ -1179,8 +1184,6 @@ class EconomicsDatabaseTests(DatabaseTests):
             OptimizeSimulationRequest(expected_revision=0, run_id=uuid4()),
         )
         with self.sessions() as session:
-            from app.data.db import simulation_result_table
-
             parameters = session.execute(
                 select(simulation_result_table.c.parameters).where(
                     simulation_result_table.c.run_id == accepted.run_id
@@ -1390,8 +1393,6 @@ class EconomicsDatabaseTests(DatabaseTests):
                 self.assertEqual(candidate["years"][0]["db_detail"]["udbytte"], 60)
 
     def test_cached_baseline_and_locked_fields_recalculate_fen(self):
-        from app.domain.rotation_candidate import RotationCandidateEvaluation
-
         with self.sessions.begin() as session:
             row = session.execute(select(setups).where(setups.c.id == "sim")).one()
             fields = row.fields

@@ -5,8 +5,9 @@ from types import SimpleNamespace
 from app.domain.field import FieldRecord
 from app.domain.read_model import EconomicsStatement, FieldYearValue
 from app.domain.rotation_candidate import RotationCandidateRef
-from app.services.optimization.crop_area_ranges import crop_area_ranges
+from app.services.optimization import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
+from app.services.rotations.custom import CUSTOM_CATEGORY
 from app.services.scenario.field_history_evaluator import REAL_HISTORY_YEARS
 
 # The leaching detail keys the year strip needs to draw what covers the soil
@@ -183,7 +184,7 @@ def field_contribution(field, candidates):
         )
         for candidate in compact
     ]
-    return [vars(value) for value in crop_area_ranges([field], {field.id: thin})]
+    return [vars(value) for value in crop_area_ranges.crop_area_ranges([field], {field.id: thin})]
 
 
 def combine_contributions(contributions):
@@ -296,10 +297,14 @@ def _rotation_catalog(by_pair):
         {
             "kategori": category,
             "saedskifter": sorted(
-                groups[category], key=lambda c: (int(c["saedskiftevariant"]), c["variant"])
+                groups[category], key=lambda c: (
+                    not c["saedskiftevariant"].isdigit(),
+                    int(c["saedskiftevariant"]) if c["saedskiftevariant"].isdigit()
+                    else c["saedskiftevariant"], c["variant"],
+                )
             ),
         }
-        for category in ["Brak", *saedskifte_kategorier.list_kategorier()]
+        for category in ["Brak", *saedskifte_kategorier.list_kategorier(), CUSTOM_CATEGORY]
         if category in groups
     ]
 

@@ -7,10 +7,11 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
+from fastapi import BackgroundTasks
 from sqlalchemy import func, select, update
 
+from app.data import saedskifte_store
 from app.data.db import SessionLocal
 from app.data.db import simulation_result_table as results
 from app.data.simulation_store import _row, get_result, read_result
@@ -19,9 +20,7 @@ from app.domain.simulation import Simulation
 from app.services.fargate_control import wake_worker
 from app.services.optimization.local import execute_local_when_ready
 from app.services.optimization.queue import sqs_client
-
-if TYPE_CHECKING:
-    from fastapi import BackgroundTasks
+from app.services.rotations import custom
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +122,19 @@ def submit(
         else:
             if result.status in ("queued", "in_progress"):
                 raise SubmissionConflictError("Scenariet har allerede en aktiv optimering.")
+            rotation_groups = saedskifte_store.resolve_selected(
+                session, simulation.rotation_saedskiftevarianter
+            )
+            with (
+                custom.rotation_scope(rotation_groups, simulation.godning.driftsform),
+                custom.measure_scope(simulation.tidlig_saaning, simulation.mellemafgrode),
+            ):
+                custom.check_expansion(
+                    simulation.rotation_saedskiftevarianter, simulation.rotation_n_norm_procenter
+                )
+            parameters["simulation_settings"]["rotation_groups"] = {
+                key: value.model_dump(mode="json") for key, value in rotation_groups.items()
+            }
             session.execute(
                 update(results)
                 .where(results.c.simulation_id == simulation_id)

@@ -9,6 +9,7 @@ from app.domain.rotation_candidate import (
     RotationCandidateRef,
     RotationPositionOverride,
 )
+from app.services.rotations.custom import simulation_scope
 from app.services.scenario import candidate_evaluator
 
 
@@ -70,28 +71,29 @@ def apply_manual_rotation(
     godning = simulation.godning
     soil_data = candidates_row.soil_data
     percolation, org_n_topsoil, s_soil = soil_data if soil_data is not None else (None, None, None)
-    candidate = candidate_evaluator.evaluate_with_overrides(
-        base_ref,
-        overrides,
-        jbnr=candidates_row.jbnr,
-        driftsform=godning.driftsform,
-        org_mineral_n=godning.org_mineral_n,
-        mineralsk_andel_pct=godning.mineralsk_andel_pct,
-        only_organic=godning.only_organic,
-        n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
-        fdato=simulation.eea_fdato,
-        precision_dagsbasis=simulation.eea_precision_dagsbasis,
-        praecisionsjordbrug=simulation.praecisionsjordbrug,
-        tidlig_saaning=simulation.tidlig_saaning,
-        mellemafgrode=simulation.mellemafgrode,
-        start_year=start_year,
-        real_history=candidates_row.real_history,
-        percolation_by_kategori=percolation,
-        org_n_topsoil=org_n_topsoil,
-        s_soil=s_soil,
-        economics_key=simulation.economics_snapshot.overrides.cache_key(),
-        autumn_plan=godning.autumn_plan(),
-    )
+    with simulation_scope(simulation):
+        candidate = candidate_evaluator.evaluate_with_overrides(
+            base_ref,
+            overrides,
+            jbnr=candidates_row.jbnr,
+            driftsform=godning.driftsform,
+            org_mineral_n=godning.org_mineral_n,
+            mineralsk_andel_pct=godning.mineralsk_andel_pct,
+            only_organic=godning.only_organic,
+            n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+            fdato=simulation.eea_fdato,
+            precision_dagsbasis=simulation.eea_precision_dagsbasis,
+            praecisionsjordbrug=simulation.praecisionsjordbrug,
+            tidlig_saaning=simulation.tidlig_saaning,
+            mellemafgrode=simulation.mellemafgrode,
+            start_year=start_year,
+            real_history=candidates_row.real_history,
+            percolation_by_kategori=percolation,
+            org_n_topsoil=org_n_topsoil,
+            s_soil=s_soil,
+            economics_key=simulation.economics_snapshot.overrides.cache_key(),
+            autumn_plan=godning.autumn_plan(),
+        )
     if candidate is None:
         return None
 

@@ -1,13 +1,15 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 from app.data import optimization_store
 from app.domain.optimization import NUM_YEARS, QuotaTradeSetting, SimulationQuotaTrade
+from app.domain.simulation import Simulation
 from plantperform_fargate import worker
 from plantperform_fargate.models import QuotaTradeInput
 from plantperform_fargate.orchestrator import _quota_trade_inputs
+from plantperform_fargate.preparation import PreparedSnapshot
 
 NAMES = {1: "Limfjorden"}
 TRADE = QuotaTradeSetting(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=30)
@@ -59,12 +61,14 @@ class QuotaTradeWorkerTests(unittest.TestCase):
                 "quotaTrades": [{"kystvandId": 1, "buyPriceKrPerKg": 35, "sellPriceKrPerKg": 30}],
             },
         }
-        snapshot = MagicMock()
-        snapshot.__getitem__.side_effect = lambda index: (
-            SimpleNamespace(economics_snapshot=MagicMock()) if index == 0 else []
+        snapshot = PreparedSnapshot(
+            simulation=Simulation(id="sim", farm_id="farm", name="Test", created_at="2026-11-04"),
+            fields=[],
+            candidates=[],
+            contexts={},
+            setup_fields={},
+            fields_before=[],
         )
-        snapshot.fields_before = []
-        snapshot.setup_fields = {}
         chosen = SimulationQuotaTrade(
             kystvand_id=1,
             kystvand_navn="Limfjorden",

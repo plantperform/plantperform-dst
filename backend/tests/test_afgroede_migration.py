@@ -106,6 +106,7 @@ class AfgroedeMigrationTests(unittest.TestCase):
                 "20261009_0001_afgroede_w_vinterplantedaekke.py",
                 "20261009_0002_afgroede_virkemiddel_flag.py",
                 "20261009_0003_afgroede_praecisionsgoedskning.py",
+                "20261019_0001_afgroede_saamaaned.py",
             )
         ]
         with self.engine.begin() as connection:
@@ -228,6 +229,7 @@ class AfgroedeMigrationTests(unittest.TestCase):
                         "afgroede": "Workbook name",
                         "jb_gruppe": "JB 1",
                         "vanding": "Uvandet",
+                        "driftsform": "Konventionel",
                         "udbytteenhed": "hkg",
                         "udbyttenorm": 50,
                         "udbyttenorm_alt": None,
