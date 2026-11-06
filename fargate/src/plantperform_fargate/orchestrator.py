@@ -15,9 +15,9 @@ from app.domain.optimization import (
     untradable_quota_reason,
 )
 from app.domain.rotation_candidate import RotationCandidateEvaluation
-from app.domain.simulation import GodningSettings, KystvandoplandNLoadCap
+from app.domain.simulation import OEKO_N_LOFT_BASIS, GodningSettings, KystvandoplandNLoadCap
 from app.domain.soil import PercolationByKategori
-from app.services.rotations import saedskifte_library
+from app.services.rotations import afgroede_normer, saedskifte_library
 from app.services.rotations.custom import with_snapshot_rotations
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
@@ -83,10 +83,45 @@ def _exclude_afgrodekoder(
     ]
 
 
+def _udnyttet_n_kgn_ha_by_year(candidate: RotationCandidateEvaluation) -> tuple[float, ...]:
+    """kg utilised N per ha in each candidate year, of a full or a compact candidate."""
+    if not isinstance(candidate, OptimizerCandidate):
+        return tuple(y.udnyttet_n_kgn_ha for y in candidate.years)
+    if len(candidate.udnyttet_n_kgn_ha_by_year) != len(candidate.years):
+        # Without this a candidate prepared without its utilised N would count as 0.
+        raise ValueError("The compact candidate does not carry its utilised N")
+    return candidate.udnyttet_n_kgn_ha_by_year
+
+
+def _udnyttet_n_and_harmoni_area_by_year(
+    candidate: RotationCandidateEvaluation,
+    area_ha: float,
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """kg utilised N and ha harmoniareal of a whole mark, one entry per candidate year.
+
+    The ceiling of the økologisk arealstøtte divides the farm's utilised N by
+    its harmoniareal, which is the area of the afgrøder the master table marks
+    Harmoni.
+    """
+    return (
+        tuple(n * area_ha for n in _udnyttet_n_kgn_ha_by_year(candidate)),
+        tuple(
+            area_ha if afgroede_normer.is_harmoniareal(y.year.afgrode_kode) else 0.0
+            for y in candidate.years
+        ),
+    )
+
+
+def _cycle_average(by_year: tuple[float, ...], active_len: int) -> float:
+    cycle = by_year[:active_len]
+    return sum(cycle) / len(cycle) if cycle else 0.0
+
+
 def _build_options(
     field: FieldRecord,
     candidates: list[RotationCandidateEvaluation],
     excluded_afgrodekoder: frozenset[int] = frozenset(),
+    with_udnyttet_n: bool = False,
 ) -> tuple[RotationOption, ...]:
     """Build one RotationOption per stored, invisibly calculated candidate.
 
@@ -97,6 +132,9 @@ def _build_options(
     Only called for marks without `allowed_rotation_ids` - a locked mark (for
     example after Phase 10's "Rediger manuelt") is not a decision variable at
     all; see _locked_field_contribution and run_optimization.
+
+    with_udnyttet_n adds each option's utilised N and harmoniareal, which only
+    the ceiling of the økologisk arealstøtte needs.
     """
     retention_factor = 1 - (field.retention or 0) / 100
     candidates = _exclude_afgrodekoder(candidates, excluded_afgrodekoder)
@@ -104,6 +142,13 @@ def _build_options(
     for candidate in candidates:
         ref_id = candidate.ref.to_id()
         leaching_total = candidate.avg_leaching_kg_n_ha * field.area_ha
+        udnyttet_n = harmoni_area_ha = 0.0
+        if with_udnyttet_n:
+            n_by_year, harmoni_by_year = _udnyttet_n_and_harmoni_area_by_year(
+                candidate, field.area_ha
+            )
+            udnyttet_n = _cycle_average(n_by_year, candidate.active_len)
+            harmoni_area_ha = _cycle_average(harmoni_by_year, candidate.active_len)
         options.append(
             RotationOption(
                 key=ref_id,
@@ -113,6 +158,8 @@ def _build_options(
                 n_load=leaching_total * retention_factor,
                 leaching=leaching_total,
                 fen=candidate.avg_fen * field.area_ha,
+                udnyttet_n=udnyttet_n,
+                harmoni_area_ha=harmoni_area_ha,
             )
         )
     return tuple(options)
@@ -144,8 +191,14 @@ def _kvote_by_kystvandopland(fields: list[FieldRecord]) -> dict[int, float]:
 def _locked_field_contribution(
     field: FieldRecord,
     candidate: RotationCandidateEvaluation | None = None,
+    with_udnyttet_n: bool = False,
 ) -> FixedFieldContribution:
-    """Use saved metrics, and the selected candidate's crops when needed."""
+    """Use saved metrics, and the selected candidate's crops and N when needed."""
+    udnyttet_n = harmoni_area_ha = 0.0
+    if with_udnyttet_n and candidate is not None:
+        n_by_year, harmoni_by_year = _udnyttet_n_and_harmoni_area_by_year(candidate, field.area_ha)
+        udnyttet_n = _cycle_average(n_by_year, candidate.active_len)
+        harmoni_area_ha = _cycle_average(harmoni_by_year, candidate.active_len)
     return FixedFieldContribution(
         kystvand_id=field.kystvand_id,
         db2=field.db2,
@@ -159,6 +212,8 @@ def _locked_field_contribution(
             if candidate is not None
             else ()
         ),
+        udnyttet_n=udnyttet_n,
+        harmoni_area_ha=harmoni_area_ha,
     )
 
 
@@ -225,6 +280,111 @@ def _lowest_n_load_by_kystvandopland_and_year(
             for year, n_load in enumerate(fixed.n_load_by_year):
                 lowest[(fixed.kystvand_id, year)] += n_load
     return lowest
+
+
+def _lowest_average(
+    choices: list[list[tuple[float, float]]],
+    fixed_n: float,
+    fixed_area: float,
+) -> float | None:
+    """The lowest total N over total harmoniareal that one pick per mark reaches.
+
+    Each mark offers (kg utilised N, ha harmoniareal) pairs, one per option.
+    This is Dinkelbach's method: for a guessed average every mark takes the
+    option with the least N above what that average allows its harmoniareal,
+    and the average of that pick is the next guess, which never rises. A pick
+    without any harmoniareal has no average. With no N either it meets any
+    ceiling, so the answer is 0; with N, the earlier guess stands (None at the
+    start, when there is none).
+    """
+    pick = [min(options) for options in choices]
+    average = None
+    for _ in range(100):
+        total_n = fixed_n + sum(n for n, _ in pick)
+        total_area = fixed_area + sum(area for _, area in pick)
+        if total_area <= 0:
+            return 0.0 if total_n <= 1e-9 else average
+        if average is not None and total_n / total_area >= average - 1e-9:
+            break
+        average = total_n / total_area
+        pick = [
+            min(options, key=lambda option, lam=average: option[0] - lam * option[1])
+            for options in choices
+        ]
+    return average
+
+
+def _lowest_udnyttet_n_per_harmoni_ha(
+    field_inputs: list[FieldInput],
+    fixed_fields: list[FixedFieldContribution],
+) -> dict[int | None, float | None]:
+    return {
+        None: _lowest_average(
+            [
+                [(option.udnyttet_n, option.harmoni_area_ha) for option in field.options]
+                for field in field_inputs
+            ],
+            sum(fixed.udnyttet_n for fixed in fixed_fields),
+            sum(fixed.harmoni_area_ha for fixed in fixed_fields),
+        )
+    }
+
+
+def _lowest_udnyttet_n_per_harmoni_ha_by_year(
+    field_inputs: list[YearlyFieldInput],
+    fixed_fields: list[FixedYearlyFieldContribution],
+) -> dict[int | None, float | None]:
+    return {
+        year: _lowest_average(
+            [
+                [
+                    (option.udnyttet_n_by_year[year], option.harmoni_area_by_year[year])
+                    for option in f.options
+                ]
+                for f in field_inputs
+            ],
+            sum(fixed.udnyttet_n_by_year[year] for fixed in fixed_fields),
+            sum(fixed.harmoni_area_by_year[year] for fixed in fixed_fields),
+        )
+        for year in range(NUM_YEARS)
+    }
+
+
+def _kg_per_ha(value: float) -> str:
+    """Round up, so the lowest possible average never reads as meeting the ceiling."""
+    return f"{math.ceil(value * 10) / 10:.1f}".replace(".", ",")
+
+
+def _n_ceiling_shortfall_error(
+    ceiling: float,
+    lowest: dict[int | None, float | None],
+) -> OptimizationInfeasibleError | None:
+    """Name the years in which no pick gets the farm's average N under the ceiling.
+
+    ``lowest`` maps a year, or None for the period average, to the lowest
+    average the options reach. Returns None when every one of them can meet
+    the ceiling, so the cause is some other limit.
+    """
+    over = [
+        (year, value)
+        for year, value in lowest.items()
+        if value is not None and value > ceiling + 1e-9
+    ]
+    if not over:
+        return None
+    parts = []
+    for year, value in over:
+        when = "" if year is None else f"i {candidate_evaluator.START_CALENDAR_YEAR + year} "
+        parts.append(f"{when}(laveste mulige: {_kg_per_ha(value)} kg N)")
+    listed = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} og {parts[-1]}"
+    remedies = ["flere N-norm-niveauer under 100 %", "flere sædskifter"]
+    if ceiling < OEKO_N_LOFT_BASIS:
+        remedies.append(f"grænsen på {OEKO_N_LOFT_BASIS} kg N")
+    advice = f"{', '.join(remedies[:-1])} eller {remedies[-1]}"
+    return OptimizationInfeasibleError(
+        "Med de valgte sædskifter og N-normer kan bedriftens gennemsnit af udnyttet N ikke "
+        f"komme under grænsen på {ceiling:g} kg N pr. ha harmoniareal {listed}. Vælg {advice}."
+    )
 
 
 def _kg(value: int) -> str:
@@ -311,6 +471,7 @@ def run_optimization(
         raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc.candidates for fc in field_candidates}
+    n_ceiling = simulation.godning.oeko_n_loft_kg_ha
 
     field_inputs = []
     fixed_fields = []
@@ -318,7 +479,7 @@ def run_optimization(
         check_deadline()
         if field.allowed_rotation_ids:
             candidate = None
-            if simulation.constraints.crop_area_limits:
+            if simulation.constraints.crop_area_limits or n_ceiling is not None:
                 candidate = selected_locked_candidate(
                     field,
                     candidates_by_field_id.get(field.id, []),
@@ -328,13 +489,16 @@ def run_optimization(
                         f"Marken {field.name} er låst til en sædskiftekandidat, der ikke "
                         "længere findes — lås marken op og lås den igen."
                     )
-            fixed_fields.append(_locked_field_contribution(field, candidate))
+            fixed_fields.append(
+                _locked_field_contribution(field, candidate, with_udnyttet_n=n_ceiling is not None)
+            )
             continue
 
         options = _build_options(
             field,
             candidates_by_field_id.get(field.id, []),
             excluded_afgrodekoder,
+            with_udnyttet_n=n_ceiling is not None,
         )
         if not options:
             raise OptimizationInfeasibleError(
@@ -366,18 +530,24 @@ def run_optimization(
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
+                max_udnyttet_n_per_harmoni_ha=n_ceiling,
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
     )
 
     if output.status == "INFEASIBLE":
-        raise _quota_shortfall_error(
+        error = _quota_shortfall_error(
             farm_id,
             email,
             _lowest_n_load_by_kystvandopland(field_inputs, fixed_fields),
             {(kystvand_id, None): cap for kystvand_id, cap in max_n_load.items()},
-        ) or OptimizationInfeasibleError(
+        )
+        if error is None and n_ceiling is not None:
+            error = _n_ceiling_shortfall_error(
+                n_ceiling, _lowest_udnyttet_n_per_harmoni_ha(field_inputs, fixed_fields)
+            )
+        raise error or OptimizationInfeasibleError(
             "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
             "maks. udledning eller foderenheder og prøv igen."
         )
@@ -527,6 +697,11 @@ def _expand_yearly_options(
             db2_by_year = tuple(y.db_kr_ha * field.area_ha for y in variant.years)
             leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in variant.years)
             n_load_by_year = tuple(leaching * retention_factor for leaching in leaching_by_year)
+            udnyttet_n_by_year, harmoni_area_by_year = (
+                _udnyttet_n_and_harmoni_area_by_year(variant, field.area_ha)
+                if godning.oeko_n_loft_kg_ha is not None
+                else ((), ())
+            )
             ref_id = variant.ref.to_id()
             # Expanded alternatives carry numbers in memory, not rich reports.
             compact = OptimizerCandidate(
@@ -559,6 +734,8 @@ def _expand_yearly_options(
                     leaching_by_year=leaching_by_year,
                     fen=variant.avg_fen * field.area_ha,
                     fen_by_year=_fen_by_year(variant, field.area_ha),
+                    udnyttet_n_by_year=udnyttet_n_by_year,
+                    harmoni_area_by_year=harmoni_area_by_year,
                 )
             )
     return tuple(options)
@@ -598,6 +775,7 @@ def _max_n_load_by_kystvandopland_and_year(
 def _locked_yearly_field_contribution(
     field: FieldRecord,
     candidates: list[RotationCandidateEvaluation],
+    with_udnyttet_n: bool = False,
 ) -> FixedYearlyFieldContribution | None:
     """A locked mark's fixed per-year contribution, from its own locked candidate.
 
@@ -613,6 +791,11 @@ def _locked_yearly_field_contribution(
         return None
     retention_factor = 1 - (field.retention or 0) / 100
     leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in candidate.years)
+    udnyttet_n_by_year, harmoni_area_by_year = (
+        _udnyttet_n_and_harmoni_area_by_year(candidate, field.area_ha)
+        if with_udnyttet_n
+        else ((), ())
+    )
     return FixedYearlyFieldContribution(
         kystvand_id=field.kystvand_id,
         db2_by_year=tuple(y.db_kr_ha * field.area_ha for y in candidate.years),
@@ -623,6 +806,8 @@ def _locked_yearly_field_contribution(
         kvotegivende=field.kvotegivende,
         area_ha=field.area_ha,
         crop_codes_by_year=tuple(y.year.afgrode_kode for y in candidate.years),
+        udnyttet_n_by_year=udnyttet_n_by_year,
+        harmoni_area_by_year=harmoni_area_by_year,
     )
 
 
@@ -658,6 +843,7 @@ def run_yearly_optimization(
         raise OptimizationInfeasibleError("Simuleringen har ingen marker at optimere.")
 
     candidates_by_field_id = {fc.field_id: fc for fc in field_candidates}
+    n_ceiling = simulation.godning.oeko_n_loft_kg_ha
     if hasattr(snapshot, "contexts"):
         soil_data_by_imk_id = {
             field.imk_id: repository._soil_data_for_context(SimpleNamespace(**context))
@@ -678,7 +864,9 @@ def run_yearly_optimization(
         base_candidates = field_candidates_row.candidates if field_candidates_row else []
 
         if field.allowed_rotation_ids:
-            fixed = _locked_yearly_field_contribution(field, base_candidates)
+            fixed = _locked_yearly_field_contribution(
+                field, base_candidates, with_udnyttet_n=n_ceiling is not None
+            )
             if fixed is None:
                 raise OptimizationInfeasibleError(
                     f"Marken {field.name} er låst til en sædskiftekandidat, der ikke "
@@ -745,6 +933,7 @@ def run_yearly_optimization(
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
                 quota_trades=quota_trades,
                 kvote_by_kystvandopland=_kvote_by_kystvandopland(fields),
+                max_udnyttet_n_per_harmoni_ha=n_ceiling,
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
@@ -752,7 +941,7 @@ def run_yearly_optimization(
 
     if output.status == "INFEASIBLE":
         traded = {trade.kystvand_id for trade in quota_trades}
-        raise _quota_shortfall_error(
+        error = _quota_shortfall_error(
             farm_id,
             email,
             _lowest_n_load_by_kystvandopland_and_year(field_inputs, fixed_fields),
@@ -763,7 +952,12 @@ def run_yearly_optimization(
                 if kystvand_id not in traded
                 for year, cap in enumerate(caps)
             },
-        ) or OptimizationInfeasibleError(
+        )
+        if error is None and n_ceiling is not None:
+            error = _n_ceiling_shortfall_error(
+                n_ceiling, _lowest_udnyttet_n_per_harmoni_ha_by_year(field_inputs, fixed_fields)
+            )
+        raise error or OptimizationInfeasibleError(
             "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
             "maks. udledning eller foderenheder og prøv igen."
         )

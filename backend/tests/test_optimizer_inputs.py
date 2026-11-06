@@ -24,7 +24,13 @@ from test_optimizer_lifecycle import (
 )
 
 from app.data import optimization_store
-from app.data.optimizer_inputs import optimizer_input, optimizer_input_json, parse_optimizer_input
+from app.data.optimizer_inputs import (
+    OptimizerYear,
+    optimizer_input,
+    optimizer_input_json,
+    parse_optimizer_input,
+    with_udnyttet_n,
+)
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import OptimizationConstraints
 from app.services.scenario.rotations import compute_yearly_summary
@@ -70,6 +76,29 @@ class CompactFodderTests(unittest.TestCase):
             [year.fen_fe_ha for year in parsed.years],
             [year.fen_fe_ha for year in full.candidates[0].years],
         )
+
+    def test_compact_candidates_carry_the_utilised_n_of_each_year_when_added(self):
+        evaluation = rich_candidate()
+        for index, year in enumerate(evaluation.years):
+            year.tildelt_husdyrgodning_udnyttet_kgn_ha = 10 * index
+            year.tildelt_handelsgodning_kgn_ha = 5
+            # The organically bound part does not count toward the utilised N.
+            year.husdyrgodning_organisk_bundet_kgn_ha = 99
+        full = SimulationFieldCandidates(field_id="field-b", jbnr=5, candidates=[evaluation])
+        expected = tuple(10 * index + 5 for index in range(len(evaluation.years)))
+        compact = optimizer_input(full)
+        self.assertNotIn("udnyttet_n_kgn_ha_by_year", compact["candidates"][0])
+        self.assertEqual(parse_optimizer_input(compact).candidates[0].udnyttet_n_kgn_ha_by_year, ())
+        with_udnyttet_n(compact, full)
+        parsed = parse_optimizer_input(compact).candidates[0]
+        self.assertEqual(parsed.udnyttet_n_kgn_ha_by_year, expected)
+
+    def test_a_compact_year_stays_at_four_fields(self):
+        # A fifth field makes pydantic's field set of every year outgrow
+        # CPython's smallest set, from 216 to 728 bytes, which is 180 MB more
+        # for a farm of 244 marks with 181 alternatives each. A value that
+        # every year would need belongs on the candidate instead.
+        self.assertEqual(len(OptimizerYear.model_fields), 4)
 
 
 class CompactExecutionTests(DatabaseTests):

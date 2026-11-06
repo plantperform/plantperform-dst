@@ -76,6 +76,16 @@ class RotationCandidateYearResult(CamelModel):
     n_norm_pct: float = 100.0
 
     @property
+    def udnyttet_n_kgn_ha(self) -> float:
+        """Utilised N this year (kg N/ha): husdyrgødning's utilised part plus handelsgødning.
+
+        This is what the økologisk arealstøtte's ceiling on the average
+        utilised N per ha harmoniareal counts. The organically bound part of
+        the husdyrgødning does not count toward it.
+        """
+        return self.tildelt_husdyrgodning_udnyttet_kgn_ha + self.tildelt_handelsgodning_kgn_ha
+
+    @property
     def fen_fe_ha(self) -> float:
         """Foderenheder per ha in this year, the same rule as the candidate's avg_fen.
 
