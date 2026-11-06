@@ -139,6 +139,17 @@ def _load_permanente_afgrodekoder() -> frozenset[int]:
         return frozenset(rows)
 
 
+@lru_cache(maxsize=1)
+def _load_harmoni_koder() -> frozenset[int]:
+    codes = frozenset(code for code, row in _load_afgroeder().items() if row.harmoni)
+    if not codes:
+        # Every flag reads false until the master table has been loaded after
+        # the column was added; an average over no harmoniareal would then
+        # silently rule out every N.
+        raise _missing_lookup("afgroede harmoni flags", "load-afgroeder")
+    return codes
+
+
 def clear_lookup_cache() -> None:
     """Clear process-local lookup caches after an administrative reload."""
     _load_afgroeder.cache_clear()
@@ -146,6 +157,7 @@ def clear_lookup_cache() -> None:
     _load_nfix_lookup.cache_clear()
     _load_nuar_koder.cache_clear()
     _load_permanente_afgrodekoder.cache_clear()
+    _load_harmoni_koder.cache_clear()
 
 
 def lookup_norm(crop_code, jb_nr, irrigated: bool = False, only_organic: bool = False):
@@ -214,6 +226,17 @@ def is_permanent_afgrode(crop_code: int | None) -> bool:
     if crop_code is None:
         return False
     return crop_code in _load_permanente_afgrodekoder()
+
+
+def is_harmoniareal(crop_code: int | None) -> bool:
+    """Return whether an area with ``crop_code`` counts as harmoniareal.
+
+    This is the master table's Harmoni: afgrøder with a gødningsbehov, where
+    organic fertiliser may be spread. The harmoniareal is the denominator of
+    the average utilised N per ha that the økologisk arealstøtte caps at 107 or
+    65 kg.
+    """
+    return crop_code in _load_harmoni_koder()
 
 
 def lookup_crop_params(crop_code):

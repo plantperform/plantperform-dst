@@ -2,10 +2,12 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
+from database.scripts.load_afgroede_stoette import parse_afgroede_stoette
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
 from database.scripts.load_goedningsregioner import goedningsregion_by_kystvand_id
 from database.scripts.load_oekonomital_afgroedebundet import parse_oekonomital_afgroedebundet
@@ -36,6 +38,7 @@ MASTER_CSV_HEADERS = [
     "nfix_normgrp1", "nfix_normgrp3",
     "nuar_afstromningskategori", "p_afstromningskategori_med_w",
     "kvotegivende_aktivitet", "kvotegivende_areal", "er_permanent_afgroede",
+    "Harmoni", "Grundbetaling", "Landbrugsareal", "Art. 4.4.C", "brak",
 ]
 
 
@@ -50,6 +53,8 @@ def master_csv_row(**overrides: str) -> list[str]:
         "nfix_normgrp1": "7", "nfix_normgrp3": "",
         "nuar_afstromningskategori": "3", "p_afstromningskategori_med_w": "1",
         "kvotegivende_aktivitet": "Ja", "kvotegivende_areal": "Ja", "er_permanent_afgroede": "",
+        "Harmoni": "1", "Grundbetaling": "1", "Landbrugsareal": "1", "Art. 4.4.C": "0",
+        "brak": "0",
     }
     row.update(overrides)
     return [row[header] for header in MASTER_CSV_HEADERS]
@@ -121,6 +126,46 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
 
         self.assertEqual(nuar_rows[0][12:14], (False, False))
         self.assertEqual(nuar_rows[0][17:19], (False, False))
+
+    def test_arealstoette_flags_are_read_per_afgroedekode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            master = Path(directory) / "master.csv"
+            write_csv(
+                master,
+                MASTER_CSV_HEADERS,
+                [
+                    master_csv_row(),
+                    master_csv_row(AfgroedeKode="310", Navn="Brak", Harmoni="0", brak="1"),
+                    master_csv_row(
+                        AfgroedeKode="586", Navn="Skovrejsning", Landbrugsareal="",
+                        **{"Art. 4.4.C": "2"},
+                    ),
+                ],
+            )
+            rows = parse_afgroede_stoette(master)
+
+        self.assertEqual(
+            rows,
+            [
+                (1, True, True, True, 0, False),
+                (310, False, True, True, 0, True),
+                (586, True, True, False, 2, False),
+            ],
+        )
+
+    def test_arealstoette_source_rejects_an_unknown_art_4_4_c_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            master = Path(directory) / "master.csv"
+            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row(**{"Art. 4.4.C": "3"})])
+            with self.assertRaisesRegex(ValueError, "Art. 4.4.C must be 0, 1 or 2"):
+                parse_afgroede_stoette(master)
+
+    def test_arealstoette_source_rejects_duplicate_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            master = Path(directory) / "master.csv"
+            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row(), master_csv_row()])
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                parse_afgroede_stoette(master)
 
     def test_permanent_afgrode_filters_on_ja(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -262,6 +307,28 @@ class GoedningsregionTests(unittest.TestCase):
     def test_a_kystvandopland_under_two_egne_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "kystvand_id 1 is listed under two egne"):
             goedningsregion_by_kystvand_id({1: (1, 2), 6: (1,)})
+
+
+class HarmoniarealTests(unittest.TestCase):
+    def setUp(self) -> None:
+        afgroede_normer._load_harmoni_koder.cache_clear()
+        self.addCleanup(afgroede_normer._load_harmoni_koder.cache_clear)
+
+    def test_the_harmoni_flag_decides_which_areas_count(self) -> None:
+        crops = {1: SimpleNamespace(harmoni=True), 310: SimpleNamespace(harmoni=False)}
+        with patch.object(afgroede_normer, "_load_afgroeder", return_value=crops):
+            self.assertTrue(afgroede_normer.is_harmoniareal(1))
+            self.assertFalse(afgroede_normer.is_harmoniareal(310))
+            self.assertFalse(afgroede_normer.is_harmoniareal(999))
+            self.assertFalse(afgroede_normer.is_harmoniareal(None))
+
+    def test_flags_that_were_never_loaded_are_an_error_not_an_empty_harmoniareal(self) -> None:
+        crops = {1: SimpleNamespace(harmoni=False)}
+        with (
+            patch.object(afgroede_normer, "_load_afgroeder", return_value=crops),
+            self.assertRaisesRegex(RuntimeError, "load-afgroeder"),
+        ):
+            afgroede_normer.is_harmoniareal(1)
 
 
 if __name__ == "__main__":
