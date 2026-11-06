@@ -158,8 +158,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(legend()).toContain('Købt kvote')
     expect(legend()).toContain('Solgt kvote')
     // One band in the year's bar and one in the legend, for each kind.
-    expect(bands('border-amber-500')).toBe(2)
-    expect(bands('border-emerald-600')).toBe(2)
+    expect(bands('border-warning')).toBe(2)
+    expect(bands('border-success')).toBe(2)
     // The kvote status still measures against the original kvote.
     expect(legend()).toContain('Over kvoten')
   })
@@ -187,12 +187,12 @@ describe('kvotehandel in the Årsgennemgang', () => {
     await render([trade(1, 0, 30)])
     // The legend names the bought kvote, but the first year has no band.
     expect(legend()).toContain('Købt kvote')
-    expect(bands('border-amber-500')).toBe(1)
+    expect(bands('border-warning')).toBe(1)
     expect(overParts()).toBe(1)
     // The first year buys 30 kg N and later years sell.
     await render([trade(1, 30, -20)])
     expect(legend()).toContain('Solgt kvote')
-    expect(bands('border-amber-500')).toBe(2)
+    expect(bands('border-warning')).toBe(2)
     expect(overParts()).toBe(1)
   })
 
@@ -230,17 +230,17 @@ describe('kvotehandel in the Årsgennemgang', () => {
     // Opland 1's cap of 150 kg N against its kvote of 100 kg N: 20 kg N sold
     // is drawn from 130 to 150 kg N.
     await render([trade(1, -20)], cap(150))
-    const sold = drawnBand('border-emerald-600')
+    const sold = drawnBand('border-success')
     expect(sold.bottom).toBeCloseTo(1.3)
     expect(sold.height).toBeCloseTo(0.2)
     // 30 kg N bought under a cap of 50 kg N is drawn from 50 to 80 kg N.
     await render([trade(1, 30)], cap(50))
-    const bought = drawnBand('border-amber-500')
+    const bought = drawnBand('border-warning')
     expect(bought.bottom).toBeCloseTo(0.5)
     expect(bought.height).toBeCloseTo(0.3)
     // Without a cap, from the kvote.
     await render([trade(1, 30)])
-    expect(drawnBand('border-amber-500').bottom).toBeCloseTo(1)
+    expect(drawnBand('border-warning').bottom).toBeCloseTo(1)
   })
 
   it('marks udledning red over the kvote, whatever the cap under Grænser', async () => {
@@ -396,7 +396,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(legend()).not.toContain('Købt kvote')
     expect(legend()).not.toContain('Oprindelig kvote')
     expect(capLines()).toEqual([])
-    expect(bands('border-amber-500')).toBe(0)
+    expect(bands('border-warning')).toBe(0)
     expect(overParts()).toBe(1)
     // A single opland keeps its Marker and År over kvoten.
     await render(undefined, undefined, { scoped: true })
