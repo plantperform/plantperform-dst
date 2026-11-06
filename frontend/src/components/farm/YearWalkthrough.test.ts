@@ -299,8 +299,10 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('shows one opland’s trade, its price and what it costs', async () => {
     await render([trade(1, 30, 60)], cap(150), { scoped: true, year: 0 })
-    expect(panel()).not.toContain('År over kvoten')
-    expect(panel()).not.toContain('Marker')
+    // The opland's own facts stay beside its trade. Its one year is over the
+    // kvote, though bought kvote covers it.
+    expect(panel()).toMatch(/Marker1 mark · 10 ha/)
+    expect(panel()).toContain('År over kvoten1 af 1')
     expect(panel()).toContain('Kvote pr. ha')
     expect(panel()).toContain('Købt kvote30 kg N (+30 % af kvoten)')
     expect(panel()).toContain('Pris30 kr/kg N')
@@ -396,5 +398,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(capLines()).toEqual([])
     expect(bands('border-amber-500')).toBe(0)
     expect(overParts()).toBe(1)
+    // A single opland keeps its Marker and År over kvoten.
+    await render(undefined, undefined, { scoped: true })
+    expect(panel()).toMatch(/Marker1 mark · 10 ha/)
+    expect(panel()).toContain('År over kvoten1 af 1')
   })
 })
