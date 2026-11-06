@@ -17,6 +17,7 @@ from app.data.db import (
     field_table,
     registry_field_table,
 )
+from app.data.membership import has_remaining_editor
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.field import (
     CreateFieldRequest,
@@ -701,8 +702,9 @@ def remove_farm_member(farm_id: str, email: str, member_email: str) -> str:
             .scalars()
             .all()
         )
-        count = len(members)
-        if count <= 1:
+        if member_email not in members:
+            return "member_not_found"
+        if not has_remaining_editor(session, members, member_email):
             return "last_member"
         result = session.execute(
             delete(farm_member_table).where(

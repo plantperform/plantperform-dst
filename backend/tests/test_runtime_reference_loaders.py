@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from app.services.rotations import afgroede_normer
 from database.scripts import runtime_lookup_loader
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
@@ -13,8 +14,6 @@ from database.scripts.load_oekonomital_generelle_satser import (
     parse_oekonomital_generelle_satser,
 )
 from database.scripts.load_permanente_afgrodekoder import parse_permanente_afgrodekoder
-
-from app.services.rotations import afgroede_normer
 
 
 def write_csv(
@@ -59,7 +58,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
     def test_master_csv_loaders_parse_the_wide_afgroedekode_format(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             master = Path(directory) / "master.csv"
-            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row()], delimiter=";")
+            write_csv(master, MASTER_CSV_HEADERS, [master_csv_row()], delimiter=",")
 
             norm_rows, nfix_rows, nuar_rows = parse_afgroede_normer(master)
             runoff_rows = parse_afstromningskategorier(master)
@@ -88,7 +87,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             master = Path(directory) / "master.csv"
             write_csv(
-                master, MASTER_CSV_HEADERS, [master_csv_row(nfix_normgrp3="9")], delimiter=";",
+                master, MASTER_CSV_HEADERS, [master_csv_row(nfix_normgrp3="9")], delimiter=",",
             )
 
             _, nfix_rows, _ = parse_afgroede_normer(master)
@@ -114,7 +113,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
                         }
                     )
                 ],
-                delimiter=";",
+                delimiter=",",
             )
 
             _, _, nuar_rows = parse_afgroede_normer(master)
@@ -128,7 +127,7 @@ class RuntimeReferenceLoaderTests(unittest.TestCase):
             write_csv(
                 master, MASTER_CSV_HEADERS,
                 [master_csv_row(er_permanent_afgroede="Ja")],
-                delimiter=";",
+                delimiter=",",
             )
 
             permanent_rows = parse_permanente_afgrodekoder(master)
@@ -231,7 +230,7 @@ class PraecisionsgoedskningFlagTests(unittest.TestCase):
                     master_csv_row(AfgroedeKode=str(code), **{"Praec.goedsk.eff.": value})
                     for code, value in ((1, "1"), (22, "2"), (5, "3"), (260, "0"))
                 ],
-                delimiter=";",
+                delimiter=",",
             )
 
             _, _, nuar_rows = parse_afgroede_normer(master)

@@ -6,7 +6,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.utils import formataddr
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import uuid4
 
 import boto3
@@ -23,6 +23,7 @@ from app.data.db import (
     SessionLocal,
     app_user_table,
     email_verification_token_table,
+    embed_key_table,
     password_reset_token_table,
     refresh_session_table,
 )
@@ -34,6 +35,7 @@ VERIFICATION_TOKEN_TTL = timedelta(hours=24)
 PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
 PASSWORD_RESET_RESEND_COOLDOWN = timedelta(minutes=1)
 REFRESH_COOKIE_NAME = "dst_refresh_token"
+EMBED_KEY_PREFIX = "pp_embed_"
 PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
     memory_cost=65536,
@@ -80,6 +82,35 @@ class AuthConfig:
 @dataclass(frozen=True)
 class AuthenticatedUser:
     email: str
+    role: Literal["editor", "viewer"] = "editor"
+    is_embed: bool = False
+
+
+def viewer_read(endpoint):
+    """Opt a reviewed GET endpoint into viewer access; other endpoints deny by default."""
+    endpoint.viewer_read = True
+    return endpoint
+
+
+def embed_key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def get_embed_user(key: str) -> AuthenticatedUser | None:
+    if len(key) != len(EMBED_KEY_PREFIX) + 43:
+        return None
+    with SessionLocal() as session:
+        row = session.execute(
+            select(app_user_table.c.email)
+            .join(embed_key_table)
+            .where(
+                embed_key_table.c.token_hash == embed_key_hash(key),
+                embed_key_table.c.revoked_at.is_(None),
+                app_user_table.c.role == "viewer",
+                app_user_table.c.verified_at.is_not(None),
+            )
+        ).first()
+    return AuthenticatedUser(row.email, "viewer", True) if row is not None else None
 
 
 @dataclass(frozen=True)
@@ -518,16 +549,17 @@ def logout_user(raw_refresh_token: str | None) -> None:
 def get_user(email: str) -> AuthenticatedUser | None:
     with SessionLocal() as session:
         row = session.execute(
-            select(app_user_table.c.email).where(
+            select(app_user_table.c.email, app_user_table.c.role).where(
                 app_user_table.c.email == normalize_email(email),
                 app_user_table.c.verified_at.is_not(None),
             )
         ).first()
-    return AuthenticatedUser(email=row.email) if row is not None else None
+    return AuthenticatedUser(email=row.email, role=row.role) if row is not None else None
 
 
 def current_user(
     credentials: BearerCredentials,
+    request: Request = None,
 ) -> AuthenticatedUser:
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -536,16 +568,29 @@ def current_user(
     )
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise unauthorized
-    try:
-        config = _config()
-        payload = jwt.decode(credentials.credentials, config.jwt_secret, algorithms=["HS256"])
-        if payload.get("typ") != "access" or not isinstance(payload.get("sub"), str):
-            raise unauthorized
-    except (jwt.InvalidTokenError, RuntimeError) as error:
-        raise unauthorized from error
-    user = get_user(payload["sub"])
+    if credentials.credentials.startswith(EMBED_KEY_PREFIX):
+        user = get_embed_user(credentials.credentials)
+    else:
+        try:
+            config = _config()
+            payload = jwt.decode(credentials.credentials, config.jwt_secret, algorithms=["HS256"])
+            if payload.get("typ") != "access" or not isinstance(payload.get("sub"), str):
+                raise unauthorized
+        except (jwt.InvalidTokenError, RuntimeError) as error:
+            raise unauthorized from error
+        user = get_user(payload["sub"])
     if user is None:
         raise unauthorized
+    if user.role == "viewer":
+        if request is not None:
+            request.state.viewer_request = True
+        endpoint = request.scope.get("endpoint") if request is not None else None
+        if (
+            request is None
+            or request.method not in {"GET", "HEAD"}
+            or not getattr(endpoint, "viewer_read", False)
+        ):
+            raise HTTPException(status_code=403, detail="Read-only access")
     return user
 
 

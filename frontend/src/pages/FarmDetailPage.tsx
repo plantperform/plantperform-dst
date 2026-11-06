@@ -8,6 +8,7 @@ import {
   useMatch,
   useNavigate,
   useParams,
+  useSearchParams,
 } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
@@ -90,6 +91,7 @@ const isSameSelection = (left: FarmViewSelection, right: FarmViewSelection) =>
 
 const FarmDetail = () => {
   const { farmId } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
   const onEconomicsPage = useMatch('/farms/:farmId/economics/*') !== null
@@ -124,8 +126,9 @@ const FarmDetail = () => {
   } = useSimulations(farmId)
   const fields = fieldsData ?? []
   const simulations = simulationsData ?? []
-  const [selection, setSelection] = useState<FarmViewSelection>({
-    kind: 'current',
+  const [selection, setSelection] = useState<FarmViewSelection>(() => {
+    const simulationId = searchParams.get('simulation')
+    return simulationId ? { kind: 'simulation', id: simulationId } : { kind: 'current' }
   })
   const activeSelection =
     selection.kind === 'simulation' &&
@@ -366,7 +369,8 @@ const FarmDetail = () => {
   )
 
   if (farmView.data && farmView.data.status !== 'done') {
-    const failed = farmView.data.status === 'failed'
+    const missing = farmView.data.status === 'missing'
+    const failed = missing || farmView.data.status === 'failed'
     return (
       <main className="min-h-screen bg-background">
         {appBar}
@@ -378,7 +382,7 @@ const FarmDetail = () => {
             {failed ? (
               <>
                 <p role="alert" className="text-sm text-destructive">
-                  Markernes historik kunne ikke beregnes.
+                  {missing ? 'Markernes historik er ikke klargjort endnu.' : 'Markernes historik kunne ikke beregnes.'}
                 </p>
                 {farmId ? (
                   <Button
@@ -680,7 +684,7 @@ export const FarmDetailPage = () => {
 
   return (
     <EconomicsProfilesContext.Provider value={economics}>
-      <FarmDetail />
+      <FarmDetail key={farmId} />
     </EconomicsProfilesContext.Provider>
   )
 }

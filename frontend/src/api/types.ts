@@ -1,5 +1,6 @@
 export type User = {
-  email: string
+  email: string | null
+  role: 'editor' | 'viewer'
 }
 
 export type TokenResponse = {

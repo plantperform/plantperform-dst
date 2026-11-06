@@ -19,7 +19,7 @@ import Map, {
   type MapRef,
 } from 'react-map-gl/maplibre'
 
-import { getAccessToken } from '@/api/auth'
+import { apiResourceRequest } from '@/api/auth'
 import { API_BASE, fetcher } from '@/api/client'
 import { useFarmFields } from '@/api/hooks'
 import { importRegistryFields } from '@/api/mutations'
@@ -1375,11 +1375,7 @@ export const FarmFieldsMap = ({
           mapLib={mapLib}
           initialViewState={initialViewState}
           mapStyle={MAP_STYLE_URL}
-          transformRequest={(url) => {
-            const token = getAccessToken()
-            if (!token || !url.includes('/api/v0/')) return { url }
-            return { url, headers: { Authorization: `Bearer ${token}` } }
-          }}
+          transformRequest={apiResourceRequest}
           interactiveLayerIds={[
             ...(addMode ? EDIT_MODE_LAYER_IDS : ['farm-fields-fill']),
             ...(showMars ? ['mars-fill', 'mars-points'] : []),

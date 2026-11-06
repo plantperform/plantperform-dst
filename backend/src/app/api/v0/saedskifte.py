@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.v0.farms import FarmMemberRequest, FarmMemberResponse
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data import saedskifte_store as store
 from app.domain.saedskifte import (
     CreateRotationGroupRequest,
@@ -29,11 +29,13 @@ def _mutable(group_id):
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
+@viewer_read
 def crop_options(user: CurrentUser):
     return choices.list_afgrode_koder()
 
 
 @router.get("/udlaeg-koder", response_model=list[AfgrodeKodeOption])
+@viewer_read
 def udlaeg_options(
     user: CurrentUser,
     hovedafgrode_kode: int | None = None,
@@ -44,6 +46,7 @@ def udlaeg_options(
 
 
 @router.get("", response_model=list[RotationGroup])
+@viewer_read
 def list_groups(user: CurrentUser):
     return store.list_groups(user.email)
 
@@ -54,6 +57,7 @@ def create_group(request: CreateRotationGroupRequest, user: CurrentUser):
 
 
 @router.get("/{group_id}", response_model=RotationGroup)
+@viewer_read
 def get_group(group_id: str, user: CurrentUser):
     return store.get_group(group_id, user.email)
 

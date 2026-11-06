@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field, field_validator
 from starlette.status import HTTP_204_NO_CONTENT
 
-from app.auth import AuthenticatedUser, current_user
-from app.data import farm_copy_store
+from app.auth import AuthenticatedUser, current_user, viewer_read
+from app.data import farm_copy_store, read_model_store
 from app.data.repository import (
     add_farm_member,
     create_farm,
@@ -49,6 +49,7 @@ class FarmMemberResponse(CamelModel):
 
 
 @router.get("", response_model=list[Farm])
+@viewer_read
 def get_farms(user: CurrentUser) -> list[Farm]:
     return list_farms(user.email)
 
@@ -86,6 +87,7 @@ def copy_farm(request: CopyFarmRequest, user: CurrentUser):
 
 
 @router.get("/{farm_id}", response_model=Farm)
+@viewer_read
 def get_farm_by_id(
     farm_id: str,
     user: CurrentUser,
@@ -99,10 +101,14 @@ def get_farm_by_id(
 
 
 @router.get("/{farm_id}/view", response_model=FarmView)
+@viewer_read
 def get_farm_display(farm_id: str, user: CurrentUser, include_data: bool = True):
-    view = get_or_prepare_farm_view(farm_id, user.email, include_data=include_data)
+    load = read_model_store.get_farm_view if user.role == "viewer" else get_or_prepare_farm_view
+    view = load(farm_id, user.email, include_data=include_data)
     if view is None:
         raise HTTPException(status_code=404, detail="Bedrift ikke fundet")
+    if user.role == "viewer" and view["status"] == "queued":
+        view = {**view, "status": "missing"}
     return view
 
 
@@ -115,6 +121,7 @@ def retry_farm_history(farm_id: str, user: CurrentUser):
 
 
 @router.get("/{farm_id}/udledning-per-kystvandopland", response_model=list[KystvandoplandUdledning])
+@viewer_read
 def get_farm_udledning(
     farm_id: str,
     user: CurrentUser,
@@ -177,6 +184,6 @@ def delete_farm_member(
     if result == "farm_not_found":
         raise HTTPException(status_code=404, detail="Farm not found")
     if result == "last_member":
-        raise HTTPException(status_code=409, detail="A farm must have at least one member")
+        raise HTTPException(status_code=409, detail="A farm must have at least one editor")
     if result == "member_not_found":
         raise HTTPException(status_code=404, detail="Farm member not found")

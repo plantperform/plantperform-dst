@@ -1,4 +1,4 @@
-import { getAccessToken, refreshAccessToken } from '@/api/auth'
+import { apiAuthOptions, refreshAccessToken } from '@/api/auth'
 import { fromWire, toWire } from '@/api/wire'
 
 export const API_BASE = '/api/v0'
@@ -25,7 +25,9 @@ type FastApiValidationError = {
 // Pydantic's own validation-error `type` codes, translated to Danish. Built
 // from `type`/`ctx` rather than translating the English `msg` string, since
 // `ctx` carries the actual limit value (e.g. {le: 120}) needed to phrase it.
-const describeValidationError = (item: FastApiValidationError): string | undefined => {
+const describeValidationError = (
+  item: FastApiValidationError,
+): string | undefined => {
   const ctx = item.ctx ?? {}
   switch (item.type) {
     case 'missing':
@@ -115,14 +117,14 @@ const readError = async (response: Response) => {
   return new ApiError(response.status, message, detail)
 }
 
-const request = async (path: string, init: RequestInit = {}, canRetry = true): Promise<Response> => {
-  const token = getAccessToken()
-  const headers = new Headers(init.headers)
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+const request = async (
+  path: string,
+  init: RequestInit = {},
+  canRetry = true,
+): Promise<Response> => {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers,
-    credentials: 'include',
+    ...apiAuthOptions(init.headers),
   })
   if (response.status === 401 && canRetry && !path.startsWith('/auth/')) {
     const refreshed = await refreshAccessToken()
@@ -132,7 +134,10 @@ const request = async (path: string, init: RequestInit = {}, canRetry = true): P
   return response
 }
 
-export const fetcher = async <T>(path: string, signal?: AbortSignal): Promise<T> => {
+export const fetcher = async <T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> => {
   const response = await request(path, { signal })
 
   if (!response.ok) {

@@ -114,6 +114,12 @@ tables. Do not run it against a database whose registry contents must be
 preserved. See `backend/database/scripts/README.md` for source details and
 individual troubleshooting commands.
 
+## Public embeds
+
+Public teaching material can use the existing frontend in read-only iframes.
+See [public embeds](docs/public-embeds.md) for manual viewer/key provisioning,
+sharing, integration, and rollout.
+
 ## Development checks
 
 Simulation and farm display data is prepared by workers and read through compact

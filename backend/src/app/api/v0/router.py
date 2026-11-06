@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.v0.auth import router as auth_router
 from app.api.v0.economics import router as economics_router
@@ -11,16 +11,24 @@ from app.api.v0.registry import router as registry_router
 from app.api.v0.rotation_candidates import router as rotation_candidates_router
 from app.api.v0.saedskifte import router as saedskifte_router
 from app.api.v0.simulations import router as simulations_router
+from app.auth import current_user
 
 router = APIRouter()
 router.include_router(auth_router)
-router.include_router(economics_router)
 router.include_router(healthz_router)
-router.include_router(farms_router)
-router.include_router(farm_fields_router)
-router.include_router(field_aliases_router)
-router.include_router(registry_router)
 router.include_router(mars_router)
-router.include_router(rotation_candidates_router)
-router.include_router(simulations_router)
-router.include_router(saedskifte_router)
+
+
+def include_protected(child: APIRouter):
+    # New handlers inherit authentication and deny viewers unless explicitly reviewed.
+    router.include_router(child, dependencies=[Depends(current_user)])
+
+
+include_protected(economics_router)
+include_protected(farms_router)
+include_protected(farm_fields_router)
+include_protected(field_aliases_router)
+include_protected(registry_router)
+include_protected(rotation_candidates_router)
+include_protected(simulations_router)
+include_protected(saedskifte_router)

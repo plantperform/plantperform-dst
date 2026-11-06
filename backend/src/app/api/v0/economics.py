@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, field_validator
 
 from app.api.v0.farms import FarmMemberRequest, FarmMemberResponse
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data import economics_store
 from app.domain.base import CamelModel
 from app.domain.economics import (
@@ -39,11 +39,13 @@ def _call(action, *args, module_id=None):
 
 
 @router.get("/economics/assumptions")
+@viewer_read
 def get_assumptions(user: CurrentUser):
     return assumptions()
 
 
 @router.get("/farms/{farm_id}/economics/budgets", response_model=CropBudgets)
+@viewer_read
 def get_farm_budgets(
     farm_id: str,
     user: CurrentUser,
@@ -59,6 +61,7 @@ def get_farm_budgets(
 
 
 @router.get("/economics-modules", response_model=list[EconomicsModule])
+@viewer_read
 def get_modules(user: CurrentUser):
     return economics_store.list_modules(user.email)
 
@@ -69,6 +72,7 @@ def post_module(request: CreateEconomicsModuleRequest, user: CurrentUser):
 
 
 @router.get("/economics-modules/{module_id}", response_model=EconomicsModule)
+@viewer_read
 def get_module(module_id: str, user: CurrentUser):
     return _call(economics_store.get_module, module_id, user.email)
 
@@ -135,6 +139,6 @@ def delete_member(module_id: str, email: str, user: CurrentUser):
         module_id=module_id,
     )
     if result == "last_member":
-        raise HTTPException(status_code=409, detail="A module must have at least one member")
+        raise HTTPException(status_code=409, detail="A module must have at least one editor")
     if result == "member_not_found":
         raise HTTPException(status_code=404, detail="Module member not found")

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import Field, field_validator
@@ -24,6 +24,7 @@ from app.auth import (
     resend_verification,
     reset_password,
     verify_email,
+    viewer_read,
 )
 from app.domain.base import CamelModel
 
@@ -75,7 +76,8 @@ class TokenResponse(CamelModel):
 
 
 class UserResponse(CamelModel):
-    email: str
+    email: str | None
+    role: Literal["editor", "viewer"]
 
 
 def _set_refresh_cookie(response: Response, raw_token: str) -> None:
@@ -233,5 +235,6 @@ def logout(
 
 
 @router.get("/me", response_model=UserResponse)
+@viewer_read
 def me(user: CurrentUser) -> UserResponse:
-    return UserResponse(email=user.email)
+    return UserResponse(email=None if user.is_embed else user.email, role=user.role)

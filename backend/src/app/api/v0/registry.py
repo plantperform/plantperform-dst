@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data.db import get_db
 from app.data.registry_repository import (
     get_owned_imk_ids,
@@ -41,6 +41,7 @@ def search_fields(
 
 
 @router.get("/fields/bounds", response_model=RegistryBounds)
+@viewer_read
 def get_field_bounds(
     db: DbSession,
     _: CurrentUser,
@@ -56,6 +57,7 @@ def get_field_bounds(
 
 
 @router.get("/fields/bulk", response_model=list[RegistryField])
+@viewer_read
 def get_fields(
     db: DbSession,
     _: CurrentUser,
@@ -73,6 +75,7 @@ def get_fields(
 
 
 @router.get("/fields/{imk_id}", response_model=RegistryField)
+@viewer_read
 def get_field(
     imk_id: int,
     db: DbSession,
@@ -87,6 +90,7 @@ def get_field(
 
 
 @router.get("/tiles/{z}/{x}/{y}.pbf")
+@viewer_read
 def get_tile(
     z: int,
     x: int,

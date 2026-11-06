@@ -1,16 +1,26 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import { mutate } from 'swr'
 
-import { clearSession, loadCurrentUser, refreshAccessToken, setAccessToken } from '@/api/auth'
+import {
+  clearSession,
+  loadCurrentUser,
+  refreshAccessToken,
+  setAccessToken,
+} from '@/api/auth'
 import { postJson } from '@/api/client'
 import type { TokenResponse, User } from '@/api/types'
 import { AuthContext } from '@/auth/context'
+import { isEmbed, preserveEmbedKey } from '@/auth/embed'
 
 type Credentials = { email: string; password: string }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const location = useLocation()
+
+  useEffect(preserveEmbedKey, [location])
 
   useEffect(() => {
     let active = true
@@ -39,10 +49,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [isLoading])
 
   useEffect(() => {
-    if (!user) return
-    const refreshTimer = window.setInterval(() => {
-      void refreshAccessToken()
-    }, 10 * 60 * 1000)
+    if (!user || isEmbed) return
+    const refreshTimer = window.setInterval(
+      () => {
+        void refreshAccessToken()
+      },
+      10 * 60 * 1000,
+    )
     return () => window.clearInterval(refreshTimer)
   }, [user])
 
@@ -50,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     isLoading,
     signIn: async (credentials: Credentials) => {
+      if (isEmbed) throw new Error('Denne visning er skrivebeskyttet.')
       const result = await postJson<TokenResponse, Credentials>(
         '/auth/login',
         credentials,
@@ -64,6 +78,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await clearSession()
       setUser(null)
     },
+  }
+
+  if (isEmbed && (isLoading || !user)) {
+    return (
+      <main className="p-6" role="status">
+        {isLoading
+          ? 'Indlæser indhold…'
+          : 'Indholdet er ikke tilgængeligt. Linket mangler eller adgangen er fjernet.'}
+      </main>
+    )
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

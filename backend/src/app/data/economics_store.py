@@ -10,6 +10,7 @@ from app.data.db import economics_module_member_table as members
 from app.data.db import economics_module_table as modules
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.data.membership import has_remaining_editor
 from app.domain.economics import (
     STANDARD_ID,
     STANDARD_NAME,
@@ -196,7 +197,7 @@ def remove_member(module_id, email, member_email):
         )
         if member_email not in emails:
             return "member_not_found"
-        if len(emails) == 1:
+        if not has_remaining_editor(session, emails, member_email):
             return "last_member"
         session.execute(
             delete(members).where(members.c.module_id == module_id, members.c.email == member_email)

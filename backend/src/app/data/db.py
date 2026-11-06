@@ -23,6 +23,7 @@ from sqlalchemy import (
     create_engine,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, sessionmaker
@@ -410,10 +411,26 @@ app_user_table = Table(
     metadata,
     Column("email", Text, primary_key=True),
     Column("password_hash", Text, nullable=False),
+    Column("role", Text, nullable=False, server_default="editor"),
     Column("verified_at", DateTime(timezone=True), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     CheckConstraint("email = lower(email)", name="ck_app_user_email_lowercase"),
+    CheckConstraint("role IN ('editor', 'viewer')", name="ck_app_user_role"),
+)
+
+embed_key_table = Table(
+    "embed_key",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", Text, nullable=False, unique=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("revoked_at", DateTime(timezone=True)),
+    Index(
+        "uq_embed_key_active_email", "email", unique=True,
+        postgresql_where=text("revoked_at IS NULL"),
+    ),
 )
 
 user_field_alias_table = Table(

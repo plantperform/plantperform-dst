@@ -5,7 +5,7 @@ from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data import economics_recalculation_store, simulation_settings_store
 from app.data.read_model_store import (
     get_simulation_view,
@@ -129,6 +129,7 @@ class YearlySummaryEntryResponse(CamelModel):
 
 
 @router.get("", response_model=list[Simulation])
+@viewer_read
 def get_farm_simulations(
     farm_id: str,
     user: CurrentUser,
@@ -221,6 +222,7 @@ def post_farm_simulation_creation_retry(
 
 
 @router.get("/{simulation_id}", response_model=Simulation)
+@viewer_read
 def get_farm_simulation(
     farm_id: str,
     simulation_id: str,
@@ -235,6 +237,7 @@ def get_farm_simulation(
 
 
 @router.get("/{simulation_id}/view", response_model=SimulationView)
+@viewer_read
 def get_simulation_display(
     farm_id: str,
     simulation_id: str,
@@ -283,6 +286,7 @@ def patch_farm_simulation_constraints(
 
 
 @router.get("/{simulation_id}/afgroder-i-brug", response_model=list[AfgrodeKodeOption])
+@viewer_read
 def get_farm_simulation_afgroder_i_brug(
     farm_id: str,
     simulation_id: str,
@@ -314,6 +318,7 @@ class CropAreaRangeResponse(CamelModel):
 
 
 @router.get("/{simulation_id}/crop-area-ranges", response_model=list[CropAreaRangeResponse])
+@viewer_read
 def get_farm_simulation_crop_area_ranges(
     farm_id: str,
     simulation_id: str,
@@ -361,6 +366,7 @@ def post_farm_simulation_yearly_optimization(
 
 
 @router.get("/{simulation_id}/result", response_model=SimulationResult)
+@viewer_read
 def get_farm_simulation_result(
     farm_id: str, simulation_id: str, user: CurrentUser, include_output: bool = True
 ):
@@ -386,6 +392,7 @@ class YearlyOptimizationKategoriOption(CamelModel):
     "/{simulation_id}/yearly-optimization-candidates",
     response_model=list[YearlyOptimizationKategoriOption],
 )
+@viewer_read
 def get_farm_simulation_yearly_optimization_candidates(
     farm_id: str,
     simulation_id: str,
@@ -401,6 +408,7 @@ def get_farm_simulation_yearly_optimization_candidates(
 
 
 @router.get("/{simulation_id}/fields", response_model=list[FieldRecord])
+@viewer_read
 def get_farm_simulation_fields(
     farm_id: str,
     simulation_id: str,
@@ -475,6 +483,7 @@ def patch_farm_simulation_field(
     "/{simulation_id}/fields/{field_id}/candidate-detail",
     response_model=RotationCandidateEvaluation,
 )
+@viewer_read
 def get_farm_simulation_field_candidate_detail(
     farm_id: str,
     simulation_id: str,
@@ -613,6 +622,7 @@ def post_farm_simulation_field_apply_rotation(
     "/{simulation_id}/yearly-summary",
     response_model=list[YearlySummaryEntryResponse],
 )
+@viewer_read
 def get_farm_simulation_yearly_summary(
     farm_id: str,
     simulation_id: str,

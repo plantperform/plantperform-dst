@@ -19,6 +19,12 @@ class RequestMetrics:
             nonlocal size, status
             if message["type"] == "http.response.start":
                 status = message["status"]
+                if scope.get("state", {}).get("viewer_request"):
+                    headers = [
+                        (key, value) for key, value in message.get("headers", [])
+                        if key.lower() != b"cache-control"
+                    ]
+                    message["headers"] = [*headers, (b"cache-control", b"no-store")]
             elif message["type"] == "http.response.body":
                 size += len(message.get("body", b""))
             await send(message)

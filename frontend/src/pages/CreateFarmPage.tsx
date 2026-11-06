@@ -158,7 +158,7 @@ export const CreateFarmPage = () => {
   const { data: farms } = useFarms()
   const { user } = useAuth()
   const { name: userName } = useUserName()
-  const role = user ? getStoredRole(user.email) : null
+  const role = user?.email ? getStoredRole(user.email) : null
   const paramCvr = searchParams.get('cvr') ?? ''
   const urlCvr = isCvrComplete(paramCvr) ? paramCvr : null
   const [initialForm] = useState(() => {

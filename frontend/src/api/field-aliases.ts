@@ -9,7 +9,7 @@ export const fieldAliasesKey = (email?: string) =>
 
 export const useFieldAliases = () => {
   const { user } = useAuth()
-  const key = fieldAliasesKey(user?.email)
+  const key = fieldAliasesKey(user ? (user.email ?? 'embed') : undefined)
   const response = useSWR<FieldAliases>(key, () => fetcher('/field-aliases'))
   const { mutate } = useSWRConfig()
 

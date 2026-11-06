@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.orm import Session
 
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data import saedskifte_store
 from app.data.db import get_db
 from app.data.registry_repository import get_registry_fields
@@ -114,6 +114,7 @@ def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
 
 
 @router.get("/kategorier", response_model=list[RotationKategoriOption])
+@viewer_read
 def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKategoriOption]:
     """Return the four sædskifte categories (driftsform + gødning level).
 
@@ -183,6 +184,7 @@ _N_NORM_PROCENTER = ["50", "60", "70", "75", "80", "85", "90", "95", "100"]
 
 
 @router.get("/n-norm-procenter", response_model=list[str])
+@viewer_read
 def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
     """Return all N-norm% levels for the checklist in "Nyt scenarie".
 
@@ -193,6 +195,7 @@ def list_rotation_n_norm_procenter(_: FarmMember) -> list[str]:
 
 
 @router.get("/godnings-presets", response_model=list[GodningPresetOption])
+@viewer_read
 def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
     """Return gødning-type presets for "Nyt scenarie" (simplified Phase 13).
 
@@ -229,6 +232,7 @@ def list_godnings_presets(_: FarmMember) -> list[GodningPresetOption]:
 
 
 @router.get("/autumn-crops", response_model=list[AutumnCropOption])
+@viewer_read
 def list_autumn_crops(
     _: FarmMember,
     jbnr: Annotated[list[int] | None, Query()] = None,
@@ -258,11 +262,13 @@ def list_autumn_crops(
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])
+@viewer_read
 def list_afgrode_koder(_: FarmMember) -> list[AfgrodeKodeOption]:
     return choices.list_afgrode_koder()
 
 
 @router.get("/udlaeg-koder", response_model=list[AfgrodeKodeOption])
+@viewer_read
 def list_udlaeg_koder(
     _: FarmMember,
     hovedafgrode_kode: int | None = None,
@@ -273,6 +279,7 @@ def list_udlaeg_koder(
 
 
 @router.get("", response_model=list[RotationCandidateOption])
+@viewer_read
 def list_candidate_refs(farm_id: str, user: FarmMember) -> list[RotationCandidateOption]:
     """Return all available sædskifte candidates for troubleshooting/debugging,
     with a short afgrøde-sequence preview for each candidate.

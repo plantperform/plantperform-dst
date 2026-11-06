@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_204_NO_CONTENT
 
 from app.api.v0.simulations import YearlySummaryEntryResponse
-from app.auth import AuthenticatedUser, current_user
+from app.auth import AuthenticatedUser, current_user, viewer_read
 from app.data.field_alias_store import update_alias
 from app.data.repository import (
     get_farm_historical_yearly_summary,
@@ -38,6 +38,7 @@ def patch_field_alias(
 
 
 @router.get("", response_model=list[FieldRecord])
+@viewer_read
 def get_farm_fields(
     farm_id: str,
     user: CurrentUser,
@@ -75,6 +76,7 @@ def post_farm_fields(
     "/historical-yearly-summary",
     response_model=list[YearlySummaryEntryResponse],
 )
+@viewer_read
 def get_farm_historical_yearly_summary_route(
     farm_id: str,
     user: CurrentUser,
@@ -97,6 +99,7 @@ def get_farm_historical_yearly_summary_route(
     "/{field_id}/historical-detail",
     response_model=list[RotationCandidateYearResult],
 )
+@viewer_read
 def get_farm_field_historical_detail(
     farm_id: str,
     field_id: str,

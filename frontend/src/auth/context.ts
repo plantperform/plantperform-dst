@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react'
+import type { User } from '@/api/types'
 
 export type AuthContextValue = {
-  user: { email: string } | null
+  user: User | null
   isLoading: boolean
   signIn: (credentials: { email: string; password: string }) => Promise<void>
   signOut: () => Promise<void>

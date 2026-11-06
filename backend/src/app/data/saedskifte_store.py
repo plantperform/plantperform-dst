@@ -10,6 +10,7 @@ from app.data.db import saedskifte_rotation_group_member_table as members
 from app.data.db import saedskifte_rotation_group_table as groups
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.data.membership import has_remaining_editor
 from app.data.rotation_snapshot_store import is_member as _is_member
 from app.data.rotation_snapshot_store import load_selected as load_selected
 from app.data.rotation_snapshot_store import resolve_selected as resolve_selected
@@ -240,8 +241,8 @@ def remove_member(group_id, email, member_email):
         )
         if member_email not in emails:
             raise RotationGroupNotFoundError
-        if len(emails) == 1:
-            raise RotationGroupConflictError("A rotation must have at least one member")
+        if not has_remaining_editor(session, emails, member_email):
+            raise RotationGroupConflictError("A rotation must have at least one editor")
         session.execute(
             delete(members).where(members.c.group_id == group_id, members.c.email == member_email)
         )
