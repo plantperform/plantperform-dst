@@ -315,34 +315,34 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(panel()).toContain('Indtægt900 kr')
   })
 
-  it('measures a trading opland against its limit after the trade', async () => {
-    // Opland 1 lets out 120 kg N against a kvote of 100 kg N. Buying 30 kg N
-    // covers it: 120 % of the cap before the trade, but not over the limit.
+  it('measures a trading opland against its kvote, whatever the trade', async () => {
+    // Opland 1 lets out 120 kg N against a kvote of 100 kg N: over the kvote
+    // even though 30 kg N bought covers it, with the trade shown beside it.
     await render([trade(1, 30)], undefined, { scoped: true, year: 0 })
-    expect(panel()).toContain('120 %tæt på kvote efter køb')
+    expect(panel()).toContain('120 %over kvote')
     expect(panel()).toContain('+30 % købt kvote')
-    expect(panel()).toContain('120 af 100 kg N, 10 kg N tilbage efter køb')
-    expect(panel()).not.toContain('over kvote')
-    // Buying too little is still over, by what the trade does not cover.
-    await render([trade(1, 10)], undefined, { scoped: true, year: 0 })
-    expect(panel()).toContain('over kvote efter køb')
-    expect(panel()).toContain('skal ned med 10 kg N efter køb')
-    // Selling takes the sold kvote off what is left.
+    expect(panel()).toContain('120 af 100 kg N, skal ned med 20 kg N')
+    expect(panel()).not.toContain('efter køb')
+    // Nor does a cap under Grænser above it change that.
+    await render([trade(1, 30)], cap(150), { scoped: true, year: 0 })
+    expect(panel()).toContain('120 %over kvote')
+    // Selling does not move what is over the kvote either.
     await render([trade(1, -30)], undefined, { scoped: true, year: 0 })
     expect(panel()).toContain('−30 % solgt kvote')
-    expect(panel()).toContain('skal ned med 50 kg N efter salg')
+    expect(panel()).toContain('skal ned med 20 kg N')
+    expect(panel()).not.toContain('efter salg')
   })
 
-  it('colours each opland in Hele bedriften by its limit after the trade', async () => {
+  it('colours each opland in Hele bedriften by its kvote, whatever the trade', async () => {
     const percent = (text: string) =>
       [...container.querySelectorAll('aside span')].find(
         (span) => span.textContent === text,
       )
-    // Opland 1 is 120 % of its kvote, but bought kvote covers it.
+    // Opland 1 is 120 % of its kvote: red with or without bought kvote.
     await render(undefined, undefined, { year: 0 })
     expect(percent('120 %')?.className).toContain('text-destructive')
     await render([trade(1, 30)], undefined, { year: 0 })
-    expect(percent('120 %')?.className).not.toContain('text-destructive')
+    expect(percent('120 %')?.className).toContain('text-destructive')
     expect(panel()).toContain('+30 %')
   })
 
