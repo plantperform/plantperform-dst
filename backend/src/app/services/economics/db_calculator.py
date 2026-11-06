@@ -48,6 +48,10 @@ def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
 # the price list are optional schemes; see the module docstring.
 _GRUNDBETALING_POST = "Grundbetaling (estimat)"
 _OEKO_AREALSTOETTE_POST = "Grundbeløb (basis)"
+# The two grass codes the master table registers "uden udbetaling af
+# økologi-tilskud". They pass every area flag the arealstøtte is paid on, so
+# they are left out by code.
+_UDEN_OEKO_TILSKUD = frozenset({305, 306})
 _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
@@ -135,6 +139,7 @@ def clear_lookup_cache() -> None:
         _afgroeder_i_saedskifter,
         _load_dyrkningsomkostninger,
         _load_prisliste,
+        _load_oeko_arealstoette_koder,
         soil_variants,
         calculate_db,
     ):
@@ -564,9 +569,40 @@ def _udlaeg_kategori(udlaeg_kode: int | None, afgrodekode: int) -> str | None:
     return kategori
 
 
+@lru_cache(maxsize=1)
+def _load_oeko_arealstoette_koder() -> frozenset[int]:
+    """The afgrødekoder the økologisk arealstøtte (basis) is paid on.
+
+    BEK 1381/2025 § 7 pays it on areas that qualify for grundbetaling and are
+    not reported under art. 4.4.c; the master table holds that as
+    Grundbetaling, Landbrugsareal and Art. 4.4.C. What a field's own data rules
+    out (miljøtilsagn, fradragsarealer, the minimum areas) is not decided by
+    the afgrøde and not modelled.
+    """
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                afgroede_table.c.afgroedekode,
+                afgroede_table.c.grundbetaling,
+                afgroede_table.c.landbrugsareal,
+                afgroede_table.c.art_4_4_c,
+            )
+        ).all()
+    eligible = frozenset(
+        code
+        for code, grundbetaling, landbrugsareal, art_4_4_c in rows
+        if grundbetaling and landbrugsareal and art_4_4_c == 0 and code not in _UDEN_OEKO_TILSKUD
+    )
+    if not eligible:
+        # Every flag reads false until the master table has been loaded after
+        # the columns were added; the støtte would then silently vanish.
+        raise RuntimeError("afgroede arealstøtte flags are empty; run pixi run load-afgroeder")
+    return eligible
+
+
 def _tilskud_poster(afgrodekode: int, driftsform: str) -> list[str]:
     posts = [_GRUNDBETALING_POST]
-    if driftsform == OEKOLOGISK:
+    if driftsform == OEKOLOGISK and afgrodekode in _load_oeko_arealstoette_koder():
         posts.append(_OEKO_AREALSTOETTE_POST)
     if afgrodekode == _STIVELSESKARTOFLER_KODE:
         posts.append(_STIVELSESKARTOFLER_POST)
