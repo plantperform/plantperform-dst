@@ -1,8 +1,9 @@
 import { AlertTriangle, Check, Pencil } from 'lucide-react'
 import { useId } from 'react'
 
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, QuotaTrade } from '@/api/types'
 import {
+  type CatchmentOption,
   catchmentKey,
   inputToOptionalNumber,
   numberToInput,
@@ -24,16 +25,66 @@ import {
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { formatNumber } from '@/lib/field-domain'
+import { describeTradePrices } from '@/lib/quota-trade-result'
 
 const limitAmount = (value: number | null) =>
   value === null ? null : formatNumber(value)
 
+type RulesQuotaTradesProps = {
+  quotaTrades: QuotaTrade[]
+  catchments: CatchmentOption[]
+}
+
+// The kvotehandel chosen for an Års-optimering, beside the caps it moves.
+// Shown, not edited here: kvotehandel is chosen in Års-optimering. Nothing
+// without one.
+export const RulesQuotaTrades = ({
+  quotaTrades,
+  catchments,
+}: RulesQuotaTradesProps) =>
+  quotaTrades.length === 0 ? null : (
+    <div className="border-t">
+      <LimitsColumn title="Kvotehandel">
+        <SummaryList>
+          {quotaTrades.map((trade) => (
+            <SummaryRow
+              key={trade.catchmentId}
+              label={
+                catchments.find(
+                  (catchment) => catchment.catchmentId === trade.catchmentId,
+                )?.label ?? `Kystvandopland ${trade.catchmentId}`
+              }
+              value={
+                <span className="text-[13px] tabular-nums">
+                  {describeTradePrices(trade)} pr. år
+                </span>
+              }
+              changed={false}
+            />
+          ))}
+        </SummaryList>
+        <RulesHint>
+          {quotaTrades.every((trade) => trade.sameEachYear !== false)
+            ? 'Samme mængde i alle år.'
+            : 'Mængden kan være forskellig fra år til år.'}{' '}
+          Vælges i Års-optimering.
+        </RulesHint>
+      </LimitsColumn>
+    </div>
+  )
+
 type RulesLimitsCardProps = {
   limits: RulesLimits
   fields: FieldRecord[]
+  // The kvotehandel chosen for an Års-optimering; empty without one.
+  quotaTrades: QuotaTrade[]
 }
 
-export const RulesLimitsCard = ({ limits, fields }: RulesLimitsCardProps) => {
+export const RulesLimitsCard = ({
+  limits,
+  fields,
+  quotaTrades,
+}: RulesLimitsCardProps) => {
   const id = useId()
   const {
     catchments,
@@ -246,6 +297,8 @@ export const RulesLimitsCard = ({ limits, fields }: RulesLimitsCardProps) => {
           />
         </LimitsColumn>
       </div>
+
+      <RulesQuotaTrades quotaTrades={quotaTrades} catchments={catchments} />
 
       <div className="flex min-h-15 flex-wrap items-center gap-2.5 rounded-b-lg border-t bg-muted/30 px-5 py-3">
         <div

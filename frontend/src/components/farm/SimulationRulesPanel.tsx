@@ -247,7 +247,15 @@ export const SimulationRulesPanel = ({
       </div>
       <div className="px-6 pt-5 pb-6">
         <div {...panelProps('limits')}>
-          <RulesLimitsCard limits={limits} fields={fields} />
+          <RulesLimitsCard
+            limits={limits}
+            fields={fields}
+            quotaTrades={
+              simulation.optimizationSettings?.kind === 'yearly'
+                ? simulation.optimizationSettings.quotaTrades
+                : []
+            }
+          />
         </div>
         <div {...panelProps('basis')}>
           <SimulationBasisCard
