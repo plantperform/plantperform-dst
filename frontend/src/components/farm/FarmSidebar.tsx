@@ -23,7 +23,11 @@ import {
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useMatch } from 'react-router-dom'
 
-import { useFarmMembers, useSimulationFields } from '@/api/hooks'
+import {
+  useFarmMembers,
+  useSimulationFields,
+  useSimulationView,
+} from '@/api/hooks'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import {
@@ -94,6 +98,10 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { optimizationRunName } from '@/lib/optimization-run'
+import {
+  averageLimitAfterTradesFor,
+  latestQuotaTrades,
+} from '@/lib/quota-trade-result'
 import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
@@ -637,8 +645,24 @@ const SimulationMenuItem = ({
     isLoading: fieldsLoading,
     summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
+  // The view the fields come from; a trading opland's status measures against
+  // its kvote moved by the latest run's kvotehandel.
+  const view = useSimulationView(
+    farmId,
+    isSimulationReady(simulation) ? simulation.id : undefined,
+  )
+  const quotaTrades = latestQuotaTrades(
+    simulation,
+    view.data?.data?.savedResult,
+  )
   const quota = simulationFields
-    ? resolveFarmQuota(simulationFields, true)
+    ? resolveFarmQuota(
+        simulationFields,
+        true,
+        quotaTrades.length > 0
+          ? averageLimitAfterTradesFor(quotaTrades)
+          : undefined,
+      )
     : null
   const figures = quota ? describeKeyFigures(quota, true) : undefined
   const fieldSetChanges = useFieldSetChanges(

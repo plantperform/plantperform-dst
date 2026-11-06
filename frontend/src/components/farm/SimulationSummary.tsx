@@ -25,6 +25,7 @@ import {
 import { cropLabelByCode, cropLabelByName } from '@/lib/crop-label'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
+import { describeTradePrices } from '@/lib/quota-trade-result'
 import {
   CUSTOM_FERTILISER,
   NO_FERTILISER,
@@ -297,6 +298,32 @@ export const SimulationSummary = ({
               ? settings.excludedCropCodes.map(cropLabelFor).join(' · ')
               : 'Ingen'}
           </p>
+        </Section>
+        <Section step="quotaTrade" onEditStep={onEditStep}>
+          {settings.quotaTrades.length === 0 ? (
+            <p>Ingen kvotehandel</p>
+          ) : (
+            <>
+              {settings.quotaTrades.map((trade) => (
+                <p key={trade.catchmentId}>
+                  <span className="text-foreground">
+                    {catchments.find(
+                      (catchment) => catchment.catchmentId === trade.catchmentId,
+                    )?.label ?? `Kystvandopland ${trade.catchmentId}`}
+                  </span>{' '}
+                  · {describeTradePrices(trade)} pr. år
+                </p>
+              ))}
+              <p>
+                Optimeringen vælger, hvor meget kvote der købes eller sælges.
+                {settings.quotaTrades.every(
+                  (trade) => trade.sameEachYear !== false,
+                )
+                  ? ' Mængden er den samme i alle år.'
+                  : ' Mængden kan være forskellig fra år til år.'}
+              </p>
+            </>
+          )}
         </Section>
       </div>
 

@@ -8,10 +8,12 @@ import {
 import { CalendarRange, Droplets, Layers, Repeat, Wheat } from 'lucide-react'
 
 import type {
+  CatchmentYearlyNLoadCaps,
   FieldRecord,
   FieldYearValues,
   OptimizeSimulationResponse,
   RotationOption,
+  SimulationQuotaTrade,
   YearlySummaryEntry,
 } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
@@ -53,6 +55,23 @@ import {
 import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import {
+  describeQuotaTradeAmount,
+  describeTradeKg,
+  describeTradePrices,
+  formatTradeShareOfCap,
+  limitAfterTradeKgN,
+  QUOTA_TRADE_LABELS,
+  quotaBarHeights,
+  quotaTradeBand,
+  quotaLimitLinePct,
+  quotaTradeKgIn,
+  quotaTradeKind,
+  tradePriceDkkPerKg,
+  type QuotaTradeKind,
+  type TradedLimit,
+  yearLimitKgN,
+} from '@/lib/quota-trade-result'
+import {
   summarizeRotationDistribution,
   type RotationShare,
 } from '@/lib/rotation-overview'
@@ -67,6 +86,25 @@ const PLACEHOLDER_BAR_HEIGHTS = [34, 46, 28, 52, 38, 48, 32, 44]
 const COMPACT_VIEWPORT_HEIGHT = 960
 
 const NO_ROTATION_OPTIONS: RotationOption[] = []
+
+// Kvote a run bought or sold: an outline from the limit the run traded from
+// (the cap under Grænser, or the kvote without one) to the traded one, in the
+// theme's warning and success colours, which no opland or "Over kvoten" uses.
+// No fill, so the bar's own colours, "Over kvoten" included, show unchanged
+// inside it.
+const QUOTA_TRADE_BAND_CLASSES: Record<QuotaTradeKind, string> = {
+  bought: 'border-warning',
+  sold: 'border-success',
+}
+
+// The cap under Grænser where it differs from the kvote.
+const CAP_LINE_CLASS = 'border-t-[1.5px] border-dotted border-sky-700'
+
+// The bands' colours, darker so text in them stays readable.
+const QUOTA_TRADE_TEXT_CLASSES: Record<QuotaTradeKind, string> = {
+  bought: 'text-warning-strong',
+  sold: 'text-success-strong',
+}
 
 type PanelView = 'nLoad' | CropShareLevel | 'rotation'
 
@@ -131,8 +169,25 @@ const buildColumns = (
 type CatchmentYear = {
   catchment: CatchmentQuota
   nLoadKg: number
+  // The kvote, the legal limit: the bars are drawn to it and the percentage
+  // is of it.
   quotaKgN: number
+  // The opland's cap under Grænser in the year, or the kvote where none is
+  // set. It is what the optimization was held to, shown for information
+  // only: a cap above the kvote does not make udledning over the kvote
+  // acceptable.
+  capKgN: number
+  // Measured against the kvote alone, like the bar's "Over kvoten": neither
+  // a trade nor a cap under Grænser moves it.
   level: QuotaStatusLevel
+  // Kvote the run bought (> 0) or sold (< 0) in this year, or on average per
+  // year for the whole period.
+  tradeKg: number
+  // The kvote a trading opland traded from and the trade that moved it;
+  // null when the opland does not trade.
+  tradedLimit: TradedLimit | null
+  // The opland's kvotehandel; null when it does not trade.
+  trade: SimulationQuotaTrade | null
 }
 
 const catchmentYearLevel = (
@@ -161,6 +216,31 @@ const barWidthClass = (count: number, wide: boolean): string => {
 
 const quotaRatio = (row: CatchmentYear): number => row.nLoadKg / row.quotaKgN
 
+// A cap under Grænser other than the kvote: shown as information, since the
+// status always measures against the kvote.
+const capDiffers = (row: CatchmentYear) =>
+  row.quotaKgN > 0 && Math.abs(row.capKgN - row.quotaKgN) > 0.5
+
+// The trade as drawn on the bar: from the cap under Grænser, the limit the
+// run traded from, rounded to whole kg N as the run's cap is by default.
+// Only the drawing: the status still measures against the kvote moved by the
+// trade (row.tradedLimit).
+const drawnTradeLimit = (row: CatchmentYear): TradedLimit | null =>
+  row.tradedLimit
+    ? { capKgN: Math.round(row.capKgN), tradeKg: row.tradedLimit.tradeKg }
+    : null
+
+// The highest part of a year's bar as a share of its kvote: the bar, the top
+// of a trade's band or the cap under Grænser, so the scale leaves room for all.
+const drawnRatio = (row: CatchmentYear): number => {
+  const drawnTrade = drawnTradeLimit(row)
+  return Math.max(
+    quotaRatio(row),
+    drawnTrade ? limitAfterTradeKgN(drawnTrade) / row.quotaKgN : 0,
+    capDiffers(row) ? row.capKgN / row.quotaKgN : 0,
+  )
+}
+
 const describeYearQuota = (
   quotaCatchmentCount: number,
   overCount: number,
@@ -179,7 +259,7 @@ const describeCatchmentYear = (label: string, row: CatchmentYear): string =>
     row.quotaKgN > 0
       ? ` (${formatQuotaPercent(row.nLoadKg, row.quotaKgN)})`
       : ', ingen kvote'
-  }`
+  }${row.tradeKg === 0 ? '' : ` · ${describeQuotaTradeAmount(row.tradeKg)}`}`
 
 type QuotaBarProps = {
   row: CatchmentYear
@@ -197,25 +277,66 @@ const QuotaBar = ({
   quotaLinePct,
 }: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
-  const ratio = quotaRatio(row)
-  const heightPct = Math.min(100, ratio * quotaLinePct)
-  const overPct = ratio > 1 ? ((heightPct - quotaLinePct) / heightPct) * 100 : 0
+  // Red above the kvote, whatever the trade or the cap under Grænser allow.
+  const { heightPct, overPct } = quotaBarHeights(
+    row.nLoadKg,
+    row.quotaKgN,
+    quotaLinePct,
+  )
+  const drawnTrade = drawnTradeLimit(row)
+  const band = drawnTrade
+    ? quotaTradeBand(row.quotaKgN, drawnTrade, quotaLinePct)
+    : null
   return (
-    <AppTooltip content={title}>
-      <span
-        className={cn(
-          'relative z-10 flex flex-col overflow-hidden rounded-t-[3px] motion-safe:transition-[height] motion-safe:duration-300',
-          widthClass,
-          colorClass,
-          heightPct > 0 && 'min-h-0.5',
-        )}
-        style={{ height: `${heightPct}%` }}
-      >
-        {overPct > 0 ? (
-          <span className="bg-destructive" style={{ height: `${overPct}%` }} />
-        ) : null}
-      </span>
-    </AppTooltip>
+    <span
+      className={cn(
+        'relative flex h-full items-end justify-center',
+        widthClass,
+      )}
+    >
+      <AppTooltip content={title}>
+        <span
+          className={cn(
+            'relative z-10 flex w-full flex-col overflow-hidden rounded-t-[3px] motion-safe:transition-[height] motion-safe:duration-300',
+            colorClass,
+            heightPct > 0 && 'min-h-0.5',
+          )}
+          style={{ height: `${heightPct}%` }}
+        >
+          {overPct > 0 ? (
+            <span
+              className="bg-destructive"
+              style={{ height: `${overPct}%` }}
+            />
+          ) : null}
+        </span>
+      </AppTooltip>
+      {band ? (
+        <span
+          className={cn(
+            'pointer-events-none absolute -inset-x-0.5 z-20 rounded-[2px] border-[1.5px]',
+            QUOTA_TRADE_BAND_CLASSES[band.kind],
+          )}
+          style={{ bottom: `${band.bottomPct}%`, height: `${band.heightPct}%` }}
+        />
+      ) : null}
+      {capDiffers(row) ? (
+        <span
+          data-cap-line=""
+          className={cn(
+            'pointer-events-none absolute -inset-x-0.5 z-30',
+            CAP_LINE_CLASS,
+          )}
+          style={{
+            bottom: `${quotaLimitLinePct(
+              row.quotaKgN,
+              { capKgN: row.capKgN, tradeKg: 0 },
+              quotaLinePct,
+            )}%`,
+          }}
+        />
+      ) : null}
+    </span>
   )
 }
 
@@ -237,6 +358,63 @@ const ScopedFact = ({
   </div>
 )
 
+// The opland's kvotehandel in the year, or the average per year over the
+// period: what was traded against the cap it moved, at what price, and what
+// it cost or earned.
+const ScopedQuotaTrade = ({
+  limit,
+  trade,
+  average,
+}: {
+  limit: TradedLimit
+  trade: SimulationQuotaTrade
+  average: boolean
+}) => {
+  const kind = quotaTradeKind(limit.tradeKg)
+  const perYear = average ? ' gns. pr. år' : ''
+  // A year pays at the price of its direction. On average the years can
+  // both buy and sell, so the run's own average payment is used.
+  const payment = average
+    ? trade.paymentDkkPerYear
+    : limit.tradeKg * tradePriceDkkPerKg(trade, limit.tradeKg)
+  const share = formatTradeShareOfCap(limit)
+  return (
+    <div className="flex flex-col gap-2 border-t pt-2.5">
+      <p className="text-[11px] font-medium text-muted-foreground">
+        Kvotehandel
+      </p>
+      {kind === null ? (
+        <p className="text-[13px] text-muted-foreground">
+          {average
+            ? 'Ingen kvotehandel i gennemsnit'
+            : 'Ingen kvotehandel i året'}
+        </p>
+      ) : (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <ScopedFact
+            label={`${QUOTA_TRADE_LABELS[kind]}${perYear}`}
+            value={`${formatWholeNumber(Math.abs(limit.tradeKg))} kg N${
+              share ? ` (${share} af kvoten)` : ''
+            }`}
+          />
+          <ScopedFact
+            label="Pris"
+            value={
+              average
+                ? describeTradePrices(trade)
+                : `${formatNumber(tradePriceDkkPerKg(trade, limit.tradeKg))} kr/kg N`
+            }
+          />
+          <ScopedFact
+            label={`${payment > 0 ? 'Udgift' : 'Indtægt'}${perYear}`}
+            value={`${formatWholeNumber(Math.abs(payment))} kr`}
+          />
+        </dl>
+      )}
+    </div>
+  )
+}
+
 type ScopedSummaryProps = {
   row: CatchmentYear
   column: YearColumn | null
@@ -254,8 +432,15 @@ const ScopedSummary = ({
 }: ScopedSummaryProps) => {
   const style = QUOTA_STATUS_STYLES[row.level]
   const { fieldCount, areaHa } = row.catchment.totals
+  // The percentage, the status and what is left all measure against the
+  // kvote, like "Hele bedriften"; the trade is shown beside them.
   const difference = formatWholeNumber(Math.abs(row.nLoadKg - row.quotaKgN))
   const over = row.nLoadKg > row.quotaKgN
+  const tradeKind = row.tradedLimit
+    ? quotaTradeKind(row.tradedLimit.tradeKg)
+    : null
+  const tradeShare =
+    row.tradedLimit && tradeKind ? formatTradeShareOfCap(row.tradedLimit) : null
   return (
     <div className="flex flex-col gap-3 border-t pt-2.5">
       <div className="flex flex-col gap-1">
@@ -267,12 +452,32 @@ const ScopedSummary = ({
             {QUOTA_STATUS_LABELS[row.level].toLowerCase()}
           </span>
         </div>
+        {tradeShare && tradeKind ? (
+          <AppTooltip content="Andel af kvoten før kvotehandel">
+            <p
+              className={cn(
+                'w-fit text-[13px] font-semibold tabular-nums',
+                QUOTA_TRADE_TEXT_CLASSES[tradeKind],
+              )}
+            >
+              {tradeShare} {QUOTA_TRADE_LABELS[tradeKind].toLowerCase()}
+            </p>
+          </AppTooltip>
+        ) : null}
         <p className="text-xs text-pretty text-muted-foreground tabular-nums">
           {formatQuotaAmount(row.nLoadKg, row.quotaKgN, formatWholeNumber)}
           {over
             ? `, skal ned med ${difference} kg N`
             : `, ${difference} kg N tilbage`}
         </p>
+        {capDiffers(row) ? (
+          // What the optimization was held to; the status ignores it.
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+            <span aria-hidden="true" className={cn('w-3.5', CAP_LINE_CLASS)} />
+            Loft under Grænser: {formatWholeNumber(row.capKgN)} kg N
+            {column ? '' : ' gns. pr. år'}
+          </p>
+        ) : null}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-2.5">
         <ScopedFact
@@ -300,6 +505,13 @@ const ScopedSummary = ({
           value={`${overYearCount} af ${yearCount}`}
         />
       </dl>
+      {row.tradedLimit && row.trade ? (
+        <ScopedQuotaTrade
+          limit={row.tradedLimit}
+          trade={row.trade}
+          average={column === null}
+        />
+      ) : null}
     </div>
   )
 }
@@ -308,39 +520,74 @@ type PanelRowProps = {
   row: CatchmentYear
   label: string
   colorClass: string
+  // The row is the average per year over the period, not one year.
+  average: boolean
 }
 
-const PanelRow = ({ row, label, colorClass }: PanelRowProps) => {
+const PanelRow = ({ row, label, colorClass, average }: PanelRowProps) => {
   const style = QUOTA_STATUS_STYLES[row.level]
   const calculated = row.level !== 'uncalculated'
   const hasQuota = row.quotaKgN > 0
+  const trade = calculated ? row.tradedLimit : null
+  const tradeKind = trade ? quotaTradeKind(trade.tradeKg) : null
+  const tradeShare = trade && tradeKind ? formatTradeShareOfCap(trade) : null
   return (
-    <div className="flex items-start justify-between gap-3 border-t py-2">
-      <span className="flex min-w-0 items-start gap-2">
-        <span
-          aria-hidden="true"
-          className={cn('mt-[5px] size-2.5 shrink-0 rounded-[3px]', colorClass)}
-        />
-        <span className="min-w-0">
-          <span className="block text-[13px] leading-5 text-pretty">
-            {label}
-          </span>
-          <span className="block text-[11px] leading-4 text-muted-foreground tabular-nums">
-            {!calculated
-              ? 'ikke beregnet'
-              : `${formatQuotaAmount(row.nLoadKg, row.quotaKgN, formatWholeNumber)}${hasQuota ? '' : ', ingen kvote'}`}
+    <div className="border-t py-2">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex min-w-0 items-start gap-2">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'mt-[5px] size-2.5 shrink-0 rounded-[3px]',
+              colorClass,
+            )}
+          />
+          <span className="min-w-0">
+            <span className="block text-[13px] leading-5 text-pretty">
+              {label}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground tabular-nums">
+              {!calculated
+                ? 'ikke beregnet'
+                : `${formatQuotaAmount(row.nLoadKg, row.quotaKgN, formatWholeNumber)}${hasQuota ? '' : ', ingen kvote'}`}
+            </span>
           </span>
         </span>
-      </span>
-      {calculated && hasQuota ? (
-        <span
-          className={cn(
-            'shrink-0 text-[13px] leading-5 font-semibold tabular-nums',
-            style.text,
-          )}
-        >
-          {formatQuotaPercent(row.nLoadKg, row.quotaKgN)}
-        </span>
+        {calculated && hasQuota ? (
+          <span
+            className={cn(
+              'shrink-0 text-[13px] leading-5 font-semibold tabular-nums',
+              style.text,
+            )}
+          >
+            {formatQuotaPercent(row.nLoadKg, row.quotaKgN)}
+          </span>
+        ) : null}
+      </div>
+      {trade ? (
+        // Indented to the label, past the colour swatch.
+        <div className="mt-1.5 ml-[18px] flex items-end justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[11px] leading-4 font-medium">
+              Kvotehandel
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground tabular-nums">
+              {describeTradeKg(trade.tradeKg, average)}
+            </span>
+          </span>
+          {tradeShare && tradeKind ? (
+            <AppTooltip content="Andel af kvoten før kvotehandel">
+              <span
+                className={cn(
+                  'shrink-0 text-[13px] leading-5 font-semibold tabular-nums',
+                  QUOTA_TRADE_TEXT_CLASSES[tradeKind],
+                )}
+              >
+                {tradeShare}
+              </span>
+            </AppTooltip>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
@@ -703,6 +950,7 @@ const YearPanel = ({
                       row={row}
                       label={catchmentLabel(row.catchment.catchmentId)}
                       colorClass={catchmentColor(row.catchment.catchmentId)}
+                      average={column === null}
                     />
                   ))
                 ) : null}
@@ -752,7 +1000,14 @@ type YearWalkthroughProps = {
   rotationColors?: Map<string, string>
   splitPanels?: boolean
   collapsed: boolean
+  // Kvotehandel of the simulation's latest run, drawn next to the kvote.
+  quotaTrades?: SimulationQuotaTrade[]
+  // The yearly caps under Grænser that the trades moved.
+  quotaCaps?: CatchmentYearlyNLoadCaps[]
 }
+
+const NO_QUOTA_TRADES: SimulationQuotaTrade[] = []
+const NO_QUOTA_CAPS: CatchmentYearlyNLoadCaps[] = []
 
 export const YearWalkthrough = ({
   entries,
@@ -772,6 +1027,8 @@ export const YearWalkthrough = ({
   rotationColors,
   splitPanels = false,
   collapsed,
+  quotaTrades = NO_QUOTA_TRADES,
+  quotaCaps = NO_QUOTA_CAPS,
 }: YearWalkthroughProps) => {
   const compact = useViewportShorterThan(COMPACT_VIEWPORT_HEIGHT)
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -793,15 +1050,64 @@ export const YearWalkthrough = ({
   const quotaCatchmentCount = catchments.filter(
     (catchment) => catchment.totals.nLoadQuotaKgN > 0,
   ).length
-
+  const tradeFor = (catchmentId: number | null) =>
+    quotaTrades.find((trade) => trade.catchmentId === catchmentId)
+  // calendarYear null: the average per year over the period.
+  const tradeKgFor = (
+    catchmentId: number | null,
+    calendarYear: number | null,
+  ) => {
+    const trade = tradeFor(catchmentId)
+    return trade ? quotaTradeKgIn(trade, calendarYear) : 0
+  }
+  // Only the oplande shown here, so a scoped view names only its own trade. A
+  // trade chosen year by year can buy in one year and sell in another.
+  const tradeKinds = (['bought', 'sold'] as const).filter((kind) =>
+    catchments.some((catchment) => {
+      const trade = tradeFor(catchment.catchmentId)
+      return (
+        catchment.totals.nLoadQuotaKgN > 0 &&
+        trade !== undefined &&
+        Object.values(trade.tradeKgByYear).some(
+          (kg) => quotaTradeKind(kg) === kind,
+        )
+      )
+    }),
+  )
   const catchmentYears = (entry: YearlySummaryEntry | null): CatchmentYear[] =>
     catchments.map((catchment) => {
+      // A simulation's entries count rotation years from 1.
+      const calendarYear =
+        entry === null
+          ? null
+          : history
+            ? entry.year
+            : firstCalendarYear(false) + entry.year - 1
+      const tradeKg = tradeKgFor(catchment.catchmentId, calendarYear)
+      const trade = tradeFor(catchment.catchmentId) ?? null
+      // The kvote the trade moved, rounded to whole kg N as the run's cap is
+      // by default: for the trade's share of the kvote, not the status.
+      const tradedLimitFor = (quotaKgN: number): TradedLimit | null =>
+        trade === null ? null : { capKgN: Math.round(quotaKgN), tradeKg }
+      const capFor = (quotaKgN: number) =>
+        yearLimitKgN(quotaCaps, catchment.catchmentId, calendarYear, quotaKgN)
       if (entry === null) {
+        const quotaKgN = catchment.totals.nLoadQuotaKgN
+        const tradedLimit = tradedLimitFor(quotaKgN)
+        const nLoadKg = catchment.totals.nLoad
+        const measured = ['ok', 'near', 'over'].includes(catchment.level)
         return {
           catchment,
-          nLoadKg: catchment.totals.nLoad,
-          quotaKgN: catchment.totals.nLoadQuotaKgN,
-          level: catchment.level,
+          nLoadKg,
+          quotaKgN,
+          capKgN: capFor(quotaKgN),
+          // Against the kvote alone, whatever the trade or the cap.
+          level: measured
+            ? quotaStatusLevel(nLoadKg, quotaKgN, true)
+            : catchment.level,
+          tradeKg,
+          tradedLimit,
+          trade,
         }
       }
       const yearTotals = catchmentTotalsByYear?.get(catchment.catchmentId)?.[
@@ -809,16 +1115,22 @@ export const YearWalkthrough = ({
       ]
       const nLoadKg = yearTotals?.nLoadKg ?? 0
       const quotaKgN = yearTotals?.quotaKgN ?? 0
+      // No kvote, no limit: neither a cap nor a trade makes one.
+      const tradedLimit = quotaKgN > 0 ? tradedLimitFor(quotaKgN) : null
       return {
         catchment,
         nLoadKg,
         quotaKgN,
+        capKgN: quotaKgN > 0 ? capFor(quotaKgN) : 0,
         level: catchmentYearLevel(
           nLoadKg,
           quotaKgN,
           yearTotals?.fieldCount ?? 0,
           catchment.totals.fieldCount,
         ),
+        tradeKg,
+        tradedLimit,
+        trade,
       }
     })
 
@@ -897,7 +1209,14 @@ export const YearWalkthrough = ({
     }
   }
 
+  // Named in the legend when any year shown has a cap other than its kvote.
+  const showCapLines = columns.some(
+    (column) =>
+      column.entry !== null && catchmentYears(column.entry).some(capDiffers),
+  )
   const yearCount = columns.filter((column) => column.entry !== null).length
+  // Years in which a shown opland is over its kvote, measured like the
+  // panel's status: against the kvote alone.
   const overYearCount = columns.filter(
     (column) =>
       column.entry !== null &&
@@ -911,7 +1230,7 @@ export const YearWalkthrough = ({
       column.entry
         ? catchmentYears(column.entry)
             .filter((row) => row.quotaKgN > 0)
-            .map(quotaRatio)
+            .map(drawnRatio)
         : [],
     ),
   )
@@ -1155,8 +1474,21 @@ export const YearWalkthrough = ({
                     aria-hidden="true"
                     className="w-3.5 border-t-[1.5px] border-dashed border-foreground/50"
                   />
-                  {quotaCatchmentCount === 1 ? 'Oplandets kvote' : 'Egen kvote'}
+                  {tradeKinds.length > 0
+                    ? 'Oprindelig kvote'
+                    : quotaCatchmentCount === 1
+                      ? 'Oplandets kvote'
+                      : 'Egen kvote'}
                 </span>
+                {showCapLines ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className={cn('w-3.5', CAP_LINE_CLASS)}
+                    />
+                    Loft under Grænser
+                  </span>
+                ) : null}
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
@@ -1164,6 +1496,18 @@ export const YearWalkthrough = ({
                   />
                   Over kvoten
                 </span>
+                {tradeKinds.map((kind) => (
+                  <span key={kind} className="inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'h-2 w-3 rounded-[2px] border-[1.5px]',
+                        QUOTA_TRADE_BAND_CLASSES[kind],
+                      )}
+                    />
+                    {QUOTA_TRADE_LABELS[kind]}
+                  </span>
+                ))}
               </>
             ) : null}
           </div>
@@ -1240,7 +1584,7 @@ export const YearWalkthrough = ({
                       >
                         {quotaCatchmentCount > 0 && !loading ? (
                           <span
-                            className="pointer-events-none absolute inset-x-0 z-20 border-t-[1.5px] border-dashed border-foreground/45 motion-safe:transition-[bottom] motion-safe:duration-300"
+                            className="pointer-events-none absolute inset-x-0 z-30 border-t-[1.5px] border-dashed border-foreground/45 motion-safe:transition-[bottom] motion-safe:duration-300"
                             style={{ bottom: `${quotaLinePct}%` }}
                           />
                         ) : null}

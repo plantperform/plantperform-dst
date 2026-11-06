@@ -58,7 +58,11 @@ const METRICS: Metric[] = [
     valueOf: (column) =>
       column.history ? null : totalsPerHa(column.totals, 'db2'),
     format: (value) => formatPerHa(value, 'db2'),
-    total: (column) => `${formatCompactDkk(column.totals.db2)} i alt`,
+    // A column that traded kvote shows it with the payment taken off.
+    total: (column) =>
+      `${formatCompactDkk(column.totals.db2)} i alt${
+        column.quotaTrades.length > 0 ? ', inkl. kvotehandel' : ''
+      }`,
     direction: 'highest',
     bestWord: 'højest',
     barClass: 'bg-primary',

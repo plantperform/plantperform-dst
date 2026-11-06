@@ -318,6 +318,24 @@ export type OptimizationSettings = {
   excludedCropCodes: number[]
   maxNLoadByCatchment: CatchmentYearlyNLoadCaps[]
   db2SwingPct: number | null
+  // Kvotehandel; only the yearly optimization uses it.
+  quotaTrades: QuotaTrade[]
+}
+
+// The prices of a kvotehandel, per kg N per year. The sell price is never
+// above the buy price.
+export type QuotaTradePrices = {
+  buyPriceDkkPerKg: number
+  sellPriceDkkPerKg: number
+}
+
+// Kvotehandel at fixed prices: the yearly optimization may buy kvote in the
+// catchment at the buy price or sell it at the sell price, an amount it
+// chooses for each year, or one amount for every year with sameEachYear.
+export type QuotaTrade = QuotaTradePrices & {
+  catchmentId: number
+  // Trades saved before this setting existed are the same each year.
+  sameEachYear?: boolean
 }
 
 export type UpdateSimulationInput = Partial<CreateSimulationInput> & {
@@ -341,12 +359,26 @@ export type RotationAssignment = {
 
 export type OptimizeSimulationResponse = {
   status: OptimizationStatus
+  // The crops' DB2 alone, without the quotaTrades' payments.
   objectiveDb2: number
   totalNLoadKg: number
   totalLeachingKg: number
   totalFeedUnits: number
   fields: FieldRecord[]
   assignments: RotationAssignment[]
+  // Runs from before kvotehandel have none.
+  quotaTrades?: SimulationQuotaTrade[]
+}
+
+// A kvotehandel a yearly run chose, per calendar year: > 0 buys at the buy
+// price, < 0 sells at the sell price. The payment is the average per year,
+// negative when the trade sells more than it buys.
+export type SimulationQuotaTrade = QuotaTradePrices & {
+  catchmentId: number
+  catchmentName: string | null
+  tradeKgByYear: Record<number, number>
+  sameEachYear: boolean
+  paymentDkkPerYear: number
 }
 
 export type CatchmentYearlyNLoadCaps = {
@@ -359,6 +391,7 @@ export type YearlyOptimizeSimulationInput = {
   runId?: string
   maxNLoadByCatchment?: CatchmentYearlyNLoadCaps[]
   db2SwingPct?: number | null
+  quotaTrades?: QuotaTrade[]
   excludedCropCodes?: number[]
 }
 

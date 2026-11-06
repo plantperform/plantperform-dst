@@ -28,6 +28,7 @@ import {
   describeYears,
   summarizeCatchmentYearStatuses,
   type CatchmentYearStatus,
+  type YearLimitFor,
 } from '@/lib/simulation-overview'
 
 export const MAX_COMPARED_SIMULATIONS = 3
@@ -206,10 +207,14 @@ export type CatchmentComparison = {
   years: CatchmentYearQuota[]
 }
 
+// limitFor: the limit an opland is held to in a year, given its kvote; the
+// status measures against it. A simulation that traded passes its kvote
+// moved by the trade. The percentage is always of the kvote.
 export const summarizeCatchmentComparison = (
   catchmentId: number,
   totalsByYear: CatchmentTotalsByYear,
   partialQuotaKgN?: number,
+  limitFor?: YearLimitFor,
 ): CatchmentComparison | null => {
   const byYear: Record<number, CatchmentYearTotals> =
     totalsByYear.get(catchmentId) ?? {}
@@ -224,9 +229,15 @@ export const summarizeCatchmentComparison = (
     single,
     true,
     partialQuotaKgN === undefined
-      ? undefined
+      ? new Map()
       : new Map([[catchmentId, partialQuotaKgN]]),
+    limitFor,
   )
+  // No kvote, no limit: a trade does not make one.
+  const yearLimitKgN = (year: number): number =>
+    limitFor && yearQuotaKgN(year) > 0
+      ? limitFor(catchmentId, year, yearQuotaKgN(year))
+      : yearQuotaKgN(year)
   const nLoadKg = quotaYears.reduce(
     (sum, year) => sum + byYear[year].nLoadKg,
     0,
@@ -247,7 +258,7 @@ export const summarizeCatchmentComparison = (
       return {
         year,
         quotaPct: quotaPercent(yearNLoadKg, yearQuotaKgN(year)),
-        level: quotaStatusLevel(yearNLoadKg, yearQuotaKgN(year), true),
+        level: quotaStatusLevel(yearNLoadKg, yearLimitKgN(year), true),
       }
     }),
   }
@@ -301,6 +312,7 @@ export const summarizeColumnQuota = (
   catchmentIds: number[],
   totalsByYear: CatchmentTotalsByYear,
   partialQuotas: ReadonlyMap<number, number>,
+  limitFor?: YearLimitFor,
 ): ColumnQuotaSummary => {
   let yearsOver = 0
   let catchmentsOver = 0
@@ -310,6 +322,7 @@ export const summarizeColumnQuota = (
         catchmentId,
         totalsByYear,
         partialQuotas.get(catchmentId),
+        limitFor,
       )?.status.overYears.length ?? 0
     yearsOver += over
     if (over > 0) catchmentsOver += 1
@@ -596,12 +609,20 @@ export const STATEMENT_RESULT: StatementLine = {
   amount: (statement) => statement.db,
 }
 
+// An amount per year in the statement's unit: per ha of its area, or in total.
+export const formatStatementAmount = (
+  statement: EconomicsStatement,
+  amount: number,
+  unit: StatementUnit,
+  format: (value: number) => string = formatDbDkk,
+): string | null => {
+  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
+  return value === null ? null : format(value)
+}
+
 export const formatStatementLine = (
   statement: EconomicsStatement,
   line: StatementLine,
   unit: StatementUnit,
-): string | null => {
-  const amount = line.amount(statement)
-  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
-  return value === null ? null : (line.format ?? formatDbDkk)(value)
-}
+): string | null =>
+  formatStatementAmount(statement, line.amount(statement), unit, line.format)

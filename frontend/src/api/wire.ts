@@ -49,6 +49,8 @@ const SHARED_NAMES: Record<string, string> = {
   avgFen: 'avgFeedUnits',
   fenFeHa: 'feedUnitsPerHa',
   journalnr: 'journalNumber',
+  buyPriceKrPerKg: 'buyPriceDkkPerKg',
+  sellPriceKrPerKg: 'sellPriceDkkPerKg',
 }
 
 const RESPONSE_ONLY_NAMES: Record<string, string> = {
@@ -90,6 +92,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   Fmajs_anvendt: 'fmajsApplied',
   Fmajs_korrektionsfaktor: 'fmajsCorrectionFactor',
   Fmajs_mineralsk_n: 'fmajsMineralN',
+  paymentKrPerYear: 'paymentDkkPerYear',
 }
 
 const RESPONSE_NAMES: Record<string, string> = {

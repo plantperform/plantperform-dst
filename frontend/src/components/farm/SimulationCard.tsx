@@ -1,15 +1,20 @@
 import { Copy, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { useFieldYearValues, useSimulationFields } from '@/api/hooks'
+import {
+  useFieldYearValues,
+  useSimulationFields,
+  useSimulationView,
+} from '@/api/hooks'
 import { useOptimizationRun } from '@/api/optimization-runs'
-import type { FieldRecord, Simulation } from '@/api/types'
+import type { FieldRecord, Simulation, SimulationQuotaTrade } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
 import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
+import { QuotaTradeFigures } from '@/components/farm/QuotaTradeFigures'
 import { CatchmentYearStatusIndicator } from '@/components/farm/QuotaStatusIndicator'
 import type { FarmInspectorMode } from '@/components/farm/types'
 import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
@@ -32,6 +37,10 @@ import {
   type FarmQuota,
   type FieldTotals,
 } from '@/lib/field-domain'
+import {
+  latestQuotaTrades,
+  limitAfterTradesFor,
+} from '@/lib/quota-trade-result'
 import { comparisonAvailability } from '@/lib/simulation-comparison'
 import {
   describeFieldChanges,
@@ -60,12 +69,16 @@ type CatchmentStatusListProps = {
   farmId: string
   simulationId: string
   fields: FieldRecord[]
+  // The latest run's kvotehandel: an opland that traded is over in a year
+  // only above its kvote moved by the trade.
+  quotaTrades: SimulationQuotaTrade[]
 }
 
 const CatchmentStatusList = ({
   farmId,
   simulationId,
   fields,
+  quotaTrades,
 }: CatchmentStatusListProps) => {
   const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
@@ -75,6 +88,7 @@ const CatchmentStatusList = ({
         summarizeCatchmentYearTotals(fields, yearValues.data, false),
         false,
         partialCatchmentQuotas(fields, true),
+        limitAfterTradesFor(quotaTrades),
       )
         .map((status) => ({
           status,
@@ -140,6 +154,13 @@ const SimulationFigures = ({
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
   const profile = useEconomicsProfiles().appliedProfile(simulation)
+  // Shares the view the card's fields come from, so this fetches nothing new.
+  const view = useSimulationView(farmId, simulation.id)
+  const quotaTrades = latestQuotaTrades(
+    simulation,
+    view.data?.data?.savedResult,
+  )
+  const catchmentLabel = useCatchmentLabel(farmId, fields)
 
   return (
     <>
@@ -172,10 +193,16 @@ const SimulationFigures = ({
           }
         />
       </div>
+      <QuotaTradeFigures
+        trades={quotaTrades}
+        totals={totals}
+        catchmentLabel={catchmentLabel}
+      />
       <CatchmentStatusList
         farmId={farmId}
         simulationId={simulation.id}
         fields={fields}
+        quotaTrades={quotaTrades}
       />
     </>
   )
