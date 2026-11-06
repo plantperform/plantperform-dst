@@ -160,13 +160,6 @@ export const averageLimitAfterTradesFor = (trades: SimulationQuotaTrade[]) => {
     ) / ROTATION_CALENDAR_YEARS.length
 }
 
-// "efter køb" or "efter salg" for a status measured after a trade; empty
-// when nothing was traded.
-export const describeAfterTrade = (tradeKg: number) => {
-  const kind = quotaTradeKind(tradeKg)
-  return kind === null ? '' : kind === 'bought' ? 'efter køb' : 'efter salg'
-}
-
 // An opland's own limit in a calendar year: the cap saved under Grænser, or
 // its kvote where none is saved. With calendarYear null, the average over the
 // period.

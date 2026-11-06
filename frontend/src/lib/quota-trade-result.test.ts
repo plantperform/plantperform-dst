@@ -32,7 +32,6 @@ import {
   quotaTradePayment,
   quotaTradeVaries,
   tradePriceDkkPerKg,
-  describeAfterTrade,
   limitAfterTradeKgN,
   limitAfterTradesFor,
   averageLimitAfterTradesFor,
@@ -121,9 +120,6 @@ describe('kvotehandel results', () => {
     // An opland that does not trade keeps its kvote.
     expect(limitFor(2, first, 99.6)).toBe(99.6)
     expect(limitAfterTradeKgN({ capKgN: 100, tradeKg: -30 })).toBe(70)
-    expect(describeAfterTrade(30)).toBe('efter køb')
-    expect(describeAfterTrade(-30)).toBe('efter salg')
-    expect(describeAfterTrade(0)).toBe('')
   })
 
   it('counts an opland over its limit only after its trade, on average', () => {
