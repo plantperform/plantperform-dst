@@ -4,14 +4,36 @@ import json
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
 from test_optimizer_lifecycle import candidate
 
 from app.data.optimizer_inputs import optimizer_input, optimizer_input_json
-from app.domain.simulation import CreateSimulationRequest
+from app.domain.simulation import CreateSimulationRequest, GodningSettings
 from app.services.scenario import candidate_evaluator
 
 
 class CreationUnitTests(unittest.TestCase):
+    def test_the_organic_n_ceiling_defaults_to_the_basis_ceiling(self):
+        self.assertEqual(CreateSimulationRequest(name="test").godning.oeko_n_loft, 107)
+        # A konventionel simulation has no ceiling and no tillæg, whatever it stores.
+        for driftsform, oeko_n_loft, ceiling, tillaeg in (
+            ("Økologisk", 107, 107, False),
+            ("Økologisk", 65, 65, True),
+            ("Konventionel", 65, None, False),
+        ):
+            with self.subTest(driftsform=driftsform, oeko_n_loft=oeko_n_loft):
+                godning = GodningSettings(driftsform=driftsform, oeko_n_loft=oeko_n_loft)
+                self.assertEqual(
+                    (godning.oeko_n_loft_kg_ha, godning.oeko_n_tillaeg), (ceiling, tillaeg)
+                )
+
+    def test_only_the_two_ceilings_of_the_arealstoette_are_accepted(self):
+        self.assertEqual(GodningSettings.model_validate({"oekoNLoft": 65}).oeko_n_loft, 65)
+        self.assertEqual(GodningSettings(oeko_n_loft=65).model_dump(by_alias=True)["oekoNLoft"], 65)
+        for value in (0, 64, 100, 170):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                GodningSettings.model_validate({"oekoNLoft": value})
+
     def test_direct_json_preserves_full_and_compact_payloads(self):
         from app.domain.rotation_candidate import SimulationFieldCandidates
 

@@ -48,6 +48,7 @@ def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
 # the price list are optional schemes; see the module docstring.
 _GRUNDBETALING_POST = "Grundbetaling (estimat)"
 _OEKO_AREALSTOETTE_POST = "Grundbeløb (basis)"
+_OEKO_N_TILLAEG_POST = "Tillæg for reduceret N-tilførsel"
 # The two grass codes the master table registers "uden udbetaling af
 # økologi-tilskud". They pass every area flag the arealstøtte is paid on, so
 # they are left out by code.
@@ -140,6 +141,7 @@ def clear_lookup_cache() -> None:
         _load_dyrkningsomkostninger,
         _load_prisliste,
         _load_oeko_arealstoette_koder,
+        _load_oeko_n_tillaeg_koder,
         soil_variants,
         calculate_db,
     ):
@@ -600,10 +602,28 @@ def _load_oeko_arealstoette_koder() -> frozenset[int]:
     return eligible
 
 
-def _tilskud_poster(afgrodekode: int, driftsform: str) -> list[str]:
+@lru_cache(maxsize=1)
+def _load_oeko_n_tillaeg_koder() -> frozenset[int]:
+    """The afgrødekoder the tillæg for reduceret N-tilførsel is paid on.
+
+    BEK 1381/2025 § 17 pays it on the areas that get the basis støtte, except
+    brak.
+    """
+    with SessionLocal() as session:
+        brak = frozenset(
+            session.execute(
+                select(afgroede_table.c.afgroedekode).where(afgroede_table.c.brak)
+            ).scalars()
+        )
+    return _load_oeko_arealstoette_koder() - brak
+
+
+def _tilskud_poster(afgrodekode: int, driftsform: str, oeko_n_tillaeg: bool = False) -> list[str]:
     posts = [_GRUNDBETALING_POST]
     if driftsform == OEKOLOGISK and afgrodekode in _load_oeko_arealstoette_koder():
         posts.append(_OEKO_AREALSTOETTE_POST)
+        if oeko_n_tillaeg and afgrodekode in _load_oeko_n_tillaeg_koder():
+            posts.append(_OEKO_N_TILLAEG_POST)
     if afgrodekode == _STIVELSESKARTOFLER_KODE:
         posts.append(_STIVELSESKARTOFLER_POST)
     return posts
@@ -627,6 +647,7 @@ def calculate_db(
     itemized: bool = False,
     husdyrgodning_ton_pr_ha: float = 0.0,
     rotation_crop: bool = False,
+    oeko_n_tillaeg: bool = False,
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -667,6 +688,10 @@ def calculate_db(
     mncs and mnca it is the available N that the udbyttenorm is scaled by for
     crops with a yield-response curve (see economics.udbytterespons). Below
     the N-norm their yield drops; every other crop keeps its full udbyttenorm.
+
+    oeko_n_tillaeg: The økologisk farm has chosen the 65 kg N ceiling, which
+    adds the tillæg for reduceret N-tilførsel to the afgrøder it is paid on.
+    It has no effect on a konventionel driftsform.
 
     An afgrøde without a cost budget that no sædskifte grows (see
     mangler_oekonomi) gets no indtægt, tilskud or omkostninger and a
@@ -917,7 +942,7 @@ def calculate_db(
         if ingen_oekonomi
         else [
             list_line("Tilskud", post, post, navn=post_label(post))
-            for post in _tilskud_poster(afgrodekode, driftsform)
+            for post in _tilskud_poster(afgrodekode, driftsform, oeko_n_tillaeg)
         ]
     )
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
@@ -993,6 +1018,7 @@ def calculate_db(
             "forfrugtsvaerdi": forfrugtsvaerdi,
             "husdyrgodning_ton_pr_ha": husdyrgodning_ton_pr_ha,
             "rotation_crop": rotation_crop,
+            "oeko_n_tillaeg": oeko_n_tillaeg,
         },
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,
