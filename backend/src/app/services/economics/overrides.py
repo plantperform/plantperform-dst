@@ -38,7 +38,10 @@ def price_unit(unit):
 
 # The imported name of a price-list post stays its identity, so saved overrides
 # keep applying. Only what the user reads is renamed.
-_POST_LABELS = {"Grundbeløb (basis)": "Økologisk arealstøtte – basis"}
+_POST_LABELS = {
+    "Grundbeløb (basis)": "Økologisk arealstøtte – basis",
+    "Tillæg for reduceret N-tilførsel": "Økologisk arealstøtte – N-tillæg",
+}
 
 
 def post_label(post):

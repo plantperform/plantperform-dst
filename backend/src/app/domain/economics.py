@@ -32,6 +32,7 @@ class EconomicsCalculationInputs(CamelModel):
     forfrugtsvaerdi: float = 0
     rotation_crop: bool = False
     husdyrgodning_ton_pr_ha: float = 0
+    oeko_n_tillaeg: bool = False
 
 
 class EconomicsOverrides(CamelModel):
