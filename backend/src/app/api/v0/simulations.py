@@ -552,6 +552,7 @@ def post_farm_simulation_field_preview_rotation(
             mineralsk_andel_pct=godning.mineralsk_andel_pct,
             only_organic=godning.only_organic,
             n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+            oeko_n_loft=godning.oeko_n_loft,
             fdato=simulation.eea_fdato,
             precision_dagsbasis=simulation.eea_precision_dagsbasis,
             praecisionsjordbrug=simulation.praecisionsjordbrug,

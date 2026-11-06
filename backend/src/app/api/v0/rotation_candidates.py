@@ -372,6 +372,7 @@ def evaluate_rotation_candidates(
                     mineralsk_andel_pct=request.godning.mineralsk_andel_pct,
                     only_organic=request.godning.only_organic,
                     n_indhold_kg_per_ton=request.godning.n_indhold_kg_per_ton,
+                    oeko_n_loft=request.godning.oeko_n_loft,
                     start_year=request.start_year,
                     irrigated=request.irrigated,
                     real_history=real_history,

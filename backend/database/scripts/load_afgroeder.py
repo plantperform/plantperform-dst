@@ -10,6 +10,7 @@ import psycopg
 
 from database.scripts.load_afgroede_normer import CSV_PATH as MASTER_PATH
 from database.scripts.load_afgroede_normer import parse_afgroede_normer
+from database.scripts.load_afgroede_stoette import parse_afgroede_stoette
 from database.scripts.load_afstromningskategorier import parse_afstromningskategorier
 from database.scripts.load_permanente_afgrodekoder import parse_permanente_afgrodekoder
 from database.scripts.runtime_lookup_loader import database_dsn, replace_tables
@@ -49,6 +50,11 @@ AFGROEDE_COLUMNS = (
     "p_norm",
     "forfrugtsvaerdi",
     "indregn_ffv",
+    "harmoni",
+    "grundbetaling",
+    "landbrugsareal",
+    "art_4_4_c",
+    "brak",
 )
 NORM_COLUMNS = (
     "source_order",
@@ -107,6 +113,7 @@ def build_afgroede_rows(
     permanent_rows: list[tuple],
     history_codes: set[int],
     history_names: dict[int, str] | None = None,
+    stoette_rows: list[tuple] | None = None,
 ) -> tuple[list[tuple], list[tuple]]:
     """Merge per-code sources and strip invariant columns from norm rows."""
     crops: dict[int, dict] = {}
@@ -127,6 +134,11 @@ def build_afgroede_rows(
                 "mellemafgroede_mulig": False,
                 "tidlig_saaning_mulig": False,
                 "praecisionsgoedskning_mulig": False,
+                "harmoni": False,
+                "grundbetaling": False,
+                "landbrugsareal": False,
+                "art_4_4_c": 0,
+                "brak": False,
             },
         )
 
@@ -211,6 +223,17 @@ def build_afgroede_rows(
         entry["saamaaned"] = row[20]
         name_for(code, row[1], 4)
 
+    for code, harmoni, grundbetaling, landbrugsareal, art_4_4_c, brak in stoette_rows or ():
+        crop(code).update(
+            {
+                "harmoni": harmoni,
+                "grundbetaling": grundbetaling,
+                "landbrugsareal": landbrugsareal,
+                "art_4_4_c": art_4_4_c,
+                "brak": brak,
+            }
+        )
+
     afgroede_rows = [
         tuple(crops[code][column] for column in AFGROEDE_COLUMNS) for code in sorted(crops)
     ]
@@ -225,6 +248,7 @@ def load_afgroeder(
     norm_rows, nfix_rows, nuar_rows = parse_afgroede_normer(master_path)
     runoff_rows = parse_afstromningskategorier(master_path)
     permanent_rows = parse_permanente_afgrodekoder(master_path)
+    stoette_rows = parse_afgroede_stoette(master_path)
     history_names = registry_names(gpkg_path)
     history_codes = registry_codes(database_url)
     afgroede_rows, conditional_norm_rows = build_afgroede_rows(
@@ -235,6 +259,7 @@ def load_afgroeder(
         permanent_rows,
         history_codes,
         history_names,
+        stoette_rows,
     )
     replace_tables(
         [

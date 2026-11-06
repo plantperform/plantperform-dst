@@ -33,7 +33,8 @@ const simulation: Simulation = {
   constraints: DEFAULT_SIMULATION_CONSTRAINTS,
   rotationVariants: ['1'], nNormPercentages: ['100'],
   fertiliser: { farmingSystem: 'Konventionel', orgMineralN: 0,
-    mineralSharePct: 100, onlyOrganic: false, nContentKgPerTon: 6 },
+    mineralSharePct: 100, onlyOrganic: false, nContentKgPerTon: 6,
+    organicNCeiling: 107 },
   catchCropSowingDate: '20/8', catchCropDailyBasis: false,
   precisionFarming: false, earlySowing: false, intermediateCrop: false,
 }

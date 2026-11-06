@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from app.data import repository, simulation_store
-from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input
+from app.data.optimizer_inputs import optimizer_input, parse_optimizer_input, with_udnyttet_n
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints
@@ -49,6 +49,14 @@ def evaluation_args(simulation, registry, real_history, jbnr):
         "s_soil": s_soil,
         "economics_key": simulation.economics_snapshot.overrides.cache_key(),
     }
+
+
+def compact_candidates(simulation, full):
+    """The solver's input for one mark, with the utilised N when the farm has an N ceiling."""
+    compact = optimizer_input(full)
+    if simulation.godning.oeko_n_loft_kg_ha is not None:
+        with_udnyttet_n(compact, full)
+    return parse_optimizer_input(compact)
 
 
 @with_simulation_rotations
@@ -143,8 +151,7 @@ def prepare(simulation, fields, setup_fields, contexts):
                 None,
             )[0]
         )
-        compact = parse_optimizer_input(optimizer_input(full))
-        rows.append(compact)
+        rows.append(compact_candidates(simulation, full))
         del full
     if conflicts:
         raise OptimizationInfeasibleError(

@@ -5,6 +5,7 @@ YearlyRotationOption and related types in optimization/models.py for why this is
 a peer system rather than a rewrite of solve().
 """
 
+import math
 import os
 from collections import defaultdict
 
@@ -23,6 +24,11 @@ SCALE = 1000
 
 def _scale(value: float) -> int:
     return round(value * SCALE)
+
+
+def _ceil_scale(value: float) -> int:
+    """Scale up, so that rounding can never let a ceiling be exceeded."""
+    return math.ceil(round(value * SCALE, 6))
 
 
 def _infeasible_output(status: str) -> YearlyOptimizationOutput:
@@ -143,6 +149,26 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
             cap = caps[y]
             if cap is not None:
                 model.Add(year_totals[y] <= _scale(cap))
+
+    # In every calendar year the farm's total utilised N stays within the
+    # ceiling times its total harmoniareal that year, as engine.py's solve()
+    # does for the period; a mark may exceed it if the others stay below.
+    ceiling = constraints.max_udnyttet_n_per_harmoni_ha
+    if ceiling is not None:
+        for y in range(NUM_YEARS):
+            chosen_excess = sum(
+                _ceil_scale(option.udnyttet_n_by_year[y] - ceiling * option.harmoni_area_by_year[y])
+                * choice_vars[(field.id, option.key)]
+                for field in input.fields
+                for option in field.options
+            )
+            fixed_excess = _ceil_scale(
+                sum(
+                    fixed.udnyttet_n_by_year[y] - ceiling * fixed.harmoni_area_by_year[y]
+                    for fixed in input.fixed_fields
+                )
+            )
+            model.Add(chosen_excess + fixed_excess <= 0)
 
     if constraints.db2_swing_pct is not None:
         pct = constraints.db2_swing_pct

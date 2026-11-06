@@ -22,7 +22,12 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
     RotationYear,
 )
-from app.domain.simulation import AutumnPlan, GodningSettings
+from app.domain.simulation import (
+    OEKO_N_LOFT_BASIS,
+    AutumnPlan,
+    GodningSettings,
+    gets_oeko_n_tillaeg,
+)
 from app.domain.soil import PercolationByKategori
 from app.services.economics.db_calculator import calculate_db
 from app.services.economics.udbytterespons import KONVENTIONEL, OEKOLOGISK, har_udbytterespons
@@ -216,6 +221,7 @@ def evaluate_sequence_for_mark(
     s_soil: float | None = None,
     economics_key: str = "",
     autumn_plan: AutumnPlan = (),
+    oeko_n_loft: int = OEKO_N_LOFT_BASIS,
 ) -> RotationCandidateEvaluation:
     """Evaluate eight positions with udvaskning and DB plus cycle averages.
 
@@ -413,6 +419,7 @@ def evaluate_sequence_for_mark(
             forfrugtsvaerdi=n_inputs[i]["fv_forfrugt"],
             husdyrgodning_ton_pr_ha=husdyrgodning_ton,
             **({"rotation_crop": True} if custom.contains_crop(this_code) else {}),
+            oeko_n_tillaeg=gets_oeko_n_tillaeg(driftsform, oeko_n_loft),
             **({"economics_key": economics_key} if economics_key else {}),
         )
         crop_params = afgroede_normer.lookup_crop_params(this_code)
@@ -486,6 +493,7 @@ def evaluate_candidate_for_mark(
     s_soil: float | None = None,
     economics_key: str = "",
     autumn_plan: AutumnPlan = (),
+    oeko_n_loft: int = OEKO_N_LOFT_BASIS,
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a sædskifte candidate over eight yearly positions.
 
@@ -518,6 +526,7 @@ def evaluate_candidate_for_mark(
         s_soil=s_soil,
         economics_key=economics_key,
         autumn_plan=autumn_plan,
+        oeko_n_loft=oeko_n_loft,
     )
 
 
@@ -551,6 +560,7 @@ def evaluate_with_overrides(
     s_soil: float | None = None,
     economics_key: str = "",
     autumn_plan: AutumnPlan = (),
+    oeko_n_loft: int = OEKO_N_LOFT_BASIS,
 ) -> RotationCandidateEvaluation | None:
     """Evaluate a candidate after applying manual changes to the library result.
 
@@ -617,6 +627,7 @@ def evaluate_with_overrides(
         s_soil=s_soil,
         economics_key=economics_key,
         autumn_plan=autumn_plan,
+        oeko_n_loft=oeko_n_loft,
     )
 
 
@@ -702,6 +713,7 @@ def generate_candidates_for_field(
             s_soil=s_soil,
             economics_key=economics_key,
             autumn_plan=godning.autumn_plan(),
+            oeko_n_loft=godning.oeko_n_loft,
         )
         for item in prepared
     ]
@@ -750,4 +762,5 @@ def generate_permanent_crop_candidate(
         s_soil=s_soil,
         economics_key=economics_key,
         autumn_plan=godning.autumn_plan(),
+        oeko_n_loft=godning.oeko_n_loft,
     )

@@ -48,6 +48,11 @@ def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
 # the price list are optional schemes; see the module docstring.
 _GRUNDBETALING_POST = "Grundbetaling (estimat)"
 _OEKO_AREALSTOETTE_POST = "Grundbeløb (basis)"
+_OEKO_N_TILLAEG_POST = "Tillæg for reduceret N-tilførsel"
+# The two grass codes the master table registers "uden udbetaling af
+# økologi-tilskud". They pass every area flag the arealstøtte is paid on, so
+# they are left out by code.
+_UDEN_OEKO_TILSKUD = frozenset({305, 306})
 _STIVELSESKARTOFLER_POST = "Stivelseskartofler"
 _STIVELSESKARTOFLER_KODE = 151
 
@@ -135,6 +140,8 @@ def clear_lookup_cache() -> None:
         _afgroeder_i_saedskifter,
         _load_dyrkningsomkostninger,
         _load_prisliste,
+        _load_oeko_arealstoette_koder,
+        _load_oeko_n_tillaeg_koder,
         soil_variants,
         calculate_db,
     ):
@@ -564,10 +571,59 @@ def _udlaeg_kategori(udlaeg_kode: int | None, afgrodekode: int) -> str | None:
     return kategori
 
 
-def _tilskud_poster(afgrodekode: int, driftsform: str) -> list[str]:
+@lru_cache(maxsize=1)
+def _load_oeko_arealstoette_koder() -> frozenset[int]:
+    """The afgrødekoder the økologisk arealstøtte (basis) is paid on.
+
+    BEK 1381/2025 § 7 pays it on areas that qualify for grundbetaling and are
+    not reported under art. 4.4.c; the master table holds that as
+    Grundbetaling, Landbrugsareal and Art. 4.4.C. What a field's own data rules
+    out (miljøtilsagn, fradragsarealer, the minimum areas) is not decided by
+    the afgrøde and not modelled.
+    """
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                afgroede_table.c.afgroedekode,
+                afgroede_table.c.grundbetaling,
+                afgroede_table.c.landbrugsareal,
+                afgroede_table.c.art_4_4_c,
+            )
+        ).all()
+    eligible = frozenset(
+        code
+        for code, grundbetaling, landbrugsareal, art_4_4_c in rows
+        if grundbetaling and landbrugsareal and art_4_4_c == 0 and code not in _UDEN_OEKO_TILSKUD
+    )
+    if not eligible:
+        # Every flag reads false until the master table has been loaded after
+        # the columns were added; the støtte would then silently vanish.
+        raise RuntimeError("afgroede arealstøtte flags are empty; run pixi run load-afgroeder")
+    return eligible
+
+
+@lru_cache(maxsize=1)
+def _load_oeko_n_tillaeg_koder() -> frozenset[int]:
+    """The afgrødekoder the tillæg for reduceret N-tilførsel is paid on.
+
+    BEK 1381/2025 § 17 pays it on the areas that get the basis støtte, except
+    brak.
+    """
+    with SessionLocal() as session:
+        brak = frozenset(
+            session.execute(
+                select(afgroede_table.c.afgroedekode).where(afgroede_table.c.brak)
+            ).scalars()
+        )
+    return _load_oeko_arealstoette_koder() - brak
+
+
+def _tilskud_poster(afgrodekode: int, driftsform: str, oeko_n_tillaeg: bool = False) -> list[str]:
     posts = [_GRUNDBETALING_POST]
-    if driftsform == OEKOLOGISK:
+    if driftsform == OEKOLOGISK and afgrodekode in _load_oeko_arealstoette_koder():
         posts.append(_OEKO_AREALSTOETTE_POST)
+        if oeko_n_tillaeg and afgrodekode in _load_oeko_n_tillaeg_koder():
+            posts.append(_OEKO_N_TILLAEG_POST)
     if afgrodekode == _STIVELSESKARTOFLER_KODE:
         posts.append(_STIVELSESKARTOFLER_POST)
     return posts
@@ -591,6 +647,7 @@ def calculate_db(
     itemized: bool = False,
     husdyrgodning_ton_pr_ha: float = 0.0,
     rotation_crop: bool = False,
+    oeko_n_tillaeg: bool = False,
 ) -> dict:
     """Calculate dækningsbidrag (DKK/ha) for an (afgrødekode, driftsform, JB-nr).
 
@@ -631,6 +688,10 @@ def calculate_db(
     mncs and mnca it is the available N that the udbyttenorm is scaled by for
     crops with a yield-response curve (see economics.udbytterespons). Below
     the N-norm their yield drops; every other crop keeps its full udbyttenorm.
+
+    oeko_n_tillaeg: The økologisk farm has chosen the 65 kg N ceiling, which
+    adds the tillæg for reduceret N-tilførsel to the afgrøder it is paid on.
+    It has no effect on a konventionel driftsform.
 
     An afgrøde without a cost budget that no sædskifte grows (see
     mangler_oekonomi) gets no indtægt, tilskud or omkostninger and a
@@ -881,7 +942,7 @@ def calculate_db(
         if ingen_oekonomi
         else [
             list_line("Tilskud", post, post, navn=post_label(post))
-            for post in _tilskud_poster(afgrodekode, driftsform)
+            for post in _tilskud_poster(afgrodekode, driftsform, oeko_n_tillaeg)
         ]
     )
     tilskud = sum(line["udgift_kr_ha"] for line in tilskud_linjer)
@@ -957,6 +1018,7 @@ def calculate_db(
             "forfrugtsvaerdi": forfrugtsvaerdi,
             "husdyrgodning_ton_pr_ha": husdyrgodning_ton_pr_ha,
             "rotation_crop": rotation_crop,
+            "oeko_n_tillaeg": oeko_n_tillaeg,
         },
         "afgrodekode": afgrodekode,
         "driftsform": driftsform,

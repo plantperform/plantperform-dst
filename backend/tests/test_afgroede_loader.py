@@ -44,6 +44,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
         ]
         runoff = [(1, "Runoff-navn", 3, 1), (2, "Kun runoff", 4, None)]
         permanent = [(1, "Permanent-navn"), (908, "Kun permanent")]
+        stoette = [(1, True, True, True, 0, False), (2, False, True, False, 2, True)]
 
         rows, conditional = build_afgroede_rows(
             norm,
@@ -53,6 +54,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
             permanent,
             {0, 905},
             {905: "Historisk navn"},
+            stoette,
         )
         by_code = {row[0]: dict(zip(AFGROEDE_COLUMNS, row, strict=True)) for row in rows}
 
@@ -75,6 +77,13 @@ class AfgroedeLoaderTests(unittest.TestCase):
         self.assertFalse(by_code[1]["tidlig_saaning_mulig"])
         self.assertTrue(by_code[1]["praecisionsgoedskning_mulig"])
         self.assertEqual(by_code[1]["saamaaned"], 9)
+        flags = ("harmoni", "grundbetaling", "landbrugsareal", "art_4_4_c", "brak")
+        self.assertEqual([by_code[1][column] for column in flags], [True, True, True, 0, False])
+        self.assertEqual([by_code[2][column] for column in flags], [False, True, False, 2, True])
+        # A code the arealstøtte source does not mention has no flag set.
+        self.assertEqual(
+            [by_code[905][column] for column in flags], [False, False, False, 0, False]
+        )
         self.assertEqual(by_code[2]["navn"], "Kun runoff")
         self.assertIsNone(by_code[2]["m"])
         self.assertFalse(by_code[905]["has_nuar"])
@@ -134,6 +143,7 @@ class AfgroedeLoaderTests(unittest.TestCase):
             ),
             patch.object(loader, "parse_afstromningskategorier", return_value=[]),
             patch.object(loader, "parse_permanente_afgrodekoder", return_value=[]),
+            patch.object(loader, "parse_afgroede_stoette", return_value=[]),
             patch.object(loader, "registry_names", return_value={}),
             patch.object(loader, "registry_codes", return_value=set()),
             patch.object(loader, "replace_tables") as replace,

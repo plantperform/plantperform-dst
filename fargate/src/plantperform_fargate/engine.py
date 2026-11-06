@@ -1,3 +1,4 @@
+import math
 import os
 from collections import defaultdict
 
@@ -16,6 +17,11 @@ SCALE = 1000
 
 def _scale(value: float) -> int:
     return round(value * SCALE)
+
+
+def _ceil_scale(value: float) -> int:
+    """Scale up, so that rounding can never let a ceiling be exceeded."""
+    return math.ceil(round(value * SCALE, 6))
 
 
 def _years_with_crop(crop_codes: tuple[int, ...], afgrode_kode: int) -> int:
@@ -97,6 +103,23 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         n_load_for_kystvand = kvotegivende_n_load_by_kystvand.get(kystvand_id)
         if cap is not None and n_load_for_kystvand is not None:
             model.Add(n_load_for_kystvand <= _scale(cap))
+
+    # The farm's average utilised N per ha harmoniareal is its total utilised N
+    # over its total harmoniareal, so staying at or under the ceiling means
+    # that the sum of (N - ceiling * harmoniareal) over all marks is at most 0.
+    # One mark may therefore exceed the ceiling if the others stay below it.
+    ceiling = constraints.max_udnyttet_n_per_harmoni_ha
+    if ceiling is not None:
+        chosen_excess = sum(
+            _ceil_scale(option.udnyttet_n - ceiling * option.harmoni_area_ha)
+            * choice_vars[(field.id, option.key)]
+            for field in input.fields
+            for option in field.options
+        )
+        fixed_excess = _ceil_scale(
+            sum(fixed.udnyttet_n - ceiling * fixed.harmoni_area_ha for fixed in input.fixed_fields)
+        )
+        model.Add(chosen_excess + fixed_excess <= 0)
 
     if constraints.min_fen is not None:
         model.Add(total_fen >= _scale(constraints.min_fen))

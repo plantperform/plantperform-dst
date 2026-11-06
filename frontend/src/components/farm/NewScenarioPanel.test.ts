@@ -175,6 +175,7 @@ const source: Simulation = {
     mineralSharePct: 100,
     onlyOrganic: false,
     nContentKgPerTon: 6,
+    organicNCeiling: 107,
   },
   catchCropSowingDate: '20/8',
   catchCropDailyBasis: false,
@@ -261,6 +262,18 @@ const WHEAT_CATEGORIES: RotationCategoryOption[] = [
     rotations: [
       { rotationVariant: '1', cropSequence: ['Hvede'], activeLen: 1 },
       { rotationVariant: '2', cropSequence: ['Byg'], activeLen: 1 },
+    ],
+  },
+]
+
+const ORGANIC_CATEGORIES: RotationCategoryOption[] = [
+  ...WHEAT_CATEGORIES,
+  {
+    category: 'Økologisk test',
+    croppingSystem: 'Økologisk',
+    rotationCount: 1,
+    rotations: [
+      { rotationVariant: '30', cropSequence: ['Hvede'], activeLen: 1 },
     ],
   },
 ]
@@ -839,5 +852,89 @@ describe('simulation wizard steps', () => {
     )
     await click('Bekræft')
     expect(container.textContent).toContain('2027: 80 kg N')
+  })
+
+  describe('økologisk N-loft', () => {
+    const ceilingRadios = () =>
+      [
+        ...container.querySelectorAll<HTMLInputElement>(
+          'input[type="radio"][name="scenario-organic-n-ceiling"]',
+        ),
+      ]
+    const organicSource: Simulation = {
+      ...source,
+      rotationVariants: ['30'],
+      fertiliser: {
+        ...source.fertiliser,
+        farmingSystem: 'Økologisk',
+        orgMineralN: 100,
+        onlyOrganic: true,
+      },
+    }
+
+    it('is offered only for the økologisk driftsform', async () => {
+      queries.categories.data = ORGANIC_CATEGORIES
+      await mount()
+      expect(ceilingRadios()).toHaveLength(0)
+      expect(container.textContent).not.toContain('Økologisk arealstøtte')
+
+      const chooseFarmingSystem = (value: string) =>
+        act(async () => {
+          const select = container.querySelector<HTMLSelectElement>(
+            '#scenario-farming-system',
+          )!
+          select.value = value
+          select.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+      await chooseFarmingSystem('Økologisk')
+      expect(container.textContent).toContain('Økologisk arealstøtte og N-loft')
+      expect(
+        ceilingRadios().map(({ value, checked }) => [value, checked]),
+      ).toEqual([
+        ['107', true],
+        ['65', false],
+      ])
+
+      await chooseFarmingSystem('Konventionel')
+      expect(ceilingRadios()).toHaveLength(0)
+    })
+
+    it('is saved with the simulation and shown in the confirmation', async () => {
+      queries.categories.data = ORGANIC_CATEGORIES
+      queries.update.mockResolvedValue(organicSource)
+      await mount(organicSource)
+      expect(ceilingRadios().map((radio) => radio.checked)).toEqual([
+        true,
+        false,
+      ])
+
+      await act(async () => ceilingRadios()[1].click())
+      expect(ceilingRadios().map((radio) => radio.checked)).toEqual([
+        false,
+        true,
+      ])
+
+      await click('Bekræft')
+      expect(container.textContent).toContain(
+        'Økologisk N-loft: 65 kg N/ha · Basisstøtte og N-tillæg',
+      )
+      await click('Gem')
+      expect(queries.update.mock.calls[0][2].fertiliser).toMatchObject({
+        farmingSystem: 'Økologisk',
+        organicNCeiling: 65,
+      })
+    })
+
+    it('is sent as the default 107 for a konventionel simulation', async () => {
+      queries.update.mockResolvedValue(source)
+      await mount()
+      await click('Bekræft')
+      expect(container.textContent).not.toContain('Økologisk N-loft')
+      await click('Gem')
+      expect(queries.update.mock.calls[0][2].fertiliser).toMatchObject({
+        farmingSystem: 'Konventionel',
+        organicNCeiling: 107,
+      })
+    })
   })
 })

@@ -21,6 +21,17 @@ class AutumnAllocation(CamelModel):
     kg_n_ha: float = Field(gt=0, allow_inf_nan=False)
     fertiliser: Literal["mineral", "manure"] = "mineral"
 
+# The two N ceilings of the økologisk arealstøtte, in kg utilised N per ha
+# harmoniareal as a farm average: the basis støtte allows 107, and the tillæg
+# for reduceret N-tilførsel is paid on top of it for a farm that keeps to 65.
+OEKO_N_LOFT_BASIS = 107
+OEKO_N_LOFT_REDUCERET = 65
+
+
+def gets_oeko_n_tillaeg(driftsform: str, oeko_n_loft: int) -> bool:
+    """Whether the farm gets the tillæg for reduceret N-tilførsel."""
+    return driftsform == "Økologisk" and oeko_n_loft == OEKO_N_LOFT_REDUCERET
+
 
 class GodningSettings(CamelModel):
     """Scenario-level gødning selection (Phase 13).
@@ -58,6 +69,19 @@ class GodningSettings(CamelModel):
             (allocation.afgrode_kode, allocation.kg_n_ha, allocation.fertiliser == "manure")
             for allocation in self.autumn_allocations
         )
+
+    # An økologisk farm chooses one of the arealstøtte's two ceilings on its
+    # average utilised N per ha harmoniareal. Konventionel simulations ignore it.
+    oeko_n_loft: Literal[107, 65] = OEKO_N_LOFT_BASIS
+
+    @property
+    def oeko_n_loft_kg_ha(self) -> int | None:
+        """The ceiling the optimisation holds the farm average to, if there is one."""
+        return self.oeko_n_loft if self.driftsform == "Økologisk" else None
+
+    @property
+    def oeko_n_tillaeg(self) -> bool:
+        return gets_oeko_n_tillaeg(self.driftsform, self.oeko_n_loft)
 
 
 class CropPercentageConstraint(CamelModel):
