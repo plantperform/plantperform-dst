@@ -78,6 +78,7 @@ def crop_budgets(
     org_mineral_n=0.0,
     n_indhold_kg_per_ton=6.0,
     standard_manure=None,
+    oeko_n_tillaeg=False,
 ):
     with SessionLocal() as session:
         crops = {
@@ -92,7 +93,7 @@ def crop_budgets(
         }
     prices = {}
     budgets = []
-    inputs = dict(only_organic=only_organic, itemized=True)
+    inputs = dict(only_organic=only_organic, itemized=True, oeko_n_tillaeg=oeko_n_tillaeg)
     for code in crop_codes:
         crop = crops.get(code)
         if crop is None:
@@ -177,6 +178,7 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
     org_mineral_n = 0.0
     n_indhold_kg_per_ton = 6.0
     standard_manure = None
+    oeko_n_tillaeg = False
     if simulation_id is not None:
         simulation = next((entry for entry in simulations if entry.id == simulation_id), None)
         if simulation is None:
@@ -185,6 +187,7 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
         only_organic = simulation.godning.only_organic
         org_mineral_n = simulation.godning.org_mineral_n
         n_indhold_kg_per_ton = simulation.godning.n_indhold_kg_per_ton
+        oeko_n_tillaeg = simulation.godning.oeko_n_tillaeg
     elif only_organic:
         standard_manure = STANDARD_MANURE
         n_indhold_kg_per_ton = standard_manure["nKgPerTon"]
@@ -205,4 +208,5 @@ def farm_budgets(farm_id, email, farming_system, simulation_id=None):
             org_mineral_n,
             n_indhold_kg_per_ton,
             standard_manure,
+            oeko_n_tillaeg,
         )

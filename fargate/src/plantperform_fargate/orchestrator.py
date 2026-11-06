@@ -474,6 +474,7 @@ def _expand_yearly_options(
                     mineralsk_andel_pct=godning.mineralsk_andel_pct,
                     only_organic=godning.only_organic,
                     n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+                    oeko_n_loft=godning.oeko_n_loft,
                     fdato=fdato,
                     precision_dagsbasis=precision_dagsbasis,
                     praecisionsjordbrug=praecisionsjordbrug,

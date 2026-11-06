@@ -1,6 +1,7 @@
+import inspect
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault(
     "DATABASE_URL",
@@ -117,10 +118,8 @@ class PermanentCropCandidateTests(unittest.TestCase):
             (first["m1"], first["g1"], first["m2"], first["g2"]), (108.0, 44.0, 108.0, 44.0),
         )
 
-    def preview(self, variant=str(PERMANENT_GRASS), overrides=()):
-        return candidate_evaluator.evaluate_with_overrides(
-            RotationCandidateRef(saedskiftevariant="permanent", variant=variant, n_norm_pct="100"),
-            list(overrides),
+    def preview(self, variant=str(PERMANENT_GRASS), overrides=(), **settings):
+        arguments = dict(
             jbnr=3,
             driftsform=ORGANIC.driftsform,
             org_mineral_n=ORGANIC.org_mineral_n,
@@ -128,6 +127,39 @@ class PermanentCropCandidateTests(unittest.TestCase):
             only_organic=ORGANIC.only_organic,
             real_history=HISTORY,
         )
+        return candidate_evaluator.evaluate_with_overrides(
+            RotationCandidateRef(saedskiftevariant="permanent", variant=variant, n_norm_pct="100"),
+            list(overrides),
+            **{**arguments, **settings},
+        )
+
+    def test_every_godning_setting_is_an_argument_of_the_evaluator(self) -> None:
+        # The worker spreads the settings into the evaluator, so a setting without
+        # a matching parameter would fail every optimization.
+        accepted = inspect.signature(candidate_evaluator.evaluate_with_overrides).parameters
+        simulation = MagicMock(godning=GodningSettings())
+        with patch.object(preparation.repository, "_soil_data_for_context", return_value=None):
+            arguments = preparation.evaluation_args(simulation, None, None, 4)
+        self.assertIn("oeko_n_loft", arguments)
+        self.assertLessEqual(set(arguments), set(accepted))
+
+    def test_the_chosen_n_ceiling_decides_whether_the_n_tillaeg_is_priced(self) -> None:
+        for driftsform, oeko_n_loft, expected in (
+            ("Økologisk", 107, False),
+            ("Økologisk", 65, True),
+            ("Konventionel", 65, False),
+        ):
+            godning = ORGANIC.model_copy(
+                update={"driftsform": driftsform, "oeko_n_loft": oeko_n_loft}
+            )
+            with self.subTest(driftsform=driftsform, oeko_n_loft=oeko_n_loft):
+                with patch.object(
+                    candidate_evaluator, "calculate_db", return_value={"db": 0.0}
+                ) as calculate:
+                    self.candidate(godning)
+                    self.preview(driftsform=driftsform, oeko_n_loft=oeko_n_loft)
+                priced = {call.kwargs["oeko_n_tillaeg"] for call in calculate.call_args_list}
+                self.assertEqual(priced, {expected})
 
     def test_manual_preview_without_changes_matches_the_locked_candidate(self) -> None:
         preview = self.preview()
