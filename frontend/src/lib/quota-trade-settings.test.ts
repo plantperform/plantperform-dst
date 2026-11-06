@@ -49,7 +49,7 @@ describe('kvotehandel settings', () => {
           { catchmentId: 1, maxNLoadByYear: withoutFirstYear },
         ],
       }),
-    ).toBe('Ikke grænse i alle år')
+    ).toBe('Kræver en grænse i alle år')
   })
 
   it('shows the caps a trade moves', () => {

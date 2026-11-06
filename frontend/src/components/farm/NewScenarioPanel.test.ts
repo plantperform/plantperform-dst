@@ -958,7 +958,7 @@ describe('simulation wizard steps', () => {
       await tick('Forskellig grænse pr. år')
       await change('2027', '')
       await click('Kvotehandel')
-      expect(container.textContent).toContain('Ikke grænse i alle år')
+      expect(container.textContent).toContain('Kræver en grænse i alle år')
       await click('Bekræft')
       expect(currentStep()).toBe('Kvotehandel')
       await click('Grænser')

@@ -68,7 +68,7 @@ export const quotaTradeBlock = (
     (entry) => entry.catchmentId === catchmentId,
   )
   if (cap && ROTATION_CALENDAR_YEARS.some((year) => !(year in cap.maxNLoadByYear)))
-    return 'Ikke grænse i alle år'
+    return 'Kræver en grænse i alle år'
   return null
 }
 
