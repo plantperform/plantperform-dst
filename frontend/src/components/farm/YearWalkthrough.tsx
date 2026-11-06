@@ -88,12 +88,13 @@ const COMPACT_VIEWPORT_HEIGHT = 960
 const NO_ROTATION_OPTIONS: RotationOption[] = []
 
 // Kvote a run bought or sold: an outline from the limit the run traded from
-// (the cap under Grænser, or the kvote without one) to the traded one, in
-// colours none of the oplande or "Over kvoten" use. No fill, so the bar's own
-// colours, "Over kvoten" included, show unchanged inside it.
+// (the cap under Grænser, or the kvote without one) to the traded one, in the
+// theme's warning and success colours, which no opland or "Over kvoten" uses.
+// No fill, so the bar's own colours, "Over kvoten" included, show unchanged
+// inside it.
 const QUOTA_TRADE_BAND_CLASSES: Record<QuotaTradeKind, string> = {
-  bought: 'border-amber-500',
-  sold: 'border-emerald-600',
+  bought: 'border-warning',
+  sold: 'border-success',
 }
 
 // The cap under Grænser where it differs from the kvote.
@@ -101,8 +102,8 @@ const CAP_LINE_CLASS = 'border-t-[1.5px] border-dotted border-sky-700'
 
 // The bands' colours, darker so text in them stays readable.
 const QUOTA_TRADE_TEXT_CLASSES: Record<QuotaTradeKind, string> = {
-  bought: 'text-amber-700',
-  sold: 'text-emerald-700',
+  bought: 'text-warning-strong',
+  sold: 'text-success-strong',
 }
 
 type PanelView = 'nLoad' | CropShareLevel | 'rotation'
