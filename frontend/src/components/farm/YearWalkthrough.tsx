@@ -87,9 +87,10 @@ const COMPACT_VIEWPORT_HEIGHT = 960
 
 const NO_ROTATION_OPTIONS: RotationOption[] = []
 
-// Kvote a run bought or sold: an outline from the original kvote to the traded
-// one, in colours none of the oplande or "Over kvoten" use. No fill, so the
-// bar's own colours, "Over kvoten" included, show unchanged inside it.
+// Kvote a run bought or sold: an outline from the limit the run traded from
+// (the cap under Grænser, or the kvote without one) to the traded one, in
+// colours none of the oplande or "Over kvoten" use. No fill, so the bar's own
+// colours, "Over kvoten" included, show unchanged inside it.
 const QUOTA_TRADE_BAND_CLASSES: Record<QuotaTradeKind, string> = {
   bought: 'border-amber-500',
   sold: 'border-emerald-600',
@@ -220,14 +221,25 @@ const quotaRatio = (row: CatchmentYear): number => row.nLoadKg / row.quotaKgN
 const capDiffers = (row: CatchmentYear) =>
   row.quotaKgN > 0 && Math.abs(row.capKgN - row.quotaKgN) > 0.5
 
+// The trade as drawn on the bar: from the cap under Grænser, the limit the
+// run traded from, rounded to whole kg N as the run's cap is by default.
+// Only the drawing: the status still measures against the kvote moved by the
+// trade (row.tradedLimit).
+const drawnTradeLimit = (row: CatchmentYear): TradedLimit | null =>
+  row.tradedLimit
+    ? { capKgN: Math.round(row.capKgN), tradeKg: row.tradedLimit.tradeKg }
+    : null
+
 // The highest part of a year's bar as a share of its kvote: the bar, the top
 // of a trade's band or the cap under Grænser, so the scale leaves room for all.
-const drawnRatio = (row: CatchmentYear): number =>
-  Math.max(
+const drawnRatio = (row: CatchmentYear): number => {
+  const drawnTrade = drawnTradeLimit(row)
+  return Math.max(
     quotaRatio(row),
-    row.tradedLimit ? limitAfterTradeKgN(row.tradedLimit) / row.quotaKgN : 0,
+    drawnTrade ? limitAfterTradeKgN(drawnTrade) / row.quotaKgN : 0,
     capDiffers(row) ? row.capKgN / row.quotaKgN : 0,
   )
+}
 
 const describeYearQuota = (
   quotaCatchmentCount: number,
@@ -265,15 +277,15 @@ const QuotaBar = ({
   quotaLinePct,
 }: QuotaBarProps) => {
   if (row.quotaKgN === 0) return null
-  // Red only above the kvote, moved by any trade.
+  // Red above the kvote, whatever the trade or the cap under Grænser allow.
   const { heightPct, overPct } = quotaBarHeights(
     row.nLoadKg,
     row.quotaKgN,
-    row.tradedLimit,
     quotaLinePct,
   )
-  const band = row.tradedLimit
-    ? quotaTradeBand(row.quotaKgN, row.tradedLimit, quotaLinePct)
+  const drawnTrade = drawnTradeLimit(row)
+  const band = drawnTrade
+    ? quotaTradeBand(row.quotaKgN, drawnTrade, quotaLinePct)
     : null
   return (
     <span

@@ -170,13 +170,14 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(legend()).not.toContain('Solgt kvote')
   })
 
-  it('marks udledning red only over the limit after the trade', async () => {
-    // Opland 1 lets out 120 kg N against a kvote of 100 kg N.
+  it('marks udledning red over the original kvote, whatever the trade', async () => {
+    // Opland 1 lets out 120 kg N against a kvote of 100 kg N: red even when
+    // bought kvote covers it.
     await render([trade(1, 30)])
-    expect(overParts()).toBe(0)
+    expect(overParts()).toBe(1)
     await render([trade(1, 10)])
     expect(overParts()).toBe(1)
-    // Opland 2 lets out 40 kg N, under its kvote but over 100 - 70 kg N.
+    // Opland 2 lets out 40 kg N, under its kvote though over 100 - 70 kg N.
     await render([trade(1, 30), trade(2, -70)])
     expect(overParts()).toBe(1)
   })
@@ -192,7 +193,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     await render([trade(1, 30, -20)])
     expect(legend()).toContain('Solgt kvote')
     expect(bands('border-amber-500')).toBe(2)
-    expect(overParts()).toBe(0)
+    expect(overParts()).toBe(1)
   })
 
   // Opland 1's cap under Grænser in every year.
@@ -209,14 +210,55 @@ describe('kvotehandel in the Årsgennemgang', () => {
       (line) => line.style.bottom,
     )
 
-  it('measures a trade from the kvote, whatever the cap under Grænser', async () => {
-    // Opland 1 lets out 120 kg N; its kvote is 100 kg N. A raised cap does
-    // not count: 100 kg N less 20 kg N sold leaves it over.
+  // The band drawn in a bar, as a share of the kvote line's height; the
+  // legend's swatch has no position.
+  const drawnBand = (className: string) => {
+    const kvoteLine = container.querySelector<HTMLElement>(
+      'span.absolute.border-dashed',
+    )
+    const band = [
+      ...container.querySelectorAll<HTMLElement>(`span.${className}`),
+    ].find((span) => span.style.bottom !== '')
+    const kvotePct = parseFloat(kvoteLine!.style.bottom)
+    return {
+      bottom: parseFloat(band!.style.bottom) / kvotePct,
+      height: parseFloat(band!.style.height) / kvotePct,
+    }
+  }
+
+  it('draws a trade from the cap under Grænser, the limit the run traded from', async () => {
+    // Opland 1's cap of 150 kg N against its kvote of 100 kg N: 20 kg N sold
+    // is drawn from 130 to 150 kg N.
     await render([trade(1, -20)], cap(150))
-    expect(overParts()).toBe(1)
-    // 100 kg N and 30 kg N bought covers it, even under a lower cap.
+    const sold = drawnBand('border-emerald-600')
+    expect(sold.bottom).toBeCloseTo(1.3)
+    expect(sold.height).toBeCloseTo(0.2)
+    // 30 kg N bought under a cap of 50 kg N is drawn from 50 to 80 kg N.
     await render([trade(1, 30)], cap(50))
-    expect(overParts()).toBe(0)
+    const bought = drawnBand('border-amber-500')
+    expect(bought.bottom).toBeCloseTo(0.5)
+    expect(bought.height).toBeCloseTo(0.3)
+    // Without a cap, from the kvote.
+    await render([trade(1, 30)])
+    expect(drawnBand('border-amber-500').bottom).toBeCloseTo(1)
+  })
+
+  it('marks udledning red over the kvote, whatever the cap under Grænser', async () => {
+    // Opland 1 lets out 120 kg N against a kvote of 100 kg N: red within a
+    // cap of 150 kg N and with 30 kg N bought on top of it.
+    await render([trade(1, 30)], cap(150))
+    expect(overParts()).toBe(1)
+    // Opland 2 lets out 40 kg N, under its kvote: not red, even over a cap
+    // of 30 kg N. Only opland 1's bar is.
+    await render(undefined, [
+      {
+        catchmentId: 2,
+        maxNLoadByYear: Object.fromEntries(
+          ROTATION_CALENDAR_YEARS.map((year) => [year, 30]),
+        ),
+      },
+    ])
+    expect(overParts()).toBe(1)
   })
 
   it('marks a cap under Grænser that differs from the kvote', async () => {
