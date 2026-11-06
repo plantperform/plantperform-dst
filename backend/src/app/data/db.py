@@ -158,6 +158,20 @@ afgroede_table = Table(
     Column("p_norm", Float, nullable=True),
     Column("forfrugtsvaerdi", Float, nullable=True),
     Column("indregn_ffv", Boolean, nullable=True),
+    # The afgrødetabel's "Harmoni": the area counts as harmoniareal, the
+    # denominator of the average utilised N per ha (gødningsregnskabets felt
+    # 106). Read from the master CSV, like the flags below.
+    Column("harmoni", Boolean, nullable=False, server_default=false()),
+    # "Grundbetaling" and "Landbrugsareal": the area is an eligible hectare for
+    # grundbetaling. "Art. 4.4.C" is 0 for an ordinary area, 1 or 2 for areas
+    # that article 4(4)(c) of Regulation 2021/2115 rules out (afforestation,
+    # tilsagn without landbrugsareal). Together they decide which afgrøder are
+    # eligible for the økologisk arealstøtte.
+    Column("grundbetaling", Boolean, nullable=False, server_default=false()),
+    Column("landbrugsareal", Boolean, nullable=False, server_default=false()),
+    Column("art_4_4_c", SmallInteger, nullable=False, server_default="0"),
+    # "brak": the tillæg for reduceret N-tilførsel is not paid on brak.
+    Column("brak", Boolean, nullable=False, server_default=false()),
     CheckConstraint("afgroedekode > 0", name="ck_afgroede_positive_code"),
 )
 
