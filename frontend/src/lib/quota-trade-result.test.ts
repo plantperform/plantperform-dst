@@ -283,32 +283,14 @@ describe('kvotehandel results', () => {
     expect(describeQuotaTradeAmount(-50)).toBe('Solgt kvote 50 kg N')
   })
 
-  it('marks udledning over the limit after the trade, not over the original kvote', () => {
-    const over = (nLoadKg: number, capKgN: number, tradeKg: number) =>
-      quotaBarHeights(nLoadKg, 100, { capKgN, tradeKg }, 34).overPct
-    // 120 kg N against a kvote of 100 kg N drawn at 34 %, without a trade.
-    expect(quotaBarHeights(120, 100, null, 34).overPct).toBeCloseTo(100 / 6)
-    // Bought kvote covers it entirely, or partly.
-    expect(quotaBarHeights(120, 100, { capKgN: 100, tradeKg: 30 }, 34)).toEqual(
-      { heightPct: 40.8, overPct: 0 },
-    )
-    expect(over(120, 100, 10)).toBeCloseTo(100 / 12)
-    // Selling lowers the limit below the original kvote.
-    expect(over(90, 100, -20)).toBeCloseTo(100 / 9)
-    expect(over(80, 100, -20)).toBe(0)
-    // The limit is the cap under Grænser moved by the trade, not the kvote:
-    // 330 kg N is within a cap of 450 kg N less 119 kg N sold.
-    expect(
-      quotaBarHeights(330, 337, { capKgN: 450, tradeKg: -119 }, 34).overPct,
-    ).toBe(0)
-    // And 320 kg N is over a cap of 150 kg N with only 100 kg N bought.
-    expect(
-      quotaBarHeights(320, 337, { capKgN: 150, tradeKg: 100 }, 34).overPct,
-    ).toBeGreaterThan(0)
-    expect(quotaBarHeights(80, 0, { capKgN: 0, tradeKg: 20 }, 34)).toEqual({
-      heightPct: 0,
-      overPct: 0,
-    })
+  it('marks udledning over the original kvote, whatever the trade or cap', () => {
+    // 120 kg N against a kvote of 100 kg N drawn at 34 %.
+    const over = quotaBarHeights(120, 100, 34)
+    expect(over.heightPct).toBeCloseTo(40.8)
+    expect(over.overPct).toBeCloseTo(100 / 6)
+    expect(quotaBarHeights(100, 100, 34).overPct).toBe(0)
+    expect(quotaBarHeights(80, 100, 34).overPct).toBe(0)
+    expect(quotaBarHeights(80, 0, 34)).toEqual({ heightPct: 0, overPct: 0 })
   })
 
   it('takes the payments off the crops’ DB2 on the card', () => {

@@ -222,23 +222,21 @@ export const quotaTradeBand = (
 
 // A bar scaled so the original kvote sits at quotaLinePct of its height: how
 // tall it is, and which share of it (from the top, in percent of the bar) is
-// over the limit. An opland that trades is held to its cap moved by the
-// trade, so udledning covered by bought kvote is not over it, and udledning
-// above sold kvote is; without a trade the limit is the kvote itself.
+// over the kvote. Always the kvote from the opland's fields: udledning above
+// it is marked even where bought kvote or a cap under Grænser covers it.
 export const quotaBarHeights = (
   nLoadKg: number,
   quotaKgN: number,
-  limit: TradedLimit | null,
   quotaLinePct: number,
 ): { heightPct: number; overPct: number } => {
   if (quotaKgN <= 0) return { heightPct: 0, overPct: 0 }
   const heightPct = Math.min(100, (nLoadKg / quotaKgN) * quotaLinePct)
-  const limitKgN = limit === null ? quotaKgN : limit.capKgN + limit.tradeKg
-  const limitPct = Math.max(0, (limitKgN / quotaKgN) * quotaLinePct)
   return {
     heightPct,
     overPct:
-      heightPct > limitPct ? ((heightPct - limitPct) / heightPct) * 100 : 0,
+      heightPct > quotaLinePct
+        ? ((heightPct - quotaLinePct) / heightPct) * 100
+        : 0,
   }
 }
 
