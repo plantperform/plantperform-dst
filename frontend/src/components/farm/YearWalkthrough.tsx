@@ -32,6 +32,7 @@ import { useViewportShorterThan } from '@/hooks/use-viewport-height'
 import {
   firstCalendarYear,
   formatCompactDkk,
+  formatFieldCount,
   formatNumber,
   formatQuotaAmount,
   formatQuotaPercent,
@@ -417,11 +418,19 @@ type ScopedSummaryProps = {
   row: CatchmentYear
   column: YearColumn | null
   db2: number | null
+  overYearCount: number
+  yearCount: number
 }
 
-const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
+const ScopedSummary = ({
+  row,
+  column,
+  db2,
+  overYearCount,
+  yearCount,
+}: ScopedSummaryProps) => {
   const style = QUOTA_STATUS_STYLES[row.level]
-  const { areaHa } = row.catchment.totals
+  const { fieldCount, areaHa } = row.catchment.totals
   // The percentage, the status and what is left all measure against the
   // kvote, like "Hele bedriften"; the trade is shown beside them.
   const difference = formatWholeNumber(Math.abs(row.nLoadKg - row.quotaKgN))
@@ -470,13 +479,10 @@ const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
         ) : null}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-2.5">
-        {db2 === null ? null : (
-          <ScopedFact
-            label={column ? 'DB2' : 'DB2 gns. pr. år'}
-            term="db2"
-            value={formatCompactDkk(db2)}
-          />
-        )}
+        <ScopedFact
+          label="Marker"
+          value={`${formatFieldCount(fieldCount)} · ${formatNumber(areaHa)} ha`}
+        />
         <ScopedFact
           label="Kvote pr. ha"
           term="quota"
@@ -485,6 +491,17 @@ const ScopedSummary = ({ row, column, db2 }: ScopedSummaryProps) => {
               ? `${formatNumber(row.catchment.totals.nLoadQuotaKgN / areaHa)} kg N/ha`
               : '-'
           }
+        />
+        {db2 === null ? null : (
+          <ScopedFact
+            label={column ? 'DB2' : 'DB2 gns. pr. år'}
+            term="db2"
+            value={formatCompactDkk(db2)}
+          />
+        )}
+        <ScopedFact
+          label="År over kvoten"
+          value={`${overYearCount} af ${yearCount}`}
         />
       </dl>
       {row.tradedLimit && row.trade ? (
@@ -708,6 +725,7 @@ type YearPanelProps = {
   catchmentLabel: (catchmentId: number | null) => string
   catchmentColor: (catchmentId: number | null) => string
   yearCount: number
+  overYearCount: number
   fieldCount: number
   yearFieldCount: number | null
   cropShares: CropShare[]
@@ -732,6 +750,7 @@ const YearPanel = ({
   catchmentLabel,
   catchmentColor,
   yearCount,
+  overYearCount,
   fieldCount,
   yearFieldCount,
   cropShares,
@@ -920,6 +939,8 @@ const YearPanel = ({
                     row={scopedRow}
                     column={column}
                     db2={history ? null : (entry?.totalDb2 ?? quota.totals.db2)}
+                    overYearCount={overYearCount}
+                    yearCount={yearCount}
                   />
                 ) : !pending ? (
                   rows.map((row) => (
@@ -1193,6 +1214,13 @@ export const YearWalkthrough = ({
       column.entry !== null && catchmentYears(column.entry).some(capDiffers),
   )
   const yearCount = columns.filter((column) => column.entry !== null).length
+  // Years in which a shown opland is over its kvote, measured like the
+  // panel's status: against the kvote alone.
+  const overYearCount = columns.filter(
+    (column) =>
+      column.entry !== null &&
+      catchmentYears(column.entry).some((row) => row.level === 'over'),
+  ).length
   const barAreaHeight = compact ? 'h-24' : 'h-[124px]'
   const wideBars = columns.length <= WIDE_BAR_YEAR_COUNT
   const barWidth = barWidthClass(catchments.length, wideBars)
@@ -1248,6 +1276,7 @@ export const YearWalkthrough = ({
     catchmentLabel,
     catchmentColor,
     yearCount,
+    overYearCount,
     fieldCount: fields.length,
     yearFieldCount: selectedColumn?.entry
       ? countFieldsWithYearValues(selectedColumn.entry.year)
