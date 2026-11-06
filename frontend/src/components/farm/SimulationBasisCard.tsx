@@ -12,6 +12,7 @@ import {
   catchCropSowingLabel,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
+  organicNCeilingLabel,
   precedingCropValueLabel,
   yesNo,
 } from '@/lib/simulation-form'
@@ -27,6 +28,7 @@ const basisValues = (
   cropCodes: CropCodeOption[],
 ): BasisValue[] => {
   const { fertiliser } = simulation
+  const organicNCeiling = organicNCeilingLabel(fertiliser)
   return [
     {
       label: 'Sædskiftevarianter',
@@ -39,6 +41,9 @@ const basisValues = (
       value: nNormPercentagesLabel(simulation.nNormPercentages),
     },
     { label: 'Driftsform', value: fertiliser.farmingSystem },
+    ...(organicNCeiling === null
+      ? []
+      : [{ label: 'Økologisk N-loft', value: organicNCeiling }]),
     {
       label: 'Mineralsk N fra organisk gødning',
       value: organicFertiliserNLabel(fertiliser),

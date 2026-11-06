@@ -41,6 +41,7 @@ const simulation = (
     mineralSharePct: 70,
     onlyOrganic: false,
     nContentKgPerTon: 6,
+    organicNCeiling: 107,
   },
   catchCropSowingDate: '20/8',
   catchCropDailyBasis: false,

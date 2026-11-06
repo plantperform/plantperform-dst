@@ -26,6 +26,7 @@ import {
   optimizationSettingsInput,
   simulationLimitsError,
 } from '@/lib/simulation-settings'
+import { OrganicNCeilingChoice } from '@/components/farm/OrganicNCeilingChoice'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
 import { syncYearlyNLoadCaps } from '@/components/farm/catchment-options'
@@ -712,6 +713,13 @@ export const NewScenarioPanel = ({
               <option value="Økologisk">Økologisk</option>
             </select>
           </div>
+          {values.farmingSystem === 'Økologisk' ? (
+            <OrganicNCeilingChoice
+              ceiling={values.organicNCeiling}
+              disabled={running || isCreating}
+              onChange={(ceiling) => updateValue('organicNCeiling', ceiling)}
+            />
+          ) : null}
           <SimulationQuotaChoice
             kind={optimizationSettings.kind}
             disabled={running || isCreating}

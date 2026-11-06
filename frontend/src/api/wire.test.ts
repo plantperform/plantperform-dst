@@ -57,6 +57,12 @@ describe('fromWire', () => {
     ).toEqual({ totalCosts: 310, otherFertilisers: 20 })
   })
 
+  it('names the økologisk N-loft in the gødning settings', () => {
+    expect(fromWire({ godning: { oekoNLoft: 65 } })).toEqual({
+      fertiliser: { organicNCeiling: 65 },
+    })
+  })
+
   it('leaves a geometry as the backend sent it', () => {
     const geometry = {
       type: 'Polygon',
@@ -98,6 +104,12 @@ describe('toWire', () => {
       },
     })
     expect(fromWire(toWire({ fertiliser }))).toEqual({ fertiliser })
+  })
+
+  it('sends the økologisk N-loft under its backend name', () => {
+    expect(toWire({ fertiliser: { organicNCeiling: 107 } })).toEqual({
+      godning: { oekoNLoft: 107 },
+    })
   })
 
   it('keeps a name that only responses translate', () => {

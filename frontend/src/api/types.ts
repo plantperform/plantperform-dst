@@ -234,6 +234,11 @@ export type AutumnCropOption = {
   normMaxKgNHa: number
 }
 
+// The økologisk arealstøtte's ceilings on the farm's average utilised N, in kg
+// per ha harmoniareal: 107 with the basic støtte, 65 with the tillæg for
+// reduceret N-tilførsel on top.
+export type OrganicNCeiling = 107 | 65
+
 export type FertiliserSettings = {
   farmingSystem: 'Konventionel' | 'Økologisk'
   orgMineralN: number
@@ -241,6 +246,8 @@ export type FertiliserSettings = {
   onlyOrganic: boolean
   nContentKgPerTon: number
   autumnAllocations?: AutumnAllocation[]
+  // Held by the optimization for økologisk only; konventionel ignores it.
+  organicNCeiling: OrganicNCeiling
 }
 
 export type FertiliserPresetOption = {
