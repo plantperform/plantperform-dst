@@ -206,12 +206,12 @@ describe('economics profiles', () => {
     expect(profileNameError(PROFILES, 'Optimistisk')).toBeNull()
   })
 
-  it('says that simulations on every farm go back to Standard when a profile is deleted', () => {
+  it('says that a deleted profile is only gone for the one deleting it', () => {
     expect(deleteProfileMessage([])).toBe(
-      'Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet. Det kan ikke fortrydes.',
+      'Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere. Det kan ikke fortrydes.',
     )
     expect(deleteProfileMessage(['Reduceret kvælstof', 'Mere vintersæd'])).toBe(
-      'Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet. På bedriften gælder det Reduceret kvælstof og Mere vintersæd. Det kan ikke fortrydes.',
+      'Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere. På bedriften gælder det Reduceret kvælstof og Mere vintersæd. Det kan ikke fortrydes.',
     )
   })
 

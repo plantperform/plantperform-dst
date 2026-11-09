@@ -175,7 +175,7 @@ field" column is the name on the wire.
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
-| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
+| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit and share it, and delete it for themselves |
 | forlade en profil | `describeLeaveProfile`, `onLeave` | | Removes yourself from a profile shared with you; the others keep it |
 | har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |

@@ -1383,7 +1383,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         with self.assertRaises(EconomicsModuleNotFoundError):
             jobs.submit("farm", "sim", request, OTHER)
 
-    def test_deleting_a_module_selects_standard_on_every_farm_and_keeps_the_applied_figures(self):
+    def test_deleting_a_shared_module_leaves_it_to_the_others_and_the_last_removes_it(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         _, _, envelope = self.submit_recalculation(selected.revision)
@@ -1418,6 +1418,12 @@ class EconomicsDatabaseTests(DatabaseTests):
                 )
         before = repository.get_simulation("farm", "sim", EMAIL)
         economics_store.delete_module(module.id, OTHER)
+        # Deleting only removes the profile for the one who deletes it.
+        self.assertEqual(economics_store.get_module(module.id, EMAIL).id, module.id)
+        with self.assertRaises(EconomicsModuleNotFoundError):
+            economics_store.get_module(module.id, OTHER)
+        self.assertEqual(repository.get_simulation("farm", "sim", EMAIL), before)
+        economics_store.delete_module(module.id, EMAIL)
         after = repository.get_simulation("farm", "sim", EMAIL)
         self.assertEqual(after.economics_module_id, "standard")
         self.assertEqual(after.economics_snapshot, before.economics_snapshot)

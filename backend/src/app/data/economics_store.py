@@ -8,6 +8,7 @@ from app.data import repository, simulation_store
 from app.data.db import app_user_table
 from app.data.db import economics_module_member_table as members
 from app.data.db import economics_module_table as modules
+from app.data.db import farm_member_table as farm_members
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.economics import (
@@ -151,9 +152,36 @@ def delete_module(module_id, email):
         if any(row.creation_status in ("queued", "running") for row in selecting):
             raise EconomicsConflictError(_BUSY)
         require_idle(session, [row.id for row in selecting])
-        session.execute(delete(modules).where(modules.c.id == module_id))
+        others = list(
+            session.execute(
+                select(members.c.email).where(
+                    members.c.module_id == module_id, members.c.email != email
+                )
+            ).scalars()
+        )
+        if others:
+            # Others still have the profile: deleting it removes it for this user only.
+            session.execute(
+                delete(members).where(members.c.module_id == module_id, members.c.email == email)
+            )
+        else:
+            session.execute(delete(modules).where(modules.c.id == module_id))
         for row in selecting:
+            if others and _still_reachable(session, row.id, others):
+                continue
             assign_module(session, row.id, row.data, STANDARD_ID)
+
+
+def _still_reachable(session, simulation_id, emails):
+    # A simulation keeps the profile when a remaining member can open its farm.
+    return (
+        session.execute(
+            select(farm_members.c.email)
+            .join(setups, setups.c.farm_id == farm_members.c.farm_id)
+            .where(setups.c.id == simulation_id, farm_members.c.email.in_(emails))
+        ).first()
+        is not None
+    )
 
 
 def list_members(module_id, email):

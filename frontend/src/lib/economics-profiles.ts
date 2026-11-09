@@ -154,7 +154,7 @@ export const describeProfileUsers = (simulationNames: string[]): string =>
     : 'Bruges ikke af nogen simulering på bedriften endnu'
 
 export const deleteProfileMessage = (simulationNames: string[]): string =>
-  `Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet.${
+  `Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere.${
     simulationNames.length > 0
       ? ` På bedriften gælder det ${formatNameList(simulationNames)}.`
       : ''
