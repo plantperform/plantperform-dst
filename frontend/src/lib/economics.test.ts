@@ -941,10 +941,24 @@ describe('shared prices', () => {
   it('tells what a new price does to the dækningsbidrag of each crop', () => {
     expect(
       sharedPriceEffect(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
-    ).toEqual([
+    ).toMatchObject([
       { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 70 },
       { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 20 },
     ])
+  })
+
+  it('shows the figures of each crop before and after a new price', () => {
+    const [rapeseed] = sharedPriceEffect(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'spraying',
+      150,
+    )
+    expect(
+      rapeseed.after.totalCostsDkkHa - rapeseed.before.totalCostsDkkHa,
+    ).toBe(-70)
+    expect(rapeseed.after.revenueDkkHa).toBe(rapeseed.before.revenueDkkHa)
+    expect(rapeseed.after.dbDkkHa - rapeseed.before.dbDkkHa).toBe(70)
   })
 
   it('tells which crops a crop takes back with it when it is restored', () => {
@@ -959,7 +973,7 @@ describe('shared prices', () => {
         (price) => price.id,
       ),
     ).toEqual(['ploughing'])
-    expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toEqual([
+    expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toMatchObject([
       { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 175 },
       { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 175 },
     ])
@@ -974,9 +988,9 @@ describe('shared prices', () => {
     expect(sharedCustomisedPrices(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual(
       [],
     )
-    expect(cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual([
-      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 },
-    ])
+    expect(
+      cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED),
+    ).toMatchObject([{ cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 }])
   })
 
   it('names the crops of a price, or all of them at once', () => {
