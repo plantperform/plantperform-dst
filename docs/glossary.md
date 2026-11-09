@@ -156,8 +156,9 @@ field" column is the name on the wire.
 | andre gødningsstoffer, omkostning | `otherFertilisers` | `andre_goedningsstoffer`, `andreGoedningsstoffer` | |
 | andet, omkostning | `other` | `andet` | The costs listed as Andet, such as Hegn/vedligehold on græs |
 | omkostninger i alt | `totalCosts` | `omkostninger_total`, `omkostningerTotal` | |
-| regnskab for en simulering | `EconomicsStatement`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger |
+| regnskab for en simulering | `EconomicsStatement`, `StatementFigures`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger. It also holds each calendar year behind the average |
 | kr/ha eller kr i alt | `StatementUnit`, `STATEMENT_UNIT_LABELS` | | The unit the regnskab on Sammenlign is shown in |
+| enkelt år eller gennemsnit | `StatementPeriod`, `STATEMENT_PERIODS`, `statementPeriodLabel`, `statementFigures` | `years` | The period the regnskab on Sammenlign is shown for: the average year or one of the eight calendar years. A result saved before the breakdown has the average only |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
 | bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |

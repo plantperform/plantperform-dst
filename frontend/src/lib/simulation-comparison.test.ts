@@ -26,6 +26,7 @@ import {
   formatKgN,
   formatStatementLine,
   hasMissingYearValues,
+  hasStatementPeriods,
   haveSameFieldPlans,
   listComparedCatchments,
   overlayCurveTone,
@@ -35,8 +36,12 @@ import {
   resolveComparisonIds,
   shareOfMax,
   sortComparison,
+  STATEMENT_AVERAGE_PERIOD,
   STATEMENT_GROUPS,
+  STATEMENT_PERIODS,
   STATEMENT_RESULT,
+  statementFigures,
+  statementPeriodLabel,
   summarizeCatchmentComparison,
   summarizeColumnQuota,
   toggleComparisonId,
@@ -784,5 +789,84 @@ describe('formatStatementLine', () => {
     expect(
       figure('Dækningsbidrag', 'perHa', { ...statement, areaHa: 0 }),
     ).toBeNull()
+  })
+})
+
+const statementOf = (
+  figures: Partial<EconomicsStatement> = {},
+): EconomicsStatement => ({
+  areaHa: 0,
+  revenue: 0,
+  subsidy: 0,
+  fertiliserCost: 0,
+  otherFertilisers: 0,
+  seed: 0,
+  cropProtection: 0,
+  fieldWork: 0,
+  drying: 0,
+  other: 0,
+  totalCosts: 0,
+  db: 0,
+  ...figures,
+})
+
+describe('statementFigures', () => {
+  const statement = statementOf({
+    areaHa: 40,
+    revenue: 600_000,
+    totalCosts: 310_000,
+    db: 290_000,
+    years: [
+      { areaHa: 40, revenue: 700_000, totalCosts: 300_000, db: 400_000 },
+      { areaHa: 40, revenue: 500_000, totalCosts: 320_000, db: 180_000 },
+    ],
+  })
+
+  it('shows the average year as the statement itself', () => {
+    expect(statementFigures(statement, STATEMENT_AVERAGE_PERIOD)).toBe(
+      statement,
+    )
+  })
+
+  it('fills in the lines a calendar year leaves out as 0', () => {
+    expect(statementFigures(statement, '1')).toEqual(
+      statementOf({
+        areaHa: 40,
+        revenue: 500_000,
+        totalCosts: 320_000,
+        db: 180_000,
+      }),
+    )
+  })
+
+  it('has no figures for a year the statement does not have', () => {
+    expect(statementFigures(statement, '5')).toBeNull()
+    expect(statementFigures(null, '0')).toBeNull()
+    expect(statementFigures(undefined, STATEMENT_AVERAGE_PERIOD)).toBeNull()
+  })
+
+  it('can show a single year only of a statement that has the years', () => {
+    expect(hasStatementPeriods(statement)).toBe(true)
+    expect(hasStatementPeriods(statementOf({ areaHa: 40 }))).toBe(false)
+    expect(hasStatementPeriods(null)).toBe(false)
+  })
+
+  it('names the average and each calendar year', () => {
+    expect(STATEMENT_PERIODS).toEqual([
+      'average',
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+    ])
+    expect(statementPeriodLabel(STATEMENT_AVERAGE_PERIOD)).toBe(
+      'Gennemsnit pr. år',
+    )
+    expect(statementPeriodLabel('0')).toBe('2027')
+    expect(statementPeriodLabel('7')).toBe('2034')
   })
 })
