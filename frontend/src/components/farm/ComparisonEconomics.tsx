@@ -32,10 +32,17 @@ import {
 import {
   formatStatementAmount,
   formatStatementLine,
+  hasStatementPeriods,
+  STATEMENT_AVERAGE_PERIOD,
   STATEMENT_GROUPS,
+  STATEMENT_PERIODS,
   STATEMENT_RESULT,
   STATEMENT_UNIT_LABELS,
+  statementFigures,
+  statementPeriodLabel,
+  statementPeriodYear,
   type StatementLine,
+  type StatementPeriod,
   type StatementUnit,
 } from '@/lib/simulation-comparison'
 import { cn } from '@/lib/utils'
@@ -109,6 +116,28 @@ export const ComparisonEconomics = ({
         })),
       )
     : []
+  const [chosenPeriod, setChosenPeriod] = useState<StatementPeriod>(
+    STATEMENT_AVERAGE_PERIOD,
+  )
+  const periodsShown = statements.every(
+    (statement) => !statement || hasStatementPeriods(statement),
+  )
+  const period = periodsShown ? chosenPeriod : STATEMENT_AVERAGE_PERIOD
+  const calendarYear = statementPeriodYear(period)
+  const periodOptions = STATEMENT_PERIODS.map(
+    (value): SegmentedControlOption<StatementPeriod> => ({
+      value,
+      label:
+        value === STATEMENT_AVERAGE_PERIOD
+          ? 'Gennemsnit'
+          : statementPeriodLabel(value),
+      title: periodsShown
+        ? undefined
+        : 'Kør Optimér igen for at se det enkelte år.',
+      disabled: !periodsShown && value !== STATEMENT_AVERAGE_PERIOD,
+      activeClassName: 'text-foreground',
+    }),
+  )
 
   // Kvotehandel shows only when a simulation traded; the others show 0 in it.
   const traded = table.columns.some((column) => column.quotaTrades.length > 0)
@@ -120,18 +149,18 @@ export const ComparisonEconomics = ({
   ) => (
     <ComparisonFigureRow key={label} label={label} {...style} {...table}>
       {(_, index) => {
-        const statement = statements[index]
-        return statement
-          ? formatStatementAmount(statement, amountOf(index), unit, format)
+        const figures = statementFigures(statements[index], period)
+        return figures
+          ? formatStatementAmount(figures, amountOf(index), unit, format)
           : null
       }}
     </ComparisonFigureRow>
   )
   const tradeAmounts = table.columns.map((column) =>
-    quotaTradeAmounts(column.quotaTrades),
+    quotaTradeAmounts(column.quotaTrades, calendarYear),
   )
   const payments = table.columns.map((column) =>
-    quotaTradePayment(column.quotaTrades),
+    quotaTradePayment(column.quotaTrades, calendarYear),
   )
 
   const statementRow = (line: StatementLine, style: typeof LINE_ROW) => (
@@ -142,8 +171,8 @@ export const ComparisonEconomics = ({
       {...table}
     >
       {(_, index) => {
-        const statement = statements[index]
-        return statement ? formatStatementLine(statement, line, unit) : null
+        const figures = statementFigures(statements[index], period)
+        return figures ? formatStatementLine(figures, line, unit) : null
       }}
     </ComparisonFigureRow>
   )
@@ -154,17 +183,26 @@ export const ComparisonEconomics = ({
         <h2 className="pt-1 font-display text-[22px] leading-tight">
           Økonomi i simuleringerne
         </h2>
-        <SegmentedControl
-          aria-label="Vis økonomien i kr/ha eller kr i alt"
-          value={unit}
-          options={UNIT_OPTIONS}
-          labelClassName=""
-          onValueChange={setUnit}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl
+            aria-label="Vis økonomien som gennemsnit eller for et enkelt år"
+            value={period}
+            options={periodOptions}
+            labelClassName=""
+            onValueChange={setChosenPeriod}
+          />
+          <SegmentedControl
+            aria-label="Vis økonomien i kr/ha eller kr i alt"
+            value={unit}
+            options={UNIT_OPTIONS}
+            labelClassName=""
+            onValueChange={setUnit}
+          />
+        </div>
       </div>
       <ComparisonColumnsTable
         compact
-        label={`Gennemsnit pr. år, ${STATEMENT_UNIT_LABELS[unit]}`}
+        label={`${statementPeriodLabel(period)}, ${STATEMENT_UNIT_LABELS[unit]}`}
         {...table}
       >
         <ComparisonFigureRow label="Regner med" {...table}>
@@ -243,11 +281,12 @@ export const ComparisonEconomics = ({
             {amountRow(
               'Dækningsbidrag inkl. kvotehandel',
               (index) => {
-                const statement = statements[index]
-                return statement
+                const figures = statementFigures(statements[index], period)
+                return figures
                   ? db2IncludingQuotaTrades(
-                      statement.db,
+                      figures.db,
                       table.columns[index].quotaTrades,
+                      calendarYear,
                     )
                   : 0
               },

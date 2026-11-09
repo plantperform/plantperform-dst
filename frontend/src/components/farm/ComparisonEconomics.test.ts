@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EconomicsStatement, SimulationQuotaTrade } from '@/api/types'
 import { ComparisonEconomics } from '@/components/farm/ComparisonEconomics'
 import type { ComparedColumn } from '@/components/farm/comparison-column'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 import { STATEMENT_UNIT_LABELS } from '@/lib/simulation-comparison'
@@ -58,14 +59,18 @@ const view = (columns: ComparedColumn[]) =>
   createElement(
     MemoryRouter,
     null,
-    createElement(ComparisonEconomics, {
-      columns,
-      highlightedKey: null,
-      onHighlight: vi.fn(),
-      profiles: columns.map(() => STANDARD_PROFILE),
-      farmingSystems: columns.map(() => 'Konventionel' as const),
-      statements: columns.map(() => statement),
-    }),
+    createElement(
+      TooltipProvider,
+      null,
+      createElement(ComparisonEconomics, {
+        columns,
+        highlightedKey: null,
+        onHighlight: vi.fn(),
+        profiles: columns.map(() => STANDARD_PROFILE),
+        farmingSystems: columns.map(() => 'Konventionel' as const),
+        statements: columns.map(() => statement),
+      }),
+    ),
   )
 
 const render = (columns: ComparedColumn[]) =>

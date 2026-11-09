@@ -512,7 +512,7 @@ export type FarmViewData = {
   yearlySummary: YearlySummaryEntry[]
 }
 
-export type EconomicsStatement = {
+export type StatementFigures = {
   areaHa: number
   revenue: number
   subsidy: number
@@ -525,6 +525,15 @@ export type EconomicsStatement = {
   other: number
   totalCosts: number
   db: number
+}
+
+// The backend leaves out a line that is 0.
+export type SparseStatementFigures = Partial<StatementFigures>
+
+// The average year, with the breakdown behind it. A result saved before the
+// breakdown existed has none of it.
+export type EconomicsStatement = StatementFigures & {
+  years?: SparseStatementFigures[]
 }
 
 export type SavedResultView = {

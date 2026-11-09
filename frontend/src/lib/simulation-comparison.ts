@@ -4,6 +4,8 @@ import type {
   FieldYearValues,
   OptimizationConstraints,
   Simulation,
+  SparseStatementFigures,
+  StatementFigures,
 } from '@/api/types'
 import { COST_CATEGORIES, formatDbDkk, formatSignedDkk } from '@/lib/economics'
 import {
@@ -602,7 +604,7 @@ export const STATEMENT_UNIT_LABELS: Record<StatementUnit, string> = {
 
 export type StatementLine = {
   label: string
-  amount: (statement: EconomicsStatement) => number
+  amount: (statement: StatementFigures) => number
   format?: (value: number) => string
 }
 
@@ -651,7 +653,7 @@ export const STATEMENT_RESULT: StatementLine = {
 
 // An amount per year in the statement's unit: per ha of its area, or in total.
 export const formatStatementAmount = (
-  statement: EconomicsStatement,
+  statement: StatementFigures,
   amount: number,
   unit: StatementUnit,
   format: (value: number) => string = formatDbDkk,
@@ -661,8 +663,60 @@ export const formatStatementAmount = (
 }
 
 export const formatStatementLine = (
-  statement: EconomicsStatement,
+  statement: StatementFigures,
   line: StatementLine,
   unit: StatementUnit,
 ): string | null =>
   formatStatementAmount(statement, line.amount(statement), unit, line.format)
+
+export type StatementPeriod = 'average' | `${number}`
+
+export const STATEMENT_AVERAGE_PERIOD: StatementPeriod = 'average'
+
+export const statementPeriodYear = (period: StatementPeriod): number | null =>
+  period === STATEMENT_AVERAGE_PERIOD
+    ? null
+    : ROTATION_START_CALENDAR_YEAR + Number(period)
+
+export const statementPeriodLabel = (period: StatementPeriod): string =>
+  String(statementPeriodYear(period) ?? 'Gennemsnit pr. år')
+
+export const STATEMENT_PERIODS: StatementPeriod[] = [
+  STATEMENT_AVERAGE_PERIOD,
+  ...ROTATION_CALENDAR_YEARS.map((_, index): StatementPeriod => `${index}`),
+]
+
+const EMPTY_FIGURES: StatementFigures = {
+  areaHa: 0,
+  revenue: 0,
+  subsidy: 0,
+  fertiliserCost: 0,
+  otherFertilisers: 0,
+  seed: 0,
+  cropProtection: 0,
+  fieldWork: 0,
+  drying: 0,
+  other: 0,
+  totalCosts: 0,
+  db: 0,
+}
+
+const fullFigures = (figures: SparseStatementFigures): StatementFigures => ({
+  ...EMPTY_FIGURES,
+  ...figures,
+})
+
+// A result saved before the breakdown existed has the average only.
+export const hasStatementPeriods = (
+  statement: EconomicsStatement | null | undefined,
+): boolean => (statement?.years?.length ?? 0) > 0
+
+export const statementFigures = (
+  statement: EconomicsStatement | null | undefined,
+  period: StatementPeriod,
+): StatementFigures | null => {
+  if (!statement) return null
+  if (period === STATEMENT_AVERAGE_PERIOD) return statement
+  const figures = statement.years?.[Number(period)]
+  return figures ? fullFigures(figures) : null
+}

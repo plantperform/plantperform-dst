@@ -62,15 +62,19 @@ export const quotaTradeContributionFigure = (
       }
 }
 
-// What buying cost and what selling earned, each the average per year and at
-// least 0. bought - sold is the trades' payment.
+// What buying cost and what selling earned, each at least 0: the average per
+// year, or in a calendar year. bought - sold is the trades' payment.
 export const quotaTradeAmounts = (
   trades: SimulationQuotaTrade[],
+  calendarYear: number | null = null,
 ): { bought: number; sold: number } => {
   let bought = 0
   let sold = 0
   for (const trade of trades) {
-    const kgs = tradeKgs(trade)
+    const kgs =
+      calendarYear === null
+        ? tradeKgs(trade)
+        : [trade.tradeKgByYear[calendarYear] ?? 0]
     for (const kg of kgs) {
       if (kg > 0) bought += (kg * trade.buyPriceDkkPerKg) / kgs.length
       else sold += (-kg * trade.sellPriceDkkPerKg) / kgs.length
