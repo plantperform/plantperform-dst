@@ -12,7 +12,13 @@ import {
   useEconomicsModules,
   useFarmBudgets,
 } from '@/api/economics'
-import { isSimulationKey, simulationsKey, simulationViewKey } from '@/api/hooks'
+import {
+  isSimulationKey,
+  isSimulationResultsKey,
+  isSimulationsFieldsKey,
+  simulationsKey,
+  simulationViewKey,
+} from '@/api/hooks'
 import type { EconomicsModule, FarmingSystem, Simulation } from '@/api/types'
 import { useToast } from '@/components/toast'
 import {
@@ -170,7 +176,17 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
         ),
       { revalidate: false },
     )
-    void mutate(simulationViewKey(farmId, simulation.id))
+    // A comparison reads the saved result out of the simulation's view, so it is
+    // read again once the view has been. A recalculation that is done within its
+    // request never shows the simulation as calculating, and would otherwise
+    // leave the figures next to it as they were.
+    await mutate(simulationViewKey(farmId, simulation.id))
+    void mutate(
+      (key) =>
+        farmId !== undefined &&
+        (isSimulationsFieldsKey(key, farmId) ||
+          isSimulationResultsKey(key, farmId)),
+    )
   }
 
   const recalculate = async (simulation: Simulation) => {
