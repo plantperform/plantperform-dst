@@ -10,6 +10,7 @@ from app.data.db import simulation_read_model_table as simulation_views
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.creation import CreationActiveError
+from app.domain.economics import EconomicsSnapshot
 from app.domain.field import FieldRecord
 from app.domain.optimization import SimulationResultSummary
 from app.domain.read_model import ReadModelNotReadyError, preparation_job
@@ -393,7 +394,13 @@ def build_simulation(session, simulation_id, *, rotation_groups=None):
             "economics_snapshot": output.get("economics_snapshot", {}),
             "rotation_groups": output.get("rotation_groups", {}),
             "field_years": field_years,
-            "economics_statement": read_models.economics_statement(response["fields"], selected),
+            "economics_statement": read_models.economics_statement(
+                response["fields"],
+                selected,
+                EconomicsSnapshot.model_validate(
+                    output.get("economics_snapshot") or {}
+                ).overrides.cache_key(),
+            ),
         }
     data, contributions = read_models.simulation_data(
         fields, {}, years, saved, catalog=[], contributions=contributions
