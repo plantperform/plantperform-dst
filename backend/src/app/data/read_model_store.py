@@ -14,7 +14,7 @@ from app.domain.economics import EconomicsSnapshot
 from app.domain.field import FieldRecord
 from app.domain.optimization import SimulationResultSummary
 from app.domain.read_model import ReadModelNotReadyError, preparation_job
-from app.domain.rotation_candidate import RotationCandidateEvaluation
+from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
 from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import Simulation
 from app.services import read_models
@@ -332,6 +332,25 @@ def insert_json(value):
     return bindparam(None, value, type_=JSONB, unique=True)
 
 
+def repriced_picks(setup_fields, selected):
+    """The optimizer's picks as the last recalculation priced them, by field id.
+
+    The priced copy is kept with the field's setup: as its chosen candidate while the
+    field is still on its pick, and as a copy of its own once the field has changed.
+    """
+    repriced = {}
+    for field_id, pick in selected.items():
+        setup = setup_fields.get(field_id) or {}
+        for name in ("economics_candidate", "economics_pick"):
+            value = setup.get(name)
+            if value and RotationCandidateRef.model_validate(value["ref"]).to_id() == (
+                pick.ref.to_id()
+            ):
+                repriced[field_id] = RotationCandidateEvaluation.model_validate(value)
+                break
+    return repriced
+
+
 def build_simulation(session, simulation_id, *, rotation_groups=None):
     """Build displays from selected results and cheap library sequences only."""
     fields = simulation_store._fields(session, simulation_id)
@@ -354,6 +373,7 @@ def build_simulation(session, simulation_id, *, rotation_groups=None):
             candidates = (
                 setup.fields.get(field.id, {}).get("fixed_candidate"),
                 setup.fields.get(field.id, {}).get("economics_candidate"),
+                setup.fields.get(field.id, {}).get("economics_pick"),
                 output.get("selected_candidates", {}).get(field.id),
                 setup.fields.get(field.id, {}).get("manual_candidate"),
             )
@@ -384,22 +404,33 @@ def build_simulation(session, simulation_id, *, rotation_groups=None):
             key: RotationCandidateEvaluation.model_validate(value)
             for key, value in output.get("selected_candidates", {}).items()
         }
-        field_years = {key: read_models.compact_years(value) for key, value in selected.items()}
-        response = read_models.flag_fields_without_economics(output["response"], field_years)
+        # The saved result stays what the optimizer returned, whatever is edited
+        # afterwards, but what its picks are worth follows a recalculation of the
+        # economics, which prices them again after the run. The snapshot is the
+        # profile the simulation is calculated with, as the figures are shown with it.
+        snapshot = simulation.economics_snapshot
+        repriced = repriced_picks(setup.fields, selected)
+        field_years = {
+            key: read_models.compact_years(repriced.get(key, pick))
+            for key, pick in selected.items()
+        }
+        response = read_models.saved_response(output["response"], repriced, field_years)
         saved = {
             "run_id": output.get("run_id") or f"legacy:{simulation_id}",
             "result_revision": output.get("result_revision", 0),
             "response": response,
             "fields_before": output.get("fields_before", []),
-            "economics_snapshot": output.get("economics_snapshot", {}),
+            "economics_snapshot": snapshot.model_dump(mode="json"),
             "rotation_groups": output.get("rotation_groups", {}),
             "field_years": field_years,
-            "economics_statement": read_models.economics_statement(
+            "economics_statement": read_models.saved_statement(
                 response["fields"],
                 selected,
-                EconomicsSnapshot.model_validate(
+                repriced,
+                selected_key=EconomicsSnapshot.model_validate(
                     output.get("economics_snapshot") or {}
                 ).overrides.cache_key(),
+                repriced_key=snapshot.overrides.cache_key(),
             ),
         }
     data, contributions = read_models.simulation_data(

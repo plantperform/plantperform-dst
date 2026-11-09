@@ -240,7 +240,7 @@ loss, and does not change the selected ID. Underlying reference defaults are
 not frozen and are reloaded when calculation starts.
 
 Recalculation preserves field IDs, rotations, locks, manual edits, constraints,
-and agronomic outputs. It updates chosen economic evaluations, field values and display projections. Expected-yield edits
+and agronomic outputs. It updates chosen economic evaluations, the optimizer's picks, field values and display projections. Expected-yield edits
 scale crop and straw income, yield-dependent drying costs, and FEN. Cost-quantity
 edits change expenses without changing physical fertilizer allocations, nitrogen
 norms, or leaching. Missing historical crop positions remain empty.
@@ -266,18 +266,25 @@ Simulations report `economicsRecalculationFailed: true` while failed economics
 work waits for this retry, so clients can tell it apart from a failed creation.
 
 Recalculation does not optimize or pick new rotations. Existing optimizer output
-remains a historical result marked `outdated`; result responses and saved-result
-views include their own `economicsSnapshot`. Current field values and candidate
-details use the newly applied snapshot. Run either existing optimization endpoint
-explicitly to calculate a new optimum. Farm history uses standard economics.
+remains a historical result marked `outdated`; result responses include the
+`economicsSnapshot` the optimizer ran with. A saved-result view stays what the
+optimizer returned, whatever is edited afterwards, except for what its picks are
+worth: its `economicsSnapshot` is the applied snapshot, and the `db2` of its
+fields, their figures per year and its `economicsStatement` value the
+optimizer's picks, in the optimizer's areas, as the recalculation priced them. A
+field that has been changed since the run has its pick priced too, in a copy of
+its own, so every field of the saved result follows the profile. Current field
+values and candidate details use the newly applied snapshot. Run either
+existing optimization endpoint explicitly to calculate a new optimum. Farm
+history uses standard economics.
 
 ## Frontend integration and rollout
 
 The frontend keeps profiles as modules and reads the assumptions from the crop
 budgets. It passes `economicsModuleId` during creation, saves a selection
 separately and offers an explicit recalculation. It labels the pending selection
-against the applied snapshot, and the current values against the previous
-optimization's saved snapshot.
+against the applied snapshot, and a comparison's regnskab with the applied
+snapshot of each simulation.
 
 Economics modules require schema migration `20261013_0001`, introduced with
 the original economics release. Existing simulations read as standard without

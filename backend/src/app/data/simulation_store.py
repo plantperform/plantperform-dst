@@ -348,6 +348,7 @@ def selected_evaluations(farm_id, simulation_id, email):
             for overlay in (
                 setup.get("fixed_candidate"),
                 setup.get("economics_candidate"),
+                setup.get("economics_pick"),
                 selected.get(field.id),
                 setup.get("manual_candidate"),
             ):
@@ -364,6 +365,7 @@ def _selected_candidate(session, simulation_id, field_id, rotation_id):
     overlays = (
         setups.c.fields[field_id]["fixed_candidate"],
         setups.c.fields[field_id]["economics_candidate"],
+        setups.c.fields[field_id]["economics_pick"],
         results.c.output["selected_candidates"][field_id],
         setups.c.fields[field_id]["manual_candidate"],
     )
@@ -467,6 +469,7 @@ def _save_field(session, simulation_id, field, candidate=None):
     for key in (
         "manual_candidate",
         "economics_candidate",
+        "economics_pick",
         "baseline_candidate",
         "calculation_context",
     ):

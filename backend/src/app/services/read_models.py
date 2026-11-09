@@ -81,6 +81,46 @@ def _sparse(figures):
     return {"area_ha": round(figures["area_ha"], 2), **rounded}
 
 
+def saved_response(response, repriced, field_years):
+    """The optimizer's response, its fields valued by the picks as they are priced now.
+
+    Where the fields are and what they leach stay what the optimizer returned. What a
+    pick is worth follows the economics, so a field whose pick has been priced again
+    gets that pick's average over the rotation, in the area the optimizer gave it.
+    `repriced` holds those picks by field id and `field_years` the years of every pick.
+    """
+    flagged = flag_fields_without_economics(response, field_years)
+    return {
+        **flagged,
+        "fields": [
+            {**field, "db2": repriced[field["id"]].avg_db_kr_ha * field["area_ha"]}
+            if field["id"] in repriced
+            else field
+            for field in flagged["fields"]
+        ],
+    }
+
+
+def saved_statement(fields, selected, repriced, *, selected_key="", repriced_key=""):
+    """The regnskab of a saved result: the optimizer's areas and rotations, priced as now.
+
+    A saved result does not change when a field is edited after the run, but a
+    recalculation of the economics prices the optimizer's picks again. `fields` are
+    the saved response's fields as `saved_response` returns them, `selected` the
+    optimizer's picks and `repriced` the picks priced again, each by field id. A
+    repriced pick is itemized with the overrides it was priced with, `repriced_key`;
+    any other pick keeps the optimizer's own valuation and `selected_key`.
+    """
+    return economics_statement(
+        [
+            {**field, "economics_key": repriced_key} if field["id"] in repriced else field
+            for field in fields
+        ],
+        {**selected, **repriced},
+        selected_key,
+    )
+
+
 def _post_list(by_name):
     """The posts of one line, biggest first, without those that are 0 in every year."""
     posts = [
@@ -101,8 +141,8 @@ def economics_statement(fields, candidates, economics_key=""):
     The average is the mean over each field's rotation cycle. The calendar years
     are the candidate's eight years, which repeat the cycle, so a cycle that does
     not divide eight gives years whose mean differs a little from the average.
-    `economics_key` is the cache key of the overrides the candidates were priced with;
-    the subsidy posts are itemized with it.
+    A field may name the overrides its candidate was priced with in `economics_key`;
+    the others use the argument.
     """
     statement = dict.fromkeys(["area_ha", "db", *_STATEMENT_LINES], 0.0)
     years = [defaultdict(float) for _ in range(_CALENDAR_YEARS)]
@@ -130,7 +170,8 @@ def economics_statement(fields, candidates, economics_key=""):
         weight = area / len(cycle)
         statement["area_ha"] += area
         statement["db"] += field["db2"]
-        year_posts = [statement_posts.year_posts(year, economics_key) for year in candidate.years]
+        key = field.get("economics_key", economics_key)
+        year_posts = [statement_posts.year_posts(year, key) for year in candidate.years]
         calendar = candidate.years[:_CALENDAR_YEARS]
         for index, year in enumerate(cycle):
             for line in _STATEMENT_LINES:
