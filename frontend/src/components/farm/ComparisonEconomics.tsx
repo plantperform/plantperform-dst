@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
@@ -15,6 +16,7 @@ import {
   SegmentedControl,
   type SegmentedControlOption,
 } from '@/components/ui/segmented-control'
+import { cropLabel } from '@/lib/crop-label'
 import {
   compareProfileChanges,
   formatCropLabels,
@@ -38,9 +40,11 @@ import {
   STATEMENT_PERIODS,
   STATEMENT_RESULT,
   STATEMENT_UNIT_LABELS,
+  statementCropRows,
   statementFigures,
   statementPeriodLabel,
   statementPeriodYear,
+  statementPostRows,
   type StatementLine,
   type StatementPeriod,
   type StatementUnit,
@@ -54,6 +58,14 @@ const UNIT_OPTIONS = (['perHa', 'total'] as const).map(
     activeClassName: 'text-foreground',
   }),
 )
+
+type StatementBreakdown = 'crop' | 'post'
+
+// What a line unfolds into: the crops it comes from or its regnskabsposter.
+const BREAKDOWN_OPTIONS: SegmentedControlOption<StatementBreakdown>[] = [
+  { value: 'crop', label: 'Afgrøder', activeClassName: 'text-foreground' },
+  { value: 'post', label: 'Poster', activeClassName: 'text-foreground' },
+]
 
 const FIGURE_CLASS = 'text-right text-[13px] tabular-nums'
 const BAND_CLASS = 'bg-muted/30 hover:bg-muted/30'
@@ -119,11 +131,17 @@ export const ComparisonEconomics = ({
   const [chosenPeriod, setChosenPeriod] = useState<StatementPeriod>(
     STATEMENT_AVERAGE_PERIOD,
   )
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set())
   const periodsShown = statements.every(
     (statement) => !statement || hasStatementPeriods(statement),
   )
   const period = periodsShown ? chosenPeriod : STATEMENT_AVERAGE_PERIOD
   const calendarYear = statementPeriodYear(period)
+  const [breakdown, setBreakdown] = useState<StatementBreakdown>('crop')
+  const cropsShown = statements.some((statement) => statement?.crops?.length)
+  const postsShown = statements.some(
+    (statement) => Object.keys(statement?.posts ?? {}).length > 0,
+  )
   const periodOptions = STATEMENT_PERIODS.map(
     (value): SegmentedControlOption<StatementPeriod> => ({
       value,
@@ -138,6 +156,26 @@ export const ComparisonEconomics = ({
       activeClassName: 'text-foreground',
     }),
   )
+  const toggleOpened = (label: string) =>
+    setOpened((current) => {
+      const next = new Set(current)
+      if (!next.delete(label)) next.add(label)
+      return next
+    })
+  const detailRows = (line: StatementLine) =>
+    breakdown === 'crop'
+      ? statementCropRows(statements, line, period).map((crop) => ({
+          key: crop.cropCode,
+          label: cropLabel(crop.cropCode, crop.cropName),
+          cells: crop.figures.map((figures) =>
+            figures ? formatStatementLine(figures, line, unit) : null,
+          ),
+        }))
+      : statementPostRows(statements, line, period, unit).map((post) => ({
+          key: post.name,
+          label: post.name,
+          cells: post.cells,
+        }))
 
   // Kvotehandel shows only when a simulation traded; the others show 0 in it.
   const traded = table.columns.some((column) => column.quotaTrades.length > 0)
@@ -163,19 +201,61 @@ export const ComparisonEconomics = ({
     quotaTradePayment(column.quotaTrades, calendarYear),
   )
 
-  const statementRow = (line: StatementLine, style: typeof LINE_ROW) => (
-    <ComparisonFigureRow
-      key={line.label}
-      label={line.label}
-      {...style}
-      {...table}
-    >
-      {(_, index) => {
-        const figures = statementFigures(statements[index], period)
-        return figures ? formatStatementLine(figures, line, unit) : null
-      }}
-    </ComparisonFigureRow>
-  )
+  const statementRow = (line: StatementLine, style: typeof LINE_ROW) => {
+    const expandable =
+      breakdown === 'crop'
+        ? line.byCrop && cropsShown
+        : line.postsKey && postsShown
+    const open = Boolean(expandable) && opened.has(line.label)
+    return (
+      <Fragment key={line.label}>
+        <ComparisonFigureRow
+          label={
+            expandable ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                className="-ml-1 flex items-center gap-1 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                onClick={() => toggleOpened(line.label)}
+              >
+                <ChevronRight
+                  aria-hidden="true"
+                  className={cn(
+                    'size-3.5 shrink-0 text-muted-foreground transition-transform',
+                    open && 'rotate-90',
+                  )}
+                />
+                {line.label}
+              </button>
+            ) : (
+              line.label
+            )
+          }
+          {...style}
+          {...table}
+        >
+          {(_, index) => {
+            const figures = statementFigures(statements[index], period)
+            return figures ? formatStatementLine(figures, line, unit) : null
+          }}
+        </ComparisonFigureRow>
+        {open
+          ? detailRows(line).map((row) => (
+              <ComparisonFigureRow
+                key={row.key}
+                label={row.label}
+                className="border-0"
+                labelClassName="py-1.5 pl-14 text-xs font-normal text-muted-foreground"
+                cellClassName={cn(FIGURE_CLASS, 'py-1.5 text-muted-foreground')}
+                {...table}
+              >
+                {(_, index) => row.cells[index]}
+              </ComparisonFigureRow>
+            ))
+          : null}
+      </Fragment>
+    )
+  }
 
   return (
     <>
@@ -190,6 +270,13 @@ export const ComparisonEconomics = ({
             options={periodOptions}
             labelClassName=""
             onValueChange={setChosenPeriod}
+          />
+          <SegmentedControl
+            aria-label="Fold linjerne ud efter afgrøde eller regnskabspost"
+            value={breakdown}
+            options={BREAKDOWN_OPTIONS}
+            labelClassName=""
+            onValueChange={setBreakdown}
           />
           <SegmentedControl
             aria-label="Vis økonomien i kr/ha eller kr i alt"
