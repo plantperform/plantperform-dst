@@ -874,54 +874,6 @@ export const profileChanges = (
   return [...yields, ...lines, ...manureChanges(assumptions, overrides, listed)]
 }
 
-export type ProfileChangeComparison = {
-  key: string
-  label: string
-  cropLabels: string[]
-  appliesTo?: string
-  cells: { value: string; changed: boolean }[]
-}
-
-export type ProfileColumn = {
-  assumptions: EconomicsAssumptions
-  overrides: EconomicsOverrides
-}
-
-export const compareProfileChanges = (
-  columns: ProfileColumn[],
-): ProfileChangeComparison[] => {
-  const changes = columns.map((column) =>
-    profileChanges(column.assumptions, column.overrides),
-  )
-  const rows = new Map<string, ProfileChange>()
-  for (const change of changes.flat()) {
-    if (!rows.has(change.key)) rows.set(change.key, change)
-  }
-  const standards = columns.map(
-    (column) =>
-      new Map(
-        columns
-          .flatMap((other) =>
-            profileChanges(column.assumptions, other.overrides),
-          )
-          .map((change) => [change.key, change.from]),
-      ),
-  )
-  return [...rows.values()].map((row) => ({
-    key: row.key,
-    label: row.label,
-    cropLabels: row.cropLabels,
-    appliesTo: row.appliesTo,
-    cells: changes.map((own, index) => {
-      const change = own.find((entry) => entry.key === row.key)
-      return {
-        value: change?.to ?? standards[index].get(row.key) ?? '',
-        changed: change !== undefined,
-      }
-    }),
-  }))
-}
-
 const formatCount = (count: number, one: string, several: string): string =>
   `${count} ${count === 1 ? one : several}`
 

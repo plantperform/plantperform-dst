@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyOverrideEdits,
   categoryPrices,
-  compareProfileChanges,
   cropRestoreEffect,
   cropSources,
   cropTotals,
@@ -55,7 +54,6 @@ import {
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
-  type EconomicsOverrides,
   type ProfileChange,
 } from '@/lib/economics'
 
@@ -852,58 +850,6 @@ describe('profileChanges', () => {
         withPriceOverride(WITH_BARLEY, NO_OVERRIDES, 'strawPrice', 0.7),
       ),
     ).toMatchObject([{ label: 'Halmpris', guideStep: null }])
-  })
-
-  it('lines the changes of several profiles up against Standard', () => {
-    const cheaperPloughing = withPriceOverride(
-      ASSUMPTIONS,
-      NO_OVERRIDES,
-      'ploughing',
-      650,
-    )
-    const columns = (...list: EconomicsOverrides[]) =>
-      list.map((entry) => ({ assumptions: ASSUMPTIONS, overrides: entry }))
-    expect(
-      compareProfileChanges(
-        columns(NO_OVERRIDES, overrides, cheaperPloughing),
-      ).map((row) => [row.label, ...row.cells.map((cell) => cell.value)]),
-    ).toEqual([
-      ['Udbytte i forhold til normen', '0 %', '+10 %', '0 %'],
-      ['Salgspris', '335 kr/hkg', '350 kr/hkg', '335 kr/hkg'],
-      ['Pløjning med pakning', '825 kr/gang', '700 kr/gang', '650 kr/gang'],
-      ['spraying, mængde', '2 gange', '3 gange', '2 gange'],
-    ])
-    expect(
-      compareProfileChanges(columns(NO_OVERRIDES, cheaperPloughing))[0].cells,
-    ).toEqual([
-      { value: '825 kr/gang', changed: false },
-      { value: '650 kr/gang', changed: true },
-    ])
-    expect(compareProfileChanges(columns(NO_OVERRIDES, NO_OVERRIDES))).toEqual(
-      [],
-    )
-  })
-
-  it('shows each column the standard of its own budget', () => {
-    const organic: EconomicsAssumptions = {
-      ...ASSUMPTIONS,
-      farmingSystem: 'Økologisk',
-      prices: ASSUMPTIONS.prices.map((price) =>
-        price.id === 'ploughing' ? { ...price, valueDkk: 900 } : price,
-      ),
-      crops: [PEAS],
-    }
-    expect(
-      compareProfileChanges([
-        { assumptions: ASSUMPTIONS, overrides },
-        { assumptions: organic, overrides: NO_OVERRIDES },
-      ]).map((row) => [row.label, ...row.cells.map((cell) => cell.value)]),
-    ).toEqual([
-      ['Udbytte i forhold til normen', '+10 %', ''],
-      ['Salgspris', '350 kr/hkg', ''],
-      ['Pløjning med pakning', '700 kr/gang', '900 kr/gang'],
-      ['spraying, mængde', '3 gange', '2 gange'],
-    ])
   })
 
   it('counts the changes in a heading', () => {
