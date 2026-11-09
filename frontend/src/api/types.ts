@@ -478,10 +478,28 @@ export type StatementFigures = {
 // The backend leaves out a line that is 0.
 export type SparseStatementFigures = Partial<StatementFigures>
 
+export type StatementCrop = {
+  cropCode: number
+  cropName: string
+  average: SparseStatementFigures
+  years: SparseStatementFigures[]
+}
+
+// One regnskabspost of a line, in whole kr.
+export type StatementPost = {
+  name: string
+  average: number
+  years: number[]
+}
+
+export type StatementLineKey = Exclude<keyof StatementFigures, 'areaHa' | 'db'>
+
 // The average year, with the breakdown behind it. A result saved before the
 // breakdown existed has none of it.
 export type EconomicsStatement = StatementFigures & {
   years?: SparseStatementFigures[]
+  crops?: StatementCrop[]
+  posts?: Partial<Record<StatementLineKey, StatementPost[]>>
 }
 
 export type SavedResultView = {

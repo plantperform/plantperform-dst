@@ -40,8 +40,10 @@ import {
   STATEMENT_GROUPS,
   STATEMENT_PERIODS,
   STATEMENT_RESULT,
+  statementCropRows,
   statementFigures,
   statementPeriodLabel,
+  statementPostRows,
   summarizeCatchmentComparison,
   summarizeColumnQuota,
   toggleComparisonId,
@@ -868,5 +870,160 @@ describe('statementFigures', () => {
     )
     expect(statementPeriodLabel('0')).toBe('2027')
     expect(statementPeriodLabel('7')).toBe('2034')
+  })
+})
+
+const statementLine = (label: string) =>
+  [
+    ...STATEMENT_GROUPS.flatMap(({ lines, total }) => [...lines, total]),
+    STATEMENT_RESULT,
+  ].find((candidate) => candidate.label === label)!
+
+describe('statementCropRows', () => {
+  const revenue = statementLine('Indtægt')
+  const wheat = {
+    cropCode: 11,
+    cropName: 'Vinterhvede',
+    average: { areaHa: 10, revenue: 500_000 },
+    years: [{ areaHa: 10, revenue: 800_000 }, { areaHa: 10 }],
+  }
+  const barley = {
+    cropCode: 1,
+    cropName: 'Vårbyg',
+    average: { areaHa: 5, revenue: 100_000 },
+    years: [
+      { areaHa: 5, revenue: 100_000 },
+      { areaHa: 5, revenue: 100_000 },
+    ],
+  }
+  const statements = [
+    statementOf({ crops: [barley, wheat] }),
+    statementOf({ crops: [wheat] }),
+    null,
+  ]
+  const revenues = (rows: ReturnType<typeof statementCropRows>) =>
+    rows.map((row) => [
+      row.cropCode,
+      row.figures.map((figures) => figures?.revenue ?? null),
+    ])
+
+  it('lists the crops behind a line, the biggest first', () => {
+    expect(
+      revenues(
+        statementCropRows(statements, revenue, STATEMENT_AVERAGE_PERIOD),
+      ),
+    ).toEqual([
+      [11, [500_000, 500_000, null]],
+      [1, [100_000, null, null]],
+    ])
+  })
+
+  it('follows the chosen year and leaves out a crop with nothing on the line', () => {
+    expect(revenues(statementCropRows(statements, revenue, '0'))).toEqual([
+      [11, [800_000, 800_000, null]],
+      [1, [100_000, null, null]],
+    ])
+    expect(revenues(statementCropRows(statements, revenue, '1'))).toEqual([
+      [1, [100_000, null, null]],
+    ])
+  })
+
+  it('has no rows for statements without the breakdown', () => {
+    expect(
+      statementCropRows(
+        [statementOf(), null, undefined],
+        revenue,
+        STATEMENT_AVERAGE_PERIOD,
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('statementPostRows', () => {
+  const statements = [
+    statementOf({
+      areaHa: 10,
+      years: [{ areaHa: 10 }, { areaHa: 10 }],
+      posts: {
+        revenue: [
+          { name: 'Udbytte', average: 400_000, years: [500_000, 300_000] },
+        ],
+        fertiliserCost: [
+          {
+            name: 'Handelsgødning, N',
+            average: 50_000,
+            years: [60_000, 40_000],
+          },
+          { name: 'Svovl', average: 5_000, years: [0, 10_000] },
+        ],
+      },
+    }),
+    statementOf({
+      areaHa: 20,
+      years: [{ areaHa: 20 }, { areaHa: 20 }],
+      posts: {
+        fertiliserCost: [
+          {
+            name: 'Handelsgødning, N',
+            average: 80_000,
+            years: [80_000, 80_000],
+          },
+        ],
+      },
+    }),
+    null,
+  ]
+  const fertiliser = statementLine('Gødning')
+
+  it('lists the posts of a line as the table shows the line, the biggest first', () => {
+    expect(
+      statementPostRows(
+        statements,
+        fertiliser,
+        STATEMENT_AVERAGE_PERIOD,
+        'total',
+      ),
+    ).toEqual([
+      { name: 'Handelsgødning, N', cells: ['−50.000', '−80.000', null] },
+      { name: 'Svovl', cells: ['−5.000', null, null] },
+    ])
+    expect(
+      statementPostRows(
+        statements,
+        statementLine('Indtægt'),
+        STATEMENT_AVERAGE_PERIOD,
+        'total',
+      ),
+    ).toEqual([{ name: 'Udbytte', cells: ['400.000', null, null] }])
+  })
+
+  it('shows the posts per hectare of each statement', () => {
+    expect(
+      statementPostRows(
+        statements,
+        fertiliser,
+        STATEMENT_AVERAGE_PERIOD,
+        'perHa',
+      )[0].cells,
+    ).toEqual(['−5.000', '−4.000', null])
+  })
+
+  it('follows the chosen year and leaves out a post that is 0 in it', () => {
+    expect(statementPostRows(statements, fertiliser, '0', 'total')).toEqual([
+      { name: 'Handelsgødning, N', cells: ['−60.000', '−80.000', null] },
+    ])
+  })
+
+  it('has no posts for a line without any', () => {
+    for (const label of ['Tørring/lagring', 'Omkostninger i alt']) {
+      expect(
+        statementPostRows(
+          statements,
+          statementLine(label),
+          STATEMENT_AVERAGE_PERIOD,
+          'total',
+        ),
+      ).toEqual([])
+    }
   })
 })

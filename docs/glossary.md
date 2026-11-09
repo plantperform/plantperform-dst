@@ -156,9 +156,11 @@ field" column is the name on the wire.
 | andre gødningsstoffer, omkostning | `otherFertilisers` | `andre_goedningsstoffer`, `andreGoedningsstoffer` | |
 | andet, omkostning | `other` | `andet` | The costs listed as Andet, such as Hegn/vedligehold on græs |
 | omkostninger i alt | `totalCosts` | `omkostninger_total`, `omkostningerTotal` | |
-| regnskab for en simulering | `EconomicsStatement`, `StatementFigures`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger. It also holds each calendar year behind the average |
+| regnskab for en simulering | `EconomicsStatement`, `StatementFigures`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger. It also holds each calendar year, each crop and each regnskabspost behind the average |
 | kr/ha eller kr i alt | `StatementUnit`, `STATEMENT_UNIT_LABELS` | | The unit the regnskab on Sammenlign is shown in |
 | enkelt år eller gennemsnit | `StatementPeriod`, `STATEMENT_PERIODS`, `statementPeriodLabel`, `statementFigures` | `years` | The period the regnskab on Sammenlign is shown for: the average year or one of the eight calendar years. A result saved before the breakdown has the average only |
+| afgrøde i regnskabet | `StatementCrop`, `statementCropRows`, `byCrop` | `crops`, `afgrodeKode`, `afgrodeNavn` | A crop under an unfolded line when Afgrøder is chosen: its average year and each calendar year, left out when it earns or costs nothing on the line |
+| regnskabspost | `StatementPost`, `statementPostRows`, `postsKey` | `posts`, `navn` | An item of an indtægt, tilskud or cost line, such as Udbytte, Halm or Pløjning, shown under the line when Poster is chosen |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
 | bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |
