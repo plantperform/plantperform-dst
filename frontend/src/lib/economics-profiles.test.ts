@@ -29,6 +29,7 @@ import {
 const barleyPrice = (value: number): EconomicsOverrides => ({
   prices: { 'sale:1': value },
   quantities: {},
+  cropCorrections: {},
   yieldPct: {},
 })
 
