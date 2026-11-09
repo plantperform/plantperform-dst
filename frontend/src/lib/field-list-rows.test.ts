@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, SimulationQuotaTrade } from '@/api/types'
 import type { CatchmentRun } from '@/lib/field-domain'
 import {
   fieldListItems,
@@ -14,7 +14,80 @@ const field = (id: string) => ({ id }) as FieldRecord
 const run = (firstFieldId: string, catchmentId: number) =>
   ({ firstFieldId, catchmentId }) as CatchmentRun
 
+const trade = (catchmentId: number) => ({ catchmentId }) as SimulationQuotaTrade
+
 describe('fieldListItems', () => {
+  it('puts each trade after its catchment’s last field', () => {
+    const north = run('a', 1)
+    const south = run('c', 2)
+    const trades = [trade(1), trade(2)]
+
+    const items = fieldListItems(
+      [field('a'), field('b'), field('c')],
+      new Map([
+        ['a', north],
+        ['c', south],
+      ]),
+      trades,
+    )
+
+    expect(items.map((item) => item.key)).toEqual([
+      'group:a',
+      'a',
+      'b',
+      'quota-trade:1',
+      'group:c',
+      'c',
+      'quota-trade:2',
+    ])
+  })
+
+  it('preserves field row indexes when trades are inserted', () => {
+    const fields = [field('a'), field('b')]
+
+    const items = fieldListItems(
+      fields,
+      new Map([
+        ['a', run('a', 1)],
+        ['b', run('b', 2)],
+      ]),
+      [trade(1)],
+    )
+
+    expect(items.filter((item) => item.kind === 'field')).toEqual([
+      { kind: 'field', key: 'a', rowIndex: 0 },
+      { kind: 'field', key: 'b', rowIndex: 1 },
+    ])
+  })
+
+  it('keeps trade keys stable when catchments are reordered', () => {
+    const runs = new Map([
+      ['a', run('a', 1)],
+      ['b', run('b', 2)],
+    ])
+
+    const items = fieldListItems([field('b'), field('a')], runs, [
+      trade(1),
+      trade(2),
+    ])
+
+    expect(
+      items
+        .filter((item) => item.kind === 'quotaTrade')
+        .map((item) => item.key),
+    ).toEqual(['quota-trade:2', 'quota-trade:1'])
+  })
+
+  it('omits trades for catchments without listed fields', () => {
+    const fields = [field('a')]
+
+    const items = fieldListItems(fields, new Map([['a', run('a', 1)]]), [
+      trade(2),
+    ])
+
+    expect(items.some((item) => item.kind === 'quotaTrade')).toBe(false)
+  })
+
   it('puts a kystvandopland row before the first mark of each run', () => {
     const north = run('a', 1)
     const south = run('c', 2)

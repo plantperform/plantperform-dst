@@ -24,7 +24,11 @@ import {
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
 } from '@/lib/economics-profiles'
-import { quotaTradeAmounts, quotaTradePayment } from '@/lib/quota-trade-result'
+import {
+  db2IncludingQuotaTrades,
+  quotaTradeAmounts,
+  quotaTradePayment,
+} from '@/lib/quota-trade-result'
 import {
   formatStatementAmount,
   formatStatementLine,
@@ -240,7 +244,12 @@ export const ComparisonEconomics = ({
               'Dækningsbidrag inkl. kvotehandel',
               (index) => {
                 const statement = statements[index]
-                return statement ? statement.db - payments[index] : 0
+                return statement
+                  ? db2IncludingQuotaTrades(
+                      statement.db,
+                      table.columns[index].quotaTrades,
+                    )
+                  : 0
               },
               RESULT_ROW,
             )}

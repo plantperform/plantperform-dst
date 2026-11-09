@@ -244,6 +244,7 @@ const numericMetricColumn = (
   config: NumericMetricColumnConfig,
   isSimulationView: boolean,
   totals: FieldTotals,
+  footer?: ReactNode,
 ): ColumnDef<FieldRecord, unknown> => {
   const { key, label, heading, emptyCell, quotaGated } = config
   const contentOf = (field: FieldRecord): CellContent => {
@@ -265,9 +266,11 @@ const numericMetricColumn = (
     cell: ({ row }) =>
       renderCellContent(contentOf(row.original)) ?? emptyCell('cell'),
     footer: () =>
-      totals.calculatedCount === 0
-        ? emptyCell('footer')
-        : renderMetricFigure(totalsFigure(totals, key), 'footer'),
+      footer !== undefined
+        ? footer
+        : totals.calculatedCount === 0
+          ? emptyCell('footer')
+          : renderMetricFigure(totalsFigure(totals, key), 'footer'),
     meta: {
       headerClassName: NUMERIC_HEADER_CLASS,
       cellClassName: NUMERIC_CELL_CLASS,
@@ -604,6 +607,7 @@ export type FarmFieldsColumnsArgs = {
   nNormLevels: Map<string, NNormLevel>
   fertiliserLoading: boolean
   quota: FarmQuota
+  db2Footer?: ReactNode
   catchmentLabel: (catchmentId: number | null) => string
   detachingFieldIds: string[]
   onRequestDetach?: (field: FieldRecord) => void
@@ -618,6 +622,7 @@ export const buildFarmFieldsColumns = ({
   nNormLevels,
   fertiliserLoading,
   quota,
+  db2Footer,
   catchmentLabel,
   detachingFieldIds,
   onRequestDetach,
@@ -889,6 +894,7 @@ export const buildFarmFieldsColumns = ({
         },
         isSimulationView,
         totals,
+        db2Footer,
       ),
     )
   }

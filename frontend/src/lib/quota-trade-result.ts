@@ -7,8 +7,12 @@ import type {
 } from '@/api/types'
 import {
   formatNumber,
+  formatPerHa,
+  formatSigned,
   formatWholeNumber,
+  perHa,
   ROTATION_CALENDAR_YEARS,
+  type PerHaFigure,
 } from '@/lib/field-domain'
 
 // The trades of the simulation's latest run. A saved result from an earlier
@@ -21,10 +25,40 @@ export const latestQuotaTrades = (
     ? (savedResult.response.quotaTrades ?? [])
     : []
 
-// What the trades cost per year; negative when selling earns more than buying
-// costs.
-export const quotaTradePayment = (trades: SimulationQuotaTrade[]) =>
-  trades.reduce((sum, trade) => sum + trade.paymentDkkPerYear, 0)
+// What the trades cost in a calendar year, or on average when no year is
+// selected; negative when selling earns more than buying costs.
+export const quotaTradePayment = (
+  trades: SimulationQuotaTrade[],
+  calendarYear: number | null = null,
+) =>
+  trades.reduce((sum, trade) => {
+    if (calendarYear === null) return sum + trade.paymentDkkPerYear
+    const kg = trade.tradeKgByYear[calendarYear] ?? 0
+    return sum + kg * tradePriceDkkPerKg(trade, kg)
+  }, 0)
+
+// Always start from crop-only DB2, so the payment is included exactly once.
+export const db2IncludingQuotaTrades = (
+  cropDb2: number,
+  trades: SimulationQuotaTrade[],
+  calendarYear: number | null = null,
+) => cropDb2 - quotaTradePayment(trades, calendarYear)
+
+export const quotaTradeContributionFigure = (
+  trades: SimulationQuotaTrade[],
+  economicsAreaHa: number,
+  calendarYear: number | null = null,
+): PerHaFigure => {
+  const contribution = -quotaTradePayment(trades, calendarYear)
+  const rate = perHa(contribution, economicsAreaHa)
+  const total = `${formatSigned(contribution, formatWholeNumber)} kr i alt`
+  return rate === null
+    ? { value: total }
+    : {
+        value: formatSigned(rate, (value) => formatPerHa(value, 'db2')),
+        total,
+      }
+}
 
 // What buying cost and what selling earned, each the average per year and at
 // least 0. bought - sold is the trades' payment.

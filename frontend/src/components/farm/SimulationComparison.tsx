@@ -30,7 +30,7 @@ import { LoadError } from '@/components/ui/load-error'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
 import {
   limitAfterTradesFor,
-  quotaTradePayment,
+  db2IncludingQuotaTrades,
 } from '@/lib/quota-trade-result'
 import {
   changedFieldIds,
@@ -224,7 +224,7 @@ export const SimulationComparison = ({
           // The dækningsbidrag including kvotehandel: what the farm keeps.
           totals: {
             ...totals,
-            db2: totals.db2 - quotaTradePayment(quotaTrades),
+            db2: db2IncludingQuotaTrades(totals.db2, quotaTrades),
           },
           requirement: describeFeedUnitRequirement(simulation.constraints),
           changedCount: changedFieldIds(simulationFields, fields).size,

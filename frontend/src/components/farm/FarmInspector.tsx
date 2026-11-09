@@ -565,6 +565,7 @@ export const FarmInspector = ({
                     farmId={farm.id}
                     search={fieldSearch}
                     sortedFields={sortedFields}
+                    quotaTrades={quotaTrades}
                     isSimulationView={isSimulationView}
                     sort={fieldsSort}
                     onSortChange={setFieldsSort}

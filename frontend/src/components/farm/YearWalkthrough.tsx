@@ -55,6 +55,7 @@ import {
 import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
 import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
 import {
+  db2IncludingQuotaTrades,
   describeQuotaTradeAmount,
   describeTradeKg,
   describeTradePrices,
@@ -495,9 +496,15 @@ const ScopedSummary = ({
         />
         {db2 === null ? null : (
           <ScopedFact
-            label={column ? 'DB2' : 'DB2 gns. pr. år'}
+            label={`${column ? 'DB2' : 'DB2 gns. pr. år'}${row.trade ? ' inkl. kvotehandel' : ''}`}
             term="db2"
-            value={formatCompactDkk(db2)}
+            value={formatCompactDkk(
+              db2IncludingQuotaTrades(
+                db2,
+                row.trade ? [row.trade] : [],
+                column?.calendarYear ?? null,
+              ),
+            )}
           />
         )}
         <ScopedFact
@@ -965,8 +972,14 @@ const YearPanel = ({
                 ) : null}
                 {lastRun && !column && view === 'nLoad' ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
-                    Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2{' '}
-                    {formatCompactDkk(lastRun.objectiveDb2)}, udledning{' '}
+                    Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2
+                    {lastRun.quotaTrades?.length ? ' inkl. kvotehandel' : ''}{' '}
+                    {formatCompactDkk(
+                      db2IncludingQuotaTrades(
+                        lastRun.objectiveDb2,
+                        lastRun.quotaTrades ?? [],
+                      ),
+                    )}, udledning{' '}
                     {formatWholeNumber(lastRun.totalNLoadKg)} kg N, udvaskning{' '}
                     {formatWholeNumber(lastRun.totalLeachingKg)} kg N,{' '}
                     {formatWholeNumber(lastRun.totalFeedUnits)} FE
@@ -1047,6 +1060,14 @@ export const YearWalkthrough = ({
     [fields, history],
   )
   const catchments = quota.catchments
+  const scopedTrades = history
+    ? []
+    : quotaTrades.filter((trade) =>
+        catchments.some((catchment) => catchment.catchmentId === trade.catchmentId),
+      )
+  const db2Label = scopedTrades.length > 0 ? 'DB2 inkl. kvotehandel' : 'DB2'
+  const yearDb2 = (entry: YearlySummaryEntry, calendarYear: number) =>
+    db2IncludingQuotaTrades(entry.totalDb2, scopedTrades, calendarYear)
   const quotaCatchmentCount = catchments.filter(
     (catchment) => catchment.totals.nLoadQuotaKgN > 0,
   ).length
@@ -1253,7 +1274,7 @@ export const YearWalkthrough = ({
     const emission = `udledning ${formatWholeNumber(entry.totalNLoadKg)} kg N${describeYearQuota(quotaCatchmentCount, overCount)}`
     return history
       ? `${column.calendarYear}: ${emission}`
-      : `${column.calendarYear}: DB2 ${formatCompactDkk(entry.totalDb2)}, ${emission}`
+      : `${column.calendarYear}: ${db2Label} ${formatCompactDkk(yearDb2(entry, column.calendarYear))}, ${emission}`
   }
   const yearTabIndex = (position: number) =>
     columns[position].index === selectedYearIndex ||
@@ -1649,7 +1670,7 @@ export const YearWalkthrough = ({
                             ) : null}
                           </>
                         ) : (
-                          `DB2 ${formatCompactDkk(entry.totalDb2)}`
+                          `${db2Label} ${formatCompactDkk(yearDb2(entry, column.calendarYear))}`
                         )}
                       </span>
                     </button>

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CatchmentYearlyNLoadCaps,
   FieldRecord,
+  OptimizeSimulationResponse,
   SimulationQuotaTrade,
 } from '@/api/types'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
@@ -104,7 +105,14 @@ describe('kvotehandel in the Årsgennemgang', () => {
     {
       year = null,
       scoped = false,
-    }: { year?: number | null; scoped?: boolean } = {},
+      collapsed = false,
+      lastRun = null,
+    }: {
+      year?: number | null
+      scoped?: boolean
+      collapsed?: boolean
+      lastRun?: OptimizeSimulationResponse | null
+    } = {},
   ) =>
     act(async () =>
       root.render(
@@ -115,10 +123,10 @@ describe('kvotehandel in the Årsgennemgang', () => {
             entries: [
               {
                 year: 1,
-                totalNLoadKg: 160,
-                totalDb2: 2_000,
+                totalNLoadKg: scoped ? 120 : 160,
+                totalDb2: scoped ? 1_000 : 2_000,
                 totalFeedUnits: 0,
-                fieldCount: 2,
+                fieldCount: scoped ? 1 : 2,
               },
             ],
             loading: false,
@@ -130,8 +138,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
             onSelectedYearIndexChange: vi.fn(),
             catchmentLabel: (id) => `Opland ${id}`,
             catchmentColor: () => 'bg-blue-700',
-            lastRun: null,
-            collapsed: false,
+            lastRun,
+            collapsed,
             catchmentTotalsByYear: yearTotals,
             quotaTrades,
             quotaCaps,
@@ -151,6 +159,80 @@ describe('kvotehandel in the Årsgennemgang', () => {
     [...container.querySelectorAll('aside')]
       .map((aside) => aside.textContent)
       .join(' ')
+
+  it('includes sales and purchase payments in the annual figure', async () => {
+    const trades = [trade(1, 30), trade(2, -70)]
+
+    await render(trades)
+
+    expect(container.querySelector('[role="radio"]')?.textContent).toContain(
+      'DB2 inkl. kvotehandel 3 t.kr',
+    )
+  })
+
+  it.each([false, true])(
+    'includes each year’s own payment in its accessible label (collapsed: %s)',
+    async (collapsed) => {
+      const trades = [trade(1, -100, 20, { buy: 30, sell: 20 })]
+
+      await render(trades, undefined, { collapsed })
+
+      expect(
+        container.querySelector('[role="radio"]')?.getAttribute('aria-label'),
+      ).toContain('2027: DB2 inkl. kvotehandel 4 t.kr')
+    },
+  )
+
+  it('includes only the selected catchment’s payment in its annual figure', async () => {
+    const trades = [trade(1, 30), trade(2, -70)]
+
+    await render(trades, undefined, { scoped: true, year: 0 })
+
+    expect(container.querySelector('[role="radio"]')?.textContent).toContain(
+      'DB2 inkl. kvotehandel 100 kr',
+    )
+  })
+
+  it('uses the selected year’s payment in the scoped summary', async () => {
+    const trades = [trade(1, -100, 20, { buy: 30, sell: 20 }), trade(2, -70)]
+
+    await render(trades, undefined, { scoped: true, year: 0 })
+
+    expect(panel()).toContain('DB2 inkl. kvotehandel3 t.kr')
+  })
+
+  it('uses the saved average payment in the scoped period summary', async () => {
+    const trades = [trade(1, -100, 20, { buy: 30, sell: 20 }), trade(2, -70)]
+
+    await render(trades, undefined, { scoped: true })
+
+    expect(panel()).toContain('DB2 gns. pr. år inkl. kvotehandel725 kr')
+  })
+
+  it('includes the last run’s own trades in its result', async () => {
+    const lastRun = {
+      status: 'OPTIMAL',
+      objectiveDb2: 100_000,
+      totalNLoadKg: 160,
+      totalLeachingKg: 200,
+      totalFeedUnits: 0,
+      fields: [],
+      assignments: [],
+      quotaTrades: [trade(1, -100)],
+    } satisfies OptimizeSimulationResponse
+
+    await render([trade(1, 30)], undefined, { lastRun })
+
+    expect(panel()).toContain('DB2 inkl. kvotehandel 103 t.kr')
+  })
+
+  it('keeps crop DB2 when no trades were saved', async () => {
+    await render()
+
+    expect(
+      container.querySelector('[role="radio"]')?.getAttribute('aria-label'),
+    ).toContain('2027: DB2 2 t.kr')
+  })
 
   it('marks bought and sold kvote apart from the udledning and names them', async () => {
     await render([trade(1, 30), trade(2, -40)])

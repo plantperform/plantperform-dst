@@ -28,7 +28,12 @@ import {
   useSimulationFields,
   useSimulationView,
 } from '@/api/hooks'
-import type { Farm, FieldRecord, Simulation } from '@/api/types'
+import type {
+  Farm,
+  FieldRecord,
+  Simulation,
+  SimulationQuotaTrade,
+} from '@/api/types'
 import { useAuth } from '@/auth/context'
 import {
   useOptimizationRun,
@@ -100,6 +105,7 @@ import {
 import { optimizationRunName } from '@/lib/optimization-run'
 import {
   averageLimitAfterTradesFor,
+  db2IncludingQuotaTrades,
   latestQuotaTrades,
 } from '@/lib/quota-trade-result'
 import { formatCreatedAt } from '@/lib/simulation-overview'
@@ -114,6 +120,7 @@ type ViewKeyFigures = {
 const describeKeyFigures = (
   quota: FarmQuota,
   isSimulationView: boolean,
+  quotaTrades: SimulationQuotaTrade[] = [],
 ): ViewKeyFigures => {
   const { totals, level, quotaKgN } = quota
 
@@ -139,15 +146,17 @@ const describeKeyFigures = (
 
   if (!isSimulationView) return { level, label: emission, title: emissionTitle }
 
+  const db2 = db2IncludingQuotaTrades(totals.db2, quotaTrades)
+  const tradeNote = quotaTrades.length > 0 ? ' inkl. kvotehandel' : ''
   const earnings = perHaFigure(
-    totalsPerHa(totals, 'db2'),
+    totalsPerHa({ ...totals, db2 }, 'db2'),
     'db2',
-    formatCompactDkk(totals.db2),
+    formatCompactDkk(db2),
   ).value
   return {
     level,
     label: `${emission} · ${earnings}`,
-    title: `${emissionTitle}, DB2 ${formatWholeNumber(totals.db2)} kr`,
+    title: `${emissionTitle}, DB2${tradeNote} ${formatWholeNumber(db2)} kr i alt`,
   }
 }
 
@@ -664,7 +673,9 @@ const SimulationMenuItem = ({
           : undefined,
       )
     : null
-  const figures = quota ? describeKeyFigures(quota, true) : undefined
+  const figures = quota
+    ? describeKeyFigures(quota, true, quotaTrades)
+    : undefined
   const fieldSetChanges = useFieldSetChanges(
     farmId,
     simulation,

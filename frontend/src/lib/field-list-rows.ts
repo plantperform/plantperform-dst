@@ -1,19 +1,51 @@
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, SimulationQuotaTrade } from '@/api/types'
 import type { CatchmentRun } from '@/lib/field-domain'
 
-type FieldListItem =
+export type FieldListItem =
   | { kind: 'group'; key: string; run: CatchmentRun }
   | { kind: 'field'; key: string; rowIndex: number }
+  | {
+      kind: 'quotaTrade'
+      key: string
+      run: CatchmentRun
+      trade: SimulationQuotaTrade
+    }
 
 export const fieldListItems = (
   fields: FieldRecord[],
   runStarts: ReadonlyMap<string, CatchmentRun>,
-): FieldListItem[] =>
-  fields.flatMap((field, rowIndex): FieldListItem[] => {
+  trades: SimulationQuotaTrade[] = [],
+): FieldListItem[] => {
+  const tradesByCatchment = new Map(
+    trades.map((trade) => [trade.catchmentId, trade]),
+  )
+  const items: FieldListItem[] = []
+  let currentRun: CatchmentRun | undefined
+  fields.forEach((field, rowIndex) => {
     const run = runStarts.get(field.id)
-    const row: FieldListItem = { kind: 'field', key: field.id, rowIndex }
-    return run ? [{ kind: 'group', key: `group:${field.id}`, run }, row] : [row]
+    if (run) {
+      currentRun = run
+      items.push({ kind: 'group', key: `group:${field.id}`, run })
+    }
+    items.push({ kind: 'field', key: field.id, rowIndex })
+    const nextField = fields[rowIndex + 1]
+    if (
+      (!nextField || runStarts.has(nextField.id)) &&
+      currentRun?.catchmentId != null
+    ) {
+      const trade = tradesByCatchment.get(currentRun.catchmentId)
+      if (trade) {
+        items.push({
+          kind: 'quotaTrade',
+          key: `quota-trade:${trade.catchmentId}`,
+          run: currentRun,
+          trade,
+        })
+      }
+    }
   })
+  return items
+}
 
 export const withGroupRows = (
   indexes: number[],
