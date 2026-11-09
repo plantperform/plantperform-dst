@@ -469,7 +469,8 @@ class EconomicsDatabaseTests(DatabaseTests):
         response = self.client.post("/api/v0/economics-modules/standard/duplicate")
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(
-            response.json()["overrides"], {"prices": {}, "quantities": {}, "yieldPct": {}}
+            response.json()["overrides"],
+            {"prices": {}, "quantities": {}, "yieldPct": {}, "cropCorrections": {}},
         )
 
     def test_unknown_identifiers_and_revision_conflicts(self):
@@ -477,6 +478,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             dict(prices={"bad": 1}),
             dict(quantities={"bad": 1}),
             dict(yieldPct={"999999": 1}),
+            dict(cropCorrections={"999999": 1}),
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.module(**values)
@@ -776,6 +778,28 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(
             field_work(irrigated=True), (1500, ["Såning og høst", "Vanding pr millimeter"])
         )
+
+    def test_a_crop_correction_adds_one_line_to_that_crop_only(self):
+        def calculate(afgrodekode, corrections):
+            return calculator.calculate_db(
+                afgrodekode,
+                "Konventionel",
+                5,
+                itemized=True,
+                economics_key=EconomicsOverrides(cropCorrections=corrections).cache_key(),
+            )
+
+        plain = calculate(1, {})
+        corrected = calculate(1, {"1": 300})
+        self.assertAlmostEqual(corrected["andet"], plain["andet"] - 300)
+        self.assertAlmostEqual(corrected["db"], plain["db"] + 300)
+        line = next(
+            line for line in corrected["linjer"] if line["behandling"] == "Afgrødekorrektion"
+        )
+        self.assertEqual((line["kategori"], line["udgift_kr_ha"]), ("Andet", -300))
+        self.assertAlmostEqual(calculate(1, {"1": -200})["db"], plain["db"] - 200)
+        # Another crop's correction leaves this crop alone.
+        self.assertEqual(calculate(1, {"2": 300})["db"], plain["db"])
 
     def test_the_straw_sold_is_the_straw_pressed_and_both_follow_the_yield(self):
         with self.sessions.begin() as session:

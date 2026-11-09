@@ -24,7 +24,8 @@ The overrides column stores only this structure, never a copy of reference data:
 {
   "prices": {"sale:[11,\"Konventionel\",\"\"]": 165},
   "quantities": {},
-  "yieldPct": {"11": 10}
+  "yieldPct": {"11": 10},
+  "cropCorrections": {"11": 300}
 }
 ```
 
@@ -83,7 +84,10 @@ variants; the frontend's example IDs are not API identifiers.
 The text after `:` is a compact JSON array with Unicode preserved. A quantity
 entry's ID equals `cropCode + '/' + lineId`, matching the existing frontend's
 quantity-key convention. `yieldPct` keys are decimal crop-code strings, and
-values are percentage changes, not absolute yields.
+values are percentage changes, not absolute yields. `cropCorrections` keys are
+crop-code strings too; the value is kr/ha added to that crop's dækningsbidrag
+(negative lowers it, between −100000 and 100000). It is booked as a negative
+cost line "Afgrødekorrektion" under Andet. It changes no shared price.
 
 Existing lookup and fallback rules select a reference variant first; an override
 then replaces that selected value. A shared work rate affects every line that
