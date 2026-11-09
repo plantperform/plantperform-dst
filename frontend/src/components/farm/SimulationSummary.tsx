@@ -193,8 +193,19 @@ export const SimulationSummary = ({
             <ul className="mt-1.5 space-y-0.5 border-l pl-3">
               {selectedRotations(categories, rotationVariants).map(
                 (rotation) => (
-                  <li key={rotation.rotationVariant} className="break-words">
-                    {rotation.cropSequence.join(' · ')}
+                  <li
+                    key={rotation.rotationVariant}
+                    className="flex gap-2 break-words"
+                  >
+                    <span
+                      className="w-8 shrink-0 text-right tabular-nums"
+                      title={`Sædskifte ${rotation.rotationVariant}`}
+                    >
+                      {rotation.rotationVariant}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {rotation.cropSequence.join(' · ')}
+                    </span>
                   </li>
                 ),
               )}

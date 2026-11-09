@@ -187,6 +187,14 @@ export const RotationPicker = ({
                     )
                   }
                 />
+                {/* Several rotations can share a crop sequence, so the
+                    saedskiftevariant number is what tells them apart. */}
+                <span
+                  className="w-8 shrink-0 text-right text-muted-foreground tabular-nums"
+                  title={`Sædskifte ${rotation.rotationVariant}`}
+                >
+                  {rotation.rotationVariant}
+                </span>
                 <span className="min-w-0 flex-1 break-words">
                   {rotation.cropSequence.map((crop, index) => (
                     <span key={index}>
