@@ -242,6 +242,15 @@ describe('kvotehandel results', () => {
       sold: (7 * 40 * 30) / 8,
     })
     expect(quotaTradeAmounts([])).toEqual({ bought: 0, sold: 0 })
+    // In a single calendar year only that year's trade counts.
+    expect(quotaTradeAmounts([mixed], ROTATION_CALENDAR_YEARS[0])).toEqual({
+      bought: 30 * 35,
+      sold: 0,
+    })
+    expect(quotaTradeAmounts([mixed], ROTATION_CALENDAR_YEARS[1])).toEqual({
+      bought: 0,
+      sold: 40 * 30,
+    })
   })
 
   it('pays a trade at the price of its direction', () => {
