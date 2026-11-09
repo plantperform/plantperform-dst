@@ -180,6 +180,7 @@ field" column is the name on the wire.
 | har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |
 | genberegn økonomi | `recalculate`, `isEconomicsCurrent`, `canRecalculateEconomics` | | Prices a simulation with its chosen profile without optimizing again. It runs by itself when a profile is switched or edited, unless the simulation is calculating or optimizing |
+| skift profil på chippen | `ProfileSwitch`, `isProfileApplied` | | The arrow on the "Regner med" chip on Sammenlign: chooses another economics profile for the simulation and recalculates it. It spins until the figures are the chosen profile's |
 | genberegningen fejlede | `economicsRecalculationFailed` | `economicsRecalculationFailed` | A failed recalculation that can be retried |
 | Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
 | tilpasset | customised, `EconomicsOverrides` | | The profile's own value instead of the standard |

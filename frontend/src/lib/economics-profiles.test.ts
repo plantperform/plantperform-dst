@@ -18,6 +18,7 @@ import {
   describeStandard,
   freeProfileName,
   isEconomicsCurrent,
+  isProfileApplied,
   profileForSimulation,
   profileNameError,
   profilesInUse,
@@ -84,6 +85,16 @@ describe('economics profiles', () => {
       id: 'careful',
       revision: 3,
     })
+  })
+
+  it('compares a chosen profile with the one the figures were calculated with', () => {
+    const careful = PROFILES[1]
+    expect(isProfileApplied(careful, appliedProfile(CURRENT))).toBe(true)
+    expect(isProfileApplied(careful, { ...careful, name: 'Omdøbt' })).toBe(true)
+    expect(isProfileApplied(careful, STANDARD_PROFILE)).toBe(false)
+    expect(
+      isProfileApplied(careful, { ...careful, overrides: barleyPrice(130) }),
+    ).toBe(false)
   })
 
   it('names a profile the user cannot open by the name it was calculated with', () => {

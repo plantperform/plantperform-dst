@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import type { EconomicsStatement, FarmingSystem } from '@/api/types'
+import type { EconomicsStatement, Simulation } from '@/api/types'
 import {
   ComparisonColumnsTable,
   ComparisonFigureRow,
@@ -75,13 +75,14 @@ const RESULT_ROW = {
 
 type ComparisonEconomicsProps = ComparedColumnsProps & {
   profiles: EconomicsProfile[]
-  farmingSystems: FarmingSystem[]
+  // The simulation of each column, so the profile it regner med can be changed.
+  simulations: (Simulation | undefined)[]
   statements: (EconomicsStatement | null | undefined)[]
 }
 
 export const ComparisonEconomics = ({
   profiles,
-  farmingSystems,
+  simulations,
   statements,
   ...table
 }: ComparisonEconomicsProps) => {
@@ -230,7 +231,10 @@ export const ComparisonEconomics = ({
           {(_, index) => (
             <EconomicsChip
               profile={profiles[index]}
-              farmingSystem={farmingSystems[index]}
+              farmingSystem={
+                simulations[index]?.fertiliser.farmingSystem ?? 'Konventionel'
+              }
+              simulation={simulations[index]}
               returnTo={{ kind: 'compare', search }}
             />
           )}

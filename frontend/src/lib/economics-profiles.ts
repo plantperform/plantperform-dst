@@ -71,17 +71,22 @@ export const profileForSimulation = (
   )
 }
 
+// Whether figures calculated with `applied` are those the `selected` profile gives.
+export const isProfileApplied = (
+  selected: EconomicsProfile,
+  applied: EconomicsProfile,
+): boolean =>
+  selected.id === applied.id &&
+  sameOverrides(selected.overrides, applied.overrides)
+
 export const isEconomicsCurrent = (
   profiles: EconomicsProfile[] | undefined,
   simulation: ProfiledSimulation,
-): boolean => {
-  const selected = profileForSimulation(profiles, simulation)
-  const applied = appliedProfile(simulation)
-  return (
-    selected.id === applied.id &&
-    sameOverrides(selected.overrides, applied.overrides)
+): boolean =>
+  isProfileApplied(
+    profileForSimulation(profiles, simulation),
+    appliedProfile(simulation),
   )
-}
 
 // A simulation that is calculating, or has an optimization queued or running,
 // cannot be recalculated; the server turns the request down with a conflict.
