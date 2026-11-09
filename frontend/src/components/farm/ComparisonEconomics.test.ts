@@ -11,6 +11,7 @@ import { ComparisonEconomics } from '@/components/farm/ComparisonEconomics'
 import type { ComparedColumn } from '@/components/farm/comparison-column'
 import { STANDARD_PROFILE } from '@/lib/economics-profiles'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+import { STATEMENT_UNIT_LABELS } from '@/lib/simulation-comparison'
 
 vi.mock('@/api/economics', () => ({
   useFarmBudgets: () => ({ data: undefined }),
@@ -100,18 +101,17 @@ describe('ComparisonEconomics', () => {
 
   it('adds kvotehandel to the regnskab when a simulation traded', () => {
     const html = render([column('Med handel', [bought]), column('Uden', [])])
-    // Per ha of 40 ha: 8.000 kr bought is 200 kr/ha.
-    expect(row(html, 'Købt kvote')).toEqual(['Købt kvote', '−200', '0'])
+    expect(row(html, 'Købt kvote')).toEqual(['Købt kvote', '−8.000', '0'])
     expect(row(html, 'Kvotehandel i alt')).toEqual([
       'Kvotehandel i alt',
-      '−200',
+      '−8.000',
       '0',
     ])
-    // 330.000 kr less 8.000 kr, per ha.
+    // 330.000 kr less 8.000 kr.
     expect(row(html, 'Dækningsbidrag inkl. kvotehandel')).toEqual([
       'Dækningsbidrag inkl. kvotehandel',
-      '8.050',
-      '8.250',
+      '322.000',
+      '330.000',
     ])
     expect(row(html, 'Dækningsbidrag')).toBeNull()
   })
@@ -121,7 +121,7 @@ describe('ComparisonEconomics', () => {
     expect(row(html, 'Kvotehandel')).toBeNull()
     expect(row(html, 'Dækningsbidrag')?.slice(0, 2)).toEqual([
       'Dækningsbidrag',
-      '8.250',
+      '330.000',
     ])
   })
 
@@ -149,7 +149,7 @@ describe('ComparisonEconomics', () => {
       total: '328.000',
     },
   ])(
-    'includes $name once when switching between kr/ha and kr i alt',
+    'includes $name once when switching between kr i alt and kr/ha',
     async ({ trades, perHa, total }) => {
       const columns = [column('Med handel', trades)]
       await act(async () => root.render(view(columns)))
@@ -160,13 +160,15 @@ describe('ComparisonEconomics', () => {
 
       await act(async () => {
         container
-          .querySelector<HTMLButtonElement>('button[aria-label="kr i alt"]')!
+          .querySelector<HTMLButtonElement>(
+            `button[aria-label="${STATEMENT_UNIT_LABELS.perHa}"]`,
+          )!
           .click()
       })
 
       expect({
-        perHa: before,
-        total: row(
+        total: before,
+        perHa: row(
           container.innerHTML,
           'Dækningsbidrag inkl. kvotehandel',
         )?.[1],
