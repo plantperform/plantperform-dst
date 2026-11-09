@@ -367,11 +367,13 @@ describe('sameOverrides', () => {
     const left = {
       prices: { spraying: 150, ploughing: 700 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '22': 10 },
     }
     const right = {
       prices: { ploughing: 700, spraying: 150 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '22': 10 },
     }
     expect(sameOverrides(left, right)).toBe(true)
@@ -379,7 +381,12 @@ describe('sameOverrides', () => {
   })
 
   it('tells a changed, an added and a removed value apart', () => {
-    const base = { prices: { spraying: 150 }, quantities: {}, yieldPct: {} }
+    const base = {
+      prices: { spraying: 150 },
+      quantities: {},
+      yieldPct: {},
+      cropCorrections: {},
+    }
     expect(sameOverrides(base, { ...base, prices: { spraying: 160 } })).toBe(
       false,
     )
@@ -729,6 +736,7 @@ describe('restoring and merging a profile', () => {
     const elsewhere = {
       prices: { 'sale:[999,"Konventionel",""]': 200 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '999': 5 },
     }
     expect(
@@ -747,21 +755,25 @@ describe('restoring and merging a profile', () => {
     const opened = {
       prices: { a: 1, b: 2 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '1': 5 },
     }
     const edited = {
       prices: { a: 1, c: 3 },
       quantities: { q: 4 },
+      cropCorrections: {},
       yieldPct: { '1': 5 },
     }
     const latest = {
       prices: { a: 10, b: 2, d: 7 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '1': 6 },
     }
     expect(applyOverrideEdits(latest, opened, edited)).toEqual({
       prices: { a: 10, c: 3, d: 7 },
       quantities: { q: 4 },
+      cropCorrections: {},
       yieldPct: { '1': 6 },
     })
   })

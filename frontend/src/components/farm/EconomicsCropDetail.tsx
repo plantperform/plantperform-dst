@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { CustomisedDot, RestoreButton } from '@/components/farm/economics-ui'
 import {
+  CropCorrectionField,
   EconomicsNumberField,
   YieldPctField,
 } from '@/components/farm/EconomicsNumberField'
@@ -22,6 +23,8 @@ import { cropGroupFor } from '@/lib/crop-groups'
 import { cropLabel } from '@/lib/crop-label'
 import {
   COST_CATEGORIES,
+  CROP_CORRECTION_LABEL,
+  cropCorrection,
   cropDbChange,
   cropRestoreEffect,
   cropSources,
@@ -30,11 +33,13 @@ import {
   describeBudgetBasis,
   fertiliserNote,
   findPrice,
+  formatCorrection,
   formatCropCount,
   formatDbDkk,
   formatEconomicsNumber,
   formatNameList,
   formatSignedDkk,
+  isCorrectionCustomised,
   isCropCustomised,
   isLineCustomised,
   isPriceCustomised,
@@ -47,6 +52,7 @@ import {
   quantityUnitLabel,
   sharedCustomisedPrices,
   standardLineQuantity,
+  withCropCorrection,
   withoutCropChanges,
   withQuantityOverride,
   withShownQuantity,
@@ -244,6 +250,63 @@ const YieldAdjustmentRow = ({
   )
 }
 
+type CropCorrectionRowProps = {
+  overrides: EconomicsOverrides
+  crop: CropEconomics
+  onChange?: (change: OverridesChange) => void
+}
+
+// An amount that belongs to this crop alone, whatever the shared prices say.
+const CropCorrectionRow = ({
+  overrides,
+  crop,
+  onChange,
+}: CropCorrectionRowProps) => {
+  const correction = cropCorrection(overrides, crop)
+  const label = cropLabel(crop.cropCode, crop.cropName)
+
+  return (
+    <div className={cn(ROW_CLASS, 'bg-muted/40')}>
+      <div className={ROW_LABEL_CLASS}>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span>{CROP_CORRECTION_LABEL}</span>
+          {onChange && isCorrectionCustomised(overrides, crop) ? (
+            <RestoreButton
+              label={CROP_CORRECTION_LABEL}
+              onRestore={() =>
+                onChange((current) => withCropCorrection(current, crop, null))
+              }
+            />
+          ) : null}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Plus lægger til dækningsbidraget for denne afgrøde alene, minus
+          trækker fra. De fælles priser ændres ikke.
+        </p>
+      </div>
+      {onChange ? (
+        <CropCorrectionField
+          value={correction}
+          cropLabel={label}
+          onCommit={(value) =>
+            onChange((current) =>
+              withCropCorrection(current, crop, value === 0 ? null : value),
+            )
+          }
+        />
+      ) : (
+        <div className="flex justify-end gap-1.5 leading-7 text-muted-foreground">
+          <StaticValue>{formatCorrection(correction)}</StaticValue>
+          <span>kr/ha</span>
+        </div>
+      )}
+      <span className="text-right tabular-nums">
+        {formatSignedDkk(correction)}
+      </span>
+    </div>
+  )
+}
+
 type GroupProps = {
   title: string
   total: string
@@ -324,7 +387,11 @@ export const EconomicsCropDetail = ({
   const [openGroups, setOpenGroups] = useState<ReadonlySet<EconomicsGroupId>>(
     () => {
       const focused = focusLineId ? lineGroupId(crop, focusLineId) : null
-      return new Set(focused ? ['revenue', focused] : ['revenue'])
+      const open: EconomicsGroupId[] = focused
+        ? ['revenue', focused]
+        : ['revenue']
+      if (isCorrectionCustomised(overrides, crop)) open.push('correction')
+      return new Set(open)
     },
   )
 
@@ -368,6 +435,17 @@ export const EconomicsCropDetail = ({
         ? 'fixed'
         : 'editable') as QuantityMode,
     })),
+    ...(onOverridesChange || totals.correctionDkkHa !== 0
+      ? [
+          {
+            id: 'correction' as const,
+            title: CROP_CORRECTION_LABEL,
+            total: formatSignedDkk(totals.correctionDkkHa),
+            lines: [],
+            quantityMode: 'hidden' as QuantityMode,
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -450,7 +528,9 @@ export const EconomicsCropDetail = ({
               group.lines.some((line) =>
                 isLineCustomised(overrides, crop, line),
               ) ||
-              (group.id === 'revenue' && isYieldCustomised(overrides, crop))
+              (group.id === 'revenue' && isYieldCustomised(overrides, crop)) ||
+              (group.id === 'correction' &&
+                isCorrectionCustomised(overrides, crop))
             }
             onToggle={() => toggleGroup(group.id)}
           >
@@ -461,6 +541,13 @@ export const EconomicsCropDetail = ({
                 overrides={overrides}
                 crop={crop}
                 highlighted={focusLineId === YIELD_ADJUSTMENT_ID}
+                onChange={onOverridesChange}
+              />
+            ) : null}
+            {group.id === 'correction' ? (
+              <CropCorrectionRow
+                overrides={overrides}
+                crop={crop}
                 onChange={onOverridesChange}
               />
             ) : null}

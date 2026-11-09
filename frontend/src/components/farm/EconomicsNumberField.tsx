@@ -5,10 +5,15 @@ import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import {
+  CROP_CORRECTION_LABEL,
+  CROP_CORRECTION_STEP,
+  formatCorrection,
   formatEconomicsNumber,
   formatYieldPct,
+  parseCorrectionInput,
   parseEconomicsInput,
   parseYieldPctInput,
+  stepCorrection,
   stepYieldPct,
   YIELD_ADJUSTMENT_LABEL,
   YIELD_PCT_STEP,
@@ -91,6 +96,51 @@ export const EconomicsNumberField = ({
     </span>
   )
 }
+
+type CropCorrectionFieldProps = {
+  value: number
+  cropLabel: string
+  onCommit: (value: number) => void
+}
+
+// Plus adds to the crop's dækningsbidrag, minus lowers it.
+export const CropCorrectionField = ({
+  value,
+  cropLabel,
+  onCommit,
+}: CropCorrectionFieldProps) => (
+  <div className="flex items-start justify-end gap-1.5 leading-7">
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="size-7"
+      aria-label={`Sænk dækningsbidraget for ${cropLabel} ${CROP_CORRECTION_STEP} kr/ha`}
+      onClick={() => onCommit(stepCorrection(value, -1))}
+    >
+      <Minus className="size-3.5" aria-hidden="true" />
+    </Button>
+    <EconomicsNumberField
+      value={value}
+      standard={0}
+      label={`${CROP_CORRECTION_LABEL} for ${cropLabel} i kr/ha`}
+      format={formatCorrection}
+      parse={parseCorrectionInput}
+      onCommit={onCommit}
+    />
+    <span className="text-muted-foreground">kr/ha</span>
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="size-7"
+      aria-label={`Hæv dækningsbidraget for ${cropLabel} ${CROP_CORRECTION_STEP} kr/ha`}
+      onClick={() => onCommit(stepCorrection(value, 1))}
+    >
+      <Plus className="size-3.5" aria-hidden="true" />
+    </Button>
+  </div>
+)
 
 type YieldPctFieldProps = {
   pct: number
