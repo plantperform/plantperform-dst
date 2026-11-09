@@ -67,7 +67,7 @@ const view = (columns: ComparedColumn[]) =>
         highlightedKey: null,
         onHighlight: vi.fn(),
         profiles: columns.map(() => STANDARD_PROFILE),
-        farmingSystems: columns.map(() => 'Konventionel' as const),
+        simulations: columns.map(() => undefined),
         statements: columns.map(() => statement),
       }),
     ),
