@@ -284,6 +284,27 @@ class ProjectionTests(unittest.TestCase):
         statement = read_models.economics_statement(
             fields, {"calculated": value, "uncalculated": value}
         )
+        years = [
+            {
+                "area_ha": 2,
+                "indtaegt": 2000,
+                "tilskud": 200,
+                "goedning": 600,
+                "udsaed": 400,
+                "omkostninger_total": 1000,
+                "db": 400,
+            },
+            {
+                "area_ha": 2,
+                "indtaegt": 2800,
+                "tilskud": 200,
+                "goedning": 1000,
+                "udsaed": 400,
+                "omkostninger_total": 1400,
+                "db": 400,
+            },
+            *[{"area_ha": 2, "db": 400}] * 6,
+        ]
         self.assertEqual(
             statement,
             {
@@ -299,8 +320,105 @@ class ProjectionTests(unittest.TestCase):
                 "andet": 0,
                 "omkostninger_total": 1200,
                 "db": 1400,
+                "years": years,
+                "posts": {
+                    "indtaegt": [
+                        {
+                            "navn": "Udbytte",
+                            "average": 2400,
+                            "years": [2000, 2800, 0, 0, 0, 0, 0, 0],
+                        }
+                    ],
+                    "tilskud": [
+                        {
+                            "navn": "Tilskud",
+                            "average": 200,
+                            "years": [200, 200, 0, 0, 0, 0, 0, 0],
+                        }
+                    ],
+                },
+                "crops": [
+                    {
+                        "afgrode_kode": 1,
+                        "afgrode_navn": "Crop",
+                        "average": {
+                            "area_ha": 2,
+                            "indtaegt": 2400,
+                            "tilskud": 200,
+                            "goedning": 800,
+                            "udsaed": 400,
+                            "omkostninger_total": 1200,
+                            "db": 400,
+                        },
+                        "years": years,
+                    }
+                ],
             },
         )
+
+    def test_economics_statement_splits_each_line_by_regnskabspost(self):
+        value = candidate(0)
+        value.active_len = 1
+        value.years[0].db_detail = {
+            "indtaegt": 1000,
+            "halm_indtaegt": 150,
+            "tilskud": 100,
+            "linjer": [
+                {
+                    "kategori": "Gødning",
+                    "behandling": "Handelsgødning, N (150 kg/ha)",
+                    "udgift_kr_ha": 300,
+                },
+                {"kategori": "Markarbejde", "behandling": "Pløjning", "udgift_kr_ha": 100},
+                {"kategori": "Ukendt", "behandling": "Ignored", "udgift_kr_ha": 999},
+            ],
+        }
+        calculated = field("calculated").model_copy(
+            update={"rotation_id": value.ref.to_id(), "db2": 0}
+        )
+        statement = read_models.economics_statement(
+            [calculated.model_dump(mode="json")], {"calculated": value}
+        )
+        self.assertEqual(
+            statement["posts"]["indtaegt"],
+            [
+                {"navn": "Udbytte", "average": 1700, "years": [1700, 0, 0, 0, 0, 0, 0, 0]},
+                {"navn": "Halm", "average": 300, "years": [300, 0, 0, 0, 0, 0, 0, 0]},
+            ],
+        )
+        self.assertEqual(
+            statement["posts"]["goedning"],
+            [
+                {
+                    "navn": "Handelsgødning, N",
+                    "average": 600,
+                    "years": [600, 0, 0, 0, 0, 0, 0, 0],
+                }
+            ],
+        )
+        self.assertEqual(statement["posts"]["markarbejde"][0]["navn"], "Pløjning")
+        self.assertNotIn("andet", statement["posts"])
+
+    def test_economics_statement_splits_each_year_by_afgroede(self):
+        value = candidate(0)
+        value.active_len = 2
+        for index, year in enumerate(value.years):
+            year.year.afgrode_kode = 10 + index % 2
+            year.year.afgrode_navn = f"Crop {year.year.afgrode_kode}"
+            year.db_detail = {"indtaegt": 100 * (index % 2 + 1)}
+        calculated = field("calculated").model_copy(
+            update={"rotation_id": value.ref.to_id(), "db2": 0}
+        )
+        statement = read_models.economics_statement(
+            [calculated.model_dump(mode="json")], {"calculated": value}
+        )
+        by_crop = {crop["afgrode_kode"]: crop for crop in statement["crops"]}
+        self.assertEqual(statement["indtaegt"], 300)
+        self.assertEqual(by_crop[10]["average"], {"area_ha": 1, "indtaegt": 100})
+        self.assertEqual(by_crop[11]["average"], {"area_ha": 1, "indtaegt": 200})
+        self.assertEqual(by_crop[10]["years"][1], {"area_ha": 0})
+        self.assertEqual(by_crop[11]["years"][1], {"area_ha": 2, "indtaegt": 400})
+        self.assertEqual([year["indtaegt"] for year in statement["years"][:2]], [200, 400])
 
     def test_compact_years_keep_an_inferred_mellemafgroede_or_tidlig_saaning(self):
         full = rich_candidate()

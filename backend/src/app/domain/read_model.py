@@ -68,6 +68,27 @@ class RotationChoiceCategory(CamelModel):
     saedskifter: list[RotationChoice]
 
 
+class StatementCrop(CamelModel):
+    """One crop's share of a regnskab: its average year and each calendar year.
+
+    Figures are sparse dicts keyed like the statement's own lines, in whole kr
+    (area_ha in ha); a line that is 0 is left out to keep the stored result small.
+    """
+
+    afgrode_kode: int
+    afgrode_navn: str
+    average: dict[str, float]
+    years: list[dict[str, float]]
+
+
+class StatementPost(CamelModel):
+    """One regnskabspost of a statement line, in whole kr: the average year and each year."""
+
+    navn: str
+    average: float
+    years: list[float]
+
+
 class EconomicsStatement(CamelModel):
     area_ha: float
     indtaegt: float
@@ -81,6 +102,12 @@ class EconomicsStatement(CamelModel):
     andet: float
     omkostninger_total: float
     db: float
+    # The same lines for each calendar year, as sparse dicts like StatementCrop's.
+    # Empty on a result saved before they were added.
+    years: list[dict[str, float]] = Field(default_factory=list)
+    crops: list[StatementCrop] = Field(default_factory=list)
+    # The posts behind each line, keyed like the lines (indtaegt, tilskud, goedning ...).
+    posts: dict[str, list[StatementPost]] = Field(default_factory=dict)
 
 
 class SavedResultView(CamelModel):

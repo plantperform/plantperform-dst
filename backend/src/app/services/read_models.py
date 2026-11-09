@@ -1,10 +1,12 @@
 """Display projections built from values already calculated by workers."""
 
+from collections import defaultdict
 from types import SimpleNamespace
 
 from app.domain.field import FieldRecord
 from app.domain.read_model import EconomicsStatement, FieldYearValue
 from app.domain.rotation_candidate import RotationCandidateRef
+from app.services.economics import statement_posts
 from app.services.optimization import crop_area_ranges
 from app.services.rotations import saedskifte_kategorier
 from app.services.rotations.custom import CUSTOM_CATEGORY
@@ -59,23 +61,105 @@ def compact_years(candidate):
     ]
 
 
-_STATEMENT_LINES = EconomicsStatement.model_fields.keys() - {"area_ha", "db"}
+_NOT_A_LINE = {"area_ha", "db", "years", "crops", "posts"}
+_STATEMENT_LINES = EconomicsStatement.model_fields.keys() - _NOT_A_LINE
+_CALENDAR_YEARS = 8
 
 
-def economics_statement(fields, candidates):
-    statement = dict.fromkeys(EconomicsStatement.model_fields, 0.0)
+def _add_year(figures, area, year):
+    """Add one rotation year of a field, scaled from kr/ha to kr, to `figures`."""
+    figures["area_ha"] += area
+    figures["db"] += area * year.db_kr_ha
+    for line in _STATEMENT_LINES:
+        figures[line] += area * (year.db_detail.get(line) or 0)
+
+
+def _sparse(figures):
+    """Whole kr without the zero lines, so the stored result stays small."""
+    rounded = {key: round(value) for key, value in figures.items() if key != "area_ha"}
+    rounded = {key: value for key, value in rounded.items() if value != 0}
+    return {"area_ha": round(figures["area_ha"], 2), **rounded}
+
+
+def _post_list(by_name):
+    """The posts of one line, biggest first, without those that are 0 in every year."""
+    posts = [
+        {
+            "navn": name,
+            "average": round(figures["average"]),
+            "years": [round(value) for value in figures["years"]],
+        }
+        for name, figures in by_name.items()
+    ]
+    posts = [post for post in posts if post["average"] or any(post["years"])]
+    return sorted(posts, key=lambda post: (-abs(post["average"]), post["navn"]))
+
+
+def economics_statement(fields, candidates, economics_key=""):
+    """The farm's regnskab as an average year, per calendar year, crop and post.
+
+    The average is the mean over each field's rotation cycle. The calendar years
+    are the candidate's eight years, which repeat the cycle, so a cycle that does
+    not divide eight gives years whose mean differs a little from the average.
+    `economics_key` is the cache key of the overrides the candidates were priced with;
+    the subsidy posts are itemized with it.
+    """
+    statement = dict.fromkeys(["area_ha", "db", *_STATEMENT_LINES], 0.0)
+    years = [defaultdict(float) for _ in range(_CALENDAR_YEARS)]
+    crops = {}
+    posts = defaultdict(
+        lambda: defaultdict(lambda: {"average": 0.0, "years": [0.0] * _CALENDAR_YEARS})
+    )
+
+    def crop_figures(year):
+        key = (year.year.afgrode_kode, year.year.afgrode_navn)
+        return crops.setdefault(
+            key,
+            {
+                "average": defaultdict(float),
+                "years": [defaultdict(float) for _ in range(_CALENDAR_YEARS)],
+            },
+        )
+
     for field in fields:
         candidate = candidates.get(field["id"])
         cycle = candidate.years[: candidate.active_len] if candidate else []
         if field.get("rotation_id") is None or field.get("economics_missing") or not cycle:
             continue
-        weight = field["area_ha"] / len(cycle)
-        statement["area_ha"] += field["area_ha"]
+        area = field["area_ha"]
+        weight = area / len(cycle)
+        statement["area_ha"] += area
         statement["db"] += field["db2"]
-        for year in cycle:
+        year_posts = [statement_posts.year_posts(year, economics_key) for year in candidate.years]
+        calendar = candidate.years[:_CALENDAR_YEARS]
+        for index, year in enumerate(cycle):
             for line in _STATEMENT_LINES:
                 statement[line] += weight * (year.db_detail.get(line) or 0)
-    return statement
+            _add_year(crop_figures(year)["average"], weight, year)
+            for line, name, amount in year_posts[index]:
+                posts[line][name]["average"] += weight * amount
+        for index, year in enumerate(calendar):
+            _add_year(years[index], area, year)
+            _add_year(crop_figures(year)["years"][index], area, year)
+            for line, name, amount in year_posts[index]:
+                posts[line][name]["years"][index] += area * amount
+
+    return {
+        **statement,
+        "posts": {line: _post_list(by_name) for line, by_name in posts.items()},
+        "years": [_sparse(figures) for figures in years],
+        "crops": [
+            {
+                "afgrode_kode": code,
+                "afgrode_navn": name,
+                "average": _sparse(figures["average"]),
+                "years": [_sparse(year) for year in figures["years"]],
+            }
+            for (code, name), figures in sorted(
+                crops.items(), key=lambda item: (-item[1]["average"]["area_ha"], item[0])
+            )
+        ],
+    }
 
 
 def candidate_metadata(candidate):
