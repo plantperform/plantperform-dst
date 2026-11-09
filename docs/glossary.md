@@ -185,7 +185,8 @@ field" column is the name on the wire.
 | Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
 | tilpasset | customised, `EconomicsOverrides` | | The profile's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
-| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
+| afgrødekorrektion | `cropCorrection`, `withCropCorrection`, `CROP_CORRECTION_LABEL` | `cropCorrections` | kr/ha added to the dækningsbidrag of one crop alone; minus lowers it. Booked as the cost line "Afgrødekorrektion" under Andet, so no shared price changes |
+| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price, quantity or afgrødekorrektion in a profile |
 | profilens virkning i en simulering | `SimulationEconomicsEffect`, `simulationEconomicsEffect` | | A profile's change in dækningsbidrag for the crops a simulation grows, weighted by each crop's average area per year |
 | Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | Six steps; step 5, Dækningsbidrag, lists the dækningsbidrag of every crop (`CropsOverview`) and opens a crop for editing |
 | sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |

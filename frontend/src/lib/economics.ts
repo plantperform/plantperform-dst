@@ -80,11 +80,18 @@ export type CropTotals = {
   revenueDkkHa: number
   subsidyDkkHa: number
   costsDkkHa: Record<CostCategory, number>
+  // The afgrødekorrektion added to the dækningsbidrag; it lowers totalCostsDkkHa
+  // by the same amount and belongs to no category.
+  correctionDkkHa: number
   totalCostsDkkHa: number
   dbDkkHa: number
 }
 
-export type EconomicsGroupId = 'revenue' | 'subsidy' | CostCategory
+export type EconomicsGroupId =
+  | 'revenue'
+  | 'subsidy'
+  | CostCategory
+  | 'correction'
 
 export type EconomicsInput = { value: number } | { error: string }
 
@@ -92,6 +99,7 @@ export const NO_OVERRIDES: EconomicsOverrides = {
   prices: {},
   quantities: {},
   yieldPct: {},
+  cropCorrections: {},
 }
 
 const sameValues = (
@@ -111,7 +119,8 @@ export const sameOverrides = (
 ): boolean =>
   sameValues(left.prices, right.prices) &&
   sameValues(left.quantities, right.quantities) &&
-  sameValues(left.yieldPct, right.yieldPct)
+  sameValues(left.yieldPct, right.yieldPct) &&
+  sameValues(left.cropCorrections, right.cropCorrections)
 
 export const YIELD_ADJUSTMENT_ID = 'yieldPct'
 
@@ -202,6 +211,14 @@ export const cropYieldPct = (
   crop: CropEconomics,
 ): number => overrides.yieldPct[cropKey(crop)] ?? 0
 
+export const CROP_CORRECTION_LABEL = 'Afgrødekorrektion'
+
+// kr/ha added to the dækningsbidrag of one crop; minus lowers it.
+export const cropCorrection = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): number => overrides.cropCorrections[cropKey(crop)] ?? 0
+
 const yieldFactor = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
@@ -258,14 +275,16 @@ export const cropTotals = (
   ) as Record<CostCategory, number>
   const revenueDkkHa = sumLines(assumptions, overrides, crop, crop.revenue)
   const subsidyDkkHa = sumLines(assumptions, overrides, crop, crop.subsidies)
+  const correctionDkkHa = cropCorrection(overrides, crop)
   const totalCostsDkkHa = COST_CATEGORIES.reduce(
     (total, category) => total + costsDkkHa[category.id],
-    0,
+    -correctionDkkHa,
   )
   return {
     revenueDkkHa,
     subsidyDkkHa,
     costsDkkHa,
+    correctionDkkHa,
     totalCostsDkkHa,
     dbDkkHa: revenueDkkHa + subsidyDkkHa - totalCostsDkkHa,
   }
@@ -408,6 +427,19 @@ export const withYieldPct = (
   ),
 })
 
+export const withCropCorrection = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+  value: number | null,
+): EconomicsOverrides => ({
+  ...overrides,
+  cropCorrections: withValue(
+    overrides.cropCorrections,
+    [{ id: cropKey(crop), value: 0 }],
+    value,
+  ),
+})
+
 export const isPriceCustomised = (
   overrides: EconomicsOverrides,
   priceId: string,
@@ -430,6 +462,11 @@ export const isYieldCustomised = (
   crop: CropEconomics,
 ): boolean => overrides.yieldPct[cropKey(crop)] !== undefined
 
+export const isCorrectionCustomised = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): boolean => overrides.cropCorrections[cropKey(crop)] !== undefined
+
 export const isLineCustomised = (
   overrides: EconomicsOverrides,
   crop: CropEconomics,
@@ -443,6 +480,7 @@ export const isCropCustomised = (
   crop: CropEconomics,
 ): boolean =>
   isYieldCustomised(overrides, crop) ||
+  isCorrectionCustomised(overrides, crop) ||
   cropLines(crop).some((line) => isLineCustomised(overrides, crop, line))
 
 export type BreakdownRow =
@@ -507,7 +545,7 @@ export const withoutCropChanges = (
         line.priceId,
         null,
       ),
-    withYieldPct(overrides, crop, null),
+    withCropCorrection(withYieldPct(overrides, crop, null), crop, null),
   )
 
 const GROUPED_THOUSANDS = /^[+-]?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/
@@ -534,6 +572,15 @@ export const parseEconomicsInput = (text: string): EconomicsInput => {
   return { value }
 }
 
+export const parseCorrectionInput = (text: string): EconomicsInput => {
+  const value = parseEconomicsNumber(text)
+  if (!Number.isFinite(value)) return { error: 'Skriv et tal.' }
+  if (Math.abs(value) > 100_000) {
+    return { error: 'Skriv et tal mellem −100.000 og 100.000.' }
+  }
+  return { value }
+}
+
 export const parseYieldPctInput = (text: string): EconomicsInput => {
   const value = parseEconomicsNumber(text)
   if (!Number.isFinite(value)) return { error: 'Skriv et tal.' }
@@ -552,6 +599,16 @@ export const formatYieldPct = (value: number): string => {
   if (value > 0) return `+${formatEconomicsNumber(value)}`
   if (value < 0) return `−${formatEconomicsNumber(-value)}`
   return '0'
+}
+
+export const formatCorrection = formatYieldPct
+
+export const CROP_CORRECTION_STEP = 100
+const CROP_CORRECTION_LIMIT = 100_000
+
+export const stepCorrection = (current: number, direction: 1 | -1): number => {
+  const next = current + direction * CROP_CORRECTION_STEP
+  return Math.abs(next) <= CROP_CORRECTION_LIMIT ? next : current
 }
 
 export const YIELD_PCT_STEP = 5
@@ -728,14 +785,14 @@ export const yieldHint = (
 
 export type ProfileChange = {
   key: string
-  kind: 'yield' | 'price' | 'quantity'
+  kind: 'yield' | 'price' | 'quantity' | 'correction'
   label: string
   cropLabels: string[]
   // What a price without crop rows applies to, such as the husdyrgødning prices.
   appliesTo?: string
   from: string
   to: string
-  guideStep: 1 | 2 | 3 | 4 | null
+  guideStep: 1 | 2 | 3 | 4 | 5 | null
 }
 
 const economicsCropLabel = (crop: CropEconomics): string =>
@@ -759,6 +816,19 @@ const yieldChange = (
   from: '0 %',
   to: `${formatYieldPct(cropYieldPct(overrides, crop))} %`,
   guideStep: 3,
+})
+
+const correctionChange = (
+  overrides: EconomicsOverrides,
+  crop: CropEconomics,
+): ProfileChange => ({
+  key: `correction:${cropKey(crop)}`,
+  kind: 'correction',
+  label: CROP_CORRECTION_LABEL,
+  cropLabels: [economicsCropLabel(crop)],
+  from: '0 kr/ha',
+  to: `${formatCorrection(cropCorrection(overrides, crop))} kr/ha`,
+  guideStep: 5,
 })
 
 const priceChange = (
@@ -846,6 +916,9 @@ export const profileChanges = (
   const yields = assumptions.crops
     .filter((crop) => isYieldCustomised(overrides, crop))
     .map((crop) => yieldChange(overrides, crop))
+  const corrections = assumptions.crops
+    .filter((crop) => isCorrectionCustomised(overrides, crop))
+    .map((crop) => correctionChange(overrides, crop))
   const listed = new Set<string>()
   const lines = assumptions.crops.flatMap((crop) =>
     groupedLines(crop).flatMap(({ group, line }) => {
@@ -876,7 +949,12 @@ export const profileChanges = (
       return changes
     }),
   )
-  return [...yields, ...lines, ...manureChanges(assumptions, overrides, listed)]
+  return [
+    ...yields,
+    ...corrections,
+    ...lines,
+    ...manureChanges(assumptions, overrides, listed),
+  ]
 }
 
 const formatCount = (count: number, one: string, several: string): string =>
@@ -910,11 +988,15 @@ export const describeProfileChanges = (changes: ProfileChange[]): string => {
   const yields = ofKind('yield')
   const prices = ofKind('price').length
   const quantities = ofKind('quantity').length
+  const corrections = ofKind('correction').length
   const parts = [
     yields.length === 1 ? `Udbytte for ${yields[0].cropLabels[0]}` : null,
     yields.length > 1 ? `Udbytte for ${formatCropCount(yields.length)}` : null,
     prices > 0 ? formatCount(prices, 'pris', 'priser') : null,
     quantities > 0 ? formatCount(quantities, 'mængde', 'mængder') : null,
+    corrections > 0
+      ? formatCount(corrections, 'afgrødekorrektion', 'afgrødekorrektioner')
+      : null,
   ].filter((part): part is string => part !== null)
   return parts.length > 0 ? formatNameList(parts) : 'Samme tal som Standard'
 }
@@ -923,6 +1005,7 @@ const OVERRIDE_FIELD = {
   yield: 'yieldPct',
   price: 'prices',
   quantity: 'quantities',
+  correction: 'cropCorrections',
 } as const
 
 export const withoutProfileChange = (
@@ -936,7 +1019,9 @@ export const withoutProfileChange = (
     ...overrides,
     [field]: withoutKeys(
       overrides[field],
-      change.kind === 'yield' ? [key] : variantIds(assumptions, key),
+      change.kind === 'yield' || change.kind === 'correction'
+        ? [key]
+        : variantIds(assumptions, key),
     ),
   }
 }
@@ -972,6 +1057,7 @@ export const applyOverrideEdits = (
     prices: merge('prices'),
     quantities: merge('quantities'),
     yieldPct: merge('yieldPct'),
+    cropCorrections: merge('cropCorrections'),
   }
 }
 

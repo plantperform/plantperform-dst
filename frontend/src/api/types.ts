@@ -279,6 +279,8 @@ export type EconomicsOverrides = {
   prices: Readonly<Record<string, number>>
   quantities: Readonly<Record<string, number>>
   yieldPct: Readonly<Record<string, number>>
+  // kr/ha added to one crop's dækningsbidrag, by afgrødekode.
+  cropCorrections: Readonly<Record<string, number>>
 }
 
 export type EconomicsSnapshot = {
