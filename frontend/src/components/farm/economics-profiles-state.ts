@@ -354,18 +354,32 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       return true
     },
     forgetProfile,
-    assignProfile: async (simulation: Simulation, profileId: string) => {
-      if ((simulation.economicsModuleId ?? STANDARD_PROFILE_ID) === profileId) {
-        return
+    // `recalculate` applies the profile at once, so the caller can wait for the
+    // new figures instead of leaving it to the automatic recalculation.
+    assignProfile: async (
+      simulation: Simulation,
+      profileId: string,
+      { recalculate: apply = false }: { recalculate?: boolean } = {},
+    ) => {
+      let assigned = simulation
+      if ((simulation.economicsModuleId ?? STANDARD_PROFILE_ID) !== profileId) {
+        try {
+          assigned = await selectSimulationEconomics(
+            farm,
+            simulation,
+            profileId,
+          )
+          await refreshSimulation(assigned)
+        } catch {
+          showError('Profilen kunne ikke vælges. Prøv igen.')
+          await mutate(simulationsKey(farmId))
+          return
+        }
       }
-      try {
-        await refreshSimulation(
-          await selectSimulationEconomics(farm, simulation, profileId),
-        )
-      } catch {
-        showError('Profilen kunne ikke vælges. Prøv igen.')
-        await mutate(simulationsKey(farmId))
-      }
+      const profile = known?.find((entry) => entry.id === profileId)
+      if (!apply || !profile || isEconomicsCurrent(known, assigned)) return
+      attempted.current.add(attemptKey(assigned, profile))
+      await recalculate(assigned)
     },
     recalculate,
     withCurrentEconomics: async (simulation: Simulation) => {
