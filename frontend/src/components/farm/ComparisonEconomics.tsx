@@ -76,7 +76,7 @@ export const ComparisonEconomics = ({
 }: ComparisonEconomicsProps) => {
   const { farmId } = useEconomicsProfiles()
   const { search } = useLocation()
-  const [unit, setUnit] = useState<StatementUnit>('perHa')
+  const [unit, setUnit] = useState<StatementUnit>('total')
   const customised = profiles.some(
     (profile) => profile.id !== STANDARD_PROFILE_ID,
   )
