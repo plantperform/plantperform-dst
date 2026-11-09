@@ -7,6 +7,7 @@ import {
   STANDARD_PROFILE_ID,
   allProfiles,
   appliedProfile,
+  canRecalculateEconomics,
   deleteProfileMessage,
   describeAppliedProfile,
   describeEconomicsLine,
@@ -270,5 +271,31 @@ describe('economics profiles', () => {
     expect(
       describeOwnProfiles(['Bakkegården 2027', 'Forsigtig 2027', 'Våd høst']),
     ).toBe('Bakkegården 2027 og 2 mere')
+  })
+
+  it('recalculates a simulation that is not calculating or optimizing', () => {
+    const idle = { creationStatus: 'done', result: { status: 'completed' } }
+    expect(canRecalculateEconomics(idle as never)).toBe(true)
+    expect(
+      canRecalculateEconomics({ result: { status: 'not_started' } } as never),
+    ).toBe(true)
+    expect(
+      canRecalculateEconomics({ ...idle, creationStatus: 'running' } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({ ...idle, creationStatus: 'queued' } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({
+        ...idle,
+        result: { status: 'in_progress' },
+      } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({
+        ...idle,
+        result: { status: 'queued' },
+      } as never),
+    ).toBe(false)
   })
 })

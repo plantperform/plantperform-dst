@@ -282,9 +282,9 @@ history uses standard economics.
 
 The frontend keeps profiles as modules and reads the assumptions from the crop
 budgets. It passes `economicsModuleId` during creation, saves a selection
-separately and offers an explicit recalculation. It labels the pending selection
-against the applied snapshot, and a comparison's regnskab with the applied
-snapshot of each simulation.
+separately and recalculates a simulation once its selection or profile is
+changed. It labels the pending selection against the applied snapshot, and a
+comparison's regnskab with the applied snapshot of each simulation.
 
 Economics modules require schema migration `20261013_0001`, introduced with
 the original economics release. Existing simulations read as standard without

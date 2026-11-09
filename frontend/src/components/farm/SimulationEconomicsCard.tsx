@@ -321,7 +321,8 @@ export const SimulationEconomicsCard = (
           </h3>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Priserne, mængderne og udbytterne bag simuleringens dækningsbidrag.
-            Et skift gælder, når økonomien er genberegnet.
+            Simuleringen genberegnes automatisk, når profilen skiftes eller
+            rettes.
           </p>
         </div>
         <EconomicsProfileMenu

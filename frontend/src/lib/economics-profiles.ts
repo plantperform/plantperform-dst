@@ -83,6 +83,17 @@ export const isEconomicsCurrent = (
   )
 }
 
+// A simulation that is calculating, or has an optimization queued or running,
+// cannot be recalculated; the server turns the request down with a conflict.
+export const canRecalculateEconomics = (
+  simulation: Pick<Simulation, 'creationStatus' | 'result'>,
+): boolean =>
+  (simulation.creationStatus === undefined ||
+    simulation.creationStatus === 'done' ||
+    simulation.creationStatus === 'failed') &&
+  simulation.result.status !== 'queued' &&
+  simulation.result.status !== 'in_progress'
+
 export const simulationsUsingProfile = <T extends ProfiledSimulation>(
   simulations: T[],
   profileId: string,
