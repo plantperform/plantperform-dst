@@ -259,7 +259,7 @@ const ProfileView = ({
               {farmName} ·{' '}
               {isStandard
                 ? `${STANDARD_SOURCE}. Standard kan ikke rettes.`
-                : `Dine priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen kan bruges på alle dine bedrifter. Rettelser gemmes med det samme og bruges, når en simulering genberegnes.`}
+                : `Dine priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen kan bruges på alle dine bedrifter. Rettelser gemmes med det samme, og simuleringer, der bruger profilen, genberegnes automatisk.`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
