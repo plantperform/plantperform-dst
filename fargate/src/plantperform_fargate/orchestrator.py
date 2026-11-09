@@ -10,7 +10,6 @@ from app.data.optimizer_inputs import OptimizerCandidate, OptimizerYear
 from app.domain.field import FieldRecord
 from app.domain.optimization import (
     NUM_YEARS,
-    KystvandoplandYearlyNLoadCaps,
     QuotaTradeSetting,
     SimulationQuotaTrade,
     untradable_quota_reason,
@@ -31,7 +30,6 @@ from plantperform_fargate.models import (
     FixedYearlyFieldContribution,
     OptimizationInput,
     OptimizationOutput,
-    QuotaTradeInput,
     RotationOption,
     YearlyConstraintsInput,
     YearlyFieldInput,
@@ -246,12 +244,12 @@ def _kystvand_name(names: dict[int | None, str], kystvand_id: int | None) -> str
     )
 
 
-def _quota_trade_inputs(
+def _validate_quota_trades(
     fields: list[FieldRecord],
     requested_caps: dict[int | None, tuple[float | None, ...]],
     quota_trades: tuple[QuotaTradeSetting, ...],
     names: dict[int | None, str],
-) -> tuple[QuotaTradeInput, ...]:
+) -> None:
     """Check each kvotehandel against this run's marker and caps.
 
     Saved settings are checked without marker, so a trade for an opland whose
@@ -259,14 +257,8 @@ def _quota_trade_inputs(
     """
     kvotegivende = {field.kystvand_id for field in fields if field.kvotegivende}
     for trade in quota_trades:
-        caps = requested_caps.get(trade.kystvand_id)
         reason = untradable_quota_reason(
-            None
-            if caps is None
-            else KystvandoplandYearlyNLoadCaps(
-                kystvand_id=trade.kystvand_id,
-                max_n_load_by_year={y: cap for y, cap in enumerate(caps) if cap is not None},
-            ),
+            requested_caps.get(trade.kystvand_id),
             trade.kystvand_id in kvotegivende,
         )
         if reason is not None:
@@ -274,15 +266,6 @@ def _quota_trade_inputs(
                 f"Kvotehandel er ikke mulig i {_kystvand_name(names, trade.kystvand_id)}: "
                 f"{reason.lower()}."
             )
-    return tuple(
-        QuotaTradeInput(
-            kystvand_id=trade.kystvand_id,
-            buy_price_kr_per_kg=trade.buy_price_kr_per_kg,
-            sell_price_kr_per_kg=trade.sell_price_kr_per_kg,
-            same_each_year=trade.same_each_year,
-        )
-        for trade in quota_trades
-    )
 
 
 def _quota_shortfall_error(
@@ -748,7 +731,7 @@ def run_yearly_optimization(
         )
 
     names = _kystvand_names(farm_id, email) if quota_trades else {}
-    trade_inputs = _quota_trade_inputs(fields, max_n_load_by_kystvandopland, quota_trades, names)
+    _validate_quota_trades(fields, max_n_load_by_kystvandopland, quota_trades, names)
     max_n_load_by_year = _max_n_load_by_kystvandopland_and_year(
         fields,
         max_n_load_by_kystvandopland,
@@ -763,14 +746,14 @@ def run_yearly_optimization(
                 min_fen=simulation.constraints.min_fen,
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
-                quota_trades=trade_inputs,
+                quota_trades=quota_trades,
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
         )
     )
 
     if output.status == "INFEASIBLE":
-        traded = {trade.kystvand_id for trade in trade_inputs}
+        traded = {trade.kystvand_id for trade in quota_trades}
         raise _quota_shortfall_error(
             farm_id,
             email,
@@ -823,13 +806,17 @@ def run_yearly_optimization(
                 kystvand_navn=names.get(trade.kystvand_id),
                 trade_kg_by_year={
                     candidate_evaluator.START_CALENDAR_YEAR + y: kg
-                    for y, kg in enumerate(trade.trade_kg_by_year)
+                    for y, kg in enumerate(output.quota_trades[trade.kystvand_id])
                 },
                 buy_price_kr_per_kg=trade.buy_price_kr_per_kg,
                 sell_price_kr_per_kg=trade.sell_price_kr_per_kg,
                 same_each_year=trade.same_each_year,
-                payment_kr_per_year=trade.payment_kr_per_year,
+                payment_kr_per_year=sum(
+                    kg * (trade.buy_price_kr_per_kg if kg >= 0 else trade.sell_price_kr_per_kg)
+                    for kg in output.quota_trades[trade.kystvand_id]
+                )
+                / NUM_YEARS,
             )
-            for trade in output.quota_trades
+            for trade in quota_trades
         ),
     )
