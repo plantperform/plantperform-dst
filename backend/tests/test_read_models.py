@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import unittest
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
@@ -28,6 +29,7 @@ from app.data.db import field_historical_detail_table as details
 from app.data.db import simulation_read_model_table as views
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
+from app.domain.economics import STANDARD_NAME, EconomicsSnapshot
 from app.domain.field import CreateFieldRequest, UpdateFieldRequest
 from app.domain.read_model import (
     FarmView,
@@ -354,6 +356,115 @@ class ProjectionTests(unittest.TestCase):
                     }
                 ],
             },
+        )
+
+    def saved_fields(self, pick, repriced=None):
+        """The saved response's one field (4 ha, db2 400), valued by `repriced` as the result is."""
+        saved = field("saved").model_copy(
+            update={"rotation_id": pick.ref.to_id(), "area_ha": 4, "db2": 400}
+        )
+        repriced = repriced or {}
+        return read_models.saved_response(
+            {"fields": [saved.model_dump(mode="json")]},
+            repriced,
+            {"saved": read_models.compact_years(repriced.get("saved", pick))},
+        )["fields"]
+
+    def test_saved_response_values_a_field_by_its_repriced_pick_in_the_saved_area(self):
+        pick, repriced = candidate(100), candidate(350)
+        response = {"fields": self.saved_fields(pick), "unrelated": "kept"}
+        saved = read_models.saved_response(
+            response, {"saved": repriced}, {"saved": read_models.compact_years(repriced)}
+        )
+        (value,) = saved["fields"]
+        self.assertEqual(
+            (value["db2"], value["area_ha"], value["rotation_id"]), (1400, 4, pick.ref.to_id())
+        )
+        self.assertEqual(saved["unrelated"], "kept")
+
+    def test_saved_response_leaves_a_field_without_a_repriced_pick_as_returned(self):
+        pick = candidate(100)
+        saved = read_models.saved_response(
+            {"fields": self.saved_fields(pick)},
+            {},
+            {"saved": read_models.compact_years(pick)},
+        )
+        self.assertEqual(saved["fields"][0]["db2"], 400)
+
+    def test_saved_response_flags_a_repriced_pick_without_economics(self):
+        pick, repriced = candidate(100), candidate(350)
+        for year in repriced.years:
+            year.db_detail = {"economics_missing": True}
+        (value,) = self.saved_fields(pick, {"saved": repriced})
+        self.assertTrue(value["economics_missing"])
+        self.assertFalse(self.saved_fields(pick)[0]["economics_missing"])
+
+    def test_saved_statement_values_a_field_by_its_repriced_pick_in_the_saved_area(self):
+        pick, repriced = candidate(100), candidate(350)
+        pick.years[0].db_detail = {"indtaegt": 1000}
+        repriced.years[0].db_detail = {"indtaegt": 3000}
+        statement = read_models.saved_statement(
+            self.saved_fields(pick, {"saved": repriced}), {"saved": pick}, {"saved": repriced}
+        )
+        self.assertEqual((statement["area_ha"], statement["db"]), (4, 1400))
+        self.assertEqual(statement["indtaegt"], 12000)
+
+    def test_saved_statement_keeps_the_optimizers_valuation_without_a_repriced_pick(self):
+        pick = candidate(100)
+        pick.years[0].db_detail = {"indtaegt": 1000}
+        statement = read_models.saved_statement(self.saved_fields(pick), {"saved": pick}, {})
+        self.assertEqual(
+            (statement["area_ha"], statement["db"], statement["indtaegt"]), (4, 400, 4000)
+        )
+
+    def test_saved_statement_skips_a_repriced_pick_without_economics(self):
+        pick, repriced = candidate(100), candidate(350)
+        pick.years[0].db_detail = {"indtaegt": 1000}
+        for year in repriced.years:
+            year.db_detail = {"economics_missing": True}
+        statement = read_models.saved_statement(
+            self.saved_fields(pick, {"saved": repriced}), {"saved": pick}, {"saved": repriced}
+        )
+        self.assertEqual((statement["area_ha"], statement["db"]), (0, 0))
+
+    def test_repriced_picks_are_found_with_the_chosen_candidate_or_a_copy_of_their_own(self):
+        picks = {id: candidate(100, str(index)) for index, id in enumerate("abcd", 1)}
+        priced = {id: candidate(350, str(index)) for index, id in enumerate("abcd", 1)}
+
+        def dumped(id):
+            return priced[id].model_dump(mode="json")
+
+        setups_by_field = {
+            "a": {"economics_candidate": dumped("a")},
+            "b": {"economics_candidate": dumped("a"), "economics_pick": dumped("b")},
+            "c": {"economics_candidate": dumped("a")},
+            "d": {},
+        }
+        repriced = read_model_store.repriced_picks(setups_by_field, picks)
+        self.assertEqual(sorted(repriced), ["a", "b"])
+        self.assertEqual(repriced["a"].ref, picks["a"].ref)
+        self.assertEqual(repriced["b"].ref, picks["b"].ref)
+        self.assertEqual(
+            {id: value.avg_db_kr_ha for id, value in repriced.items()}, {"a": 350, "b": 350}
+        )
+
+    def test_saved_statement_itemizes_each_field_with_the_overrides_it_was_priced_with(self):
+        again, kept = candidate(100), candidate(100, "2")
+        fields = [
+            field(id).model_copy(update={"rotation_id": value.ref.to_id()}).model_dump(mode="json")
+            for id, value in (("again", again), ("kept", kept))
+        ]
+        with patch.object(read_models.statement_posts, "year_posts", return_value=[]) as posts:
+            read_models.saved_statement(
+                fields,
+                {"again": again, "kept": kept},
+                {"again": candidate(350)},
+                selected_key="optimizer",
+                repriced_key="repriced",
+            )
+        self.assertEqual(
+            Counter(call.args[1] for call in posts.call_args_list),
+            {"optimizer": 8, "repriced": 8},
         )
 
     def test_economics_statement_splits_each_line_by_regnskabspost(self):
@@ -733,6 +844,98 @@ class ReadModelTests(DatabaseTests):
         )
         self.assertEqual(saved["economicsStatement"]["areaHa"], 2)
         self.assertEqual(saved["economicsStatement"]["db"], 400)
+
+    def saved_figures(self):
+        """What the saved result shows of the economics: regnskab, db2 per field, field-b's year."""
+        view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
+        result = view["data"]["saved_result"]
+        statement = result["economics_statement"]
+        return (
+            (statement["area_ha"], statement["db"], result["economics_snapshot"]["name"]),
+            {field["id"]: field["db2"] for field in result["response"]["fields"]},
+            result["field_years"]["field-b"][0]["db_kr_ha"],
+        )
+
+    def priced(self, value, db_kr_ha):
+        """A copy of a candidate priced as a recalculation would price it."""
+        value = value.model_copy(deep=True)
+        value.avg_db_kr_ha = db_kr_ha
+        for year in value.years:
+            year.db_kr_ha = db_kr_ha
+        return value.model_dump(mode="json")
+
+    def test_saved_result_follows_a_recalculation_but_not_a_field_edit(self):
+        value, _, _, _ = self.publish_result()
+        self.assertEqual(
+            self.saved_figures(), ((4, 800, STANDARD_NAME), {"field-a": 400, "field-b": 400}, 200)
+        )
+        # What the recalculation job stores: the re-priced candidate and the profile.
+        profile = EconomicsSnapshot(source_id="profile", name="Profil", revision=3)
+        with self.sessions.begin() as session:
+            row = session.execute(select(setups.c.data, setups.c.fields)).one()
+            fields = {**row.fields}
+            fields["field-b"]["economics_candidate"] = self.priced(value, 500)
+            session.execute(
+                update(setups).values(
+                    fields=fields,
+                    data={**row.data, "economics_snapshot": profile.model_dump(mode="json")},
+                )
+            )
+            read_model_store.refresh_simulation_view(session, "sim")
+        repriced = ((4, 400 + 500 * 2, "Profil"), {"field-a": 400, "field-b": 1000}, 500)
+        self.assertEqual(self.saved_figures(), repriced)
+        self.edit(area_ha=8)
+        self.assertEqual(self.saved_figures(), repriced)
+
+    def test_saved_result_prices_the_pick_of_a_field_changed_since_the_run(self):
+        value, _, _, _ = self.publish_result()
+        other = candidate(300, "2")
+        profile = EconomicsSnapshot(source_id="profile", name="Profil", revision=3)
+
+        def recalculate(**kept):
+            # The field was locked to another rotation after the run, and a recalculation
+            # prices that rotation as its chosen candidate. It prices the pick it was changed
+            # from too, as a copy of its own.
+            with self.sessions.begin() as session:
+                row = session.execute(select(setups.c.data, setups.c.fields)).one()
+                fields = {**row.fields}
+                fields["field-b"].update(
+                    allowed_rotation_ids=[other.ref.to_id()],
+                    fixed_candidate=other.model_dump(mode="json"),
+                    fixed=dict(
+                        rotation_id=other.ref.to_id(),
+                        crop_rotation=[y.year.model_dump(mode="json") for y in other.years],
+                        db2=600,
+                        fen=0,
+                        n_load=0,
+                        leaching=0,
+                    ),
+                    economics_candidate=self.priced(other, 300),
+                    **kept,
+                )
+                session.execute(
+                    update(setups).values(
+                        fields=fields,
+                        data={**row.data, "economics_snapshot": profile.model_dump(mode="json")},
+                    )
+                )
+                read_model_store.refresh_simulation_view(session, "sim")
+
+        # Without a priced copy of the pick, the saved result keeps the optimizer's valuation.
+        recalculate()
+        self.assertEqual(
+            self.saved_figures(), ((4, 800, "Profil"), {"field-a": 400, "field-b": 400}, 200)
+        )
+        recalculate(economics_pick=self.priced(value, 500))
+        self.assertEqual(
+            self.saved_figures(),
+            ((4, 400 + 500 * 2, "Profil"), {"field-a": 400, "field-b": 1000}, 500),
+        )
+        view = read_model_store.get_simulation_view("farm", "sim", EMAIL)
+        shown = {field["id"]: field for field in view["data"]["saved_result"]["response"]["fields"]}
+        self.assertEqual(shown["field-b"]["rotation_id"], value.ref.to_id())
+        live = {field["id"]: field for field in view["data"]["fields"]}
+        self.assertEqual(live["field-b"]["rotation_id"], other.ref.to_id())
 
     def test_backfill_after_failed_new_run_preserves_successful_provenance(self):
         _, successful, _, _ = self.publish_result()
