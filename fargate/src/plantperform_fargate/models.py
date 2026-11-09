@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
+from app.domain.optimization import QuotaTradeSetting
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationYear
 from app.domain.simulation import CropAreaLimit
 
@@ -145,39 +146,6 @@ class FixedYearlyFieldContribution:
 
 
 @dataclass(frozen=True)
-class QuotaTradeInput:
-    """Kvotehandel at fixed prices for one kystvandopland.
-
-    The solver chooses, in whole kg N for each year, kvote to buy and kvote to
-    sell: the opland's cap becomes original cap + bought - sold in that year.
-    Bought kvote costs buy_price_kr_per_kg and sold kvote earns
-    sell_price_kr_per_kg, per kg and year. The buy price may not be below the
-    sell price, or buying and selling the same kg would pay. With
-    same_each_year both amounts are the same in every year. The opland must
-    have a cap in every year.
-    """
-
-    kystvand_id: int
-    buy_price_kr_per_kg: float
-    sell_price_kr_per_kg: float
-    same_each_year: bool = True
-
-
-@dataclass(frozen=True)
-class QuotaTradeResult:
-    kystvand_id: int
-    # One entry per year, like total_db2_by_year: the net trade, > 0 bought
-    # and < 0 sold; a year never both buys and sells.
-    trade_kg_by_year: tuple[int, ...]
-    buy_price_kr_per_kg: float
-    sell_price_kr_per_kg: float
-    same_each_year: bool
-    # The average payment per year, on the same per-year basis as the output's
-    # total_db2; negative when the trades sell more than they buy.
-    payment_kr_per_year: float
-
-
-@dataclass(frozen=True)
 class YearlyConstraintsInput:
     # Same per-kystvandopland principle as ConstraintsInput, but with an
     # eight-item per-calendar-year cap tuple per opland instead of one value.
@@ -186,7 +154,7 @@ class YearlyConstraintsInput:
     min_fen: float | None
     max_fen: float | None
     crop_area_limits: tuple[CropAreaLimit, ...] = ()
-    quota_trades: tuple[QuotaTradeInput, ...] = ()
+    quota_trades: tuple[QuotaTradeSetting, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -207,6 +175,6 @@ class YearlyOptimizationOutput:
     total_fen: float
     total_db2_by_year: tuple[float, ...]
     total_n_load_by_year: tuple[float, ...]
-    # total_db2 is the crops' DB2 alone; subtract the trades' payments for the
-    # DB2 including kvotehandel.
-    quota_trades: tuple[QuotaTradeResult, ...] = ()
+    # Net kg per year by kystvandopland: positive buys, negative sells.
+    # total_db2 remains the crops' DB2, before quota payments.
+    quota_trades: dict[int, tuple[int, ...]] = field(default_factory=dict)

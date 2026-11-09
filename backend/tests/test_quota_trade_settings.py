@@ -4,7 +4,6 @@ from pydantic import ValidationError
 
 from app.domain.optimization import (
     NUM_YEARS,
-    KystvandoplandYearlyNLoadCaps,
     OptimizationSettings,
     SimulationQuotaTrade,
     YearlyOptimizeSimulationRequest,
@@ -114,7 +113,8 @@ class QuotaTradeSettingsTests(unittest.TestCase):
         self.assertEqual(request.quota_trades, saved.quota_trades)
 
     def test_an_opland_without_kvotegivende_marker_cannot_trade(self):
-        caps = KystvandoplandYearlyNLoadCaps(kystvand_id=1, max_n_load_by_year=ALL_YEARS)
+        caps = ALL_YEARS.values()
+
         self.assertEqual(untradable_quota_reason(caps, False), "Ingen kvotegivende marker")
         self.assertIsNone(untradable_quota_reason(caps, True))
         self.assertIsNone(untradable_quota_reason(None, True))
