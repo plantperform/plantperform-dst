@@ -20,6 +20,7 @@ import {
   RUN_STATUS_LABELS,
   type OptimizationChanges,
 } from '@/lib/optimization-run'
+import { db2IncludingQuotaTrades } from '@/lib/quota-trade-result'
 import { cn } from '@/lib/utils'
 
 type OptimizationRunProgressProps = {
@@ -132,6 +133,13 @@ const SucceededDetails = ({
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
   const changedFields = applyFieldAliases(changes.changedFields, aliases)
   const changedCount = changes.changedFields.length
+  const quotaTrades = run.response.quotaTrades ?? []
+  const netDb2 = db2IncludingQuotaTrades(changes.totalsAfter.db2, quotaTrades)
+  const finalDb2 = perHaFigure(
+    totalsPerHa({ ...changes.totalsAfter, db2: netDb2 }, 'db2'),
+    'db2',
+    formatCompactDkk(netDb2),
+  )
 
   return (
     <>
@@ -144,32 +152,48 @@ const SucceededDetails = ({
       </p>
       {changedCount === 0 ? (
         <p className="mx-auto max-w-sm pt-2 text-sm">
-          Ingen ændringer. Markerne havde allerede det bedste sædskifte inden
-          for reglerne.
+          Ingen ændringer i sædskifterne.
         </p>
       ) : (
-        <>
-          <p className="mx-auto max-w-sm pt-2 text-sm">
-            {changedCount} {changedCount === 1 ? 'mark' : 'marker'} fik ændret
-            sædskifte:{' '}
-            {formatFieldNameList(changedFields.map(fieldTitle))}.
-          </p>
-          <dl className="mx-auto grid w-fit grid-cols-[auto_auto_auto] gap-x-4 gap-y-1 pt-2 text-left text-sm tabular-nums">
+        <p className="mx-auto max-w-sm pt-2 text-sm">
+          {changedCount} {changedCount === 1 ? 'mark' : 'marker'} fik ændret
+          sædskifte: {formatFieldNameList(changedFields.map(fieldTitle))}.
+        </p>
+      )}
+      {changedCount > 0 || run.kind === 'yearly' ? (
+        <dl className="mx-auto grid w-fit grid-cols-[auto_auto_auto] gap-x-4 gap-y-1 pt-2 text-left text-sm tabular-nums">
+          {run.kind === 'yearly' ? (
+            <>
+              <dt className="text-muted-foreground">
+                DB2{quotaTrades.length > 0 ? ' inkl. kvotehandel' : ''}
+              </dt>
+              <dd className="col-span-2">
+                {finalDb2.value}
+                {finalDb2.total ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {finalDb2.total}
+                  </span>
+                ) : null}
+              </dd>
+            </>
+          ) : (
             <ChangeRow
               label="DB2"
               metric="db2"
               changes={changes}
               formatTotal={formatCompactDkk}
             />
+          )}
+          {changedCount > 0 ? (
             <ChangeRow
               label="Udledning"
               metric="nLoad"
               changes={changes}
               formatTotal={(value) => `${formatWholeNumber(value)} kg N`}
             />
-          </dl>
-        </>
-      )}
+          ) : null}
+        </dl>
+      ) : null}
     </>
   )
 }

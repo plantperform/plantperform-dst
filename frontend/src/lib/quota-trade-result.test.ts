@@ -17,6 +17,7 @@ import {
   type FieldTotals,
 } from '@/lib/field-domain'
 import {
+  db2IncludingQuotaTrades,
   describeQuotaPayment,
   describeQuotaTrade,
   describeQuotaTradeAmount,
@@ -289,8 +290,9 @@ describe('kvotehandel results', () => {
     expect(quotaBarHeights(80, 0, 34)).toEqual({ heightPct: 0, overPct: 0 })
   })
 
-  it('takes the payments off the crops’ DB2 on the card', () => {
-    const totals = { db2: 100_000, calculatedAreaHa: 10 } as FieldTotals
+  it('shows the net trading contribution separately from crop DB2', () => {
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
+
     const html = renderToStaticMarkup(
       createElement(QuotaTradeFigures, {
         trades: [buy, sell],
@@ -298,31 +300,132 @@ describe('kvotehandel results', () => {
         catchmentLabel: (id) => `Kystvandopland ${id}`,
       }),
     )
-    expect(html).toContain('Dækningsbidrag inkl. kvotehandel')
-    // 100.000 kr less 2.425 kr in payments, over 10 ha.
-    expect(html).toContain('98 t.kr i alt')
-    expect(html).toContain('9.758')
+
+    expect(html).toContain('Kvotehandel pr. år')
+    expect(html).toContain('−2.425 kr i alt')
+    expect(html).toContain('−243 kr/ha')
+  })
+
+  it('keeps the per-catchment trade breakdown', () => {
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
+
+    const html = renderToStaticMarkup(
+      createElement(QuotaTradeFigures, {
+        trades: [buy, sell],
+        totals,
+        catchmentLabel: (id) => `Kystvandopland ${id}`,
+      }),
+    )
+
     expect(html).toContain('Kolding Fjord, indre')
     expect(html).toContain('Kystvandopland 2')
     expect(html).toContain('Modtager 1.775 kr/år')
-    // A payment that differs between years is shown as its average.
-    expect(
-      renderToStaticMarkup(
-        createElement(QuotaTradeFigures, {
-          trades: [{ ...buy, tradeKgByYear: byYear(-40, 120) }],
-          totals,
-          catchmentLabel: String,
-        }),
-      ),
-    ).toContain('Betaler gns. 4.200 kr/år')
-    expect(
-      renderToStaticMarkup(
-        createElement(QuotaTradeFigures, {
-          trades: [],
-          totals,
-          catchmentLabel: String,
-        }),
-      ),
-    ).toBe('')
+  })
+
+  it('labels a varying payment as its annual average', () => {
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
+
+    const html = renderToStaticMarkup(
+      createElement(QuotaTradeFigures, {
+        trades: [{ ...buy, tradeKgByYear: byYear(-40, 120) }],
+        totals,
+        catchmentLabel: String,
+      }),
+    )
+
+    expect(html).toContain('Betaler gns. 4.200 kr/år')
+  })
+
+  it('omits the breakdown when no trades were saved', () => {
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
+
+    const html = renderToStaticMarkup(
+      createElement(QuotaTradeFigures, {
+        trades: [],
+        totals,
+        catchmentLabel: String,
+      }),
+    )
+
+    expect(html).toBe('')
+  })
+
+  it('shows sales income as a positive contribution', () => {
+    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
+
+    const html = renderToStaticMarkup(
+      createElement(QuotaTradeFigures, {
+        trades: [sell],
+        totals,
+        catchmentLabel: String,
+      }),
+    )
+
+    expect(html).toContain('+178 kr/ha')
+    expect(html).toContain('+1.775 kr i alt')
+  })
+
+  it('shows the trading total without dividing by zero', () => {
+    const totals = { db2: 0, economicsAreaHa: 0 } as FieldTotals
+
+    const html = renderToStaticMarkup(
+      createElement(QuotaTradeFigures, {
+        trades: [sell],
+        totals,
+        catchmentLabel: String,
+      }),
+    )
+
+    expect(html).toContain('+1.775 kr i alt')
+    expect(html).not.toContain('kr/ha')
+  })
+})
+
+describe('DB2 including quota trades', () => {
+  it.each([
+    { name: 'sales income', trades: [sell], expected: 101_775 },
+    { name: 'purchase costs', trades: [buy], expected: 95_800 },
+    { name: 'trades across catchments', trades: [buy, sell], expected: 97_575 },
+    { name: 'no trades', trades: [], expected: 100_000 },
+  ])('includes $name in the annual result', ({ trades, expected }) => {
+    const cropDb2 = 100_000
+
+    const result = db2IncludingQuotaTrades(cropDb2, trades)
+
+    expect(result).toBe(expected)
+  })
+
+  it.each([
+    { year: ROTATION_CALENDAR_YEARS[0], expected: 101_200 },
+    { year: ROTATION_CALENDAR_YEARS[1], expected: 95_800 },
+  ])(
+    'uses the quantity and direction-specific price for $year',
+    ({ year, expected }) => {
+      const trade = { ...buy, tradeKgByYear: byYear(-40, 120) }
+
+      const result = db2IncludingQuotaTrades(100_000, [trade], year)
+
+      expect(result).toBe(expected)
+    },
+  )
+
+  it('uses the saved average when the calendar year is null', () => {
+    const trade = {
+      ...buy,
+      tradeKgByYear: byYear(-40, 120),
+      paymentDkkPerYear: 3_525,
+    }
+
+    const result = db2IncludingQuotaTrades(100_000, [trade], null)
+
+    expect(result).toBe(96_475)
+  })
+
+  it('uses zero payment for a year with no saved trade', () => {
+    const year = ROTATION_CALENDAR_YEARS[0] - 1
+
+    const result = quotaTradePayment([buy], year)
+
+    expect(result).toBe(0)
   })
 })

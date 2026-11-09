@@ -30,7 +30,15 @@ import {
 } from 'react'
 
 import { useFarmFields } from '@/api/hooks'
-import type { FieldRecord, FieldYearValues } from '@/api/types'
+import type {
+  FieldRecord,
+  FieldYearValues,
+  SimulationQuotaTrade,
+} from '@/api/types'
+import {
+  FieldListDb2Footer,
+  FieldListQuotaTradeRow,
+} from '@/components/farm/FieldListQuotaTrade'
 import {
   catchmentKey,
   fieldInCatchment,
@@ -78,6 +86,7 @@ import {
   catchmentRuns,
   changedFieldIds,
   fieldDisplayName,
+  firstCalendarYear,
   formatCatchmentAmount,
   formatFieldCount,
   formatNumber,
@@ -114,6 +123,7 @@ const GROUP_ROW_HEIGHT = remToPx(1.75) + 1
 const FIELD_ROW_HEIGHT = { compact: remToPx(2.5), full: remToPx(3.25) }
 const ROW_OVERSCAN = 8
 const FOOTER_SCROLL_PADDING = remToPx(6)
+const NO_QUOTA_TRADES: SimulationQuotaTrade[] = []
 
 type CatchmentGroupRowProps = {
   catchmentId: number | null
@@ -279,6 +289,7 @@ SizerRow.displayName = 'SizerRow'
 type FarmFieldsListProps = {
   farmId: string
   sortedFields: FieldRecord[]
+  quotaTrades?: SimulationQuotaTrade[]
   isSimulationView?: boolean
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
@@ -304,6 +315,7 @@ type FarmFieldsListProps = {
 export const FarmFieldsList = ({
   farmId,
   sortedFields,
+  quotaTrades = NO_QUOTA_TRADES,
   isSimulationView = false,
   sort,
   onSortChange,
@@ -347,6 +359,23 @@ export const FarmFieldsList = ({
     () => resolveFarmQuota(sortedFields, isSimulationView),
     [sortedFields, isSimulationView],
   )
+
+  const listTrades = useMemo(
+    () =>
+      isSimulationView
+        ? quotaTrades.filter((trade) =>
+            sortedFields.some((field) => field.catchmentId === trade.catchmentId),
+          )
+        : NO_QUOTA_TRADES,
+    [isSimulationView, quotaTrades, sortedFields],
+  )
+  const calendarYear =
+    selectedYearIndex === null
+      ? null
+      : firstCalendarYear(false) + selectedYearIndex
+  const db2Loading =
+    isSimulationView && selectedYearIndex !== null &&
+    (yearValuesLoading || yearValues === undefined)
 
   const fertiliser = useMemo(
     () =>
@@ -445,6 +474,15 @@ export const FarmFieldsList = ({
         nNormLevels,
         fertiliserLoading: yearValuesLoading,
         quota,
+        db2Footer:
+          db2Loading || listTrades.length > 0 ? (
+            <FieldListDb2Footer
+              totals={quota.totals}
+              trades={listTrades}
+              calendarYear={calendarYear}
+              loading={db2Loading}
+            />
+          ) : undefined,
         catchmentLabel,
         detachingFieldIds,
         onRequestDetach,
@@ -458,6 +496,9 @@ export const FarmFieldsList = ({
       nNormLevels,
       yearValuesLoading,
       quota,
+      listTrades,
+      calendarYear,
+      db2Loading,
       catchmentLabel,
       detachingFieldIds,
       onRequestDetach,
@@ -524,9 +565,18 @@ export const FarmFieldsList = ({
   const stickyHeight = headerHeight + GROUP_ROW_HEIGHT
   const rows = table.getRowModel().rows
   const visibleColumns = table.getVisibleLeafColumns()
+  const showTrades = visibleColumns.some((column) => column.id === 'db2')
   const items = useMemo(
-    () => fieldListItems(sortedFields, runStarts),
-    [sortedFields, runStarts],
+    () => fieldListItems(
+      sortedFields,
+      runStarts,
+      showTrades ? listTrades : NO_QUOTA_TRADES,
+    ),
+    [sortedFields, runStarts, showTrades, listTrades],
+  )
+  const tradeRows = useMemo(
+    () => items.filter((item) => item.kind === 'quotaTrade'),
+    [items],
   )
   const groupIndexes = useMemo(
     () =>
@@ -544,7 +594,9 @@ export const FarmFieldsList = ({
     estimateSize: (index) =>
       items[index].kind === 'group'
         ? GROUP_ROW_HEIGHT
-        : FIELD_ROW_HEIGHT[density],
+        : items[index].kind === 'quotaTrade'
+          ? FIELD_ROW_HEIGHT.full
+          : FIELD_ROW_HEIGHT[density],
     getItemKey,
     rangeExtractor: extractRange,
     overscan: ROW_OVERSCAN,
@@ -568,7 +620,7 @@ export const FarmFieldsList = ({
 
   useLayoutEffect(() => {
     virtualizer.measure()
-  }, [virtualizer, density])
+  }, [virtualizer, density, items])
 
   const scrollToField = useEffectEvent((fieldId: string | null) => {
     const index = items.findIndex((item) => item.key === fieldId)
@@ -606,7 +658,7 @@ export const FarmFieldsList = ({
     return () => {
       cancelled = true
     }
-  }, [columns, shownColumnVisibility, runStarts, onRequiredWidthChange])
+  }, [columns, shownColumnVisibility, runStarts, tradeRows, onRequiredWidthChange])
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -640,6 +692,25 @@ export const FarmFieldsList = ({
           </CardDescription>
         </CardHeader>
       </Card>
+    )
+  }
+
+  const renderTradeRow = (item: (typeof tradeRows)[number], sizing = false) => {
+    const selected = fieldInCatchment(item.run, highlightedCatchmentKey)
+    return (
+      <FieldListQuotaTradeRow
+        key={item.key}
+        trade={item.trade}
+        totals={item.run.totals}
+        calendarYear={calendarYear}
+        catchmentLabel={catchmentLabel(item.trade.catchmentId)}
+        columns={visibleColumns}
+        selected={selected}
+        dimmed={highlightedCatchmentKey !== null && !selected}
+        height={FIELD_ROW_HEIGHT.full}
+        loading={db2Loading}
+        sizing={sizing}
+      />
     )
   }
 
@@ -750,11 +821,12 @@ export const FarmFieldsList = ({
                 </TableRow>
               ))}
             </TableHeader>
-            {sizerRows.length > 0 ? (
-              <tbody className="invisible">
+            {isWindowed && (sizerRows.length > 0 || tradeRows.length > 0) ? (
+              <tbody className="invisible" aria-hidden="true">
                 {sizerRows.map((row) => (
                   <SizerRow key={row.id} cells={row.getVisibleCells()} />
                 ))}
+                {tradeRows.map((item) => renderTradeRow(item, true))}
               </tbody>
             ) : null}
             <TableBody className="[&_td]:border-b [&_tr:nth-last-child(-n+2)_td]:border-b-0 [&_tr[aria-hidden]_td]:border-b-0">
@@ -775,6 +847,7 @@ export const FarmFieldsList = ({
                   )
                 }
                 const item = items[slot.index]
+                if (item.kind === 'quotaTrade') return renderTradeRow(item)
                 if (item.kind === 'group') {
                   const selected = fieldInCatchment(
                     item.run,

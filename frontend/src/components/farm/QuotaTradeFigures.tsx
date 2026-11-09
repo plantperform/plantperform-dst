@@ -1,21 +1,16 @@
 import type { SimulationQuotaTrade } from '@/api/types'
 import { KeyFigure } from '@/components/farm/OverviewCard'
-import {
-  formatCompactDkk,
-  perHaFigure,
-  totalsPerHa,
-  type FieldTotals,
-} from '@/lib/field-domain'
+import type { FieldTotals } from '@/lib/field-domain'
 import {
   describeQuotaPayment,
   describeQuotaTrade,
-  quotaTradePayment,
+  quotaTradeContributionFigure,
   quotaTradeVaries,
 } from '@/lib/quota-trade-result'
 
 type Props = {
   trades: SimulationQuotaTrade[]
-  // The crops' totals the card shows; the trades' payments come off their DB2.
+  // Use the same economics area as the card's main figure.
   totals: FieldTotals
   catchmentLabel: (catchmentId: number) => string
 }
@@ -26,16 +21,11 @@ export const QuotaTradeFigures = ({
   catchmentLabel,
 }: Props) => {
   if (trades.length === 0) return null
-  const db2 = totals.db2 - quotaTradePayment(trades)
   return (
     <div className="space-y-3 border-t pt-3">
       <KeyFigure
-        label="Dækningsbidrag inkl. kvotehandel"
-        figure={perHaFigure(
-          totalsPerHa({ ...totals, db2 }, 'db2'),
-          'db2',
-          formatCompactDkk(db2),
-        )}
+        label="Kvotehandel pr. år"
+        figure={quotaTradeContributionFigure(trades, totals.economicsAreaHa)}
       />
       <ul className="space-y-1.5" aria-label="Kvotehandel">
         {trades.map((trade) => {

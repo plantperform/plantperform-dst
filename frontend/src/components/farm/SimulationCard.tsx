@@ -38,6 +38,7 @@ import {
   type FieldTotals,
 } from '@/lib/field-domain'
 import {
+  db2IncludingQuotaTrades,
   latestQuotaTrades,
   limitAfterTradesFor,
 } from '@/lib/quota-trade-result'
@@ -150,7 +151,6 @@ const SimulationFigures = ({
 }: SimulationFiguresProps) => {
   const comparable =
     totals.uncalculatedCount === 0 && history.totals.calculatedCount > 0
-  const db2PerHa = totalsPerHa(totals, 'db2')
   const nLoadPerHa = totalsPerHa(totals, 'nLoad')
   const historyNLoadPerHa = totalsPerHa(history.totals, 'nLoad')
   const profile = useEconomicsProfiles().appliedProfile(simulation)
@@ -160,14 +160,20 @@ const SimulationFigures = ({
     simulation,
     view.data?.data?.savedResult,
   )
+  const db2 = db2IncludingQuotaTrades(totals.db2, quotaTrades)
+  const db2PerHa = totalsPerHa({ ...totals, db2 }, 'db2')
   const catchmentLabel = useCatchmentLabel(farmId, fields)
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
         <KeyFigure
-          label="Dækningsbidrag pr. år"
-          figure={perHaFigure(db2PerHa, 'db2', formatCompactDkk(totals.db2))}
+          label={
+            quotaTrades.length > 0
+              ? 'Dækningsbidrag pr. år inkl. kvotehandel'
+              : 'Dækningsbidrag pr. år'
+          }
+          figure={perHaFigure(db2PerHa, 'db2', formatCompactDkk(db2))}
         >
           {profile.id === STANDARD_PROFILE_ID ? null : (
             <EconomicsChip
