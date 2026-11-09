@@ -6,11 +6,13 @@ import { cropLabel } from '@/lib/crop-label'
 import {
   findPrice,
   formatCropCount,
+  formatDbDkk,
   formatEconomicsNumber,
   formatSignedDkk,
   priceValue,
   sharedPriceEffect,
   type CropDbDelta,
+  type CropTotals,
   type EconomicsAssumptions,
   type EconomicsOverrides,
 } from '@/lib/economics'
@@ -53,19 +55,99 @@ export const DbEffectsConfirm = ({
           </Button>
         </div>
       </div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
-        {effects.map((effect) => (
-          <li key={effect.cropCode}>
-            {cropLabel(effect.cropCode, effect.cropName)}{' '}
-            <span className="font-semibold">
-              {formatSignedDkk(effect.deltaDkkHa)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <EffectsTable effects={effects} />
     </div>
   </div>
 )
+
+type EffectColumn = {
+  label: string
+  figure: (totals: CropTotals) => number
+  format: (value: number) => string
+  always?: boolean
+}
+
+// The columns of the overview table; a column that no crop changes is left out.
+const EFFECT_COLUMNS: EffectColumn[] = [
+  { label: 'Indtægt', figure: (t) => t.revenueDkkHa, format: formatDbDkk },
+  { label: 'Tilskud', figure: (t) => t.subsidyDkkHa, format: formatSignedDkk },
+  {
+    label: 'Omkostninger',
+    figure: (t) => -t.totalCostsDkkHa,
+    format: formatDbDkk,
+  },
+  {
+    label: 'Dækningsbidrag',
+    figure: (t) => t.dbDkkHa,
+    format: formatDbDkk,
+    always: true,
+  },
+]
+
+const EffectsTable = ({ effects }: { effects: CropDbDelta[] }) => {
+  const columns = EFFECT_COLUMNS.filter(
+    (column) =>
+      column.always ||
+      effects.some(
+        (effect) =>
+          Math.round(column.figure(effect.before)) !==
+          Math.round(column.figure(effect.after)),
+      ),
+  )
+  const gridStyle = {
+    gridTemplateColumns: `minmax(8rem,1fr) repeat(${columns.length}, minmax(7rem,auto))`,
+  }
+
+  return (
+    <div className="mt-2 overflow-x-auto">
+      <div
+        className="grid items-baseline gap-x-4 text-xs text-muted-foreground"
+        style={gridStyle}
+      >
+        <span>kr/ha</span>
+        {columns.map((column) => (
+          <span key={column.label} className="text-right">
+            {column.label}
+          </span>
+        ))}
+      </div>
+      {effects.map((effect) => (
+        <div
+          key={effect.cropCode}
+          className="grid items-baseline gap-x-4 pt-1 tabular-nums"
+          style={gridStyle}
+        >
+          <span className="truncate">
+            {cropLabel(effect.cropCode, effect.cropName)}
+          </span>
+          {columns.map((column) => {
+            const before = column.figure(effect.before)
+            const after = column.figure(effect.after)
+            const changed = Math.round(before) !== Math.round(after)
+            return (
+              <span key={column.label} className="text-right">
+                {changed ? (
+                  <>
+                    <span className="text-muted-foreground">
+                      {column.format(before)} →{' '}
+                    </span>
+                    <span className="font-semibold">
+                      {column.format(after)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {column.format(after)}
+                  </span>
+                )}
+              </span>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 type SharedPriceConfirmProps = {
   assumptions: EconomicsAssumptions

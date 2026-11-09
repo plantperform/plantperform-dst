@@ -630,6 +630,9 @@ export type CropDbDelta = {
   cropCode: number
   cropName: string
   deltaDkkHa: number
+  // The crop's figures before and after the change, as in the overview table.
+  before: CropTotals
+  after: CropTotals
 }
 
 const dbDeltas = (
@@ -644,6 +647,8 @@ const dbDeltas = (
     deltaDkkHa:
       wholeDbDkkHa(assumptions, after, crop) -
       wholeDbDkkHa(assumptions, before, crop),
+    before: cropTotals(assumptions, before, crop),
+    after: cropTotals(assumptions, after, crop),
   }))
 
 export const sharedPriceEffect = (
