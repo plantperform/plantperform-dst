@@ -280,7 +280,7 @@ describe('kvotehandel results', () => {
     expect(describeQuotaTradeAmount(-50)).toBe('Solgt kvote 50 kg N')
   })
 
-  it('marks udledning over the original kvote, whatever the trade or cap', () => {
+  it('keeps the original quota as the default bar limit', () => {
     // 120 kg N against a kvote of 100 kg N drawn at 34 %.
     const over = quotaBarHeights(120, 100, 34)
     expect(over.heightPct).toBeCloseTo(40.8)
@@ -288,6 +288,49 @@ describe('kvotehandel results', () => {
     expect(quotaBarHeights(100, 100, 34).overPct).toBe(0)
     expect(quotaBarHeights(80, 100, 34).overPct).toBe(0)
     expect(quotaBarHeights(80, 0, 34)).toEqual({ heightPct: 0, overPct: 0 })
+  })
+
+  it('keeps the bar height relative to the original quota after trading', () => {
+    const bar = quotaBarHeights(120, 100, 34, 130)
+
+    expect(bar.heightPct).toBeCloseTo(40.8)
+  })
+
+  it.each([
+    [120, 130, 0],
+    [140, 130, 100 / 14],
+    [40, 70, 0],
+    [80, 70, 12.5],
+    [130, 130, 0],
+    [1, 0, 100],
+    [0, 0, 0],
+    [10, -10, 100],
+    [0, -10, 0],
+  ])(
+    'marks only the excess of %s kg above a limit of %s red',
+    (load, limit, expected) => {
+      const bar = quotaBarHeights(load, 100, 34, limit)
+
+      expect(bar.overPct).toBeCloseTo(expected)
+    },
+  )
+
+  it('clips a bar taller than the chart', () => {
+    const bar = quotaBarHeights(400, 100, 50, 130)
+
+    expect(bar).toEqual({ heightPct: 100, overPct: 35 })
+  })
+
+  it('clips a limit above the chart without drawing red', () => {
+    const bar = quotaBarHeights(400, 100, 50, 500)
+
+    expect(bar.overPct).toBe(0)
+  })
+
+  it('does not draw a traded bar without an original quota', () => {
+    const bar = quotaBarHeights(80, 0, 34, 100)
+
+    expect(bar).toEqual({ heightPct: 0, overPct: 0 })
   })
 
   it('shows the net trading contribution separately from crop DB2', () => {

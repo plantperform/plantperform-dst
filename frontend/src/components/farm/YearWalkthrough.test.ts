@@ -9,11 +9,13 @@ import type {
   FieldRecord,
   OptimizeSimulationResponse,
   SimulationQuotaTrade,
+  YearlySummaryEntry,
 } from '@/api/types'
 import { YearWalkthrough } from '@/components/farm/YearWalkthrough'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   ROTATION_CALENDAR_YEARS,
+  REAL_HISTORY_START_CALENDAR_YEAR,
   type CatchmentTotalsByYear,
 } from '@/lib/field-domain'
 
@@ -64,6 +66,37 @@ const yearTotals: CatchmentTotalsByYear = new Map([
   [2, { 1: { nLoadKg: 40, quotaKgN: 100, fieldCount: 1 } }],
 ])
 
+const figures = (loads: number[], quotaKgN = 100, history = false) => {
+  const average = loads.reduce((sum, load) => sum + load, 0) / loads.length
+  const entries = loads.map((nLoad, index) => ({
+    year: history ? REAL_HISTORY_START_CALENDAR_YEAR + index : index + 1,
+    totalNLoadKg: nLoad,
+    totalDb2: 1_000,
+    totalFeedUnits: 0,
+    fieldCount: 1,
+  }))
+  return {
+    fields: [{ ...field('a', 1, average), nLoadQuotaKgN: quotaKgN }],
+    entries,
+    totalsByYear: new Map([
+      [
+        1,
+        Object.fromEntries(
+          entries.map((entry) => [
+            entry.year,
+            {
+              nLoadKg: entry.totalNLoadKg,
+              quotaKgN,
+              fieldCount: 1,
+            },
+          ]),
+        ),
+      ],
+    ]),
+    history,
+  }
+}
+
 describe('kvotehandel in the Årsgennemgang', () => {
   let root: Root
   let container: HTMLDivElement
@@ -107,11 +140,19 @@ describe('kvotehandel in the Årsgennemgang', () => {
       scoped = false,
       collapsed = false,
       lastRun = null,
+      fields,
+      totalsByYear = yearTotals,
+      entries,
+      history = false,
     }: {
       year?: number | null
       scoped?: boolean
       collapsed?: boolean
       lastRun?: OptimizeSimulationResponse | null
+      fields?: FieldRecord[]
+      totalsByYear?: CatchmentTotalsByYear
+      entries?: YearlySummaryEntry[]
+      history?: boolean
     } = {},
   ) =>
     act(async () =>
@@ -120,7 +161,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
           TooltipProvider,
           null,
           createElement(YearWalkthrough, {
-            entries: [
+            entries: entries ?? [
               {
                 year: 1,
                 totalNLoadKg: scoped ? 120 : 160,
@@ -130,9 +171,11 @@ describe('kvotehandel in the Årsgennemgang', () => {
               },
             ],
             loading: false,
-            fields: scoped
-              ? [field('a', 1, 120)]
-              : [field('a', 1, 120), field('b', 2, 40)],
+            fields:
+              fields ??
+              (scoped
+                ? [field('a', 1, 120)]
+                : [field('a', 1, 120), field('b', 2, 40)]),
             selectedYearIndex: year,
             scopeLabel: scoped ? 'Opland 1' : null,
             onSelectedYearIndexChange: vi.fn(),
@@ -140,7 +183,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
             catchmentColor: () => 'bg-blue-700',
             lastRun,
             collapsed,
-            catchmentTotalsByYear: yearTotals,
+            catchmentTotalsByYear: totalsByYear,
+            history,
             quotaTrades,
             quotaCaps,
           }),
@@ -242,8 +286,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     // One band in the year's bar and one in the legend, for each kind.
     expect(bands('border-warning')).toBe(2)
     expect(bands('border-success')).toBe(2)
-    // The kvote status still measures against the original kvote.
-    expect(legend()).toContain('Over kvoten')
+    expect(legend()).toContain('Over kvoten efter kvotehandel')
   })
 
   it('names only the kind of trade the run made', async () => {
@@ -252,15 +295,21 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(legend()).not.toContain('Solgt kvote')
   })
 
-  it('marks udledning red over the original kvote, whatever the trade', async () => {
-    // Opland 1 lets out 120 kg N against a kvote of 100 kg N: red even when
-    // bought kvote covers it.
+  it('does not mark emissions covered by bought quota red', async () => {
     await render([trade(1, 30)])
-    expect(overParts()).toBe(1)
+
+    expect(overParts()).toBe(0)
+  })
+
+  it('marks emissions above the bought quota red', async () => {
     await render([trade(1, 10)])
+
     expect(overParts()).toBe(1)
-    // Opland 2 lets out 40 kg N, under its kvote though over 100 - 70 kg N.
+  })
+
+  it('marks emissions above the quota remaining after a sale red', async () => {
     await render([trade(1, 30), trade(2, -70)])
+
     expect(overParts()).toBe(1)
   })
 
@@ -275,7 +324,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     await render([trade(1, 30, -20)])
     expect(legend()).toContain('Solgt kvote')
     expect(bands('border-warning')).toBe(2)
-    expect(overParts()).toBe(1)
+    expect(overParts()).toBe(0)
   })
 
   // Opland 1's cap under Grænser in every year.
@@ -327,8 +376,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('marks udledning red over the kvote, whatever the cap under Grænser', async () => {
     // Opland 1 lets out 120 kg N against a kvote of 100 kg N: red within a
-    // cap of 150 kg N and with 30 kg N bought on top of it.
-    await render([trade(1, 30)], cap(150))
+    // cap of 150 kg N with only 10 kg N bought.
+    await render([trade(1, 10)], cap(150))
     expect(overParts()).toBe(1)
     // Opland 2 lets out 40 kg N, under its kvote: not red, even over a cap
     // of 30 kg N. Only opland 1's bar is.
@@ -381,10 +430,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('shows one opland’s trade, its price and what it costs', async () => {
     await render([trade(1, 30, 60)], cap(150), { scoped: true, year: 0 })
-    // The opland's own facts stay beside its trade. Its one year is over the
-    // kvote, though bought kvote covers it.
+    // The opland's own facts stay beside its trade, which covers the year.
     expect(panel()).toMatch(/Marker1 mark · 10 ha/)
-    expect(panel()).toContain('År over kvoten1 af 1')
+    expect(panel()).toContain('År over kvoten0 af 1')
     expect(panel()).toContain('Kvote pr. ha')
     expect(panel()).toContain('Købt kvote30 kg N (+30 % af kvoten)')
     expect(panel()).toContain('Pris30 kr/kg N')
@@ -399,35 +447,236 @@ describe('kvotehandel in the Årsgennemgang', () => {
     expect(panel()).toContain('Indtægt900 kr')
   })
 
-  it('measures a trading opland against its kvote, whatever the trade', async () => {
-    // Opland 1 lets out 120 kg N against a kvote of 100 kg N: over the kvote
-    // even though 30 kg N bought covers it, with the trade shown beside it.
-    await render([trade(1, 30)], undefined, { scoped: true, year: 0 })
-    expect(panel()).toContain('120 %over kvote')
-    expect(panel()).toContain('+30 % købt kvote')
-    expect(panel()).toContain('120 af 100 kg N, skal ned med 20 kg N')
-    expect(panel()).not.toContain('efter køb')
-    // Nor does a cap under Grænser above it change that.
-    await render([trade(1, 30)], cap(150), { scoped: true, year: 0 })
-    expect(panel()).toContain('120 %over kvote')
-    // Selling does not move what is over the kvote either.
-    await render([trade(1, -30)], undefined, { scoped: true, year: 0 })
-    expect(panel()).toContain('−30 % solgt kvote')
-    expect(panel()).toContain('skal ned med 20 kg N')
-    expect(panel()).not.toContain('efter salg')
+  it.each([
+    [120, 30, '120 af 130 kg N efter kvotehandel, 10 kg N tilbage'],
+    [140, 30, '140 af 130 kg N efter kvotehandel, skal ned med 10 kg N'],
+    [40, -30, '40 af 70 kg N efter kvotehandel, 30 kg N tilbage'],
+    [80, -30, '80 af 70 kg N efter kvotehandel, skal ned med 10 kg N'],
+    [130, 30, '130 af 130 kg N efter kvotehandel, 0 kg N tilbage'],
+    [0, -100, '0 af 0 kg N efter kvotehandel, 0 kg N tilbage'],
+    [0, -110, '0 af -10 kg N efter kvotehandel, skal ned med 10 kg N'],
+  ])(
+    'shows the remaining quota for emissions %s and trade %s',
+    async (load, kg, text) => {
+      const data = figures([load])
+
+      await render([trade(1, kg)], undefined, {
+        ...data,
+        scoped: true,
+        year: 0,
+      })
+
+      expect(panel()).toContain(text)
+    },
+  )
+
+  it.each([
+    [120, 30, 'tæt på kvote efter kvotehandel'],
+    [140, 30, 'over kvote efter kvotehandel'],
+    [40, -30, 'under kvote efter kvotehandel'],
+    [80, -30, 'over kvote efter kvotehandel'],
+    [130, 30, 'tæt på kvote efter kvotehandel'],
+    [0, -100, 'tæt på kvote efter kvotehandel'],
+    [1, -100, 'over kvote efter kvotehandel'],
+    [0, -110, 'over kvote efter kvotehandel'],
+  ])('rates emissions %s after trading %s', async (load, kg, text) => {
+    const data = figures([load])
+
+    await render([trade(1, kg)], undefined, { ...data, scoped: true, year: 0 })
+
+    expect(panel()).toContain(text)
   })
 
-  it('colours each opland in Hele bedriften by its kvote, whatever the trade', async () => {
-    const percent = (text: string) =>
-      [...container.querySelectorAll('aside span')].find(
-        (span) => span.textContent === text,
+  it('keeps the scoped percentage relative to the original quota', async () => {
+    await render([trade(1, 30)], undefined, { scoped: true, year: 0 })
+
+    expect(panel()).toContain('120 % af oprindelig kvote')
+  })
+
+  it.each([50, 150])(
+    'ignores a cap of %s when calculating remaining quota',
+    async (limit) => {
+      await render([trade(1, 30)], cap(limit), { scoped: true, year: 0 })
+
+      expect(panel()).toContain(
+        '120 af 130 kg N efter kvotehandel, 10 kg N tilbage',
       )
-    // Opland 1 is 120 % of its kvote: red with or without bought kvote.
-    await render(undefined, undefined, { year: 0 })
-    expect(percent('120 %')?.className).toContain('text-destructive')
-    await render([trade(1, 30)], undefined, { year: 0 })
-    expect(percent('120 %')?.className).toContain('text-destructive')
-    expect(panel()).toContain('+30 %')
+    },
+  )
+
+  it('uses the existing quota rounding for a trading catchment', async () => {
+    const data = figures([130], 99.6)
+
+    await render([trade(1, 30)], undefined, { ...data, scoped: true, year: 0 })
+
+    expect(panel()).toContain('tæt på kvote efter kvotehandel')
+  })
+
+  it.each([
+    [30, false],
+    [10, true],
+  ])('colours the whole-farm percentage after buying %s', async (kg, over) => {
+    await render([trade(1, kg)], undefined, { year: 0 })
+
+    const percent = [...container.querySelectorAll('aside span')].find(
+      (span) => span.textContent === '120 % af oprindelig kvote',
+    )
+    expect(percent?.classList.contains('text-destructive')).toBe(over)
+  })
+
+  it('does not apply another catchment’s bought quota', async () => {
+    await render([trade(2, 30)], undefined, { year: 0 })
+
+    const percent = [...container.querySelectorAll('aside span')].find(
+      (span) => span.textContent === '120 %',
+    )
+    expect(percent?.className).toContain('text-destructive')
+  })
+
+  it('shows the adjusted amount in the whole-farm row', async () => {
+    await render([trade(2, -30)], undefined, { year: 0 })
+
+    expect(panel()).toContain('40 af 70 kg N efter kvotehandel')
+  })
+
+  it.each([false, true])(
+    'describes the year after trading (collapsed: %s)',
+    async (collapsed) => {
+      await render([trade(1, 30)], undefined, { collapsed, year: 0 })
+
+      expect(
+        container.querySelector('[role="radio"]')?.getAttribute('aria-label'),
+      ).toContain('alle oplande under kvoten efter kvotehandel')
+    },
+  )
+
+  it.each([
+    [120, 30, false],
+    [80, -30, true],
+  ])(
+    'colours the collapsed meter for emissions %s and trade %s',
+    async (load, kg, over) => {
+      const data = figures([load])
+
+      await render([trade(1, kg)], undefined, {
+        ...data,
+        collapsed: true,
+        year: 0,
+      })
+
+      expect(
+        container
+          .querySelector('span.block.h-full')
+          ?.classList.contains('bg-destructive'),
+      ).toBe(over)
+    },
+  )
+
+  it('labels the original percentage and adjusted status when collapsed', async () => {
+    await render([trade(1, 30)], undefined, {
+      scoped: true,
+      collapsed: true,
+      year: 0,
+    })
+
+    expect(container.textContent).toContain(
+      '120 % af oprindelig kvote tæt på kvote efter kvotehandel',
+    )
+  })
+
+  it('counts years using each year’s own trade', async () => {
+    const data = figures(ROTATION_CALENDAR_YEARS.map(() => 120))
+
+    await render([trade(1, 30, 10)], undefined, { ...data, scoped: true })
+
+    expect(panel()).toContain('År over kvoten7 af 8')
+  })
+
+  it('uses the average limit in the period summary', async () => {
+    const data = figures(ROTATION_CALENDAR_YEARS.map(() => 120))
+
+    await render([trade(1, 30, 10)], undefined, { ...data, scoped: true })
+
+    expect(panel()).toContain(
+      '120 af 113 kg N efter kvotehandel, skal ned med 8 kg N',
+    )
+  })
+
+  it('counts a year made over quota by selling', async () => {
+    const data = figures(ROTATION_CALENDAR_YEARS.map(() => 80))
+
+    await render([trade(1, -30, 0)], undefined, { ...data, scoped: true })
+
+    expect(panel()).toContain('År over kvoten1 af 8')
+  })
+
+  it.each([null, 0])(
+    'preserves partial status after a covering purchase (year: %s)',
+    async (year) => {
+      const data = figures([120])
+      data.fields.push({
+        ...field('missing', 1, 0),
+        rotationId: null,
+        nLoadQuotaKgN: 0,
+      })
+
+      await render([trade(1, 30)], undefined, { ...data, scoped: true, year })
+
+      expect(panel()).toContain('delvist beregnet')
+    },
+  )
+
+  it.each([null, 0])(
+    'reports a known overrun despite missing fields (year: %s)',
+    async (year) => {
+      const data = figures([80])
+      data.fields.push({
+        ...field('missing', 1, 0),
+        rotationId: null,
+        nLoadQuotaKgN: 0,
+      })
+
+      await render([trade(1, -30)], undefined, { ...data, scoped: true, year })
+
+      expect(panel()).toContain('over kvote efter kvotehandel')
+    },
+  )
+
+  it('preserves the uncalculated state when a year has no field values', async () => {
+    await render([trade(1, 30)], undefined, {
+      totalsByYear: new Map(),
+      scoped: true,
+      year: 0,
+    })
+
+    expect(panel()).toContain('ikke beregnet')
+  })
+
+  it('does not create a quota by trading when the original quota is zero', async () => {
+    const data = figures([120], 0)
+
+    await render([trade(1, 130)], undefined, { ...data, scoped: true, year: 0 })
+
+    expect(panel()).toContain('ingen kvote')
+  })
+
+  it.each([null, 0])(
+    'ignores trades in the historical panel (year: %s)',
+    async (year) => {
+      const data = figures([120], 100, true)
+
+      await render([trade(1, 30)], cap(150), { ...data, scoped: true, year })
+
+      expect(panel()).toContain('120 af 100 kg N, skal ned med 20 kg N')
+    },
+  )
+
+  it('ignores trades in historical bars', async () => {
+    const data = figures([120], 100, true)
+
+    await render([trade(1, 30)], undefined, data)
+
+    expect(overParts()).toBe(1)
   })
 
   it('prices each year at its direction and averages what the run paid', async () => {
