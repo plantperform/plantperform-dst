@@ -187,7 +187,7 @@ field" column is the name on the wire.
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
 | ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
 | profilens virkning i en simulering | `SimulationEconomicsEffect`, `simulationEconomicsEffect` | | A profile's change in dækningsbidrag for the crops a simulation grows, weighted by each crop's average area per year |
-| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | |
+| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | Six steps; step 5, Dækningsbidrag, lists the dækningsbidrag of every crop (`CropsOverview`) and opens a crop for editing |
 | sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation

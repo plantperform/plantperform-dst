@@ -22,6 +22,7 @@ import {
   DbDelta,
   ProfilesStatus,
 } from '@/components/farm/economics-ui'
+import { CropsOverview } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
   GuideFertiliserStep,
@@ -92,6 +93,12 @@ const STEPS = [
   },
   {
     id: 5,
+    label: 'Dækningsbidrag',
+    intro:
+      'Se dækningsbidraget for alle afgrøder med dine tal. Klik på en afgrøde for at rette den.',
+  },
+  {
+    id: 6,
     label: 'Gennemgang',
     intro:
       'Giv profilen et navn, gå ændringerne igennem og vælg, hvor den skal bruges.',
@@ -370,6 +377,15 @@ const Guide = ({
                 assumptions={assumptions}
                 overrides={overrides}
                 onChange={setOverrides}
+              />
+            ) : null}
+            {step === 5 ? (
+              <CropsOverview
+                assumptions={assumptions}
+                overrides={overrides}
+                editable
+                showHeader={false}
+                onOpenCrop={(cropCode) => setSheet({ cropCode, open: true })}
               />
             ) : null}
             {step === LAST_STEP ? (

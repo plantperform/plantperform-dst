@@ -33,13 +33,16 @@ type CropsOverviewProps = {
   assumptions: EconomicsAssumptions
   overrides: EconomicsOverrides
   editable: boolean
+  // The guide shows its own title and introduction above the table.
+  showHeader?: boolean
   onOpenCrop: (cropCode: number) => void
 }
 
-const CropsOverview = ({
+export const CropsOverview = ({
   assumptions,
   overrides,
   editable,
+  showHeader = true,
   onOpenCrop,
 }: CropsOverviewProps) => {
   const gridClass = cn(
@@ -51,13 +54,15 @@ const CropsOverview = ({
 
   return (
     <div>
-      <div className="px-5 pt-4 pb-3">
-        <h2 className="text-base font-semibold">Alle afgrøder</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Tal i kr/ha. Klik på en afgrøde for at se dens priser og mængder
-          {editable ? ' og rette dem' : null}.
-        </p>
-      </div>
+      {showHeader ? (
+        <div className="px-5 pt-4 pb-3">
+          <h2 className="text-base font-semibold">Alle afgrøder</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tal i kr/ha. Klik på en afgrøde for at se dens priser og mængder
+            {editable ? ' og rette dem' : null}.
+          </p>
+        </div>
+      ) : null}
       <div className="overflow-x-auto">
         <div className={cn(gridClass, GRID_HEAD_CLASS)}>
           <span>Afgrøde</span>
