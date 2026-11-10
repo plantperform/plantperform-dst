@@ -12,7 +12,7 @@ The standard lookup loader never touches custom groups.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/saedskifte-rotations` | Standards and groups the requester belongs to |
+| GET | `/saedskifte-rotations` | Standards and groups the requester belongs to; `standard=true` lists only standards, `standard=false` only groups |
 | POST | `/saedskifte-rotations` | Create a group; returns 201 |
 | GET | `/saedskifte-rotations/{id}` | Read a standard or a group the requester belongs to |
 | PATCH | `/saedskifte-rotations/{id}` | Update with `expectedRevision` |

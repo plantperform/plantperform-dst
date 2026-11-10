@@ -44,8 +44,8 @@ def udlaeg_options(
 
 
 @router.get("", response_model=list[RotationGroup])
-def list_groups(user: CurrentUser):
-    return store.list_groups(user.email)
+def list_groups(user: CurrentUser, standard: bool | None = None):
+    return store.list_groups(user.email, standard)
 
 
 @router.post("", response_model=RotationGroup, status_code=201)
