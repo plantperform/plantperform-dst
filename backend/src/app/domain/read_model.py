@@ -100,8 +100,13 @@ class FarmViewData(CamelModel):
     yearly_summary: list[YearlyTotal]
 
 
+class RotationOptionsError(CamelModel):
+    code: str
+    message: str
+
+
 class SimulationViewData(FarmViewData):
-    rotation_options_error: str | None = None
+    rotation_options_error: RotationOptionsError | None = None
     crop_area_ranges: list[CropAreaRangeValue]
     yearly_optimization_candidates: list[RotationChoiceCategory]
     saved_result: SavedResultView | None = None

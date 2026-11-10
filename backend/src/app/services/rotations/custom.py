@@ -138,7 +138,8 @@ def check_expansion(group_ids, n_norm_procenter):
     if count > MAX_CUSTOM_CANDIDATES:
         raise RotationDefinitionError(
             f"At most {MAX_CUSTOM_CANDIDATES} custom candidates are allowed; "
-            "reduce variants, virkemiddel choices or N-norm levels"
+            "reduce variants, virkemiddel choices or N-norm levels",
+            code="TOO_MANY_CUSTOM_CANDIDATES",
         )
 
 
@@ -164,7 +165,9 @@ def resolve_variant(group_id, variant_id):
         ):
             raise ValueError
     except (ValueError, StopIteration) as error:
-        raise RotationDefinitionError("Rotation variant is no longer available") from error
+        raise RotationDefinitionError(
+            "Rotation variant is no longer available", code="ROTATION_VARIANT_UNAVAILABLE"
+        ) from error
     return variant, codes
 
 
@@ -209,7 +212,9 @@ def validate_overrides(ref, overrides, start_year, driftsform):
             or override.udlaeg_kode not in allowed
             or override.udlaeg_kode in _disabled.get()
         ):
-            raise RotationDefinitionError("Udlæg is not permitted at this rotation position")
+            raise RotationDefinitionError(
+                "Udlæg is not permitted at this rotation position", code="UDLAEG_NOT_PERMITTED"
+            )
 
 
 def contains_crop(code):

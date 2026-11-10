@@ -98,7 +98,10 @@ app.include_router(v0_router, prefix="/api/v0")
 
 @app.exception_handler(RotationGroupNotFoundError)
 async def rotation_not_found(_, error):
-    return JSONResponse(status_code=404, content={"detail": "Rotation group not found"})
+    return JSONResponse(
+        status_code=404,
+        content={"detail": {"code": "ROTATION_NOT_FOUND", "message": "Rotation group not found"}},
+    )
 
 
 @app.exception_handler(RotationGroupConflictError)
@@ -108,4 +111,6 @@ async def rotation_conflict(_, error):
 
 @app.exception_handler(RotationDefinitionError)
 async def invalid_rotation(_, error):
-    return JSONResponse(status_code=422, content={"detail": str(error)})
+    return JSONResponse(
+        status_code=422, content={"detail": {"code": error.code, "message": str(error)}}
+    )

@@ -106,4 +106,6 @@ class RotationGroupConflictError(Exception):
 
 
 class RotationDefinitionError(ValueError):
-    pass
+    def __init__(self, message, code="INVALID_ROTATION"):
+        super().__init__(message)
+        self.code = code
