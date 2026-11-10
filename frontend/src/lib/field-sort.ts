@@ -79,10 +79,19 @@ const comparePrimary = (
   catchmentLabel?: CatchmentLabel,
   selectedYearIndex: number | null = null,
   nNormLevels?: Map<string, NNormLevel>,
+  rotationNames?: Map<string, string>,
 ) => {
+  const rotationText = (field: FieldRecord) => {
+    const variant = fieldRotationVariant(field)
+    return variant === null ? null : (rotationNames?.get(variant) ?? variant)
+  }
   switch (sort.key) {
     case 'name':
-      return compareName(fieldDisplayName(left), fieldDisplayName(right), sort.direction)
+      return compareName(
+        fieldDisplayName(left),
+        fieldDisplayName(right),
+        sort.direction,
+      )
     case 'areaHa':
       return compareNumber(left.areaHa, right.areaHa, sort.direction)
     case 'cropCode':
@@ -106,8 +115,8 @@ const comparePrimary = (
       )
     case 'rotationVariant':
       return compareNullableName(
-        fieldRotationVariant(left),
-        fieldRotationVariant(right),
+        rotationText(left),
+        rotationText(right),
         sort.direction,
       )
     case 'nNormPct':
@@ -168,6 +177,7 @@ export const compareFields = (
   catchmentLabel?: CatchmentLabel,
   selectedYearIndex: number | null = null,
   nNormLevels?: Map<string, NNormLevel>,
+  rotationNames?: Map<string, string>,
 ) => {
   const primary = comparePrimary(
     left,
@@ -176,6 +186,7 @@ export const compareFields = (
     catchmentLabel,
     selectedYearIndex,
     nNormLevels,
+    rotationNames,
   )
   if (primary !== 0) return primary
   const imkTie = compareNullableNumber(left.imkId, right.imkId, 'asc')

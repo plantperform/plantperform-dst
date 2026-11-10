@@ -191,4 +191,27 @@ describe('compareFields', () => {
     expect(idsSortedBy('asc')).toEqual(['32', '315', 'permanent', 'none'])
     expect(idsSortedBy('desc')).toEqual(['permanent', '315', '32', 'none'])
   })
+
+  it('sorts own sædskifter by the name the column shows', () => {
+    const names = new Map([
+      ['own-a', 'Viborg'],
+      ['own-b', 'Bjerre'],
+    ])
+    const fields = [
+      { ...field('a', 1, 0), rotationId: 'own-a:v~0:100' },
+      { ...field('b', 1, 0), rotationId: 'own-b:v~0:100' },
+    ]
+    const sorted = [...fields].sort((left, right) =>
+      compareFields(
+        left,
+        right,
+        { key: 'rotationVariant', direction: 'asc' },
+        undefined,
+        null,
+        undefined,
+        names,
+      ),
+    )
+    expect(sorted.map(({ id }) => id)).toEqual(['b', 'a'])
+  })
 })

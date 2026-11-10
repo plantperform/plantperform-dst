@@ -64,6 +64,7 @@ import { latestQuotaTrades } from '@/lib/quota-trade-result'
 import { useEscapeKey } from '@/hooks/use-escape-key'
 import {
   rotationColorsOf,
+  rotationNamesOf,
   rotationOptionsOf,
   summarizeRotationDistribution,
 } from '@/lib/rotation-overview'
@@ -114,6 +115,7 @@ const sortListFields = (
   highlightedCatchmentKey: string | null,
   selectedYearIndex: number | null,
   nNormLevels: Map<string, NNormLevel> | undefined,
+  rotationNames: Map<string, string>,
 ) => {
   const sorted = [...fields].sort((left, right) =>
     compareFields(
@@ -123,6 +125,7 @@ const sortListFields = (
       catchmentLabel,
       selectedYearIndex,
       nNormLevels,
+      rotationNames,
     ),
   )
   const ordered = orderFieldsByCatchment(sorted, catchmentLabel)
@@ -319,7 +322,7 @@ export const FarmInspector = ({
     fields,
     showYearWalkthrough,
   )
-  // Only the Sædskifter tab needs these, and the afgrødehistorik has none.
+  // The afgrødehistorik has no sædskifter, so only a simulation needs these.
   const { data: rotationCategories } = useRotationCategories(
     isSimulationView ? farm.id : undefined,
   )
@@ -327,11 +330,15 @@ export const FarmInspector = ({
     () => rotationOptionsOf(rotationCategories ?? []),
     [rotationCategories],
   )
+  const rotationNames = useMemo(
+    () => rotationNamesOf(rotationOptions),
+    [rotationOptions],
+  )
   // Of the whole farm, so a sædskifte has the same colour in the Sædskifter tab
   // (also with an opland chosen) and on the map.
   const rotationShares = useMemo(
-    () => summarizeRotationDistribution(fields, rotationOptions),
-    [fields, rotationOptions],
+    () => summarizeRotationDistribution(fields, rotationOptions, rotationNames),
+    [fields, rotationOptions, rotationNames],
   )
   const rotationColors = useMemo(
     () => rotationColorsOf(rotationShares),
@@ -351,6 +358,7 @@ export const FarmInspector = ({
     fieldsSort.key === 'nNormPct'
       ? nNormLevelByFieldId(listFields, yearValues, effectiveSelectedYearIndex)
       : undefined,
+    rotationNames,
   )
   const simulationSummary = useSimulationYearlySummary(
     farm.id,
@@ -586,6 +594,7 @@ export const FarmInspector = ({
                     sortedFields={sortedFields}
                     quotaTrades={quotaTrades}
                     isSimulationView={isSimulationView}
+                    rotationNames={rotationNames}
                     sort={fieldsSort}
                     onSortChange={setFieldsSort}
                     selectedFieldId={selectedFieldId}

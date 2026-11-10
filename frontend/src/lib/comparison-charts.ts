@@ -41,10 +41,8 @@ const ROUND_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
 const DOT_RADIUS = 6
 const BETTER_AREA_OPACITY = 0.08
 
-export const chartLabel = (title: string): string =>
-  title.length <= LABEL_LENGTH
-    ? title
-    : `${title.slice(0, LABEL_LENGTH - 1).trimEnd()}…`
+export const chartLabel = (title: string, length = LABEL_LENGTH): string =>
+  title.length <= length ? title : `${title.slice(0, length - 1).trimEnd()}…`
 
 const roundUp = (value: number): number => {
   if (value <= 0) return 1

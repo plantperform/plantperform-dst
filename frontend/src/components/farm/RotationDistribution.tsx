@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { ShareDonut } from '@/components/farm/ShareDonut'
 import { AppTooltip } from '@/components/ui/app-tooltip'
+import { chartLabel } from '@/lib/comparison-charts'
 import {
   formatFieldCount,
   formatHectares,
@@ -25,13 +26,15 @@ const formatArea = (areaHa: number) =>
 const shareKey = (entry: RotationShare) => rotationKey(entry.rotationVariant)
 
 const shareLabel = (entry: RotationShare) =>
-  rotationLabel(entry.rotationVariant)
+  rotationLabel(entry.rotationVariant, entry.name)
+
+const SHORT_LABEL_LENGTH = 14
 
 // The donut hole only has room for a short name.
 const shortShareLabel = (entry: RotationShare) =>
   entry.rotationVariant === PERMANENT_ROTATION
     ? 'Permanente'
-    : shareLabel(entry)
+    : chartLabel(shareLabel(entry), SHORT_LABEL_LENGTH)
 
 const shareTooltip = (entry: RotationShare) => (
   <span className="flex flex-col gap-0.5">

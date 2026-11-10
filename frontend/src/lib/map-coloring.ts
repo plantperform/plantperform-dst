@@ -440,7 +440,7 @@ export const buildRotationSpec = (
     return {
       value: key,
       color: colors.get(key) ?? NO_ROTATION_COLOR,
-      label: rotationLabel(share.rotationVariant),
+      label: rotationLabel(share.rotationVariant, share.name),
     }
   }),
   fallbackColor: NO_ROTATION_COLOR,

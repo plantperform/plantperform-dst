@@ -588,6 +588,7 @@ export type RotationOption = {
   rotationVariant: string
   cropSequence: string[]
   activeLen: number
+  name?: string | null
 }
 
 export type RotationCategoryOption = {
