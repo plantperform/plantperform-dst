@@ -953,6 +953,16 @@ class RotationDatabaseTests(unittest.TestCase):
         self.assertEqual({group for group, _ in refs}, {"1", listed.id})
         self.assertEqual({level for _, level in refs}, {"90", "100"})
 
+    def test_rotation_list_can_leave_out_standard_or_own_rotations(self):
+        own = store.create_group(definition(), EMAIL)
+        path = "/api/v0/saedskifte-rotations"
+
+        own_only = self.client.get(path, params={"standard": "false"})
+        standard_only = self.client.get(path, params={"standard": "true"})
+
+        self.assertEqual([group["id"] for group in own_only.json()], [own.id])
+        self.assertEqual({group["isStandard"] for group in standard_only.json()}, {True})
+
     def test_simulation_settings_keep_the_rotation_error_code(self):
         error = RotationDefinitionError("Too many", code="TOO_MANY_CUSTOM_CANDIDATES")
 

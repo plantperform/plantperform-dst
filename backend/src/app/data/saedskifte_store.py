@@ -81,13 +81,17 @@ def _model(row, *, can_copy=True):
     return RotationGroup.model_validate({**dict(row._mapping), "can_copy": can_copy})
 
 
-def list_groups(email):
+def list_groups(email, standard=None):
     with repository.SessionLocal() as session:
-        allowed = copyable_ids(session, email)
-        standards = [
-            _standard(group_id).model_copy(update={"can_copy": group_id in allowed})
-            for group_id in saedskifte_library.list_saedskifter()
-        ]
+        standards = []
+        if standard is not False:
+            allowed = copyable_ids(session, email)
+            standards = [
+                _standard(group_id).model_copy(update={"can_copy": group_id in allowed})
+                for group_id in saedskifte_library.list_saedskifter()
+            ]
+        if standard:
+            return standards
         rows = session.execute(
             select(groups)
             .join(members)
