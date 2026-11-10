@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { isSimulationKey, simulationsKey } from '@/api/hooks'
+import {
+  isSimulationKey,
+  rotationCandidatesKey,
+  simulationsKey,
+} from '@/api/hooks'
 import { simulationViewKey } from '@/api/views'
+
+describe('rotationCandidatesKey', () => {
+  it("asks only for the simulation's sædskifter and N-norm levels", () => {
+    expect(rotationCandidatesKey('farm-a', ['1', 'own-1'], ['100', '90'])).toBe(
+      '/farms/farm-a/rotation-candidates?saedskiftevarianter=1,own-1&nNormProcenter=100,90',
+    )
+    expect(rotationCandidatesKey('farm-a', ['1'], [])).toBe(
+      '/farms/farm-a/rotation-candidates?saedskiftevarianter=1',
+    )
+    expect(rotationCandidatesKey('farm-a', [], ['100'])).toBeNull()
+    expect(rotationCandidatesKey(undefined, ['1'], ['100'])).toBeNull()
+  })
+})
 
 describe('isSimulationKey', () => {
   it("matches every farm's simulation lists and views and nothing else", () => {

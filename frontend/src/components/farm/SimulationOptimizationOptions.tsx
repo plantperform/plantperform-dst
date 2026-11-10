@@ -101,6 +101,7 @@ type Props = {
   farmId: string
   fields: FieldRecord[]
   variants: string[]
+  nNormPercentages: string[]
   settings: OptimizationSettings
   constraints: OptimizationConstraints
   onSettingsChange: (settings: OptimizationSettings) => void
@@ -111,6 +112,7 @@ export function SimulationOptimizationOptions({
   farmId,
   fields,
   variants,
+  nNormPercentages,
   settings,
   constraints,
   onSettingsChange,
@@ -118,11 +120,13 @@ export function SimulationOptimizationOptions({
 }: Props) {
   const catchments = useCatchmentOptions(farmId, fields)
   const crops = useCropCodes(farmId)
-  const options = useRotationCandidateOptions(farmId)
+  const options = useRotationCandidateOptions(
+    farmId,
+    variants,
+    nNormPercentages,
+  )
   const names = new Set(
-    (options.data ?? [])
-      .filter((option) => variants.includes(option.ref.rotationVariant))
-      .flatMap((option) => option.cropSequence),
+    (options.data ?? []).flatMap((option) => option.cropSequence),
   )
   const listedCrops = (crops.data ?? []).filter((crop) => names.has(crop.name))
   const patch = (value: Partial<OptimizationSettings>) =>

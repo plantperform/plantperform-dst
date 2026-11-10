@@ -1270,6 +1270,7 @@ export const NewScenarioPanel = ({
               farmId={farmId}
               fields={effectiveFields}
               variants={values.rotationVariants}
+              nNormPercentages={values.nNormPercentages}
               settings={optimizationSettings}
               constraints={constraints}
               onSettingsChange={setOptimizationSettings}

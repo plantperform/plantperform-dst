@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { preloadRotationCandidateCatalog } from '@/api/hooks'
+import {
+  preloadRotationCandidateCatalog,
+  rotationCandidatesKey,
+} from '@/api/hooks'
 import type {
   FieldRecord,
   DisplayYearValue,
@@ -171,10 +174,18 @@ export const FieldPanel = ({
     return () => onCalcOpenChange?.(false)
   }, [calcOpen, onCalcOpenChange])
 
+  const candidatesKey = simulation
+    ? rotationCandidatesKey(
+        farmId,
+        simulation.rotationVariants,
+        simulation.nNormPercentages,
+      )
+    : null
+
   useEffect(() => {
     if (!isSimulationView || !simulationId) return
-    preloadRotationCandidateCatalog(farmId)
-  }, [farmId, isSimulationView, simulationId])
+    preloadRotationCandidateCatalog(farmId, candidatesKey)
+  }, [farmId, isSimulationView, simulationId, candidatesKey])
 
   const calculated = isFieldCalculated(field, isSimulationView)
   const db2Figure = fieldFigure(field, 'db2')

@@ -125,7 +125,11 @@ export const ManualRotationEditor = ({
     isValidating: isValidatingAllRefs,
     error: allRefsError,
     mutate: retryAllRefs,
-  } = useRotationCandidateOptions(farmId)
+  } = useRotationCandidateOptions(
+    farmId,
+    simulation.rotationVariants,
+    simulation.nNormPercentages,
+  )
   const {
     data: cropCodes = NO_CROP_CODES,
     isLoading: isLoadingCropCodes,
