@@ -87,7 +87,10 @@ Existing `saedskiftevarianter` requests accept custom UUIDs as well as standard 
 Newly selecting a custom group requires group membership. Once selected, every farm
 member can calculate and preview it through that simulation, without acquiring
 edit/share rights to the source. The farm candidate endpoints also expose available
-custom groups and validate access before stateless evaluation.
+custom groups and validate access before stateless evaluation. `GET
+/farms/{id}/rotation-candidates` accepts comma-separated `saedskiftevarianter` and
+`nNormProcenter` to list only those candidates, and the custom-candidate limit then
+applies to what is listed.
 
 A new optimization submission captures the latest selected group definitions and
 revisions. Reusing the same run ID or retrying a worker attempt preserves those

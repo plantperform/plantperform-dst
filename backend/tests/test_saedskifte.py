@@ -921,6 +921,28 @@ class RotationDatabaseTests(unittest.TestCase):
         self.assertIn("4096", view["data"]["rotation_options_error"]["message"])
         self.assertIsNotNone(view["data"]["saved_result"])
 
+    def test_candidate_list_limits_only_the_listed_custom_candidates(self):
+        listed = store.create_group(definition(), EMAIL)
+        store.create_group(definition(), EMAIL)
+        with custom.rotation_scope({listed.id: listed}):
+            combinations = len(custom.list_variants(listed.id))
+        path = "/api/v0/farms/farm/rotation-candidates"
+        query = {"saedskiftevarianter": f"1,{listed.id}", "nNormProcenter": "90,100"}
+
+        with patch.object(custom, "MAX_CUSTOM_CANDIDATES", 2 * combinations):
+            everything = self.client.get(path)
+            filtered = self.client.get(path, params=query)
+
+        self.assertEqual(everything.status_code, 422)
+        self.assertEqual(everything.json()["detail"]["code"], "TOO_MANY_CUSTOM_CANDIDATES")
+        self.assertEqual(filtered.status_code, 200, filtered.text)
+        refs = {
+            (option["ref"]["saedskiftevariant"], option["ref"]["nNormPct"])
+            for option in filtered.json()
+        }
+        self.assertEqual({group for group, _ in refs}, {"1", listed.id})
+        self.assertEqual({level for _, level in refs}, {"90", "100"})
+
     def test_simulation_settings_keep_the_rotation_error_code(self):
         error = RotationDefinitionError("Too many", code="TOO_MANY_CUSTOM_CANDIDATES")
 
