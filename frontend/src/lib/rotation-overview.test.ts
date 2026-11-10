@@ -14,6 +14,7 @@ import {
   rotationColorsOf,
   rotationKey,
   rotationLabel,
+  rotationNamesOf,
   rotationOptionsOf,
   rotationVariantOf,
   summarizeRotationDistribution,
@@ -213,6 +214,27 @@ describe('rotationOptionsOf', () => {
       '315',
       '42',
     ])
+  })
+})
+
+describe('rotationNamesOf', () => {
+  it('names an own sædskifte from the simulation when the list no longer has it', () => {
+    const names = rotationNamesOf(
+      [
+        {
+          rotationVariant: 'own-1',
+          name: 'Nyt navn',
+          cropSequence: ['Raps'],
+          activeLen: 1,
+        },
+      ],
+      [
+        undefined,
+        { 'own-1': { name: 'Gammelt navn' }, 'own-2': { name: 'Slettet' } },
+      ],
+    )
+    expect(names.get('own-1')).toBe('Nyt navn')
+    expect(names.get('own-2')).toBe('Slettet')
   })
 })
 
