@@ -611,6 +611,7 @@ export type FarmFieldsColumnsArgs = {
   catchmentLabel: (catchmentId: number | null) => string
   detachingFieldIds: string[]
   onRequestDetach?: (field: FieldRecord) => void
+  rotationNames: Map<string, string>
 }
 
 export const buildFarmFieldsColumns = ({
@@ -626,6 +627,7 @@ export const buildFarmFieldsColumns = ({
   catchmentLabel,
   detachingFieldIds,
   onRequestDetach,
+  rotationNames,
 }: FarmFieldsColumnsArgs): ColumnDef<FieldRecord, unknown>[] => {
   const { totals } = quota
   const list: ColumnDef<FieldRecord, unknown>[] = []
@@ -714,7 +716,8 @@ export const buildFarmFieldsColumns = ({
   if (isSimulationView) {
     const rotationVariantText = (field: FieldRecord) => {
       const variant = fieldRotationVariant(field)
-      return variant === PERMANENT_ROTATION ? 'Permanent' : variant
+      if (variant === PERMANENT_ROTATION) return 'Permanent'
+      return variant === null ? null : (rotationNames.get(variant) ?? variant)
     }
     list.push({
       id: 'rotationVariant',

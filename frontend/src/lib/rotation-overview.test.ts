@@ -137,6 +137,7 @@ describe('rotationColorsOf', () => {
   const sharesOf = (variants: (string | null)[]): RotationShare[] =>
     variants.map((rotationVariant) => ({
       rotationVariant,
+      name: null,
       cropSequence: null,
       areaHa: 1,
       share: 1 / variants.length,
@@ -276,5 +277,26 @@ describe('summarizeRotationDistribution', () => {
 
   it('returns no rows without fields', () => {
     expect(summarizeRotationDistribution([], rotations)).toEqual([])
+  })
+})
+
+describe('own rotation names', () => {
+  it('shows an own rotation by its name instead of its id', () => {
+    const [share] = summarizeRotationDistribution(
+      [field({ rotationId: 'b1f2:v3~0-951:100' })],
+      [
+        {
+          rotationVariant: 'b1f2',
+          cropSequence: ['Vinterhvede'],
+          activeLen: 1,
+          name: 'Korn og raps',
+        },
+      ],
+    )
+    expect(share.name).toBe('Korn og raps')
+    expect(rotationLabel(share.rotationVariant, share.name)).toBe(
+      'Korn og raps',
+    )
+    expect(rotationLabel('315')).toBe('Sædskifte 315')
   })
 })

@@ -176,6 +176,7 @@ describe('quota trading in the field list', () => {
       sortedFields: [field()],
       quotaTrades: [trade()],
       isSimulationView: true,
+      rotationNames: new Map(),
       sort: { key: 'name', direction: 'asc' },
       onSortChange: vi.fn(),
       selectedFieldId: null,

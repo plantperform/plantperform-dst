@@ -84,6 +84,7 @@ field" column is the name on the wire.
 | indregn forfrugtsværdi (indregn_ffv) | `deducts_preceding_crop_value` | | Backend. Ja or Nej per crop in the master table. Nej for grass, seed grass, clover, lucerne and other perennial crops, which get no forfrugtsværdi deducted |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |
+| navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |
 | N-norm | `nNormPct`, `nNormPercentages`, `allowedNNormPercentages` | `nNormPct`, `rotationNNormProcenter`, `nNormProcenter` | |

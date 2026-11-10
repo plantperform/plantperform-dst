@@ -75,6 +75,7 @@ describe('buildRotationSpec', () => {
   const sharesOf = (variants: (string | null)[]): RotationShare[] =>
     variants.map((rotationVariant) => ({
       rotationVariant,
+      name: null,
       cropSequence: null,
       areaHa: 1,
       share: 1 / variants.length,
