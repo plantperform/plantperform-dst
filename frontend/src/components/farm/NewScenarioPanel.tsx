@@ -73,6 +73,7 @@ import {
   chosenCropsFor,
   fertiliserFieldsForChoice,
   forcedAutumnFertiliser,
+  initialFormValues,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -89,6 +90,7 @@ import {
   withCropChoice,
   withFarmingSystem,
   type CropChoice,
+  type InitialRotations,
   type RotationChoice,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
@@ -103,6 +105,7 @@ type NewScenarioPanelProps = {
   farmId: string
   fields: FieldRecord[]
   source: Simulation | null
+  initialRotations?: InitialRotations | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSimulationCreated: (simulation: Simulation) => void
@@ -127,6 +130,7 @@ export const NewScenarioPanel = ({
   farmId,
   fields,
   source,
+  initialRotations,
   open,
   onOpenChange,
   onSimulationCreated,
@@ -241,7 +245,9 @@ export const NewScenarioPanel = ({
   const prefillKey = !open
     ? null
     : source === null
-      ? 'blank'
+      ? initialRotations
+        ? `blank:${initialRotations.farmingSystem}:${initialRotations.rotationVariants.join(',')}`
+        : 'blank'
       : `${source.id}:${source.revision}:${source.name}:${JSON.stringify(source.constraints)}`
   const [prefilled, setPrefilled] = useState<{
     key: string
@@ -273,7 +279,9 @@ export const NewScenarioPanel = ({
               farmingSystem: source.fertiliser.farmingSystem,
             }),
           }
-        : DEFAULT_SIMULATION_FORM_VALUES,
+        : initialRotations
+          ? initialFormValues(categories, fertiliserPresets, initialRotations)
+          : DEFAULT_SIMULATION_FORM_VALUES,
     })
     setStepIndex(0)
     setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)

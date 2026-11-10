@@ -2,12 +2,12 @@ import { Undo2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { useFarmBudgets } from '@/api/economics'
-import type { FarmingSystem } from '@/api/types'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Pending } from '@/components/ui/pending'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
+  FARMING_SYSTEMS,
   dbDeltaBar,
   formatSignedDkk,
   type DbDeltaScale,
@@ -52,11 +52,6 @@ export const ProfilesStatus = ({ className }: { className?: string }) => {
     />
   )
 }
-
-const FARMING_SYSTEMS: { value: FarmingSystem; label: string }[] = [
-  { value: 'Konventionel', label: 'Konventionel' },
-  { value: 'Økologisk', label: 'Økologisk' },
-]
 
 export const FarmingSystemSwitch = () => {
   const economics = useEconomicsProfiles()

@@ -16,6 +16,7 @@ type ConfirmDialogProps = {
   title?: string
   description: string
   confirmLabel: string
+  cancelLabel?: string
   destructive?: boolean
   children?: ReactNode
   onOpenChange: (open: boolean) => void
@@ -27,6 +28,7 @@ export const ConfirmDialog = ({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Annuller',
   destructive = true,
   children,
   onOpenChange,
@@ -41,7 +43,7 @@ export const ConfirmDialog = ({
       {children}
       <DialogFooter>
         <DialogClose asChild>
-          <Button variant="outline">Annuller</Button>
+          <Button variant="outline">{cancelLabel}</Button>
         </DialogClose>
         <DialogClose asChild>
           <Button

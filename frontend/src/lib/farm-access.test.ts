@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import {
   describeFarmAccess,
   describeLeaveFarm,
@@ -7,6 +8,7 @@ import {
   describeShareFarm,
   memberProfileNames,
   memberProfilesLabel,
+  notShared,
   otherMemberEmails,
   shareEmailError,
 } from '@/lib/farm-access'
@@ -15,6 +17,21 @@ const members = [
   { email: 'Anders.Bak@example.com' },
   { email: 'karen.holm@example.com' },
 ]
+
+describe('notShared', () => {
+  it('counts an existing member as shared and keeps what failed', () => {
+    expect(
+      notShared(
+        ['delt', 'havde adgang', 'fejlede'],
+        [
+          { status: 'fulfilled', value: null },
+          { status: 'rejected', reason: new ApiError(409, 'Har adgang') },
+          { status: 'rejected', reason: new ApiError(404, 'Ikke fundet') },
+        ],
+      ),
+    ).toEqual(['fejlede'])
+  })
+})
 
 describe('shareEmailError', () => {
   it('wants an address that does not have access yet', () => {

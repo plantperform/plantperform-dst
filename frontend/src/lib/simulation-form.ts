@@ -622,6 +622,36 @@ export const fertiliserFieldsForChoice = (
   }
 }
 
+export type InitialRotations = {
+  rotationVariants: string[]
+  farmingSystem: FarmingSystem | null
+}
+
+export const initialFormValues = (
+  categories: RotationCategoryOption[],
+  presets: FertiliserPresetOption[],
+  rotations: InitialRotations,
+): SimulationFormValues => {
+  const farmingSystem =
+    rotations.farmingSystem ?? DEFAULT_SIMULATION_FORM_VALUES.farmingSystem
+  const fertiliserChoice = offersNoFertiliser(farmingSystem)
+    ? NO_FERTILISER
+    : organicFertiliserChoice(presets)
+  const { rotationVariants } = rotations
+  return {
+    ...DEFAULT_SIMULATION_FORM_VALUES,
+    farmingSystem,
+    onlyOrganic: farmingSystem === 'Økologisk',
+    fertiliserChoice,
+    ...fertiliserFieldsForChoice(fertiliserChoice, presets, farmingSystem),
+    rotationVariants,
+    chosenCrops: chosenCropsFor(categories, {
+      rotationVariants,
+      farmingSystem,
+    }),
+  }
+}
+
 // True when a preset is chosen and its numbers were edited afterwards. The
 // preset name is not sent, so this only labels the choice as tilpasset.
 export const isPresetModified = (

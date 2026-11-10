@@ -27,7 +27,7 @@ import {
 import {
   allProfiles,
   appliedProfile,
-  freeProfileName,
+  freeName,
   isEconomicsCurrent,
   profileForSimulation,
   profileNameError,
@@ -225,7 +225,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
     simulationsUsingProfile,
     nameError: (name: string, profileId?: string) =>
       profileNameError(profiles, name, profileId),
-    newProfileName: (baseName: string) => freeProfileName(profiles, baseName),
+    newProfileName: (baseName: string) => freeName(profiles, baseName),
     saveProfile: async (
       profileId: string,
       name: string,

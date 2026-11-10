@@ -45,12 +45,15 @@ import {
 import { FarmSidebar, ShowSidebarButton } from '@/components/farm/FarmSidebar'
 import { FarmSwitcher } from '@/components/farm/FarmSwitcher'
 import { NewScenarioPanel } from '@/components/farm/NewScenarioPanel'
+import { OwnRotationPage } from '@/components/farm/OwnRotationPage'
+import { OwnRotationsOverview } from '@/components/farm/OwnRotationsOverview'
 import { useSidebarWidth } from '@/components/farm/sidebar-width'
 import { useSimulationActions } from '@/components/farm/simulation-actions'
 import { SimulationComparison } from '@/components/farm/SimulationComparison'
 import { SimulationCreationStatus } from '@/components/farm/SimulationCreationStatus'
 import { withoutCalculation } from '@/lib/field-domain'
 import { isSimulationReady } from '@/lib/simulation-creation'
+import type { InitialRotations } from '@/lib/simulation-form'
 import { SimulationOverview } from '@/components/farm/SimulationOverview'
 import {
   resolveEffectiveView,
@@ -93,6 +96,7 @@ const FarmDetail = () => {
   const navigate = useNavigate()
   const onOverview = useMatch('/farms/:farmId/simulations/*') !== null
   const onEconomicsPage = useMatch('/farms/:farmId/economics/*') !== null
+  const onOwnRotationsPage = useMatch('/farms/:farmId/own-rotations/*') !== null
   const onAboutPage = useMatch('/farms/:farmId/about') !== null
   const { showToast, showError } = useToast()
   const farmPath = `/farms/${farmId}`
@@ -179,8 +183,14 @@ const FarmDetail = () => {
   const [newSimulationOpen, setNewSimulationOpen] = useState(false)
   const [newSimulationSource, setNewSimulationSource] =
     useState<Simulation | null>(null)
-  const openNewSimulation = (source: Simulation | null) => {
+  const [newSimulationRotations, setNewSimulationRotations] =
+    useState<InitialRotations | null>(null)
+  const openNewSimulation = (
+    source: Simulation | null,
+    rotations: InitialRotations | null = null,
+  ) => {
     setNewSimulationSource(source)
+    setNewSimulationRotations(rotations)
     setNewSimulationOpen(true)
   }
   const [simulationToDelete, setSimulationToDelete] =
@@ -281,7 +291,9 @@ const FarmDetail = () => {
   })
 
   const leavePage = () => {
-    if (onOverview || onEconomicsPage || onAboutPage) navigate(farmPath)
+    if (onOverview || onEconomicsPage || onOwnRotationsPage || onAboutPage) {
+      navigate(farmPath)
+    }
   }
 
   const openView = (next: FarmViewSelection, nextMode: FarmInspectorMode) => {
@@ -356,7 +368,13 @@ const FarmDetail = () => {
         <FarmSwitcher
           farm={farm}
           samePage={
-            onEconomicsPage ? '/economics' : onAboutPage ? '/about' : ''
+            onEconomicsPage
+              ? '/economics'
+              : onOwnRotationsPage
+                ? '/own-rotations'
+                : onAboutPage
+                  ? '/about'
+                  : ''
           }
         />
       ) : (
@@ -426,6 +444,7 @@ const FarmDetail = () => {
             selection={activeSelection}
             overviewActive={onOverview}
             economicsPageActive={onEconomicsPage}
+            ownRotationsActive={onOwnRotationsPage}
             aboutActive={onAboutPage}
             loadingSelection={simulationFieldsLoading}
             onSelectionChange={(next) => {
@@ -619,6 +638,26 @@ const FarmDetail = () => {
                 }
               />
               <Route
+                path="own-rotations"
+                element={
+                  <OwnRotationsOverview
+                    farmId={loadedFarm.id}
+                    farmName={loadedFarm.name}
+                  />
+                }
+              />
+              <Route
+                path="own-rotations/:rotationId"
+                element={
+                  <OwnRotationPage
+                    farmId={loadedFarm.id}
+                    onUseInSimulation={(rotations) =>
+                      openNewSimulation(null, rotations)
+                    }
+                  />
+                }
+              />
+              <Route
                 path="about"
                 element={
                   <FarmAboutPage
@@ -646,11 +685,13 @@ const FarmDetail = () => {
             farmId={loadedFarm.id}
             fields={fields}
             source={newSimulationSource}
+            initialRotations={newSimulationRotations}
             open={newSimulationOpen}
             onOpenChange={setNewSimulationOpen}
-            onSimulationCreated={(simulation) =>
+            onSimulationCreated={(simulation) => {
               changeSelection({ kind: 'simulation', id: simulation.id })
-            }
+              if (newSimulationRotations) navigate(farmPath)
+            }}
             onError={showError}
           />
           <ConfirmDialog

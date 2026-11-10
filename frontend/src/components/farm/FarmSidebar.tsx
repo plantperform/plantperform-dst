@@ -16,6 +16,7 @@ import {
   PanelLeft,
   Play,
   Plus,
+  Repeat,
   SlidersHorizontal,
   Table2,
   Trash2,
@@ -30,6 +31,7 @@ import {
   useSimulationFields,
   useSimulationView,
 } from '@/api/hooks'
+import { useOwnRotationDefinitions } from '@/api/own-rotations'
 import type {
   Farm,
   FieldRecord,
@@ -45,6 +47,7 @@ import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state
 import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
+import { ownRotationsPath } from '@/components/farm/own-rotations-state'
 import { SidebarResizeHandle } from '@/components/farm/SidebarResizeHandle'
 import type {
   FarmInspectorMode,
@@ -110,6 +113,7 @@ import {
   db2IncludingQuotaTrades,
   latestQuotaTrades,
 } from '@/lib/quota-trade-result'
+import { describeNames } from '@/lib/economics'
 import { formatCreatedAt } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
@@ -182,6 +186,7 @@ type FarmSidebarProps = {
   selection: FarmViewSelection
   overviewActive: boolean
   economicsPageActive: boolean
+  ownRotationsActive: boolean
   aboutActive: boolean
   loadingSelection?: boolean
   onSelectionChange: (selection: FarmViewSelection) => void
@@ -209,6 +214,7 @@ export const FarmSidebar = ({
   selection,
   overviewActive,
   economicsPageActive,
+  ownRotationsActive,
   aboutActive,
   loadingSelection = false,
   onSelectionChange,
@@ -240,11 +246,14 @@ export const FarmSidebar = ({
   const farmGroupOpen = !farmGroupMinimized
   const farmGroupId = useId()
   const showEconomics = farmGroupOpen || economicsPageActive
+  const showOwnRotations = farmGroupOpen || ownRotationsActive
   const showAbout = farmGroupOpen || aboutActive
-  const pageActive = overviewActive || economicsPageActive || aboutActive
+  const pageActive =
+    overviewActive || economicsPageActive || ownRotationsActive || aboutActive
   const { user } = useAuth()
   const { data: members } = useFarmMembers(farm.id)
   const economics = useEconomicsProfiles()
+  const { data: ownRotations } = useOwnRotationDefinitions()
   const historyActive = !pageActive && selection.kind === 'current'
   const selectedSimulationId =
     !pageActive && selection.kind === 'simulation' ? selection.id : null
@@ -426,7 +435,7 @@ export const FarmSidebar = ({
           </button>
         </SidebarGroupLabel>
         <SidebarGroupContent id={farmGroupId}>
-          {showEconomics || showAbout ? (
+          {showEconomics || showOwnRotations || showAbout ? (
             <SidebarMenu>
               {showEconomics ? (
                 <PageMenuItem
@@ -438,6 +447,21 @@ export const FarmSidebar = ({
                   {economics.ownProfiles
                     ? describeOwnProfiles(
                         economics.ownProfiles.map((profile) => profile.name),
+                      )
+                    : null}
+                </PageMenuItem>
+              ) : null}
+              {showOwnRotations ? (
+                <PageMenuItem
+                  to={ownRotationsPath(farm.id)}
+                  active={ownRotationsActive}
+                  name="Egne sædskifter"
+                  icon={<Repeat />}
+                >
+                  {ownRotations
+                    ? describeNames(
+                        ownRotations.map((definition) => definition.name),
+                        'Ingen endnu',
                       )
                     : null}
                 </PageMenuItem>
