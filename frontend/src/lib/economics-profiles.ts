@@ -71,17 +71,33 @@ export const profileForSimulation = (
   )
 }
 
+// Whether figures calculated with `applied` are those the `selected` profile gives.
+export const isProfileApplied = (
+  selected: EconomicsProfile,
+  applied: EconomicsProfile,
+): boolean =>
+  selected.id === applied.id &&
+  sameOverrides(selected.overrides, applied.overrides)
+
 export const isEconomicsCurrent = (
   profiles: EconomicsProfile[] | undefined,
   simulation: ProfiledSimulation,
-): boolean => {
-  const selected = profileForSimulation(profiles, simulation)
-  const applied = appliedProfile(simulation)
-  return (
-    selected.id === applied.id &&
-    sameOverrides(selected.overrides, applied.overrides)
+): boolean =>
+  isProfileApplied(
+    profileForSimulation(profiles, simulation),
+    appliedProfile(simulation),
   )
-}
+
+// A simulation that is calculating, or has an optimization queued or running,
+// cannot be recalculated; the server turns the request down with a conflict.
+export const canRecalculateEconomics = (
+  simulation: Pick<Simulation, 'creationStatus' | 'result'>,
+): boolean =>
+  (simulation.creationStatus === undefined ||
+    simulation.creationStatus === 'done' ||
+    simulation.creationStatus === 'failed') &&
+  simulation.result.status !== 'queued' &&
+  simulation.result.status !== 'in_progress'
 
 export const simulationsUsingProfile = <T extends ProfiledSimulation>(
   simulations: T[],
@@ -138,7 +154,7 @@ export const describeProfileUsers = (simulationNames: string[]): string =>
     : 'Bruges ikke af nogen simulering på bedriften endnu'
 
 export const deleteProfileMessage = (simulationNames: string[]): string =>
-  `Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet.${
+  `Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere.${
     simulationNames.length > 0
       ? ` På bedriften gælder det ${formatNameList(simulationNames)}.`
       : ''

@@ -11,6 +11,8 @@ from app.domain.base import CamelModel
 
 Nonnegative = Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
 YieldPercentage = Annotated[float, Field(gt=-100, allow_inf_nan=False, strict=True)]
+# kr/ha added to one crop's dækningsbidrag; negative lowers it.
+CropCorrection = Annotated[float, Field(ge=-100_000, le=100_000, allow_inf_nan=False, strict=True)]
 STANDARD_ID = "standard"
 STANDARD_NAME = "Standard (SEGES 2026)"
 
@@ -39,9 +41,10 @@ class EconomicsOverrides(CamelModel):
     prices: dict[str, Nonnegative] = Field(default_factory=dict)
     quantities: dict[str, Nonnegative] = Field(default_factory=dict)
     yield_pct: dict[str, YieldPercentage] = Field(default_factory=dict)
+    crop_corrections: dict[str, CropCorrection] = Field(default_factory=dict)
 
     def cache_key(self) -> str:
-        if not any((self.prices, self.quantities, self.yield_pct)):
+        if not any((self.prices, self.quantities, self.yield_pct, self.crop_corrections)):
             return ""
         return json.dumps(self.model_dump(), sort_keys=True, separators=(",", ":"))
 

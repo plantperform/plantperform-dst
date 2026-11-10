@@ -7,6 +7,7 @@ import {
   STANDARD_PROFILE_ID,
   allProfiles,
   appliedProfile,
+  canRecalculateEconomics,
   deleteProfileMessage,
   describeAppliedProfile,
   describeEconomicsLine,
@@ -17,6 +18,7 @@ import {
   describeStandard,
   freeProfileName,
   isEconomicsCurrent,
+  isProfileApplied,
   profileForSimulation,
   profileNameError,
   profilesInUse,
@@ -27,6 +29,7 @@ import {
 const barleyPrice = (value: number): EconomicsOverrides => ({
   prices: { 'sale:1': value },
   quantities: {},
+  cropCorrections: {},
   yieldPct: {},
 })
 
@@ -83,6 +86,16 @@ describe('economics profiles', () => {
       id: 'careful',
       revision: 3,
     })
+  })
+
+  it('compares a chosen profile with the one the figures were calculated with', () => {
+    const careful = PROFILES[1]
+    expect(isProfileApplied(careful, appliedProfile(CURRENT))).toBe(true)
+    expect(isProfileApplied(careful, { ...careful, name: 'Omdøbt' })).toBe(true)
+    expect(isProfileApplied(careful, STANDARD_PROFILE)).toBe(false)
+    expect(
+      isProfileApplied(careful, { ...careful, overrides: barleyPrice(130) }),
+    ).toBe(false)
   })
 
   it('names a profile the user cannot open by the name it was calculated with', () => {
@@ -193,12 +206,12 @@ describe('economics profiles', () => {
     expect(profileNameError(PROFILES, 'Optimistisk')).toBeNull()
   })
 
-  it('says that simulations on every farm go back to Standard when a profile is deleted', () => {
+  it('says that a deleted profile is only gone for the one deleting it', () => {
     expect(deleteProfileMessage([])).toBe(
-      'Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet. Det kan ikke fortrydes.',
+      'Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere. Det kan ikke fortrydes.',
     )
     expect(deleteProfileMessage(['Reduceret kvælstof', 'Mere vintersæd'])).toBe(
-      'Profilen slettes for dig og alle, den er delt med. Simuleringer, der bruger den, går tilbage til Standard på alle bedrifter og får Standards tal, når økonomien er genberegnet. På bedriften gælder det Reduceret kvælstof og Mere vintersæd. Det kan ikke fortrydes.',
+      'Profilen slettes kun for dig. Andre, den er delt med, beholder den. Simuleringer, der bruger den, går tilbage til Standard og får Standards tal, når økonomien er genberegnet, hvis ingen med adgang til bedriften har profilen mere. På bedriften gælder det Reduceret kvælstof og Mere vintersæd. Det kan ikke fortrydes.',
     )
   })
 
@@ -270,5 +283,31 @@ describe('economics profiles', () => {
     expect(
       describeOwnProfiles(['Bakkegården 2027', 'Forsigtig 2027', 'Våd høst']),
     ).toBe('Bakkegården 2027 og 2 mere')
+  })
+
+  it('recalculates a simulation that is not calculating or optimizing', () => {
+    const idle = { creationStatus: 'done', result: { status: 'completed' } }
+    expect(canRecalculateEconomics(idle as never)).toBe(true)
+    expect(
+      canRecalculateEconomics({ result: { status: 'not_started' } } as never),
+    ).toBe(true)
+    expect(
+      canRecalculateEconomics({ ...idle, creationStatus: 'running' } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({ ...idle, creationStatus: 'queued' } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({
+        ...idle,
+        result: { status: 'in_progress' },
+      } as never),
+    ).toBe(false)
+    expect(
+      canRecalculateEconomics({
+        ...idle,
+        result: { status: 'queued' },
+      } as never),
+    ).toBe(false)
   })
 })

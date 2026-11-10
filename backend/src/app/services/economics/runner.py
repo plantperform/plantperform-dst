@@ -4,12 +4,14 @@ import logging
 from contextlib import nullcontext
 from copy import deepcopy
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.data import creation_store, read_model_store, simulation_store
 from app.data import economics_recalculation_store as store
+from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.economics import EconomicsRecalculationJob
+from app.domain.rotation_candidate import RotationCandidateRef
 from app.domain.simulation import Simulation
 from app.services.calculation import CalculationContext, CalculationFailedError
 from app.services.economics.db_calculator import clear_lookup_cache
@@ -23,8 +25,24 @@ def _deadline(context):
         raise TimeoutError("Economics recalculation deadline reached")
 
 
+def _reprice_pick(setup, pick, candidate, simulation, snapshot, jbnr):
+    """Price the optimizer's own pick too, when the field has been changed from it.
+
+    A saved result stays on the rotations the optimizer picked, so its figures follow
+    the profile only if those picks are priced as well. A field that is still on its
+    pick has it priced as its chosen candidate, so no second copy is kept.
+    """
+    setup.pop("economics_pick", None)
+    if not pick:
+        return
+    if candidate is None or candidate.ref.to_id() != (
+        RotationCandidateRef.model_validate(pick["ref"]).to_id()
+    ):
+        setup["economics_pick"] = recalculate_document(pick, simulation, snapshot, jbnr)
+
+
 def _execute(session, job, context):
-    """Reprice only saved chosen/manual results; alternative candidates do not exist here."""
+    """Reprice the saved chosen/manual results and the optimizer's picks; no alternatives exist."""
     with session.begin():
         row = store.locked_setup(session, job)
         if row is None or row.creation_status != "running":
@@ -39,6 +57,14 @@ def _execute(session, job, context):
             for field in original_fields
             if field.rotation_id
         }
+        picks = (
+            session.execute(
+                select(results.c.output["selected_candidates"]).where(
+                    results.c.simulation_id == job.simulation_id
+                )
+            ).scalar_one_or_none()
+            or {}
+        )
     for field in original_fields:
         _deadline(context)
         setup = setup_fields[field.id]
@@ -48,6 +74,7 @@ def _execute(session, job, context):
             if setup.get(name):
                 setup[name] = recalculate_document(setup[name], simulation, job.snapshot, jbnr)
         candidate = chosen.get(field.id)
+        _reprice_pick(setup, picks.get(field.id), candidate, simulation, job.snapshot, jbnr)
         if candidate is not None:
             value = recalculate_candidate(candidate, simulation, job.snapshot, jbnr)
             setup["economics_candidate"] = value.model_dump(mode="json")

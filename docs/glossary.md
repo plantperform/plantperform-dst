@@ -156,8 +156,11 @@ field" column is the name on the wire.
 | andre gødningsstoffer, omkostning | `otherFertilisers` | `andre_goedningsstoffer`, `andreGoedningsstoffer` | |
 | andet, omkostning | `other` | `andet` | The costs listed as Andet, such as Hegn/vedligehold on græs |
 | omkostninger i alt | `totalCosts` | `omkostninger_total`, `omkostningerTotal` | |
-| regnskab for en simulering | `EconomicsStatement`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger |
+| regnskab for en simulering | `EconomicsStatement`, `StatementFigures`, `economicsStatement`, `STATEMENT_GROUPS`, `STATEMENT_RESULT`, `formatStatementLine` | `economicsStatement` | A saved result's dækningsbidrag line by line on Sammenlign: each calculated mark's average year times its area, summed, grouped as indtægter and omkostninger. It also holds each calendar year, each crop and each regnskabspost behind the average |
 | kr/ha eller kr i alt | `StatementUnit`, `STATEMENT_UNIT_LABELS` | | The unit the regnskab on Sammenlign is shown in |
+| enkelt år eller gennemsnit | `StatementPeriod`, `STATEMENT_PERIODS`, `statementPeriodLabel`, `statementFigures` | `years` | The period the regnskab on Sammenlign is shown for: the average year or one of the eight calendar years. A result saved before the breakdown has the average only |
+| afgrøde i regnskabet | `StatementCrop`, `statementCropRows`, `byCrop` | `crops`, `afgrodeKode`, `afgrodeNavn` | A crop under an unfolded line when Afgrøder is chosen: its average year and each calendar year, left out when it earns or costs nothing on the line |
+| regnskabspost | `StatementPost`, `statementPostRows`, `postsKey` | `posts`, `navn` | An item of an indtægt, tilskud or cost line, such as Udbytte, Halm or Pløjning, shown under the line when Poster is chosen |
 | omkostningslinjer | `lines`, `CostLine`, `treatment`, `costDkkHa` | `linjer`, `behandling`, `udgift_kr_ha` | |
 | økonomiforudsætninger | `EconomicsAssumptions`, `CropEconomics`, `EconomicsLine` | | The standard prices and quantities behind dækningsbidraget, per crop |
 | bedriftens afgrødebudgetter | `useFarmBudgets`, `BudgetScope`, `useEconomicsAssumptions` | | The standard budget of each crop on the farm, row by row, from the backend |
@@ -172,18 +175,20 @@ field" column is the name on the wire.
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
-| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
+| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit and share it, and delete it for themselves |
 | forlade en profil | `describeLeaveProfile`, `onLeave` | | Removes yourself from a profile shared with you; the others keep it |
 | har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |
-| genberegn økonomi | `recalculate`, `isEconomicsCurrent` | | Prices a simulation with its chosen profile without optimizing again |
+| genberegn økonomi | `recalculate`, `isEconomicsCurrent`, `canRecalculateEconomics` | | Prices a simulation with its chosen profile without optimizing again. It runs by itself when a profile is switched or edited, unless the simulation is calculating or optimizing |
+| skift profil på chippen | `ProfileSwitch`, `isProfileApplied` | | The arrow on the "Regner med" chip on Sammenlign: chooses another economics profile for the simulation and recalculates it. It spins until the figures are the chosen profile's |
 | genberegningen fejlede | `economicsRecalculationFailed` | `economicsRecalculationFailed` | A failed recalculation that can be retried |
 | Standard (SEGES 2026) | `STANDARD_PROFILE`, `STANDARD_SOURCE` | | The profile without changes |
 | tilpasset | customised, `EconomicsOverrides` | | The profile's own value instead of the standard |
 | udbytte i forhold til normen | `yieldPct` | | Percent on top of each field's own yield for a crop |
-| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price or quantity in a profile |
+| afgrødekorrektion | `cropCorrection`, `withCropCorrection`, `CROP_CORRECTION_LABEL` | `cropCorrections` | kr/ha added to the dækningsbidrag of one crop alone; minus lowers it. Booked as the cost line "Afgrødekorrektion" under Andet, so no shared price changes |
+| ændring i forhold til Standard | `ProfileChange` | | One changed yield, price, quantity or afgrødekorrektion in a profile |
 | profilens virkning i en simulering | `SimulationEconomicsEffect`, `simulationEconomicsEffect` | | A profile's change in dækningsbidrag for the crops a simulation grows, weighted by each crop's average area per year |
-| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | |
+| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | Six steps; step 5, Dækningsbidrag, lists the dækningsbidrag of every crop (`CropsOverview`) and opens a crop for editing |
 | sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation

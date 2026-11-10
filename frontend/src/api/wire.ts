@@ -65,6 +65,7 @@ const RESPONSE_ONLY_NAMES: Record<string, string> = {
   salgspris: 'salePrice',
   frasorteret_andel: 'culledShare',
   frasorteret_pris: 'culledPrice',
+  area_ha: 'areaHa',
   halm_indtaegt: 'strawRevenue',
   indtaegt: 'revenue',
   tilskud: 'subsidy',

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyOverrideEdits,
   categoryPrices,
-  compareProfileChanges,
   cropRestoreEffect,
   cropSources,
   cropTotals,
@@ -55,7 +54,6 @@ import {
   type CropEconomics,
   type EconomicsAssumptions,
   type EconomicsLine,
-  type EconomicsOverrides,
   type ProfileChange,
 } from '@/lib/economics'
 
@@ -369,11 +367,13 @@ describe('sameOverrides', () => {
     const left = {
       prices: { spraying: 150, ploughing: 700 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '22': 10 },
     }
     const right = {
       prices: { ploughing: 700, spraying: 150 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '22': 10 },
     }
     expect(sameOverrides(left, right)).toBe(true)
@@ -381,7 +381,12 @@ describe('sameOverrides', () => {
   })
 
   it('tells a changed, an added and a removed value apart', () => {
-    const base = { prices: { spraying: 150 }, quantities: {}, yieldPct: {} }
+    const base = {
+      prices: { spraying: 150 },
+      quantities: {},
+      yieldPct: {},
+      cropCorrections: {},
+    }
     expect(sameOverrides(base, { ...base, prices: { spraying: 160 } })).toBe(
       false,
     )
@@ -731,6 +736,7 @@ describe('restoring and merging a profile', () => {
     const elsewhere = {
       prices: { 'sale:[999,"Konventionel",""]': 200 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '999': 5 },
     }
     expect(
@@ -749,21 +755,25 @@ describe('restoring and merging a profile', () => {
     const opened = {
       prices: { a: 1, b: 2 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '1': 5 },
     }
     const edited = {
       prices: { a: 1, c: 3 },
       quantities: { q: 4 },
+      cropCorrections: {},
       yieldPct: { '1': 5 },
     }
     const latest = {
       prices: { a: 10, b: 2, d: 7 },
       quantities: {},
+      cropCorrections: {},
       yieldPct: { '1': 6 },
     }
     expect(applyOverrideEdits(latest, opened, edited)).toEqual({
       prices: { a: 10, c: 3, d: 7 },
       quantities: { q: 4 },
+      cropCorrections: {},
       yieldPct: { '1': 6 },
     })
   })
@@ -852,58 +862,6 @@ describe('profileChanges', () => {
         withPriceOverride(WITH_BARLEY, NO_OVERRIDES, 'strawPrice', 0.7),
       ),
     ).toMatchObject([{ label: 'Halmpris', guideStep: null }])
-  })
-
-  it('lines the changes of several profiles up against Standard', () => {
-    const cheaperPloughing = withPriceOverride(
-      ASSUMPTIONS,
-      NO_OVERRIDES,
-      'ploughing',
-      650,
-    )
-    const columns = (...list: EconomicsOverrides[]) =>
-      list.map((entry) => ({ assumptions: ASSUMPTIONS, overrides: entry }))
-    expect(
-      compareProfileChanges(
-        columns(NO_OVERRIDES, overrides, cheaperPloughing),
-      ).map((row) => [row.label, ...row.cells.map((cell) => cell.value)]),
-    ).toEqual([
-      ['Udbytte i forhold til normen', '0 %', '+10 %', '0 %'],
-      ['Salgspris', '335 kr/hkg', '350 kr/hkg', '335 kr/hkg'],
-      ['Pløjning med pakning', '825 kr/gang', '700 kr/gang', '650 kr/gang'],
-      ['spraying, mængde', '2 gange', '3 gange', '2 gange'],
-    ])
-    expect(
-      compareProfileChanges(columns(NO_OVERRIDES, cheaperPloughing))[0].cells,
-    ).toEqual([
-      { value: '825 kr/gang', changed: false },
-      { value: '650 kr/gang', changed: true },
-    ])
-    expect(compareProfileChanges(columns(NO_OVERRIDES, NO_OVERRIDES))).toEqual(
-      [],
-    )
-  })
-
-  it('shows each column the standard of its own budget', () => {
-    const organic: EconomicsAssumptions = {
-      ...ASSUMPTIONS,
-      farmingSystem: 'Økologisk',
-      prices: ASSUMPTIONS.prices.map((price) =>
-        price.id === 'ploughing' ? { ...price, valueDkk: 900 } : price,
-      ),
-      crops: [PEAS],
-    }
-    expect(
-      compareProfileChanges([
-        { assumptions: ASSUMPTIONS, overrides },
-        { assumptions: organic, overrides: NO_OVERRIDES },
-      ]).map((row) => [row.label, ...row.cells.map((cell) => cell.value)]),
-    ).toEqual([
-      ['Udbytte i forhold til normen', '+10 %', ''],
-      ['Salgspris', '350 kr/hkg', ''],
-      ['Pløjning med pakning', '700 kr/gang', '900 kr/gang'],
-      ['spraying, mængde', '3 gange', '2 gange'],
-    ])
   })
 
   it('counts the changes in a heading', () => {
@@ -995,10 +953,24 @@ describe('shared prices', () => {
   it('tells what a new price does to the dækningsbidrag of each crop', () => {
     expect(
       sharedPriceEffect(ASSUMPTIONS, NO_OVERRIDES, 'spraying', 150),
-    ).toEqual([
+    ).toMatchObject([
       { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 70 },
       { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 20 },
     ])
+  })
+
+  it('shows the figures of each crop before and after a new price', () => {
+    const [rapeseed] = sharedPriceEffect(
+      ASSUMPTIONS,
+      NO_OVERRIDES,
+      'spraying',
+      150,
+    )
+    expect(
+      rapeseed.after.totalCostsDkkHa - rapeseed.before.totalCostsDkkHa,
+    ).toBe(-70)
+    expect(rapeseed.after.revenueDkkHa).toBe(rapeseed.before.revenueDkkHa)
+    expect(rapeseed.after.dbDkkHa - rapeseed.before.dbDkkHa).toBe(70)
   })
 
   it('tells which crops a crop takes back with it when it is restored', () => {
@@ -1013,7 +985,7 @@ describe('shared prices', () => {
         (price) => price.id,
       ),
     ).toEqual(['ploughing'])
-    expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toEqual([
+    expect(cropRestoreEffect(ASSUMPTIONS, ploughing, RAPESEED)).toMatchObject([
       { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 175 },
       { cropCode: 30, cropName: 'Ærter', deltaDkkHa: 175 },
     ])
@@ -1028,9 +1000,9 @@ describe('shared prices', () => {
     expect(sharedCustomisedPrices(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual(
       [],
     )
-    expect(cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED)).toEqual([
-      { cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 },
-    ])
+    expect(
+      cropRestoreEffect(ASSUMPTIONS, moreSpraying, RAPESEED),
+    ).toMatchObject([{ cropCode: 22, cropName: 'Vinterraps', deltaDkkHa: 160 }])
   })
 
   it('names the crops of a price, or all of them at once', () => {

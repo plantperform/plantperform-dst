@@ -4,6 +4,9 @@ import type {
   FieldYearValues,
   OptimizationConstraints,
   Simulation,
+  SparseStatementFigures,
+  StatementFigures,
+  StatementLineKey,
 } from '@/api/types'
 import { COST_CATEGORIES, formatDbDkk, formatSignedDkk } from '@/lib/economics'
 import {
@@ -549,8 +552,14 @@ export const STATEMENT_UNIT_LABELS: Record<StatementUnit, string> = {
 
 export type StatementLine = {
   label: string
-  amount: (statement: EconomicsStatement) => number
+  amount: (statement: StatementFigures) => number
   format?: (value: number) => string
+  // The line can be opened to show which crops it comes from.
+  byCrop?: boolean
+  // The statement line whose regnskabsposter can be shown under it, and the
+  // sign it has in the table (costs are shown as negative).
+  postsKey?: StatementLineKey
+  sign?: -1
 }
 
 type StatementGroup = {
@@ -563,11 +572,18 @@ export const STATEMENT_GROUPS: StatementGroup[] = [
   {
     label: 'Indtægter',
     lines: [
-      { label: 'Indtægt', amount: (statement) => statement.revenue },
+      {
+        label: 'Indtægt',
+        amount: (statement) => statement.revenue,
+        byCrop: true,
+        postsKey: 'revenue',
+      },
       {
         label: 'Tilskud',
         amount: (statement) => statement.subsidy,
         format: formatSignedDkk,
+        byCrop: true,
+        postsKey: 'subsidy',
       },
     ],
     total: {
@@ -577,16 +593,20 @@ export const STATEMENT_GROUPS: StatementGroup[] = [
   },
   {
     label: 'Omkostninger',
-    lines: COST_CATEGORIES.map(
-      ({ id, label }): StatementLine => ({
+    lines: COST_CATEGORIES.map(({ id, label }): StatementLine => {
+      const postsKey = id === 'fertiliser' ? 'fertiliserCost' : id
+      return {
         label,
-        amount: (statement) =>
-          -statement[id === 'fertiliser' ? 'fertiliserCost' : id],
-      }),
-    ),
+        amount: (statement) => -statement[postsKey],
+        byCrop: true,
+        postsKey,
+        sign: -1,
+      }
+    }),
     total: {
       label: 'Omkostninger i alt',
       amount: (statement) => -statement.totalCosts,
+      byCrop: true,
     },
   },
 ]
@@ -596,12 +616,162 @@ export const STATEMENT_RESULT: StatementLine = {
   amount: (statement) => statement.db,
 }
 
-export const formatStatementLine = (
-  statement: EconomicsStatement,
+const formatStatementAmount = (
+  amount: number,
+  areaHa: number,
   line: StatementLine,
   unit: StatementUnit,
 ): string | null => {
-  const amount = line.amount(statement)
-  const value = unit === 'perHa' ? perHa(amount, statement.areaHa) : amount
+  const value = unit === 'perHa' ? perHa(amount, areaHa) : amount
   return value === null ? null : (line.format ?? formatDbDkk)(value)
+}
+
+export const formatStatementLine = (
+  statement: StatementFigures,
+  line: StatementLine,
+  unit: StatementUnit,
+): string | null =>
+  formatStatementAmount(line.amount(statement), statement.areaHa, line, unit)
+
+export type StatementPeriod = 'average' | `${number}`
+
+export const STATEMENT_AVERAGE_PERIOD: StatementPeriod = 'average'
+
+export const statementPeriodLabel = (period: StatementPeriod): string =>
+  period === STATEMENT_AVERAGE_PERIOD
+    ? 'Gennemsnit pr. år'
+    : String(ROTATION_START_CALENDAR_YEAR + Number(period))
+
+export const STATEMENT_PERIODS: StatementPeriod[] = [
+  STATEMENT_AVERAGE_PERIOD,
+  ...ROTATION_CALENDAR_YEARS.map((_, index): StatementPeriod => `${index}`),
+]
+
+const EMPTY_FIGURES: StatementFigures = {
+  areaHa: 0,
+  revenue: 0,
+  subsidy: 0,
+  fertiliserCost: 0,
+  otherFertilisers: 0,
+  seed: 0,
+  cropProtection: 0,
+  fieldWork: 0,
+  drying: 0,
+  other: 0,
+  totalCosts: 0,
+  db: 0,
+}
+
+const fullFigures = (figures: SparseStatementFigures): StatementFigures => ({
+  ...EMPTY_FIGURES,
+  ...figures,
+})
+
+// A result saved before the breakdown existed has the average only.
+export const hasStatementPeriods = (
+  statement: EconomicsStatement | null | undefined,
+): boolean => (statement?.years?.length ?? 0) > 0
+
+export const statementFigures = (
+  statement: EconomicsStatement | null | undefined,
+  period: StatementPeriod,
+): StatementFigures | null => {
+  if (!statement) return null
+  if (period === STATEMENT_AVERAGE_PERIOD) return statement
+  const figures = statement.years?.[Number(period)]
+  return figures ? fullFigures(figures) : null
+}
+
+export type StatementCropRow = {
+  cropCode: number
+  cropName: string
+  // One entry per compared simulation, null where it does not grow the crop.
+  figures: (StatementFigures | null)[]
+}
+
+// The crops behind a line in the period, over all compared simulations. A
+// crop that no simulation earns or spends anything on in the period is left
+// out, and the biggest comes first.
+export const statementCropRows = (
+  statements: (EconomicsStatement | null | undefined)[],
+  line: StatementLine,
+  period: StatementPeriod,
+): StatementCropRow[] => {
+  const rows = new Map<number, StatementCropRow>()
+  const weights = new Map<number, number>()
+  statements.forEach((statement, column) => {
+    for (const crop of statement?.crops ?? []) {
+      const sparse =
+        period === STATEMENT_AVERAGE_PERIOD
+          ? crop.average
+          : crop.years[Number(period)]
+      if (!sparse) continue
+      const figures = fullFigures(sparse)
+      const amount = line.amount(figures)
+      if (amount === 0) continue
+      const row = rows.get(crop.cropCode) ?? {
+        cropCode: crop.cropCode,
+        cropName: crop.cropName,
+        figures: statements.map(() => null),
+      }
+      row.figures[column] = figures
+      rows.set(crop.cropCode, row)
+      weights.set(
+        crop.cropCode,
+        (weights.get(crop.cropCode) ?? 0) + Math.abs(amount),
+      )
+    }
+  })
+  return [...rows.values()].sort(
+    (left, right) =>
+      (weights.get(right.cropCode) ?? 0) - (weights.get(left.cropCode) ?? 0),
+  )
+}
+
+export type StatementPostRow = {
+  name: string
+  // One entry per compared simulation, null where it has no such post.
+  cells: (string | null)[]
+}
+
+// The regnskabsposter behind a line in the period, over all compared
+// simulations. A post that is 0 in every simulation is left out, and the
+// biggest comes first.
+export const statementPostRows = (
+  statements: (EconomicsStatement | null | undefined)[],
+  line: StatementLine,
+  period: StatementPeriod,
+  unit: StatementUnit,
+): StatementPostRow[] => {
+  const { postsKey, sign = 1 } = line
+  if (!postsKey) return []
+  const rows = new Map<string, StatementPostRow>()
+  const weights = new Map<string, number>()
+  statements.forEach((statement, column) => {
+    const areaHa = statementFigures(statement, period)?.areaHa
+    if (areaHa === undefined) return
+    for (const post of statement?.posts?.[postsKey] ?? []) {
+      const value =
+        period === STATEMENT_AVERAGE_PERIOD
+          ? post.average
+          : post.years[Number(period)]
+      if (value === undefined || value === 0) continue
+      const row = rows.get(post.name) ?? {
+        name: post.name,
+        cells: statements.map(() => null),
+      }
+      row.cells[column] = formatStatementAmount(
+        value * sign,
+        areaHa,
+        line,
+        unit,
+      )
+      rows.set(post.name, row)
+      weights.set(post.name, (weights.get(post.name) ?? 0) + Math.abs(value))
+    }
+  })
+  return [...rows.values()].sort(
+    (left, right) =>
+      (weights.get(right.name) ?? 0) - (weights.get(left.name) ?? 0),
+  )
 }

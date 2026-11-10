@@ -205,13 +205,16 @@ def assumptions():
 
 
 def validate_identifiers(overrides):
-    if not any((overrides.prices, overrides.quantities, overrides.yield_pct)):
+    if not any(
+        (overrides.prices, overrides.quantities, overrides.yield_pct, overrides.crop_corrections)
+    ):
         return
     catalog = assumptions()
     for values, allowed, kind in (
         (overrides.prices, {row["id"] for row in catalog["prices"]}, "price"),
         (overrides.quantities, {row["id"] for row in catalog["quantities"]}, "quantity"),
         (overrides.yield_pct, {str(row["cropCode"]) for row in catalog["crops"]}, "crop"),
+        (overrides.crop_corrections, {str(row["cropCode"]) for row in catalog["crops"]}, "crop"),
     ):
         unknown = set(values) - allowed
         if unknown:

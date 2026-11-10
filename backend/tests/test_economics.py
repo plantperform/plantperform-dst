@@ -16,6 +16,7 @@ from legacy_candidates import caches
 from pydantic import ValidationError
 from sqlalchemy import insert, select, update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
+from test_optimizer_lifecycle import candidate as sample_candidate
 
 from app import main
 from app.api.v0 import economics as api
@@ -112,6 +113,35 @@ class EconomicsValidationTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 UpdateEconomicsModuleRequest(expectedRevision=0, name=name)
         self.assertEqual(CreateEconomicsModuleRequest(name=" Mine ").name, "Mine")
+
+
+class RepricePickTests(unittest.TestCase):
+    def reprice(self, setup, pick, chosen):
+        with patch.object(
+            economics_worker,
+            "recalculate_document",
+            side_effect=lambda value, *_: {**value, "priced": True},
+        ):
+            economics_worker._reprice_pick(setup, pick, chosen, None, None, 5)
+        return setup
+
+    def test_a_field_off_its_pick_or_without_a_rotation_has_the_pick_priced_as_a_copy(self):
+        pick = sample_candidate(100, "1").model_dump(mode="json")
+        for chosen in (sample_candidate(100, "2"), None):
+            with self.subTest(chosen=chosen is not None):
+                setup = self.reprice({}, pick, chosen)
+                self.assertEqual(setup["economics_pick"], {**pick, "priced": True})
+
+    def test_a_field_on_its_pick_keeps_no_copy_and_loses_a_stale_one(self):
+        pick = sample_candidate(100, "1")
+        stale = {"economics_pick": {"stale": True}}
+        setup = self.reprice(stale, pick.model_dump(mode="json"), pick)
+        self.assertNotIn("economics_pick", setup)
+
+    def test_a_field_without_a_pick_keeps_no_copy(self):
+        stale = {"economics_pick": {"stale": True}}
+        setup = self.reprice(stale, None, sample_candidate(100, "1"))
+        self.assertNotIn("economics_pick", setup)
 
 
 class EconomicsMissingViewTests(unittest.TestCase):
@@ -439,7 +469,8 @@ class EconomicsDatabaseTests(DatabaseTests):
         response = self.client.post("/api/v0/economics-modules/standard/duplicate")
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(
-            response.json()["overrides"], {"prices": {}, "quantities": {}, "yieldPct": {}}
+            response.json()["overrides"],
+            {"prices": {}, "quantities": {}, "yieldPct": {}, "cropCorrections": {}},
         )
 
     def test_unknown_identifiers_and_revision_conflicts(self):
@@ -447,6 +478,7 @@ class EconomicsDatabaseTests(DatabaseTests):
             dict(prices={"bad": 1}),
             dict(quantities={"bad": 1}),
             dict(yieldPct={"999999": 1}),
+            dict(cropCorrections={"999999": 1}),
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.module(**values)
@@ -746,6 +778,28 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(
             field_work(irrigated=True), (1500, ["Såning og høst", "Vanding pr millimeter"])
         )
+
+    def test_a_crop_correction_adds_one_line_to_that_crop_only(self):
+        def calculate(afgrodekode, corrections):
+            return calculator.calculate_db(
+                afgrodekode,
+                "Konventionel",
+                5,
+                itemized=True,
+                economics_key=EconomicsOverrides(cropCorrections=corrections).cache_key(),
+            )
+
+        plain = calculate(1, {})
+        corrected = calculate(1, {"1": 300})
+        self.assertAlmostEqual(corrected["andet"], plain["andet"] - 300)
+        self.assertAlmostEqual(corrected["db"], plain["db"] + 300)
+        line = next(
+            line for line in corrected["linjer"] if line["behandling"] == "Afgrødekorrektion"
+        )
+        self.assertEqual((line["kategori"], line["udgift_kr_ha"]), ("Andet", -300))
+        self.assertAlmostEqual(calculate(1, {"1": -200})["db"], plain["db"] - 200)
+        # Another crop's correction leaves this crop alone.
+        self.assertEqual(calculate(1, {"2": 300})["db"], plain["db"])
 
     def test_the_straw_sold_is_the_straw_pressed_and_both_follow_the_yield(self):
         with self.sessions.begin() as session:
@@ -1232,6 +1286,66 @@ class EconomicsDatabaseTests(DatabaseTests):
         optimizer_worker.execute("sim", run.run_id, CONTEXT)
         self.assertEqual(self.result().status, "completed")
 
+    def test_recalculation_prices_the_pick_of_a_field_changed_since_the_run(self):
+        self.install_calculation_inputs()
+        run = self.submit()
+        optimizer_worker.execute("sim", run.run_id, CONTEXT)
+        picks = self.result().selected_candidates
+        before = {field.id: field.db2 for field in self.result().response.fields}
+        with self.sessions.begin() as session:
+            fields = session.execute(select(setups.c.fields)).scalar_one()
+            raw = session.execute(
+                select(caches.c.data).where(caches.c.field_id == "field-b")
+            ).scalar_one()
+            other = next(
+                value
+                for value in map(RotationCandidateEvaluation.model_validate, raw["candidates"])
+                if value.ref != picks["field-b"].ref
+            )
+            # The field has been locked to another rotation since the optimization.
+            fields["field-b"].update(
+                allowed_rotation_ids=[other.ref.to_id()],
+                fixed_candidate=other.model_dump(mode="json"),
+                fixed=dict(
+                    rotation_id=other.ref.to_id(),
+                    crop_rotation=[y.year.model_dump(mode="json") for y in other.years],
+                    db2=other.avg_db_kr_ha * 2,
+                    fen=120,
+                    n_load=10,
+                    leaching=20,
+                ),
+            )
+            session.execute(update(setups).values(fields=fields))
+        selected = self.select_module(self.module(prices={SALE: 150}))
+        _, _, envelope = self.submit_recalculation(selected.revision)
+        economics_worker.execute(envelope, CONTEXT)
+        with self.sessions() as session:
+            fields = session.execute(select(setups.c.fields)).scalar_one()
+        # The changed field has a priced copy of the pick it was changed from, besides its
+        # chosen rotation. The other field is still on its pick, which is priced once.
+        priced = {
+            (field_id, name): RotationCandidateEvaluation.model_validate(setup[name])
+            for field_id, setup in fields.items()
+            for name in ("economics_candidate", "economics_pick")
+            if name in setup
+        }
+        copy = priced["field-b", "economics_pick"]
+        self.assertEqual(copy.ref, picks["field-b"].ref)
+        self.assertEqual(priced["field-b", "economics_candidate"].ref, other.ref)
+        self.assertEqual(copy.years[0].db_detail["salgspris"], 150)
+        self.assertNotIn(("field-a", "economics_pick"), priced)
+        self.assertEqual(priced["field-a", "economics_candidate"].ref, picks["field-a"].ref)
+        # The saved result keeps both fields on the optimizer's picks, valued by the profile.
+        saved = read_model_store.get_simulation_view("farm", "sim", EMAIL)["data"]["saved_result"]
+        shown = {field["id"]: field for field in saved["response"]["fields"]}
+        self.assertEqual(shown["field-b"]["rotation_id"], picks["field-b"].ref.to_id())
+        self.assertEqual(shown["field-b"]["db2"], copy.avg_db_kr_ha * shown["field-b"]["area_ha"])
+        for field_id, value in shown.items():
+            self.assertGreater(value["db2"], before[field_id])
+        self.assertEqual(
+            saved["economics_statement"]["db"], sum(value["db2"] for value in shown.values())
+        )
+
     def test_failed_retry_keeps_captured_snapshot_after_module_deletion(self):
         self.install_calculation_inputs()
         module = self.module(prices={SALE: 150})
@@ -1269,7 +1383,7 @@ class EconomicsDatabaseTests(DatabaseTests):
         with self.assertRaises(EconomicsModuleNotFoundError):
             jobs.submit("farm", "sim", request, OTHER)
 
-    def test_deleting_a_module_selects_standard_on_every_farm_and_keeps_the_applied_figures(self):
+    def test_deleting_a_shared_module_leaves_it_to_the_others_and_the_last_removes_it(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         _, _, envelope = self.submit_recalculation(selected.revision)
@@ -1304,6 +1418,12 @@ class EconomicsDatabaseTests(DatabaseTests):
                 )
         before = repository.get_simulation("farm", "sim", EMAIL)
         economics_store.delete_module(module.id, OTHER)
+        # Deleting only removes the profile for the one who deletes it.
+        self.assertEqual(economics_store.get_module(module.id, EMAIL).id, module.id)
+        with self.assertRaises(EconomicsModuleNotFoundError):
+            economics_store.get_module(module.id, OTHER)
+        self.assertEqual(repository.get_simulation("farm", "sim", EMAIL), before)
+        economics_store.delete_module(module.id, EMAIL)
         after = repository.get_simulation("farm", "sim", EMAIL)
         self.assertEqual(after.economics_module_id, "standard")
         self.assertEqual(after.economics_snapshot, before.economics_snapshot)

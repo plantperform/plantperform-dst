@@ -370,6 +370,9 @@ def _load_dyrkningsomkostninger() -> dict[tuple[int, str], list[dict]]:
     return lookup
 
 
+CROP_CORRECTION_LABEL = "Afgrødekorrektion"
+
+
 def _linje(
     kategori: str,
     behandling: str,
@@ -857,6 +860,20 @@ def calculate_db(
     if praecisionsjordbrug and praecisionsgoedskning_tilladt(afgrodekode):
         linjer.append(
             list_line("Markarbejde", "Præcisionsjordbrug", "Præcisionsjordbrug", optional=True)
+        )
+    correction = economics.get("crop_corrections", {}).get(str(afgrodekode), 0.0)
+    if correction:
+        linjer.append(
+            _linje(
+                "Andet",
+                CROP_CORRECTION_LABEL,
+                1.0,
+                -correction,
+                pris_id=None,
+                maengde_id=None,
+                enhed="kr/ha",
+                kilde=None,
+            )
         )
     alle_linjer = goedning_linjer + linjer
 

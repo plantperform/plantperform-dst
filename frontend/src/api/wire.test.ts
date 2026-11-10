@@ -57,6 +57,30 @@ describe('fromWire', () => {
     ).toEqual({ totalCosts: 310, otherFertilisers: 20 })
   })
 
+  it('names the sparse figures of a regnskab year', () => {
+    expect(
+      fromWire({
+        years: [{ area_ha: 3.5, indtaegt: 900, andre_goedningsstoffer: 20 }],
+      }),
+    ).toEqual({
+      years: [{ areaHa: 3.5, revenue: 900, otherFertilisers: 20 }],
+    })
+  })
+
+  it('names an afgrøde of the regnskab with its sparse figures', () => {
+    expect(
+      fromWire({
+        afgrodeKode: 210,
+        average: { area_ha: 3.5, indtaegt: 900, omkostninger_total: 400 },
+        years: [{ area_ha: 3.5, andre_goedningsstoffer: 20 }],
+      }),
+    ).toEqual({
+      cropCode: 210,
+      average: { areaHa: 3.5, revenue: 900, totalCosts: 400 },
+      years: [{ areaHa: 3.5, otherFertilisers: 20 }],
+    })
+  })
+
   it('leaves a geometry as the backend sent it', () => {
     const geometry = {
       type: 'Polygon',

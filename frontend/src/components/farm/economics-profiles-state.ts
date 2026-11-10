@@ -12,7 +12,14 @@ import {
   useEconomicsModules,
   useFarmBudgets,
 } from '@/api/economics'
-import { isSimulationKey, simulationsKey, simulationViewKey } from '@/api/hooks'
+import {
+  isSimulationKey,
+  isSimulationResultsKey,
+  isSimulationsFieldsKey,
+  simulationsKey,
+  simulationViewKey,
+  useSimulations,
+} from '@/api/hooks'
 import type { EconomicsModule, FarmingSystem, Simulation } from '@/api/types'
 import { useToast } from '@/components/toast'
 import {
@@ -27,12 +34,14 @@ import {
 import {
   allProfiles,
   appliedProfile,
+  canRecalculateEconomics,
   freeProfileName,
   isEconomicsCurrent,
   profileForSimulation,
   profileNameError,
   simulationsUsingProfile,
   STANDARD_PROFILE_ID,
+  type EconomicsProfile,
 } from '@/lib/economics-profiles'
 
 type ModuleEdit = Partial<Pick<EconomicsModule, 'name' | 'overrides'>>
@@ -42,6 +51,10 @@ const PROFILE_GONE =
 
 const REFRESH_INTERVAL_MS = 5000
 
+// An edit is often followed by more; simulations that are behind their profile
+// are recalculated once the profiles have been left alone this long.
+const RECALCULATE_AFTER_EDIT_MS = 1500
+
 const recalculationError = (error: unknown) => {
   const status = error instanceof ApiError ? error.status : null
   if (status === 409) {
@@ -50,6 +63,11 @@ const recalculationError = (error: unknown) => {
   if (status === 504) return 'Genberegningen tog for lang tid. Prøv igen.'
   return 'Økonomien kunne ikke genberegnes. Prøv igen.'
 }
+
+// What the automatic recalculation has tried: a simulation at one revision
+// against the revision of the profile it was behind.
+const attemptKey = (simulation: Simulation, profile: EconomicsProfile) =>
+  `${simulation.id}:${simulation.revision}:${profile.revision}`
 
 export const useEconomicsProfilesStore = (farmId: string | undefined) => {
   const [farmingSystem, setFarmingSystem] =
@@ -64,6 +82,9 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
   const { showError } = useToast()
   const saving = useRef(new Map<string, Promise<boolean>>())
   const recalculations = useRef(new Map<string, CreationRequestIdentity>())
+  const attempted = useRef(new Set<string>())
+  const reconciling = useRef(false)
+  const { data: simulations } = useSimulations(farmId)
 
   useEffect(() => {
     let refreshedAt = 0
@@ -170,10 +191,23 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
         ),
       { revalidate: false },
     )
-    void mutate(simulationViewKey(farmId, simulation.id))
+    // A comparison reads the saved result out of the simulation's view, so it is
+    // read again once the view has been. A recalculation that is done within its
+    // request never shows the simulation as calculating, and would otherwise
+    // leave the figures next to it as they were.
+    await mutate(simulationViewKey(farmId, simulation.id))
+    void mutate(
+      (key) =>
+        farmId !== undefined &&
+        (isSimulationsFieldsKey(key, farmId) ||
+          isSimulationResultsKey(key, farmId)),
+    )
   }
 
-  const recalculate = async (simulation: Simulation) => {
+  const recalculate = async (
+    simulation: Simulation,
+    { quiet = false }: { quiet?: boolean } = {},
+  ) => {
     const saved = await saving.current.get(
       simulation.economicsModuleId ?? STANDARD_PROFILE_ID,
     )
@@ -193,11 +227,52 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       await refreshSimulation(recalculated)
       return recalculated
     } catch (error) {
-      showError(recalculationError(error))
+      const conflict = error instanceof ApiError && error.status === 409
+      if (!(quiet && conflict)) showError(recalculationError(error))
       await mutate(simulationsKey(farmId))
       return null
     }
   }
+
+  // A simulation that is behind its profile, whether it was edited here or by
+  // someone it is shared with, is recalculated without anyone pressing Genberegn,
+  // so its figures and regnskab follow the profile. Each state is tried once; if
+  // that fails, the warning on the simulation still offers Genberegn.
+  useEffect(() => {
+    if (!farmId || !moduleList || !simulations) return
+    const timer = setTimeout(() => {
+      if (reconciling.current) return
+      const available = allProfiles(moduleList)
+      const behind = simulations.flatMap((simulation) => {
+        const selected = available.find(
+          (profile) =>
+            profile.id ===
+            (simulation.economicsModuleId ?? STANDARD_PROFILE_ID),
+        )
+        return selected !== undefined &&
+          canRecalculateEconomics(simulation) &&
+          !isEconomicsCurrent(available, simulation) &&
+          !attempted.current.has(attemptKey(simulation, selected))
+          ? [{ simulation, selected }]
+          : []
+      })
+      if (behind.length === 0) return
+      reconciling.current = true
+      void (async () => {
+        try {
+          for (const { simulation, selected } of behind) {
+            attempted.current.add(attemptKey(simulation, selected))
+            await recalculate(simulation, { quiet: true })
+          }
+        } finally {
+          reconciling.current = false
+        }
+      })()
+    }, RECALCULATE_AFTER_EDIT_MS)
+    return () => clearTimeout(timer)
+    // recalculate only reads refs and stable SWR functions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmId, moduleList, simulations])
 
   return {
     farmId,
@@ -279,18 +354,32 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
       return true
     },
     forgetProfile,
-    assignProfile: async (simulation: Simulation, profileId: string) => {
-      if ((simulation.economicsModuleId ?? STANDARD_PROFILE_ID) === profileId) {
-        return
+    // `recalculate` applies the profile at once, so the caller can wait for the
+    // new figures instead of leaving it to the automatic recalculation.
+    assignProfile: async (
+      simulation: Simulation,
+      profileId: string,
+      { recalculate: apply = false }: { recalculate?: boolean } = {},
+    ) => {
+      let assigned = simulation
+      if ((simulation.economicsModuleId ?? STANDARD_PROFILE_ID) !== profileId) {
+        try {
+          assigned = await selectSimulationEconomics(
+            farm,
+            simulation,
+            profileId,
+          )
+          await refreshSimulation(assigned)
+        } catch {
+          showError('Profilen kunne ikke vælges. Prøv igen.')
+          await mutate(simulationsKey(farmId))
+          return
+        }
       }
-      try {
-        await refreshSimulation(
-          await selectSimulationEconomics(farm, simulation, profileId),
-        )
-      } catch {
-        showError('Profilen kunne ikke vælges. Prøv igen.')
-        await mutate(simulationsKey(farmId))
-      }
+      const profile = known?.find((entry) => entry.id === profileId)
+      if (!apply || !profile || isEconomicsCurrent(known, assigned)) return
+      attempted.current.add(attemptKey(assigned, profile))
+      await recalculate(assigned)
     },
     recalculate,
     withCurrentEconomics: async (simulation: Simulation) => {

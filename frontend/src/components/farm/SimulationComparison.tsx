@@ -1,4 +1,7 @@
-import { isSimulationReady } from '@/lib/simulation-creation'
+import {
+  isSimulationCreating,
+  isSimulationReady,
+} from '@/lib/simulation-creation'
 import { useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -150,6 +153,15 @@ export const SimulationComparison = ({
   simulations: allSimulations,
 }: SimulationComparisonProps) => {
   const simulations = useMemo(() => allSimulations.filter(isSimulationReady), [allSimulations])
+  // A simulation is not ready while its economics are recalculated, and its
+  // column returns when it is again, so its id stays in the address meanwhile.
+  const recalculating = useMemo(
+    () =>
+      allSimulations
+        .filter(isSimulationCreating)
+        .map((simulation) => simulation.id),
+    [allSimulations],
+  )
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [sort, setSort] = useState<ComparisonSort>('balance')
@@ -170,8 +182,11 @@ export const SimulationComparison = ({
     )
     return requested === null
       ? defaultComparisonIds(simulations, selectable)
-      : resolveComparisonIds(parseComparisonIds(requested), selectable)
-  }, [availability, requested, simulations])
+      : resolveComparisonIds(
+          parseComparisonIds(requested),
+          new Set([...selectable, ...recalculating]),
+        )
+  }, [availability, recalculating, requested, simulations])
   const selectedSimulations = useMemo(() => simulations.filter((simulation) => ids.includes(simulation.id)),
                                      [ids, simulations])
   const simulationsFields = useSimulationResults(farmId, selectedSimulations)
@@ -423,10 +438,8 @@ export const SimulationComparison = ({
                 <ComparisonEconomics
                   columns={simulationColumns}
                   profiles={profiles}
-                  farmingSystems={simulationColumns.map(
-                    (column) =>
-                      simulations.find((entry) => entry.id === column.key)
-                        ?.fertiliser.farmingSystem ?? 'Konventionel',
+                  simulations={simulationColumns.map((column) =>
+                    simulations.find((entry) => entry.id === column.key),
                   )}
                   statements={simulationColumns.map(
                     (column) =>

@@ -135,6 +135,7 @@ def prepare(simulation, fields, setup_fields, contexts):
                 }
         # Old valuations and winners are historical outputs, never new alternatives.
         setup.pop("economics_candidate", None)
+        setup.pop("economics_pick", None)
         computed_setups[field.id] = {**setup, "calculation_context": contexts.get(field.id)}
         computed_fields.append(
             simulation_store.project_fields(
