@@ -19,6 +19,7 @@ import {
   NTHETA_COEFFICIENTS,
   SOWING_DATE_INTERVALS,
 } from '@/lib/nles5-detail-labels'
+import { MAX_OWN_ROTATIONS_IN_SIMULATION } from '@/lib/own-rotations'
 
 // 'none' and 'custom' are fixed choices; any other value is a preset name.
 export const NO_FERTILISER = 'none'
@@ -433,13 +434,19 @@ const cropsIn = (rotations: RotationOption[]): string[] =>
     new Set(rotations.flatMap((rotation) => rotation.cropSequence)),
   ).sort(byDanishName)
 
+const fitsFarmingSystem = (
+  category: RotationCategoryOption,
+  farmingSystem: FarmingSystem,
+): boolean =>
+  category.croppingSystem === null || category.croppingSystem === farmingSystem
+
 export const cropsForFarmingSystem = (
   categories: RotationCategoryOption[],
   farmingSystem: FarmingSystem,
 ): string[] =>
   cropsIn(
     categories
-      .filter((category) => category.croppingSystem === farmingSystem)
+      .filter((category) => fitsFarmingSystem(category, farmingSystem))
       .flatMap((category) => category.rotations),
   )
 
@@ -521,13 +528,90 @@ export const setRotationsSelected = (
   return rotationVariants.filter((variant) => !removed.has(variant))
 }
 
+export const ownRotationVariantsOf = (
+  categories: RotationCategoryOption[],
+): Set<string> =>
+  new Set(
+    categories
+      .filter((category) => category.croppingSystem === null)
+      .flatMap((category) =>
+        category.rotations.map((rotation) => rotation.rotationVariant),
+      ),
+  )
+
+export const selectableRotationCategories = (
+  categories: RotationCategoryOption[],
+  ownRotationIds: ReadonlySet<string>,
+  keptRotationVariants: readonly string[],
+): RotationCategoryOption[] =>
+  categories.flatMap((category) => {
+    if (category.croppingSystem !== null) return [category]
+    const rotations = category.rotations.filter(
+      (rotation) =>
+        ownRotationIds.has(rotation.rotationVariant) ||
+        keptRotationVariants.includes(rotation.rotationVariant),
+    )
+    return rotations.length === 0
+      ? []
+      : [{ ...category, rotationCount: rotations.length, rotations }]
+  })
+
+const OWN_ROTATION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export const selectableRotationVariants = (
+  rotationVariants: string[],
+  categories: RotationCategoryOption[],
+  selectable: RotationCategoryOption[],
+  ownRotationIds: ReadonlySet<string>,
+): string[] => {
+  const listed = new Set(
+    categories.flatMap((category) =>
+      category.rotations.map((rotation) => rotation.rotationVariant),
+    ),
+  )
+  const own = ownRotationVariantsOf(categories)
+  const allowed = ownRotationVariantsOf(selectable)
+  return rotationVariants.filter((variant) =>
+    listed.has(variant)
+      ? !own.has(variant) || allowed.has(variant)
+      : ownRotationIds.has(variant) || !OWN_ROTATION_ID.test(variant),
+  )
+}
+
+export const selectRotationsWithinLimit = (
+  rotationVariants: string[],
+  rotations: RotationOption[],
+  ownVariants: Set<string>,
+): string[] => {
+  const selected = new Set(rotationVariants)
+  let ownCount = rotationVariants.filter((variant) =>
+    ownVariants.has(variant),
+  ).length
+  const added: string[] = []
+  for (const { rotationVariant } of rotations) {
+    if (selected.has(rotationVariant)) continue
+    if (ownVariants.has(rotationVariant)) {
+      if (ownCount >= MAX_OWN_ROTATIONS_IN_SIMULATION) continue
+      ownCount += 1
+    }
+    selected.add(rotationVariant)
+    added.push(rotationVariant)
+  }
+  return [...rotationVariants, ...added]
+}
+
 // Categories for the chosen driftsform first, keeping their order otherwise.
 export const orderCategoriesForFarmingSystem = (
   categories: RotationCategoryOption[],
   farmingSystem: FarmingSystem,
 ): RotationCategoryOption[] => [
-  ...categories.filter((category) => category.croppingSystem === farmingSystem),
-  ...categories.filter((category) => category.croppingSystem !== farmingSystem),
+  ...categories.filter((category) =>
+    fitsFarmingSystem(category, farmingSystem),
+  ),
+  ...categories.filter(
+    (category) => !fitsFarmingSystem(category, farmingSystem),
+  ),
 ]
 
 // Counts selected rotations that exist only in categories of the other
@@ -540,7 +624,7 @@ export const farmingSystemMismatchCount = (
 ): number => {
   const matching = new Set(
     categories
-      .filter((category) => category.croppingSystem === farmingSystem)
+      .filter((category) => fitsFarmingSystem(category, farmingSystem))
       .flatMap((category) =>
         category.rotations.map((rotation) => rotation.rotationVariant),
       ),

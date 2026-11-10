@@ -69,6 +69,9 @@ vi.mock('@/api/hooks', () => ({
   simulationViewKey: vi.fn(),
   simulationsKey: vi.fn(),
 }))
+vi.mock('@/api/own-rotations', () => ({
+  useOwnRotationDefinitions: () => queries.reference,
+}))
 vi.mock('@/api/optimization-runs', () => ({
   useOptimizationRun: () => undefined,
   useOptimizationRunActions: () => ({ startRun: queries.startRun }),
@@ -715,6 +718,27 @@ describe('simulation wizard steps', () => {
     expect(queries.create.mock.calls[0][1]).toMatchObject({
       allowedRotationVariants: ['10'],
     })
+  })
+
+  it('opens Sædskifter on the first category with a chosen rotation', async () => {
+    queries.categories.data = ['Plante', 'Kvæg'].map((category, index) => ({
+      category,
+      croppingSystem: 'Konventionel',
+      rotationCount: 1,
+      rotations: [
+        {
+          rotationVariant: String(index + 1),
+          cropSequence: ['Vinterhvede'],
+          activeLen: 1,
+        },
+      ],
+    }))
+    await mount({ ...source, rotationVariants: ['2'] })
+    await click('Sædskifter')
+    expect(
+      container.querySelector('[role="tab"][aria-selected="true"]')
+        ?.textContent,
+    ).toBe('Kvæg1/1')
   })
 
   it('selects and clears every crop of a group with its checkbox', async () => {

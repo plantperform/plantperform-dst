@@ -15,11 +15,14 @@ import {
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
   orderCategoriesForFarmingSystem,
+  ownRotationVariantsOf,
   selectedInCategory,
+  selectRotationsWithinLimit,
   setRotationsSelected,
   toggleValue,
   type CropChoice,
 } from '@/lib/simulation-form'
+import { MAX_OWN_ROTATIONS_IN_SIMULATION } from '@/lib/own-rotations'
 import { cn } from '@/lib/utils'
 
 type RotationPickerProps = {
@@ -43,7 +46,12 @@ export const RotationPicker = ({
     categoriesMatchingCropChoice(categories, cropChoice),
     farmingSystem,
   )
-  const [activeName, setActiveName] = useState<string | null>(null)
+  const [activeName, setActiveName] = useState(
+    () =>
+      matchingCategories.find(
+        (category) => selectedInCategory(category, rotationVariants) > 0,
+      )?.category ?? null,
+  )
   const [onlySelected, setOnlySelected] = useState(false)
 
   const active =
@@ -76,6 +84,16 @@ export const RotationPicker = ({
     rotationVariants,
     farmingSystem,
   )
+  const ownVariants = ownRotationVariantsOf(categories)
+  const ownSelected = rotationVariants.filter((variant) =>
+    ownVariants.has(variant),
+  ).length
+  const ownFull = ownSelected >= MAX_OWN_ROTATIONS_IN_SIMULATION
+  const withShownSelected = selectRotationsWithinLimit(
+    rotationVariants,
+    shown,
+    ownVariants,
+  )
 
   return (
     <div className="space-y-3">
@@ -97,6 +115,9 @@ export const RotationPicker = ({
             Vis kun valgte
           </label>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Vælger du kun få sædskifter, har optimeringen færre muligheder.
+        </p>
 
         <FieldError id="rotation-picker-error" message={error} />
 
@@ -113,7 +134,9 @@ export const RotationPicker = ({
         <div role="tablist" aria-label="Kategorier" className="flex flex-wrap gap-1.5">
           {matchingCategories.map((category) => {
             const isActive = category.category === active.category
-            const isOtherSystem = category.croppingSystem !== farmingSystem
+            const isOtherSystem =
+              category.croppingSystem !== null &&
+              category.croppingSystem !== farmingSystem
             return (
               <button
                 key={category.category}
@@ -141,16 +164,18 @@ export const RotationPicker = ({
           })}
         </div>
 
-        <div className="flex justify-end gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {active.croppingSystem === null ? (
+            <p className="mr-auto text-xs text-muted-foreground">
+              {ownSelected} af højst {MAX_OWN_ROTATIONS_IN_SIMULATION} egne
+              sædskifter valgt
+            </p>
+          ) : null}
           <Button
             variant="outline"
             size="xs"
-            disabled={shownSelectedCount === shown.length}
-            onClick={() =>
-              onRotationVariantsChange(
-                setRotationsSelected(rotationVariants, shown, true),
-              )
-            }
+            disabled={withShownSelected.length === rotationVariants.length}
+            onClick={() => onRotationVariantsChange(withShownSelected)}
           >
             Vælg {scope}
           </Button>
@@ -182,6 +207,11 @@ export const RotationPicker = ({
                   type="checkbox"
                   className="mt-0.5"
                   checked={rotationVariants.includes(rotation.rotationVariant)}
+                  disabled={
+                    ownFull &&
+                    ownVariants.has(rotation.rotationVariant) &&
+                    !rotationVariants.includes(rotation.rotationVariant)
+                  }
                   onChange={() =>
                     onRotationVariantsChange(
                       toggleValue(rotationVariants, rotation.rotationVariant),
@@ -194,6 +224,9 @@ export const RotationPicker = ({
                   {libraryRotationNumber(rotation.rotationVariant)}
                 </span>
                 <span className="min-w-0 flex-1 break-words">
+                  {rotation.name ? (
+                    <span className="block font-medium">{rotation.name}</span>
+                  ) : null}
                   {rotation.cropSequence.map((crop, index) => (
                     <span key={index}>
                       {index > 0 ? (
