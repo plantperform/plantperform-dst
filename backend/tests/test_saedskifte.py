@@ -921,6 +921,16 @@ class RotationDatabaseTests(unittest.TestCase):
         self.assertIn("4096", view["data"]["rotation_options_error"]["message"])
         self.assertIsNotNone(view["data"]["saved_result"])
 
+    def test_status_view_includes_the_selected_rotation_groups(self):
+        source = store.create_group(definition(), EMAIL)
+        simulation = self.select_group(source.id)
+
+        view = read_model_store.get_simulation_view(
+            "farm", simulation.id, EMAIL, include_data=False
+        )
+
+        self.assertEqual(list(view["simulation"].rotation_groups), [source.id])
+
     def test_candidate_list_limits_only_the_listed_custom_candidates(self):
         listed = store.create_group(definition(), EMAIL)
         store.create_group(definition(), EMAIL)

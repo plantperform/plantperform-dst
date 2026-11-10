@@ -109,7 +109,8 @@ Expansion is limited to 4,096 custom candidates per request/run, including N-nor
 levels, before deduplication and yearly shifts. Excess returns 422 rather than a
 truncated set. If a later shared edit makes future options too large, the simulation
 view still exposes saved outputs, with `rotationOptionsError` (`code` and `message`)
-and empty future-option metadata; reduce the choices before the next run.
+and empty future-option metadata; reduce the choices before the next run. The
+simulation's `rotationGroups` are included whether or not the view data is.
 
 Deleting a group removes it from current simulation selections and marks results
 outdated, preserving previous outputs and source snapshots. Fields locked to removed

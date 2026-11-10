@@ -130,6 +130,14 @@ def get_farm_view(farm_id, email, *, include_data=True):
         }
 
 
+def _with_rotation_groups(simulation):
+    try:
+        groups = saedskifte_store.load_selected(simulation.rotation_saedskiftevarianter)
+    except RotationDefinitionError:
+        return simulation
+    return simulation.model_copy(update={"rotation_groups": groups})
+
+
 def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
     columns = [
         setups.c.data.label("setup_data"),
@@ -189,16 +197,10 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
         status = "queued" if summary["status"] == "queued" else "running"
     else:
         status = "missing"
+    simulation = _with_rotation_groups(simulation)
     view_data = row.view_data if include_data and status == "done" else None
     if view_data is not None:
         try:
-            simulation = simulation.model_copy(
-                update={
-                    "rotation_groups": saedskifte_store.load_selected(
-                        simulation.rotation_saedskiftevarianter
-                    )
-                }
-            )
             ranges = view_data.get("crop_area_ranges", [])
             if simulation.rotation_groups or (view_data.get("saved_result") or {}).get(
                 "rotation_groups"
