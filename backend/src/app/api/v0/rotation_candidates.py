@@ -272,20 +272,38 @@ def list_udlaeg_koder(
     return choices.list_udlaeg_koder(hovedafgrode_kode, driftsform, naeste_afgrode_kode)
 
 
+def _listed(value: str | None) -> set[str] | None:
+    return None if value is None else {item for item in value.split(",") if item}
+
+
 @router.get("", response_model=list[RotationCandidateOption])
-def list_candidate_refs(farm_id: str, user: FarmMember) -> list[RotationCandidateOption]:
-    """Return all available sædskifte candidates for troubleshooting/debugging,
-    with a short afgrøde-sequence preview for each candidate.
+def list_candidate_refs(
+    farm_id: str,
+    user: FarmMember,
+    saedskiftevarianter: str | None = None,
+    n_norm_procenter: Annotated[str | None, Query(alias="nNormProcenter")] = None,
+) -> list[RotationCandidateOption]:
+    """Return the available sædskifte candidates with a short afgrøde-sequence
+    preview for each candidate. The comma-separated `saedskiftevarianter` and
+    `nNormProcenter` limit the list, and the custom-candidate limit applies to
+    what is listed.
 
     No udvaskning/DB calculation is performed here; use POST .../evaluate on a
     selected subset instead.
     """
+    selected = _listed(saedskiftevarianter)
+    levels = _listed(n_norm_procenter)
+    percentages = [value for value in _N_NORM_PROCENTER if levels is None or value in levels]
     groups, copyable = saedskifte_store.available_for_farm(farm_id, user.email)
+    if selected is not None:
+        groups = {key: value for key, value in groups.items() if key in selected}
     with custom.rotation_scope(groups):
-        custom.check_expansion(groups, _N_NORM_PROCENTER)
-        refs = saedskifte_library.list_all_saedskifte_refs() + [
-            (key, variant) for key in groups for variant in saedskifte_library.list_variants(key)
-        ]
+        custom.check_expansion(groups, percentages)
+        refs = [
+            ref
+            for ref in saedskifte_library.list_all_saedskifte_refs()
+            if selected is None or ref[0] in selected
+        ] + [(key, variant) for key in groups for variant in saedskifte_library.list_variants(key)]
         options = []
         for group_id, variant in refs:
             raw = saedskifte_library.get_raw_rotation(group_id, variant)
@@ -294,7 +312,7 @@ def list_candidate_refs(farm_id: str, user: FarmMember) -> list[RotationCandidat
                 afgroede_normer.lookup_crop_params(code).get("navn", str(code))
                 for code, _, _ in raw[:active_len]
             ]
-            for percentage in _N_NORM_PROCENTER:
+            for percentage in percentages:
                 options.append(
                     RotationCandidateOption(
                         ref=RotationCandidateRef(
