@@ -225,7 +225,7 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
                 **view_data,
                 "yearly_optimization_candidates": [],
                 "crop_area_ranges": [],
-                "rotation_options_error": str(error),
+                "rotation_options_error": {"code": error.code, "message": str(error)},
             }
     return {
         "simulation": simulation,

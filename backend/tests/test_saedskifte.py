@@ -290,8 +290,10 @@ class RotationDefinitionTests(unittest.TestCase):
         changed = value.model_copy(update={"variants": [variant()]})
 
         with custom.rotation_scope({value.id: changed}):
-            with self.assertRaises(RotationDefinitionError):
+            with self.assertRaises(RotationDefinitionError) as raised:
                 saedskifte_library.generate_rotation(value.id, identity)
+
+        self.assertEqual(raised.exception.code, "ROTATION_VARIANT_UNAVAILABLE")
 
     def test_short_cycle_keeps_eligible_measure_in_last_horizon_year(self):
         calculation_data(self)
@@ -875,6 +877,13 @@ class RotationDatabaseTests(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.error.code, "INFEASIBLE")
 
+    def test_a_selection_that_no_longer_exists_has_its_own_code(self):
+        with self.sessions() as session:
+            with self.assertRaises(RotationDefinitionError) as raised:
+                rotation_snapshot_store.resolve_selected(session, [str(uuid4())])
+
+        self.assertEqual(raised.exception.code, "ROTATION_DELETED")
+
     def test_reading_deleted_source_results_does_not_resolve_the_source(self):
         source = store.create_group(definition(), EMAIL)
         simulation = self.select_group(source.id)
@@ -906,8 +915,34 @@ class RotationDatabaseTests(unittest.TestCase):
         view = read_model_store.get_simulation_view("farm", simulation.id, EMAIL)
 
         self.assertEqual(result.status, "outdated", result.error)
-        self.assertIn("4096", view["data"]["rotation_options_error"])
+        self.assertEqual(
+            view["data"]["rotation_options_error"]["code"], "TOO_MANY_CUSTOM_CANDIDATES"
+        )
+        self.assertIn("4096", view["data"]["rotation_options_error"]["message"])
         self.assertIsNotNone(view["data"]["saved_result"])
+
+    def test_simulation_settings_keep_the_rotation_error_code(self):
+        error = RotationDefinitionError("Too many", code="TOO_MANY_CUSTOM_CANDIDATES")
+
+        with patch.object(
+            simulations.simulation_settings_store, "update_settings", side_effect=error
+        ):
+            response = self.client.patch(
+                "/api/v0/farms/farm/simulations/simulation", json={"expectedRevision": 0}
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"], {"code": "TOO_MANY_CUSTOM_CANDIDATES", "message": "Too many"}
+        )
+
+    def test_missing_rotation_has_a_not_found_code(self):
+        response = self.client.get(
+            "/api/v0/saedskifte-rotations/00000000-0000-0000-0000-000000000000"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"]["code"], "ROTATION_NOT_FOUND")
 
     def test_selection_in_an_unrelated_farm_does_not_allow_copying(self):
         source = store.create_group(definition(), OTHER)
@@ -1025,6 +1060,7 @@ class RotationDatabaseTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"]["code"], "UDLAEG_NOT_PERMITTED")
 
     def test_stateless_evaluation_rejects_an_unrelated_custom_rotation(self):
         source = store.create_group(definition(), OTHER)

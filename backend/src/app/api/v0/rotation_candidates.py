@@ -342,7 +342,9 @@ def evaluate_rotation_candidates(
         farm_id, [ref.saedskiftevariant for ref in request.candidate_refs], user.email
     )
     if sum(custom.is_custom(ref.saedskiftevariant) for ref in request.candidate_refs) > 4096:
-        raise RotationDefinitionError("At most 4096 custom candidates are allowed")
+        raise RotationDefinitionError(
+            "At most 4096 custom candidates are allowed", code="TOO_MANY_CUSTOM_CANDIDATES"
+        )
     with custom.rotation_scope(groups, request.godning.driftsform):
         results: list[FieldRotationCandidates] = []
         for field in selected:

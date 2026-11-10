@@ -105,8 +105,8 @@ shifting custom cycles and reconstructs winners from the captured definitions.
 Expansion is limited to 4,096 custom candidates per request/run, including N-norm
 levels, before deduplication and yearly shifts. Excess returns 422 rather than a
 truncated set. If a later shared edit makes future options too large, the simulation
-view still exposes saved outputs, with `rotationOptionsError` and empty future-option
-metadata; reduce the choices before the next run.
+view still exposes saved outputs, with `rotationOptionsError` (`code` and `message`)
+and empty future-option metadata; reduce the choices before the next run.
 
 Deleting a group removes it from current simulation selections and marks results
 outdated, preserving previous outputs and source snapshots. Fields locked to removed
@@ -118,5 +118,10 @@ variants must be unlocked or reassigned before another optimization. Deletion re
 - 404: missing/inaccessible resource, unauthorized copy, or missing/unverified member.
 - 409: stale revision, duplicate member, last-member removal, or deletion during calculation.
 - 422: invalid definitions, immutable-standard mutations, disallowed measures or excessive expansion.
+
+Rotation errors return `{"detail": {"code": ..., "message": ...}}`. The codes are
+`TOO_MANY_CUSTOM_CANDIDATES`, `ROTATION_DELETED`, `ROTATION_VARIANT_UNAVAILABLE`,
+`UDLAEG_NOT_PERMITTED` and `INVALID_ROTATION` for the rest, and a missing or
+inaccessible group answers 404 with `ROTATION_NOT_FOUND`.
 
 Frontend changes and infrastructure deployment are outside this change.
