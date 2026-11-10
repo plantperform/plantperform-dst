@@ -198,7 +198,7 @@ describe('copy farm creation', () => {
     expect(container.textContent).toContain('87 65 43 21')
     expect(container.textContent).toContain('Anna')
     expect(container.textContent).toContain('12,5 ha')
-    expect(container.textContent).toContain('Scenarier2')
+    expect(container.textContent).toContain('Simuleringer2')
   })
 
   it('creates only after confirmation and opens the copied farm', async () => {
