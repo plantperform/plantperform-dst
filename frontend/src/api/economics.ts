@@ -1,6 +1,7 @@
 import useSWR from 'swr'
 
 import { deleteJson, fetcher, patchJson, postJson } from '@/api/client'
+import { addMember } from '@/api/members'
 import type {
   EconomicsModule,
   EconomicsOverrides,
@@ -134,10 +135,8 @@ export const updateEconomicsModule = (
 export const deleteEconomicsModule = (moduleId: string) =>
   deleteJson(modulePath(moduleId))
 
-const membersPath = (moduleId: string) => `${modulePath(moduleId)}/members`
-
-export const useEconomicsModuleMembers = (moduleId: string) =>
-  useSWR<FarmMember[]>(membersPath(moduleId), fetcher)
+export const economicsModuleMembersPath = (moduleId: string) =>
+  `${modulePath(moduleId)}/members`
 
 const MODULES_MEMBERS_KEY = 'economics-modules-members'
 
@@ -148,7 +147,7 @@ const fetchModulesMembers = async (
     await Promise.all(
       moduleIds.map(async (moduleId) => {
         const members = await fetcher<FarmMember[]>(
-          membersPath(moduleId),
+          economicsModuleMembersPath(moduleId),
         ).catch((): FarmMember[] => [])
         return [moduleId, members] as const
       }),
@@ -164,10 +163,7 @@ export const useEconomicsModulesMembers = (moduleIds: string[]) =>
   )
 
 export const addEconomicsModuleMember = (moduleId: string, email: string) =>
-  postJson<FarmMember, { email: string }>(membersPath(moduleId), { email })
-
-export const removeEconomicsModuleMember = (moduleId: string, email: string) =>
-  deleteJson(`${membersPath(moduleId)}/${encodeURIComponent(email)}`)
+  addMember(economicsModuleMembersPath(moduleId), email)
 
 const simulationEconomicsPath = (farmId: string, simulationId: string) =>
   `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/economics`
