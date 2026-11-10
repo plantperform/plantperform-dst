@@ -268,6 +268,7 @@ export type Simulation = {
   createdAt: string
   constraints: OptimizationConstraints
   rotationVariants: string[]
+  rotationGroups?: Record<string, RotationGroupSnapshot>
   nNormPercentages: string[]
   fertiliser: FertiliserSettings
   catchCropSowingDate: string
@@ -516,6 +517,7 @@ export type EconomicsStatement = {
 }
 
 export type SavedResultView = {
+  rotationGroups?: Record<string, RotationGroupSnapshot>
   runId: string
   resultRevision: number
   response: OptimizeSimulationResponse
@@ -599,6 +601,11 @@ export type RotationDefinition = {
   createdAt: string | null
   updatedAt: string | null
 }
+
+export type RotationGroupSnapshot = Pick<
+  RotationDefinition,
+  'id' | 'name' | 'revision' | 'farmingSystem' | 'variants'
+>
 
 export type RotationDefinitionInput = {
   name: string

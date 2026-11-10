@@ -68,12 +68,16 @@ export const rotationOptionsOf = (
 
 export const rotationNamesOf = (
   rotations: RotationOption[],
+  groups: (Record<string, { name: string }> | undefined)[] = [],
 ): Map<string, string> =>
-  new Map(
-    rotations.flatMap((rotation) =>
+  new Map([
+    ...groups.flatMap((group) =>
+      Object.entries(group ?? {}).map(([id, { name }]) => [id, name] as const),
+    ),
+    ...rotations.flatMap((rotation) =>
       rotation.name ? [[rotation.rotationVariant, rotation.name] as const] : [],
     ),
-  )
+  ])
 
 export const summarizeRotationDistribution = (
   fields: FieldRecord[],

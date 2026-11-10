@@ -96,6 +96,7 @@ field" column is the name on the wire.
 | dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Gives another user the eget sædskifte; everyone who has it can edit, share, copy and delete it |
 | egne sædskifter i Ny simulering | `ownRotationVariantsOf`, `selectRotationsWithinLimit`, `fitsFarmingSystem`, `MAX_OWN_ROTATIONS_IN_SIMULATION` | `dyrkningssystem` `""` | The category Egne sædskifter has no driftsform (`croppingSystem: null`), so it fits every simulation and never counts as the other driftsform. At most 50 can be chosen in a simulation |
 | navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
+| rediger manuelt med et eget sædskifte | `ownVariantToken`, `ownVariantOf`, `allowedUndersownAt` | `rotationGroups` | A field on an eget sædskifte starts on the variant with its virkemidler, and each year offers only the virkemiddel the sædskifte has in that year, also when the start year is shifted. The definitions come from the simulation or the last run |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |
 | N-norm | `nNormPct`, `nNormPercentages`, `allowedNNormPercentages` | `nNormPct`, `rotationNNormProcenter`, `nNormProcenter` | |

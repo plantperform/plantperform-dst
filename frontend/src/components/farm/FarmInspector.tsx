@@ -321,13 +321,19 @@ export const FarmInspector = ({
   const { data: rotationCategories } = useRotationCategories(
     isSimulationView ? farm.id : undefined,
   )
+  // The same view as the summary, so this fetches nothing new.
+  const simulationView = useSimulationView(farm.id, selectedSimulation?.id)
   const rotationOptions = useMemo(
     () => rotationOptionsOf(rotationCategories ?? []),
     [rotationCategories],
   )
   const rotationNames = useMemo(
-    () => rotationNamesOf(rotationOptions),
-    [rotationOptions],
+    () =>
+      rotationNamesOf(rotationOptions, [
+        simulationView.data?.data?.savedResult?.rotationGroups,
+        simulationView.data?.simulation.rotationGroups,
+      ]),
+    [rotationOptions, simulationView.data],
   )
   // Of the whole farm, so a sædskifte has the same colour in the Sædskifter tab
   // (also with an opland chosen) and on the map.
@@ -359,8 +365,6 @@ export const FarmInspector = ({
     farm.id,
     selectedSimulation?.id,
   )
-  // The same view as the summary, so this fetches nothing new.
-  const simulationView = useSimulationView(farm.id, selectedSimulation?.id)
   const quotaTrades =
     isSimulationView && selectedSimulation
       ? latestQuotaTrades(
