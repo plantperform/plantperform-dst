@@ -1,5 +1,6 @@
 import type { EconomicsModule, Simulation } from '@/api/types'
 import {
+  describeNames,
   formatChangeCount,
   formatCropCount,
   formatNameList,
@@ -159,11 +160,8 @@ export const describeOwnProfileCount = (count: number): string => {
   return `${count} ${count === 1 ? 'egen profil' : 'egne profiler'} ud over Standard, som du kan bruge på alle dine bedrifter.`
 }
 
-export const describeOwnProfiles = (names: string[]): string => {
-  if (names.length === 0) return 'Kun Standard'
-  if (names.length <= 2) return formatNameList(names)
-  return `${names[0]} og ${names.length - 1} mere`
-}
+export const describeOwnProfiles = (names: string[]): string =>
+  describeNames(names, 'Kun Standard')
 
 export const describeProfileOption = (
   profileId: string,

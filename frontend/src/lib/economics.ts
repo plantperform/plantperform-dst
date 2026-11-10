@@ -581,6 +581,12 @@ export const nameListFormat = new Intl.ListFormat('da-DK', {
 export const formatNameList = (names: string[]): string =>
   nameListFormat.format(names)
 
+export const describeNames = (names: string[], none: string): string => {
+  if (names.length === 0) return none
+  if (names.length <= 2) return formatNameList(names)
+  return `${names[0]} og ${names.length - 1} mere`
+}
+
 export const quantityUnitLabel = (unit: string, quantity: number): string =>
   unit === 'gange' && quantity === 1 ? 'gang' : unit
 
