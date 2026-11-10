@@ -532,6 +532,7 @@ export type RotationOptionsError = { code: string; message: string }
 export type SimulationViewData = FarmViewData & {
   cropAreaRanges: CropAreaRange[]
   yearlyOptimizationCandidates: YearlyOptimizationCategoryOption[]
+  rotationOptionsError?: RotationOptionsError | null
   savedResult: SavedResultView | null
 }
 
