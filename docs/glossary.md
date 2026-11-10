@@ -23,8 +23,8 @@ field" column is the name on the wire.
 | Din konto | account, `AccountButton` | | The signed-in user's details in a panel opened from the bar |
 | fornavn, efternavn | `firstName`, `lastName` | | `UserName`; kept in the browser until the backend stores a name on the user |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
-| Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi and Om bedriften in the sidebar, which can be minimised |
-| adgang (til en bedrift eller profil) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | | The users a farm or a profile is shared with |
+| Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi, Egne sædskifter and Om bedriften in the sidebar, which can be minimised |
+| adgang (til en bedrift, profil eller et sædskifte) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | | The users a farm, a profile or an eget sædskifte is shared with |
 | kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota
@@ -84,6 +84,16 @@ field" column is the name on the wire.
 | indregn forfrugtsværdi (indregn_ffv) | `deducts_preceding_crop_value` | | Backend. Ja or Nej per crop in the master table. Nej for grass, seed grass, clover, lucerne and other perennial crops, which get no forfrugtsværdi deducted |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |
+| egne sædskifter | own rotations, `OwnRotationsOverview`, `OwnRotationPage`, `useOwnRotationDefinitions` | `standard=false` | The sædskifter a user builds from the crops of the library's sædskifter, under Bedriften in the sidebar. Everyone they are shared with can choose them in simulations on their own farms |
+| sædskiftedefinition | `RotationDefinition`, `RotationDefinitionVariant`, `useLibraryRotationDefinitions` | `/saedskifte-rotations` | A sædskifte as the backend stores it: name, driftsform and one or more variants of 1 to 8 years. The library's sædskifter (`isStandard`, `standard=true`) can only be copied and are fetched apart from the own ones |
+| virkemiddel i et år (eget sædskifte) | `allowedUndersownCropCodes`, `undersownCropCodes`, `setYearUndersownCrop`, `keepAllowedUndersownCrops`, `yearsToRecheck` | `allowedUdlaegKoder` | The one udlæg or virkemiddel a year of an eget sædskifte has, or none. The optimization always uses it. When a crop, the order or the driftsform changes, a virkemiddel that no longer fits is removed, and the year says so |
+| standardvirkemiddel | `libraryUndersownDefaults`, `defaultUndersownCrop` | | The virkemiddel a crop gets when it is chosen in an eget sædskifte: the one the library's sædskifter use most for that crop in the same driftsform. A crop where no virkemiddel is used as often gets none |
+| år for år (eget sædskifte) | `OwnRotationYearRow`, `moveYear`, `insertYearAfter` | | A line per year with the crop, its virkemiddel as a tag and a menu to move, insert and remove years. A year can also be dragged by its handle |
+| ændringer, der ikke er gemt | `draftChangeCount`, `yearStatus`, `describeLostChanges`, `OwnRotationSaveBar` | | A saved eget sædskifte marks each year that is new (Nyt) or differs from the saved one (Ændret), counts the changes in the save line and says which are lost when someone else changed it in the meantime |
+| brug i en ny simulering | `InitialRotations`, `initialRotations`, `onUseInSimulation`, `newSimulationRotations` | | Opens Ny simulering on top of the eget sædskifte, in its driftsform and with it chosen |
+| udgave (af et eget sædskifte) | variant | `variants` | A crop sequence of an eget sædskifte with its virkemidler. A copy from the library keeps the library's variants |
+| kopi af et sædskifte | `duplicateRotationDefinition`, `LibraryRotationCopyDialog` | `/duplicate` | A new eget sædskifte with the same years and virkemidler. A library sædskifte can only be copied when it is chosen in a simulation on one of the user's farms (`canCopy`) |
+| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Gives another user the eget sædskifte; everyone who has it can edit, share, copy and delete it |
 | navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |

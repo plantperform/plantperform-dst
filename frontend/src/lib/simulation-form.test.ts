@@ -26,6 +26,7 @@ import {
   farmingSystemMismatchMessage,
   forcedAutumnFertiliser,
   groupSelection,
+  initialFormValues,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -480,6 +481,45 @@ describe('crop choice', () => {
         farmingSystem: 'Konventionel',
       }),
     ).toEqual(['Kløvergræs', 'Vårbyg'])
+  })
+
+  it('starts the requested rotations in their own driftsform', () => {
+    const preset: FertiliserPresetOption = {
+      name: 'Kvæggylle',
+      fertiliser: {
+        farmingSystem: 'Konventionel',
+        orgMineralN: 30,
+        mineralSharePct: 50,
+        onlyOrganic: false,
+        nContentKgPerTon: 5,
+        organicNCeiling: 107,
+      },
+    }
+    expect(
+      initialFormValues(CATEGORIES, [preset], {
+        rotationVariants: ['30'],
+        farmingSystem: 'Økologisk',
+      }),
+    ).toEqual({
+      ...DEFAULT_SIMULATION_FORM_VALUES,
+      farmingSystem: 'Økologisk',
+      rotationVariants: ['30'],
+      chosenCrops: ['Havre', 'Kløvergræs'],
+      fertiliserChoice: 'Kvæggylle',
+      orgMineralN: '30',
+      mineralSharePct: '50',
+      onlyOrganic: true,
+    })
+    expect(
+      initialFormValues(CATEGORIES, [preset], {
+        rotationVariants: ['10'],
+        farmingSystem: null,
+      }),
+    ).toEqual({
+      ...DEFAULT_SIMULATION_FORM_VALUES,
+      rotationVariants: ['10'],
+      chosenCrops: ['Kløvergræs', 'Vårbyg'],
+    })
   })
 })
 

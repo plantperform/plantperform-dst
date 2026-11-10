@@ -103,25 +103,32 @@ export const profilesInUse = (
 
 const comparableName = (name: string) => name.trim().toLocaleLowerCase('da-DK')
 
+export const isNameTaken = (
+  items: { id: string; name: string }[],
+  name: string,
+  id?: string,
+): boolean =>
+  items.some(
+    (item) =>
+      item.id !== id && comparableName(item.name) === comparableName(name),
+  )
+
 export const profileNameError = (
   profiles: EconomicsProfile[],
   name: string,
   profileId?: string,
 ): string | null => {
   if (name.trim() === '') return 'Giv profilen et navn.'
-  const taken = profiles.some(
-    (profile) =>
-      profile.id !== profileId &&
-      comparableName(profile.name) === comparableName(name),
-  )
-  return taken ? 'Der findes allerede en profil med det navn.' : null
+  return isNameTaken(profiles, name, profileId)
+    ? 'Der findes allerede en profil med det navn.'
+    : null
 }
 
-export const freeProfileName = (
-  profiles: EconomicsProfile[],
+export const freeName = (
+  items: { name: string }[],
   baseName: string,
 ): string => {
-  const taken = new Set(profiles.map((profile) => comparableName(profile.name)))
+  const taken = new Set(items.map((item) => comparableName(item.name)))
   let number = 1
   let name = baseName
   while (taken.has(comparableName(name))) {

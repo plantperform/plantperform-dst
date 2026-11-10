@@ -15,7 +15,7 @@ import {
   describeProfileOption,
   describeProfileUsers,
   describeStandard,
-  freeProfileName,
+  freeName,
   isEconomicsCurrent,
   profileForSimulation,
   profileNameError,
@@ -175,10 +175,8 @@ describe('economics profiles', () => {
   })
 
   it('suggests the first free name for a new profile', () => {
-    expect(freeProfileName(PROFILES, 'Bakkegården 2027')).toBe(
-      'Bakkegården 2027',
-    )
-    expect(freeProfileName(PROFILES, 'forsigtig 2027')).toBe('forsigtig 2027 2')
+    expect(freeName(PROFILES, 'Bakkegården 2027')).toBe('Bakkegården 2027')
+    expect(freeName(PROFILES, 'forsigtig 2027')).toBe('forsigtig 2027 2')
   })
 
   it('wants a name that no other profile has', () => {

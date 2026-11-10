@@ -16,6 +16,7 @@ const SHARED_NAMES: Record<string, string> = {
   udlaegKode: 'undersownCropCode',
   udlaegNavn: 'undersownCropName',
   udlaegSet: 'undersownCropSet',
+  allowedUdlaegKoder: 'allowedUndersownCropCodes',
   excludedAfgrodekoder: 'excludedCropCodes',
   afgrodeNormKgnHa: 'cropNormKgNHa',
   mellemafgrode: 'intermediateCrop',
