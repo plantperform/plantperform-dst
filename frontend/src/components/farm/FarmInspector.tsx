@@ -486,6 +486,7 @@ export const FarmInspector = ({
               optimizationKind={selectedSimulation.optimizationSettings?.kind}
               run={optimizationRun}
               fields={fieldsLoading || fieldsError ? undefined : fields}
+              rotationOptionsError={simulationView.data?.data?.rotationOptionsError}
             />
           ) : null}
           {showYearWalkthrough ? (

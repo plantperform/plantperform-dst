@@ -39,6 +39,7 @@ import {
   optimizationFailureMessage,
   summarizeOptimizationChanges,
 } from '@/lib/optimization-run'
+import { rotationErrorMessage } from '@/lib/own-rotations'
 
 const resultKey = (farmId: string, simulationId: string) =>
   `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/result`
@@ -272,10 +273,10 @@ export const OptimizationRunsProvider = ({
           putRun({
             ...running,
             status: 'failed',
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Kunne ikke starte optimeringen.',
+            error: rotationErrorMessage(
+              error,
+              'Kunne ikke starte optimeringen.',
+            ),
             cropAreaViolations:
               error instanceof ApiError
                 ? cropAreaViolationsFromDetail(error.detail)

@@ -3,7 +3,8 @@ import {
   useStartDefaultOptimization,
   type OptimizationRun,
 } from '@/api/optimization-runs'
-import type { FieldRecord } from '@/api/types'
+import type { FieldRecord, RotationOptionsError } from '@/api/types'
+import { OwnRotationOptionsWarning } from '@/components/farm/OwnRotationOptionsWarning'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { Button } from '@/components/ui/button'
 import { LoadError } from '@/components/ui/load-error'
@@ -39,6 +40,7 @@ type OptimizationBannerProps = {
   optimizationKind: OptimizationKind | undefined
   run: OptimizationRun | undefined
   fields: FieldRecord[] | undefined
+  rotationOptionsError: RotationOptionsError | null | undefined
   className?: string
 }
 
@@ -50,6 +52,7 @@ export const OptimizationBanner = ({
   optimizationKind,
   run,
   fields,
+  rotationOptionsError,
   className,
 }: OptimizationBannerProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
@@ -92,6 +95,12 @@ export const OptimizationBanner = ({
         onRetry={retry}
         onDismiss={dismiss}
       />
+    )
+  }
+
+  if (rotationOptionsError) {
+    return (
+      <OwnRotationOptionsWarning farmId={farmId} error={rotationOptionsError} />
     )
   }
 
