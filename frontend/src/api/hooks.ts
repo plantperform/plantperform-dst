@@ -515,14 +515,30 @@ export const useRegistryFieldsBulk = (imkIds: number[]) =>
     revalidateOnFocus: false,
   })
 
-export const rotationCandidatesKey = (farmId?: string) => {
-  if (!farmId) return null
+export const rotationCandidatesKey = (
+  farmId: string | undefined,
+  rotationVariants: string[],
+  nNormPercentages: string[],
+) => {
+  if (!farmId || rotationVariants.length === 0) return null
 
-  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates`
+  const variants = rotationVariants.map(encodeURIComponent).join(',')
+  const levels =
+    nNormPercentages.length > 0
+      ? `&nNormProcenter=${nNormPercentages.map(encodeURIComponent).join(',')}`
+      : ''
+  return `/farms/${encodeURIComponent(farmId)}/rotation-candidates?saedskiftevarianter=${variants}${levels}`
 }
 
-export const useRotationCandidateOptions = (farmId?: string) =>
-  useSWR<RotationCandidateOption[]>(rotationCandidatesKey(farmId), fetcher)
+export const useRotationCandidateOptions = (
+  farmId: string | undefined,
+  rotationVariants: string[],
+  nNormPercentages: string[],
+) =>
+  useSWR<RotationCandidateOption[]>(
+    rotationCandidatesKey(farmId, rotationVariants, nNormPercentages),
+    fetcher,
+  )
 
 export const rotationCategoriesKey = (farmId?: string) => {
   if (!farmId) return null
@@ -613,9 +629,12 @@ export const useUndersownCropCodes = (
     fetcher,
   )
 
-export const preloadRotationCandidateCatalog = (farmId: string) => {
+export const preloadRotationCandidateCatalog = (
+  farmId: string,
+  candidatesKey: string | null,
+) => {
   void preload(rotationCategoriesKey(farmId), fetcher)
-  void preload(rotationCandidatesKey(farmId), fetcher)
+  if (candidatesKey) void preload(candidatesKey, fetcher)
   void preload(cropCodesKey(farmId), fetcher)
   void preload(undersownCropCodesKey(farmId), fetcher)
 }
