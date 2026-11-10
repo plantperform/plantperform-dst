@@ -15,11 +15,11 @@ import {
   useRotationNNormPercentages,
 } from '@/api/hooks'
 import { createSimulation, updateSimulation } from '@/api/mutations'
+import { useOwnRotationDefinitions } from '@/api/own-rotations'
 import {
   useOptimizationRun,
   useOptimizationRunActions,
 } from '@/api/optimization-runs'
-import { ApiError } from '@/api/client'
 import {
   DEFAULT_OPTIMIZATION_SETTINGS,
   DEFAULT_SIMULATION_CONSTRAINTS,
@@ -81,6 +81,8 @@ import {
   listedAutumnCrops,
   offersNoFertiliser,
   organicFertiliserChoice,
+  selectableRotationCategories,
+  selectableRotationVariants,
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
@@ -99,6 +101,7 @@ import {
   updateOrRecreate,
   type CreationRequestIdentity,
 } from '@/lib/simulation-creation'
+import { rotationErrorMessage } from '@/lib/own-rotations'
 import { cn } from '@/lib/utils'
 
 type NewScenarioPanelProps = {
@@ -111,6 +114,8 @@ type NewScenarioPanelProps = {
   onSimulationCreated: (simulation: Simulation) => void
   onError: (message: string | null) => void
 }
+
+const NO_ROTATION_VARIANTS: string[] = []
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 const LIMITS_STEP_INDEX = stepIndexOf('limits')
@@ -187,6 +192,15 @@ export const NewScenarioPanel = ({
   const economicsProfiles = useEconomicsProfiles()
   const cropCodes = useCropCodes(farmId).data ?? NO_CROP_CODES
   const categories = categoriesQuery.data ?? NO_CATEGORIES
+  const ownDefinitionsQuery = useOwnRotationDefinitions()
+  const ownRotationIds = new Set(
+    (ownDefinitionsQuery.data ?? []).map((definition) => definition.id),
+  )
+  const selectableCategories = selectableRotationCategories(
+    categories,
+    ownRotationIds,
+    source?.rotationVariants ?? NO_ROTATION_VARIANTS,
+  )
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
   const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
@@ -339,6 +353,19 @@ export const NewScenarioPanel = ({
       setValue('chosenCrops', chosenCropsFor(categories, getValues()))
     }
   }, [missingCrops, categories, getValues, setValue])
+  const selectableSelection = selectableRotationVariants(
+    values.rotationVariants,
+    categories,
+    selectableCategories,
+    ownRotationIds,
+  )
+  const dropsRotations =
+    categoriesQuery.data !== undefined &&
+    ownDefinitionsQuery.data !== undefined &&
+    selectableSelection.length < values.rotationVariants.length
+  useEffect(() => {
+    if (dropsRotations) setValue('rotationVariants', selectableSelection)
+  }, [dropsRotations, selectableSelection, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -554,9 +581,10 @@ export const NewScenarioPanel = ({
       }
     } catch (error) {
       setCreateError(
-        error instanceof ApiError || error instanceof Error
-          ? error.message
-          : 'Kunne ikke gemme simuleringen. Prøv igen.',
+        rotationErrorMessage(
+          error,
+          'Kunne ikke gemme simuleringen. Prøv igen.',
+        ),
       )
     }
     setIsCreating(false)
@@ -838,7 +866,7 @@ export const NewScenarioPanel = ({
 
         {!referenceBlocked && stepId === 'rotations' ? (
           <RotationPicker
-            categories={categories}
+            categories={selectableCategories}
             farmingSystem={values.farmingSystem}
             cropChoice={cropChoice}
             rotationVariants={values.rotationVariants}
@@ -1306,7 +1334,7 @@ export const NewScenarioPanel = ({
             farmId={farmId}
             fields={effectiveFields}
             values={values}
-            categories={categories}
+            categories={selectableCategories}
             fertiliserPresets={fertiliserPresets}
             settings={settingsWithTrades}
             constraints={constraints}

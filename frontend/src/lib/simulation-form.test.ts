@@ -39,11 +39,16 @@ import {
   offersNoFertiliser,
   organicFertiliserChoice,
   organicFertiliserNLabel,
+  orderCategoriesForFarmingSystem,
   organicNCeilingLabel,
+  ownRotationVariantsOf,
   precedingCropValueLabel,
   selectedCountsByCategory,
   selectedInCategory,
+  selectableRotationCategories,
+  selectableRotationVariants,
   selectedRotations,
+  selectRotationsWithinLimit,
   simulationFormSchema,
   SIMULATION_FORM_STEPS,
   simulationToFormValues,
@@ -1190,5 +1195,98 @@ describe('saving simulation settings', () => {
         ...filledValues,
       }),
     ).toBe(true)
+  })
+})
+
+describe('own rotations in Ny simulering', () => {
+  const library: RotationCategoryOption = {
+    category: 'Konventionel, normal gødning',
+    croppingSystem: 'Konventionel',
+    rotationCount: 1,
+    rotations: [
+      { rotationVariant: '12', cropSequence: ['Vinterhvede'], activeLen: 1 },
+    ],
+  }
+  const own = (count: number): RotationCategoryOption => ({
+    category: 'Egne sædskifter',
+    croppingSystem: null,
+    rotationCount: count,
+    rotations: Array.from({ length: count }, (_, index) => ({
+      rotationVariant: `own-${index}`,
+      cropSequence: ['Vårbyg'],
+      activeLen: 1,
+      name: `Eget ${index}`,
+    })),
+  })
+
+  it('fits every driftsform, so it is neither a mismatch nor last', () => {
+    const categories = [library, own(1)]
+    expect(farmingSystemMismatchCount(categories, ['own-0'], 'Økologisk')).toBe(
+      0,
+    )
+    expect(cropsForFarmingSystem(categories, 'Økologisk')).toEqual(['Vårbyg'])
+    expect(
+      orderCategoriesForFarmingSystem(categories, 'Økologisk').map(
+        (category) => category.category,
+      ),
+    ).toEqual(['Egne sædskifter', 'Konventionel, normal gødning'])
+  })
+
+  it('selects at most 50 own rotations, but every library rotation', () => {
+    const categories = [library, own(60)]
+    const ownVariants = ownRotationVariantsOf(categories)
+    const selected = selectRotationsWithinLimit(
+      ['own-0'],
+      [...own(60).rotations, ...library.rotations],
+      ownVariants,
+    )
+    expect(selected.filter((variant) => ownVariants.has(variant))).toHaveLength(
+      50,
+    )
+    expect(selected).toContain('12')
+  })
+
+  it('offers only own rotations and those the simulation already has', () => {
+    const categories = [library, own(3)]
+    const selectable = selectableRotationCategories(
+      categories,
+      new Set(['own-0']),
+      ['own-2'],
+    )
+    expect(selectable[0]).toBe(library)
+    expect(
+      selectable[1].rotations.map((rotation) => rotation.rotationVariant),
+    ).toEqual(['own-0', 'own-2'])
+    expect(selectable[1].rotationCount).toBe(2)
+    expect(
+      selectableRotationVariants(
+        ['12', 'own-0', 'own-1'],
+        categories,
+        selectable,
+        new Set(['own-0']),
+      ),
+    ).toEqual(['12', 'own-0'])
+    expect(selectableRotationCategories(categories, new Set(), [])).toEqual([
+      library,
+    ])
+  })
+
+  it('drops a chosen own rotation that is no longer listed anywhere', () => {
+    const deleted = '3f2a6c1e-0b7d-4c9e-8a1f-2d3c4b5a6e7f'
+    const created = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d'
+    const categories = [library, own(1)]
+    const selectable = selectableRotationCategories(
+      categories,
+      new Set(['own-0', created]),
+      [],
+    )
+    expect(
+      selectableRotationVariants(
+        ['12', 'own-0', deleted, created, '99'],
+        categories,
+        selectable,
+        new Set(['own-0', created]),
+      ),
+    ).toEqual(['12', 'own-0', created, '99'])
   })
 })

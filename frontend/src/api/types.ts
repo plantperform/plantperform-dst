@@ -626,7 +626,7 @@ export type RotationOption = {
 
 export type RotationCategoryOption = {
   category: string
-  croppingSystem: FarmingSystem
+  croppingSystem: FarmingSystem | null
   rotationCount: number
   rotations: RotationOption[]
 }

@@ -94,6 +94,7 @@ field" column is the name on the wire.
 | udgave (af et eget sædskifte) | variant | `variants` | A crop sequence of an eget sædskifte with its virkemidler. A copy from the library keeps the library's variants |
 | kopi af et sædskifte | `duplicateRotationDefinition`, `LibraryRotationCopyDialog` | `/duplicate` | A new eget sædskifte with the same years and virkemidler. A library sædskifte can only be copied when it is chosen in a simulation on one of the user's farms (`canCopy`) |
 | dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Gives another user the eget sædskifte; everyone who has it can edit, share, copy and delete it |
+| egne sædskifter i Ny simulering | `ownRotationVariantsOf`, `selectRotationsWithinLimit`, `fitsFarmingSystem`, `MAX_OWN_ROTATIONS_IN_SIMULATION` | `dyrkningssystem` `""` | The category Egne sædskifter has no driftsform (`croppingSystem: null`), so it fits every simulation and never counts as the other driftsform. At most 50 can be chosen in a simulation |
 | navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |

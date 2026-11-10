@@ -41,6 +41,7 @@ import type {
   AutumnCropOption,
   CropCodeOption,
   Farm,
+  FarmingSystem,
   FarmMember,
   FarmView,
   FieldRecord,
@@ -546,8 +547,28 @@ export const rotationCategoriesKey = (farmId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/rotation-candidates/kategorier`
 }
 
+type RotationCategoryWire = Omit<RotationCategoryOption, 'croppingSystem'> & {
+  croppingSystem: string
+}
+
+const isFarmingSystem = (value: string): value is FarmingSystem =>
+  value === 'Konventionel' || value === 'Økologisk'
+
+const fetchRotationCategories = async (
+  path: string,
+): Promise<RotationCategoryOption[]> =>
+  (await fetcher<RotationCategoryWire[]>(path)).map((category) => ({
+    ...category,
+    croppingSystem: isFarmingSystem(category.croppingSystem)
+      ? category.croppingSystem
+      : null,
+  }))
+
 export const useRotationCategories = (farmId?: string) =>
-  useSWR<RotationCategoryOption[]>(rotationCategoriesKey(farmId), fetcher)
+  useSWR<RotationCategoryOption[]>(
+    rotationCategoriesKey(farmId),
+    fetchRotationCategories,
+  )
 
 export const rotationNNormPercentagesKey = (farmId?: string) => {
   if (!farmId) return null
@@ -633,7 +654,7 @@ export const preloadRotationCandidateCatalog = (
   farmId: string,
   candidatesKey: string | null,
 ) => {
-  void preload(rotationCategoriesKey(farmId), fetcher)
+  void preload(rotationCategoriesKey(farmId), fetchRotationCategories)
   if (candidatesKey) void preload(candidatesKey, fetcher)
   void preload(cropCodesKey(farmId), fetcher)
   void preload(undersownCropCodesKey(farmId), fetcher)
