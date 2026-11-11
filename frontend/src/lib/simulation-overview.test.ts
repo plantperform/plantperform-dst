@@ -9,6 +9,8 @@ import {
   describeNLoadDelta,
   partialCatchmentQuotas,
   summarizeCatchmentYearStatuses,
+  tradedCatchmentYearStatus,
+  type CatchmentYearStatus,
 } from '@/lib/simulation-overview'
 
 const years = (entries: Record<number, [nLoadKg: number, quotaKgN: number]>) =>
@@ -180,6 +182,32 @@ describe('partialCatchmentQuotas', () => {
 })
 
 describe('describeCatchmentYearStatus', () => {
+  it('names the years over the kvote that bought kvote covers', () => {
+    const near: CatchmentYearStatus = {
+      catchmentId: 1,
+      level: 'near',
+      overYears: [],
+    }
+    expect(describeCatchmentYearStatus(near)).toBe('Tæt på kvoten')
+    expect(describeCatchmentYearStatus(tradedCatchmentYearStatus(near))).toBe(
+      'Under kvoten',
+    )
+    expect(
+      describeCatchmentYearStatus(
+        tradedCatchmentYearStatus(near),
+        [2029, 2031],
+      ),
+    ).toBe('Over kvoten i 2029 og 2031, dækket af købt kvote')
+    const over: CatchmentYearStatus = {
+      ...near,
+      level: 'over',
+      overYears: [2029],
+    }
+    expect(
+      describeCatchmentYearStatus(tradedCatchmentYearStatus(over), [2030]),
+    ).toBe('Over kvoten i 2029')
+  })
+
   it('names every year over the quota', () => {
     expect(
       describeCatchmentYearStatus({

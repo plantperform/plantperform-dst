@@ -39,6 +39,7 @@ import {
 } from '@/lib/field-domain'
 import {
   db2IncludingQuotaTrades,
+  describeQuotaTradePeriod,
   latestQuotaTrades,
   limitAfterTradesFor,
 } from '@/lib/quota-trade-result'
@@ -84,16 +85,27 @@ const CatchmentStatusList = ({
   const hasValues = fields.some((field) => field.rotationId !== null)
   const yearValues = useFieldYearValues(farmId, simulationId, fields, hasValues)
   const catchmentLabel = useCatchmentLabel(farmId, fields)
-  const statuses = yearValues.data
+  const totalsByYear = yearValues.data
+    ? summarizeCatchmentYearTotals(fields, yearValues.data, false)
+    : null
+  const partialQuotas = partialCatchmentQuotas(fields, true)
+  const overKvote = totalsByYear
+    ? summarizeCatchmentYearStatuses(totalsByYear, false, partialQuotas)
+    : []
+  const statuses = totalsByYear
     ? summarizeCatchmentYearStatuses(
-        summarizeCatchmentYearTotals(fields, yearValues.data, false),
+        totalsByYear,
         false,
-        partialCatchmentQuotas(fields, true),
+        partialQuotas,
         limitAfterTradesFor(quotaTrades),
       )
         .map((status) => ({
           status,
           label: catchmentLabel(status.catchmentId),
+          coveredYears: (
+            overKvote.find((own) => own.catchmentId === status.catchmentId)
+              ?.overYears ?? []
+          ).filter((year) => !status.overYears.includes(year)),
         }))
         .sort((left, right) => left.label.localeCompare(right.label, 'da-DK'))
     : null
@@ -119,17 +131,34 @@ const CatchmentStatusList = ({
 
   return (
     <ul className="space-y-1.5">
-      {statuses.map(({ status, label }) => (
-        <li
-          key={status.catchmentId}
-          className="flex items-center justify-between gap-3 text-[13px]"
-        >
-          <span className="max-w-[45%] shrink-0 truncate" title={label}>
-            {label}
-          </span>
-          <CatchmentYearStatusIndicator status={status} className="min-w-0" />
-        </li>
-      ))}
+      {statuses.map(({ status, label, coveredYears }) => {
+        const trade = quotaTrades.find(
+          (candidate) => candidate.catchmentId === status.catchmentId,
+        )
+        return (
+          <li
+            key={status.catchmentId}
+            className="flex items-start justify-between gap-3 text-[13px]"
+          >
+            <span className="min-w-0">
+              <span className="block truncate" title={label}>
+                {label}
+              </span>
+              {trade ? (
+                <span className="block text-xs text-pretty text-muted-foreground tabular-nums">
+                  {describeQuotaTradePeriod(trade)}
+                </span>
+              ) : null}
+            </span>
+            <CatchmentYearStatusIndicator
+              status={status}
+              traded={trade !== undefined}
+              coveredYears={trade ? coveredYears : []}
+              className="mt-0.5 max-w-[45%] shrink-0"
+            />
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -162,7 +191,6 @@ const SimulationFigures = ({
   )
   const db2 = db2IncludingQuotaTrades(totals.db2, quotaTrades)
   const db2PerHa = totalsPerHa({ ...totals, db2 }, 'db2')
-  const catchmentLabel = useCatchmentLabel(farmId, fields)
 
   return (
     <>
@@ -199,11 +227,7 @@ const SimulationFigures = ({
           }
         />
       </div>
-      <QuotaTradeFigures
-        trades={quotaTrades}
-        totals={totals}
-        catchmentLabel={catchmentLabel}
-      />
+      <QuotaTradeFigures trades={quotaTrades} totals={totals} />
       <CatchmentStatusList
         farmId={farmId}
         simulationId={simulation.id}

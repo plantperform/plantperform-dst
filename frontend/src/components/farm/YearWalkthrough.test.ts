@@ -191,8 +191,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
         ),
       ),
     )
-  const bands = (className: string) =>
-    container.querySelectorAll(`span.${className}`).length
+  const bands = (kind: 'bought' | 'sold') =>
+    container.querySelectorAll(`span[data-trade-band="${kind}"]`).length
   // The red top of a bar; the legend's swatch has more classes.
   const overParts = () =>
     container.querySelectorAll('span[class="bg-destructive"]').length
@@ -209,7 +209,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render(trades)
 
-    expect(container.querySelector('[role="radio"]')?.textContent).toContain(
+    const year = container.querySelector('[role="radio"]')
+    expect(year?.textContent).toContain('3 t.kr')
+    expect(year?.getAttribute('aria-label')).toContain(
       'DB2 inkl. kvotehandel 3 t.kr',
     )
   })
@@ -232,7 +234,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render(trades, undefined, { scoped: true, year: 0 })
 
-    expect(container.querySelector('[role="radio"]')?.textContent).toContain(
+    const year = container.querySelector('[role="radio"]')
+    expect(year?.textContent).toContain('100 kr')
+    expect(year?.getAttribute('aria-label')).toContain(
       'DB2 inkl. kvotehandel 100 kr',
     )
   })
@@ -280,13 +284,10 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
   it('marks bought and sold kvote apart from the udledning and names them', async () => {
     await render([trade(1, 30), trade(2, -40)])
-    expect(legend()).toContain('Oprindelig kvote')
-    expect(legend()).toContain('Købt kvote')
-    expect(legend()).toContain('Solgt kvote')
-    // One band in the year's bar and one in the legend, for each kind.
-    expect(bands('border-warning')).toBe(2)
-    expect(bands('border-success')).toBe(2)
-    expect(legend()).toContain('Over kvoten efter kvotehandel')
+    expect(legend()).toContain('KvoteMå udledeKøbt kvoteSolgt kvoteOver kvoten')
+    expect(bands('bought')).toBe(1)
+    expect(bands('sold')).toBe(1)
+    expect(container.querySelectorAll('span[data-limit-line]')).toHaveLength(2)
   })
 
   it('names only the kind of trade the run made', async () => {
@@ -318,12 +319,12 @@ describe('kvotehandel in the Årsgennemgang', () => {
     await render([trade(1, 0, 30)])
     // The legend names the bought kvote, but the first year has no band.
     expect(legend()).toContain('Købt kvote')
-    expect(bands('border-warning')).toBe(1)
+    expect(bands('bought')).toBe(0)
     expect(overParts()).toBe(1)
     // The first year buys 30 kg N and later years sell.
     await render([trade(1, 30, -20)])
     expect(legend()).toContain('Solgt kvote')
-    expect(bands('border-warning')).toBe(2)
+    expect(bands('bought')).toBe(1)
     expect(overParts()).toBe(0)
   })
 
@@ -341,37 +342,41 @@ describe('kvotehandel in the Årsgennemgang', () => {
       (line) => line.style.bottom,
     )
 
-  // The band drawn in a bar, as a share of the kvote line's height; the
-  // legend's swatch has no position.
-  const drawnBand = (className: string) => {
+  // The band drawn in a bar and the line for what the opland may let out, as
+  // a share of the kvote line's height.
+  const drawnBand = (kind: 'bought' | 'sold') => {
     const kvoteLine = container.querySelector<HTMLElement>(
       'span.absolute.border-dashed',
     )
-    const band = [
-      ...container.querySelectorAll<HTMLElement>(`span.${className}`),
-    ].find((span) => span.style.bottom !== '')
+    const band = container.querySelector<HTMLElement>(
+      `span[data-trade-band="${kind}"]`,
+    )
+    const limitLine = container.querySelector<HTMLElement>(
+      'span[data-limit-line]',
+    )
     const kvotePct = parseFloat(kvoteLine!.style.bottom)
     return {
       bottom: parseFloat(band!.style.bottom) / kvotePct,
       height: parseFloat(band!.style.height) / kvotePct,
+      limit: parseFloat(limitLine!.style.bottom) / kvotePct,
     }
   }
 
-  it('draws a trade from the cap under Grænser, the limit the run traded from', async () => {
-    // Opland 1's cap of 150 kg N against its kvote of 100 kg N: 20 kg N sold
-    // is drawn from 130 to 150 kg N.
+  it('draws a trade from the kvote, whatever the cap under Grænser', async () => {
+    // Opland 1 sells 20 kg N of its kvote of 100 kg N: drawn from 80 to 100
+    // kg N, though its cap is 150 kg N.
     await render([trade(1, -20)], cap(150))
-    const sold = drawnBand('border-success')
-    expect(sold.bottom).toBeCloseTo(1.3)
+    const sold = drawnBand('sold')
+    expect(sold.bottom).toBeCloseTo(0.8)
     expect(sold.height).toBeCloseTo(0.2)
-    // 30 kg N bought under a cap of 50 kg N is drawn from 50 to 80 kg N.
+    expect(sold.limit).toBeCloseTo(0.8)
+    // 30 kg N bought is drawn from 100 to 130 kg N, though its cap is 50.
     await render([trade(1, 30)], cap(50))
-    const bought = drawnBand('border-warning')
-    expect(bought.bottom).toBeCloseTo(0.5)
+    const bought = drawnBand('bought')
+    expect(bought.bottom).toBeCloseTo(1)
     expect(bought.height).toBeCloseTo(0.3)
-    // Without a cap, from the kvote.
-    await render([trade(1, 30)])
-    expect(drawnBand('border-warning').bottom).toBeCloseTo(1)
+    expect(bought.limit).toBeCloseTo(1.3)
+    expect(capLines()).toEqual([])
   })
 
   it('marks udledning red over the kvote, whatever the cap under Grænser', async () => {
@@ -411,20 +416,25 @@ describe('kvotehandel in the Årsgennemgang', () => {
   })
 
   it('names each opland’s trade against its kvote for the whole farm', async () => {
-    // Opland 2 trades nothing. Under its titled section, with its share of
-    // the kvote after the row's own percentage; a cap does not change it.
+    // Opland 2 trades nothing and keeps its percentage; a cap does not change
+    // opland 1's limit.
     await render([trade(1, 30, 60)], cap(150))
-    expect(panel()).toContain('KvotehandelKøbt gns. 56 kg N/år+56 %')
-    // Opland 2 has no section.
-    expect(panel().split('Kvotehandel').length - 1).toBe(1)
+    expect(panel()).toContain(
+      'Opland 1120 af 156 kg N efter købKøber 30-60 kg N i 8 år til 30 kr. Udgift gns. 1.688 kr/årDækket af køb',
+    )
+    expect(panel()).toContain('Opland 240 af 100 kg N40 %')
     // The selected first year buys 30 kg N of the 100 kg N kvote.
     await render([trade(1, 30, 60)], cap(150), { year: 0 })
-    expect(panel()).toContain('KvotehandelKøbt 30 kg N+30 %')
+    expect(panel()).toContain(
+      '120 af 130 kg N efter købKøbt 30 kg N til 30 kr = 900 krDækket af køb',
+    )
     await render([trade(1, -30)], undefined, { year: 0 })
-    expect(panel()).toContain('KvotehandelSolgt 30 kg N−30 %')
-    // A year without a trade says so, with no share.
+    expect(panel()).toContain(
+      '120 af 70 kg N efter salgSolgt 30 kg N til 30 kr = 900 krOver',
+    )
+    // A year without a trade says so, measured against the kvote alone.
     await render([trade(1, 0, 30)], undefined, { year: 0 })
-    expect(panel()).toContain('KvotehandelIngen handel i året')
+    expect(panel()).toContain('120 af 100 kg NIngen handel i åretOver')
     expect(panel()).not.toMatch(/[+−]\d+ %/)
   })
 
@@ -432,29 +442,47 @@ describe('kvotehandel in the Årsgennemgang', () => {
     await render([trade(1, 30, 60)], cap(150), { scoped: true, year: 0 })
     // The opland's own facts stay beside its trade, which covers the year.
     expect(panel()).toMatch(/Marker1 mark · 10 ha/)
-    expect(panel()).toContain('År over kvoten0 af 1')
+    expect(panel()).toContain('År over efter handel0 af 1')
     expect(panel()).toContain('Kvote pr. ha')
-    expect(panel()).toContain('Købt kvote30 kg N (+30 % af kvoten)')
-    expect(panel()).toContain('Pris30 kr/kg N')
-    // 30 kg N at 30 kr.
-    expect(panel()).toContain('Udgift900 kr')
+    expect(panel()).toContain('Kvote100 kg NKøbt+30 kg NMå udlede130 kg N')
+    expect(panel()).toContain('Købt 30 kg N til 30 kr = 900 kr')
     // The period's average: seven years of 60 kg N and one of 30 kg N.
     await render([trade(1, 30, 60)], cap(150), { scoped: true })
-    expect(panel()).toContain('Købt kvote gns. pr. år56 kg N')
-    expect(panel()).toContain('Udgift gns. pr. år1.688 kr')
+    expect(panel()).toContain('Købt gns.+56 kg NMå udlede156 kg N')
+    expect(panel()).toContain(
+      'Køber 30-60 kg N i 8 år til 30 kr. Udgift gns. 1.688 kr/år',
+    )
     // Selling earns.
     await render([trade(1, -30)], undefined, { scoped: true, year: 0 })
-    expect(panel()).toContain('Indtægt900 kr')
+    expect(panel()).toContain('Solgt 30 kg N til 30 kr = 900 kr')
+    await render([trade(1, -30)], undefined, { scoped: true })
+    expect(panel()).toContain('Indtægt gns. 900 kr/år')
   })
 
   it.each([
-    [120, 30, '120 af 130 kg N efter kvotehandel, 10 kg N tilbage'],
-    [140, 30, '140 af 130 kg N efter kvotehandel, skal ned med 10 kg N'],
-    [40, -30, '40 af 70 kg N efter kvotehandel, 30 kg N tilbage'],
-    [80, -30, '80 af 70 kg N efter kvotehandel, skal ned med 10 kg N'],
-    [130, 30, '130 af 130 kg N efter kvotehandel, 0 kg N tilbage'],
-    [0, -100, '0 af 0 kg N efter kvotehandel, 0 kg N tilbage'],
-    [0, -110, '0 af -10 kg N efter kvotehandel, skal ned med 10 kg N'],
+    [
+      120,
+      30,
+      'Må udlede130 kg NUdledning (120 % af kvoten)120 kg NTilbage10 kg N',
+    ],
+    [
+      140,
+      30,
+      'Må udlede130 kg NUdledning (140 % af kvoten)140 kg NOver10 kg N',
+    ],
+    [
+      40,
+      -30,
+      'Må udlede70 kg NUdledning (40 % af kvoten)40 kg NTilbage30 kg N',
+    ],
+    [80, -30, 'Må udlede70 kg NUdledning (80 % af kvoten)80 kg NOver10 kg N'],
+    [
+      130,
+      30,
+      'Må udlede130 kg NUdledning (130 % af kvoten)130 kg NTilbage0 kg N',
+    ],
+    [0, -100, 'Må udlede0 kg NUdledning (0 % af kvoten)0 kg NTilbage0 kg N'],
+    [0, -110, 'Må udlede-10 kg NUdledning (0 % af kvoten)0 kg NOver10 kg N'],
   ])(
     'shows the remaining quota for emissions %s and trade %s',
     async (load, kg, text) => {
@@ -471,14 +499,14 @@ describe('kvotehandel in the Årsgennemgang', () => {
   )
 
   it.each([
-    [120, 30, 'tæt på kvote efter kvotehandel'],
-    [140, 30, 'over kvote efter kvotehandel'],
-    [40, -30, 'under kvote efter kvotehandel'],
-    [80, -30, 'over kvote efter kvotehandel'],
-    [130, 30, 'tæt på kvote efter kvotehandel'],
-    [0, -100, 'tæt på kvote efter kvotehandel'],
-    [1, -100, 'over kvote efter kvotehandel'],
-    [0, -110, 'over kvote efter kvotehandel'],
+    [120, 30, 'Over kvoten, dækket af købt kvote'],
+    [140, 30, 'Over kvoten, også efter køb'],
+    [40, -30, 'Under kvoten efter salg'],
+    [80, -30, 'Over kvoten efter salg'],
+    [130, 30, 'Over kvoten, dækket af købt kvote'],
+    [0, -100, 'Under kvoten efter salg'],
+    [1, -100, 'Over kvoten efter salg'],
+    [0, -110, 'Over kvoten efter salg'],
   ])('rates emissions %s after trading %s', async (load, kg, text) => {
     const data = figures([load])
 
@@ -490,7 +518,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
   it('keeps the scoped percentage relative to the original quota', async () => {
     await render([trade(1, 30)], undefined, { scoped: true, year: 0 })
 
-    expect(panel()).toContain('120 % af oprindelig kvote')
+    expect(panel()).toContain('Udledning (120 % af kvoten)')
   })
 
   it.each([50, 150])(
@@ -499,7 +527,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
       await render([trade(1, 30)], cap(limit), { scoped: true, year: 0 })
 
       expect(panel()).toContain(
-        '120 af 130 kg N efter kvotehandel, 10 kg N tilbage',
+        'Må udlede130 kg NUdledning (120 % af kvoten)120 kg NTilbage10 kg N',
       )
     },
   )
@@ -509,19 +537,20 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render([trade(1, 30)], undefined, { ...data, scoped: true, year: 0 })
 
-    expect(panel()).toContain('tæt på kvote efter kvotehandel')
+    expect(panel()).toContain('Over kvoten, dækket af købt kvote')
+    expect(panel()).toContain('Kvote100 kg NKøbt+30 kg NMå udlede130 kg N')
   })
 
   it.each([
     [30, false],
     [10, true],
-  ])('colours the whole-farm percentage after buying %s', async (kg, over) => {
+  ])('colours the whole-farm status after buying %s', async (kg, over) => {
     await render([trade(1, kg)], undefined, { year: 0 })
 
-    const percent = [...container.querySelectorAll('aside span')].find(
-      (span) => span.textContent === '120 % af oprindelig kvote',
+    const status = [...container.querySelectorAll('aside span')].find(
+      (span) => span.textContent === (over ? 'Over' : 'Dækket af køb'),
     )
-    expect(percent?.classList.contains('text-destructive')).toBe(over)
+    expect(status?.classList.contains('text-destructive')).toBe(over)
   })
 
   it('does not apply another catchment’s bought quota', async () => {
@@ -536,7 +565,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
   it('shows the adjusted amount in the whole-farm row', async () => {
     await render([trade(2, -30)], undefined, { year: 0 })
 
-    expect(panel()).toContain('40 af 70 kg N efter kvotehandel')
+    expect(panel()).toContain('Opland 240 af 70 kg N efter salg')
   })
 
   it.each([false, true])(
@@ -546,7 +575,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
       expect(
         container.querySelector('[role="radio"]')?.getAttribute('aria-label'),
-      ).toContain('alle oplande under kvoten efter kvotehandel')
+      ).toContain('1 af 2 oplande over kvoten, dækket af købt kvote')
     },
   )
 
@@ -572,7 +601,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     },
   )
 
-  it('labels the original percentage and adjusted status when collapsed', async () => {
+  it('labels the status after trading when collapsed', async () => {
     await render([trade(1, 30)], undefined, {
       scoped: true,
       collapsed: true,
@@ -580,7 +609,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
     })
 
     expect(container.textContent).toContain(
-      '120 % af oprindelig kvote tæt på kvote efter kvotehandel',
+      'Opland 1over kvoten, dækket af købt kvote',
     )
   })
 
@@ -589,7 +618,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render([trade(1, 30, 10)], undefined, { ...data, scoped: true })
 
-    expect(panel()).toContain('År over kvoten7 af 8')
+    expect(panel()).toContain('År over efter handel7 af 8')
   })
 
   it('uses the average limit in the period summary', async () => {
@@ -597,8 +626,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render([trade(1, 30, 10)], undefined, { ...data, scoped: true })
 
+    expect(panel()).toContain('Over kvoten i 7 af 8 år, også efter køb')
     expect(panel()).toContain(
-      '120 af 113 kg N efter kvotehandel, skal ned med 8 kg N',
+      'Må udlede113 kg NUdledning (120 % af kvoten)120 kg NOver8 kg N',
     )
   })
 
@@ -607,7 +637,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
     await render([trade(1, -30, 0)], undefined, { ...data, scoped: true })
 
-    expect(panel()).toContain('År over kvoten1 af 8')
+    expect(panel()).toContain('År over efter handel1 af 8')
   })
 
   it.each([null, 0])(
@@ -622,7 +652,7 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
       await render([trade(1, 30)], undefined, { ...data, scoped: true, year })
 
-      expect(panel()).toContain('delvist beregnet')
+      expect(panel()).toContain('Delvist beregnet')
     },
   )
 
@@ -638,7 +668,8 @@ describe('kvotehandel in the Årsgennemgang', () => {
 
       await render([trade(1, -30)], undefined, { ...data, scoped: true, year })
 
-      expect(panel()).toContain('over kvote efter kvotehandel')
+      expect(panel()).toContain('Over kvoten')
+      expect(panel()).not.toContain('Delvist beregnet')
     },
   )
 
@@ -686,19 +717,19 @@ describe('kvotehandel in the Årsgennemgang', () => {
       scoped: true,
       year: 0,
     })
-    expect(panel()).toContain('Pris20 kr/kg N')
-    expect(panel()).toContain('Indtægt600 kr')
+    expect(panel()).toContain('Solgt 30 kg N til 20 kr = 600 kr')
     await render([trade(1, 60, -30, prices)], cap(150), {
       scoped: true,
       year: 0,
     })
-    expect(panel()).toContain('Pris30 kr/kg N')
-    expect(panel()).toContain('Udgift1.800 kr')
+    expect(panel()).toContain('Købt 60 kg N til 30 kr = 1.800 kr')
     // The first year sells and the other seven buy.
     // (7 * 1.800 - 600) / 8 kr, at both prices.
     await render([trade(1, -30, 60, prices)], cap(150), { scoped: true })
-    expect(panel()).toContain('Priskøb 30, salg 20 kr/kg N')
-    expect(panel()).toContain('Udgift gns. pr. år1.500 kr')
+    expect(panel()).toContain('Købt gns.+53 kg NSolgt gns.−4 kg N')
+    expect(panel()).toContain(
+      'Køber 60 kg N i 7 år til 30 kr, sælger 30 kg N i 1 år til 20 kr. Udgift gns. 1.500 kr/år',
+    )
   })
 
   it('measures each year against the kvote and shows a different cap beside it', async () => {
@@ -725,9 +756,9 @@ describe('kvotehandel in the Årsgennemgang', () => {
   it('stays as before without kvotehandel', async () => {
     await render()
     expect(legend()).not.toContain('Købt kvote')
-    expect(legend()).not.toContain('Oprindelig kvote')
+    expect(legend()).not.toContain('Må udlede')
     expect(capLines()).toEqual([])
-    expect(bands('border-warning')).toBe(0)
+    expect(bands('bought')).toBe(0)
     expect(overParts()).toBe(1)
     // A single opland keeps its Marker and År over kvoten.
     await render(undefined, undefined, { scoped: true })

@@ -671,6 +671,7 @@ const SimulationMenuItem = ({
         quotaTrades.length > 0
           ? averageLimitAfterTradesFor(quotaTrades)
           : undefined,
+        new Set(quotaTrades.map((trade) => trade.catchmentId)),
       )
     : null
   const figures = quota

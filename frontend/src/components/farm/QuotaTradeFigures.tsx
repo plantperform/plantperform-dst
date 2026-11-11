@@ -1,54 +1,22 @@
 import type { SimulationQuotaTrade } from '@/api/types'
 import { KeyFigure } from '@/components/farm/OverviewCard'
 import type { FieldTotals } from '@/lib/field-domain'
-import {
-  describeQuotaPayment,
-  describeQuotaTrade,
-  quotaTradeContributionFigure,
-  quotaTradeVaries,
-} from '@/lib/quota-trade-result'
+import { quotaTradeContributionFigure } from '@/lib/quota-trade-result'
 
 type Props = {
   trades: SimulationQuotaTrade[]
   // Use the same economics area as the card's main figure.
   totals: FieldTotals
-  catchmentLabel: (catchmentId: number) => string
 }
 
-export const QuotaTradeFigures = ({
-  trades,
-  totals,
-  catchmentLabel,
-}: Props) => {
+export const QuotaTradeFigures = ({ trades, totals }: Props) => {
   if (trades.length === 0) return null
   return (
-    <div className="space-y-3 border-t pt-3">
+    <div className="border-t pt-3">
       <KeyFigure
         label="Kvotehandel pr. år"
         figure={quotaTradeContributionFigure(trades, totals.economicsAreaHa)}
       />
-      <ul className="space-y-1.5" aria-label="Kvotehandel">
-        {trades.map((trade) => {
-          const label = trade.catchmentName ?? catchmentLabel(trade.catchmentId)
-          return (
-            <li
-              key={trade.catchmentId}
-              className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px]"
-            >
-              <span className="max-w-[45%] truncate" title={label}>
-                {label}
-              </span>
-              <span className="text-muted-foreground tabular-nums">
-                {describeQuotaTrade(trade)} ·{' '}
-                {describeQuotaPayment(
-                  trade.paymentDkkPerYear,
-                  quotaTradeVaries(trade),
-                )}
-              </span>
-            </li>
-          )
-        })}
-      </ul>
     </div>
   )
 }

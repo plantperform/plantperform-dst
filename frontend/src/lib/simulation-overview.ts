@@ -134,10 +134,18 @@ const CATCHMENT_LEVEL_LABELS: Record<
 
 export const describeCatchmentYearStatus = (
   status: CatchmentYearStatus,
+  coveredYears: number[] = [],
 ): string =>
   status.level === 'over'
     ? `Over kvoten i ${describeYears(status.overYears)}`
-    : CATCHMENT_LEVEL_LABELS[status.level]
+    : coveredYears.length > 0 && status.level === 'ok'
+      ? `Over kvoten i ${describeYears(coveredYears)}, dækket af købt kvote`
+      : CATCHMENT_LEVEL_LABELS[status.level]
+
+export const tradedCatchmentYearStatus = (
+  status: CatchmentYearStatus,
+): CatchmentYearStatus =>
+  status.level === 'near' ? { ...status, level: 'ok' } : status
 
 export type DeltaTone = 'better' | 'worse' | 'same'
 

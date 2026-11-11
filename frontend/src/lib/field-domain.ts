@@ -782,6 +782,7 @@ export const resolveFarmQuota = (
   fields: FieldRecord[],
   isSimulationView: boolean,
   limitFor?: (catchmentId: number, quotaKgN: number) => number,
+  tradedCatchmentIds: ReadonlySet<number> = new Set(),
 ): FarmQuota => {
   const totals = computeFieldTotals(fields, isSimulationView)
   // The totals with each opland's kvote replaced by its limit, for the level.
@@ -792,6 +793,8 @@ export const resolveFarmQuota = (
           nLoadQuotaKgN: limitFor(catchmentId, catchmentTotals.nLoadQuotaKgN),
         }
       : catchmentTotals
+  const withinTrade = (level: QuotaStatusLevel, traded: boolean) =>
+    traded && level === 'near' ? 'ok' : level
   const catchments = groupFieldsByCatchment(fields, isSimulationView).flatMap(
     ({ catchmentId, totals: catchmentTotals }) =>
       catchmentId !== null &&
@@ -800,8 +803,9 @@ export const resolveFarmQuota = (
             {
               catchmentId,
               totals: catchmentTotals,
-              level: totalsQuotaStatusLevel(
-                limited(catchmentId, catchmentTotals),
+              level: withinTrade(
+                totalsQuotaStatusLevel(limited(catchmentId, catchmentTotals)),
+                tradedCatchmentIds.has(catchmentId),
               ),
             },
           ]
@@ -823,7 +827,12 @@ export const resolveFarmQuota = (
     totals,
     level: separate
       ? combineQuotaStatusLevels(levels)
-      : totalsQuotaStatusLevel({ ...totals, nLoadQuotaKgN: farmLimitKgN }),
+      : withinTrade(
+          totalsQuotaStatusLevel({ ...totals, nLoadQuotaKgN: farmLimitKgN }),
+          catchments.some(({ catchmentId }) =>
+            tradedCatchmentIds.has(catchmentId),
+          ),
+        ),
     quotaKgN: separate ? null : totals.nLoadQuotaKgN,
     catchments,
     overCount,

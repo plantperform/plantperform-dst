@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import type {
   CatchmentYearlyNLoadCaps,
   QuotaTradePrices,
@@ -151,6 +153,14 @@ export const QUOTA_TRADE_LABELS: Record<QuotaTradeKind, string> = {
   sold: 'Solgt kvote',
 }
 
+const hatch = (color: string) =>
+  `repeating-linear-gradient(135deg, hsl(var(${color}) / 0.6) 0 1.5px, hsl(var(${color}) / 0.14) 1.5px 4.5px)`
+
+export const QUOTA_TRADE_BAND_STYLES: Record<QuotaTradeKind, CSSProperties> = {
+  bought: { backgroundImage: hatch('--warning') },
+  sold: { backgroundImage: hatch('--success') },
+}
+
 export const quotaTradeKind = (tradeKg: number): QuotaTradeKind | null =>
   tradeKg > 0 ? 'bought' : tradeKg < 0 ? 'sold' : null
 
@@ -192,6 +202,30 @@ export const averageLimitAfterTradesFor = (trades: SimulationQuotaTrade[]) => {
       (sum, year) => sum + limitFor(catchmentId, year, quotaKgN),
       0,
     ) / ROTATION_CALENDAR_YEARS.length
+}
+
+export const limitAfterTradeIn = (
+  trade: SimulationQuotaTrade,
+  calendarYear: number | null,
+  quotaKgN: number,
+): number =>
+  calendarYear === null
+    ? averageLimitAfterTradesFor([trade])(trade.catchmentId, quotaKgN)
+    : limitAfterTradesFor([trade])(trade.catchmentId, calendarYear, quotaKgN)
+
+export const describeAfterTrade = (
+  trade: SimulationQuotaTrade,
+  calendarYear: number | null,
+): string => {
+  const kinds = new Set(
+    (calendarYear === null
+      ? tradeKgs(trade)
+      : [quotaTradeKgIn(trade, calendarYear)]
+    ).map(quotaTradeKind),
+  )
+  if (kinds.has('bought') && kinds.has('sold')) return 'efter kvotehandel'
+  if (kinds.has('bought')) return 'efter køb'
+  return kinds.has('sold') ? 'efter salg' : ''
 }
 
 // An opland's own limit in a calendar year: the cap saved under Grænser, or
@@ -271,15 +305,6 @@ export const quotaBarHeights = (
   }
 }
 
-// A trade as a share of the cap it moved, signed: "+51 %" bought, "−26 %"
-// sold. null when there is no cap to compare with.
-export const formatTradeShareOfCap = (limit: TradedLimit): string | null =>
-  limit.capKgN > 0
-    ? `${limit.tradeKg < 0 ? '−' : '+'}${formatWholeNumber(
-        (Math.abs(limit.tradeKg) / limit.capKgN) * 100,
-      )} %`
-    : null
-
 // A year's trade, or with average the average per year over the period:
 // "Købt 171 kg N", "Solgt gns. 50 kg N/år".
 export const describeTradeKg = (tradeKg: number, average: boolean) => {
@@ -298,10 +323,36 @@ export const describeQuotaTradeAmount = (tradeKg: number) => {
     : `${QUOTA_TRADE_LABELS[kind]} ${formatWholeNumber(Math.abs(tradeKg))} kg N`
 }
 
-// average: the payment differs between years, so this is its average.
-export const describeQuotaPayment = (payment: number, average = false) =>
-  payment === 0
-    ? '0 kr/år'
-    : `${payment > 0 ? 'Betaler' : 'Modtager'}${
-        average ? ' gns.' : ''
-      } ${formatWholeNumber(Math.abs(payment))} kr/år`
+const kgRange = (kgs: number[]): string => {
+  const low = Math.min(...kgs)
+  const high = Math.max(...kgs)
+  return low === high
+    ? formatWholeNumber(low)
+    : `${formatWholeNumber(low)}-${formatWholeNumber(high)}`
+}
+
+export const describeQuotaTradePeriod = (
+  trade: SimulationQuotaTrade,
+): string => {
+  const kgs = Object.values(trade.tradeKgByYear)
+  const bought = kgs.filter((kg) => kg > 0)
+  const sold = kgs.filter((kg) => kg < 0).map((kg) => -kg)
+  const parts = [
+    ...(bought.length > 0
+      ? [
+          `køber ${kgRange(bought)} kg N i ${bought.length} år til ${formatNumber(trade.buyPriceDkkPerKg)} kr`,
+        ]
+      : []),
+    ...(sold.length > 0
+      ? [
+          `sælger ${kgRange(sold)} kg N i ${sold.length} år til ${formatNumber(trade.sellPriceDkkPerKg)} kr`,
+        ]
+      : []),
+  ]
+  if (parts.length === 0) return 'Ingen handel i perioden'
+  const text = parts.join(', ')
+  const payment = trade.paymentDkkPerYear
+  return `${text[0].toUpperCase()}${text.slice(1)}. ${
+    payment > 0 ? 'Udgift' : 'Indtægt'
+  } gns. ${formatWholeNumber(Math.abs(payment))} kr/år`
+}

@@ -18,12 +18,12 @@ import {
 } from '@/lib/field-domain'
 import {
   db2IncludingQuotaTrades,
-  describeQuotaPayment,
+  describeAfterTrade,
   describeQuotaTrade,
   describeQuotaTradeAmount,
+  describeQuotaTradePeriod,
   describeTradeKg,
   describeTradePrices,
-  formatTradeShareOfCap,
   latestQuotaTrades,
   quotaBarHeights,
   quotaLimitLinePct,
@@ -33,6 +33,7 @@ import {
   quotaTradePayment,
   quotaTradeVaries,
   tradePriceDkkPerKg,
+  limitAfterTradeIn,
   limitAfterTradeKgN,
   limitAfterTradesFor,
   averageLimitAfterTradesFor,
@@ -104,9 +105,30 @@ describe('kvotehandel results', () => {
       'Ingen handel',
     )
     expect(quotaTradePayment([buy, sell])).toBe(2_425)
-    expect(describeQuotaPayment(4_200)).toBe('Betaler 4.200 kr/år')
-    expect(describeQuotaPayment(-1_775)).toBe('Modtager 1.775 kr/år')
-    expect(describeQuotaPayment(4_200, true)).toBe('Betaler gns. 4.200 kr/år')
+  })
+
+  it('describes the period’s trade in kg, years, price and payment', () => {
+    expect(describeQuotaTradePeriod(buy)).toBe(
+      'Køber 120 kg N i 8 år til 35 kr. Udgift gns. 4.200 kr/år',
+    )
+    expect(describeQuotaTradePeriod(sell)).toBe(
+      'Sælger 50 kg N i 8 år til 35,5 kr. Indtægt gns. 1.775 kr/år',
+    )
+    expect(
+      describeQuotaTradePeriod({
+        ...buy,
+        tradeKgByYear: byYear(-40, 90),
+        paymentDkkPerYear: 2_606.25,
+      }),
+    ).toBe(
+      'Køber 90 kg N i 7 år til 35 kr, sælger 40 kg N i 1 år til 30 kr. Udgift gns. 2.606 kr/år',
+    )
+    expect(
+      describeQuotaTradePeriod({ ...buy, tradeKgByYear: byYear(30, 60) }),
+    ).toContain('Køber 30-60 kg N i 8 år')
+    expect(
+      describeQuotaTradePeriod({ ...buy, tradeKgByYear: everyYear(0) }),
+    ).toBe('Ingen handel i perioden')
   })
 
   it('holds a trading opland to its kvote moved by the year’s trade', () => {
@@ -154,6 +176,57 @@ describe('kvotehandel results', () => {
     expect(
       describeSeparateQuotas(resolveFarmQuota(fields, true, limitFor(30))),
     ).toBe('alle 2 oplande under grænsen')
+  })
+
+  it('names the limit and the trade of a year or the period', () => {
+    const mixed = { ...buy, tradeKgByYear: byYear(-40, 120) }
+    expect(limitAfterTradeIn(mixed, ROTATION_CALENDAR_YEARS[0], 99.6)).toBe(60)
+    expect(limitAfterTradeIn(mixed, null, 99.6)).toBe(100 + (7 * 120 - 40) / 8)
+    expect(describeAfterTrade(mixed, ROTATION_CALENDAR_YEARS[0])).toBe(
+      'efter salg',
+    )
+    expect(describeAfterTrade(mixed, ROTATION_CALENDAR_YEARS[1])).toBe(
+      'efter køb',
+    )
+    expect(describeAfterTrade(mixed, null)).toBe('efter kvotehandel')
+    expect(
+      describeAfterTrade({ ...buy, tradeKgByYear: byYear(0, 30) }, null),
+    ).toBe('efter køb')
+    expect(
+      describeAfterTrade({ ...buy, tradeKgByYear: everyYear(0) }, null),
+    ).toBe('')
+  })
+
+  it('rates an opland that trades up to its limit as under it, not close to it', () => {
+    const fields = [
+      {
+        id: 'field-1',
+        catchmentId: 1,
+        rotationId: 'rotation',
+        quotaEligible: true,
+        nLoadQuotaKgN: 100,
+        nLoad: 129,
+        db2: 0,
+        leaching: 129,
+        feedUnits: 0,
+        areaHa: 1,
+      } as FieldRecord,
+    ]
+    const limitFor = averageLimitAfterTradesFor([
+      { ...buy, tradeKgByYear: everyYear(30) },
+    ])
+    expect(resolveFarmQuota(fields, true, limitFor).level).toBe('near')
+    expect(resolveFarmQuota(fields, true, limitFor, new Set([1])).level).toBe(
+      'ok',
+    )
+    expect(
+      resolveFarmQuota(
+        [{ ...fields[0], nLoad: 131, leaching: 131 }],
+        true,
+        limitFor,
+        new Set([1]),
+      ).level,
+    ).toBe('over')
   })
 
   it('splits the payment into what buying cost and selling earned', () => {
@@ -231,10 +304,7 @@ describe('kvotehandel results', () => {
     expect(yearLimitKgN(gap, 1, second, 99.6)).toBe(99.6)
   })
 
-  it('describes a trade against the cap it moved', () => {
-    expect(formatTradeShareOfCap({ capKgN: 150, tradeKg: 171 })).toBe('+114 %')
-    expect(formatTradeShareOfCap({ capKgN: 450, tradeKg: -119 })).toBe('−26 %')
-    expect(formatTradeShareOfCap({ capKgN: 0, tradeKg: 20 })).toBeNull()
+  it('describes the trade of a year or its average', () => {
     expect(describeTradeKg(171, false)).toBe('Købt 171 kg N')
     expect(describeTradeKg(-50, true)).toBe('Solgt gns. 50 kg N/år')
     expect(describeTradeKg(0, false)).toBe('Ingen handel i året')
@@ -337,57 +407,20 @@ describe('kvotehandel results', () => {
     const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
 
     const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [buy, sell],
-        totals,
-        catchmentLabel: (id) => `Kystvandopland ${id}`,
-      }),
+      createElement(QuotaTradeFigures, { trades: [buy, sell], totals }),
     )
 
     expect(html).toContain('Kvotehandel pr. år')
     expect(html).toContain('−2.425 kr i alt')
     expect(html).toContain('−243 kr/ha')
+    expect(html).not.toContain('Kolding Fjord, indre')
   })
 
-  it('keeps the per-catchment trade breakdown', () => {
+  it('omits the figure when no trades were saved', () => {
     const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
 
     const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [buy, sell],
-        totals,
-        catchmentLabel: (id) => `Kystvandopland ${id}`,
-      }),
-    )
-
-    expect(html).toContain('Kolding Fjord, indre')
-    expect(html).toContain('Kystvandopland 2')
-    expect(html).toContain('Modtager 1.775 kr/år')
-  })
-
-  it('labels a varying payment as its annual average', () => {
-    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
-
-    const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [{ ...buy, tradeKgByYear: byYear(-40, 120) }],
-        totals,
-        catchmentLabel: String,
-      }),
-    )
-
-    expect(html).toContain('Betaler gns. 4.200 kr/år')
-  })
-
-  it('omits the breakdown when no trades were saved', () => {
-    const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
-
-    const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [],
-        totals,
-        catchmentLabel: String,
-      }),
+      createElement(QuotaTradeFigures, { trades: [], totals }),
     )
 
     expect(html).toBe('')
@@ -397,11 +430,7 @@ describe('kvotehandel results', () => {
     const totals = { db2: 100_000, economicsAreaHa: 10 } as FieldTotals
 
     const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [sell],
-        totals,
-        catchmentLabel: String,
-      }),
+      createElement(QuotaTradeFigures, { trades: [sell], totals }),
     )
 
     expect(html).toContain('+178 kr/ha')
@@ -412,11 +441,7 @@ describe('kvotehandel results', () => {
     const totals = { db2: 0, economicsAreaHa: 0 } as FieldTotals
 
     const html = renderToStaticMarkup(
-      createElement(QuotaTradeFigures, {
-        trades: [sell],
-        totals,
-        catchmentLabel: String,
-      }),
+      createElement(QuotaTradeFigures, { trades: [sell], totals }),
     )
 
     expect(html).toContain('+1.775 kr i alt')
