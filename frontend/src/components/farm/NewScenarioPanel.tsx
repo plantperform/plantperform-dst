@@ -45,6 +45,7 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { CropChoicePicker } from '@/components/farm/CropChoicePicker'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
@@ -249,6 +250,8 @@ export const NewScenarioPanel = ({
   const [createError, setCreateError] = useState<string | null>(null)
   const [limitsTouched, setLimitsTouched] = useState(false)
   const [quotaTradeTouched, setQuotaTradeTouched] = useState(false)
+  const [settingsEdited, setSettingsEdited] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
   const creationRequest = useRef<CreationRequestIdentity | null>(null)
 
   const hasFields = effectiveFields.length > 0
@@ -302,6 +305,7 @@ export const NewScenarioPanel = ({
     setCreateError(null)
     setLimitsTouched(false)
     setQuotaTradeTouched(false)
+    setSettingsEdited(false)
   }
   // Once per opening, after fields load: a yearly cap that is the same in
   // every year follows the maks. udledning under Regler. Later edits in the
@@ -433,6 +437,7 @@ export const NewScenarioPanel = ({
     setFurthestStepIndex(0)
     setCreateError(null)
     setLimitsTouched(false)
+    setSettingsEdited(false)
     setYearlySyncedKey(null)
     setQuotaTradeTouched(false)
     setPrefilled({ key: 'blank', values: null })
@@ -625,12 +630,16 @@ export const NewScenarioPanel = ({
 
   const stepId = SIMULATION_FORM_STEPS[stepIndex].id
   const isLastStep = stepIndex === LAST_STEP_INDEX
+  const title = source ? 'Simuleringens indstillinger' : 'Ny simulering'
 
   return (
     <StepDialog
       open={open}
-      onOpenChange={onOpenChange}
-      title={source ? 'Simuleringens indstillinger' : 'Ny simulering'}
+      onOpenChange={(next) => {
+        if (!next && (isDirty || settingsEdited)) setConfirmingClose(true)
+        else onOpenChange(next)
+      }}
+      title={title}
       description={
         source
           ? `Ret indstillingerne for ${source.name} og kør optimeringen igen.`
@@ -805,6 +814,7 @@ export const NewScenarioPanel = ({
             onChange={(kind) => {
               setOptimizationSettings((current) => ({ ...current, kind }))
               setYearlySyncedKey(null)
+              setSettingsEdited(true)
             }}
           />
 
@@ -1309,8 +1319,14 @@ export const NewScenarioPanel = ({
               nNormPercentages={values.nNormPercentages}
               settings={optimizationSettings}
               constraints={constraints}
-              onSettingsChange={setOptimizationSettings}
-              onConstraintsChange={setConstraints}
+              onSettingsChange={(next) => {
+                setOptimizationSettings(next)
+                setSettingsEdited(true)
+              }}
+              onConstraintsChange={(next) => {
+                setConstraints(next)
+                setSettingsEdited(true)
+              }}
             />
           </div>
         ) : null}
@@ -1325,7 +1341,10 @@ export const NewScenarioPanel = ({
               fields={effectiveFields}
               settings={optimizationSettings}
               draft={quotaTradeDraft}
-              onDraftChange={setQuotaTradeDraft}
+              onDraftChange={(next) => {
+                setQuotaTradeDraft(next)
+                setSettingsEdited(true)
+              }}
             />
           </div>
         ) : null}
@@ -1343,6 +1362,17 @@ export const NewScenarioPanel = ({
           />
         ) : null}
       </fieldset>
+      <ConfirmDialog
+        name={confirmingClose ? title : null}
+        title={`Luk ${title} uden at gemme?`}
+        description="Det, du har valgt, gemmes ikke."
+        confirmLabel="Luk uden at gemme"
+        onOpenChange={setConfirmingClose}
+        onConfirm={() => {
+          startOver()
+          onOpenChange(false)
+        }}
+      />
     </StepDialog>
   )
 }
