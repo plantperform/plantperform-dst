@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { formatNumber } from '@/lib/field-domain'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import {
-  originalCapRange,
+  catchmentQuotaKgN,
   quotaTradeBlock,
   type QuotaTradeDraft,
 } from '@/lib/quota-trade-settings'
@@ -20,13 +20,6 @@ type Props = {
   draft: QuotaTradeDraft
   onDraftChange: (draft: QuotaTradeDraft) => void
 }
-
-const capLabel = (range: { min: number; max: number } | undefined) =>
-  range === undefined
-    ? 'Ingen grænse'
-    : range.min === range.max
-      ? `${formatNumber(range.min)} kg N hvert år`
-      : `${formatNumber(range.min)}–${formatNumber(range.max)} kg N pr. år`
 
 export function SimulationQuotaTradeOptions({
   farmId,
@@ -83,6 +76,10 @@ export function SimulationQuotaTradeOptions({
             til salgsprisen i de kystvandoplande, du vælger. Priserne gælder pr.
             kg N pr. år. Mellem de to priser beholder oplandet sin egen kvote.
           </span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Et opland med kvotehandel må udlede sin kvote plus det købte og
+            minus det solgte. Loftet under Grænser gælder ikke for det.
+          </span>
         </span>
       </label>
 
@@ -112,14 +109,12 @@ export function SimulationQuotaTradeOptions({
           </legend>
           {catchments.map((catchment) => {
             const { catchmentId } = catchment
-            const block = quotaTradeBlock(catchmentId, fields, settings)
+            const block = quotaTradeBlock(catchmentId, fields)
             const entry =
               catchmentId === null ? undefined : draft.catchments[catchmentId]
             const trading = block === null && Boolean(entry?.enabled)
-            const range =
-              catchmentId === null
-                ? undefined
-                : originalCapRange(catchmentId, fields, settings)
+            const quota =
+              catchmentId === null ? 0 : catchmentQuotaKgN(catchmentId, fields)
             return (
               <div
                 key={catchmentKey(catchmentId)}
@@ -149,7 +144,7 @@ export function SimulationQuotaTradeOptions({
                   <span>
                     <span className="font-medium">{catchment.label}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {block ?? `Loft under Grænser: ${capLabel(range)}`}
+                      {block ?? `Kvote ${formatNumber(quota)} kg N pr. år`}
                     </span>
                   </span>
                 </label>
