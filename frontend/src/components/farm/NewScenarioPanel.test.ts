@@ -105,6 +105,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     actions,
     steps,
     currentIndex,
+    onOpenChange,
     onStepSelect,
     secondaryAction,
     footerMessage,
@@ -115,6 +116,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     actions: ReactNode
     steps: StepDialogStep[]
     currentIndex: number
+    onOpenChange: (open: boolean) => void
     onStepSelect: (index: number) => void
     secondaryAction: ReactNode
     footerMessage: ReactNode
@@ -124,6 +126,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
       null,
       title,
       description,
+      createElement('button', { onClick: () => onOpenChange(false) }, 'Luk'),
       createElement(
         'nav',
         null,
@@ -313,7 +316,11 @@ describe('simulation wizard steps', () => {
     container.remove()
   })
 
-  const mount = async (simulation: Simulation | null = source, open = true) => {
+  const mount = async (
+    simulation: Simulation | null = source,
+    open = true,
+    onOpenChange = vi.fn(),
+  ) => {
     await act(async () =>
       root!.render(
         createElement(NewScenarioPanel, {
@@ -321,7 +328,7 @@ describe('simulation wizard steps', () => {
           source: simulation,
           fields: [field],
           open,
-          onOpenChange: vi.fn(),
+          onOpenChange,
           onSimulationCreated: vi.fn(),
           onError: vi.fn(),
         }),
@@ -1134,5 +1141,27 @@ describe('simulation wizard steps', () => {
         organicNCeiling: 107,
       })
     })
+  })
+
+  it('asks before closing with changes and starts over when the user leaves', async () => {
+    const onOpenChange = vi.fn()
+    await mount(null, true, onOpenChange)
+    await click('Luk')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    onOpenChange.mockClear()
+    await change('Simuleringens navn', 'Ny simulering')
+    await click('Luk')
+    expect(onOpenChange).not.toHaveBeenCalled()
+    const leave = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Luk uden at gemme',
+    )
+    expect(leave).toBeDefined()
+    await act(async () => leave!.click())
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    onOpenChange.mockClear()
+    await click('Luk')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })
