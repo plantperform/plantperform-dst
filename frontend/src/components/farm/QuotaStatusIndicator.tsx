@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { QUOTA_STATUS_STYLES, type QuotaStatusLevel } from '@/lib/field-domain'
 import {
   describeCatchmentYearStatus,
+  tradedCatchmentYearStatus,
   type CatchmentYearStatus,
 } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
@@ -32,21 +33,28 @@ export const QuotaStatusIndicator = ({
 
 type CatchmentYearStatusIndicatorProps = {
   status: CatchmentYearStatus
+  traded?: boolean
+  coveredYears?: number[]
   className?: string
 }
 
 export const CatchmentYearStatusIndicator = ({
   status,
+  traded = false,
+  coveredYears = [],
   className,
-}: CatchmentYearStatusIndicatorProps) => (
-  <QuotaStatusIndicator
-    level={status.level}
-    className={cn(
-      'gap-1.5 text-xs font-medium whitespace-normal',
-      QUOTA_STATUS_STYLES[status.level].text,
-      className,
-    )}
-  >
-    {describeCatchmentYearStatus(status)}
-  </QuotaStatusIndicator>
-)
+}: CatchmentYearStatusIndicatorProps) => {
+  const shown = traded ? tradedCatchmentYearStatus(status) : status
+  return (
+    <QuotaStatusIndicator
+      level={shown.level}
+      className={cn(
+        'gap-1.5 text-xs font-medium whitespace-normal',
+        QUOTA_STATUS_STYLES[shown.level].text,
+        className,
+      )}
+    >
+      {describeCatchmentYearStatus(shown, coveredYears)}
+    </QuotaStatusIndicator>
+  )
+}

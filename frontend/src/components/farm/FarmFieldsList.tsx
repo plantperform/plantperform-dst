@@ -103,6 +103,7 @@ import {
   withGroupRows,
 } from '@/lib/field-list-rows'
 import { nNormLevelByFieldId } from '@/lib/n-norm-level'
+import { describeAfterTrade, limitAfterTradeIn } from '@/lib/quota-trade-result'
 import { cn } from '@/lib/utils'
 
 type ColumnToggle = {
@@ -129,6 +130,8 @@ type CatchmentGroupRowProps = {
   catchmentId: number | null
   label: string
   totals: FieldTotals
+  trade: SimulationQuotaTrade | undefined
+  calendarYear: number | null
   colorClass: string
   colSpan: number
   selected: boolean
@@ -141,13 +144,31 @@ const CatchmentGroupRow = memo(
     catchmentId,
     label,
     totals,
+    trade,
+    calendarYear,
     colorClass,
     colSpan,
     selected,
     isDimmed,
     onToggle,
   }: CatchmentGroupRowProps) => {
-    const style = QUOTA_STATUS_STYLES[totalsQuotaStatusLevel(totals)]
+    const traded =
+      trade !== undefined &&
+      totals.nLoadQuotaKgN > 0 &&
+      totals.calculatedCount > 0
+    const shown = traded
+      ? {
+          ...totals,
+          nLoadQuotaKgN: limitAfterTradeIn(
+            trade,
+            calendarYear,
+            totals.nLoadQuotaKgN,
+          ),
+        }
+      : totals
+    const level = totalsQuotaStatusLevel(shown)
+    const style = QUOTA_STATUS_STYLES[traded && level === 'near' ? 'ok' : level]
+    const afterTrade = traded ? describeAfterTrade(trade, calendarYear) : ''
     return (
       <TableRow
         aria-label={`Kystvandopland ${label}`}
@@ -183,8 +204,11 @@ const CatchmentGroupRow = memo(
               {formatNumber(totals.areaHa)} ha ·
             </span>
             <span className={cn('font-semibold tabular-nums', style.text)}>
-              {formatCatchmentAmount(totals)}
+              {formatCatchmentAmount(shown)}
             </span>
+            {afterTrade ? (
+              <span className="text-muted-foreground">{afterTrade}</span>
+            ) : null}
           </button>
         </TableCell>
       </TableRow>
@@ -355,11 +379,6 @@ export const FarmFieldsList = ({
     [sortedFields, liveFields],
   )
 
-  const quota = useMemo(
-    () => resolveFarmQuota(sortedFields, isSimulationView),
-    [sortedFields, isSimulationView],
-  )
-
   const listTrades = useMemo(
     () =>
       isSimulationView
@@ -373,6 +392,23 @@ export const FarmFieldsList = ({
     selectedYearIndex === null
       ? null
       : firstCalendarYear(false) + selectedYearIndex
+
+  const quota = useMemo(() => {
+    const limitFor = (catchmentId: number, quotaKgN: number) => {
+      const trade = listTrades.find(
+        (candidate) => candidate.catchmentId === catchmentId,
+      )
+      return trade && quotaKgN > 0
+        ? limitAfterTradeIn(trade, calendarYear, quotaKgN)
+        : quotaKgN
+    }
+    return resolveFarmQuota(
+      sortedFields,
+      isSimulationView,
+      listTrades.length > 0 ? limitFor : undefined,
+      new Set(listTrades.map((trade) => trade.catchmentId)),
+    )
+  }, [sortedFields, isSimulationView, listTrades, calendarYear])
   const db2Loading =
     isSimulationView && selectedYearIndex !== null &&
     (yearValuesLoading || yearValues === undefined)
@@ -859,6 +895,10 @@ export const FarmFieldsList = ({
                       catchmentId={item.run.catchmentId}
                       label={catchmentLabel(item.run.catchmentId)}
                       totals={item.run.totals}
+                      trade={listTrades.find(
+                        (trade) => trade.catchmentId === item.run.catchmentId,
+                      )}
+                      calendarYear={calendarYear}
                       colorClass={catchmentColor(item.run.catchmentId)}
                       colSpan={visibleColumns.length}
                       selected={selected}
