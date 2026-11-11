@@ -1030,12 +1030,11 @@ describe('simulation wizard steps', () => {
   })
 
   describe('økologisk N-loft', () => {
-    const ceilingRadios = () =>
-      [
-        ...container.querySelectorAll<HTMLInputElement>(
-          'input[type="radio"][name="scenario-organic-n-ceiling"]',
-        ),
-      ]
+    const ceilingRadios = () => [
+      ...container.querySelectorAll<HTMLInputElement>(
+        'input[type="radio"][name="scenario-organic-n-ceiling"]',
+      ),
+    ]
     const organicSource: Simulation = {
       ...source,
       rotationVariants: ['30'],
@@ -1062,7 +1061,7 @@ describe('simulation wizard steps', () => {
           select.dispatchEvent(new Event('change', { bubbles: true }))
         })
       await chooseFarmingSystem('Økologisk')
-      expect(container.textContent).toContain('Økologisk arealstøtte og N-loft')
+      expect(container.textContent).toContain('Økologisk N-loft')
       expect(
         ceilingRadios().map(({ value, checked }) => [value, checked]),
       ).toEqual([
@@ -1091,7 +1090,7 @@ describe('simulation wizard steps', () => {
 
       await click('Bekræft')
       expect(container.textContent).toContain(
-        'Økologisk N-loft: 65 kg N/ha · Basisstøtte og N-tillæg',
+        'Økologisk N-loft: 65 kg N pr. ha harmoniareal · Basisstøtte og tillæg for reduceret N-tilførsel',
       )
       await click('Gem')
       expect(queries.update.mock.calls[0][2].fertiliser).toMatchObject({

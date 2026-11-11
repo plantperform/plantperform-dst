@@ -953,10 +953,12 @@ describe('organicNCeilingLabel', () => {
   it('names the N-loft and the støtte it gives for økologisk', () => {
     expect(
       organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 107 }),
-    ).toBe('107 kg N/ha · Basisstøtte')
+    ).toBe('107 kg N pr. ha harmoniareal · Basisstøtte')
     expect(
       organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 65 }),
-    ).toBe('65 kg N/ha · Basisstøtte og N-tillæg')
+    ).toBe(
+      '65 kg N pr. ha harmoniareal · Basisstøtte og tillæg for reduceret N-tilførsel',
+    )
   })
 
   it('has none for konventionel, which ignores the N-loft', () => {
