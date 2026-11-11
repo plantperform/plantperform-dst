@@ -253,7 +253,14 @@ export const SimulationSummary = ({
             const cap = settings.maxNLoadByCatchment.find(
               (entry) => entry.catchmentId === catchment.catchmentId,
             )
-            return settings.kind === 'yearly' ? (
+            return settings.kind === 'yearly' &&
+              settings.quotaTrades.some(
+                (trade) => trade.catchmentId === catchment.catchmentId,
+              ) ? (
+              <p key={catchmentKey(catchment.catchmentId)}>
+                {catchment.label} · Loft hvert år: gælder ikke ved kvotehandel
+              </p>
+            ) : settings.kind === 'yearly' ? (
               <p key={catchmentKey(catchment.catchmentId)}>
                 {catchment.label} · Loft hvert år:{' '}
                 {ROTATION_CALENDAR_YEARS.map(

@@ -30,14 +30,25 @@ import { describeTradePrices } from '@/lib/quota-trade-result'
 const limitAmount = (value: number | null) =>
   value === null ? null : formatNumber(value)
 
+const quotaNote = (
+  quota: number | undefined,
+  traded: boolean,
+): string | null => {
+  const kvote = quota === undefined ? null : `Kvote ${formatNumber(quota)}`
+  if (!traded) return kvote
+  return kvote
+    ? `${kvote}, gælder ikke ved kvotehandel`
+    : 'Gælder ikke ved kvotehandel'
+}
+
 type RulesQuotaTradesProps = {
   quotaTrades: QuotaTrade[]
   catchments: CatchmentOption[]
 }
 
-// The kvotehandel chosen for an Års-optimering, beside the caps it moves.
-// Shown, not edited here: kvotehandel is chosen in Års-optimering. Nothing
-// without one.
+// The kvotehandel chosen for an Års-optimering. It moves the opland's kvote,
+// so the cap above does not apply to it. Shown, not edited here: kvotehandel
+// is chosen in Års-optimering. Nothing without one.
 export const RulesQuotaTrades = ({
   quotaTrades,
   catchments,
@@ -64,6 +75,9 @@ export const RulesQuotaTrades = ({
           ))}
         </SummaryList>
         <RulesHint>
+          Et opland med kvotehandel må udlede sin kvote plus det købte og minus
+          det solgte, så loftet under Maks. udledning pr. opland gælder ikke for
+          det.{' '}
           {quotaTrades.every((trade) => trade.sameEachYear !== false)
             ? 'Samme mængde i alle år.'
             : 'Mængden kan være forskellig fra år til år.'}{' '}
@@ -163,11 +177,13 @@ export const RulesLimitsCard = ({
                     <FieldLabel
                       htmlFor={`${id}-n-load-${key}`}
                       label={catchment.label}
-                      hint={
-                        quota === undefined
-                          ? null
-                          : `Kvote ${formatNumber(quota)}`
-                      }
+                      hint={quotaNote(
+                        quota,
+                        quotaTrades.some(
+                          (trade) =>
+                            trade.catchmentId === catchment.catchmentId,
+                        ),
+                      )}
                     />
                     <UnitInput
                       id={`${id}-n-load-${key}`}
@@ -193,13 +209,17 @@ export const RulesLimitsCard = ({
               {maxNLoadByCatchment.map((cap, index) => {
                 const key = catchmentKey(cap.catchmentId)
                 const quota = quotaByKey.get(key)
+                const traded = quotaTrades.some(
+                  (trade) => trade.catchmentId === cap.catchmentId,
+                )
                 return (
                   <SummaryRow
                     key={key}
                     label={catchments[index].label}
                     note={
-                      quota !== undefined && cap.maxNLoadKg !== quota
-                        ? `Kvote ${formatNumber(quota)}`
+                      traded ||
+                      (quota !== undefined && cap.maxNLoadKg !== quota)
+                        ? quotaNote(quota, traded)
                         : null
                     }
                     value={

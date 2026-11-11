@@ -57,6 +57,9 @@ describe('the chosen kvotehandel under Grænser', () => {
       'Mængden kan være forskellig fra år til år.',
     )
     expect(container.textContent).toContain('Vælges i Års-optimering.')
+    expect(container.textContent).toContain(
+      'Et opland med kvotehandel må udlede sin kvote plus det købte og minus det solgte, så loftet under Maks. udledning pr. opland gælder ikke for det.',
+    )
   })
 
   it('says when the amount is the same in every year', async () => {
