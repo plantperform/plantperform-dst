@@ -1,5 +1,4 @@
 import math
-from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -84,7 +83,8 @@ class QuotaTradeSetting(CamelModel):
     """Kvotehandel at fixed prices for one kystvandopland in Års-optimering.
 
     The run chooses in whole kg N for each year how much kvote to buy or sell,
-    which moves the opland's cap in that year. Bought kvote costs
+    which moves the opland's kvote in that year; the cap under Grænser does not
+    apply to an opland that trades. Bought kvote costs
     buy_price_kr_per_kg and sold kvote earns sell_price_kr_per_kg, per kg and
     year. With same_each_year the trade is one amount for every year.
     """
@@ -115,18 +115,10 @@ class YearlyOptimizeSimulationRequest(OptimizeSimulationRequest):
     quota_trades: list[QuotaTradeSetting] = Field(default_factory=list)
 
 
-def untradable_quota_reason(
-    caps: Collection[float | None] | None, has_kvotegivende_marker: bool
-) -> str | None:
-    """Why an opland cannot trade kvote, or None when it can.
-
-    An opland without saved yearly caps uses its marker's kvote in every year.
-    A saved year left out has "Ingen grænse".
-    """
+def untradable_quota_reason(has_kvotegivende_marker: bool) -> str | None:
+    """Why an opland cannot trade kvote, or None when it can."""
     if not has_kvotegivende_marker:
         return "Ingen kvotegivende marker"
-    if caps is not None and (len(caps) < NUM_YEARS or None in caps):
-        return "Kræver en grænse i alle år"
     return None
 
 
@@ -152,16 +144,6 @@ class OptimizationSettings(CamelModel):
         ids = [trade.kystvand_id for trade in self.quota_trades]
         if len(ids) != len(set(ids)):
             raise ValueError("Et kystvandopland kan kun have én kvotehandel")
-        caps = {
-            cap.kystvand_id: cap.max_n_load_by_year.values()
-            for cap in self.max_n_load_by_kystvandopland
-        }
-        for kystvand_id in ids:
-            # Marker are only known at run time; the run checks them.
-            if untradable_quota_reason(caps.get(kystvand_id), True) is not None:
-                raise ValueError(
-                    "Kvotehandel kræver en udledningsgrænse i alle år i kystvandoplandet"
-                )
         return self
 
 

@@ -13,7 +13,7 @@ from plantperform_fargate.yearly_engine import solve_yearly
 # "high" earns 1,000 kr more per year than "low" and lets out 100 kg N more.
 HIGH = ("high", 2_000.0, 150.0)
 LOW = ("low", 1_000.0, 50.0)
-# "mid" uses a 100 kg N cap exactly, so it needs no trade.
+# "mid" uses a 100 kg N kvote exactly, so it needs no trade.
 MID = ("mid", 1_600.0, 100.0)
 
 
@@ -29,15 +29,19 @@ def _trade(
     )
 
 
-def _option(key: str, db2: float, n_load: float) -> YearlyRotationOption:
+def _by_year(value: float | tuple[float, ...]) -> tuple[float, ...]:
+    return value if isinstance(value, tuple) else (value,) * NUM_YEARS
+
+
+def _option(key: str, db2: float, n_load: float | tuple[float, ...]) -> YearlyRotationOption:
     return YearlyRotationOption(
         key=key,
         id=key,
         candidate=None,
         years=(),
         db2_by_year=(db2,) * NUM_YEARS,
-        n_load_by_year=(n_load,) * NUM_YEARS,
-        leaching_by_year=(n_load,) * NUM_YEARS,
+        n_load_by_year=_by_year(n_load),
+        leaching_by_year=_by_year(n_load),
         fen=0.0,
         fen_by_year=(0.0,) * NUM_YEARS,
     )
@@ -71,6 +75,7 @@ def _solve(
     caps: dict[int, tuple[float | None, ...]],
     trades: tuple[QuotaTradeSetting, ...] = (),
     fixed: tuple[FixedYearlyFieldContribution, ...] = (),
+    kvotes: dict[int, float] | None = None,
 ):
     return solve_yearly(
         YearlyOptimizationInput(
@@ -82,6 +87,7 @@ def _solve(
                 min_fen=None,
                 max_fen=None,
                 quota_trades=trades,
+                kvote_by_kystvandopland={1: 100.0, 2: 100.0} if kvotes is None else kvotes,
             ),
             time_limit_seconds=5,
         )
@@ -115,21 +121,28 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         self.assertEqual(_chosen(output), {"a": "low"})
         self.assertEqual(output.quota_trades, {1: (-50,) * NUM_YEARS})
 
-    def test_one_trade_moves_caps_that_differ_by_year(self) -> None:
-        # The 60 kg year decides: high needs 90 kg more in every year.
-        caps = (100.0, 60.0) + (100.0,) * (NUM_YEARS - 2)
-        output = _solve((_field("a", 1),), {1: caps}, (_trade(1, 8),))
-        self.assertEqual(_chosen(output), {"a": "high"})
-        self.assertEqual(output.quota_trades, {1: (90,) * NUM_YEARS})
+    def test_a_trade_moves_the_kvote_whatever_the_cap_under_graenser(self) -> None:
+        for caps in (
+            (100.0, 60.0) + (100.0,) * (NUM_YEARS - 2),
+            (300.0,) * NUM_YEARS,
+            (None,) * NUM_YEARS,
+        ):
+            with self.subTest(caps=caps):
+                output = _solve((_field("a", 1),), {1: caps}, (_trade(1, 8),))
+                self.assertEqual(_chosen(output), {"a": "high"})
+                self.assertEqual(output.quota_trades, {1: (50,) * NUM_YEARS})
 
-    def test_selling_stops_at_the_smallest_cap(self) -> None:
-        # Nothing is let out, so all of the 40 kg year can be sold, but no more.
-        field = YearlyFieldInput(
-            id="a", area_ha=10, kystvand_id=1, options=(_option("none", 0.0, 0.0),)
-        )
+    def test_an_opland_without_caps_can_trade(self) -> None:
+        output = _solve((_field("a", 1),), {}, (_trade(1, 8),))
+        self.assertEqual(_chosen(output), {"a": "high"})
+        self.assertEqual(output.quota_trades, {1: (50,) * NUM_YEARS})
+
+    def test_selling_stops_at_the_kvote(self) -> None:
+        # Nothing is let out, so the whole kvote can be sold, but no more.
+        field = _field("a", 1, options=(("none", 0.0, 0.0),))
         caps = (100.0, 40.0) + (100.0,) * (NUM_YEARS - 2)
         output = _solve((field,), {1: caps}, (_trade(1, 5),))
-        self.assertEqual(output.quota_trades, {1: (-40,) * NUM_YEARS})
+        self.assertEqual(output.quota_trades, {1: (-100,) * NUM_YEARS})
 
     def test_each_opland_trades_at_its_own_price(self) -> None:
         output = _solve(
@@ -161,20 +174,17 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         self.assertEqual(output.quota_trades, {1: (50,) * NUM_YEARS})
 
     def test_a_trade_by_year_buys_only_what_each_year_needs(self) -> None:
-        # high needs 90 kg more in the 60 kg year and 50 kg in the others.
-        caps = (100.0, 60.0) + (100.0,) * (NUM_YEARS - 2)
-        output = _solve((_field("a", 1),), {1: caps}, (_trade(1, 8, same_each_year=False),))
+        # high needs 90 kg more in the 190 kg year and 50 kg in the others.
+        high = ("high", 2_000.0, (150.0, 190.0) + (150.0,) * (NUM_YEARS - 2))
+        field = _field("a", 1, options=(high, LOW))
+        output = _solve((field,), {1: CAP_100}, (_trade(1, 8, same_each_year=False),))
         self.assertEqual(_chosen(output), {"a": "high"})
         # 8 kr for 7 * 50 + 90 kg over 8 years: 440 kr per year, not 720.
         self.assertEqual(output.quota_trades, {1: (50, 90) + (50,) * (NUM_YEARS - 2)})
 
     def test_a_trade_by_year_sells_what_each_year_does_not_use(self) -> None:
-        # Nothing is let out, so each year's whole cap is sold.
-        field = YearlyFieldInput(
-            id="a", area_ha=10, kystvand_id=1, options=(_option("none", 0.0, 0.0),)
-        )
-        caps = (100.0, 40.0) + (100.0,) * (NUM_YEARS - 2)
-        output = _solve((field,), {1: caps}, (_trade(1, 5, same_each_year=False),))
+        field = _field("a", 1, options=(("some", 0.0, (0.0, 60.0) + (0.0,) * (NUM_YEARS - 2)),))
+        output = _solve((field,), {1: CAP_100}, (_trade(1, 5, same_each_year=False),))
         self.assertEqual(
             output.quota_trades,
             {1: (-100, -40) + (-100,) * (NUM_YEARS - 2)},
@@ -206,10 +216,11 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         self.assertEqual(output.quota_trades, {1: (0,) * NUM_YEARS})
 
     def test_a_trade_by_year_pays_each_years_own_price(self) -> None:
-        # high needs 50 kg more in the 100 kg years and leaves 50 kg in the
-        # 200 kg year: 7 * 50 * 8 kr bought, 50 * 5 kr sold, over 8 years.
-        caps = (100.0, 200.0) + (100.0,) * (NUM_YEARS - 2)
-        output = _solve((_field("a", 1),), {1: caps}, (_trade(1, 8, 5, same_each_year=False),))
+        # high needs 50 kg more in the 150 kg years and leaves 50 kg in the
+        # 50 kg year: 7 * 50 * 8 kr bought, 50 * 5 kr sold, over 8 years.
+        high = ("high", 2_000.0, (150.0, 50.0) + (150.0,) * (NUM_YEARS - 2))
+        field = _field("a", 1, options=(high, LOW))
+        output = _solve((field,), {1: CAP_100}, (_trade(1, 8, 5, same_each_year=False),))
         self.assertEqual(_chosen(output), {"a": "high"})
         self.assertEqual(
             output.quota_trades,
@@ -217,29 +228,25 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         )
 
     def test_fractional_shortfall_is_rounded_up_to_whole_kg(self) -> None:
-        field = _field("a", 1, options=(("only", 2_000.0, 150.3),))
-        caps = (100.2, 60.1) + (100.2,) * (NUM_YEARS - 2)
+        field = _field("a", 1, options=(("only", 2_000.0, (150.3, 160.4) + (150.3,) * 6),))
         trade = _trade(1, 8, same_each_year=False)
 
-        output = _solve((field,), {1: caps}, (trade,))
+        output = _solve((field,), {1: CAP_100}, (trade,), kvotes={1: 100.2})
 
-        self.assertEqual(output.quota_trades, {1: (51, 91) + (51,) * (NUM_YEARS - 2)})
+        self.assertEqual(output.quota_trades, {1: (51, 61) + (51,) * (NUM_YEARS - 2)})
 
     def test_constant_trade_covers_the_largest_fractional_shortfall(self) -> None:
-        field = _field("a", 1, options=(("only", 2_000.0, 150.3),))
-        caps = (100.2, 60.1) + (100.2,) * (NUM_YEARS - 2)
-        trade = _trade(1, 8)
+        field = _field("a", 1, options=(("only", 2_000.0, (150.3, 160.4) + (150.3,) * 6),))
 
-        output = _solve((field,), {1: caps}, (trade,))
+        output = _solve((field,), {1: CAP_100}, (_trade(1, 8),), kvotes={1: 100.2})
 
-        self.assertEqual(output.quota_trades, {1: (91,) * NUM_YEARS})
+        self.assertEqual(output.quota_trades, {1: (61,) * NUM_YEARS})
 
     def test_fractional_surplus_is_rounded_down_to_whole_kg(self) -> None:
         field = _field("a", 1, options=(("only", 1_000.0, 50.7),))
-        caps = (100.8,) * NUM_YEARS
         trade = _trade(1, 8, same_each_year=False)
 
-        output = _solve((field,), {1: caps}, (trade,))
+        output = _solve((field,), {1: CAP_100}, (trade,), kvotes={1: 100.8})
 
         self.assertEqual(output.quota_trades, {1: (-50,) * NUM_YEARS})
 
@@ -251,14 +258,13 @@ class YearlyQuotaTradeTests(unittest.TestCase):
 
         self.assertEqual(output.quota_trades, {1: (50,) * NUM_YEARS})
 
-    def test_rounding_does_not_allow_selling_more_than_the_original_cap(self) -> None:
+    def test_rounding_does_not_allow_selling_more_than_the_kvote(self) -> None:
         field = _field("a", 1, options=(("none", 0.0, 0.0),))
-        caps = (0.9996,) * NUM_YEARS
         for same_each_year in (True, False):
             with self.subTest(same_each_year=same_each_year):
                 trade = _trade(1, 8, same_each_year=same_each_year)
 
-                output = _solve((field,), {1: caps}, (trade,))
+                output = _solve((field,), {1: CAP_100}, (trade,), kvotes={1: 0.9996})
 
                 self.assertEqual(output.quota_trades, {1: (0,) * NUM_YEARS})
 
@@ -266,13 +272,6 @@ class YearlyQuotaTradeTests(unittest.TestCase):
         # Buying and selling the same kg would then pay without end.
         with self.assertRaises(ValueError):
             _solve((_field("a", 1),), {1: CAP_100}, (_trade(1, 5, 8),))
-
-    def test_an_opland_without_a_cap_in_every_year_cannot_trade(self) -> None:
-        caps = (None,) + (100.0,) * (NUM_YEARS - 1)
-        with self.assertRaises(ValueError):
-            _solve((_field("a", 1),), {1: caps}, (_trade(1, 8),))
-        with self.assertRaises(ValueError):
-            _solve((_field("a", 1),), {}, (_trade(1, 8),))
 
     def test_an_opland_without_kvotegivende_marker_cannot_trade(self) -> None:
         with self.assertRaises(ValueError):

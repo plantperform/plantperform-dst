@@ -246,21 +246,17 @@ def _kystvand_name(names: dict[int | None, str], kystvand_id: int | None) -> str
 
 def _validate_quota_trades(
     fields: list[FieldRecord],
-    requested_caps: dict[int | None, tuple[float | None, ...]],
     quota_trades: tuple[QuotaTradeSetting, ...],
     names: dict[int | None, str],
 ) -> None:
-    """Check each kvotehandel against this run's marker and caps.
+    """Check each kvotehandel against this run's marker.
 
     Saved settings are checked without marker, so a trade for an opland whose
     kvotegivende marker are gone is only caught here.
     """
     kvotegivende = {field.kystvand_id for field in fields if field.kvotegivende}
     for trade in quota_trades:
-        reason = untradable_quota_reason(
-            requested_caps.get(trade.kystvand_id),
-            trade.kystvand_id in kvotegivende,
-        )
+        reason = untradable_quota_reason(trade.kystvand_id in kvotegivende)
         if reason is not None:
             raise ValueError(
                 f"Kvotehandel er ikke mulig i {_kystvand_name(names, trade.kystvand_id)}: "
@@ -731,7 +727,7 @@ def run_yearly_optimization(
         )
 
     names = _kystvand_names(farm_id, email) if quota_trades else {}
-    _validate_quota_trades(fields, max_n_load_by_kystvandopland, quota_trades, names)
+    _validate_quota_trades(fields, quota_trades, names)
     max_n_load_by_year = _max_n_load_by_kystvandopland_and_year(
         fields,
         max_n_load_by_kystvandopland,
@@ -747,6 +743,7 @@ def run_yearly_optimization(
                 max_fen=simulation.constraints.max_fen,
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
                 quota_trades=quota_trades,
+                kvote_by_kystvandopland=_kvote_by_kystvandopland(fields),
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
         )

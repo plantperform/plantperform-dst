@@ -566,17 +566,13 @@ def _fit_settings(data, before, after):
         return {**cap, "max_n_load_by_year": years}
 
     yearly_caps = [yearly(cap) for cap in settings.get("max_n_load_by_kystvandopland", [])]
-    caps_by_id = {cap["kystvand_id"]: cap["max_n_load_by_year"].values() for cap in yearly_caps}
     kvotegivende = {field.kystvand_id for field in after if field.kvotegivende}
     # Kvotehandel is only set when creating a simulation, so a trade the new
     # marker cannot carry is dropped rather than left to fail every run.
     quota_trades = [
         trade
         for trade in settings.get("quota_trades", [])
-        if untradable_quota_reason(
-            caps_by_id.get(trade["kystvand_id"]), trade["kystvand_id"] in kvotegivende
-        )
-        is None
+        if untradable_quota_reason(trade["kystvand_id"] in kvotegivende) is None
     ]
     fitted_settings = {**settings, "max_n_load_by_kystvandopland": yearly_caps}
     if "quota_trades" in settings:
