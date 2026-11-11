@@ -4,7 +4,6 @@ import type {
   QuotaTrade,
   QuotaTradePrices,
 } from '@/api/types'
-import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 
 // What the Kvotehandel step edits. A catchment keeps its prices while it is
 // switched off or cannot trade, so going back and forth loses nothing; only
@@ -50,12 +49,10 @@ export const quotaTradeDraftFrom = (
         ),
       }
 
-// Mirrors the backend's untradable_quota_reason. A catchment without a saved
-// yearly cap uses its kvote in every year, so it can trade.
+// Mirrors the backend's untradable_quota_reason.
 export const quotaTradeBlock = (
   catchmentId: number | null,
   fields: FieldRecord[],
-  settings: OptimizationSettings,
 ): string | null => {
   if (catchmentId === null) return 'Marker uden kystvandopland kan ikke handle'
   if (
@@ -64,35 +61,20 @@ export const quotaTradeBlock = (
     )
   )
     return 'Ingen kvotegivende marker'
-  const cap = settings.maxNLoadByCatchment.find(
-    (entry) => entry.catchmentId === catchmentId,
-  )
-  if (cap && ROTATION_CALENDAR_YEARS.some((year) => !(year in cap.maxNLoadByYear)))
-    return 'Kræver en grænse i alle år'
   return null
 }
 
-// The caps a trade moves, as set under Grænser: one value when every year has
-// the same, else the range. undefined when no year has a cap.
-export const originalCapRange = (
+export const catchmentQuotaKgN = (
   catchmentId: number,
   fields: FieldRecord[],
-  settings: OptimizationSettings,
-): { min: number; max: number } | undefined => {
-  const cap = settings.maxNLoadByCatchment.find(
-    (entry) => entry.catchmentId === catchmentId,
+): number =>
+  Math.round(
+    fields
+      .filter(
+        (field) => field.catchmentId === catchmentId && field.quotaEligible,
+      )
+      .reduce((sum, field) => sum + field.nLoadQuotaKgN, 0),
   )
-  const quota = fields
-    .filter((field) => field.catchmentId === catchmentId && field.quotaEligible)
-    .reduce((sum, field) => sum + field.nLoadQuotaKgN, 0)
-  const values = cap
-    ? Object.values(cap.maxNLoadByYear)
-    : quota > 0
-      ? [Math.round(quota)]
-      : []
-  if (values.length === 0) return undefined
-  return { min: Math.min(...values), max: Math.max(...values) }
-}
 
 const parsePrice = (price: string) =>
   price.trim() === '' ? NaN : Number(price.replace(',', '.'))
@@ -122,7 +104,7 @@ const tradingCatchments = (
         .filter(
           (entry) =>
             entry.enabled &&
-            quotaTradeBlock(entry.catchmentId, fields, settings) === null,
+            quotaTradeBlock(entry.catchmentId, fields) === null,
         )
     : []
 
@@ -159,9 +141,7 @@ export const quotaTradeError = (
     return 'Priserne skal være tal på mindst 0 kr/kg N.'
   // Mirrors the backend: selling above the buy price would pay for buying
   // and selling the same kvote.
-  if (
-    prices.some((price) => price.sellPriceDkkPerKg > price.buyPriceDkkPerKg)
-  )
+  if (prices.some((price) => price.sellPriceDkkPerKg > price.buyPriceDkkPerKg))
     return 'Salgsprisen må ikke være højere end købsprisen.'
   return null
 }

@@ -4,8 +4,8 @@ import type { FieldRecord, OptimizationSettings } from '@/api/types'
 import { fromWire, toWire } from '@/api/wire'
 import { ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
 import {
+  catchmentQuotaKgN,
   NO_QUOTA_TRADE_DRAFT,
-  originalCapRange,
   quotaTradeBlock,
   quotaTradeDraftFrom,
   quotaTradeError,
@@ -31,31 +31,15 @@ const fields = [field(1), field(2), field(3, false), field(null)]
 
 describe('kvotehandel settings', () => {
   it('names why a catchment cannot trade', () => {
-    expect(quotaTradeBlock(1, fields, yearly)).toBeNull()
-    // No saved yearly cap: the catchment's kvote holds in every year.
-    expect(quotaTradeBlock(2, fields, yearly)).toBeNull()
-    expect(quotaTradeBlock(3, fields, yearly)).toBe(
-      'Ingen kvotegivende marker',
-    )
-    expect(quotaTradeBlock(null, fields, yearly)).toContain(
-      'uden kystvandopland',
-    )
-    const withoutFirstYear = everyYear(100)
-    delete withoutFirstYear[2027]
-    expect(
-      quotaTradeBlock(1, fields, {
-        ...yearly,
-        maxNLoadByCatchment: [
-          { catchmentId: 1, maxNLoadByYear: withoutFirstYear },
-        ],
-      }),
-    ).toBe('Kræver en grænse i alle år')
+    expect(quotaTradeBlock(1, fields)).toBeNull()
+    expect(quotaTradeBlock(2, fields)).toBeNull()
+    expect(quotaTradeBlock(3, fields)).toBe('Ingen kvotegivende marker')
+    expect(quotaTradeBlock(null, fields)).toContain('uden kystvandopland')
   })
 
-  it('shows the caps a trade moves', () => {
-    expect(originalCapRange(1, fields, yearly)).toEqual({ min: 80, max: 100 })
-    expect(originalCapRange(2, fields, yearly)).toEqual({ min: 50, max: 50 })
-    expect(originalCapRange(3, fields, yearly)).toBeUndefined()
+  it('shows the kvote a trade moves, whatever the caps under Grænser', () => {
+    expect(catchmentQuotaKgN(1, fields)).toBe(50)
+    expect(catchmentQuotaKgN(3, fields)).toBe(0)
   })
 
   it('saves the switched-on catchments that can trade, in the yearly optimization only', () => {

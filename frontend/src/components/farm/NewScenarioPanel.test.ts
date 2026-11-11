@@ -820,7 +820,10 @@ describe('simulation wizard steps', () => {
   describe('kvotehandel', () => {
     const yearly = {
       ...source,
-      optimizationSettings: { ...DEFAULT_OPTIMIZATION_SETTINGS, kind: 'yearly' },
+      optimizationSettings: {
+        ...DEFAULT_OPTIMIZATION_SETTINGS,
+        kind: 'yearly',
+      },
     } satisfies Simulation
     const average = {
       ...source,
@@ -853,9 +856,7 @@ describe('simulation wizard steps', () => {
       await click('Kvotehandel')
       expect(container.textContent).not.toContain('Kystvandopland 1')
       await tick('Brug kvotehandel')
-      expect(container.textContent).toContain(
-        'Loft under Grænser: 100 kg N hvert år',
-      )
+      expect(container.textContent).toContain('Kvote 100 kg N pr. år')
       await click('Næste')
       expect(currentStep()).toBe('Kvotehandel')
       expect(container.textContent).toContain(
@@ -944,7 +945,7 @@ describe('simulation wizard steps', () => {
       ])
     })
 
-    it('stops trading a catchment once a year has no limit, keeping its prices', async () => {
+    it('keeps trading a catchment when a year has no limit under Grænser', async () => {
       await mount({
         ...yearly,
         optimizationSettings: {
@@ -957,12 +958,6 @@ describe('simulation wizard steps', () => {
       await click('Grænser')
       await tick('Forskellig grænse pr. år')
       await change('2027', '')
-      await click('Kvotehandel')
-      expect(container.textContent).toContain('Kræver en grænse i alle år')
-      await click('Bekræft')
-      expect(currentStep()).toBe('Kvotehandel')
-      await click('Grænser')
-      await change('2027', '100')
       await click('Bekræft')
       expect(container.textContent).toContain(
         'Kystvandopland 1 · 40 kr/kg N pr. år',
