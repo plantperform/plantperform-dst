@@ -12,6 +12,7 @@ import {
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
 import {
+  coveredYearCount,
   curveCeilingPct,
   curveLeftPct,
   curveSegments,
@@ -23,6 +24,7 @@ import {
   type CatchmentYearQuota,
   type CurveTone,
 } from '@/lib/simulation-comparison'
+import { QUOTA_TRADE_BAND_STYLES } from '@/lib/quota-trade-result'
 import type { CatchmentYearStatus } from '@/lib/simulation-overview'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +35,7 @@ export type CurveRow = {
   years: CatchmentYearQuota[] | null
   averagePct: number | null
   status: CatchmentYearStatus | null
+  afterTrade?: string
 }
 
 const YEAR_COUNT = ROTATION_CALENDAR_YEARS.length
@@ -79,7 +82,11 @@ const dotClass = (level: CatchmentYearQuota['level'], hovered: boolean) => {
 const labelClass = (level: CatchmentYearQuota['level']) =>
   marked(level) ? QUOTA_STATUS_STYLES[level].text : 'text-foreground'
 
-const describeCount = (status: CatchmentYearStatus | null) => {
+const describeCount = (
+  status: CatchmentYearStatus | null,
+  afterTrade: string | undefined,
+  coveredCount: number,
+) => {
   if (status === null) return { text: '', className: '' }
   if (status.level === 'over') {
     return {
@@ -88,7 +95,7 @@ const describeCount = (status: CatchmentYearStatus | null) => {
     }
   }
   return {
-    text: describeCatchmentYearsOver(status),
+    text: describeCatchmentYearsOver(status, afterTrade, coveredCount),
     className:
       status.level === 'ok' || status.level === 'near'
         ? 'text-success-strong'
@@ -123,6 +130,32 @@ const QuotaLine = ({ ceilingPct }: { ceilingPct: number }) => (
     style={{ top: `${curveTopPct(100, ceilingPct)}%` }}
   />
 )
+
+const TradeBands = ({
+  years,
+  ceilingPct,
+}: {
+  years: CatchmentYearQuota[]
+  ceilingPct: number
+}) =>
+  years.map(({ year, limitPct }, index) => {
+    if (limitPct === undefined || Math.round(limitPct) === 100) return null
+    const top = curveTopPct(Math.max(limitPct, 100), ceilingPct)
+    const bottom = curveTopPct(Math.min(limitPct, 100), ceilingPct)
+    return (
+      <div
+        key={year}
+        data-trade-band={limitPct > 100 ? 'bought' : 'sold'}
+        className="absolute w-3.5 -translate-x-1/2"
+        style={{
+          ...QUOTA_TRADE_BAND_STYLES[limitPct > 100 ? 'bought' : 'sold'],
+          left: `${curveLeftPct(index, YEAR_COUNT)}%`,
+          top: `${top}%`,
+          height: `${bottom - top}%`,
+        }}
+      />
+    )
+  })
 
 const YearZones = ({ onHover }: { onHover: (index: number) => void }) => (
   <div className="absolute inset-0 flex">
@@ -190,7 +223,11 @@ const CurveRowView = ({
   highlightedKey,
   onHighlight,
 }: CurveRowViewProps) => {
-  const count = describeCount(row.status)
+  const count = describeCount(
+    row.status,
+    row.afterTrade,
+    coveredYearCount(row.years ?? []),
+  )
   const highlighted = row.key === highlightedKey
   const background = columnCellClass(row, highlightedKey)
   return (
@@ -215,13 +252,14 @@ const CurveRowView = ({
         <QuotaLine ceilingPct={ceilingPct} />
         {row.years === null ? null : (
           <>
+            <TradeBands years={row.years} ceilingPct={ceilingPct} />
             <CurveLine
               years={row.years}
               ceilingPct={ceilingPct}
               className={highlighted ? 'stroke-[#1C1C1A]' : 'stroke-[#8F8F89]'}
               strokeWidth={highlighted ? 2 : 1.5}
             />
-            {row.years.map(({ year, quotaPct, level }, index) => {
+            {row.years.map(({ year, quotaPct, level, limitPct }, index) => {
               if (quotaPct === null) return null
               const isHovered = index === hovered
               const point = pointStyle(index, quotaPct, ceilingPct)
@@ -234,7 +272,9 @@ const CurveRowView = ({
                     )}
                     style={{ ...point, transform: 'translate(-50%, -50%)' }}
                   />
-                  {marked(level) || isHovered ? (
+                  {marked(level) ||
+                  isHovered ||
+                  (limitPct !== undefined && quotaPct > 100) ? (
                     <div
                       className={cn(
                         'absolute rounded-[3px] px-[3px] py-px text-[11px] leading-none font-semibold whitespace-nowrap tabular-nums',
@@ -266,7 +306,7 @@ const CurveRowView = ({
       </div>
       <div
         className={cn(
-          'flex w-40 shrink-0 items-center justify-end text-right text-[13px] font-semibold',
+          'flex w-40 shrink-0 items-center justify-end text-right text-[13px] font-semibold whitespace-normal',
           count.className,
         )}
       >
@@ -417,7 +457,14 @@ export const CatchmentYearCurves = ({
   onToggleOverlay,
 }: CatchmentYearCurvesProps) => {
   const ceilingPct = curveCeilingPct(
-    rows.flatMap((row) => row.years?.map((year) => year.quotaPct) ?? []),
+    rows.flatMap(
+      (row) =>
+        row.years?.flatMap((year) => [year.quotaPct, year.limitPct ?? null]) ??
+        [],
+    ),
+  )
+  const traded = rows.some((row) =>
+    row.years?.some((year) => year.limitPct !== undefined),
   )
   return (
     <div
@@ -431,6 +478,12 @@ export const CatchmentYearCurves = ({
           <br />
           Stiplet linje er kvoten (100 %)
           <br />
+          {traded && !overlay ? (
+            <>
+              Skraveret er købt og solgt kvote
+              <br />
+            </>
+          ) : null}
           <button
             type="button"
             onClick={onToggleOverlay}

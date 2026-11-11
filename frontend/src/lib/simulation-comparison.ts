@@ -27,6 +27,7 @@ import {
 import {
   describeYears,
   summarizeCatchmentYearStatuses,
+  tradedCatchmentYearStatus,
   type CatchmentYearStatus,
   type YearLimitFor,
 } from '@/lib/simulation-overview'
@@ -193,6 +194,7 @@ export type CatchmentYearQuota = {
   year: number
   quotaPct: number | null
   level: QuotaStatusLevel
+  limitPct?: number
 }
 
 export type CatchmentAverage = {
@@ -215,6 +217,7 @@ export const summarizeCatchmentComparison = (
   totalsByYear: CatchmentTotalsByYear,
   partialQuotaKgN?: number,
   limitFor?: YearLimitFor,
+  traded = false,
 ): CatchmentComparison | null => {
   const byYear: Record<number, CatchmentYearTotals> =
     totalsByYear.get(catchmentId) ?? {}
@@ -225,7 +228,7 @@ export const summarizeCatchmentComparison = (
   )
   if (quotaYears.length === 0 && partialQuotaKgN === undefined) return null
   const single: CatchmentTotalsByYear = new Map([[catchmentId, byYear]])
-  const [status] = summarizeCatchmentYearStatuses(
+  const [yearStatus] = summarizeCatchmentYearStatuses(
     single,
     true,
     partialQuotaKgN === undefined
@@ -233,6 +236,7 @@ export const summarizeCatchmentComparison = (
       : new Map([[catchmentId, partialQuotaKgN]]),
     limitFor,
   )
+  const status = traded ? tradedCatchmentYearStatus(yearStatus) : yearStatus
   // No kvote, no limit: a trade does not make one.
   const yearLimitKgN = (year: number): number =>
     limitFor && yearQuotaKgN(year) > 0
@@ -255,10 +259,15 @@ export const summarizeCatchmentComparison = (
           },
     years: ROTATION_CALENDAR_YEARS.map((year) => {
       const yearNLoadKg = byYear[year]?.nLoadKg ?? 0
+      const level = quotaStatusLevel(yearNLoadKg, yearLimitKgN(year), true)
+      const limitPct = traded
+        ? quotaPercent(yearLimitKgN(year), yearQuotaKgN(year))
+        : null
       return {
         year,
         quotaPct: quotaPercent(yearNLoadKg, yearQuotaKgN(year)),
-        level: quotaStatusLevel(yearNLoadKg, yearLimitKgN(year), true),
+        level: traded && level === 'near' ? 'ok' : level,
+        ...(limitPct === null ? {} : { limitPct }),
       }
     }),
   }
@@ -390,10 +399,16 @@ export const sortComparison = <T extends SortCandidate>(
 export const formatYears = (count: number): string => `${count} år`
 
 export type ComparisonVerdictInput = {
-  best: { title: string; yearsOver: number | null }
+  best: {
+    title: string
+    yearsOver: number | null
+    quotaTrades?: readonly { tradeKgByYear: Record<number, number> }[]
+  }
   compliantCount: number
   simulationCount: number
 }
+
+const COUNTING_BOUGHT = 'uden år over kvoten, når købt kvote tælles med'
 
 export const describeComparisonVerdict = ({
   best,
@@ -406,25 +421,50 @@ export const describeComparisonVerdict = ({
       ? `${best.title} holder ikke kvoten i alle år: ${formatYears(best.yearsOver)} over kvoten.`
       : `Ingen simulering holder kvoten i alle år. ${best.title} kommer tættest på med ${formatYears(best.yearsOver)} over kvoten.`
   }
+  const bought = (best.quotaTrades ?? []).some((trade) =>
+    Object.values(trade.tradeKgByYear).some((kg) => kg > 0),
+  )
   if (simulationCount === 1) {
-    return `${best.title} holder kvoten i alle år og alle oplande.`
+    return bought
+      ? `${best.title} er ${COUNTING_BOUGHT}.`
+      : `${best.title} holder kvoten i alle år og alle oplande.`
   }
   const reason =
     compliantCount === 1
-      ? 'eneste simulering under kvoten i alle år og alle oplande'
-      : 'højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande'
+      ? bought
+        ? `eneste simulering ${COUNTING_BOUGHT}`
+        : 'eneste simulering under kvoten i alle år og alle oplande'
+      : bought
+        ? `højeste dækningsbidrag af dem ${COUNTING_BOUGHT}`
+        : 'højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande'
   return `${best.title} giver den bedste balance: ${reason}.`
 }
 
+export const coveredYearCount = (years: CatchmentYearQuota[]): number =>
+  years.filter(
+    ({ quotaPct, level, limitPct }) =>
+      limitPct !== undefined &&
+      quotaPct !== null &&
+      quotaPct > 100 &&
+      level !== 'over',
+  ).length
+
 export const describeCatchmentYearsOver = (
   status: CatchmentYearStatus,
+  afterTrade = '',
+  coveredCount = 0,
 ): string => {
   if (status.level === 'over') {
     return `over kvoten i ${describeYears(status.overYears)}`
   }
   if (status.level === 'partial') return 'delvist beregnet'
   if (status.level === 'noData') return 'ingen kvote'
-  return 'under kvoten alle år'
+  if (coveredCount > 0) {
+    return `${formatYears(coveredCount)} dækket af købt kvote`
+  }
+  return afterTrade
+    ? `under kvoten alle år ${afterTrade}`
+    : 'under kvoten alle år'
 }
 
 export const shareOfMax = (value: number, max: number): number =>

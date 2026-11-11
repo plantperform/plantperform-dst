@@ -26,6 +26,7 @@ import {
 } from '@/lib/field-domain'
 import {
   bestColumnIndex,
+  coveredYearCount,
   describeCatchmentYearsOver,
   formatFeedUnits,
   formatKgN,
@@ -35,7 +36,10 @@ import {
   type FeedUnitRequirementPlacement,
 } from '@/lib/simulation-comparison'
 import type { CatchmentYearStatus } from '@/lib/simulation-overview'
-import { limitAfterTradesFor } from '@/lib/quota-trade-result'
+import {
+  describeAfterTrade,
+  limitAfterTradesFor,
+} from '@/lib/quota-trade-result'
 import { cn } from '@/lib/utils'
 
 const statusClass = (status: CatchmentYearStatus) =>
@@ -75,7 +79,15 @@ const CatchmentRow = ({
   onToggleOverlay,
 }: CatchmentRowProps) => {
   const detailId = useId()
-  const comparisons = columns.map((column) =>
+  const trades = columns.map((column) =>
+    column.quotaTrades.find(
+      (trade) => trade.catchmentId === catchment.catchmentId,
+    ),
+  )
+  const afterTrades = trades.map((trade) =>
+    trade ? describeAfterTrade(trade, null) : '',
+  )
+  const comparisons = columns.map((column, index) =>
     column.catchments === undefined
       ? undefined
       : summarizeCatchmentComparison(
@@ -85,6 +97,7 @@ const CatchmentRow = ({
           column.quotaTrades.length > 0
             ? limitAfterTradesFor(column.quotaTrades)
             : undefined,
+          trades[index] !== undefined,
         ),
   )
   return (
@@ -154,7 +167,11 @@ const CatchmentRow = ({
                       statusClass(comparison.status),
                     )}
                   >
-                    {describeCatchmentYearsOver(comparison.status)}
+                    {describeCatchmentYearsOver(
+                      comparison.status,
+                      afterTrades[index],
+                      coveredYearCount(comparison.years),
+                    )}
                   </span>
                 </>
               )}
@@ -181,6 +198,7 @@ const CatchmentRow = ({
                 years: comparisons[index]?.years ?? null,
                 averagePct: comparisons[index]?.average?.quotaPct ?? null,
                 status: comparisons[index]?.status ?? null,
+                afterTrade: afterTrades[index],
               }))}
             />
           </TableCell>
