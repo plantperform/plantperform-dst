@@ -16,6 +16,7 @@ import {
   curveSegments,
   curveTopPct,
   defaultComparisonIds,
+  coveredYearCount,
   describeCatchmentYearsOver,
   describeComparisonAvailability,
   describeComparisonVerdict,
@@ -321,6 +322,39 @@ describe('summarizeCatchmentComparison', () => {
         ?.years.slice(0, 4)
         .map(({ level }) => level),
     ).toEqual(['ok', 'near', 'near', 'over'])
+    const traded = summarizeCatchmentComparison(
+      7,
+      totals,
+      undefined,
+      undefined,
+      true,
+    )
+    expect(traded?.years.slice(0, 4).map(({ level }) => level)).toEqual([
+      'ok',
+      'ok',
+      'ok',
+      'over',
+    ])
+  })
+
+  it('rates an opland that trades as within its limit when close to it', () => {
+    const totals: CatchmentTotalsByYear = new Map([
+      [7, years({ 2027: [95, 100], 2028: [90, 100] })],
+    ])
+    expect(summarizeCatchmentComparison(7, totals)?.status.level).toBe('near')
+    expect(
+      summarizeCatchmentComparison(7, totals, undefined, undefined, true)
+        ?.status.level,
+    ).toBe('ok')
+    const limitFor = () => 130
+    expect(
+      summarizeCatchmentComparison(7, totals, undefined, limitFor, true)
+        ?.years[0],
+    ).toEqual({ year: 2027, quotaPct: 95, level: 'ok', limitPct: 130 })
+    expect(
+      summarizeCatchmentComparison(7, totals, undefined, limitFor)?.years[0]
+        .limitPct,
+    ).toBeUndefined()
   })
 
   it('has nothing to compare when the catchment has no quota', () => {
@@ -601,6 +635,39 @@ describe('describeComparisonVerdict', () => {
     )
   })
 
+  it('counts bought kvote in when the best one bought kvote', () => {
+    const bought = {
+      ...test3,
+      quotaTrades: [{ tradeKgByYear: { 2027: -10, 2028: 30 } }],
+    }
+    expect(
+      describeComparisonVerdict({
+        best: bought,
+        compliantCount: 1,
+        simulationCount: 3,
+      }),
+    ).toBe(
+      'Test3 giver den bedste balance: eneste simulering uden år over kvoten, når købt kvote tælles med.',
+    )
+    expect(
+      describeComparisonVerdict({
+        best: bought,
+        compliantCount: 1,
+        simulationCount: 1,
+      }),
+    ).toBe('Test3 er uden år over kvoten, når købt kvote tælles med.')
+
+    expect(
+      describeComparisonVerdict({
+        best: { ...test3, quotaTrades: [{ tradeKgByYear: { 2027: -10 } }] },
+        compliantCount: 2,
+        simulationCount: 3,
+      }),
+    ).toBe(
+      'Test3 giver den bedste balance: højeste dækningsbidrag af dem, der er under kvoten i alle år og alle oplande.',
+    )
+  })
+
   it('names the one closest to the quota when none keeps it', () => {
     expect(
       describeComparisonVerdict({
@@ -657,6 +724,33 @@ describe('describeCatchmentYearsOver', () => {
         overYears: [],
       }),
     ).toBe('under kvoten alle år')
+    expect(
+      describeCatchmentYearsOver(
+        { catchmentId: 7, level: 'ok', overYears: [] },
+        'efter kvotehandel',
+      ),
+    ).toBe('under kvoten alle år efter kvotehandel')
+    expect(
+      describeCatchmentYearsOver(
+        { catchmentId: 7, level: 'ok', overYears: [] },
+        'efter køb',
+        4,
+      ),
+    ).toBe('4 år dækket af købt kvote')
+    expect(
+      coveredYearCount([
+        { year: 2027, quotaPct: 120, level: 'ok', limitPct: 130 },
+        { year: 2028, quotaPct: 90, level: 'ok', limitPct: 80 },
+        { year: 2029, quotaPct: 140, level: 'over', limitPct: 130 },
+        { year: 2030, quotaPct: 120, level: 'over' },
+      ]),
+    ).toBe(1)
+    expect(
+      describeCatchmentYearsOver(
+        { catchmentId: 7, level: 'over', overYears: [2030] },
+        'efter køb',
+      ),
+    ).toBe('over kvoten i 2030')
     expect(
       describeCatchmentYearsOver({
         catchmentId: 7,
