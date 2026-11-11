@@ -22,7 +22,7 @@ NAMES = {1: "Limfjorden"}
 TRADE = QuotaTradeSetting(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=30)
 
 
-def _field(kystvand_id, kvotegivende=True):
+def _field(kystvand_id, kvotegivende=True, kvote=100):
     return FieldRecord(
         id=str(kystvand_id),
         farm_id="farm",
@@ -33,30 +33,30 @@ def _field(kystvand_id, kvotegivende=True):
         leaching=150,
         kystvand_id=kystvand_id,
         kvotegivende=kvotegivende,
-        udledningskvote_mark_kgn=100,
+        udledningskvote_mark_kgn=kvote,
     )
 
 
-def _snapshot(catchments=(1,)):
+def _snapshot(catchments=(1,), kvotes=None, leaching_by_year=(150,) * NUM_YEARS):
     candidate = RotationCandidateEvaluation(
         ref=RotationCandidateRef(saedskiftevariant="1", variant="1", n_norm_pct="100"),
         active_len=1,
         years=[
             RotationCandidateYearResult(
                 year=RotationYear(afgrode_kode=1, afgrode_navn="Test"),
-                leaching_kg_n_ha=150,
+                leaching_kg_n_ha=leaching,
                 leaching_detail={},
                 db_kr_ha=2_000,
                 db_detail={},
             )
-            for _ in range(NUM_YEARS)
+            for leaching in leaching_by_year
         ],
-        avg_leaching_kg_n_ha=150,
+        avg_leaching_kg_n_ha=sum(leaching_by_year) / NUM_YEARS,
         avg_db_kr_ha=2_000,
         avg_fen=0,
     )
     fields = [
-        _field(catchment).model_copy(
+        _field(catchment, kvote=(kvotes or {}).get(catchment, 100)).model_copy(
             update={
                 "rotation_id": candidate.ref.to_id(),
                 "allowed_rotation_ids": [candidate.ref.to_id()],
@@ -85,13 +85,7 @@ class QuotaTradeInputTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "Kvotehandel er ikke mulig i Limfjorden: ingen kvotegivende marker"
         ):
-            _validate_quota_trades(fields, {}, (TRADE,), NAMES)
-
-    def test_an_opland_with_a_year_without_a_cap_is_named(self):
-        caps = (None,) + (100.0,) * (NUM_YEARS - 1)
-
-        with self.assertRaisesRegex(ValueError, "kræver en grænse i alle år"):
-            _validate_quota_trades([_field(1)], {1: caps}, (TRADE,), NAMES)
+            _validate_quota_trades(fields, (TRADE,), NAMES)
 
 
 class QuotaTradeRunTests(unittest.TestCase):
@@ -133,17 +127,26 @@ class QuotaTradeRunTests(unittest.TestCase):
         self.assertEqual(result.quota_trades[0].model_dump(mode="json", by_alias=True), expected)
 
     def test_selling_earns_the_sell_price(self):
-        caps = {1: (200.0,) * NUM_YEARS}
-
-        result = self.run_optimization(caps=caps)
+        result = self.run_optimization(snapshot=_snapshot(kvotes={1: 200}))
 
         self.assertEqual(result.quota_trades[0].payment_kr_per_year, -1_500)
 
+    def test_a_trade_ignores_the_cap_under_graenser(self):
+        for caps in (
+            {1: (100.0,) * NUM_YEARS},
+            {1: (300.0,) * NUM_YEARS},
+            {1: (None,) * NUM_YEARS},
+        ):
+            with self.subTest(caps=caps):
+                result = self.run_optimization(caps=caps)
+
+                self.assertEqual(result.quota_trades[0].payment_kr_per_year, 1_750)
+
     def test_yearly_trades_average_buy_and_sell_payments(self):
         trade = TRADE.model_copy(update={"same_each_year": False})
-        caps = {1: (100.0, 200.0) + (100.0,) * (NUM_YEARS - 2)}
+        snapshot = _snapshot(leaching_by_year=(150, 50) + (150,) * (NUM_YEARS - 2))
 
-        result = self.run_optimization(trades=(trade,), caps=caps)
+        result = self.run_optimization(trades=(trade,), snapshot=snapshot)
 
         self.assertEqual(result.quota_trades[0].payment_kr_per_year, (7 * 1_750 - 1_500) / 8)
 
@@ -159,10 +162,9 @@ class QuotaTradeRunTests(unittest.TestCase):
             TRADE,
             QuotaTradeSetting(kystvand_id=2, buy_price_kr_per_kg=8, sell_price_kr_per_kg=5),
         )
-        snapshot = _snapshot(catchments=(2, 1))
-        caps = {1: (100.0,) * NUM_YEARS, 2: (200.0,) * NUM_YEARS}
+        snapshot = _snapshot(catchments=(2, 1), kvotes={2: 200})
 
-        result = self.run_optimization(trades=trades, caps=caps, snapshot=snapshot)
+        result = self.run_optimization(trades=trades, snapshot=snapshot)
 
         self.assertEqual(
             {trade.kystvand_id: trade.payment_kr_per_year for trade in result.quota_trades},

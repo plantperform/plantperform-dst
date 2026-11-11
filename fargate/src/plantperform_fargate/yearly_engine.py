@@ -43,18 +43,17 @@ def _highest_kvotegivende_n_load_by_year(
 
 
 def _trade_bounds_by_year(
-    input: YearlyOptimizationInput, kystvand_id: int, caps: tuple[float, ...]
+    input: YearlyOptimizationInput, kystvand_id: int, kvote: float
 ) -> list[tuple[int, int]]:
     """Whole-kg bounds on one opland's trade in each year.
 
-    Selling stops where the year's cap reaches 0. Buying stops where the cap
+    Selling stops where the kvote reaches 0. Buying stops where the kvote
     covers the opland's highest possible udledning that year, as more can only
     cost; one extra kg absorbs the rounding of the scaled terms.
     """
     highest = _highest_kvotegivende_n_load_by_year(input, kystvand_id)
     return [
-        (-math.floor(caps[y]), max(0, math.ceil(highest[y] - caps[y])) + 1)
-        for y in range(NUM_YEARS)
+        (-math.floor(kvote), max(0, math.ceil(highest[y] - kvote)) + 1) for y in range(NUM_YEARS)
     ]
 
 
@@ -169,53 +168,49 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
                 model.Add(total_area <= _scale(limit.max_area_ha))
 
     caps_by_kystvand = constraints.max_n_load_by_kystvandopland_and_year
+    kvote_by_kystvand = constraints.kvote_by_kystvandopland
     trades = {trade.kystvand_id: trade for trade in constraints.quota_trades}
     for trade in trades.values():
-        caps = caps_by_kystvand.get(trade.kystvand_id)
-        if caps is None or any(cap is None for cap in caps):
-            raise ValueError(
-                f"Kvotehandel needs a cap in every year for kystvandopland {trade.kystvand_id}"
-            )
-        if trade.kystvand_id not in kvotegivende_n_load_by_kystvand_year:
+        if (
+            trade.kystvand_id not in kvotegivende_n_load_by_kystvand_year
+            or trade.kystvand_id not in kvote_by_kystvand
+        ):
             raise ValueError(
                 f"Kvotehandel needs kvotegivende marker in kystvandopland {trade.kystvand_id}"
             )
 
+    for kystvand_id, caps in caps_by_kystvand.items():
+        year_totals = kvotegivende_n_load_by_kystvand_year.get(kystvand_id)
+        if year_totals is None or kystvand_id in trades:
+            continue
+        for y in range(NUM_YEARS):
+            if caps[y] is not None:
+                model.Add(year_totals[y] <= _scale(caps[y]))
+
     # A bought and a sold amount per year; a trade that is the same each year
     # shares one pair. Buying and selling the same kg never improves DB2.
     quota_payments = []
-    for kystvand_id, caps in caps_by_kystvand.items():
-        year_totals = kvotegivende_n_load_by_kystvand_year.get(kystvand_id)
-        if year_totals is None:
-            continue
-        trade = trades.get(kystvand_id)
-        if trade is not None:
-            bounds = _trade_bounds_by_year(input, kystvand_id, caps)
-            if trade.same_each_year:
-                bounds = [(max(lower for lower, _ in bounds), max(upper for _, upper in bounds))]
-            trade_vars = [
-                (
-                    model.NewIntVar(0, upper, f"quota_bought_{kystvand_id}_{y}"),
-                    model.NewIntVar(0, -lower, f"quota_sold_{kystvand_id}_{y}"),
-                )
-                for y, (lower, upper) in enumerate(bounds)
-            ]
-            if trade.same_each_year:
-                trade_vars *= NUM_YEARS
-            quota_payments.extend(
-                _scale(trade.buy_price_kr_per_kg) * bought
-                - _scale(trade.sell_price_kr_per_kg) * sold
-                for bought, sold in trade_vars
+    for kystvand_id, trade in trades.items():
+        year_totals = kvotegivende_n_load_by_kystvand_year[kystvand_id]
+        kvote = kvote_by_kystvand[kystvand_id]
+        bounds = _trade_bounds_by_year(input, kystvand_id, kvote)
+        if trade.same_each_year:
+            bounds = [(max(lower for lower, _ in bounds), max(upper for _, upper in bounds))]
+        trade_vars = [
+            (
+                model.NewIntVar(0, upper, f"quota_bought_{kystvand_id}_{y}"),
+                model.NewIntVar(0, -lower, f"quota_sold_{kystvand_id}_{y}"),
             )
-        for y in range(NUM_YEARS):
-            cap = caps[y]
-            if cap is None:
-                continue
-            if trade is None:
-                model.Add(year_totals[y] <= _scale(cap))
-            else:
-                bought, sold = trade_vars[y]
-                model.Add(year_totals[y] <= _scale(cap) + SCALE * (bought - sold))
+            for y, (lower, upper) in enumerate(bounds)
+        ]
+        if trade.same_each_year:
+            trade_vars *= NUM_YEARS
+        quota_payments.extend(
+            _scale(trade.buy_price_kr_per_kg) * bought - _scale(trade.sell_price_kr_per_kg) * sold
+            for bought, sold in trade_vars
+        )
+        for y, (bought, sold) in enumerate(trade_vars):
+            model.Add(year_totals[y] <= _scale(kvote) + SCALE * (bought - sold))
 
     if constraints.db2_swing_pct is not None:
         pct = constraints.db2_swing_pct
@@ -303,7 +298,7 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
 
     quota_trades = {}
     for kystvand_id, trade in trades.items():
-        caps = caps_by_kystvand[kystvand_id]
+        kvote = kvote_by_kystvand[kystvand_id]
         year_totals = kvotegivende_n_load_by_kystvand_year[kystvand_id]
         # Within the gap limit the solver may keep a few kg of trade the plan
         # does not use, or buy and sell the same kg at equal prices. The
@@ -311,8 +306,8 @@ def solve_yearly(input: YearlyOptimizationInput) -> YearlyOptimizationOutput:
         # more, so report that one: bought when it is positive, sold when not.
         needed = tuple(
             max(
-                -math.floor(caps[y]),
-                -((_scale(caps[y]) - solver.Value(year_totals[y])) // SCALE),
+                -math.floor(kvote),
+                -((_scale(kvote) - solver.Value(year_totals[y])) // SCALE),
             )
             for y in range(NUM_YEARS)
         )

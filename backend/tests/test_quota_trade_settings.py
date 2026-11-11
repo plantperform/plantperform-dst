@@ -79,17 +79,11 @@ class QuotaTradeSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "Salgsprisen"):
             settings(trades=[trade(buy=30, sell=35)])
 
-    def test_an_opland_with_a_cap_in_every_year_can_trade(self):
-        caps = [{"kystvand_id": 1, "max_n_load_by_year": ALL_YEARS}]
-        settings(caps, [trade()])
-
-    def test_an_opland_with_a_year_without_a_cap_cannot_trade(self):
+    def test_an_opland_can_trade_whatever_its_caps_under_graenser(self):
         years = dict(list(ALL_YEARS.items())[1:])
-        with self.assertRaisesRegex(ValidationError, "alle år"):
-            settings(
-                [{"kystvand_id": 1, "max_n_load_by_year": years}],
-                [trade()],
-            )
+        for caps in (ALL_YEARS, years):
+            with self.subTest(caps=caps):
+                settings([{"kystvand_id": 1, "max_n_load_by_year": caps}], [trade()])
 
     def test_an_opland_trades_once(self):
         with self.assertRaisesRegex(ValidationError, "én kvotehandel"):
@@ -113,11 +107,8 @@ class QuotaTradeSettingsTests(unittest.TestCase):
         self.assertEqual(request.quota_trades, saved.quota_trades)
 
     def test_an_opland_without_kvotegivende_marker_cannot_trade(self):
-        caps = ALL_YEARS.values()
-
-        self.assertEqual(untradable_quota_reason(caps, False), "Ingen kvotegivende marker")
-        self.assertIsNone(untradable_quota_reason(caps, True))
-        self.assertIsNone(untradable_quota_reason(None, True))
+        self.assertEqual(untradable_quota_reason(False), "Ingen kvotegivende marker")
+        self.assertIsNone(untradable_quota_reason(True))
 
 
 if __name__ == "__main__":

@@ -155,6 +155,7 @@ class YearlyConstraintsInput:
     max_fen: float | None
     crop_area_limits: tuple[CropAreaLimit, ...] = ()
     quota_trades: tuple[QuotaTradeSetting, ...] = ()
+    kvote_by_kystvandopland: dict[int, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
