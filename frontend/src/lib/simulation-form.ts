@@ -176,9 +176,9 @@ export const organicFertiliserNLabel = (
     ? `${formatNumber(fertiliser.orgMineralN)} kg N/ha`
     : 'Hele N-normen'
 
-const ORGANIC_N_CEILING_SUPPORT: Record<OrganicNCeiling, string> = {
+export const ORGANIC_N_CEILING_SUPPORT: Record<OrganicNCeiling, string> = {
   107: 'Basisstøtte',
-  65: 'Basisstøtte og N-tillæg',
+  65: 'Basisstøtte og tillæg for reduceret N-tilførsel',
 }
 
 // The ceiling a simulation holds the farm's average utilised N per ha
@@ -187,7 +187,7 @@ export const organicNCeilingLabel = (
   fertiliser: Pick<FertiliserSettings, 'farmingSystem' | 'organicNCeiling'>,
 ): string | null =>
   fertiliser.farmingSystem === 'Økologisk'
-    ? `${fertiliser.organicNCeiling} kg N/ha · ${ORGANIC_N_CEILING_SUPPORT[fertiliser.organicNCeiling]}`
+    ? `${fertiliser.organicNCeiling} kg N pr. ha harmoniareal · ${ORGANIC_N_CEILING_SUPPORT[fertiliser.organicNCeiling]}`
     : null
 
 const ORGANIC_NEEDS_FERTILISER = 'Økologisk kræver organisk gødning'
