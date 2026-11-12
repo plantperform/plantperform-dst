@@ -37,7 +37,7 @@ Example create request:
     {
       "positions": [
         {"afgrodeKode": 11, "allowedUdlaegKoder": [9683]},
-        {"afgrodeKode": 11, "allowedUdlaegKoder": [9682, 9683]}
+        {"afgrodeKode": 11, "allowedUdlaegKoder": []}
       ]
     }
   ]
@@ -52,8 +52,8 @@ trimmed and nonempty. Explicit null names/variants and duplicate IDs/codes are i
 `driftsform` is optional metadata (`Konventionel`, `Økologisk`, or null); actual
 calculations use the simulation's farming system.
 
-Each variant has 1–8 positions. A position always permits no udlæg, including when
-its configured list is empty. Permitted codes come from the existing catalog and
+Each variant has 1–8 positions. A position has at most one udlæg, and every
+candidate uses it; an empty list means no udlæg. Codes come from the existing catalog and
 must be eligible for that crop and the next crop in the cycle. With unspecified
 farming-system metadata, organic-only choices may be configured; the simulation's
 actual farming system narrows them during calculation. This feature does not add
@@ -78,8 +78,8 @@ assignments nor results, field overrides or memberships. Copying can happen duri
 an optimization because it does not change the source.
 
 Standard copies resolve forward-filled crops and remove unused trailing positions.
-Each original udlæg becomes a permitted choice, alongside the implicit no-udlæg
-alternative. Changing either source or copy never changes the other.
+Each original udlæg stays the position's udlæg. Changing either source or copy never
+changes the other.
 
 ## Simulations and results
 

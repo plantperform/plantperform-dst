@@ -189,14 +189,20 @@ class RotationDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             variant(measures=(9683, 9683))
 
-    def test_none_is_available_in_every_position(self):
+    def test_two_measures_in_one_position_are_rejected(self):
+        request = definition(variants=[variant(measures=(968, 9683))])
+
+        with self.assertRaisesRegex(RotationDefinitionError, "at most one udlæg"):
+            custom.validate_definition(request.variants)
+
+    def test_chosen_measure_is_used_in_every_candidate(self):
         value = snapshot()
 
         with custom.rotation_scope({value.id: value}):
             prepared = candidate_evaluator.prepare_candidates([value.id], ["100"])
 
-        self.assertEqual(len(prepared), 4)
-        self.assertEqual(prepared[0].rotation, ((11, None, None),) * 8)
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual({code for _, code, _ in prepared[0].rotation}, {9683})
 
     def test_empty_choices_only_generate_none(self):
         value = snapshot(variants=[variant(measures=())])
@@ -215,13 +221,14 @@ class RotationDefinitionTests(unittest.TestCase):
 
         self.assertEqual([crop for crop, _, _ in rotation], [11, 5, 1, 11, 5, 1, 11, 5])
 
-    def test_disabling_early_sowing_deduplicates_candidates(self):
+    def test_disabled_early_sowing_leaves_the_position_without_udlaeg(self):
         value = snapshot()
 
         with custom.rotation_scope({value.id: value}):
             prepared = candidate_evaluator.prepare_candidates([value.id], ["100"], False)
 
         self.assertEqual(len(prepared), 1)
+        self.assertEqual({code for _, code, _ in prepared[0].rotation}, {None})
 
     def test_effective_driftsform_filters_organic_choices(self):
         value = snapshot(variants=[variant(codes=(11,), measures=(921,))])
@@ -232,7 +239,7 @@ class RotationDefinitionTests(unittest.TestCase):
         self.assertEqual(len(prepared), 1)
 
     def test_candidate_limit_includes_n_norm_levels(self):
-        value = snapshot(variants=[variant(codes=(11,) * 6, measures=(968, 9682, 9683))])
+        value = snapshot(variants=[variant(codes=(11,) * 7, measures=(968, 9682, 9683))])
 
         with custom.rotation_scope({value.id: value}):
             custom.check_expansion([value.id], ["100"])
@@ -906,19 +913,20 @@ class RotationDatabaseTests(unittest.TestCase):
         store.update_group(
             source.id,
             UpdateRotationGroupRequest(
-                expected_revision=0, variants=[variant(codes=(11,) * 8, measures=(9682, 9683))]
+                expected_revision=0, variants=[variant(), variant(), variant()]
             ),
             EMAIL,
         )
 
-        result = self.execute(simulation, run)
-        view = read_model_store.get_simulation_view("farm", simulation.id, EMAIL)
+        with patch.object(custom, "MAX_CUSTOM_CANDIDATES", 2):
+            result = self.execute(simulation, run)
+            view = read_model_store.get_simulation_view("farm", simulation.id, EMAIL)
 
         self.assertEqual(result.status, "outdated", result.error)
         self.assertEqual(
             view["data"]["rotation_options_error"]["code"], "TOO_MANY_CUSTOM_CANDIDATES"
         )
-        self.assertIn("4096", view["data"]["rotation_options_error"]["message"])
+        self.assertIn("At most 2", view["data"]["rotation_options_error"]["message"])
         self.assertIsNotNone(view["data"]["saved_result"])
 
     def test_status_view_includes_the_selected_rotation_groups(self):
