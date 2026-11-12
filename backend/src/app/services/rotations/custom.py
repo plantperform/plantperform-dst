@@ -94,6 +94,8 @@ def validate_definition(variants, driftsform=None):
         for index, position in enumerate(variant.positions):
             if position.afgrode_kode not in primary_codes:
                 raise RotationDefinitionError(f"Invalid hovedafgrøde: {position.afgrode_kode}")
+            if len(position.allowed_udlaeg_koder) > 1:
+                raise RotationDefinitionError("A crop position takes at most one udlæg")
             next_crop = variant.positions[(index + 1) % len(variant.positions)].afgrode_kode
             # With no driftsform metadata a definition may be used organically;
             # the effective simulation driftsform narrows choices during expansion.
@@ -122,7 +124,7 @@ def _options(variant, index):
             next_crop,
         )
     }
-    result = [0, *sorted((set(position.allowed_udlaeg_koder) & allowed) - _disabled.get())]
+    result = sorted((set(position.allowed_udlaeg_koder) & allowed) - _disabled.get()) or [0]
     if cache is not None:
         cache[key] = result
     return result
