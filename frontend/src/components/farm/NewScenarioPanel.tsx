@@ -583,6 +583,7 @@ export const NewScenarioPanel = ({
         onError(null)
         onOpenChange(false)
         creationRequest.current = null
+        if (source === null) startOver()
       }
     } catch (error) {
       setCreateError(

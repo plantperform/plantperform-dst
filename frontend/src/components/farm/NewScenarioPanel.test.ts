@@ -665,6 +665,31 @@ describe('simulation wizard steps', () => {
     ).toEqual([])
   })
 
+  it('starts a new draft once a simulation is created', async () => {
+    queries.create.mockResolvedValueOnce({
+      ...source,
+      id: 'created',
+      name: 'Ny simulering',
+    })
+    const onOpenChange = vi.fn()
+    await mount(null, true, onOpenChange)
+    await change('Simuleringens navn', 'Ny simulering')
+    await click('Næste')
+    await check('Afgrøder', 'Hvede')
+    await click('Næste')
+    await click('Vælg alle')
+    for (let step = 0; step < 5; step += 1) await click('Næste')
+    await click('Gem')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    await mount(null, false, onOpenChange)
+    await mount(null, true, onOpenChange)
+    expect(currentStep()).toBe('Grundlag')
+    expect(
+      (document.getElementById('scenario-name') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   it('narrows the rotations by the crops chosen', async () => {
     queries.categories.data = [
       {
