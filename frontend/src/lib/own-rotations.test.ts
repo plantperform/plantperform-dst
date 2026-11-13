@@ -9,6 +9,8 @@ import {
   creationChecklist,
   defaultUndersownCrop,
   definitionInputFromDraft,
+  definitionYears,
+  describeRotationYear,
   describeRotationOptionsError,
   draftChangeCount,
   draftFromDefinition,
@@ -237,6 +239,45 @@ describe('changes that are not saved', () => {
     })
     const firstYearChosen = setYearCrop(addYear(named, 0), 0, 0, WINTER_WHEAT)
     expect(creationChecklist(firstYearChosen)[2].label).toBe('Afgrøde i 2. år')
+  })
+})
+
+describe('definitionYears', () => {
+  it('names each year with its crop and its vinterdække or virkemiddel', () => {
+    expect(
+      definitionYears(
+        definition(),
+        new Map([[WINTER_WHEAT, 'Vinterhvede']]),
+        new Map([[CATCH_CROP, 'Efterafgrøde']]),
+      ),
+    ).toEqual([
+      {
+        cropCode: WINTER_WHEAT,
+        cropName: 'Vinterhvede',
+        undersownCropCode: CATCH_CROP,
+        undersownCropName: 'Efterafgrøde',
+      },
+      {
+        cropCode: SPRING_BARLEY,
+        cropName: `Afgrøde ${SPRING_BARLEY}`,
+        undersownCropCode: null,
+        undersownCropName: null,
+      },
+    ])
+  })
+
+  it('describes a year with its number, code and vinterdække', () => {
+    const [withCover, without] = definitionYears(
+      definition(),
+      new Map([[WINTER_WHEAT, 'Vinterhvede']]),
+      new Map([[CATCH_CROP, 'Efterafgrøde']]),
+    )
+    expect(describeRotationYear(withCover, 0)).toBe(
+      `1. Vinterhvede · kode ${WINTER_WHEAT} · Efterafgrøde`,
+    )
+    expect(describeRotationYear(without, 1)).toBe(
+      `2. Afgrøde ${SPRING_BARLEY} · kode ${SPRING_BARLEY}`,
+    )
   })
 })
 
