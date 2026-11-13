@@ -1,8 +1,8 @@
-import { Copy, Ellipsis, Plus, Trash2, UserPlus } from 'lucide-react'
+import { ChevronRight, Plus, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { useCropCodes, useUndersownCropCodes } from '@/api/hooks'
+import { useCropCodes } from '@/api/hooks'
 import { useMembers } from '@/api/members'
 import {
   rotationDefinitionMembersPath,
@@ -11,7 +11,6 @@ import {
 import type { RotationDefinition } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
-import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { FARM_LIST_CLASS } from '@/components/farm/FarmList'
 import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
 import { LibraryRotationCopyDialog } from '@/components/farm/LibraryRotationCopyDialog'
@@ -20,22 +19,13 @@ import {
   ownRotationPath,
   useOwnRotationActions,
 } from '@/components/farm/own-rotations-state'
-import { OwnRotationShareButton } from '@/components/farm/OwnRotationShareButton'
 import { OwnRotationsShareDialog } from '@/components/farm/OwnRotationsShareDialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Pending } from '@/components/ui/pending'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cropGroupFor } from '@/lib/crop-groups'
+import { formatCount } from '@/lib/economics'
 import { describeFarmAccess, otherMemberEmails } from '@/lib/farm-access'
-import { describeLastOpened } from '@/lib/farm-overview'
 import {
   DELETE_ROTATION_DIALOG,
   definitionCropNames,
@@ -44,10 +34,9 @@ import {
 import { cn } from '@/lib/utils'
 
 const ROW_GRID_CLASS =
-  'grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-5 lg:grid-cols-[16px_minmax(0,1fr)_13rem_6.5rem_auto]'
+  'grid grid-cols-[16px_minmax(0,1fr)_16px] items-center gap-x-4 gap-y-1 px-5 lg:grid-cols-[16px_minmax(12rem,1fr)_minmax(0,1fr)_11rem_16px]'
 
-const STACKED_CELL_CLASS =
-  'col-span-2 col-start-2 lg:col-span-1 lg:col-start-auto'
+const STACKED_CELL_CLASS = 'col-start-2 lg:col-start-auto'
 
 const SharedWith = ({ definition }: { definition: RotationDefinition }) => {
   const { user } = useAuth()
@@ -64,30 +53,21 @@ const SharedWith = ({ definition }: { definition: RotationDefinition }) => {
 type OwnRotationRowProps = {
   farmId: string
   definition: RotationDefinition
-  cropNames: Map<number, string>
-  undersownNames: Map<number, string>
+  crops: string[]
   selected: boolean
-  copyDisabled: boolean
   onSelect: (selected: boolean) => void
-  onCopy: () => void
-  onDelete: () => void
 }
 
 const OwnRotationRow = ({
   farmId,
   definition,
-  cropNames,
-  undersownNames,
+  crops,
   selected,
-  copyDisabled,
   onSelect,
-  onCopy,
-  onDelete,
 }: OwnRotationRowProps) => {
-  const positions = definition.variants[0]?.positions ?? []
   const subtitle = [
     definition.farmingSystem ?? 'Uden driftsform',
-    describeYearCount(positions.length),
+    describeYearCount(crops.length),
     definition.variants.length > 1
       ? `${definition.variants.length} udgaver`
       : null,
@@ -107,7 +87,7 @@ const OwnRotationRow = ({
         type="checkbox"
         checked={selected}
         aria-label={`Vælg ${definition.name}`}
-        className="relative z-10 mt-1 size-4 accent-primary"
+        className="relative z-10 size-4 accent-primary"
         onChange={(event) => onSelect(event.target.checked)}
       />
       <div className="min-w-0">
@@ -121,79 +101,21 @@ const OwnRotationRow = ({
           {subtitle}
         </p>
       </div>
+      <p className={cn(STACKED_CELL_CLASS, 'truncate text-[13px]')}>
+        {crops.join(' · ')}
+      </p>
       <span
         className={cn(
           STACKED_CELL_CLASS,
-          'truncate text-[13px] text-muted-foreground lg:pt-1',
+          'truncate text-[13px] text-muted-foreground',
         )}
       >
         <SharedWith definition={definition} />
       </span>
-      <span className="hidden pt-1 text-[13px] text-muted-foreground lg:block">
-        {definition.updatedAt
-          ? describeLastOpened(Date.parse(definition.updatedAt))
-          : null}
-      </span>
-      <div className="relative z-10 col-start-3 row-start-1 flex items-center gap-1 lg:col-start-auto lg:row-start-auto">
-        <OwnRotationShareButton definition={definition} size="xs" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="size-8 p-0 text-muted-foreground"
-              aria-label={`Flere valg for ${definition.name}`}
-            >
-              <Ellipsis className="size-4" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem disabled={copyDisabled} onSelect={onCopy}>
-              <Copy aria-hidden="true" />
-              Kopier
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={onDelete}
-            >
-              <Trash2 aria-hidden="true" />
-              Slet
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <ol
-        aria-label={`Afgrøder i ${definition.name}`}
-        className="col-span-2 col-start-2 mt-1 grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-x-4 gap-y-2 lg:col-span-4 lg:col-start-2"
-      >
-        {positions.map((position, index) => {
-          const name =
-            cropNames.get(position.cropCode) ?? `Afgrøde ${position.cropCode}`
-          const undersownCode = position.allowedUndersownCropCodes[0]
-          return (
-            <li key={index} className="min-w-0">
-              <span className="flex items-center gap-1.5 text-[13px]">
-                <CropGroupTile group={cropGroupFor(position.cropCode, name)} />
-                <span className="truncate">{name}</span>
-              </span>
-              <span
-                className={cn(
-                  'mt-0.5 block truncate pl-6 text-[11.5px]',
-                  undersownCode === undefined
-                    ? 'text-muted-foreground/70'
-                    : 'text-muted-foreground',
-                )}
-              >
-                {undersownCode === undefined
-                  ? 'Intet virkemiddel'
-                  : (undersownNames.get(undersownCode) ??
-                    `Afgrøde ${undersownCode}`)}
-              </span>
-            </li>
-          )
-        })}
-      </ol>
+      <ChevronRight
+        className="col-start-3 row-start-1 size-4 text-muted-foreground lg:col-start-auto lg:row-start-auto"
+        aria-hidden="true"
+      />
     </li>
   )
 }
@@ -209,38 +131,38 @@ export const OwnRotationsOverview = ({
 }: OwnRotationsOverviewProps) => {
   const definitions = useOwnRotationDefinitions()
   const crops = useCropCodes(farmId)
-  const undersown = useUndersownCropCodes(farmId)
   const actions = useOwnRotationActions(farmId)
-  const [toDelete, setToDelete] = useState<RotationDefinition | null>(null)
   const [query, setQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [sharingSelected, setSharingSelected] = useState(false)
+  const [deletingSelected, setDeletingSelected] = useState(false)
   const cropNames = new Map(
     (crops.data ?? []).map((crop) => [crop.code, crop.name]),
   )
-  const undersownNames = new Map(
-    (undersown.data ?? []).map((option) => [option.code, option.name]),
-  )
-  const own = (definitions.data ?? []).toSorted((left, right) =>
-    left.name.localeCompare(right.name, 'da'),
-  )
+  const own = (definitions.data ?? [])
+    .toSorted((left, right) => left.name.localeCompare(right.name, 'da'))
+    .map((definition) => ({
+      definition,
+      crops: definitionCropNames(definition, cropNames),
+    }))
   const search = query.trim().toLocaleLowerCase('da')
   const shown = own.filter(
-    (definition) =>
+    ({ definition, crops }) =>
       search === '' ||
-      [definition.name, ...definitionCropNames(definition, cropNames)]
+      [definition.name, ...crops]
         .join(' ')
         .toLocaleLowerCase('da')
         .includes(search),
   )
-  const selected = own.filter((definition) =>
-    selectedIds.includes(definition.id),
-  )
-  const shownSelectedCount = shown.filter((definition) =>
+  const selected = own
+    .map(({ definition }) => definition)
+    .filter((definition) => selectedIds.includes(definition.id))
+  const shownSelectedCount = shown.filter(({ definition }) =>
     selectedIds.includes(definition.id),
   ).length
   const allShownSelected =
     shown.length > 0 && shownSelectedCount === shown.length
+  const one = selected.length === 1 ? selected[0] : null
 
   const select = (ids: string[], checked: boolean) =>
     setSelectedIds((current) =>
@@ -307,33 +229,33 @@ export const OwnRotationsOverview = ({
                   placeholder="Søg på navn eller afgrøde"
                   label="Søg i egne sædskifter"
                 />
-                {selected.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {selected.length} valgt
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedIds([])}
-                    >
-                      Fravælg
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setSharingSelected(true)}
-                    >
-                      <UserPlus aria-hidden="true" />
-                      Del valgte
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-muted-foreground">
-                    Sæt flueben for at dele flere på en gang.
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] text-muted-foreground">
+                    {selected.length > 0
+                      ? `${selected.length} valgt`
+                      : 'Sæt flueben for at dele eller slette'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={selected.length === 0}
+                    onClick={() => setSharingSelected(true)}
+                  >
+                    <UserPlus aria-hidden="true" />
+                    Del
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={selected.length === 0}
+                    onClick={() => setDeletingSelected(true)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    Slet
+                  </Button>
+                </div>
               </div>
               {shown.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -360,29 +282,25 @@ export const OwnRotationsOverview = ({
                       className="size-4 accent-primary"
                       onChange={(event) =>
                         select(
-                          shown.map((definition) => definition.id),
+                          shown.map(({ definition }) => definition.id),
                           event.target.checked,
                         )
                       }
                     />
-                    <span>Sædskifte og afgrøder år for år</span>
+                    <span>Sædskifte</span>
+                    <span className="hidden lg:block">Afgrøder</span>
                     <span className="hidden lg:block">Deling</span>
-                    <span className="hidden lg:block">Ændret</span>
                     <span />
                   </div>
                   <ul className="divide-y">
-                    {shown.map((definition) => (
+                    {shown.map(({ definition, crops }) => (
                       <OwnRotationRow
                         key={definition.id}
                         farmId={farmId}
                         definition={definition}
-                        cropNames={cropNames}
-                        undersownNames={undersownNames}
+                        crops={crops}
                         selected={selectedIds.includes(definition.id)}
-                        copyDisabled={actions.copyingId !== null}
                         onSelect={(checked) => select([definition.id], checked)}
-                        onCopy={() => void actions.copy(definition)}
-                        onDelete={() => setToDelete(definition)}
                       />
                     ))}
                   </ul>
@@ -413,15 +331,31 @@ export const OwnRotationsOverview = ({
         }}
       />
       <ConfirmDialog
-        {...DELETE_ROTATION_DIALOG}
-        name={toDelete?.name ?? null}
-        onOpenChange={(open) => {
-          if (!open) setToDelete(null)
-        }}
-        onConfirm={() => {
-          if (toDelete) void actions.remove(toDelete)
-        }}
-      />
+        name={deletingSelected && selected.length > 0 ? 'valgte' : null}
+        title={
+          one
+            ? `Slet ${one.name}?`
+            : `Slet ${formatCount(selected.length, 'sædskifte', 'sædskifter')}?`
+        }
+        description={
+          one
+            ? DELETE_ROTATION_DIALOG.description
+            : 'Sædskifterne slettes for alle, de er delt med, og fjernes fra de simuleringer, hvor de er valgt. Deres resultater bliver forældede.'
+        }
+        confirmLabel={one ? 'Slet sædskifte' : 'Slet sædskifter'}
+        onOpenChange={setDeletingSelected}
+        onConfirm={() => void actions.removeAll(selected)}
+      >
+        {one ? null : (
+          <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+            {selected.map((definition) => (
+              <li key={definition.id} className="truncate">
+                {definition.name}
+              </li>
+            ))}
+          </ul>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }
