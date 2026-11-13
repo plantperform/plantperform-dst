@@ -33,6 +33,7 @@ import { LibraryRotationCopyDialog } from '@/components/farm/LibraryRotationCopy
 import { OwnRotationSaveBar } from '@/components/farm/OwnRotationSaveBar'
 import { OwnRotationShareButton } from '@/components/farm/OwnRotationShareButton'
 import {
+  OwnRotationYearHeader,
   OwnRotationYearRow,
   OwnRotationYearView,
 } from '@/components/farm/OwnRotationYearRow'
@@ -368,139 +369,145 @@ const OwnRotationEditor = ({
     const count = variant.years.length
     if (!editing) {
       return (
+        <>
+          <OwnRotationYearHeader editing={false} />
+          <ol>
+            {variant.years.map((year, yearIndex) => {
+              const undersownCode = year.undersownCropCodes[0]
+              return (
+                <OwnRotationYearView
+                  key={yearIndex}
+                  number={yearIndex + 1}
+                  cropCode={year.cropCode}
+                  cropName={cropName(year.cropCode)}
+                  undersownName={
+                    undersownCode === undefined
+                      ? null
+                      : (undersownNames.get(undersownCode) ??
+                        `Afgrøde ${undersownCode}`)
+                  }
+                />
+              )
+            })}
+          </ol>
+        </>
+      )
+    }
+    return (
+      <>
+        <OwnRotationYearHeader editing />
         <ol>
           {variant.years.map((year, yearIndex) => {
-            const undersownCode = year.undersownCropCodes[0]
+            const nextCropCode =
+              variant.years[nextYearIndex(count, yearIndex)].cropCode
+            const here =
+              drag !== null && drag.variantIndex === variantIndex ? drag : null
             return (
-              <OwnRotationYearView
+              <OwnRotationYearRow
                 key={yearIndex}
+                farmId={farmId}
                 number={yearIndex + 1}
-                cropCode={year.cropCode}
+                year={year}
                 cropName={cropName(year.cropCode)}
-                undersownName={
-                  undersownCode === undefined
-                    ? null
-                    : (undersownNames.get(undersownCode) ??
-                      `Afgrøde ${undersownCode}`)
+                nextCropCode={nextCropCode}
+                nextCropName={cropName(nextCropCode)}
+                cropOptions={cropOptions}
+                farmingSystem={draft.farmingSystem}
+                undersownNames={undersownNames}
+                status={saved ? yearStatus(saved, variant, yearIndex) : null}
+                note={
+                  notes[
+                    noteKey(
+                      variantIndex,
+                      yearIndex,
+                      year.cropCode,
+                      nextCropCode,
+                      draft.farmingSystem,
+                    )
+                  ] ?? null
                 }
+                isFirst={yearIndex === 0}
+                isLast={yearIndex === count - 1}
+                canInsert={count < MAX_ROTATION_YEARS}
+                canRemove={count > 1}
+                dragging={here?.from === yearIndex}
+                dropTarget={
+                  here !== null &&
+                  here.over === yearIndex &&
+                  here.from !== yearIndex
+                }
+                onCrop={(cropCode) =>
+                  change(
+                    setYearCrop(
+                      draft,
+                      variantIndex,
+                      yearIndex,
+                      cropCode,
+                      defaultUndersownCrop(
+                        undersownDefaults,
+                        cropCode,
+                        draft.farmingSystem,
+                      ),
+                    ),
+                    'afgrøden er skiftet',
+                  )
+                }
+                onSelect={(code) =>
+                  setDraft(
+                    setYearUndersownCrop(draft, variantIndex, yearIndex, code),
+                  )
+                }
+                onMoveUp={() =>
+                  change(
+                    moveYear(draft, variantIndex, yearIndex, yearIndex - 1),
+                    'rækkefølgen er ændret',
+                  )
+                }
+                onMoveDown={() =>
+                  change(
+                    moveYear(draft, variantIndex, yearIndex, yearIndex + 1),
+                    'rækkefølgen er ændret',
+                  )
+                }
+                onInsertAfter={() =>
+                  change(
+                    insertYearAfter(draft, variantIndex, yearIndex),
+                    'rækkefølgen er ændret',
+                  )
+                }
+                onRemove={() =>
+                  change(
+                    removeYear(draft, variantIndex, yearIndex),
+                    'rækkefølgen er ændret',
+                  )
+                }
+                onDragStart={() =>
+                  setDrag({ variantIndex, from: yearIndex, over: yearIndex })
+                }
+                onDragOver={() =>
+                  setDrag((current) =>
+                    current !== null &&
+                    current.variantIndex === variantIndex &&
+                    current.over !== yearIndex
+                      ? { ...current, over: yearIndex }
+                      : current,
+                  )
+                }
+                onDragEnd={() => setDrag(null)}
+                onDrop={() => {
+                  if (here !== null && here.from !== yearIndex) {
+                    change(
+                      moveYear(draft, variantIndex, here.from, yearIndex),
+                      'rækkefølgen er ændret',
+                    )
+                  }
+                  setDrag(null)
+                }}
               />
             )
           })}
         </ol>
-      )
-    }
-    return (
-      <ol>
-        {variant.years.map((year, yearIndex) => {
-          const nextCropCode =
-            variant.years[nextYearIndex(count, yearIndex)].cropCode
-          const here =
-            drag !== null && drag.variantIndex === variantIndex ? drag : null
-          return (
-            <OwnRotationYearRow
-              key={yearIndex}
-              farmId={farmId}
-              number={yearIndex + 1}
-              year={year}
-              cropName={cropName(year.cropCode)}
-              nextCropCode={nextCropCode}
-              nextCropName={cropName(nextCropCode)}
-              cropOptions={cropOptions}
-              farmingSystem={draft.farmingSystem}
-              undersownNames={undersownNames}
-              status={saved ? yearStatus(saved, variant, yearIndex) : null}
-              note={
-                notes[
-                  noteKey(
-                    variantIndex,
-                    yearIndex,
-                    year.cropCode,
-                    nextCropCode,
-                    draft.farmingSystem,
-                  )
-                ] ?? null
-              }
-              isFirst={yearIndex === 0}
-              isLast={yearIndex === count - 1}
-              canInsert={count < MAX_ROTATION_YEARS}
-              canRemove={count > 1}
-              dragging={here?.from === yearIndex}
-              dropTarget={
-                here !== null &&
-                here.over === yearIndex &&
-                here.from !== yearIndex
-              }
-              onCrop={(cropCode) =>
-                change(
-                  setYearCrop(
-                    draft,
-                    variantIndex,
-                    yearIndex,
-                    cropCode,
-                    defaultUndersownCrop(
-                      undersownDefaults,
-                      cropCode,
-                      draft.farmingSystem,
-                    ),
-                  ),
-                  'afgrøden er skiftet',
-                )
-              }
-              onSelect={(code) =>
-                setDraft(
-                  setYearUndersownCrop(draft, variantIndex, yearIndex, code),
-                )
-              }
-              onMoveUp={() =>
-                change(
-                  moveYear(draft, variantIndex, yearIndex, yearIndex - 1),
-                  'rækkefølgen er ændret',
-                )
-              }
-              onMoveDown={() =>
-                change(
-                  moveYear(draft, variantIndex, yearIndex, yearIndex + 1),
-                  'rækkefølgen er ændret',
-                )
-              }
-              onInsertAfter={() =>
-                change(
-                  insertYearAfter(draft, variantIndex, yearIndex),
-                  'rækkefølgen er ændret',
-                )
-              }
-              onRemove={() =>
-                change(
-                  removeYear(draft, variantIndex, yearIndex),
-                  'rækkefølgen er ændret',
-                )
-              }
-              onDragStart={() =>
-                setDrag({ variantIndex, from: yearIndex, over: yearIndex })
-              }
-              onDragOver={() =>
-                setDrag((current) =>
-                  current !== null &&
-                  current.variantIndex === variantIndex &&
-                  current.over !== yearIndex
-                    ? { ...current, over: yearIndex }
-                    : current,
-                )
-              }
-              onDragEnd={() => setDrag(null)}
-              onDrop={() => {
-                if (here !== null && here.from !== yearIndex) {
-                  change(
-                    moveYear(draft, variantIndex, here.from, yearIndex),
-                    'rækkefølgen er ændret',
-                  )
-                }
-                setDrag(null)
-              }}
-            />
-          )
-        })}
-      </ol>
+      </>
     )
   }
 
