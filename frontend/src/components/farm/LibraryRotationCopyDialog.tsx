@@ -2,7 +2,7 @@ import { Copy } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import { useLibraryRotationDefinitions } from '@/api/own-rotations'
-import type { RotationDefinition } from '@/api/types'
+import type { FarmingSystem, RotationDefinition } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Pending } from '@/components/ui/pending'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { FARMING_SYSTEMS } from '@/lib/economics'
 import {
   copyableLibraryRotationsOf,
   definitionCropNames,
@@ -36,6 +38,7 @@ export const LibraryRotationCopyDialog = ({
 }: LibraryRotationCopyDialogProps) => {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [farmingSystem, setFarmingSystem] = useState<FarmingSystem>('Økologisk')
   const definitions = useLibraryRotationDefinitions(open)
   const library = copyableLibraryRotationsOf(definitions.data ?? []).map(
     (definition) => ({
@@ -46,8 +49,9 @@ export const LibraryRotationCopyDialog = ({
   const search = query.trim().toLocaleLowerCase('da')
   const shown = library.filter(
     ({ definition, crops }) =>
-      search === '' ||
-      `${definition.name} ${crops}`.toLocaleLowerCase('da').includes(search),
+      definition.farmingSystem === farmingSystem &&
+      (search === '' ||
+        `${definition.name} ${crops}`.toLocaleLowerCase('da').includes(search)),
   )
 
   const copy = async (definition: RotationDefinition) => {
@@ -88,16 +92,28 @@ export const LibraryRotationCopyDialog = ({
           </p>
         ) : (
           <div className="min-w-0 space-y-3">
-            <Input
-              type="search"
-              aria-label="Søg sædskifte"
-              placeholder="Søg på afgrøde eller nummer..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <SegmentedControl
+                aria-label="Driftsform"
+                value={farmingSystem}
+                options={FARMING_SYSTEMS}
+                labelClassName=""
+                onValueChange={setFarmingSystem}
+              />
+              <Input
+                type="search"
+                aria-label="Søg sædskifte"
+                placeholder="Søg på afgrøde eller nummer..."
+                className="min-w-48 flex-1"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
             {shown.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">
-                Ingen sædskifter matcher søgningen.
+                {search === ''
+                  ? `Ingen ${farmingSystem === 'Økologisk' ? 'økologiske' : 'konventionelle'} sædskifter fra biblioteket er valgt i dine simuleringer.`
+                  : 'Ingen sædskifter matcher søgningen.'}
               </p>
             ) : (
               <ul className="max-h-[50vh] divide-y overflow-y-auto rounded-md border">
