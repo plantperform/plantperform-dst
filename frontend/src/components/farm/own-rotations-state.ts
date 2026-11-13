@@ -14,6 +14,7 @@ import {
 } from '@/api/own-rotations'
 import type { RotationDefinition } from '@/api/types'
 import { useToast } from '@/components/toast'
+import { formatCount, formatNameList } from '@/lib/economics'
 import { freeName } from '@/lib/economics-profiles'
 import {
   definitionInputFromDraft,
@@ -148,19 +149,47 @@ export const useOwnRotationActions = (farmId: string) => {
 
   const reload = () => mutate<RotationDefinition[]>(ownRotationDefinitionsKey)
 
-  const remove = async (definition: RotationDefinition): Promise<boolean> => {
-    try {
-      await deleteRotationDefinition(definition.id)
-      await forgetDefinition(definition.id)
-      void mutate(isSimulationKey)
-      showToast(`${definition.name} er slettet`)
-      return true
-    } catch (error) {
-      if (statusOf(error) === 404) await forgetDefinition(definition.id)
-      showError(deleteFailure(error))
+  const removeAll = async (
+    definitions: RotationDefinition[],
+  ): Promise<boolean> => {
+    const results = await Promise.allSettled(
+      definitions.map((definition) => deleteRotationDefinition(definition.id)),
+    )
+    const outcomes = definitions.map((definition, index) => {
+      const result = results[index]
+      const error = result.status === 'rejected' ? result.reason : undefined
+      return {
+        definition,
+        error,
+        gone: result.status === 'fulfilled' || statusOf(error) === 404,
+      }
+    })
+    await Promise.all(
+      outcomes
+        .filter((outcome) => outcome.gone)
+        .map((outcome) => forgetDefinition(outcome.definition.id)),
+    )
+    void mutate(isSimulationKey)
+    if (definitions.length === 1 && results[0].status === 'rejected') {
+      showError(deleteFailure(outcomes[0].error))
       return false
     }
+    const failed = outcomes
+      .filter((outcome) => !outcome.gone)
+      .map((outcome) => outcome.definition.name)
+    if (failed.length > 0) {
+      showError(
+        `${formatNameList(failed)} kunne ikke slettes. Prøv igen om lidt.`,
+      )
+      return false
+    }
+    showToast(
+      `${definitions.length === 1 ? definitions[0].name : formatCount(definitions.length, 'sædskifte', 'sædskifter')} er slettet`,
+    )
+    return true
   }
+
+  const remove = (definition: RotationDefinition) => removeAll([definition])
 
   const copy = async (
     definition: RotationDefinition,
@@ -189,5 +218,5 @@ export const useOwnRotationActions = (farmId: string) => {
     }
   }
 
-  return { create, save, reload, remove, copy, copyingId }
+  return { create, save, reload, remove, removeAll, copy, copyingId }
 }
