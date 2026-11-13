@@ -1,188 +1,103 @@
-"""Load the national udledningsgraense (discharge-limit) polygon layer into a
-staging table, then compute each registry field's area-weighted average
-udledningsgraense (kg N/ha) via a real geometric overlay — not a centroid or
-dominant-polygon lookup, since the limit genuinely varies within a single
-kystvand catchment (confirmed: 25,892 distinct (catchment, value) pairs across
-only 107 catchments in the source layer).
+"""Set UdledgrKgNPerHa in the merged GeoPackage to each field's udledningsgrænse
+(kg N/ha) as the PUMR 2027 requirements spec (table A, field A78) specifies it:
+overlap the field with every cell of the limit map, take the overlap-area-weighted
+mean of their Udledgr, and round to 2 decimals. The rounded value is the one the
+field's udledningskvote is calculated from (field A24).
 
-Source: Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp
-(EPSG:25832, ~2.8M polygon parts, column "Udledgr" = discharge limit kg N/ha).
+Run it whenever the GeoPackage or the limit map is replaced, before
+`pixi run load-registry-data`, which loads UdledgrKgNPerHa into
+registry_field.udledningsgraense_kgn_ha.
+
+A field that overlaps no cell gets UdledgrKgNPerHa NULL: the spec gives no
+fallback value. The registry loader stores NULL as 0, so the field gets no quota.
+
+Sources: Udledningsgraenser_til_Udledningsbaseret_Markregulering_2027.shp (EPSG:25832,
+cells of about 1 ha with Udledgr in kg N/ha, one decimal) from landbrugsgeodata.fvm.dk,
+workspace Udledningsbaseret_mark_regulering, downloaded 2026-11-13 (the file is dated
+2026-11-10; the portal replaces it without changing its name), and the merged
+GeoPackage's PlantPerform layer. Foreloebige_udledningsgraenser_... is the preliminary
+layer and is not the one to use.
 """
 
 import time
-from collections.abc import Iterator
-from io import StringIO
+from collections.abc import Callable
 from pathlib import Path
 
-import geopandas as gpd
-import pandas as pd
-import psycopg
-from dotenv import load_dotenv
-from pyogrio import read_dataframe, read_info
-from shapely.geometry import MultiPolygon, Polygon
+import numpy as np
+from pyogrio import read_dataframe
 
-from app.data.db import DATABASE_URL
-
-ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw" / "ANGJ-data" / "Udeledningsdata"
-SHP_PATH = (
-    RAW_DIR / "Foreloebige_udledningsgraenser_til_Udledningsbaseret_Markregulering.shp"
+from database.scripts.merged_gpkg import (
+    LAYER,
+    MERGED_GPKG,
+    RAW_DIR,
+    add_columns,
+    area_weighted,
+    format_duration,
+    overlaps,
+    progress_printer,
+    write_columns,
 )
-BATCH_SIZE = 50_000
-STAGING_TABLE = "udledningsgraense_omrade_load"
+
+LIMIT_MAP = (
+    RAW_DIR
+    / "ANGJ-data"
+    / "Udeledningsdata"
+    / "UMR_2027"
+    / "Udledningsgraenser_til_Udledningsbaseret_Markregulering_2027.shp"
+)
+LIMIT_COLUMN = "UdledgrKgNPerHa"
+# Field A78: the value rounded to 2 decimals is the one the quota is calculated from.
+LIMIT_DECIMALS = 2
 
 
-def format_duration(seconds: float) -> str:
-    total_seconds = max(0, int(seconds))
-    minutes, seconds = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"
+def area_weighted_limit(
+    fields: np.ndarray,
+    cell_limits: np.ndarray,
+    cell_polygons: np.ndarray,
+    *,
+    progress: Callable[[int, int], None] | None = None,
+) -> np.ndarray:
+    """Return each field's overlap-area-weighted mean cell limit, rounded to
+    LIMIT_DECIMALS; NaN where the field overlaps no cell."""
+    field_index, cell_index, area = overlaps(fields, cell_polygons, progress=progress)
+    means = area_weighted(field_index, cell_limits[cell_index], area, len(fields))
+    return np.round(means, LIMIT_DECIMALS)
 
 
-def to_multipolygon_wkt(geometry: Polygon | MultiPolygon) -> str:
-    if isinstance(geometry, Polygon):
-        geometry = MultiPolygon([geometry])
-    return geometry.wkt
+def load_udledningsgraenser(gpkg_path: Path = MERGED_GPKG, map_path: Path = LIMIT_MAP) -> None:
+    for path in (gpkg_path, map_path):
+        if not path.exists():
+            raise FileNotFoundError(f"Expected {path}")
 
+    # A GeoPackage without the column gets an empty one to write into.
+    add_columns(gpkg_path, {LIMIT_COLUMN: "REAL"})
+    print(f"Reading fields from {gpkg_path.name}...", flush=True)
+    fields = read_dataframe(str(gpkg_path), layer=LAYER, columns=[LIMIT_COLUMN], fid_as_index=True)
+    print(f"Reading limit cells from {map_path.name}...", flush=True)
+    limit_map = read_dataframe(str(map_path), columns=["Udledgr"])
+    if limit_map.crs != fields.crs:
+        limit_map = limit_map.to_crs(fields.crs)
+    limit_map = limit_map[limit_map["Udledgr"].notna()]
+    print(f"  {len(fields):,} fields, {len(limit_map):,} limit cells", flush=True)
 
-def csv_line(row: tuple[object, ...]) -> str:
-    import csv
-
-    output = StringIO()
-    csv.writer(output).writerow(row)
-    return output.getvalue()
-
-
-def iter_staging_rows(feature_count: int) -> Iterator[tuple[object, ...]]:
-    offset = 0
     start = time.monotonic()
-    last_print = start
+    limit = area_weighted_limit(
+        fields.geometry.to_numpy(),
+        limit_map["Udledgr"].to_numpy(dtype=np.float64),
+        limit_map.geometry.to_numpy(),
+        progress=progress_printer("overlaying"),
+    )
+    previous = fields[LIMIT_COLUMN].to_numpy(dtype=np.float64)
+    changed = ~np.isclose(limit, previous, rtol=0, atol=1e-9, equal_nan=True)
+    print(
+        f"  computed in {format_duration(time.monotonic() - start)}: "
+        f"{np.count_nonzero(np.isnan(limit)):,} fields overlap no limit cell and get NULL; "
+        f"{np.count_nonzero(changed):,} values change",
+        flush=True,
+    )
 
-    while offset < feature_count:
-        frame = read_dataframe(
-            str(SHP_PATH),
-            columns=["Udledgr"],
-            skip_features=offset,
-            max_features=BATCH_SIZE,
-        )
-        if frame.empty:
-            break
-
-        frame = gpd.GeoDataFrame(frame, geometry="geometry", crs=frame.crs).to_crs(4326)
-
-        for row in frame.itertuples(index=False):
-            if row.geometry is None or pd.isna(row.Udledgr):
-                continue
-            yield (float(row.Udledgr), to_multipolygon_wkt(row.geometry))
-
-        offset += BATCH_SIZE
-        now = time.monotonic()
-        if now - last_print >= 5.0:
-            last_print = now
-            elapsed = now - start
-            pct = offset / feature_count
-            rate = offset / elapsed if elapsed > 0 else 0
-            eta = format_duration((feature_count - offset) / rate) if rate > 0 else "--:--"
-            print(
-                f"Read {offset:,} / {feature_count:,} ({pct:.1%}), "
-                f"elapsed {format_duration(elapsed)}, ETA {eta}",
-                flush=True,
-            )
-
-
-def load_staging_table(dsn: str) -> None:
-    feature_count = read_info(str(SHP_PATH))["features"]
-    print(f"Loading {feature_count:,} udledningsgraense polygons into staging table", flush=True)
-
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
-            cursor.execute(
-                f"""
-                CREATE TABLE {STAGING_TABLE} (
-                    udledgr double precision NOT NULL,
-                    geom geometry(MULTIPOLYGON, 4326) NOT NULL
-                )
-                """
-            )
-            with cursor.copy(
-                f"COPY {STAGING_TABLE} (udledgr, geom) FROM STDIN WITH (FORMAT CSV)"
-            ) as copy:
-                loaded = 0
-                for udledgr, geom_wkt in iter_staging_rows(feature_count):
-                    copy.write(csv_line((udledgr, f"SRID=4326;{geom_wkt}")))
-                    loaded += 1
-            print(f"Loaded {loaded:,} rows, building spatial index...", flush=True)
-            cursor.execute(
-                f"CREATE INDEX ix_{STAGING_TABLE}_geom ON {STAGING_TABLE} "
-                f"USING gist (geom)"
-            )
-            cursor.execute(f"ANALYZE {STAGING_TABLE}")
-        connection.commit()
-
-
-def compute_overlay(dsn: str) -> None:
-    print("Computing area-weighted overlay onto registry_field...", flush=True)
-    start = time.monotonic()
-
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                f"""
-                WITH parts AS (
-                    SELECT
-                        rf.imk_id,
-                        ST_Area(
-                            ST_Intersection(rf.geom, u.geom)::geography
-                        ) AS overlap_area_m2,
-                        u.udledgr AS value
-                    FROM registry_field rf
-                    JOIN {STAGING_TABLE} u ON ST_Intersects(rf.geom, u.geom)
-                ),
-                agg AS (
-                    SELECT
-                        imk_id,
-                        SUM(overlap_area_m2 * value) / NULLIF(SUM(overlap_area_m2), 0)
-                            AS weighted_avg_kgn_ha
-                    FROM parts
-                    WHERE overlap_area_m2 > 0
-                    GROUP BY imk_id
-                )
-                UPDATE registry_field rf
-                SET
-                    udledningsgraense_kgn_ha = agg.weighted_avg_kgn_ha,
-                    udledningskvote_mark_kgn = agg.weighted_avg_kgn_ha * rf.area_ha
-                FROM agg
-                WHERE rf.imk_id = agg.imk_id
-                """
-            )
-            updated = cursor.rowcount
-        connection.commit()
-
-    elapsed = time.monotonic() - start
-    print(f"Updated {updated:,} registry fields in {format_duration(elapsed)}", flush=True)
-
-
-def drop_staging_table(dsn: str) -> None:
-    with psycopg.connect(dsn) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {STAGING_TABLE}")
-        connection.commit()
-
-
-def load_udledningsgraenser(*, keep_staging: bool = False) -> None:
-    if not SHP_PATH.exists():
-        raise FileNotFoundError(f"Expected {SHP_PATH}")
-
-    load_dotenv(ROOT.parent / ".env")
-    dsn = DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
-
-    load_staging_table(dsn)
-    compute_overlay(dsn)
-    if not keep_staging:
-        drop_staging_table(dsn)
+    write_columns(gpkg_path, fields.index.to_numpy(), {LIMIT_COLUMN: limit})
+    print(f"Updated {LIMIT_COLUMN} for {len(fields):,} features in {gpkg_path.name}", flush=True)
 
 
 if __name__ == "__main__":

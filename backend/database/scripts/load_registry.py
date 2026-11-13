@@ -349,8 +349,8 @@ def load_registry() -> None:
             print("Inserting into registry_field...", flush=True)
             # udledningsgraense_kgn_ha/udledningskvote_mark_kgn are left at their
             # DB default (0) here — they come from a separate national layer, not
-            # the IMK GeoPackage. Run load_udledningsgraenser.py after this to
-            # (re)compute them.
+            # the IMK GeoPackage. load_udledningsgraenser.py writes the limit into
+            # the merged GeoPackage, and load_registry_from_merged_gpkg.py loads it.
             cursor.execute(
                 """
                 INSERT INTO registry_field (

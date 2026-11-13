@@ -49,6 +49,8 @@ registry_field_table = Table(
     Column("retention", Float, nullable=True),
     Column("jbnr", SmallInteger, nullable=True),
     Column("area_ha", Float, nullable=False),
+    # The part of area_ha on the PUMR A4 deduction layers; the quota is calculated without it.
+    Column("fradragsareal_ha", Float, nullable=False, server_default="0"),
     Column("crop_rotation", Text, nullable=False),
     Column(
         "in_takeout_plan",

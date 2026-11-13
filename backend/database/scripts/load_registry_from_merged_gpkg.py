@@ -34,6 +34,12 @@ ROUND_DIGITS = 3
 # PUMR 2027 requirements spec, table A, field A22: retention is rounded to 2
 # decimals, and that rounded value is the one the N load calculation uses.
 RETENTION_ROUND_DIGITS = 2
+# Field A24: the quota, the udledningsgrænse times the area without the
+# deduction (A69 = A3 - A4 - A6), is rounded to 2 decimals.
+QUOTA_ROUND_DIGITS = 2
+# The GeoPackage's fradragsareal (A4), set by load_fradragsarealer.py, in ha.
+DEDUCTION_COLUMN = "Fradragsareal"
+DEDUCTION_ROUND_DIGITS = 4
 STATUS_INTERVAL_SECONDS = 10.0
 CROP_HISTORY_YEARS = range(2016, 2027)
 PERCOLATION_COLUMNS_BY_KATEGORI = (
@@ -147,6 +153,12 @@ def secondary_crop_history(row: object) -> dict[str, int]:
     }
 
 
+def deduction_area(row: object) -> float:
+    """Return the row's Fradragsareal in ha. A row read without that column, or
+    with no value in it, has no deduction."""
+    return clean_float_rounded(getattr(row, DEDUCTION_COLUMN, None), DEDUCTION_ROUND_DIGITS) or 0.0
+
+
 def merged_source_metadata() -> dict:
     if not MERGED_GPKG.exists():
         raise FileNotFoundError(f"Expected {MERGED_GPKG}")
@@ -154,13 +166,15 @@ def merged_source_metadata() -> dict:
     feature_count = int(info["features"])
     if feature_count <= 0:
         raise ValueError("The merged GeoPackage contains no features")
-    # An older GeoPackage without SekAfg<year> columns gives every field none.
+    # An older GeoPackage without SekAfg<year> columns gives every field none,
+    # and one without Fradragsareal gives every field no deduction.
     fields = set(info["fields"])
     secondary_crop_years = [year for year in CROP_HISTORY_YEARS if f"SekAfg{year}" in fields]
     return {
         "layer": LAYER,
         "feature_count": feature_count,
         "secondary_crop_years": secondary_crop_years,
+        "deduction_area": DEDUCTION_COLUMN in fields,
     }
 
 
@@ -220,6 +234,7 @@ def staging_values(row: object, imk_id: int) -> tuple:
         clean_str(row.journalnr),
         str(cvr).zfill(8) if cvr is not None else None,
         area_ha,
+        deduction_area(row),
         json.dumps(crop_history),
         clean_int(row.JB_Kode),
         clean_int(row.KystvandID),
@@ -270,6 +285,7 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
         + list(PERCOLATION_COLUMNS_BY_KATEGORI)
         + [f"Afg{year}" for year in CROP_HISTORY_YEARS]
         + [f"SekAfg{year}" for year in run.state["sources"]["secondary_crop_years"]]
+        + ([DEDUCTION_COLUMN] if run.state["sources"]["deduction_area"] else [])
     )
 
     if run.state["phase"] == "new":
@@ -278,7 +294,8 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
                 f"""
                 CREATE TABLE {STAGING_TABLE} (
                     imk_id bigint PRIMARY KEY, marknr text, markblok text, journalnr text, cvr text,
-                    area_ha double precision, crop_history jsonb, jbnr smallint,
+                    area_ha double precision, fradragsareal_ha double precision NOT NULL,
+                    crop_history jsonb, jbnr smallint,
                     kystvand_id integer, kystvand_navn text, retention double precision,
                     udledningsgraense_kgn_ha double precision, oeko boolean,
                     oestoette boolean, hoejeste_hnv smallint, kvotegivende boolean,
@@ -319,8 +336,9 @@ def load_staging(run: LoadRun, *, batch_size: int = DEFAULT_BATCH_SIZE) -> None:
                 connection.cursor() as cursor,
                 cursor.copy(
                     f"""COPY {STAGING_TABLE} (
-                    imk_id, marknr, markblok, journalnr, cvr, area_ha, crop_history, jbnr,
-                    kystvand_id, kystvand_navn, retention, udledningsgraense_kgn_ha,
+                    imk_id, marknr, markblok, journalnr, cvr, area_ha, fradragsareal_ha,
+                    crop_history, jbnr, kystvand_id, kystvand_navn, retention,
+                    udledningsgraense_kgn_ha,
                     oeko, oestoette, hoejeste_hnv, kvotegivende,
                     omlaegningsplan_virkemiddel, omlaegningsplan_status,
                     percolation_by_kategori, org_n_topsoil, s_soil, banned,
@@ -386,7 +404,8 @@ def finalize_registry_field(run: LoadRun) -> None:
             cursor.execute(
                 f"""
                 INSERT INTO registry_field (
-                imk_id, cvr, marknr, markblok, journalnr, area_ha, crop_rotation, crop_history,
+                imk_id, cvr, marknr, markblok, journalnr, area_ha, fradragsareal_ha,
+                crop_rotation, crop_history,
                 geom, centroid, sample_bucket, in_takeout_plan, udledningsgraense_kgn_ha,
                 udledningskvote_mark_kgn, jbnr, kystvand_id, kystvand_navn, retention,
                 oeko, oestoette, hoejeste_hnv, kvotegivende,
@@ -394,11 +413,12 @@ def finalize_registry_field(run: LoadRun) -> None:
                 percolation_by_kategori, org_n_topsoil, s_soil, banned, secondary_crop_history
             )
             SELECT
-                imk_id, cvr, marknr, markblok, journalnr, area_ha, '', crop_history,
+                imk_id, cvr, marknr, markblok, journalnr, area_ha, fradragsareal_ha,
+                '', crop_history,
                 geom, ST_PointOnSurface(geom), (hashtext(imk_id::text) & 1023),
                 COALESCE(omlaegningsplan_virkemiddel, 'nej'), udledningsgraense_kgn_ha,
-                ROUND((udledningsgraense_kgn_ha * COALESCE(area_ha, 0))::numeric,
-                      {ROUND_DIGITS})::float,
+                ROUND((udledningsgraense_kgn_ha * GREATEST(area_ha - fradragsareal_ha, 0))::numeric,
+                      {QUOTA_ROUND_DIGITS})::float,
                 jbnr, kystvand_id, kystvand_navn, retention, oeko, oestoette,
                 hoejeste_hnv, kvotegivende, omlaegningsplan_virkemiddel,
                 omlaegningsplan_status, percolation_by_kategori, org_n_topsoil, s_soil, banned,
