@@ -35,7 +35,7 @@ field" column is the name on the wire.
 | kystvand-id, -navn | `catchmentId`, `catchmentName` | `kystvandId`, `kystvandNavn` | |
 | vandopland (farvelæg) | `catchment` colour attribute | | |
 | udledning | `nLoad` | | N reaching the coastal water, kg N |
-| udledningskvote, mark | `nLoadQuotaKgN` | `udledningskvoteMarkKgn` | |
+| udledningskvote, mark | `nLoadQuotaKgN` | `udledningskvoteMarkKgn` | The udledningsgrænse times the area minus the fradragsareal (wells, GLM lakes and monuments, 3 m strips, markkrat), so the quota per `areaHa` can be below `nLoadLimitKgNHa`. The fradragsareal is not sent |
 | udledningskvote, opland | `totalNLoadQuotaKgN` | `udledningskvoteKgN` | |
 | beregnet udledning | `calculatedNLoadKgN` | `beregnetUdledningKgN` | |
 | overholder | `withinQuota` | `overholder` | |
