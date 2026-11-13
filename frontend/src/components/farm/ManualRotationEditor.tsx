@@ -23,6 +23,7 @@ import type {
   RotationPositionOverride,
   Simulation,
 } from '@/api/types'
+import { useSimulationView } from '@/api/views'
 import { CropYearBlock } from '@/components/farm/CropGroupTile'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import {
@@ -52,6 +53,13 @@ import {
 import { cropGroupColor, cropGroupFor } from '@/lib/crop-groups'
 import { cropLabel, rotationYearLabel } from '@/lib/crop-label'
 import { nNormLevelNote, nNormLevelOf } from '@/lib/n-norm-level'
+import {
+  allowedUndersownAt,
+  ownRotationErrorText,
+  ownVariantOf,
+  ownVariantToken,
+  rotationErrorMessage,
+} from '@/lib/own-rotations'
 import { presentWinterCovers, rotationCovers } from '@/lib/winter-cover'
 
 type ManualRotationEditorProps = {
@@ -125,7 +133,11 @@ export const ManualRotationEditor = ({
     isValidating: isValidatingAllRefs,
     error: allRefsError,
     mutate: retryAllRefs,
-  } = useRotationCandidateOptions(farmId)
+  } = useRotationCandidateOptions(
+    farmId,
+    simulation.rotationVariants,
+    simulation.nNormPercentages,
+  )
   const {
     data: cropCodes = NO_CROP_CODES,
     isLoading: isLoadingCropCodes,
@@ -133,6 +145,15 @@ export const ManualRotationEditor = ({
     error: cropCodesError,
     mutate: retryCropCodes,
   } = useCropCodes(farmId)
+  const { data: view } = useSimulationView(farmId, simulationId)
+  const rotationGroups = {
+    ...view?.data?.savedResult?.rotationGroups,
+    ...view?.simulation.rotationGroups,
+  }
+  const baseVariantFor = (rotationVariant: string) => {
+    const firstVariant = rotationGroups[rotationVariant]?.variants[0]
+    return firstVariant ? ownVariantToken(firstVariant) : '1'
+  }
   const isLoadingCandidates =
     isLoadingCurrent ||
     isLoadingCategories ||
@@ -213,10 +234,13 @@ export const ManualRotationEditor = ({
 
   const categoryPickerItems = (selectedCategory?.rotations ?? []).map((s) => ({
     key: s.rotationVariant,
-    label: compactCropSequenceLabel(s.cropSequence),
-    title: s.cropSequence
-      .map((name) => cropLabel(codeByCropName.get(name), name))
-      .join(' · '),
+    label: s.name ?? compactCropSequenceLabel(s.cropSequence),
+    title: [
+      ...(s.name ? [s.name] : []),
+      s.cropSequence
+        .map((name) => cropLabel(codeByCropName.get(name), name))
+        .join(' · '),
+    ].join(': '),
     colors: s.cropSequence.map(colorForCropName),
     meta: `${s.cropSequence.length} år`,
   }))
@@ -277,9 +301,7 @@ export const ManualRotationEditor = ({
           pendingShiftDirectionRef.current = null
           setPreview(null)
           setPreviewError(
-            error instanceof Error
-              ? error.message
-              : 'Kunne ikke genberegne rotationen.',
+            rotationErrorMessage(error, 'Kunne ikke genberegne rotationen.'),
           )
         })
         .finally(() => {
@@ -321,7 +343,7 @@ export const ManualRotationEditor = ({
     if (first) {
       changeBase({
         rotationVariant: first.rotationVariant,
-        variant: '1',
+        variant: baseVariantFor(first.rotationVariant),
         nNormPct: simulation.nNormPercentages[0] ?? '100',
       })
     }
@@ -402,9 +424,7 @@ export const ManualRotationEditor = ({
       close()
     } catch (error) {
       onError(
-        error instanceof Error
-          ? error.message
-          : 'Kunne ikke gemme den manuelle rettelse.',
+        rotationErrorMessage(error, 'Kunne ikke gemme den manuelle rettelse.'),
       )
     }
     setIsSaving(false)
@@ -424,12 +444,35 @@ export const ManualRotationEditor = ({
       ? years[(activeYearIndex + 1) % years.length]
       : undefined
 
-  const { data: undersownCropCodes } = useUndersownCropCodes(
+  const { data: eligibleUndersownCropCodes } = useUndersownCropCodes(
     farmId,
     activeYear?.year.cropCode,
     simulation.fertiliser.farmingSystem,
     nextYear?.year.cropCode,
   )
+  const ownGroup = baseRef ? rotationGroups[baseRef.rotationVariant] : undefined
+  const ownVariant =
+    ownGroup && baseRef ? ownVariantOf(ownGroup, baseRef.variant) : undefined
+  const variantChoices = ownGroup
+    ? ownGroup.variants.map((variant, index) => ({
+        token: ownVariantToken(variant),
+        text: String(index + 1),
+        selected: variant.id === ownVariant?.id,
+      }))
+    : variantsForRotation.map((v) => ({
+        token: v,
+        text: v,
+        selected: baseRef?.variant === v,
+      }))
+  const ownAllowedUndersown =
+    ownVariant && activeYearIndex !== null
+      ? new Set(allowedUndersownAt(ownVariant, startYear, activeYearIndex))
+      : null
+  const undersownCropCodes = ownAllowedUndersown
+    ? eligibleUndersownCropCodes?.filter((option) =>
+        ownAllowedUndersown.has(option.code),
+      )
+    : eligibleUndersownCropCodes
   const undersownCropPickerItems = [
     {
       key: NO_UNDERSOWN_CROP_KEY,
@@ -512,7 +555,10 @@ export const ManualRotationEditor = ({
 
         {candidatesError ? (
           <LoadError
-            message="Kunne ikke hente sædskifter."
+            message={
+              ownRotationErrorText(candidatesError) ??
+              'Kunne ikke hente sædskifter.'
+            }
             onRetry={retryCandidates}
             retrying={isRetryingCandidates}
           />
@@ -552,7 +598,7 @@ export const ManualRotationEditor = ({
                     onSelect={(key) =>
                       changeBase({
                         rotationVariant: key,
-                        variant: '1',
+                        variant: baseVariantFor(key),
                         nNormPct: simulation.nNormPercentages[0] ?? '100',
                       })
                     }
@@ -563,23 +609,23 @@ export const ManualRotationEditor = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {variantsForRotation.length > 1 ? (
+                  {variantChoices.length > 1 ? (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">
-                        Variant
+                        {ownGroup ? 'Udgave' : 'Variant'}
                       </span>
-                      {variantsForRotation.map((v) => (
+                      {variantChoices.map((choice) => (
                         <button
-                          key={v}
+                          key={choice.token}
                           type="button"
-                          aria-pressed={baseRef?.variant === v}
+                          aria-pressed={choice.selected}
                           onClick={() => {
                             if (!baseRef) return
-                            changeBase({ ...baseRef, variant: v })
+                            changeBase({ ...baseRef, variant: choice.token })
                           }}
-                          className={chipClassName(baseRef?.variant === v)}
+                          className={chipClassName(choice.selected)}
                         >
-                          {v}
+                          {choice.text}
                         </button>
                       ))}
                     </div>
@@ -609,9 +655,9 @@ export const ManualRotationEditor = ({
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Varianter har samme afgrøder - forskellen er hvor mange
-                  efterafgrøder og andre virkemidler der er lagt ind. N-norm er
-                  andelen af fuld kvælstofnorm.
+                  {ownGroup
+                    ? 'Et eget sædskifte har det virkemiddel, der er valgt i hvert år af sædskiftet. Du kan fjerne det år for år herunder. N-norm er andelen af fuld kvælstofnorm.'
+                    : 'Varianter har samme afgrøder - forskellen er hvor mange efterafgrøder og andre virkemidler der er lagt ind. N-norm er andelen af fuld kvælstofnorm.'}
                 </p>
                 {nNormNote ? (
                   <p className="text-xs text-muted-foreground">{nNormNote}</p>

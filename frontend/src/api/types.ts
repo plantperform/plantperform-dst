@@ -268,6 +268,7 @@ export type Simulation = {
   createdAt: string
   constraints: OptimizationConstraints
   rotationVariants: string[]
+  rotationGroups?: Record<string, RotationGroupSnapshot>
   nNormPercentages: string[]
   fertiliser: FertiliserSettings
   catchCropSowingDate: string
@@ -516,6 +517,7 @@ export type EconomicsStatement = {
 }
 
 export type SavedResultView = {
+  rotationGroups?: Record<string, RotationGroupSnapshot>
   runId: string
   resultRevision: number
   response: OptimizeSimulationResponse
@@ -525,9 +527,12 @@ export type SavedResultView = {
   economicsStatement?: EconomicsStatement | null
 }
 
+export type RotationOptionsError = { code: string; message: string }
+
 export type SimulationViewData = FarmViewData & {
   cropAreaRanges: CropAreaRange[]
   yearlyOptimizationCandidates: YearlyOptimizationCategoryOption[]
+  rotationOptionsError?: RotationOptionsError | null
   savedResult: SavedResultView | null
 }
 
@@ -576,6 +581,42 @@ export type FieldRotationCandidates = {
 
 export type FarmingSystem = 'Konventionel' | 'Økologisk'
 
+export type RotationDefinitionPosition = {
+  cropCode: number
+  allowedUndersownCropCodes: number[]
+}
+
+export type RotationDefinitionVariant = {
+  id: string
+  positions: RotationDefinitionPosition[]
+}
+
+export type RotationDefinition = {
+  id: string
+  name: string
+  farmingSystem: FarmingSystem | null
+  variants: RotationDefinitionVariant[]
+  revision: number
+  isStandard: boolean
+  canCopy: boolean
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type RotationGroupSnapshot = Pick<
+  RotationDefinition,
+  'id' | 'name' | 'revision' | 'farmingSystem' | 'variants'
+>
+
+export type RotationDefinitionInput = {
+  name: string
+  farmingSystem: FarmingSystem | null
+  variants: {
+    id?: string
+    positions: RotationDefinitionPosition[]
+  }[]
+}
+
 export type EvaluateRotationCandidatesInput = {
   fieldIds: string[]
   category: string
@@ -588,11 +629,12 @@ export type RotationOption = {
   rotationVariant: string
   cropSequence: string[]
   activeLen: number
+  name?: string | null
 }
 
 export type RotationCategoryOption = {
   category: string
-  croppingSystem: FarmingSystem
+  croppingSystem: FarmingSystem | null
   rotationCount: number
   rotations: RotationOption[]
 }

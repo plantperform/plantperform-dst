@@ -1,3 +1,4 @@
+import { ApiError } from '@/api/client'
 import type { FarmMember } from '@/api/types'
 import { validateEmail } from '@/lib/auth-form'
 
@@ -10,6 +11,18 @@ export const shareEmailError = (
     ? 'Har allerede adgang.'
     : null
 }
+
+export const notShared = <T>(
+  items: T[],
+  results: PromiseSettledResult<unknown>[],
+): T[] =>
+  items.filter((_, index) => {
+    const result = results[index]
+    return (
+      result.status === 'rejected' &&
+      !(result.reason instanceof ApiError && result.reason.status === 409)
+    )
+  })
 
 export const otherMemberEmails = (
   members: FarmMember[],
@@ -31,6 +44,9 @@ export const describeLeaveFarm = (otherEmails: string[]): string =>
 
 export const describeLeaveProfile = (otherEmails: string[]): string =>
   `Du mister adgangen til profilen. Simuleringer, der bruger den, beholder deres tal, men du kan ikke genberegne dem med den. ${shareAgain(otherEmails)}`
+
+export const describeLeaveRotation = (otherEmails: string[]): string =>
+  `Du mister adgangen til sædskiftet. Simuleringer, hvor det er valgt, kan stadig regne med det, men du kan ikke rette det. ${shareAgain(otherEmails)}`
 
 type ProfileMembers = { name: string; members: FarmMember[] }
 

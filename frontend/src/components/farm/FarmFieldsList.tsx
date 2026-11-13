@@ -315,6 +315,7 @@ type FarmFieldsListProps = {
   sortedFields: FieldRecord[]
   quotaTrades?: SimulationQuotaTrade[]
   isSimulationView?: boolean
+  rotationNames: Map<string, string>
   sort: FieldsSortState
   onSortChange: (sort: FieldsSortState) => void
   selectedFieldId: string | null
@@ -341,6 +342,7 @@ export const FarmFieldsList = ({
   sortedFields,
   quotaTrades = NO_QUOTA_TRADES,
   isSimulationView = false,
+  rotationNames,
   sort,
   onSortChange,
   selectedFieldId,
@@ -522,6 +524,7 @@ export const FarmFieldsList = ({
         catchmentLabel,
         detachingFieldIds,
         onRequestDetach,
+        rotationNames,
       }),
     [
       isSimulationView,
@@ -538,6 +541,7 @@ export const FarmFieldsList = ({
       catchmentLabel,
       detachingFieldIds,
       onRequestDetach,
+      rotationNames,
     ],
   )
 

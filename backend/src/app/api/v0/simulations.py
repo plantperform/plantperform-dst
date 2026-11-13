@@ -65,6 +65,7 @@ from app.domain.rotation_candidate import (
     RotationCandidateRef,
     RotationPositionOverride,
 )
+from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import (
     CreateSimulationRequest,
     OptimizationConstraints,
@@ -181,6 +182,8 @@ def post_farm_simulation(
                 "simulationId": error.simulation_id,
             },
         ) from error
+    except RotationDefinitionError:
+        raise
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -202,6 +205,8 @@ def patch_farm_simulation(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except EconomicsModuleNotFoundError as error:
         raise HTTPException(status_code=404, detail="Economics module not found") from error
+    except RotationDefinitionError:
+        raise
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     if simulation is None:
@@ -292,6 +297,8 @@ def patch_farm_simulation_constraints(
         simulation = update_simulation_constraints(farm_id, simulation_id, request, user.email)
     except (CreationNotReadyError, SetupRevisionConflictError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except RotationDefinitionError:
+        raise
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

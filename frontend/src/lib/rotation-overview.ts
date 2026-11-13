@@ -15,6 +15,7 @@ export const NO_ROTATION_KEY = 'none'
 export type RotationShare = {
   // Null for the fields that have no rotation selected.
   rotationVariant: string | null
+  name: string | null
   cropSequence: string[] | null
   areaHa: number
   share: number
@@ -35,12 +36,16 @@ export const fieldRotationVariant = (
 export const rotationKey = (rotationVariant: string | null): string =>
   rotationVariant ?? NO_ROTATION_KEY
 
-export const rotationLabel = (rotationVariant: string | null): string =>
-  rotationVariant === null
-    ? 'Uden sædskifte'
-    : rotationVariant === PERMANENT_ROTATION
-      ? 'Permanente sædskifter'
-      : `Sædskifte ${rotationVariant}`
+export const rotationLabel = (
+  rotationVariant: string | null,
+  name: string | null = null,
+): string => {
+  if (name) return name
+  if (rotationVariant === null) return 'Uden sædskifte'
+  return rotationVariant === PERMANENT_ROTATION
+    ? 'Permanente sædskifter'
+    : `Sædskifte ${rotationVariant}`
+}
 
 export const libraryRotationNumber = (
   rotationVariant: string,
@@ -65,9 +70,23 @@ export const rotationOptionsOf = (
   return [...byVariant.values()]
 }
 
+export const rotationNamesOf = (
+  rotations: RotationOption[],
+  groups: (Record<string, { name: string }> | undefined)[] = [],
+): Map<string, string> =>
+  new Map([
+    ...groups.flatMap((group) =>
+      Object.entries(group ?? {}).map(([id, { name }]) => [id, name] as const),
+    ),
+    ...rotations.flatMap((rotation) =>
+      rotation.name ? [[rotation.rotationVariant, rotation.name] as const] : [],
+    ),
+  ])
+
 export const summarizeRotationDistribution = (
   fields: FieldRecord[],
   rotations: RotationOption[],
+  names: Map<string, string> = rotationNamesOf(rotations),
 ): RotationShare[] => {
   const sequenceByVariant = new Map(
     rotations.map((rotation) => [
@@ -92,6 +111,8 @@ export const summarizeRotationDistribution = (
   const shares = [...totalsByVariant].map(
     ([rotationVariant, totals]): RotationShare => ({
       rotationVariant,
+      name:
+        rotationVariant === null ? null : (names.get(rotationVariant) ?? null),
       cropSequence:
         rotationVariant === null
           ? null

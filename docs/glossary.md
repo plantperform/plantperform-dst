@@ -23,8 +23,8 @@ field" column is the name on the wire.
 | Din konto | account, `AccountButton` | | The signed-in user's details in a panel opened from the bar |
 | fornavn, efternavn | `firstName`, `lastName` | | `UserName`; kept in the browser until the backend stores a name on the user |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
-| Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi and Om bedriften in the sidebar, which can be minimised |
-| adgang (til en bedrift eller profil) | access, `FarmMember`, `MemberList`, `useMemberAccess` | | The users a farm or a profile is shared with |
+| Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi, Egne sædskifter and Om bedriften in the sidebar, which can be minimised |
+| adgang (til en bedrift, profil eller et sædskifte) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | | The users a farm, a profile or an eget sædskifte is shared with |
 | kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota
@@ -79,7 +79,7 @@ field" column is the name on the wire.
 | sekundær afgrøde | secondary crop | | The GeoPackage's `SekAfg<year>` columns |
 | mellemafgrøde | `intermediateCrop` | `mellemafgrode` | |
 | mellemafgrøde eller tidlig såning | `intermediateOrEarlySowing`, `INTERMEDIATE_OR_EARLY_SOWING`, `isIntermediateOrEarlySowingYear` | `mellemafgroede_eller_tidlig_saaning` | A history year whose reported catch crop came before an autumn-sown crop: one of the two, which the source does not say; drawn split down the middle in the colours of both |
-| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The band under the crops and the inner ring of the crop donut use the same colours and definitions, from `winter-cover.ts` |
+| vinterdække | `WinterCoverKind`, `YearCover`, `rotationCovers`, `WinterCoverBand`, `measureCover` | | What covers the soil after harvest: `winterCereal`, `grassRapeBeets`, `undersownOrFallow`, `stubble` or `bareSoil`, shown per year together with `catchCrop`, `intermediateCrop` and `earlySowing`. The band under the crops and the inner ring of the crop donut use the same colours and definitions, from `winter-cover.ts`. `measureCover` gives the vinterdække a chosen virkemiddel stands for, also Stub and Bar jord, for the line under each year in the list of egne sædskifter |
 | vintersæd | `winterCereal` | | W=1 and W=7 (after grass) in NLES5: winter cereal covers the soil |
 | græs, raps og roer | `grassRapeBeets` | | W=6 and W=8 in NLES5: grass, clover grass, winter rape or beets stand long into the autumn, or grass is ploughed late |
 | undersået græs og brak | `undersownOrFallow` | | W=4 in NLES5 without a catch crop, and a grass reported as udlæg |
@@ -91,6 +91,20 @@ field" column is the name on the wire.
 | indregn forfrugtsværdi (indregn_ffv) | `deducts_preceding_crop_value` | | Backend. Ja or Nej per crop in the master table. Nej for grass, seed grass, clover, lucerne and other perennial crops, which get no forfrugtsværdi deducted |
 | sædskifte | rotation, `cropRotation`, `rotations` | `saedskifter` | |
 | sædskiftevariant | `rotationVariant`, `rotationVariants`, `allowedRotationVariants` | `saedskiftevariant`, `rotationSaedskiftevarianter`, `saedskiftevarianter` | |
+| egne sædskifter | own rotations, `OwnRotationsOverview`, `OwnRotationPage`, `useOwnRotationDefinitions` | `standard=false` | The sædskifter a user builds from the crops of the library's sædskifter, under Bedriften in the sidebar. Everyone they are shared with can choose them in simulations on their own farms |
+| sædskiftedefinition | `RotationDefinition`, `RotationDefinitionVariant`, `useLibraryRotationDefinitions` | `/saedskifte-rotations` | A sædskifte as the backend stores it: name, driftsform and one or more variants of 1 to 8 years. The library's sædskifter (`isStandard`, `standard=true`) can only be copied and are fetched apart from the own ones |
+| virkemiddel i et år (eget sædskifte) | `allowedUndersownCropCodes`, `undersownCropCodes`, `setYearUndersownCrop`, `keepAllowedUndersownCrops`, `yearsToRecheck` | `allowedUdlaegKoder` | The one udlæg or virkemiddel a year of an eget sædskifte has, or none. The optimization always uses it. When a crop, the order or the driftsform changes, a virkemiddel that no longer fits is removed, and the year says so |
+| standardvirkemiddel | `libraryUndersownDefaults`, `defaultUndersownCrop` | | The virkemiddel a crop gets when it is chosen in an eget sædskifte: the one the library's sædskifter use most for that crop in the same driftsform. A crop where no virkemiddel is used as often gets none |
+| år for år (eget sædskifte) | `OwnRotationYearRow`, `moveYear`, `insertYearAfter` | | A line per year with the crop, its virkemiddel as a tag and a menu to move, insert and remove years. A year can also be dragged by its handle |
+| ændringer, der ikke er gemt | `draftChangeCount`, `yearStatus`, `describeLostChanges`, `OwnRotationSaveBar` | | A saved eget sædskifte marks each year that is new (Nyt) or differs from the saved one (Ændret), counts the changes in the save line and says which are lost when someone else changed it in the meantime |
+| brug i en ny simulering | `InitialRotations`, `initialRotations`, `onUseInSimulation`, `newSimulationRotations` | | Opens Ny simulering on top of the eget sædskifte, in its driftsform and with it chosen |
+| udgave (af et eget sædskifte) | variant | `variants` | A crop sequence of an eget sædskifte with its virkemidler. A copy from the library keeps the library's variants |
+| kopi af et sædskifte | `duplicateRotationDefinition`, `LibraryRotationCopyDialog` | `/duplicate` | A new eget sædskifte with the same years and virkemidler. A library sædskifte can only be copied when it is chosen in a simulation on one of the user's farms (`canCopy`) |
+| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Gives another user the eget sædskifte; everyone who has it can edit, share, copy and delete it |
+| egne sædskifter i Ny simulering | `ownRotationVariantsOf`, `selectRotationsWithinLimit`, `fitsFarmingSystem`, `MAX_OWN_ROTATIONS_IN_SIMULATION` | `dyrkningssystem` `""` | The category Egne sædskifter has no driftsform (`croppingSystem: null`), so it fits every simulation and never counts as the other driftsform. At most 50 can be chosen in a simulation |
+| navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
+| rediger manuelt med et eget sædskifte | `ownVariantToken`, `ownVariantOf`, `allowedUndersownAt` | `rotationGroups` | A field on an eget sædskifte starts on the variant with its virkemidler, and each year offers only the virkemiddel the sædskifte has in that year, also when the start year is shifted. The definitions come from the simulation or the last run |
+| fejl i et eget sædskifte | `ownRotationProblem`, `rotationErrorMessage`, `describeRotationOptionsError`, `OwnRotationOptionsWarning` | `rotationOptionsError` | The Danish text for the backend's errors about egne sædskifter, e.g. too many combinations. A saved simulation whose egne sædskifter were changed so it cannot be optimized again keeps the figures from its last run and shows a warning |
 | antal sædskifter | `rotationCount` | `antalSaedskifter` | |
 | kategori | `category` | `kategori` | |
 | N-norm | `nNormPct`, `nNormPercentages`, `allowedNNormPercentages` | `nNormPct`, `rotationNNormProcenter`, `nNormProcenter` | |
@@ -185,7 +199,7 @@ field" column is the name on the wire.
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
-| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember`, `removeEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
+| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
 | forlade en profil | `describeLeaveProfile`, `onLeave` | | Removes yourself from a profile shared with you; the others keep it |
 | har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |

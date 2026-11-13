@@ -160,6 +160,7 @@ const renderSidebar = () =>
           selection: { kind: 'simulation', id: 'sim' },
           overviewActive: true,
           economicsPageActive: false,
+          ownRotationsActive: false,
           aboutActive: false,
           mode: 'values',
           view: 'list',

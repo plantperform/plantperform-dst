@@ -15,11 +15,11 @@ import {
   useRotationNNormPercentages,
 } from '@/api/hooks'
 import { createSimulation, updateSimulation } from '@/api/mutations'
+import { useOwnRotationDefinitions } from '@/api/own-rotations'
 import {
   useOptimizationRun,
   useOptimizationRunActions,
 } from '@/api/optimization-runs'
-import { ApiError } from '@/api/client'
 import {
   DEFAULT_OPTIMIZATION_SETTINGS,
   DEFAULT_SIMULATION_CONSTRAINTS,
@@ -45,6 +45,7 @@ import type {
 } from '@/api/types'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { CropChoicePicker } from '@/components/farm/CropChoicePicker'
 import { LoadingSkeleton } from '@/components/farm/LoadingSkeleton'
 import { RotationPicker } from '@/components/farm/RotationPicker'
@@ -73,6 +74,7 @@ import {
   chosenCropsFor,
   fertiliserFieldsForChoice,
   forcedAutumnFertiliser,
+  initialFormValues,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -80,6 +82,8 @@ import {
   listedAutumnCrops,
   offersNoFertiliser,
   organicFertiliserChoice,
+  selectableRotationCategories,
+  selectableRotationVariants,
   simulationFormSchema,
   simulationToFormValues,
   stepFields,
@@ -89,6 +93,7 @@ import {
   withCropChoice,
   withFarmingSystem,
   type CropChoice,
+  type InitialRotations,
   type RotationChoice,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
@@ -97,17 +102,21 @@ import {
   updateOrRecreate,
   type CreationRequestIdentity,
 } from '@/lib/simulation-creation'
+import { rotationErrorMessage } from '@/lib/own-rotations'
 import { cn } from '@/lib/utils'
 
 type NewScenarioPanelProps = {
   farmId: string
   fields: FieldRecord[]
   source: Simulation | null
+  initialRotations?: InitialRotations | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSimulationCreated: (simulation: Simulation) => void
   onError: (message: string | null) => void
 }
+
+const NO_ROTATION_VARIANTS: string[] = []
 
 const LAST_STEP_INDEX = SIMULATION_FORM_STEPS.length - 1
 const LIMITS_STEP_INDEX = stepIndexOf('limits')
@@ -127,6 +136,7 @@ export const NewScenarioPanel = ({
   farmId,
   fields,
   source,
+  initialRotations,
   open,
   onOpenChange,
   onSimulationCreated,
@@ -183,6 +193,15 @@ export const NewScenarioPanel = ({
   const economicsProfiles = useEconomicsProfiles()
   const cropCodes = useCropCodes(farmId).data ?? NO_CROP_CODES
   const categories = categoriesQuery.data ?? NO_CATEGORIES
+  const ownDefinitionsQuery = useOwnRotationDefinitions()
+  const ownRotationIds = new Set(
+    (ownDefinitionsQuery.data ?? []).map((definition) => definition.id),
+  )
+  const selectableCategories = selectableRotationCategories(
+    categories,
+    ownRotationIds,
+    source?.rotationVariants ?? NO_ROTATION_VARIANTS,
+  )
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
   const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
@@ -231,6 +250,8 @@ export const NewScenarioPanel = ({
   const [createError, setCreateError] = useState<string | null>(null)
   const [limitsTouched, setLimitsTouched] = useState(false)
   const [quotaTradeTouched, setQuotaTradeTouched] = useState(false)
+  const [settingsEdited, setSettingsEdited] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
   const creationRequest = useRef<CreationRequestIdentity | null>(null)
 
   const hasFields = effectiveFields.length > 0
@@ -241,7 +262,9 @@ export const NewScenarioPanel = ({
   const prefillKey = !open
     ? null
     : source === null
-      ? 'blank'
+      ? initialRotations
+        ? `blank:${initialRotations.farmingSystem}:${initialRotations.rotationVariants.join(',')}`
+        : 'blank'
       : `${source.id}:${source.revision}:${source.name}:${JSON.stringify(source.constraints)}`
   const [prefilled, setPrefilled] = useState<{
     key: string
@@ -273,13 +296,16 @@ export const NewScenarioPanel = ({
               farmingSystem: source.fertiliser.farmingSystem,
             }),
           }
-        : DEFAULT_SIMULATION_FORM_VALUES,
+        : initialRotations
+          ? initialFormValues(categories, fertiliserPresets, initialRotations)
+          : DEFAULT_SIMULATION_FORM_VALUES,
     })
     setStepIndex(0)
     setFurthestStepIndex(source ? LAST_STEP_INDEX : 0)
     setCreateError(null)
     setLimitsTouched(false)
     setQuotaTradeTouched(false)
+    setSettingsEdited(false)
   }
   // Once per opening, after fields load: a yearly cap that is the same in
   // every year follows the maks. udledning under Regler. Later edits in the
@@ -331,6 +357,19 @@ export const NewScenarioPanel = ({
       setValue('chosenCrops', chosenCropsFor(categories, getValues()))
     }
   }, [missingCrops, categories, getValues, setValue])
+  const selectableSelection = selectableRotationVariants(
+    values.rotationVariants,
+    categories,
+    selectableCategories,
+    ownRotationIds,
+  )
+  const dropsRotations =
+    categoriesQuery.data !== undefined &&
+    ownDefinitionsQuery.data !== undefined &&
+    selectableSelection.length < values.rotationVariants.length
+  useEffect(() => {
+    if (dropsRotations) setValue('rotationVariants', selectableSelection)
+  }, [dropsRotations, selectableSelection, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -398,6 +437,7 @@ export const NewScenarioPanel = ({
     setFurthestStepIndex(0)
     setCreateError(null)
     setLimitsTouched(false)
+    setSettingsEdited(false)
     setYearlySyncedKey(null)
     setQuotaTradeTouched(false)
     setPrefilled({ key: 'blank', values: null })
@@ -543,12 +583,14 @@ export const NewScenarioPanel = ({
         onError(null)
         onOpenChange(false)
         creationRequest.current = null
+        if (source === null) startOver()
       }
     } catch (error) {
       setCreateError(
-        error instanceof ApiError || error instanceof Error
-          ? error.message
-          : 'Kunne ikke gemme simuleringen. Prøv igen.',
+        rotationErrorMessage(
+          error,
+          'Kunne ikke gemme simuleringen. Prøv igen.',
+        ),
       )
     }
     setIsCreating(false)
@@ -589,12 +631,16 @@ export const NewScenarioPanel = ({
 
   const stepId = SIMULATION_FORM_STEPS[stepIndex].id
   const isLastStep = stepIndex === LAST_STEP_INDEX
+  const title = source ? 'Simuleringens indstillinger' : 'Ny simulering'
 
   return (
     <StepDialog
       open={open}
-      onOpenChange={onOpenChange}
-      title={source ? 'Simuleringens indstillinger' : 'Ny simulering'}
+      onOpenChange={(next) => {
+        if (!next && (isDirty || settingsEdited)) setConfirmingClose(true)
+        else onOpenChange(next)
+      }}
+      title={title}
       description={
         source
           ? `Ret indstillingerne for ${source.name} og kør optimeringen igen.`
@@ -769,6 +815,7 @@ export const NewScenarioPanel = ({
             onChange={(kind) => {
               setOptimizationSettings((current) => ({ ...current, kind }))
               setYearlySyncedKey(null)
+              setSettingsEdited(true)
             }}
           />
 
@@ -830,7 +877,7 @@ export const NewScenarioPanel = ({
 
         {!referenceBlocked && stepId === 'rotations' ? (
           <RotationPicker
-            categories={categories}
+            categories={selectableCategories}
             farmingSystem={values.farmingSystem}
             cropChoice={cropChoice}
             rotationVariants={values.rotationVariants}
@@ -1270,10 +1317,17 @@ export const NewScenarioPanel = ({
               farmId={farmId}
               fields={effectiveFields}
               variants={values.rotationVariants}
+              nNormPercentages={values.nNormPercentages}
               settings={optimizationSettings}
               constraints={constraints}
-              onSettingsChange={setOptimizationSettings}
-              onConstraintsChange={setConstraints}
+              onSettingsChange={(next) => {
+                setOptimizationSettings(next)
+                setSettingsEdited(true)
+              }}
+              onConstraintsChange={(next) => {
+                setConstraints(next)
+                setSettingsEdited(true)
+              }}
             />
           </div>
         ) : null}
@@ -1288,7 +1342,10 @@ export const NewScenarioPanel = ({
               fields={effectiveFields}
               settings={optimizationSettings}
               draft={quotaTradeDraft}
-              onDraftChange={setQuotaTradeDraft}
+              onDraftChange={(next) => {
+                setQuotaTradeDraft(next)
+                setSettingsEdited(true)
+              }}
             />
           </div>
         ) : null}
@@ -1297,7 +1354,7 @@ export const NewScenarioPanel = ({
             farmId={farmId}
             fields={effectiveFields}
             values={values}
-            categories={categories}
+            categories={selectableCategories}
             fertiliserPresets={fertiliserPresets}
             settings={settingsWithTrades}
             constraints={constraints}
@@ -1306,6 +1363,17 @@ export const NewScenarioPanel = ({
           />
         ) : null}
       </fieldset>
+      <ConfirmDialog
+        name={confirmingClose ? title : null}
+        title={`Luk ${title} uden at gemme?`}
+        description="Det, du har valgt, gemmes ikke."
+        confirmLabel="Luk uden at gemme"
+        onOpenChange={setConfirmingClose}
+        onConfirm={() => {
+          startOver()
+          onOpenChange(false)
+        }}
+      />
     </StepDialog>
   )
 }

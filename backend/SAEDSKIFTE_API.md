@@ -12,7 +12,7 @@ The standard lookup loader never touches custom groups.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/saedskifte-rotations` | Standards and groups the requester belongs to |
+| GET | `/saedskifte-rotations` | Standards and groups the requester belongs to; `standard=true` lists only standards, `standard=false` only groups |
 | POST | `/saedskifte-rotations` | Create a group; returns 201 |
 | GET | `/saedskifte-rotations/{id}` | Read a standard or a group the requester belongs to |
 | PATCH | `/saedskifte-rotations/{id}` | Update with `expectedRevision` |
@@ -37,7 +37,7 @@ Example create request:
     {
       "positions": [
         {"afgrodeKode": 11, "allowedUdlaegKoder": [9683]},
-        {"afgrodeKode": 11, "allowedUdlaegKoder": [9682, 9683]}
+        {"afgrodeKode": 11, "allowedUdlaegKoder": []}
       ]
     }
   ]
@@ -52,8 +52,8 @@ trimmed and nonempty. Explicit null names/variants and duplicate IDs/codes are i
 `driftsform` is optional metadata (`Konventionel`, `Økologisk`, or null); actual
 calculations use the simulation's farming system.
 
-Each variant has 1–8 positions. A position always permits no udlæg, including when
-its configured list is empty. Permitted codes come from the existing catalog and
+Each variant has 1–8 positions. A position has at most one udlæg, and every
+candidate uses it; an empty list means no udlæg. Codes come from the existing catalog and
 must be eligible for that crop and the next crop in the cycle. With unspecified
 farming-system metadata, organic-only choices may be configured; the simulation's
 actual farming system narrows them during calculation. This feature does not add
@@ -78,8 +78,8 @@ assignments nor results, field overrides or memberships. Copying can happen duri
 an optimization because it does not change the source.
 
 Standard copies resolve forward-filled crops and remove unused trailing positions.
-Each original udlæg becomes a permitted choice, alongside the implicit no-udlæg
-alternative. Changing either source or copy never changes the other.
+Each original udlæg stays the position's udlæg. Changing either source or copy never
+changes the other.
 
 ## Simulations and results
 
@@ -87,7 +87,10 @@ Existing `saedskiftevarianter` requests accept custom UUIDs as well as standard 
 Newly selecting a custom group requires group membership. Once selected, every farm
 member can calculate and preview it through that simulation, without acquiring
 edit/share rights to the source. The farm candidate endpoints also expose available
-custom groups and validate access before stateless evaluation.
+custom groups and validate access before stateless evaluation. `GET
+/farms/{id}/rotation-candidates` accepts comma-separated `saedskiftevarianter` and
+`nNormProcenter` to list only those candidates, and the custom-candidate limit then
+applies to what is listed.
 
 A new optimization submission captures the latest selected group definitions and
 revisions. Reusing the same run ID or retrying a worker attempt preserves those
@@ -105,8 +108,9 @@ shifting custom cycles and reconstructs winners from the captured definitions.
 Expansion is limited to 4,096 custom candidates per request/run, including N-norm
 levels, before deduplication and yearly shifts. Excess returns 422 rather than a
 truncated set. If a later shared edit makes future options too large, the simulation
-view still exposes saved outputs, with `rotationOptionsError` and empty future-option
-metadata; reduce the choices before the next run.
+view still exposes saved outputs, with `rotationOptionsError` (`code` and `message`)
+and empty future-option metadata; reduce the choices before the next run. The
+simulation's `rotationGroups` are included whether or not the view data is.
 
 Deleting a group removes it from current simulation selections and marks results
 outdated, preserving previous outputs and source snapshots. Fields locked to removed
@@ -118,5 +122,10 @@ variants must be unlocked or reassigned before another optimization. Deletion re
 - 404: missing/inaccessible resource, unauthorized copy, or missing/unverified member.
 - 409: stale revision, duplicate member, last-member removal, or deletion during calculation.
 - 422: invalid definitions, immutable-standard mutations, disallowed measures or excessive expansion.
+
+Rotation errors return `{"detail": {"code": ..., "message": ...}}`. The codes are
+`TOO_MANY_CUSTOM_CANDIDATES`, `ROTATION_DELETED`, `ROTATION_VARIANT_UNAVAILABLE`,
+`UDLAEG_NOT_PERMITTED` and `INVALID_ROTATION` for the rest, and a missing or
+inaccessible group answers 404 with `ROTATION_NOT_FOUND`.
 
 Frontend changes and infrastructure deployment are outside this change.

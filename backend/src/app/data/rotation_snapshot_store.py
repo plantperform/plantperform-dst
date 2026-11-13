@@ -33,7 +33,9 @@ def resolve_selected(session, ids, *, email=None, existing=()):
                 raise RotationGroupNotFoundError
     rows = session.execute(select(groups).where(groups.c.id.in_(custom_ids))).all()
     if {row.id for row in rows} != custom_ids:
-        raise RotationDefinitionError("A selected rotation no longer exists")
+        raise RotationDefinitionError(
+            "A selected rotation no longer exists", code="ROTATION_DELETED"
+        )
     return {row.id: RotationGroupSnapshot.model_validate(dict(row._mapping)) for row in rows}
 
 

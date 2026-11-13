@@ -581,6 +581,17 @@ export const nameListFormat = new Intl.ListFormat('da-DK', {
 export const formatNameList = (names: string[]): string =>
   nameListFormat.format(names)
 
+export const describeNames = (names: string[], none: string): string => {
+  if (names.length === 0) return none
+  if (names.length <= 2) return formatNameList(names)
+  return `${names[0]} og ${names.length - 1} mere`
+}
+
+export const FARMING_SYSTEMS: { value: FarmingSystem; label: string }[] = [
+  { value: 'Konventionel', label: 'Konventionel' },
+  { value: 'Økologisk', label: 'Økologisk' },
+]
+
 export const quantityUnitLabel = (unit: string, quantity: number): string =>
   unit === 'gange' && quantity === 1 ? 'gang' : unit
 
@@ -922,8 +933,11 @@ export const compareProfileChanges = (
   }))
 }
 
-const formatCount = (count: number, one: string, several: string): string =>
-  `${count} ${count === 1 ? one : several}`
+export const formatCount = (
+  count: number,
+  one: string,
+  several: string,
+): string => `${count} ${count === 1 ? one : several}`
 
 export const formatChangeCount = (count: number): string =>
   count === 0 ? 'Ingen ændringer' : formatCount(count, 'ændring', 'ændringer')

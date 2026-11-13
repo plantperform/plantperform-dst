@@ -75,7 +75,7 @@ from app.domain.simulation import (
     UpdateSimulationRequest,
 )
 from app.services.optimization import jobs
-from app.services.rotations import afgroede_normer, custom, saedskifte_library
+from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
 from app.services.scenario import candidate_evaluator
 from plantperform_fargate import worker
 
@@ -165,6 +165,9 @@ class RotationDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             definition(name="  ")
 
+    def test_udlaeg_catalog_without_hovedafgrode_includes_bar_jord(self):
+        self.assertIn(921, {option.code for option in choices.list_udlaeg_koder()})
+
     def test_explicit_null_patch_is_rejected(self):
         with self.assertRaises(ValidationError):
             UpdateRotationGroupRequest(expected_revision=0, variants=None)
@@ -189,14 +192,20 @@ class RotationDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             variant(measures=(9683, 9683))
 
-    def test_none_is_available_in_every_position(self):
+    def test_two_measures_in_one_position_are_rejected(self):
+        request = definition(variants=[variant(measures=(968, 9683))])
+
+        with self.assertRaisesRegex(RotationDefinitionError, "at most one udlæg"):
+            custom.validate_definition(request.variants)
+
+    def test_chosen_measure_is_used_in_every_candidate(self):
         value = snapshot()
 
         with custom.rotation_scope({value.id: value}):
             prepared = candidate_evaluator.prepare_candidates([value.id], ["100"])
 
-        self.assertEqual(len(prepared), 4)
-        self.assertEqual(prepared[0].rotation, ((11, None, None),) * 8)
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual({code for _, code, _ in prepared[0].rotation}, {9683})
 
     def test_empty_choices_only_generate_none(self):
         value = snapshot(variants=[variant(measures=())])
@@ -215,13 +224,14 @@ class RotationDefinitionTests(unittest.TestCase):
 
         self.assertEqual([crop for crop, _, _ in rotation], [11, 5, 1, 11, 5, 1, 11, 5])
 
-    def test_disabling_early_sowing_deduplicates_candidates(self):
+    def test_disabled_early_sowing_leaves_the_position_without_udlaeg(self):
         value = snapshot()
 
         with custom.rotation_scope({value.id: value}):
             prepared = candidate_evaluator.prepare_candidates([value.id], ["100"], False)
 
         self.assertEqual(len(prepared), 1)
+        self.assertEqual({code for _, code, _ in prepared[0].rotation}, {None})
 
     def test_effective_driftsform_filters_organic_choices(self):
         value = snapshot(variants=[variant(codes=(11,), measures=(921,))])
@@ -232,7 +242,7 @@ class RotationDefinitionTests(unittest.TestCase):
         self.assertEqual(len(prepared), 1)
 
     def test_candidate_limit_includes_n_norm_levels(self):
-        value = snapshot(variants=[variant(codes=(11,) * 6, measures=(968, 9682, 9683))])
+        value = snapshot(variants=[variant(codes=(11,) * 7, measures=(968, 9682, 9683))])
 
         with custom.rotation_scope({value.id: value}):
             custom.check_expansion([value.id], ["100"])
@@ -290,8 +300,10 @@ class RotationDefinitionTests(unittest.TestCase):
         changed = value.model_copy(update={"variants": [variant()]})
 
         with custom.rotation_scope({value.id: changed}):
-            with self.assertRaises(RotationDefinitionError):
+            with self.assertRaises(RotationDefinitionError) as raised:
                 saedskifte_library.generate_rotation(value.id, identity)
+
+        self.assertEqual(raised.exception.code, "ROTATION_VARIANT_UNAVAILABLE")
 
     def test_short_cycle_keeps_eligible_measure_in_last_horizon_year(self):
         calculation_data(self)
@@ -875,6 +887,13 @@ class RotationDatabaseTests(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.error.code, "INFEASIBLE")
 
+    def test_a_selection_that_no_longer_exists_has_its_own_code(self):
+        with self.sessions() as session:
+            with self.assertRaises(RotationDefinitionError) as raised:
+                rotation_snapshot_store.resolve_selected(session, [str(uuid4())])
+
+        self.assertEqual(raised.exception.code, "ROTATION_DELETED")
+
     def test_reading_deleted_source_results_does_not_resolve_the_source(self):
         source = store.create_group(definition(), EMAIL)
         simulation = self.select_group(source.id)
@@ -897,17 +916,86 @@ class RotationDatabaseTests(unittest.TestCase):
         store.update_group(
             source.id,
             UpdateRotationGroupRequest(
-                expected_revision=0, variants=[variant(codes=(11,) * 8, measures=(9682, 9683))]
+                expected_revision=0, variants=[variant(), variant(), variant()]
             ),
             EMAIL,
         )
 
-        result = self.execute(simulation, run)
-        view = read_model_store.get_simulation_view("farm", simulation.id, EMAIL)
+        with patch.object(custom, "MAX_CUSTOM_CANDIDATES", 2):
+            result = self.execute(simulation, run)
+            view = read_model_store.get_simulation_view("farm", simulation.id, EMAIL)
 
         self.assertEqual(result.status, "outdated", result.error)
-        self.assertIn("4096", view["data"]["rotation_options_error"])
+        self.assertEqual(
+            view["data"]["rotation_options_error"]["code"], "TOO_MANY_CUSTOM_CANDIDATES"
+        )
+        self.assertIn("At most 2", view["data"]["rotation_options_error"]["message"])
         self.assertIsNotNone(view["data"]["saved_result"])
+
+    def test_status_view_includes_the_selected_rotation_groups(self):
+        source = store.create_group(definition(), EMAIL)
+        simulation = self.select_group(source.id)
+
+        view = read_model_store.get_simulation_view(
+            "farm", simulation.id, EMAIL, include_data=False
+        )
+
+        self.assertEqual(list(view["simulation"].rotation_groups), [source.id])
+
+    def test_candidate_list_limits_only_the_listed_custom_candidates(self):
+        listed = store.create_group(definition(), EMAIL)
+        store.create_group(definition(), EMAIL)
+        with custom.rotation_scope({listed.id: listed}):
+            combinations = len(custom.list_variants(listed.id))
+        path = "/api/v0/farms/farm/rotation-candidates"
+        query = {"saedskiftevarianter": f"1,{listed.id}", "nNormProcenter": "90,100"}
+
+        with patch.object(custom, "MAX_CUSTOM_CANDIDATES", 2 * combinations):
+            everything = self.client.get(path)
+            filtered = self.client.get(path, params=query)
+
+        self.assertEqual(everything.status_code, 422)
+        self.assertEqual(everything.json()["detail"]["code"], "TOO_MANY_CUSTOM_CANDIDATES")
+        self.assertEqual(filtered.status_code, 200, filtered.text)
+        refs = {
+            (option["ref"]["saedskiftevariant"], option["ref"]["nNormPct"])
+            for option in filtered.json()
+        }
+        self.assertEqual({group for group, _ in refs}, {"1", listed.id})
+        self.assertEqual({level for _, level in refs}, {"90", "100"})
+
+    def test_rotation_list_can_leave_out_standard_or_own_rotations(self):
+        own = store.create_group(definition(), EMAIL)
+        path = "/api/v0/saedskifte-rotations"
+
+        own_only = self.client.get(path, params={"standard": "false"})
+        standard_only = self.client.get(path, params={"standard": "true"})
+
+        self.assertEqual([group["id"] for group in own_only.json()], [own.id])
+        self.assertEqual({group["isStandard"] for group in standard_only.json()}, {True})
+
+    def test_simulation_settings_keep_the_rotation_error_code(self):
+        error = RotationDefinitionError("Too many", code="TOO_MANY_CUSTOM_CANDIDATES")
+
+        with patch.object(
+            simulations.simulation_settings_store, "update_settings", side_effect=error
+        ):
+            response = self.client.patch(
+                "/api/v0/farms/farm/simulations/simulation", json={"expectedRevision": 0}
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"], {"code": "TOO_MANY_CUSTOM_CANDIDATES", "message": "Too many"}
+        )
+
+    def test_missing_rotation_has_a_not_found_code(self):
+        response = self.client.get(
+            "/api/v0/saedskifte-rotations/00000000-0000-0000-0000-000000000000"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"]["code"], "ROTATION_NOT_FOUND")
 
     def test_selection_in_an_unrelated_farm_does_not_allow_copying(self):
         source = store.create_group(definition(), OTHER)
@@ -1025,6 +1113,7 @@ class RotationDatabaseTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"]["code"], "UDLAEG_NOT_PERMITTED")
 
     def test_stateless_evaluation_rejects_an_unrelated_custom_rotation(self):
         source = store.create_group(definition(), OTHER)

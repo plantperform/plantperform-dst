@@ -69,6 +69,9 @@ vi.mock('@/api/hooks', () => ({
   simulationViewKey: vi.fn(),
   simulationsKey: vi.fn(),
 }))
+vi.mock('@/api/own-rotations', () => ({
+  useOwnRotationDefinitions: () => queries.reference,
+}))
 vi.mock('@/api/optimization-runs', () => ({
   useOptimizationRun: () => undefined,
   useOptimizationRunActions: () => ({ startRun: queries.startRun }),
@@ -102,6 +105,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     actions,
     steps,
     currentIndex,
+    onOpenChange,
     onStepSelect,
     secondaryAction,
     footerMessage,
@@ -112,6 +116,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
     actions: ReactNode
     steps: StepDialogStep[]
     currentIndex: number
+    onOpenChange: (open: boolean) => void
     onStepSelect: (index: number) => void
     secondaryAction: ReactNode
     footerMessage: ReactNode
@@ -121,6 +126,7 @@ vi.mock('@/components/ui/step-dialog', () => ({
       null,
       title,
       description,
+      createElement('button', { onClick: () => onOpenChange(false) }, 'Luk'),
       createElement(
         'nav',
         null,
@@ -310,7 +316,11 @@ describe('simulation wizard steps', () => {
     container.remove()
   })
 
-  const mount = async (simulation: Simulation | null = source, open = true) => {
+  const mount = async (
+    simulation: Simulation | null = source,
+    open = true,
+    onOpenChange = vi.fn(),
+  ) => {
     await act(async () =>
       root!.render(
         createElement(NewScenarioPanel, {
@@ -318,7 +328,7 @@ describe('simulation wizard steps', () => {
           source: simulation,
           fields: [field],
           open,
-          onOpenChange: vi.fn(),
+          onOpenChange,
           onSimulationCreated: vi.fn(),
           onError: vi.fn(),
         }),
@@ -655,6 +665,31 @@ describe('simulation wizard steps', () => {
     ).toEqual([])
   })
 
+  it('starts a new draft once a simulation is created', async () => {
+    queries.create.mockResolvedValueOnce({
+      ...source,
+      id: 'created',
+      name: 'Ny simulering',
+    })
+    const onOpenChange = vi.fn()
+    await mount(null, true, onOpenChange)
+    await change('Simuleringens navn', 'Ny simulering')
+    await click('Næste')
+    await check('Afgrøder', 'Hvede')
+    await click('Næste')
+    await click('Vælg alle')
+    for (let step = 0; step < 5; step += 1) await click('Næste')
+    await click('Gem')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    await mount(null, false, onOpenChange)
+    await mount(null, true, onOpenChange)
+    expect(currentStep()).toBe('Grundlag')
+    expect(
+      (document.getElementById('scenario-name') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   it('narrows the rotations by the crops chosen', async () => {
     queries.categories.data = [
       {
@@ -715,6 +750,27 @@ describe('simulation wizard steps', () => {
     expect(queries.create.mock.calls[0][1]).toMatchObject({
       allowedRotationVariants: ['10'],
     })
+  })
+
+  it('opens Sædskifter on the first category with a chosen rotation', async () => {
+    queries.categories.data = ['Plante', 'Kvæg'].map((category, index) => ({
+      category,
+      croppingSystem: 'Konventionel',
+      rotationCount: 1,
+      rotations: [
+        {
+          rotationVariant: String(index + 1),
+          cropSequence: ['Vinterhvede'],
+          activeLen: 1,
+        },
+      ],
+    }))
+    await mount({ ...source, rotationVariants: ['2'] })
+    await click('Sædskifter')
+    expect(
+      container.querySelector('[role="tab"][aria-selected="true"]')
+        ?.textContent,
+    ).toBe('Kvæg1/1')
   })
 
   it('selects and clears every crop of a group with its checkbox', async () => {
@@ -1110,5 +1166,27 @@ describe('simulation wizard steps', () => {
         organicNCeiling: 107,
       })
     })
+  })
+
+  it('asks before closing with changes and starts over when the user leaves', async () => {
+    const onOpenChange = vi.fn()
+    await mount(null, true, onOpenChange)
+    await click('Luk')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    onOpenChange.mockClear()
+    await change('Simuleringens navn', 'Ny simulering')
+    await click('Luk')
+    expect(onOpenChange).not.toHaveBeenCalled()
+    const leave = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Luk uden at gemme',
+    )
+    expect(leave).toBeDefined()
+    await act(async () => leave!.click())
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    onOpenChange.mockClear()
+    await click('Luk')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

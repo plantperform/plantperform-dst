@@ -103,7 +103,7 @@ def list_udlaeg_koder(
     after_ploughable_graes = hovedafgrode_kode is not None and bool(
         afgroede_normer.lookup_crop_params(hovedafgrode_kode).get("W_omploejning")
     )
-    if driftsform == "Økologisk" or after_ploughable_graes:
+    if hovedafgrode_kode is None or driftsform == "Økologisk" or after_ploughable_graes:
         bar_jord_navn = names.get(_BAR_JORD_KODE)
         if bar_jord_navn is not None:
             options.append(AfgrodeKodeOption(code=_BAR_JORD_KODE, navn=bar_jord_navn))

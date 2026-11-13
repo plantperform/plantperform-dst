@@ -186,6 +186,6 @@ export const deleteJson = async (path: string): Promise<void> => {
   })
 
   if (!response.ok) {
-    throw new Error((await readError(response)).message)
+    throw await readError(response)
   }
 }
