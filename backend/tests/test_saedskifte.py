@@ -75,7 +75,7 @@ from app.domain.simulation import (
     UpdateSimulationRequest,
 )
 from app.services.optimization import jobs
-from app.services.rotations import afgroede_normer, custom, saedskifte_library
+from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
 from app.services.scenario import candidate_evaluator
 from plantperform_fargate import worker
 
@@ -164,6 +164,9 @@ class RotationDefinitionTests(unittest.TestCase):
     def test_blank_name_is_rejected(self):
         with self.assertRaises(ValidationError):
             definition(name="  ")
+
+    def test_udlaeg_catalog_without_hovedafgrode_includes_bar_jord(self):
+        self.assertIn(921, {option.code for option in choices.list_udlaeg_koder()})
 
     def test_explicit_null_patch_is_rejected(self):
         with self.assertRaises(ValidationError):
