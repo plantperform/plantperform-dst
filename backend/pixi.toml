@@ -59,6 +59,7 @@ load-jordbundskort = "PYTHONPATH=src python database/scripts/load_jordbundskort.
 load-kystvandoplande = "PYTHONPATH=src python database/scripts/load_kystvandoplande.py"
 load-goedningsregioner = "PYTHONPATH=src:. python database/scripts/load_goedningsregioner.py"
 load-oekologi-hnv = "PYTHONPATH=src python database/scripts/load_oekologi_hnv.py"
+load-udledningsgraenser = "PYTHONPATH=src python -m database.scripts.load_udledningsgraenser"
 load-retentionskort = "PYTHONPATH=src python -m database.scripts.load_retentionskort"
 load-nles5-soil-inputs = "PYTHONPATH=src python -m database.scripts.load_nles5_soil_inputs"
 load-catch-crop-history = "PYTHONPATH=src python -m database.scripts.load_catch_crop_history"
