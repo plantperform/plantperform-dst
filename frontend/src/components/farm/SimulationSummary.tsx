@@ -23,6 +23,7 @@ import {
   ROTATION_CALENDAR_YEARS,
 } from '@/lib/field-domain'
 import { cropLabelByCode, cropLabelByName } from '@/lib/crop-label'
+import { libraryRotationNumber } from '@/lib/rotation-overview'
 import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
 import { sowingDateEffectPercent } from '@/lib/nles5-detail-labels'
 import {
@@ -191,11 +192,8 @@ export const SimulationSummary = ({
                     key={rotation.rotationVariant}
                     className="flex gap-2 break-words"
                   >
-                    <span
-                      className="w-8 shrink-0 text-right tabular-nums"
-                      title={`Sædskifte ${rotation.rotationVariant}`}
-                    >
-                      {rotation.rotationVariant}
+                    <span className="w-8 shrink-0 text-right text-muted-foreground tabular-nums">
+                      {libraryRotationNumber(rotation.rotationVariant)}
                     </span>
                     <span className="min-w-0 flex-1">
                       {rotation.cropSequence.join(' · ')}

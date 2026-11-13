@@ -42,6 +42,10 @@ export const rotationLabel = (rotationVariant: string | null): string =>
       ? 'Permanente sædskifter'
       : `Sædskifte ${rotationVariant}`
 
+export const libraryRotationNumber = (
+  rotationVariant: string,
+): string | null => (/^\d+$/.test(rotationVariant) ? rotationVariant : null)
+
 // The crops of a rotation in the order of the years: "1. Vinterhvede → 2. Vårbyg".
 export const cropSequenceText = (cropSequence: string[]): string =>
   cropSequence.map((crop, index) => `${index + 1}. ${crop}`).join(' → ')
