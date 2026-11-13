@@ -53,14 +53,15 @@ Migrationernes stier er relative til `backend/`.
 
 ## Kortdata i GeoPackage’en
 
-Retention, organisk kvælstof i overjorden (NT), perkolation (P) og
-jordbundseffekt (S) i den sammenlagte GeoPackage beregnes fra de officielle
-kort efter bekendtgørelsen om udledningsbaseret markregulering for 2027, og
-historiske efterafgrøder lægges ind som sekundær afgrøde. Kør scripts, hver
-gang GeoPackage’en eller en af kilderne udskiftes, og før
+Udledningsgrænse, retention, organisk kvælstof i overjorden (NT), perkolation
+(P) og jordbundseffekt (S) i den sammenlagte GeoPackage beregnes fra de
+officielle kort efter bekendtgørelsen om udledningsbaseret markregulering for
+2027, og historiske efterafgrøder lægges ind som sekundær afgrøde. Kør scripts,
+hver gang GeoPackage’en eller en af kilderne udskiftes, og før
 `pixi run load-registry-data`:
 
 ```bash
+pixi run load-udledningsgraenser
 pixi run load-retentionskort
 pixi run load-nles5-soil-inputs
 pixi run load-catch-crop-history
@@ -73,6 +74,7 @@ ligger i `ANGJ-data/Udeledningsdata/UMR_2027/` samt `.shx`, `.dbf`, `.prj` og
 
 | Script | Kilde | Skriver |
 | --- | --- | --- |
+| [load_udledningsgraenser.py](load_udledningsgraenser.py) | `Udledningsgraenser_til_Udledningsbaseret_Markregulering_2027.shp` (ikke det foreløbige `Foreloebige_udledningsgraenser_…`) | `UdledgrKgNPerHa`: arealvægtet gennemsnit af cellernes `Udledgr` over markens overlap, afrundet til 2 decimaler (PUMR-kravspec felt A78). Marker uden overlap får en tom værdi, som indlæses som 0 og giver ingen kvote. Styrelsen udskifter laget uden at skifte filnavn, så noter hentedatoen i scriptets docstring. |
 | [load_retentionskort.py](load_retentionskort.py) | `Kvaelstofretention_UMR_2027.shp` | `RetTot`: arealvægtet gennemsnit over markens overlap, afrundet til 2 decimaler (§ 13, stk. 3; PUMR-kravspec felt A22). Marker uden overlap får en tom værdi. |
 | [load_nles5_soil_inputs.py](load_nles5_soil_inputs.py) | `Organisk kvaelstof i overjorden 2027.shp`, `Afstroemningsvaerdier 2027.shp` | `orgNtopsoil2024` og de otte `P_*`-kolonner: den værdi, der dækker den største del af marken (§ 29, stk. 6 og § 32, stk. 3). Kortenes 0 betyder ingen data og tæller ikke med; en mark helt uden data får en tom værdi og markeres som `banned` ved indlæsning. `S_soil2024`: exp(−0,001849 · lerprocent) for `JB_Kode` efter bilag 2, tabel 14. |
 | [load_catch_crop_history.py](load_catch_crop_history.py) | `ANGJ-data/Marker 24-25-25/Efterafgrøde_historik/Efterafgrøder 2024-2026.zip` (markkort med pligtige og målrettede efterafgrøder pr. år) | Tilføjer `SekAfg2024`–`SekAfg2026`: afgrødekode 968, når efterafgrødemarker dækker mindst 90 % af marken, ellers en tom værdi. `load-registry-from-merged-gpkg` indlæser dem som `registry_field.secondary_crop_history`. |
