@@ -116,7 +116,8 @@ class RegistryLoadRecoveryTests(unittest.TestCase):
             connection.execute("""
                 CREATE TABLE registry_field (
                     imk_id bigint PRIMARY KEY, cvr text, marknr text, markblok text, journalnr text,
-                    area_ha double precision, crop_rotation text, crop_history json,
+                    area_ha double precision, fradragsareal_ha double precision NOT NULL DEFAULT 0,
+                    crop_rotation text, crop_history json,
                     geom geometry(MULTIPOLYGON,4326), centroid geometry(POINT,4326),
                     sample_bucket smallint, in_takeout_plan text,
                     udledningsgraense_kgn_ha double precision,
@@ -140,12 +141,20 @@ class RegistryLoadRecoveryTests(unittest.TestCase):
                 sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema))
             )
 
-    def write_source(self, ids: list[int | None], *, geometries: list | None = None) -> None:
+    def write_source(
+        self,
+        ids: list[int | None],
+        *,
+        geometries: list | None = None,
+        deductions: list[float | None] | None = None,
+    ) -> None:
         polygon = Polygon([(10, 55), (10.01, 55), (10.01, 55.01), (10, 55)])
         rows = []
         for index, imk_id in enumerate(ids):
             rows.append(
                 {
+                    # An older GeoPackage has no Fradragsareal column.
+                    **({} if deductions is None else {"Fradragsareal": deductions[index]}),
                     "IMK_ID": imk_id,
                     "Marknr": f"source-{index}",
                     "IMK_areal": 1.23456,
@@ -271,7 +280,32 @@ class RegistryLoadRecoveryTests(unittest.TestCase):
             """).fetchone()
         self.assertEqual(row[:3], ("source-0", "00000123", 0.46))
         self.assertEqual(row[3], {str(k): 0.123 for k in range(1, 9)})
-        self.assertEqual(row[4:], (3.123, 1.0, False, 4326, "ST_MultiPolygon", 13.032))
+        self.assertEqual(row[4:], (3.123, 1.0, False, 4326, "ST_MultiPolygon", 13.03))
+
+    def test_deducts_the_fradragsareal_from_the_area_the_quota_is_calculated_on(self) -> None:
+        # The limit is 10.556 kg N/ha and every field is 1.23456 ha.
+        self.write_source([1, 2, 3], deductions=[0.5, 3.0, None])
+
+        loader.load_registry_from_merged_gpkg()
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                """SELECT imk_id, fradragsareal_ha, udledningskvote_mark_kgn
+                   FROM registry_field ORDER BY imk_id"""
+            ).fetchall()
+        # 10.556 x (1.23456 - 0.5) ha; a deduction above the area leaves no quota;
+        # a field without a deduction gets 10.556 x 1.23456 ha.
+        self.assertEqual(rows, [(1, 0.5, 7.75), (2, 3.0, 0.0), (3, 0.0, 13.03)])
+
+    def test_a_geopackage_without_fradragsareal_deducts_nothing(self) -> None:
+        loader.load_registry_from_merged_gpkg()
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT fradragsareal_ha, udledningskvote_mark_kgn
+                   FROM registry_field"""
+            ).fetchall()
+        self.assertEqual(rows, [(0.0, 13.03)])
 
     def test_geometry_repair_rollback_and_resume_without_recopy(self) -> None:
         bowtie = Polygon([(10, 55), (10.01, 55.01), (10.01, 55), (10, 55.01), (10, 55)])
