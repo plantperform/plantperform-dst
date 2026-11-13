@@ -9,6 +9,7 @@ import { emptyMeasures } from '@/lib/field-domain'
 import {
   cropSequenceOf,
   cropSequenceText,
+  libraryRotationNumber,
   NO_ROTATION_COLOR,
   rotationColorsOf,
   rotationKey,
@@ -71,6 +72,15 @@ describe('rotationLabel', () => {
   it('names the permanent crops and the fields without a rotation', () => {
     expect(rotationLabel('permanent')).toBe('Permanente sædskifter')
     expect(rotationLabel(null)).toBe('Uden sædskifte')
+  })
+})
+
+describe('libraryRotationNumber', () => {
+  it('numbers the library rotations but not an own rotation, whose id is not a number', () => {
+    expect(libraryRotationNumber('22')).toBe('22')
+    expect(
+      libraryRotationNumber('3f2a8c1e-5b7d-4e2a-9c1f-0a2b3c4d5e6f'),
+    ).toBeNull()
   })
 })
 
