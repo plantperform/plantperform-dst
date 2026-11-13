@@ -633,25 +633,25 @@ export type QuotaFieldChange = {
   toCrops: string[]
 }
 
-// One solved trade amount: tradeKg is kg N per year added to (bought) or
-// removed from (sold) the catchment's cap in every capped year.
+// One solved trade amount: tradeKg is kg N per year bought (positive) or
+// sold (negative) in every year, so the catchment may let out its kvote plus
+// tradeKg.
 export type QuotaValuePoint = {
   tradeKg: number
   status: QuotaPointStatus
-  // Best yearly DB2 with the traded cap, V(t); null when infeasible.
+  // Best yearly DB2 with the traded kvote, V(t); null when infeasible.
   db2: number | null
   // Proven upper bound on V(t): the best possible DB2 lies between db2 and
-  // this. Null when nothing bounds it, as in curves computed before bounds.
+  // this. Null when nothing bounds it.
   db2UpperBound: number | null
   // Set when the solver found nothing better within its time limit than this
-  // smaller trade's solution, which also meets the larger cap: a lower bound.
+  // smaller trade's solution, which also meets the larger kvote: a lower bound.
   solutionFromTradeKg: number | null
   nLoadByYear: Record<string, number>
-  capByYear: Record<string, number | null>
   feedUnitsByYear: Record<string, number>
   changedFields: QuotaFieldChange[]
   // Every mark's rotation in this point's plan, used to create it as a
-  // simulation; empty when infeasible or in curves computed before it existed.
+  // simulation; empty when infeasible.
   rotations: QuotaFieldRotation[]
 }
 
@@ -667,14 +667,13 @@ export type QuotaTradeSimulationInput = {
   catchmentId: number
   tradeKg: number
   name: string
-  // Kept on the simulation with the trade.
+  // The new simulation's kvotehandel buys and sells at this price.
   priceKrPerKg: number
-  catchmentName: string | null
 }
 
 export type QuotaTradeSimulationResult = {
-  // Its saved settings are the curve's Års-optimering with the traded
-  // catchment's caps, so its run is started like any other simulation's.
+  // Its saved settings trade the catchment's kvote at the price, so its run
+  // is started like any other simulation's.
   simulation: Simulation
   // Fields that could not be given the plan's rotation.
   unmatchedFields: string[]
@@ -682,17 +681,9 @@ export type QuotaTradeSimulationResult = {
 
 export type QuotaValueCurve = {
   catchmentId: number
-  baseCapByYear: Record<string, number | null>
+  quotaKgN: number
   unconstrainedTradeKg: number
   points: QuotaValuePoint[]
-}
-
-export type QuotaValueInteraction = {
-  priceKrPerKg: number
-  tradesKg: Record<string, number>
-  separateGain: number
-  combinedStatus: QuotaPointStatus
-  combinedGain: number | null
 }
 
 export type QuotaValueOutput = {
@@ -700,12 +691,13 @@ export type QuotaValueOutput = {
   baseFeedUnitsByYear: Record<string, number>
   minFeedUnits: number | null
   maxFeedUnits: number | null
-  curves: QuotaValueCurve[]
-  interaction: QuotaValueInteraction | null
+  curve: QuotaValueCurve
 }
 
+// One catchment's curve.
 export type QuotaValueResult = {
-  status: 'not_started' | 'queued' | 'in_progress' | 'completed' | 'failed'
+  catchmentId: number
+  status: 'queued' | 'in_progress' | 'completed' | 'failed'
   runId: string | null
   baseRunId: string | null
   inputRevision: number | null
@@ -731,9 +723,6 @@ export type QuotaProgressStep = {
     | 'selling'
     | 'selling_limit'
     | 'refinement'
-    | 'interaction'
-  // The catchment the step belongs to; null for steps shared by all of them.
-  catchmentId: number | null
   state: 'pending' | 'running' | 'done' | 'skipped'
   done: number
   // Solves the step needs; null while that is not yet known.
@@ -751,7 +740,8 @@ export type QuotaTradeRange = {
 export type QuotaValueInput = {
   expectedRevision: number
   runId: string
+  catchmentId: number
   priceKrPerKg: number
-  // Null solves the default window around the no-trade cap.
+  // Null solves the default window around no trade.
   tradeRange: QuotaTradeRange | null
 }

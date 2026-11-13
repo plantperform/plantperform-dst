@@ -7,6 +7,7 @@ import {
   useFarmHistoricalYearlySummary,
   useFieldYearValues,
   useRotationCategories,
+  useQuotaValues,
   useSimulationView,
   useSimulationYearlySummary,
 } from '@/api/hooks'
@@ -250,11 +251,21 @@ export const FarmInspector = ({
   // Kvotehandel belongs to a scenario's values; Liste/Delt/Kort stays a
   // separate layout choice for the fields.
   const [content, setContent] = useState<InspectorContent>('fields')
-  const canShowQuotaTrade = canSwitchMode && !isRules
+  const quotaValues = useQuotaValues(
+    canSwitchMode ? farm.id : undefined,
+    selectedSimulation?.id,
+  )
+  const canShowQuotaTrade =
+    canSwitchMode && !isRules && quotaValues.data !== undefined
   const effectiveContent: InspectorContent = canShowQuotaTrade
     ? content
     : 'fields'
   const showQuotaTrade = effectiveContent === 'quota'
+  const [shownView, setShownView] = useState(effectiveView)
+  if (shownView !== effectiveView) {
+    setShownView(effectiveView)
+    setContent('fields')
+  }
   const [highlightedMode, setHighlightedMode] = useState(effectiveMode)
   if (highlightedMode !== effectiveMode) {
     setHighlightedMode(effectiveMode)
@@ -561,13 +572,16 @@ export const FarmInspector = ({
               value={effectiveContent}
               options={CONTENT_OPTIONS}
               onValueChange={setContent}
+              labelClassName="inline"
               className="h-8 w-fit shrink-0"
             />
           ) : null}
           {showQuotaTrade && selectedSimulation ? (
             <QuotaTradePanel
+              key={selectedSimulation.id}
               farmId={farm.id}
               simulation={selectedSimulation}
+              fields={fields}
               catchmentLabel={catchmentLabel}
               onOpenSimulation={(simulationId) => {
                 // Show the new simulation's marker, not its Kvotehandel.

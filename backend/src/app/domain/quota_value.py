@@ -12,7 +12,7 @@ from app.domain.optimization import ResultError
 from app.domain.rotation_candidate import RotationCandidateRef, RotationPositionOverride
 from app.domain.simulation import Simulation
 
-QuotaValueStatus = Literal["not_started", "queued", "in_progress", "completed", "failed"]
+QuotaValueStatus = Literal["queued", "in_progress", "completed", "failed"]
 QuotaPointStatus = Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN"]
 
 # A chosen range may ask for at most this many trades besides no trade; each is
@@ -25,8 +25,7 @@ class QuotaTradeRange(CamelModel):
     """The trades to solve instead of the default window ("interval for handel").
 
     Trades are laid out from no trade in steps of step_kg, so they line up with
-    0, and the ends of the range are always included. The same range applies to
-    every opland.
+    0, and the ends of the range are always included.
     """
 
     min_kg: float = Field(ge=-MAX_RANGE_KG, le=MAX_RANGE_KG)
@@ -60,11 +59,11 @@ class QuotaTradeRange(CamelModel):
 class QuotaValueRequest(CamelModel):
     expected_revision: int = Field(ge=0)
     run_id: UUID
+    kystvand_id: int
     # The price the gains are compared at: it decides which points are solved
-    # again more precisely, and the interaction check between oplande. The
-    # frontend can still apply any price to the curve afterwards.
+    # again more precisely. The frontend can still apply any price afterwards.
     price_kr_per_kg: float = Field(ge=0, le=10_000)
-    # None solves the default window around the no-trade cap.
+    # None solves the default window around no trade.
     trade_range: QuotaTradeRange | None = None
 
 
@@ -87,41 +86,32 @@ class QuotaFieldRotation(CamelModel):
 
 
 class QuotaValuePoint(CamelModel):
-    # kg N per year added to (positive, bought) or removed from (negative, sold)
-    # the opland's cap in every capped year.
+    # kg N per year bought (positive) or sold (negative) in every year: the
+    # opland may let out its kvote plus this.
     trade_kg: float
     status: QuotaPointStatus
-    # Best yearly DB2 with the traded cap, V(t); None when infeasible.
+    # Best yearly DB2 with the traded kvote, V(t); None when infeasible.
     db2: float | None = None
     # Proven upper bound on V(t): the true best DB2 lies between db2 and this.
-    # None when nothing bounds it (infeasible, or a curve saved before bounds).
+    # None when nothing bounds it (infeasible).
     db2_upper_bound: float | None = None
     # Set when the solver found nothing better here within its time limit than
-    # this smaller trade's solution, which also meets the larger cap (V(t) can
-    # only rise with more kvote). The value is then a lower bound.
+    # this smaller trade's solution, which also stays within the larger kvote
+    # (V(t) can only rise with more kvote). The value is then a lower bound.
     solution_from_trade_kg: float | None = None
     n_load_by_year: dict[int, float] = Field(default_factory=dict)
-    cap_by_year: dict[int, float | None] = Field(default_factory=dict)
     feed_units_by_year: dict[int, float] = Field(default_factory=dict)
     changed_fields: list[QuotaFieldChange] = Field(default_factory=list)
     # Every mark's rotation in this point's plan, to create it as a simulering;
-    # empty when infeasible or in curves computed before this was stored.
+    # empty when infeasible.
     rotations: list[QuotaFieldRotation] = Field(default_factory=list)
 
 
 class QuotaValueCurve(CamelModel):
     kystvand_id: int
-    base_cap_by_year: dict[int, float | None]
+    kvote_kg: float
     unconstrained_trade_kg: float
     points: list[QuotaValuePoint]
-
-
-class QuotaValueInteraction(CamelModel):
-    price_kr_per_kg: float
-    trades_kg: dict[int, float]
-    separate_gain: float
-    combined_status: QuotaPointStatus
-    combined_gain: float | None = None
 
 
 class QuotaValueOutput(CamelModel):
@@ -129,12 +119,11 @@ class QuotaValueOutput(CamelModel):
     base_feed_units_by_year: dict[int, float]
     min_fen: float | None = None
     max_fen: float | None = None
-    curves: list[QuotaValueCurve]
-    interaction: QuotaValueInteraction | None = None
+    curve: QuotaValueCurve
 
 
 QuotaProgressStepKey = Literal[
-    "base", "uncapped", "buying", "selling", "selling_limit", "refinement", "interaction"
+    "base", "uncapped", "buying", "selling", "selling_limit", "refinement"
 ]
 QuotaProgressStepState = Literal["pending", "running", "done", "skipped"]
 
@@ -143,8 +132,6 @@ class QuotaProgressStep(CamelModel):
     """One step of a running curve, in the order the steps are solved."""
 
     key: QuotaProgressStepKey
-    # The opland the step belongs to; None for steps shared by all of them.
-    kystvand_id: int | None = None
     state: QuotaProgressStepState = "pending"
     done: int = 0
     # Solves the step needs; None while that is not yet known.
@@ -152,7 +139,8 @@ class QuotaProgressStep(CamelModel):
 
 
 class QuotaValueResult(CamelModel):
-    status: QuotaValueStatus = "not_started"
+    kystvand_id: int
+    status: QuotaValueStatus
     run_id: str | None = None
     # The completed "Års-optimering" run the curve was computed from.
     base_run_id: str | None = None
@@ -177,14 +165,14 @@ class QuotaTradeSimulationRequest(CamelModel):
     kystvand_id: int
     trade_kg: float
     name: str = Field(min_length=1, max_length=200)
-    # The price the trade was chosen at, kept on the simulering with the trade.
+    # The price the trade was chosen at: the new simulering's kvotehandel buys
+    # and sells at it.
     price_kr_per_kg: float = Field(ge=0, le=10_000)
-    kystvand_navn: str | None = Field(default=None, max_length=200)
 
 
 class QuotaTradeSimulationResponse(CamelModel):
-    # Its saved settings are the curve's Års-optimering with the traded caps, so
-    # the caller starts that run on it as on any other simulering.
+    # Its saved settings trade the opland's kvote at the price, so the caller
+    # starts its Års-optimering as on any other simulering.
     simulation: Simulation
     # Marker that could not be given the plan's rotation; a normal run decides
     # theirs.

@@ -1,17 +1,19 @@
 """Value of buying or selling N kvote in one kystvandopland ("Kvotehandel").
 
 For a kystvandopland k, V(t) is the best yearly DB2 "Års-optimering" reaches
-when k's udledning cap is changed by t kg N in every capped year (t > 0 buys,
-t < 0 sells), everything else unchanged. Given a market price p, the gain of a
-trade over not trading is V(t) - p * t - V(0); the price is applied by the
-caller, so one curve answers every price.
+when k's kvotegivende marker may let out k's kvote plus t kg N in every year
+(t > 0 buys, t < 0 sells), as a kvotehandel lets them; the cap under Grænser
+does not apply to k. The caller fixes the rest of the farm. Given a market
+price p, the gain of a trade over not trading is V(t) - p * t - V(0); the price
+is applied by the caller, so one curve answers every price.
 
-V(t) is solved at evenly spaced trades within a window of 25 % of k's no-trade
-cap either way: three on each side of t = 0, so seven points. The window is cut
-at the limits of t. Solving without k's cap gives the udledning the farm would
+V(t) is solved at evenly spaced trades within a window of 25 % of k's kvote
+either way: three on each side of t = 0, so seven points. The window is cut at
+the limits of t. Solving without k's kvote gives the udledning the farm would
 use if kvote were free; buying beyond it adds nothing, so it is the highest
-trade looked at. Selling stops where the model becomes infeasible, and the step
-into infeasibility is bisected so the selling limit is located more precisely.
+trade looked at. Selling stops at the kvote or where the model becomes
+infeasible, and the step into infeasibility is bisected so the selling limit is
+located more precisely.
 
 Every solve is hinted with the solution of its nearest already-solved
 neighbour, which is usually only a few fields away from the answer.
@@ -21,9 +23,9 @@ to lie in a range [V found, upper bound]. At the price asked for, the points
 whose range still overlaps the best trade's could each be the best one; those
 are solved again to 0.05 % to tell them apart.
 
-The oplande's curves are independent of each other once the plan without trade
-is known, and so are the solves that refine the contenders, so both are solved
-several at a time, each thread on its own copy of the model (parallel_solves).
+The solves that refine the contenders are independent of each other, so they
+are solved several at a time, each thread on its own copy of the model
+(parallel_solves).
 """
 
 import contextvars
@@ -42,8 +44,8 @@ from plantperform_fargate.deadline import remaining_time
 from plantperform_fargate.models import YearlyOptimizationInput, YearlyOptimizationOutput
 from plantperform_fargate.yearly_engine import YearlyModel, solve_yearly
 
-# The trades looked at reach this share of the no-trade cap either way, with
-# this many evenly spaced points on each side of t = 0.
+# The trades looked at reach this share of the kvote either way, with this many
+# evenly spaced points on each side of t = 0.
 WINDOW_SHARE = 0.25
 POINTS_PER_SIDE = 3
 # How precisely a selling limit inside the window is located.
@@ -70,69 +72,46 @@ class QuotaProgress:
     """How far the analysis has come, step by step, reported after every change.
 
     The steps are listed up front in the order they run, so a viewer sees what
-    is left: the base, then per opland the uncapped solve, buying, selling and
-    locating the selling limit, then the refinement and the interaction check.
-    A step's total is set once it is known. report receives a list of plain
-    dicts (key, kystvand_id, state, done, total). Oplande solved in parallel
-    report from their own threads, so every change and report holds a lock.
+    is left: the base, the uncapped solve, buying, selling, locating the
+    selling limit and the refinement. A step's total is set once it is known.
+    report receives a list of plain dicts (key, state, done, total). The
+    refinement solves report from their own threads, so every change and
+    report holds a lock.
     """
 
-    PER_OPLAND = ("uncapped", "buying", "selling", "selling_limit")
+    STEPS = ("base", "uncapped", "buying", "selling", "selling_limit", "refinement")
 
-    def __init__(self, oplande: list[int], report: Callable[[list[dict]], None] | None = None):
+    def __init__(self, report: Callable[[list[dict]], None] | None = None):
         self._report = report
         self._lock = threading.RLock()
-        self._steps = [self._step("base", None)]
-        for k in oplande:
-            self._steps += [self._step(key, k) for key in self.PER_OPLAND]
-        self._steps.append(self._step("refinement", None))
-        if len(oplande) > 1:
-            self._steps.append(self._step("interaction", None))
+        self._steps = [
+            {"key": key, "state": "pending", "done": 0, "total": None} for key in self.STEPS
+        ]
 
-    @staticmethod
-    def _step(key: str, kystvand_id: int | None) -> dict:
-        return {
-            "key": key,
-            "kystvand_id": kystvand_id,
-            "state": "pending",
-            "done": 0,
-            "total": None,
-        }
+    def _find(self, key: str) -> dict:
+        return next(s for s in self._steps if s["key"] == key)
 
-    def _find(self, key: str, kystvand_id: int | None) -> dict | None:
-        return next(
-            (s for s in self._steps if s["key"] == key and s["kystvand_id"] == kystvand_id), None
-        )
-
-    def _update(self, key: str, kystvand_id: int | None, **changes) -> None:
+    def _update(self, key: str, **changes) -> None:
         with self._lock:
-            step = self._find(key, kystvand_id)
-            if step is None:
-                return
-            step.update(changes)
+            self._find(key).update(changes)
             if self._report is not None:
                 self._report([dict(s) for s in self._steps])
 
-    def start(self, key: str, kystvand_id: int | None = None, total: int | None = None) -> None:
-        self._update(key, kystvand_id, state="running", total=total)
+    def start(self, key: str, total: int | None = None) -> None:
+        self._update(key, state="running", total=total)
 
-    def solved(self, key: str, kystvand_id: int | None = None) -> None:
+    def solved(self, key: str) -> None:
         with self._lock:
-            step = self._find(key, kystvand_id)
-            if step is not None:
-                total = step["total"]
-                done = step["done"] + 1
-                # A step may need a solve more than planned (a selling point
-                # solved again); its total grows with it.
-                self._update(
-                    key, kystvand_id, done=done, total=None if total is None else max(total, done)
-                )
+            step = self._find(key)
+            total = step["total"]
+            done = step["done"] + 1
+            # A step may need a solve more than planned (a selling point
+            # solved again); its total grows with it.
+            self._update(key, done=done, total=None if total is None else max(total, done))
 
-    def finish(self, key: str, kystvand_id: int | None = None) -> None:
+    def finish(self, key: str) -> None:
         with self._lock:
-            step = self._find(key, kystvand_id)
-            if step is not None:
-                self._update(key, kystvand_id, state="done" if step["done"] else "skipped")
+            self._update(key, state="done" if self._find(key)["done"] else "skipped")
 
     @property
     def steps(self) -> list[dict]:
@@ -147,7 +126,7 @@ class QuotaPoint:
     trade_kg: float
     status: str
     db2: float | None
-    # Udledning of the opland's kvotegivende marker and the traded cap, per year.
+    # Udledning of the opland's kvotegivende marker and the traded kvote, per year.
     n_load_by_year: tuple[float, ...]
     cap_by_year: tuple[float | None, ...]
     # Foderenheder of the whole farm per year.
@@ -155,7 +134,7 @@ class QuotaPoint:
     # field id -> chosen option key; empty when infeasible.
     choices: dict[str, str]
     # Set when the solver found nothing better here within its time limit than
-    # this smaller trade's solution, which also fits the larger cap: the value
+    # this smaller trade's solution, which also fits the larger kvote: the value
     # is then a lower bound.
     solution_from_trade_kg: float | None = None
     # Proven upper bound on V(t): from this solve, lowered by any larger
@@ -170,41 +149,40 @@ class QuotaPoint:
 @dataclass(frozen=True)
 class QuotaCurve:
     kystvand_id: int
-    base_cap_by_year: tuple[float | None, ...]
+    kvote_kg: float
     points: tuple[QuotaPoint, ...]
-    # Buying more than this adds nothing: the farm's udledning without the cap.
+    # Buying more than this adds nothing: the farm's udledning without the kvote.
     unconstrained_trade_kg: float
     solves: int
 
 
 @dataclass(frozen=True)
-class QuotaInteraction:
-    """Separate best trades per opland checked by applying them together."""
-
-    price_kr_per_kg: float
-    trades_kg: dict[int, float]
-    separate_gain: float
-    combined_status: str
-    combined_gain: float | None
-
-
-@dataclass(frozen=True)
 class QuotaValueAnalysis:
     base: QuotaPoint
-    curves: tuple[QuotaCurve, ...]
-    interaction: QuotaInteraction | None
+    curve: QuotaCurve
 
 
 def tradable_kystvandoplande(input: YearlyOptimizationInput) -> list[int]:
-    """Oplande with a cap in at least one year and kvotegivende marker in them."""
-    caps = input.constraints.max_n_load_by_kystvandopland_and_year
+    """Oplande with a kvote and kvotegivende marker in them, as a kvotehandel needs."""
     with_quota = {f.kystvand_id for f in input.fields if f.kvotegivende} | {
         f.kystvand_id for f in input.fixed_fields if f.kvotegivende
     }
-    return sorted(
-        k
-        for k, year_caps in caps.items()
-        if k is not None and k in with_quota and any(c is not None for c in year_caps)
+    return sorted(k for k in input.constraints.kvote_by_kystvandopland if k in with_quota)
+
+
+def kvote_input(input: YearlyOptimizationInput, kystvand_id: int) -> YearlyOptimizationInput:
+    """input with only k's udledning capped, by its kvote in every year, and no trade.
+
+    The other oplande keep no cap: the caller fixes their marker.
+    """
+    kvote = input.constraints.kvote_by_kystvandopland[kystvand_id]
+    return replace(
+        input,
+        constraints=replace(
+            input.constraints,
+            max_n_load_by_kystvandopland_and_year={kystvand_id: (kvote,) * NUM_YEARS},
+            quota_trades=(),
+        ),
     )
 
 
@@ -421,9 +399,10 @@ def quota_value_curve(
 ) -> QuotaCurve:
     """Solve V(t) for one opland; base is the already-solved t = 0 point.
 
-    The window is window_share of the smallest capped year's cap, so selling
-    all of it never takes a year's cap below zero. A trade_range replaces the
-    window with its own trades, cut at the same limits.
+    input caps the opland by its kvote, as kvote_input does. The window is
+    window_share of the kvote, so selling all of it never takes the kvote below
+    zero. A trade_range replaces the window with its own trades, cut at the
+    same limits.
 
     Selling points are the hard ones (the tighter cap forces many marker to
     change), so they may be given a longer time limit than input's.
@@ -457,24 +436,24 @@ def quota_value_curve(
     def can_solve() -> bool:
         return solves < max_solves and not _out_of_time()
 
-    # Top: the udledning the farm would use with no cap in this opland. Solved
+    # Top: the udledning the farm would use with no kvote in this opland. Solved
     # without a hint: its optimum is far from the capped solution, and starting
     # there kept CP-SAT near it (562,874 after 10 s on a real farm, against
     # 567,260 proven optimal in 4 s without the hint).
-    progress = progress or QuotaProgress([])
-    progress.start("uncapped", kystvand_id, total=1)
+    progress = progress or QuotaProgress()
+    progress.start("uncapped", total=1)
     solves += 1
     free = solver(with_trades(input, {kystvand_id: None}), None)
-    progress.solved("uncapped", kystvand_id)
-    progress.finish("uncapped", kystvand_id)
+    progress.solved("uncapped")
+    progress.finish("uncapped")
     unconstrained_trade_kg = 0.0
     if free.status in FEASIBLE:
         free_load = kvotegivende_n_load_by_year(input, _choices(free), kystvand_id)
         excess = max(free_load[y] - base_caps[y] for y in capped)
         unconstrained_trade_kg = float(math.ceil(excess)) if excess > 0 else 0.0
 
-    # The trades are cut where buying adds nothing and where the cap would drop
-    # below zero.
+    # The trades are cut where buying adds nothing and where the kvote would
+    # drop below zero.
     lowest_allowed = -min(base_caps[y] for y in capped)
     if trade_range is None:
         window_kg = float(round(window_share * -lowest_allowed))
@@ -490,41 +469,41 @@ def quota_value_curve(
     # Buying side, each point hinted with the one below it, whose solution
     # always fits the larger cap.
     hint = base.choices
-    progress.start("buying", kystvand_id, total=len(buying))
+    progress.start("buying", total=len(buying))
     for trade in buying:
         if trade == unconstrained_trade_kg:
             # The uncapped solution meets the cap raised by exactly this much.
             points[trade] = _point(input, kystvand_id, trade, free)
-            progress.solved("buying", kystvand_id)
+            progress.solved("buying")
             break
         if not can_solve():
             break
         point = solve(trade, hint)
-        progress.solved("buying", kystvand_id)
+        progress.solved("buying")
         if point.feasible:
             hint = point.choices
-    progress.finish("buying", kystvand_id)
+    progress.finish("buying")
 
     # Selling side, outwards until the window ends or the model is proven
     # infeasible. A point without any solution in time (UNKNOWN) is not proof,
     # so selling continues past it.
     upper = points[0.0]
-    progress.start("selling", kystvand_id, total=len(selling))
+    progress.start("selling", total=len(selling))
     for trade in selling:
         if not can_solve():
             break
         point = solve(trade, selling_hint(trade, upper))
-        progress.solved("selling", kystvand_id)
+        progress.solved("selling")
         if point.status == "INFEASIBLE":
             break
         if point.feasible:
             upper = point
-    progress.finish("selling", kystvand_id)
+    progress.finish("selling")
 
     # Infeasibility inside the window is where the curve ends: the step into it
     # is bisected so the selling limit is located within min_step_kg. Midpoints
     # are hinted with the feasible point above, repaired to the midpoint's cap.
-    progress.start("selling_limit", kystvand_id)
+    progress.start("selling_limit")
     while can_solve():
         interval = _selling_limit_interval(points, min_step_kg)
         if interval is None:
@@ -532,7 +511,7 @@ def quota_value_curve(
         low, high = interval
         middle = _midpoint(low, high, min_step_kg)
         solve(middle, selling_hint(middle, points[high]))
-        progress.solved("selling_limit", kystvand_id)
+        progress.solved("selling_limit")
 
     # Going back up, the solution below always fits, so a selling point the
     # solver did not finish (not OPTIMAL) is solved again from it and keeps the
@@ -542,17 +521,17 @@ def quota_value_curve(
         current = points[trade]
         if below is not None and current.status != "OPTIMAL" and can_solve():
             again = attempt(trade, below.choices)
-            progress.solved("selling_limit", kystvand_id)
+            progress.solved("selling_limit")
             if again.feasible and (not current.feasible or again.db2 > current.db2):
                 points[trade] = current = again
         if current.feasible:
             below = current
-    progress.finish("selling_limit", kystvand_id)
+    progress.finish("selling_limit")
     _monotone_envelope(points, input, kystvand_id)
 
     return QuotaCurve(
         kystvand_id=kystvand_id,
-        base_cap_by_year=base_caps,
+        kvote_kg=-lowest_allowed,
         points=tuple(points[t] for t in sorted(points)),
         unconstrained_trade_kg=unconstrained_trade_kg,
         solves=solves,
@@ -662,49 +641,6 @@ def best_trade(curve: QuotaCurve, base: QuotaPoint, price_kr_per_kg: float) -> Q
     """The feasible point with the highest gain; ties go to the smaller trade."""
     feasible = [p for p in curve.points if p.feasible]
     return max(feasible, key=lambda p: (gain(p, base, price_kr_per_kg), -abs(p.trade_kg)))
-
-
-def interaction_check(
-    input: YearlyOptimizationInput,
-    curves: tuple[QuotaCurve, ...],
-    base: QuotaPoint,
-    price_kr_per_kg: float,
-    *,
-    solver: Solver = solve_yearly,
-    progress: QuotaProgress | None = None,
-) -> QuotaInteraction | None:
-    """Apply every opland's own best trade together and compare the gains.
-
-    Oplande share farm-wide constraints (FEN, crop areas, DB2 swing), so the
-    value of kvote in one can depend on the other. Only meaningful when at
-    least two oplande would trade.
-    """
-    best = {curve.kystvand_id: best_trade(curve, base, price_kr_per_kg) for curve in curves}
-    trades = {k: p.trade_kg for k, p in best.items() if p.trade_kg != 0}
-    progress = progress or QuotaProgress([])
-    if len(trades) < 2 or _out_of_time():
-        progress.finish("interaction")
-        return None
-    progress.start("interaction", total=1)
-    separate_gain = sum(gain(best[k], base, price_kr_per_kg) for k in trades)
-    hint = dict(base.choices)
-    for k in trades:
-        hint.update(best[k].choices)
-    output = solver(with_trades(input, trades), hint)
-    progress.solved("interaction")
-    progress.finish("interaction")
-    combined_gain = (
-        output.total_db2 - price_kr_per_kg * sum(trades.values()) - base.db2
-        if output.status in FEASIBLE
-        else None
-    )
-    return QuotaInteraction(
-        price_kr_per_kg=price_kr_per_kg,
-        trades_kg=trades,
-        separate_gain=separate_gain,
-        combined_status=output.status,
-        combined_gain=combined_gain,
-    )
 
 
 def contender_trades(curve: QuotaCurve, price_kr_per_kg: float) -> list[float]:
@@ -870,6 +806,7 @@ class BaseNotSolvedError(Exception):
 
 def analyse_quota_value(
     input: YearlyOptimizationInput,
+    kystvand_id: int,
     price_kr_per_kg: float,
     *,
     base_hint: dict[str, str] | None = None,
@@ -881,32 +818,32 @@ def analyse_quota_value(
     trade_range: QuotaTradeRange | None = None,
     parallel_solves: int = 1,
 ) -> QuotaValueAnalysis:
-    """V(t) for every tradable opland plus the interaction check at the given price.
+    """V(t) for one tradable opland, refined at the given price.
 
     The CP-SAT model is built once and only its caps change between solves,
-    unless a solver is passed (as tests do). Raises BaseNotSolvedError when the
-    model without trade (t = 0 everywhere) has no solution. on_progress gets
-    QuotaProgress's steps after every change.
+    unless a solver is passed (as tests do). Raises ValueError when the opland
+    has no kvote to trade, and BaseNotSolvedError when the model without trade
+    has no solution. on_progress gets QuotaProgress's steps after every change.
 
-    Up to parallel_solves curves, and then refinement solves, run at the same
-    time, each on its own copy of the model; a passed solver is shared and must
-    allow that. Each
+    Up to parallel_solves refinement solves run at the same time, each on its
+    own copy of the model; a passed solver is shared and must allow that. Each
     solve uses its own CP-SAT threads (OPTIMIZER_SOLVER_THREADS), so the
     caller keeps the product within the cores the job may use.
     """
-    input = replace(input, relative_gap_limit=point_gap)
-    oplande = tradable_kystvandoplande(input)
-    progress = QuotaProgress(oplande, on_progress)
+    if kystvand_id not in tradable_kystvandoplande(input):
+        raise ValueError(f"Kystvandopland {kystvand_id} has no kvote to trade")
+    input = replace(kvote_input(input, kystvand_id), relative_gap_limit=point_gap)
+    progress = QuotaProgress(on_progress)
     if solver is None:
         model = YearlyModel(input)
         solver = _model_solver(model)
 
-        def curve_solver() -> Solver:
+        def copy_solver() -> Solver:
             return _model_solver(model.copy())
     else:
         shared = solver
 
-        def curve_solver() -> Solver:
+        def copy_solver() -> Solver:
             return shared
 
     progress.start("base", total=1)
@@ -915,52 +852,28 @@ def analyse_quota_value(
     progress.finish("base")
     if base_output.status not in FEASIBLE:
         raise BaseNotSolvedError(base_output.status)
-    base = _point(input, oplande[0], 0.0, base_output) if oplande else None
-    if base is None:
-        return QuotaValueAnalysis(
-            base=QuotaPoint(0.0, base_output.status, base_output.total_db2, (), (), (), {}),
-            curves=(),
-            interaction=None,
-        )
-
-    def curve(k: int, curve_solver: Solver) -> QuotaCurve:
-        return quota_value_curve(
-            input,
-            k,
-            replace(
-                base,
-                n_load_by_year=kvotegivende_n_load_by_year(input, base.choices, k),
-                cap_by_year=_caps(input, k),
-            ),
-            solver=curve_solver,
-            selling_time_limit_seconds=selling_time_limit_seconds,
-            progress=progress,
-            trade_range=trade_range,
-        )
-
-    curves = tuple(
-        _in_parallel(
-            [lambda solver, k=k: curve(k, solver) for k in oplande],
-            parallel_solves,
-            solver,
-            curve_solver,
-        )
+    base = _point(input, kystvand_id, 0.0, base_output)
+    curve = quota_value_curve(
+        input,
+        kystvand_id,
+        base,
+        solver=solver,
+        selling_time_limit_seconds=selling_time_limit_seconds,
+        progress=progress,
+        trade_range=trade_range,
     )
-    base, curves = _refine_contenders(
+    base, (curve,) = _refine_contenders(
         replace(input, relative_gap_limit=refined_gap),
         base,
-        curves,
+        (curve,),
         price_kr_per_kg,
         solver=solver,
-        new_solver=curve_solver,
+        new_solver=copy_solver,
         workers=parallel_solves,
         selling_time_limit_seconds=selling_time_limit_seconds,
         progress=progress,
     )
-    return QuotaValueAnalysis(
-        base=base,
-        curves=curves,
-        interaction=interaction_check(
-            input, curves, base, price_kr_per_kg, solver=solver, progress=progress
-        ),
-    )
+    zero = next((p for p in curve.points if p.trade_kg == 0 and p.feasible), None)
+    if zero is not None and zero.db2 > base.db2:
+        base = zero
+    return QuotaValueAnalysis(base=base, curve=curve)

@@ -1,11 +1,11 @@
-"""Print the kvote value curve ("Kvotehandel") of a local simulation.
+"""Print the kvote value curve ("Kvotehandel") of one opland of a local simulation.
 
 Uses the simulation's latest completed "Års-optimering" and its parameters, the
 same as the app, but only prints the result; nothing is stored.
 
     cd backend
-    pixi run quota-value-curve <simulation-id> --price 35
-    pixi run quota-value-curve <simulation-id> --price 35 --range -100 150 50
+    pixi run quota-value-curve <simulation-id> <kystvand-id> --price 35
+    pixi run quota-value-curve <simulation-id> <kystvand-id> --price 35 --range -100 150 50
 """
 
 import argparse
@@ -21,8 +21,6 @@ from app.domain.optimization import YearlyOptimizeSimulationRequest
 from app.domain.quota_value import QuotaTradeRange
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from plantperform_fargate import quota_value
-from plantperform_fargate.orchestrator import build_yearly_input
-from plantperform_fargate.preparation import prepare
 from plantperform_fargate.quota_value import (
     BaseNotSolvedError,
     analyse_quota_value,
@@ -31,16 +29,16 @@ from plantperform_fargate.quota_value import (
     hint_from_candidates,
 )
 from plantperform_fargate.quota_value_worker import (
-    POINT_TIME_LIMIT_SECONDS,
     SELLING_POINT_TIME_LIMIT_SECONDS,
+    build_opland_input,
     parallel_solves,
 )
-from plantperform_fargate.worker import yearly_caps
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("simulation_id")
+    parser.add_argument("kystvand_id", type=int)
     parser.add_argument("--price", type=float, required=True, help="kr per kg N per år")
     parser.add_argument(
         "--selling-seconds",
@@ -96,27 +94,20 @@ def main() -> int:
     if captured is None:
         print("The simulation changed since its Års-optimering.", file=sys.stderr)
         return 1
-    snapshot = prepare(*captured)
     request = YearlyOptimizeSimulationRequest.model_validate(base.parameters)
-    built = build_yearly_input(
-        setup.farm_id,
-        args.simulation_id,
-        POINT_TIME_LIMIT_SECONDS,
-        yearly_caps(request),
-        request.db2_swing_pct,
-        frozenset(request.excluded_afgrodekoder),
-        "",
-        snapshot=snapshot,
-    )
     selected = {
         field_id: RotationCandidateEvaluation.model_validate(candidate)
         for field_id, candidate in (base[4] or {}).items()
     }
+    built = build_opland_input(
+        setup.farm_id, args.simulation_id, args.kystvand_id, captured, request, selected
+    )
     hint = hint_from_candidates(built.input, selected)
     print(f"Hint from the shown optimization: {len(hint)} of {len(built.input.fields)} marker")
     try:
         analysis = analyse_quota_value(
             built.input,
+            args.kystvand_id,
             args.price,
             base_hint=hint,
             selling_time_limit_seconds=args.selling_seconds or SELLING_POINT_TIME_LIMIT_SECONDS,
@@ -131,43 +122,32 @@ def main() -> int:
         print(f"The optimization without trade has no solution: {error.status}.", file=sys.stderr)
         return 1
 
+    curve = analysis.curve
     print(f"V(0) = {analysis.base.db2:,.0f} kr/år, price {args.price:g} kr/kg N")
-    for curve in analysis.curves:
-        print(f"\nKystvandopland {curve.kystvand_id} ({curve.solves} solves)")
+    print(f"\nKystvandopland {curve.kystvand_id}, kvote {curve.kvote_kg:,.0f} kg N")
+    print(f"({curve.solves} solves)")
+    print(
+        f"{'t (kg N/år)':>12} {'status':>10} {'V(t) kr/år':>12} {'øvre grænse':>12} "
+        f"{'gap kr':>8} {'gap %':>7} {'gevinst':>10} {'marker':>7} {'løsning fra':>12}"
+    )
+    for point in curve.points:
+        changed = sum(1 for f, key in point.choices.items() if analysis.base.choices.get(f) != key)
+        value = f"{point.db2:,.0f}" if point.feasible else "-"
+        bound = point.db2_upper_bound
+        upper = f"{bound:,.0f}" if bound is not None else "-"
+        gap = bound - point.db2 if bound is not None and point.feasible else None
+        gap_kr = f"{gap:,.0f}" if gap is not None else "-"
+        gap_pct = f"{100 * gap / point.db2:.3f}" if gap is not None and point.db2 else "-"
+        net = f"{gain(point, analysis.base, args.price):,.0f}" if point.feasible else "-"
+        source = "" if point.solution_from_trade_kg is None else f"{point.solution_from_trade_kg:g}"
         print(
-            f"{'t (kg N/år)':>12} {'status':>10} {'V(t) kr/år':>12} {'øvre grænse':>12} "
-            f"{'gap kr':>8} {'gap %':>7} {'gevinst':>10} {'marker':>7} {'løsning fra':>12}"
+            f"{point.trade_kg:>12g} {point.status:>10} {value:>12} {upper:>12} "
+            f"{gap_kr:>8} {gap_pct:>7} {net:>10} {changed:>7} {source:>12}"
         )
-        for point in curve.points:
-            changed = sum(
-                1 for f, key in point.choices.items() if analysis.base.choices.get(f) != key
-            )
-            value = f"{point.db2:,.0f}" if point.feasible else "-"
-            bound = point.db2_upper_bound
-            upper = f"{bound:,.0f}" if bound is not None else "-"
-            gap = bound - point.db2 if bound is not None and point.feasible else None
-            gap_kr = f"{gap:,.0f}" if gap is not None else "-"
-            gap_pct = f"{100 * gap / point.db2:.3f}" if gap is not None and point.db2 else "-"
-            net = f"{gain(point, analysis.base, args.price):,.0f}" if point.feasible else "-"
-            source = (
-                "" if point.solution_from_trade_kg is None else f"{point.solution_from_trade_kg:g}"
-            )
-            print(
-                f"{point.trade_kg:>12g} {point.status:>10} {value:>12} {upper:>12} "
-                f"{gap_kr:>8} {gap_pct:>7} {net:>10} {changed:>7} {source:>12}"
-            )
-        best = best_trade(curve, analysis.base, args.price)
-        action = "køb" if best.trade_kg > 0 else "sælg" if best.trade_kg < 0 else "ingen handel"
-        amount = f" {abs(best.trade_kg):g} kg N/år" if best.trade_kg else ""
-        print(f"Bedst ved {args.price:g} kr/kg: {action}{amount}")
-    if analysis.interaction:
-        check = analysis.interaction
-        combined = (
-            f"{check.combined_gain:,.0f} kr/år"
-            if check.combined_gain is not None
-            else check.combined_status
-        )
-        print(f"\nSamlet kontrol: hver for sig {check.separate_gain:,.0f} kr/år, sammen {combined}")
+    best = best_trade(curve, analysis.base, args.price)
+    action = "køb" if best.trade_kg > 0 else "sælg" if best.trade_kg < 0 else "ingen handel"
+    amount = f" {abs(best.trade_kg):g} kg N/år" if best.trade_kg else ""
+    print(f"Bedst ved {args.price:g} kr/kg: {action}{amount}")
     return 0
 
 

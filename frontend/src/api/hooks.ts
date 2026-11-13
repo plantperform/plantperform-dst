@@ -489,16 +489,26 @@ export const quotaValueKey = (farmId?: string, simulationId?: string) => {
   return `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/quota-value`
 }
 
-// Same polling interval as optimization runs while the curve is computing.
-const QUOTA_VALUE_POLL_MS = 5000
+// Same polling interval as optimization runs while a curve is computing.
+const QUOTA_VALUE_POLL_MS = 1000
 
-export const useQuotaValue = (farmId?: string, simulationId?: string) =>
-  useSWR<QuotaValueResult>(quotaValueKey(farmId, simulationId), fetcher, {
-    refreshInterval: (result) =>
-      result?.status === 'queued' || result?.status === 'in_progress'
-        ? QUOTA_VALUE_POLL_MS
-        : 0,
-  })
+export const isQuotaValueRunning = (result: QuotaValueResult) =>
+  result.status === 'queued' || result.status === 'in_progress'
+
+export const useQuotaValues = (farmId?: string, simulationId?: string) => {
+  const [polling, setPolling] = useState(false)
+  const response = useSWR<QuotaValueResult[]>(
+    quotaValueKey(farmId, simulationId),
+    fetcher,
+    {
+      refreshInterval: polling ? QUOTA_VALUE_POLL_MS : 0,
+      shouldRetryOnError: false,
+    },
+  )
+  const running = response.data?.some(isQuotaValueRunning) ?? false
+  if (running !== polling) setPolling(running)
+  return response
+}
 
 export const farmHistoricalYearlySummaryKey = (farmId?: string) => {
   if (!farmId) return null

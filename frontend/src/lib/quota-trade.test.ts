@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type {
+  FieldRecord,
   QuotaProgressStep,
   QuotaValueCurve,
   QuotaValuePoint,
@@ -8,20 +9,22 @@ import type {
 import {
   bestTrade,
   checkTradeRange,
+  describeComputedAt,
   describeTrade,
   gainPoints,
   sellingLimit,
-  interactionCheck,
+  listTrades,
   lowestFeasibleTradeKg,
-  formatElapsed,
+  gainScale,
   parseKg,
   parsePrice,
   priceThresholds,
   rangeTrades,
-  progressCount,
-  progressLabel,
+  progressFraction,
   quotaYearRows,
   rivalTrades,
+  type GainPoint,
+  tradableCatchments,
   tradeSimulationName,
 } from '@/lib/quota-trade'
 
@@ -36,7 +39,6 @@ const point = (
   db2UpperBound: db2,
   solutionFromTradeKg: null,
   nLoadByYear: { '2028': 120, '2027': 110 },
-  capByYear: { '2027': 100 + tradeKg, '2028': 100 + tradeKg },
   feedUnitsByYear: { '2027': 500, '2028': 0 },
   changedFields: [],
   rotations: [],
@@ -45,7 +47,7 @@ const point = (
 // V(0) = 1500; V(50) = 2500; V(100) = 3500; V(130) = 4500; selling is infeasible.
 const curve: QuotaValueCurve = {
   catchmentId: 233,
-  baseCapByYear: { '2027': 100, '2028': 100 },
+  quotaKgN: 100,
   unconstrainedTradeKg: 130,
   points: [
     point(-25, null, 'INFEASIBLE'),
@@ -133,19 +135,20 @@ describe('quota trade text and input', () => {
         priceKrPerKg,
       })
     expect(name(53, 'Lillebælt')).toBe(
-      'Scenarie A – Køb 53 kg N/år – Lillebælt – 35 kr/kg',
+      'Scenarie A · Køb 53 kg N/år · Lillebælt · 35 kr/kg N',
     )
     expect(name(-27, null, 37.5)).toBe(
-      'Scenarie A – Sælg 27 kg N/år – 37,5 kr/kg',
+      'Scenarie A · Salg 27 kg N/år · 37,5 kr/kg N',
     )
     // The price does not change the plan without trade.
-    expect(name(0, 'Lillebælt')).toBe('Scenarie A – Ingen handel – Lillebælt')
+    expect(name(0, 'Lillebælt')).toBe('Scenarie A · Ingen handel · Lillebælt')
   })
 
-  it('describes trades in Danish', () => {
+  it('describes trades in Danish, also inside a sentence', () => {
     expect(describeTrade(200)).toBe('Køb 200 kg N/år')
-    expect(describeTrade(-1250)).toBe('Sælg 1.250 kg N/år')
+    expect(describeTrade(-1250)).toBe('Salg 1.250 kg N/år')
     expect(describeTrade(0)).toBe('Ingen handel')
+    expect(listTrades([-5, 0])).toBe('salg 5 kg N/år og ingen handel')
   })
 
   it('accepts prices with a decimal comma and rejects invalid ones', () => {
@@ -156,74 +159,40 @@ describe('quota trade text and input', () => {
     expect(parsePrice('abc')).toBeNull()
   })
 
-  it('lists the years in order', () => {
-    expect(quotaYearRows(curve.points[2])).toEqual([
-      { year: '2027', nLoad: 110, cap: 100, feedUnits: 500 },
-      { year: '2028', nLoad: 120, cap: 100, feedUnits: 0 },
+  it('lists the years in order with the kvote after the trade', () => {
+    expect(quotaYearRows(curve.points[3], curve.quotaKgN)).toEqual([
+      { year: '2027', nLoad: 110, quotaAfterTrade: 150, feedUnits: 500 },
+      { year: '2028', nLoad: 120, quotaAfterTrade: 150, feedUnits: 0 },
     ])
   })
 })
 
-describe('interaction between catchments', () => {
-  const interaction = {
-    priceKrPerKg: 30,
-    tradesKg: { '233': 100, '244': 50 },
-    separateGain: 4000,
-    combinedStatus: 'OPTIMAL' as const,
-    combinedGain: 3950,
-  }
+describe('catchments a curve can be computed for', () => {
+  const field = (
+    catchmentId: number | null,
+    nLoadQuotaKgN: number,
+    quotaEligible = true,
+    locked = false,
+  ) =>
+    ({
+      catchmentId,
+      quotaEligible,
+      nLoadQuotaKgN,
+      rotationId: locked ? 'r' : null,
+      allowedRotationIds: locked ? ['r'] : [],
+    }) as FieldRecord
 
-  it('is not shown for a single trading catchment', () => {
-    expect(interactionCheck(null, 30)).toEqual({ kind: 'none' })
-  })
-
-  it('accepts small rounding differences', () => {
-    expect(interactionCheck(interaction, 30)).toEqual({ kind: 'consistent' })
-  })
-
-  it('warns when the combined trade is worth clearly less', () => {
-    expect(
-      interactionCheck({ ...interaction, combinedGain: 2000 }, 30),
-    ).toEqual({
-      kind: 'differs',
-      separateGain: 4000,
-      combinedGain: 2000,
-    })
-  })
-
-  it('says when the check was made at another price', () => {
-    expect(interactionCheck(interaction, 45)).toEqual({
-      kind: 'other-price',
-      computedAt: 30,
-    })
-  })
-})
-
-describe('progress of a running curve', () => {
-  const step = (
-    state: QuotaProgressStep['state'],
-    done: number,
-    total: number | null,
-  ): QuotaProgressStep => ({
-    key: 'buying',
-    catchmentId: 233,
-    state,
-    done,
-    total,
-  })
-
-  it('counts solves against the total once it is known', () => {
-    expect(progressCount(step('running', 2, 3))).toBe('2 / 3')
-    expect(progressCount(step('running', 2, null))).toBe('2')
-    expect(progressCount(step('pending', 0, null))).toBe('')
-    expect(progressCount(step('skipped', 0, 0))).toBe('Ikke nødvendig')
-    expect(progressLabel(step('running', 0, 3))).toBe('Køb')
-  })
-
-  it('shows the elapsed time in minutes and seconds', () => {
-    expect(formatElapsed(42.7)).toBe('42 s')
-    expect(formatElapsed(100)).toBe('1 min 40 s')
-    expect(formatElapsed(-3)).toBe('0 s')
+  it('need kvotegivende marker and a kvote, counted once per catchment', () => {
+    const fields = [
+      field(1, 20.3),
+      field(1, 10.4, true, true),
+      field(2, 30, false),
+      field(3, 0),
+      field(null, 40),
+    ]
+    expect(tradableCatchments(fields)).toEqual([
+      { catchmentId: 1, quotaKgN: 31, fieldCount: 2, lockedCount: 1 },
+    ])
   })
 })
 
@@ -311,5 +280,52 @@ describe('prices where buying or selling is best', () => {
       points: [point(0, 1500), point(50, 1500)],
     }
     expect(priceThresholds(flat).buyBelow).toBeNull()
+  })
+})
+
+describe('the bar chart scale', () => {
+  const bar = (gain: number, gainUpperBound: number | null = null) =>
+    ({ tradeKg: 0, gain, gainUpperBound }) as GainPoint
+
+  it('keeps 0 and reaches the highest upper bound in round steps', () => {
+    expect(gainScale([bar(0), bar(795, 935), bar(924)])).toEqual({
+      min: 0,
+      max: 1000,
+      ticks: [0, 250, 500, 750, 1000],
+    })
+    expect(gainScale([bar(-120), bar(40)]).ticks).toEqual([
+      -150, -100, -50, 0, 50,
+    ])
+  })
+
+  it('names when a curve was computed', () => {
+    const now = new Date(2026, 10, 12, 15, 0)
+    expect(
+      describeComputedAt(new Date(2026, 10, 12, 13, 5).toISOString(), now),
+    ).toBe('Beregnet kl. 13.05')
+    expect(
+      describeComputedAt(new Date(2026, 10, 11, 9, 0).toISOString(), now),
+    ).toBe('Beregnet 11. nov.')
+  })
+})
+
+describe('how far a running curve has come', () => {
+  const step = (
+    key: QuotaProgressStep['key'],
+    state: QuotaProgressStep['state'],
+    done = 0,
+    total: number | null = null,
+  ): QuotaProgressStep => ({ key, state, done, total })
+
+  it('counts finished and skipped steps whole and the running one by its solves', () => {
+    expect(progressFraction([])).toBe(0)
+    expect(
+      progressFraction([
+        step('base', 'done', 1, 1),
+        step('uncapped', 'skipped'),
+        step('buying', 'running', 1, 4),
+        step('selling', 'pending'),
+      ]),
+    ).toBeCloseTo((1 + 1 + 0.25) / 4)
   })
 })

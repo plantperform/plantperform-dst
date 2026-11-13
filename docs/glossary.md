@@ -49,7 +49,8 @@ field" column is the name on the wire.
 | handlet kvote, kvotebetaling | `SimulationQuotaTrade`, `tradeKgByYear`, `paymentDkkPerYear` | `quotaTrades`, `tradeKgByYear`, `paymentKrPerYear` | What a run chose, per calendar year: > 0 buys and < 0 sells; the payment is the average per year and negative when selling more than buying |
 | Dækningsbidrag inkl. kvotehandel | `QuotaTradeFigures`, `quotaTradeAmounts` | | The crops' DB2 per year less the payments: on the simulation card, and on Sammenlign, where it ranks bedste balance and ends the regnskab after its Kvotehandel group (Købt kvote, Solgt kvote) |
 | kvotehandel | quota trade, `QuotaTradePanel` | | Buying or selling udledningskvote in one kystvandopland |
-| kvoteværdi | quota value, `QuotaValueResult`, `useQuotaValue` | `quota-value` | V(t): best yearly DB2 with the cap changed by t kg N |
+| kvoteværdi | quota value, `QuotaValueResult`, `useQuotaValues` | `quota-value` | V(t): best yearly DB2 when one kystvandopland may let out its kvote plus t kg N, the rest of the farm on its latest plan; one curve per opland |
+| oplandets kvote (kvoteværdi) | `quotaKgN` | `kvoteKg` | The kystvandopland's kvote a curve trades from |
 | kvotepris | `priceKrPerKg` | `priceKrPerKg` | Price of 1 kg N kvote per year |
 | handel (køb/salg af kvote) | `tradeKg` | `tradeKg` | kg N per year; positive buys, negative sells |
 | interval for handel | trade range, `QuotaTradeRange` | `tradeRange` | Trades to solve instead of the default window: multiples of a step from no trade, plus both ends |

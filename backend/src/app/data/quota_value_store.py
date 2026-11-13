@@ -1,9 +1,10 @@
 """Kvote value curves ("Kvotehandel"). Always lock setup before result rows.
 
-A curve is computed from the simulation's latest completed "Års-optimering", so
-its value without trade matches the solution shown. It runs as a local
-background job only: one attempt, no lease; a restarted backend fails any run
-it interrupted (see recover_local_quota_values).
+A curve is computed for one kystvandopland from the simulation's latest
+completed "Års-optimering", so the rest of the farm keeps the plan shown. Each
+opland has its own row. It runs as a local background job only: one attempt,
+no lease; a restarted backend fails any run it interrupted (see
+recover_local_quota_values).
 """
 
 from copy import deepcopy
@@ -31,20 +32,17 @@ class QuotaValueConflictError(Exception):
 
 
 def _read(row, setup_revision, current_run_id) -> QuotaValueResult:
-    if row is None:
-        return QuotaValueResult()
     return QuotaValueResult.model_validate(
         {
             **dict(row._mapping),
             "price_kr_per_kg": row.parameters.get("price_kr_per_kg"),
             "trade_range": row.parameters.get("trade_range"),
-            "outdated": row.status != "not_started"
-            and (row.input_revision != setup_revision or row.base_run_id != current_run_id),
+            "outdated": row.input_revision != setup_revision or row.base_run_id != current_run_id,
         }
     )
 
 
-def get_quota_value(farm_id, simulation_id, email) -> QuotaValueResult | None:
+def get_quota_values(farm_id, simulation_id, email) -> list[QuotaValueResult] | None:
     with SessionLocal() as session:
         setup = _row(session, farm_id, simulation_id, email, include_data=False)
         if setup is None:
@@ -52,10 +50,19 @@ def get_quota_value(farm_id, simulation_id, email) -> QuotaValueResult | None:
         current_run_id = session.execute(
             select(results.c.run_id).where(results.c.simulation_id == simulation_id)
         ).scalar_one_or_none()
-        row = session.execute(
-            select(quota_values).where(quota_values.c.simulation_id == simulation_id)
-        ).first()
-        return _read(row, setup.revision, current_run_id)
+        rows = session.execute(
+            select(quota_values)
+            .where(quota_values.c.simulation_id == simulation_id)
+            .order_by(quota_values.c.kystvand_id)
+        ).all()
+        return [_read(row, setup.revision, current_run_id) for row in rows]
+
+
+def get_quota_value(farm_id, simulation_id, kystvand_id, email) -> QuotaValueResult | None:
+    values = get_quota_values(farm_id, simulation_id, email)
+    if values is None:
+        return None
+    return next((value for value in values if value.kystvand_id == kystvand_id), None)
 
 
 def submit_quota_value(
@@ -63,12 +70,16 @@ def submit_quota_value(
 ) -> tuple[QuotaValueResult, bool]:
     """Queue a new curve; the flag is False when this run id was already submitted."""
     run_id = str(request.run_id)
+    key = (
+        quota_values.c.simulation_id == simulation_id,
+        quota_values.c.kystvand_id == request.kystvand_id,
+    )
     with SessionLocal.begin() as session:
         setup = _row(session, farm_id, simulation_id, email, lock=True, include_data=False)
         if setup is None:
             raise QuotaValueNotFoundError
         if setup.revision != request.expected_revision:
-            raise QuotaValueConflictError("Scenariet er ændret. Genindlæs før en ny beregning.")
+            raise QuotaValueConflictError("Simuleringen er ændret. Genindlæs før en ny beregning.")
         base = session.execute(
             select(
                 results.c.run_id,
@@ -83,14 +94,10 @@ def submit_quota_value(
             or base.result_revision != setup.revision
         ):
             raise QuotaValueConflictError(
-                "Kvoteværdien beregnes ud fra en gennemført Års-optimering. "
-                "Kør Års-optimering først."
+                "Kvoteværdien beregnes ud fra en gennemført optimering med loft hvert år. "
+                "Optimer simuleringen med loft hvert år først."
             )
-        current = session.execute(
-            select(quota_values)
-            .where(quota_values.c.simulation_id == simulation_id)
-            .with_for_update()
-        ).first()
+        current = session.execute(select(quota_values).where(*key).with_for_update()).first()
         if current is not None and current.run_id == run_id:
             # A repeated identical request returns the run it already started.
             return _read(current, setup.revision, base.run_id), False
@@ -115,22 +122,27 @@ def submit_quota_value(
         )
         session.execute(
             insert(quota_values)
-            .values(simulation_id=simulation_id, **values)
-            .on_conflict_do_update(index_elements=[quota_values.c.simulation_id], set_=values)
+            .values(simulation_id=simulation_id, kystvand_id=request.kystvand_id, **values)
+            .on_conflict_do_update(
+                index_elements=[quota_values.c.simulation_id, quota_values.c.kystvand_id],
+                set_=values,
+            )
         )
-        row = session.execute(
-            select(quota_values).where(quota_values.c.simulation_id == simulation_id)
-        ).one()
+        row = session.execute(select(quota_values).where(*key)).one()
         return _read(row, setup.revision, base.run_id), True
+
+
+def _run(simulation_id, run_id):
+    return (quota_values.c.simulation_id == simulation_id, quota_values.c.run_id == run_id)
 
 
 def claim_quota_value(simulation_id, run_id):
     """Start a queued run whose base optimization is still current.
 
-    Returns (price, farm_id, revision, base run parameters, the base run's chosen
-    candidate per field, the chosen trade range or None) or None when the run
-    was replaced; a run whose scenarie or optimization changed is failed as
-    outdated.
+    Returns (kystvand_id, price, farm_id, revision, base run parameters, the
+    base run's chosen candidate per field, the chosen trade range or None) or
+    None when the run was replaced; a run whose scenarie or optimization
+    changed is failed as outdated.
     """
     with SessionLocal.begin() as session:
         setup = session.execute(
@@ -141,11 +153,9 @@ def claim_quota_value(simulation_id, run_id):
         if setup is None:
             return None
         row = session.execute(
-            select(quota_values)
-            .where(quota_values.c.simulation_id == simulation_id)
-            .with_for_update()
+            select(quota_values).where(*_run(simulation_id, run_id)).with_for_update()
         ).first()
-        if row is None or row.run_id != run_id or row.status != "queued":
+        if row is None or row.status != "queued":
             return None
         base = session.execute(
             select(
@@ -165,20 +175,20 @@ def claim_quota_value(simulation_id, run_id):
         ):
             session.execute(
                 update(quota_values)
-                .where(quota_values.c.simulation_id == simulation_id)
+                .where(*_run(simulation_id, run_id))
                 .values(
                     status="failed",
                     finished_at=now,
                     error={
                         "code": "OUTDATED",
-                        "message": "Scenariet eller optimeringen er ændret. Beregn igen.",
+                        "message": "Simuleringen eller optimeringen er ændret. Beregn igen.",
                     },
                 )
             )
             return None
         session.execute(
             update(quota_values)
-            .where(quota_values.c.simulation_id == simulation_id)
+            .where(*_run(simulation_id, run_id))
             .values(status="in_progress", started_at=now)
         )
         selected = {
@@ -187,6 +197,7 @@ def claim_quota_value(simulation_id, run_id):
         }
         trade_range = row.parameters.get("trade_range")
         return (
+            row.kystvand_id,
             row.parameters["price_kr_per_kg"],
             setup.farm_id,
             row.input_revision,
@@ -228,11 +239,7 @@ def report_quota_progress(simulation_id, run_id, progress: list[dict]) -> None:
     with SessionLocal.begin() as session:
         session.execute(
             update(quota_values)
-            .where(
-                quota_values.c.simulation_id == simulation_id,
-                quota_values.c.run_id == run_id,
-                quota_values.c.status == "in_progress",
-            )
+            .where(*_run(simulation_id, run_id), quota_values.c.status == "in_progress")
             .values(progress=progress)
         )
 
@@ -240,15 +247,13 @@ def report_quota_progress(simulation_id, run_id, progress: list[dict]) -> None:
 def finish_quota_value(simulation_id, run_id, *, output=None, error=None) -> bool:
     with SessionLocal.begin() as session:
         row = session.execute(
-            select(quota_values.c.run_id, quota_values.c.status)
-            .where(quota_values.c.simulation_id == simulation_id)
-            .with_for_update()
+            select(quota_values.c.status).where(*_run(simulation_id, run_id)).with_for_update()
         ).first()
-        if row is None or row.run_id != run_id or row.status != "in_progress":
+        if row is None or row.status != "in_progress":
             return False
         session.execute(
             update(quota_values)
-            .where(quota_values.c.simulation_id == simulation_id)
+            .where(*_run(simulation_id, run_id))
             .values(
                 status="failed" if error else "completed",
                 finished_at=datetime.now(UTC),
@@ -265,8 +270,7 @@ def fail_quota_value(simulation_id, run_id, error) -> None:
         session.execute(
             update(quota_values)
             .where(
-                quota_values.c.simulation_id == simulation_id,
-                quota_values.c.run_id == run_id,
+                *_run(simulation_id, run_id),
                 quota_values.c.status.in_(("queued", "in_progress")),
             )
             .values(status="failed", finished_at=datetime.now(UTC), error=error)

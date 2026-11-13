@@ -40,11 +40,12 @@ class QuotaTradeRangeTests(unittest.TestCase):
             {
                 "expectedRevision": 1,
                 "runId": "8f6f0a5e-3c58-4a49-a2a0-8c7f3b3b6d1e",
+                "kystvandId": 233,
                 "priceKrPerKg": 35,
                 "tradeRange": {"minKg": -100, "maxKg": 150, "stepKg": 50},
             }
         )
-        self.assertEqual(request.trade_range.step_kg, 50)
+        self.assertEqual((request.kystvand_id, request.trade_range.step_kg), (233, 50))
 
 
 if __name__ == "__main__":

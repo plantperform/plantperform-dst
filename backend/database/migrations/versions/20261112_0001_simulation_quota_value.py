@@ -1,18 +1,18 @@
-"""Store the latest kvote value curve ("Kvotehandel") per simulation.
+"""Store the latest kvote value curve ("Kvotehandel") per simulation and kystvandopland.
 
 progress holds the steps of a running curve, so the UI can show how far it has
 come.
 
-Revision ID: 20261021_0001
-Revises: 20261019_0002
+Revision ID: 20261112_0001
+Revises: 20261106_0001
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "20261021_0001"
-down_revision = "20261019_0002"
+revision = "20261112_0001"
+down_revision = "20261106_0001"
 branch_labels = None
 depends_on = None
 
@@ -26,6 +26,7 @@ def upgrade():
             sa.ForeignKey("simulation.id", ondelete="CASCADE"),
             primary_key=True,
         ),
+        sa.Column("kystvand_id", sa.Integer(), primary_key=True),
         sa.Column("status", sa.Text(), nullable=False, server_default="not_started"),
         sa.Column("run_id", sa.Text()),
         sa.Column("base_run_id", sa.Text()),
