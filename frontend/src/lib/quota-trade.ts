@@ -17,7 +17,8 @@ export type SolvedQuotaPoint = QuotaValuePoint & { db2: number }
 
 export type GainPoint = {
   tradeKg: number
-  // V(t) - p * t - V(0): yearly gain of this trade over not trading.
+  // V(t) - p * t - V(0): yearly gain of this trade over not trading, or over
+  // the least purchase when the catchment must buy.
   gain: number
   // The same with V(t) at its proven upper bound: the best plan for this trade
   // gains between gain and gainUpperBound. Null when the point has no bound.
@@ -33,7 +34,8 @@ export const tradeGain = (
   point: SolvedQuotaPoint,
   baseDb2: number,
   priceKrPerKg: number,
-): number => point.db2 - priceKrPerKg * point.tradeKg - baseDb2
+  fromKg = 0,
+): number => point.db2 - priceKrPerKg * (point.tradeKg - fromKg) - baseDb2
 
 export const gainPoints = (
   curve: QuotaValueCurve,
@@ -44,7 +46,7 @@ export const gainPoints = (
     .filter(isSolved)
     .map((point) => ({
       tradeKg: point.tradeKg,
-      gain: tradeGain(point, baseDb2, priceKrPerKg),
+      gain: tradeGain(point, baseDb2, priceKrPerKg, curve.minimumPurchaseKg),
       gainUpperBound:
         point.db2UpperBound === null
           ? null
@@ -52,6 +54,7 @@ export const gainPoints = (
               { ...point, db2: point.db2UpperBound },
               baseDb2,
               priceKrPerKg,
+              curve.minimumPurchaseKg,
             ),
       point,
     }))
@@ -110,13 +113,15 @@ const breakEven = (t: SolvedQuotaPoint, s: SolvedQuotaPoint) =>
 // from no trade to selling, among the found solutions of one curve. A buying
 // trade beats a rival s (no trade or selling) while the price is below their
 // break-even price, so it stays best up to the lowest one; buying is best up to
-// the highest such price over the buying trades. Selling mirrors it.
+// the highest such price over the buying trades. Selling mirrors it. When the
+// catchment must buy, buying means buying more than the least purchase.
 export const priceThresholds = (curve: QuotaValueCurve): PriceThresholds => {
+  const from = curve.minimumPurchaseKg
   const solved = curve.points.filter(isSolved)
-  const buying = solved.filter((point) => point.tradeKg > 0)
-  const notBuying = solved.filter((point) => point.tradeKg <= 0)
-  const selling = solved.filter((point) => point.tradeKg < 0)
-  const notSelling = solved.filter((point) => point.tradeKg >= 0)
+  const buying = solved.filter((point) => point.tradeKg > from)
+  const notBuying = solved.filter((point) => point.tradeKg <= from)
+  const selling = solved.filter((point) => point.tradeKg < from)
+  const notSelling = solved.filter((point) => point.tradeKg >= from)
 
   const buy = buying
     .map<Limit>((t) => ({

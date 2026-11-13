@@ -148,6 +148,7 @@ def _curve(
         kvote_kg=curve.kvote_kg,
         unconstrained_trade_kg=curve.unconstrained_trade_kg,
         points=points,
+        minimum_purchase_kg=curve.minimum_purchase_kg,
     )
 
 
@@ -270,8 +271,8 @@ def execute_quota_value(simulation_id: str, run_id: str) -> None:
         except BaseNotSolvedError as error:
             if error.status == "INFEASIBLE":
                 raise OptimizationInfeasibleError(
-                    "Planen kan ikke holde oplandets kvote uden handel, ofte fordi låste "
-                    "marker udleder for meget. Lås nogle marker op, og beregn igen."
+                    "Planen kan ikke overholde de andre grænser, heller ikke uden "
+                    "oplandets kvote. Optimer simuleringen igen, og beregn igen."
                 ) from error
             raise OptimizationDeadlineError(
                 "Optimeringen uden handel fandt ingen løsning inden for tidsgrænsen."

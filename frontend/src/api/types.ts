@@ -684,6 +684,8 @@ export type QuotaValueCurve = {
   quotaKgN: number
   unconstrainedTradeKg: number
   points: QuotaValuePoint[]
+  // The least the catchment must buy to keep its kvote; the points start here.
+  minimumPurchaseKg: number
 }
 
 export type QuotaValueOutput = {
