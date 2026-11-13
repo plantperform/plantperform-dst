@@ -270,7 +270,7 @@ const FarmDetail = () => {
   const selectFieldFromSearch = (fieldId: string) => {
     if (!activeFields.some((field) => field.id === fieldId)) return
     setSelectedFieldId(fieldId)
-    if (mode === 'rules') setMode('values')
+    if (mode !== 'values') setMode('values')
   }
 
   const simulationActions = useSimulationActions({
@@ -445,6 +445,7 @@ const FarmDetail = () => {
             splitAvailable={splitAvailable}
             onViewChange={(next) => {
               selectView(next)
+              if (mode === 'quota') setMode('values')
               leavePage()
             }}
             copyingSimulationId={simulationActions.copyingSimulationId}

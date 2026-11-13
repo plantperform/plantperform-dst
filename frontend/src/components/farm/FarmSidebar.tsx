@@ -4,6 +4,7 @@ import {
   isSimulationReady,
 } from '@/lib/simulation-creation'
 import {
+  ArrowLeftRight,
   ChevronRight,
   Coins,
   Copy,
@@ -25,6 +26,7 @@ import { NavLink, useMatch } from 'react-router-dom'
 
 import {
   useFarmMembers,
+  useQuotaValues,
   useSimulationFields,
   useSimulationView,
 } from '@/api/hooks'
@@ -647,6 +649,10 @@ const SimulationMenuItem = ({
   const run = useOptimizationRun(simulation.id)
   const runningRun = run?.status === 'running' ? run : undefined
   const running = Boolean(runningRun) || isSimulationCreating(simulation)
+  const quotaValues = useQuotaValues(
+    selected && isSimulationReady(simulation) ? farmId : undefined,
+    simulation.id,
+  )
   const failedRun = run?.status === 'failed' ? run : undefined
   const {
     data: simulationFields,
@@ -702,9 +708,13 @@ const SimulationMenuItem = ({
       : null
 
   if (
-    folded && !selected && !running && !failedRun &&
+    folded &&
+    !selected &&
+    !running &&
+    !failedRun &&
     simulation.creationStatus !== 'failed'
-  ) return null
+  )
+    return null
 
   return (
     <SidebarMenuItem>
@@ -773,14 +783,20 @@ const SimulationMenuItem = ({
             </SidebarMenuAction>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem disabled={!isSimulationReady(simulation)} onSelect={() => {
-              onSelect()
-              onOptimize()
-            }}>
+            <DropdownMenuItem
+              disabled={!isSimulationReady(simulation)}
+              onSelect={() => {
+                onSelect()
+                onOptimize()
+              }}
+            >
               Indstillinger og navn
             </DropdownMenuItem>
             <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Kopien får bedriftens marker, så låse og tilføjede eller fjernede marker følger ikke med.">
-              <DropdownMenuItem disabled={copying || !isSimulationReady(simulation)} onSelect={onCopy}>
+              <DropdownMenuItem
+                disabled={copying || !isSimulationReady(simulation)}
+                onSelect={onCopy}
+              >
                 <Copy className="mr-2 size-4" aria-hidden="true" />
                 Kopier som ny
               </DropdownMenuItem>
@@ -804,6 +820,7 @@ const SimulationMenuItem = ({
           mode={mode}
           disabled={loading}
           running={running}
+          quotaTrade={quotaValues.data !== undefined}
           onModeChange={onModeChange}
           onOptimize={onOptimize}
         />
@@ -862,6 +879,7 @@ type SimulationSubMenuProps = {
   mode: FarmInspectorMode
   disabled: boolean
   running: boolean
+  quotaTrade: boolean
   onModeChange: (mode: FarmInspectorMode) => void
   onOptimize: () => void
 }
@@ -870,6 +888,7 @@ const SimulationSubMenu = ({
   mode,
   disabled,
   running,
+  quotaTrade,
   onModeChange,
   onOptimize,
 }: SimulationSubMenuProps) => (
@@ -924,6 +943,26 @@ const SimulationSubMenu = ({
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
     </AppTooltip>
+    {quotaTrade ? (
+      <AppTooltip content="Se hvad det er værd at købe eller sælge udledningskvote">
+        <SidebarMenuSubItem>
+          <SidebarMenuSubButton
+            asChild
+            className="w-full"
+            isActive={mode === 'quota'}
+          >
+            <button
+              type="button"
+              aria-current={mode === 'quota' ? 'page' : undefined}
+              onClick={() => onModeChange('quota')}
+            >
+              <ArrowLeftRight />
+              <span>Kvotehandel</span>
+            </button>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      </AppTooltip>
+    ) : null}
   </SidebarMenuSub>
 )
 
