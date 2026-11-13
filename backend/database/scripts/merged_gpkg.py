@@ -3,6 +3,8 @@ GeoPackage before `pixi run load-registry-data` loads it."""
 
 import math
 import sqlite3
+import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 
@@ -14,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw"
 MERGED_GPKG = RAW_DIR / "V1_1_IMK2026_n604144_gpkg_merged.gpkg"
 LAYER = "PlantPerform"
+# Fields handled per pass over a map. The overlap geometries of one pass are all
+# in memory at once, so this bounds the memory a map with millions of cells uses.
+FIELD_CHUNK_SIZE = 50_000
 
 
 def format_duration(seconds: float) -> str:
@@ -25,15 +30,52 @@ def format_duration(seconds: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
+def progress_printer(label: str, interval: float = 10.0) -> Callable[[int, int], None]:
+    """Return a callback for overlaps(progress=...) that prints how many fields
+    are done at most every interval seconds, and when all are."""
+    start = last = time.monotonic()
+
+    def report(done: int, total: int) -> None:
+        nonlocal last
+        now = time.monotonic()
+        if done == total or now - last >= interval:
+            last = now
+            print(
+                f"  {label}: {done:,} / {total:,} fields ({done / total:.0%}), "
+                f"{format_duration(now - start)}",
+                flush=True,
+            )
+
+    return report
+
+
 def overlaps(
-    fields: np.ndarray, map_polygons: np.ndarray
+    fields: np.ndarray,
+    map_polygons: np.ndarray,
+    *,
+    chunk_size: int = FIELD_CHUNK_SIZE,
+    progress: Callable[[int, int], None] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return (field index, map polygon index, overlap area) for every field
-    and map polygon that share area."""
-    field_index, map_index = shapely.STRtree(map_polygons).query(fields, predicate="intersects")
-    area = shapely.area(shapely.intersection(fields[field_index], map_polygons[map_index]))
-    shared = area > 0
-    return field_index[shared], map_index[shared], area[shared]
+    and map polygon that share area.
+
+    The fields go through the map's spatial index chunk_size at a time, and
+    progress(done, total) is called after each chunk."""
+    tree = shapely.STRtree(map_polygons)
+    field_parts, map_parts, area_parts = [], [], []
+    for start in range(0, len(fields), chunk_size):
+        chunk = fields[start : start + chunk_size]
+        chunk_index, map_index = tree.query(chunk, predicate="intersects")
+        area = shapely.area(shapely.intersection(chunk[chunk_index], map_polygons[map_index]))
+        shared = area > 0
+        field_parts.append(chunk_index[shared] + start)
+        map_parts.append(map_index[shared])
+        area_parts.append(area[shared])
+        if progress is not None:
+            progress(start + len(chunk), len(fields))
+    if not field_parts:
+        return np.empty(0, dtype=np.intp), np.empty(0, dtype=np.intp), np.empty(0)
+    return np.concatenate(field_parts), np.concatenate(map_parts), np.concatenate(area_parts)
 
 
 def area_weighted(
