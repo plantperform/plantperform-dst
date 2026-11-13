@@ -112,6 +112,8 @@ class QuotaValueCurve(CamelModel):
     kvote_kg: float
     unconstrained_trade_kg: float
     points: list[QuotaValuePoint]
+    # The least the opland must buy to keep its kvote; the points start here.
+    minimum_purchase_kg: float = 0
 
 
 class QuotaValueOutput(CamelModel):

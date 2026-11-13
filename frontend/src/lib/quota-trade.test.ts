@@ -49,6 +49,7 @@ const curve: QuotaValueCurve = {
   catchmentId: 233,
   quotaKgN: 100,
   unconstrainedTradeKg: 130,
+  minimumPurchaseKg: 0,
   points: [
     point(-25, null, 'INFEASIBLE'),
     point(130, 4500),
@@ -63,6 +64,19 @@ describe('quota trade gain', () => {
     const points = gainPoints(curve, 1500, 20)
     expect(points.map((p) => p.tradeKg)).toEqual([0, 50, 100, 130])
     expect(points.map((p) => p.gain)).toEqual([0, 0, 0, 400])
+  })
+
+  it('counts from the least purchase when the catchment must buy', () => {
+    // It must buy 50 kg; buying 50 more gains 1000 for 50 kg.
+    const mustBuy = {
+      ...curve,
+      minimumPurchaseKg: 50,
+      points: [point(50, 2500), point(100, 3500)],
+    }
+    expect(gainPoints(mustBuy, 2500, 10).map((p) => p.gain)).toEqual([0, 500])
+    const { buyBelow, sellAbove } = priceThresholds(mustBuy)
+    expect(buyBelow).toEqual({ priceKrPerKg: 20, tradeKg: 100 })
+    expect(sellAbove).toBeNull()
   })
 
   it('picks the best trade, preferring the smaller trade on ties', () => {

@@ -376,6 +376,7 @@ const CatchmentCard = ({
     result?.status === 'completed' && result.output && price !== null
       ? bestTradeAt(result.output, price)
       : null
+  const fromKg = result?.output?.curve.minimumPurchaseKg ?? 0
   return (
     <button
       type="button"
@@ -406,7 +407,7 @@ const CatchmentCard = ({
           >
             {describeTrade(best.tradeKg)}
           </span>
-          {best.tradeKg !== 0 ? (
+          {best.tradeKg !== fromKg ? (
             <span
               className={cn('font-semibold tabular-nums', GAIN_TEXT(best.gain))}
             >
@@ -892,13 +893,14 @@ const QuotaAnswer = ({
 }) => {
   const { buyBelow, sellAbove } = useMemo(() => priceThresholds(curve), [curve])
   const limit = sellingLimit(curve)
+  const fromKg = curve.minimumPurchaseKg
   return (
     <div className="overflow-hidden rounded-lg border">
       <div className="-mt-px -ml-px grid @2xl:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))] @5xl:grid-cols-2">
         <div
           className={cn(
             'flex flex-col gap-1 border-t border-l p-3',
-            best.tradeKg === 0
+            best.tradeKg === fromKg
               ? 'bg-muted/40'
               : KIND_CHIP[tradeKind(best.tradeKg)],
           )}
@@ -909,7 +911,7 @@ const QuotaAnswer = ({
           <span className="font-display text-xl text-foreground">
             {describeTrade(best.tradeKg)}
           </span>
-          {best.tradeKg !== 0 ? (
+          {best.tradeKg !== fromKg ? (
             <span className="text-sm">
               <span
                 className={cn(
@@ -920,7 +922,9 @@ const QuotaAnswer = ({
                 {formatSignedKr(best.gain)}
               </span>{' '}
               <span className="text-muted-foreground">
-                i forhold til ingen handel
+                {fromKg > 0
+                  ? 'i forhold til mindste køb'
+                  : 'i forhold til ingen handel'}
               </span>
             </span>
           ) : null}
@@ -932,7 +936,9 @@ const QuotaAnswer = ({
             </span>
           ) : null}
         </div>
-        <AnswerCell label="Køb betaler sig">
+        <AnswerCell
+          label={fromKg > 0 ? 'Mere køb betaler sig' : 'Køb betaler sig'}
+        >
           {buyBelow ? (
             <>
               <span className="font-semibold tabular-nums">
@@ -960,7 +966,9 @@ const QuotaAnswer = ({
             </>
           ) : (
             <span className="text-sm text-muted-foreground">
-              Planen kan ikke klare sig med mindre kvote
+              {fromKg > 0
+                ? 'Planen kan ikke holde kvoten uden køb'
+                : 'Planen kan ikke klare sig med mindre kvote'}
             </span>
           )}
         </AnswerCell>
@@ -972,6 +980,13 @@ const QuotaAnswer = ({
             </b>{' '}
             kan udnyttes
             <br />
+            {fromKg > 0 ? (
+              <>
+                Mindst{' '}
+                <b className="tabular-nums">{formatWholeNumber(fromKg)} kg</b>{' '}
+                skal købes
+              </>
+            ) : null}
             {limit?.kind === 'proven' && limit.lowestKg === 0
               ? 'Der kan ikke sælges'
               : null}
@@ -1151,6 +1166,13 @@ const QuotaCurveView = ({
 
   return (
     <div className="flex flex-col gap-4">
+      {curve.minimumPurchaseKg > 0 ? (
+        <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-strong">
+          Oplandet skal købe mindst {formatWholeNumber(curve.minimumPurchaseKg)}{' '}
+          kg N/år for at holde kvoten. Søjlerne viser, hvad det er værd at købe
+          mere end det.
+        </p>
+      ) : null}
       <div className="grid gap-4 @5xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] @5xl:items-start">
         <QuotaAnswer curve={curve} best={best} rivals={rivals} price={price} />
         <div className="flex min-w-0 flex-col gap-2">

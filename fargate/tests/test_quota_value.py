@@ -259,9 +259,41 @@ class KvoteTests(unittest.TestCase):
         self.assertAlmostEqual(analysis.base.db2, 3500)
 
     def test_unsolved_base_raises_with_its_status(self):
-        farm = _input([_field("a", KYSTVAND, _option("a-low", 50, 1000))], {KYSTVAND: 10})
         with self.assertRaises(BaseNotSolvedError) as raised:
-            analyse_quota_value(farm, KYSTVAND, price_kr_per_kg=5)
+            analyse_quota_value(_window_farm(), KYSTVAND, 5, solver=lambda input, hint: _unsolved())
+        self.assertEqual(raised.exception.status, "UNKNOWN")
+
+
+class MinimumPurchaseTests(unittest.TestCase):
+    # Kvote 100. a-low lets out 120 (2000 kr), a-high 150 (3000 kr): the plan
+    # must buy at least 20 kg, and 50 kg is the uncapped udledning.
+    def farm(self):
+        return _input(
+            [_field("a", KYSTVAND, _option("a-high", 150, 3000), _option("a-low", 120, 2000))],
+            {KYSTVAND: 100},
+        )
+
+    def test_the_curve_starts_at_the_least_purchase_and_only_buys(self):
+        analysis = analyse_quota_value(self.farm(), KYSTVAND, price_kr_per_kg=10)
+        curve = analysis.curve
+        self.assertEqual((curve.minimum_purchase_kg, curve.kvote_kg), (20, 100))
+        self.assertEqual([p.trade_kg for p in curve.points], [20, 28, 37, 45])
+        self.assertEqual((analysis.base.trade_kg, analysis.base.db2), (20, 2000))
+        self.assertEqual(curve.points[0].cap_by_year, (120,) * NUM_YEARS)
+
+    def test_gains_are_over_the_least_purchase(self):
+        trades = QuotaTradeRange(min_kg=-20, max_kg=60, step_kg=10)
+        analysis = analyse_quota_value(self.farm(), KYSTVAND, 10, trade_range=trades)
+        by_trade = {p.trade_kg: p for p in analysis.curve.points}
+        self.assertEqual(sorted(by_trade), [20, 30, 40, 50])
+        self.assertAlmostEqual(gain(by_trade[50], analysis.base, 10), 1000 - 300)
+
+    def test_no_plan_even_without_the_kvote_raises(self):
+        def solver(input, hint):
+            return replace(_unsolved(), status="INFEASIBLE")
+
+        with self.assertRaises(BaseNotSolvedError) as raised:
+            analyse_quota_value(self.farm(), KYSTVAND, 5, solver=solver)
         self.assertEqual(raised.exception.status, "INFEASIBLE")
 
 

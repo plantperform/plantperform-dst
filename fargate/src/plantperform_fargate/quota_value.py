@@ -15,6 +15,11 @@ trade looked at. Selling stops at the kvote or where the model becomes
 infeasible, and the step into infeasibility is bisected so the selling limit is
 located more precisely.
 
+A plan that cannot keep the kvote at all must buy. The least it can buy is then
+bisected to the whole kg between no trade and the uncapped udledning, and the
+curve starts there instead of at no trade, buying only: its gains are over
+buying that least amount.
+
 Every solve is hinted with the solution of its nearest already-solved
 neighbour, which is usually only a few fields away from the answer.
 
@@ -154,6 +159,8 @@ class QuotaCurve:
     # Buying more than this adds nothing: the farm's udledning without the kvote.
     unconstrained_trade_kg: float
     solves: int
+    # The least the opland must buy to keep the kvote; the points start here.
+    minimum_purchase_kg: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -399,6 +406,10 @@ def quota_value_curve(
 ) -> QuotaCurve:
     """Solve V(t) for one opland; base is the already-solved t = 0 point.
 
+    An INFEASIBLE base means the opland must buy: the curve then starts at the
+    least it can buy, buying only, and raises BaseNotSolvedError when even the
+    uncapped model has no solution.
+
     input caps the opland by its kvote, as kvote_input does. The window is
     window_share of the kvote, so selling all of it never takes the kvote below
     zero. A trade_range replaces the window with its own trades, cut at the
@@ -409,7 +420,7 @@ def quota_value_curve(
     """
     base_caps = _caps(input, kystvand_id)
     capped = [y for y in range(NUM_YEARS) if base_caps[y] is not None]
-    points: dict[float, QuotaPoint] = {0.0: replace(base, cap_by_year=base_caps)}
+    points: dict[float, QuotaPoint] = {}
     solves = 0
 
     def attempt(trade_kg: float, hint: dict[str, str] | None) -> QuotaPoint:
@@ -445,26 +456,54 @@ def quota_value_curve(
     solves += 1
     free = solver(with_trades(input, {kystvand_id: None}), None)
     progress.solved("uncapped")
-    progress.finish("uncapped")
     unconstrained_trade_kg = 0.0
     if free.status in FEASIBLE:
         free_load = kvotegivende_n_load_by_year(input, _choices(free), kystvand_id)
         excess = max(free_load[y] - base_caps[y] for y in capped)
         unconstrained_trade_kg = float(math.ceil(excess)) if excess > 0 else 0.0
 
+    # The uncapped solution meets the kvote raised by unconstrained_trade_kg, so
+    # the least purchase lies between it and no trade. A step without an answer
+    # in time counts as too little, so the purchase found always has a plan.
+    if not base.feasible:
+        if free.status not in FEASIBLE:
+            raise BaseNotSolvedError(free.status)
+        low, base = 0.0, _point(input, kystvand_id, unconstrained_trade_kg, free)
+        while base.trade_kg - low > 1 and not _out_of_time():
+            middle = float(math.floor((low + base.trade_kg) / 2))
+            point = attempt(middle, selling_hint(middle, base))
+            progress.solved("uncapped")
+            if point.feasible:
+                base = point
+            else:
+                low = middle
+    progress.finish("uncapped")
+    minimum_purchase_kg = base.trade_kg
+    points[minimum_purchase_kg] = replace(
+        base, cap_by_year=_traded_caps(base_caps, minimum_purchase_kg)
+    )
+
     # The trades are cut where buying adds nothing and where the kvote would
     # drop below zero.
     lowest_allowed = -min(base_caps[y] for y in capped)
     if trade_range is None:
         window_kg = float(round(window_share * -lowest_allowed))
-        buying = _grid(min(window_kg, unconstrained_trade_kg), points_per_side)
+        buying = [
+            minimum_purchase_kg + trade
+            for trade in _grid(
+                min(window_kg, unconstrained_trade_kg - minimum_purchase_kg), points_per_side
+            )
+        ]
         selling = _grid(max(-window_kg, lowest_allowed), points_per_side)
     else:
         buying, selling = _cut_to_limits(
             trade_range.trades(), unconstrained_trade_kg, lowest_allowed
         )
+        buying = [trade for trade in buying if trade > minimum_purchase_kg]
+    if minimum_purchase_kg > 0:
+        selling = []
     if max_solves is None:
-        max_solves = 1 + len(buying) + 2 * len(selling) + MAX_SELLING_LIMIT_SOLVES
+        max_solves = solves + len(buying) + 2 * len(selling) + MAX_SELLING_LIMIT_SOLVES
 
     # Buying side, each point hinted with the one below it, whose solution
     # always fits the larger cap.
@@ -487,7 +526,7 @@ def quota_value_curve(
     # Selling side, outwards until the window ends or the model is proven
     # infeasible. A point without any solution in time (UNKNOWN) is not proof,
     # so selling continues past it.
-    upper = points[0.0]
+    upper = points[minimum_purchase_kg]
     progress.start("selling", total=len(selling))
     for trade in selling:
         if not can_solve():
@@ -535,6 +574,7 @@ def quota_value_curve(
         points=tuple(points[t] for t in sorted(points)),
         unconstrained_trade_kg=unconstrained_trade_kg,
         solves=solves,
+        minimum_purchase_kg=minimum_purchase_kg,
     )
 
 
@@ -633,8 +673,12 @@ def _selling_limit_interval(
 
 
 def gain(point: QuotaPoint, base: QuotaPoint, price_kr_per_kg: float) -> float:
-    """V(t) - p * t - V(0): the yearly gain of this trade over not trading."""
-    return point.db2 - price_kr_per_kg * point.trade_kg - base.db2
+    """V(t) - p * t - V(0): the yearly gain of this trade over not trading.
+
+    When the opland must buy, base is the least purchase, and the gain is over
+    buying that.
+    """
+    return point.db2 - price_kr_per_kg * (point.trade_kg - base.trade_kg) - base.db2
 
 
 def best_trade(curve: QuotaCurve, base: QuotaPoint, price_kr_per_kg: float) -> QuotaPoint:
@@ -822,8 +866,9 @@ def analyse_quota_value(
 
     The CP-SAT model is built once and only its caps change between solves,
     unless a solver is passed (as tests do). Raises ValueError when the opland
-    has no kvote to trade, and BaseNotSolvedError when the model without trade
-    has no solution. on_progress gets QuotaProgress's steps after every change.
+    has no kvote to trade, and BaseNotSolvedError when the model has no
+    solution without trade (except INFEASIBLE, where the opland must buy) or
+    without the kvote. on_progress gets QuotaProgress's steps after every change.
 
     Up to parallel_solves refinement solves run at the same time, each on its
     own copy of the model; a passed solver is shared and must allow that. Each
@@ -850,7 +895,7 @@ def analyse_quota_value(
     base_output = solver(input, base_hint)
     progress.solved("base")
     progress.finish("base")
-    if base_output.status not in FEASIBLE:
+    if base_output.status not in (*FEASIBLE, "INFEASIBLE"):
         raise BaseNotSolvedError(base_output.status)
     base = _point(input, kystvand_id, 0.0, base_output)
     curve = quota_value_curve(
@@ -862,6 +907,8 @@ def analyse_quota_value(
         progress=progress,
         trade_range=trade_range,
     )
+    if not base.feasible:
+        base = next(p for p in curve.points if p.trade_kg == curve.minimum_purchase_kg)
     base, (curve,) = _refine_contenders(
         replace(input, relative_gap_limit=refined_gap),
         base,
@@ -873,7 +920,7 @@ def analyse_quota_value(
         selling_time_limit_seconds=selling_time_limit_seconds,
         progress=progress,
     )
-    zero = next((p for p in curve.points if p.trade_kg == 0 and p.feasible), None)
-    if zero is not None and zero.db2 > base.db2:
-        base = zero
+    start = next(p for p in curve.points if p.trade_kg == curve.minimum_purchase_kg)
+    if start.feasible and start.db2 > base.db2:
+        base = start
     return QuotaValueAnalysis(base=base, curve=curve)

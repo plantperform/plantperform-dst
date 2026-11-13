@@ -94,6 +94,7 @@ const completed: QuotaValueResult = {
       catchmentId: 103,
       quotaKgN: 33,
       unconstrainedTradeKg: 7,
+      minimumPurchaseKg: 0,
       points: [point(0, 1000), point(7, 2000)],
     },
   },
@@ -205,5 +206,37 @@ describe('QuotaTradePanel', () => {
         (cell) => cell.textContent,
       ),
     ).toEqual(['2027', '30', '40', '0'])
+  })
+
+  it('counts from the least purchase when the catchment must buy', async () => {
+    api.results = [
+      {
+        ...completed,
+        output: {
+          ...completed.output!,
+          curve: {
+            ...completed.output!.curve,
+            unconstrainedTradeKg: 27,
+            minimumPurchaseKg: 20,
+            points: [point(20, 1000), point(27, 2000)],
+          },
+        },
+      },
+    ]
+    await mount()
+    expect(container.textContent).toContain(
+      'Oplandet skal købe mindst 20 kg N/år for at holde kvoten.',
+    )
+    expect(container.textContent).toContain(
+      'Bedst ved 35 kr/kg NKøb 27 kg N/år+755 kr/år i forhold til mindste køb',
+    )
+    expect(container.textContent).toContain(
+      'Planen kan ikke holde kvoten uden køb',
+    )
+    expect(
+      [...container.querySelectorAll('tbody td')].map(
+        (cell) => cell.textContent,
+      ),
+    ).toEqual(['2027', '30', '60', '0'])
   })
 })
