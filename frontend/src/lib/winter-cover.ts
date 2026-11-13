@@ -165,10 +165,33 @@ const W_COVERS: Record<number, YearCover> = {
 export const yearCoverForW = (w: number): YearCover | null =>
   W_COVERS[w] ?? null
 
-const CATCH_CROP_CODES = new Set([968, 9680, 970])
+const CATCH_CROP_CODES = new Set([950, 951, 952, 953, 954, 968, 9680, 970])
 const INTERMEDIATE_CROP_CODES = new Set([9682, 9684])
-const UNDERSOWN_COVER_CODES = new Set([960, 961, 962, 963, 964, 965, 966, 2000])
+const UNDERSOWN_COVER_CODES = new Set([
+  943, 944, 945, 946, 960, 961, 962, 963, 964, 965, 966, 2000,
+])
 const EARLY_SOWING_CODE = 9683
+const STUBBLE_CODE = 922
+const BARE_SOIL_CODE = 921
+
+export const MEASURE_COVERS: readonly WinterCoverDefinition[] = [
+  CATCH_CROP,
+  INTERMEDIATE_CROP,
+  EARLY_SOWING,
+  UNDERSOWN_OR_FALLOW,
+  STUBBLE,
+  BARE_SOIL,
+]
+
+export const measureCover = (code: number): WinterCoverDefinition | null => {
+  if (CATCH_CROP_CODES.has(code)) return CATCH_CROP
+  if (INTERMEDIATE_CROP_CODES.has(code)) return INTERMEDIATE_CROP
+  if (code === EARLY_SOWING_CODE) return EARLY_SOWING
+  if (UNDERSOWN_COVER_CODES.has(code)) return UNDERSOWN_OR_FALLOW
+  if (code === STUBBLE_CODE) return STUBBLE
+  if (code === BARE_SOIL_CODE) return BARE_SOIL
+  return null
+}
 
 const isOn = (value: unknown): boolean => Number(value ?? 0) > 0
 
@@ -195,10 +218,8 @@ const yearCoversFromUndersownCrop = (year: RotationYear): YearCover[] => {
   if (isIntermediateOrEarlySowingYear(year)) {
     return [yearCover(INTERMEDIATE_OR_EARLY_SOWING)]
   }
-  if (CATCH_CROP_CODES.has(code)) return [yearCover(CATCH_CROP)]
-  if (INTERMEDIATE_CROP_CODES.has(code)) return [yearCover(INTERMEDIATE_CROP)]
-  if (code === EARLY_SOWING_CODE) return [yearCover(EARLY_SOWING)]
-  if (UNDERSOWN_COVER_CODES.has(code)) {
+  const cover = measureCover(code)
+  if (cover === UNDERSOWN_OR_FALLOW) {
     return [
       yearCover(
         UNDERSOWN_OR_FALLOW,
@@ -206,7 +227,9 @@ const yearCoversFromUndersownCrop = (year: RotationYear): YearCover[] => {
       ),
     ]
   }
-  return []
+  return cover === null || cover === STUBBLE || cover === BARE_SOIL
+    ? []
+    : [yearCover(cover)]
 }
 
 export const rotationCovers = (

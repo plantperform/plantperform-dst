@@ -2,13 +2,26 @@ import { describe, expect, it } from 'vitest'
 
 import type { RotationYear } from '@/api/types'
 import {
+  BARE_SOIL,
+  CATCH_CROP,
   EARLY_SOWING,
   INTERMEDIATE_CROP,
   INTERMEDIATE_OR_EARLY_SOWING,
+  STUBBLE,
   isIntermediateOrEarlySowingYear,
+  measureCover,
   rotationCovers,
   yearCoversFromDetail,
 } from '@/lib/winter-cover'
+
+describe('measureCover', () => {
+  it('gives the cover of a chosen vinterdække or virkemiddel', () => {
+    expect(measureCover(951)).toBe(CATCH_CROP)
+    expect(measureCover(922)).toBe(STUBBLE)
+    expect(measureCover(921)).toBe(BARE_SOIL)
+    expect(measureCover(1)).toBeNull()
+  })
+})
 
 const coversOf = (detail: Record<string, unknown>) =>
   yearCoversFromDetail(detail).map(({ cover }) => cover)

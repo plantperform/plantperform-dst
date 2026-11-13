@@ -1,16 +1,12 @@
-import { ChevronRight, Plus, Trash2, UserPlus } from 'lucide-react'
+import { ChevronRight, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { useCropCodes } from '@/api/hooks'
-import { useMembers } from '@/api/members'
-import {
-  rotationDefinitionMembersPath,
-  useOwnRotationDefinitions,
-} from '@/api/own-rotations'
-import type { RotationDefinition } from '@/api/types'
-import { useAuth } from '@/auth/context'
+import { useCropCodes, useUndersownCropCodes } from '@/api/hooks'
+import { useOwnRotationDefinitions } from '@/api/own-rotations'
+import type { RotationDefinition, RotationYear } from '@/api/types'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
+import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { FARM_LIST_CLASS } from '@/components/farm/FarmList'
 import { FarmSearchInput } from '@/components/farm/FarmSearchInput'
 import { LibraryRotationCopyDialog } from '@/components/farm/LibraryRotationCopyDialog'
@@ -20,54 +16,100 @@ import {
   useOwnRotationActions,
 } from '@/components/farm/own-rotations-state'
 import { OwnRotationsShareDialog } from '@/components/farm/OwnRotationsShareDialog'
+import { AppTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Pending } from '@/components/ui/pending'
-import { Skeleton } from '@/components/ui/skeleton'
+import { cropGroupFor } from '@/lib/crop-groups'
 import { formatCount } from '@/lib/economics'
-import { describeFarmAccess, otherMemberEmails } from '@/lib/farm-access'
 import {
   DELETE_ROTATION_DIALOG,
-  definitionCropNames,
+  MAX_ROTATION_YEARS,
+  definitionYears,
+  describeRotationYear,
   describeYearCount,
 } from '@/lib/own-rotations'
 import { cn } from '@/lib/utils'
+import { MEASURE_COVERS, measureCover } from '@/lib/winter-cover'
 
-const ROW_GRID_CLASS =
-  'grid grid-cols-[16px_minmax(0,1fr)_16px] items-center gap-x-4 gap-y-1 px-5 lg:grid-cols-[16px_minmax(12rem,1fr)_minmax(0,1fr)_11rem_16px]'
+const FULL_GRID_CLASS =
+  'grid grid-cols-[32px_180px_minmax(0,1fr)_32px] items-center gap-x-3 px-4 @min-[1100px]:grid-cols-[32px_230px_minmax(0,1fr)_32px]'
 
-const STACKED_CELL_CLASS = 'col-start-2 lg:col-start-auto'
+const COMPACT_GRID_CLASS =
+  'grid grid-cols-[28px_170px_92px_28px_56px_minmax(0,1fr)_28px] items-center gap-x-2.5 px-4'
 
-const SharedWith = ({ definition }: { definition: RotationDefinition }) => {
-  const { user } = useAuth()
-  const { data: members } = useMembers(
-    rotationDefinitionMembersPath(definition.id),
+const HEADER_CLASS = 'py-2.5 text-xs font-medium text-muted-foreground'
+
+const NAME_LINK_CLASS =
+  'block truncate rounded-sm font-display after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+
+const CHEVRON_CLASS =
+  'size-4 justify-self-end text-muted-foreground transition-colors group-hover:text-foreground'
+
+const rowClass = (selected: boolean) =>
+  cn(
+    'group relative transition-colors',
+    selected ? 'bg-primary/5' : 'hover:bg-muted/40',
   )
-  return members ? (
-    describeFarmAccess(otherMemberEmails(members, user?.email ?? ''))
-  ) : (
-    <Skeleton className="h-3.5 w-20" />
-  )
+
+const coverColor = ({ undersownCropCode }: RotationYear): string =>
+  undersownCropCode === null
+    ? 'transparent'
+    : (measureCover(undersownCropCode)?.color ?? 'transparent')
+
+type SelectBoxProps = {
+  label: string
+  checked: boolean
+  indeterminate?: boolean
+  compact?: boolean
+  onChange: (checked: boolean) => void
 }
 
+const SelectBox = ({
+  label,
+  checked,
+  indeterminate = false,
+  compact = false,
+  onChange,
+}: SelectBoxProps) => (
+  <label
+    className={cn(
+      'relative z-10 flex cursor-pointer items-center justify-center',
+      compact ? 'size-7' : 'size-8',
+    )}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      aria-label={label}
+      ref={(element) => {
+        if (element) element.indeterminate = indeterminate
+      }}
+      className="size-4 cursor-pointer accent-primary"
+      onChange={(event) => onChange(event.target.checked)}
+    />
+  </label>
+)
+
 type OwnRotationRowProps = {
-  farmId: string
+  path: string
   definition: RotationDefinition
-  crops: string[]
+  years: RotationYear[]
   selected: boolean
   onSelect: (selected: boolean) => void
 }
 
 const OwnRotationRow = ({
-  farmId,
+  path,
   definition,
-  crops,
+  years,
+  columns,
   selected,
   onSelect,
-}: OwnRotationRowProps) => {
-  const subtitle = [
+}: OwnRotationRowProps & { columns: number }) => {
+  const meta = [
     definition.farmingSystem ?? 'Uden driftsform',
-    describeYearCount(crops.length),
+    describeYearCount(years.length),
     definition.variants.length > 1
       ? `${definition.variants.length} udgaver`
       : null,
@@ -76,49 +118,113 @@ const OwnRotationRow = ({
     .join(' · ')
 
   return (
-    <li
-      className={cn(
-        ROW_GRID_CLASS,
-        'relative py-3.5 transition-colors',
-        selected ? 'bg-primary/5' : 'hover:bg-muted/40',
-      )}
-    >
-      <input
-        type="checkbox"
+    <li className={cn(FULL_GRID_CLASS, rowClass(selected), 'py-3.5')}>
+      <SelectBox
+        label={`Vælg ${definition.name}`}
         checked={selected}
-        aria-label={`Vælg ${definition.name}`}
-        className="relative z-10 size-4 accent-primary"
-        onChange={(event) => onSelect(event.target.checked)}
+        onChange={onSelect}
       />
       <div className="min-w-0">
         <Link
-          to={ownRotationPath(farmId, definition.id)}
-          className="block truncate rounded-sm font-display text-[19px] leading-6 after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          to={path}
+          title={definition.name}
+          className={cn(NAME_LINK_CLASS, 'text-xl leading-tight')}
         >
           {definition.name}
         </Link>
-        <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
-          {subtitle}
+        <p className="mt-0.5 truncate text-[12.5px] leading-snug text-muted-foreground">
+          {meta}
         </p>
       </div>
-      <p className={cn(STACKED_CELL_CLASS, 'truncate text-[13px]')}>
-        {crops.join(' · ')}
-      </p>
-      <span
-        className={cn(
-          STACKED_CELL_CLASS,
-          'truncate text-[13px] text-muted-foreground',
-        )}
-      >
-        <SharedWith definition={definition} />
-      </span>
-      <ChevronRight
-        className="col-start-3 row-start-1 size-4 text-muted-foreground lg:col-start-auto lg:row-start-auto"
-        aria-hidden="true"
-      />
+      <Link to={path} tabIndex={-1} className="relative z-10 min-w-0">
+        <ol
+          className="grid items-start gap-x-3"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
+          {years.map((year, index) => (
+            <AppTooltip key={index} content={describeRotationYear(year, index)}>
+              <li className="grid min-w-0 grid-cols-[auto_18px_minmax(0,1fr)] items-center gap-x-1.5">
+                <span className="text-xs leading-[18px] text-muted-foreground tabular-nums">
+                  {index + 1}.
+                </span>
+                <CropGroupTile
+                  group={cropGroupFor(year.cropCode, year.cropName)}
+                />
+                <span className="truncate pr-1 text-[13px] leading-[18px] font-medium">
+                  {year.cropName}
+                </span>
+                <span />
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 h-0.5 self-start"
+                  style={{ backgroundColor: coverColor(year) }}
+                />
+                <span className="mt-0.5 min-h-4 truncate text-xs leading-4 text-muted-foreground">
+                  {year.undersownCropName}
+                </span>
+              </li>
+            </AppTooltip>
+          ))}
+        </ol>
+      </Link>
+      <ChevronRight className={CHEVRON_CLASS} aria-hidden="true" />
     </li>
   )
 }
+
+const OwnRotationCompactRow = ({
+  path,
+  definition,
+  years,
+  selected,
+  onSelect,
+}: OwnRotationRowProps) => (
+  <li className={cn(COMPACT_GRID_CLASS, rowClass(selected), 'py-2.5')}>
+    <SelectBox
+      compact
+      label={`Vælg ${definition.name}`}
+      checked={selected}
+      onChange={onSelect}
+    />
+    <Link
+      to={path}
+      title={definition.name}
+      className={cn(NAME_LINK_CLASS, 'text-[17px] leading-snug')}
+    >
+      {definition.name}
+    </Link>
+    <span className="truncate text-[13px] leading-snug">
+      {definition.farmingSystem ?? 'Uden driftsform'}
+    </span>
+    <span className="text-[13px] leading-snug tabular-nums">
+      {years.length}
+    </span>
+    <span className="text-[13px] leading-snug tabular-nums">
+      {definition.variants.length > 1 ? definition.variants.length : '-'}
+    </span>
+    <Link to={path} tabIndex={-1} className="relative z-10 min-w-0">
+      <ol className="grid grid-cols-8 gap-1.5">
+        {years.map((year, index) => (
+          <AppTooltip key={index} content={describeRotationYear(year, index)}>
+            <li
+              className="flex h-6 min-w-0 items-center gap-1 border-b-2"
+              style={{ borderBottomColor: coverColor(year) }}
+            >
+              <CropGroupTile
+                className="size-4"
+                group={cropGroupFor(year.cropCode, year.cropName)}
+              />
+              <span className="truncate text-[11px] leading-4 font-medium text-muted-foreground tabular-nums">
+                {year.cropCode}
+              </span>
+            </li>
+          </AppTooltip>
+        ))}
+      </ol>
+    </Link>
+    <ChevronRight className={CHEVRON_CLASS} aria-hidden="true" />
+  </li>
+)
 
 type OwnRotationsOverviewProps = {
   farmId: string
@@ -131,6 +237,7 @@ export const OwnRotationsOverview = ({
 }: OwnRotationsOverviewProps) => {
   const definitions = useOwnRotationDefinitions()
   const crops = useCropCodes(farmId)
+  const undersown = useUndersownCropCodes(farmId)
   const actions = useOwnRotationActions(farmId)
   const [query, setQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -139,17 +246,20 @@ export const OwnRotationsOverview = ({
   const cropNames = new Map(
     (crops.data ?? []).map((crop) => [crop.code, crop.name]),
   )
+  const undersownNames = new Map(
+    (undersown.data ?? []).map((option) => [option.code, option.name]),
+  )
   const own = (definitions.data ?? [])
     .toSorted((left, right) => left.name.localeCompare(right.name, 'da'))
     .map((definition) => ({
       definition,
-      crops: definitionCropNames(definition, cropNames),
+      years: definitionYears(definition, cropNames, undersownNames),
     }))
   const search = query.trim().toLocaleLowerCase('da')
   const shown = own.filter(
-    ({ definition, crops }) =>
+    ({ definition, years }) =>
       search === '' ||
-      [definition.name, ...crops]
+      [definition.name, ...years.map((year) => year.cropName)]
         .join(' ')
         .toLocaleLowerCase('da')
         .includes(search),
@@ -163,6 +273,7 @@ export const OwnRotationsOverview = ({
   const allShownSelected =
     shown.length > 0 && shownSelectedCount === shown.length
   const one = selected.length === 1 ? selected[0] : null
+  const columns = Math.max(1, ...own.map(({ years }) => years.length))
 
   const select = (ids: string[], checked: boolean) =>
     setSelectedIds((current) =>
@@ -170,6 +281,21 @@ export const OwnRotationsOverview = ({
         ? [...new Set([...current, ...ids])]
         : current.filter((id) => !ids.includes(id)),
     )
+
+  const selectAll = (compact: boolean) => (
+    <SelectBox
+      compact={compact}
+      label="Vælg alle viste sædskifter"
+      checked={allShownSelected}
+      indeterminate={shownSelectedCount > 0 && !allShownSelected}
+      onChange={(checked) =>
+        select(
+          shown.map(({ definition }) => definition.id),
+          checked,
+        )
+      }
+    />
+  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -203,7 +329,7 @@ export const OwnRotationsOverview = ({
             </div>
           ) : null}
         </header>
-        {definitions.data && crops.data ? (
+        {definitions.data && crops.data && undersown.data ? (
           own.length === 0 ? (
             <Card className="flex flex-col items-center gap-3 border-dashed px-6 py-11 text-center">
               <h2 className="text-[17px] font-semibold">
@@ -220,7 +346,7 @@ export const OwnRotationsOverview = ({
               </Button>
             </Card>
           ) : (
-            <>
+            <div className="mt-1.5 flex flex-col gap-3.5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <FarmSearchInput
                   className="w-72 max-w-full"
@@ -229,8 +355,15 @@ export const OwnRotationsOverview = ({
                   placeholder="Søg på navn eller afgrøde"
                   label="Søg i egne sædskifter"
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span
+                    className={cn(
+                      'text-[13px]',
+                      selected.length > 0
+                        ? 'text-foreground'
+                        : 'text-muted-foreground',
+                    )}
+                  >
                     {selected.length > 0
                       ? `${selected.length} valgt`
                       : 'Sæt flueben for at dele eller slette'}
@@ -258,65 +391,126 @@ export const OwnRotationsOverview = ({
                 </div>
               </div>
               {shown.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Ingen sædskifter matcher "{query.trim()}".
-                </p>
+                <Card className="px-6 py-14 text-center">
+                  <p className="font-display text-xl leading-snug">
+                    Ingen sædskifter matcher "{query.trim()}"
+                  </p>
+                  <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                    Søgningen rammer både sædskiftets navn og afgrøderne i det.
+                    Prøv et andet ord, eller ryd søgningen for at se alle{' '}
+                    {formatCount(own.length, 'sædskifte', 'sædskifter')}.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => setQuery('')}
+                  >
+                    <X aria-hidden="true" />
+                    Ryd søgning
+                  </Button>
+                </Card>
               ) : (
-                <div className={FARM_LIST_CLASS}>
+                <>
                   <div
                     className={cn(
-                      ROW_GRID_CLASS,
-                      'py-2.5 text-xs text-muted-foreground',
+                      FARM_LIST_CLASS,
+                      'hidden @min-[1000px]:block',
                     )}
                   >
-                    <input
-                      type="checkbox"
-                      aria-label="Vælg alle viste sædskifter"
-                      checked={allShownSelected}
-                      ref={(element) => {
-                        if (element) {
-                          element.indeterminate =
-                            shownSelectedCount > 0 && !allShownSelected
-                        }
-                      }}
-                      className="size-4 accent-primary"
-                      onChange={(event) =>
-                        select(
-                          shown.map(({ definition }) => definition.id),
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <span>Sædskifte</span>
-                    <span className="hidden lg:block">Afgrøder</span>
-                    <span className="hidden lg:block">Deling</span>
-                    <span />
+                    <div className={cn(FULL_GRID_CLASS, HEADER_CLASS)}>
+                      {selectAll(false)}
+                      <span>Sædskifte</span>
+                      <span>Afgrøder år for år</span>
+                      <span />
+                    </div>
+                    <ul className="divide-y">
+                      {shown.map(({ definition, years }) => (
+                        <OwnRotationRow
+                          key={definition.id}
+                          path={ownRotationPath(farmId, definition.id)}
+                          definition={definition}
+                          years={years}
+                          columns={columns}
+                          selected={selectedIds.includes(definition.id)}
+                          onSelect={(checked) =>
+                            select([definition.id], checked)
+                          }
+                        />
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="divide-y">
-                    {shown.map(({ definition, crops }) => (
-                      <OwnRotationRow
-                        key={definition.id}
-                        farmId={farmId}
-                        definition={definition}
-                        crops={crops}
-                        selected={selectedIds.includes(definition.id)}
-                        onSelect={(checked) => select([definition.id], checked)}
-                      />
-                    ))}
-                  </ul>
-                </div>
+                  <div className="flex flex-col gap-2.5 @min-[1000px]:hidden">
+                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1.5 text-xs leading-snug text-muted-foreground">
+                      <span>Streg under året = vinterdække/virkemiddel</span>
+                      {MEASURE_COVERS.map((cover) => (
+                        <span
+                          key={cover.id}
+                          className="inline-flex items-center gap-1.5"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-0.5 w-3.5"
+                            style={{ backgroundColor: cover.color }}
+                          />
+                          {cover.label}
+                        </span>
+                      ))}
+                    </div>
+                    <div className={FARM_LIST_CLASS}>
+                      <div className={cn(COMPACT_GRID_CLASS, HEADER_CLASS)}>
+                        {selectAll(true)}
+                        <span>Sædskifte</span>
+                        <span>Driftsform</span>
+                        <span>År</span>
+                        <span>Udgaver</span>
+                        <span className="grid grid-cols-8 gap-1.5">
+                          {Array.from(
+                            { length: MAX_ROTATION_YEARS },
+                            (_, index) => (
+                              <span key={index}>{index + 1}.</span>
+                            ),
+                          )}
+                        </span>
+                        <span />
+                      </div>
+                      <ul className="divide-y">
+                        {shown.map(({ definition, years }) => (
+                          <OwnRotationCompactRow
+                            key={definition.id}
+                            path={ownRotationPath(farmId, definition.id)}
+                            definition={definition}
+                            years={years}
+                            selected={selectedIds.includes(definition.id)}
+                            onSelect={(checked) =>
+                              select([definition.id], checked)
+                            }
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </>
               )}
-            </>
+            </div>
           )
         ) : (
           <Pending
-            failed={Boolean(definitions.error || crops.error)}
+            failed={Boolean(
+              definitions.error || crops.error || undersown.error,
+            )}
             failure="Sædskifterne kunne ikke hentes."
             loading="Henter sædskifterne..."
-            retrying={definitions.isValidating || crops.isValidating}
+            retrying={
+              definitions.isValidating ||
+              crops.isValidating ||
+              undersown.isValidating
+            }
             onRetry={() => {
               void definitions.mutate()
               void crops.mutate()
+              void undersown.mutate()
             }}
           />
         )}
@@ -325,10 +519,7 @@ export const OwnRotationsOverview = ({
         definitions={selected}
         open={sharingSelected}
         onOpenChange={setSharingSelected}
-        onShared={() => {
-          setSharingSelected(false)
-          setSelectedIds([])
-        }}
+        onShared={() => setSharingSelected(false)}
       />
       <ConfirmDialog
         name={deletingSelected && selected.length > 0 ? 'valgte' : null}

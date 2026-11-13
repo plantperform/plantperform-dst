@@ -6,6 +6,7 @@ import type {
   RotationDefinitionInput,
   RotationDefinitionVariant,
   RotationOptionsError,
+  RotationYear,
 } from '@/api/types'
 import { formatCount, formatNameList } from '@/lib/economics'
 import { formatWholeNumber } from '@/lib/field-domain'
@@ -566,7 +567,36 @@ export const definitionCropNames = (
   definition: RotationDefinition,
   cropNames: Map<number, string>,
 ): string[] =>
-  (definition.variants[0]?.positions ?? []).map(
-    (position) =>
-      cropNames.get(position.cropCode) ?? `Afgrøde ${position.cropCode}`,
-  )
+  definitionYears(definition, cropNames, new Map()).map((year) => year.cropName)
+
+export const describeRotationYear = (
+  year: RotationYear,
+  index: number,
+): string =>
+  [
+    `${index + 1}. ${year.cropName}`,
+    `kode ${year.cropCode}`,
+    year.undersownCropName,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ')
+
+export const definitionYears = (
+  definition: RotationDefinition,
+  cropNames: Map<number, string>,
+  undersownNames: Map<number, string>,
+): RotationYear[] =>
+  (definition.variants[0]?.positions ?? []).map((position) => {
+    const undersownCropCode = position.allowedUndersownCropCodes[0] ?? null
+    return {
+      cropCode: position.cropCode,
+      cropName:
+        cropNames.get(position.cropCode) ?? `Afgrøde ${position.cropCode}`,
+      undersownCropCode,
+      undersownCropName:
+        undersownCropCode === null
+          ? null
+          : (undersownNames.get(undersownCropCode) ??
+            `Afgrøde ${undersownCropCode}`),
+    }
+  })
