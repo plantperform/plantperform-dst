@@ -160,26 +160,6 @@ def copy_fields(farm_id, simulation_id, source_id, email) -> dict[str, str] | No
         return ids
 
 
-def record_quota_trade(farm_id, simulation_id, trade, email) -> bool:
-    """Keep the kvote trade a simulering was created for (SimulationQuotaTrade)."""
-    with repository.SessionLocal.begin() as session:
-        if not repository._member_exists(session, farm_id, email):
-            return False
-        row = session.execute(
-            select(setups.c.data)
-            .where(setups.c.id == simulation_id, setups.c.farm_id == farm_id)
-            .with_for_update()
-        ).first()
-        if row is None:
-            return False
-        session.execute(
-            update(setups)
-            .where(setups.c.id == simulation_id)
-            .values(data={**row.data, "quota_trade": trade.model_dump(mode="json")})
-        )
-        return True
-
-
 def update_settings(farm_id, simulation_id, request, email):
     with repository.SessionLocal.begin() as session:
         if not repository._member_exists(session, farm_id, email):

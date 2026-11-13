@@ -18,7 +18,7 @@ from test_optimizer_lifecycle import (
 
 from app.api.v0 import simulations as simulations_api
 from app.data import quota_value_store, repository
-from app.domain.optimization import NUM_YEARS
+from app.domain.optimization import QuotaTradeSetting
 from app.domain.quota_value import (
     QuotaTradeRange,
     QuotaTradeSimulationRequest,
@@ -30,7 +30,7 @@ from app.services.scenario import quota_trade, rotations
 from plantperform_fargate import quota_value_worker, worker
 from plantperform_fargate.quota_value_worker import execute_quota_value
 
-KYSTVAND = 233
+KYSTVAND, OTHER = 233, 244
 
 
 def _leaching(evaluation, kg_n_ha):
@@ -66,8 +66,20 @@ class QuotaValueJobTests(DatabaseTests):
 
     def quota_request(self, **values):
         return QuotaValueRequest(
-            **{"expected_revision": 0, "run_id": uuid4(), "price_kr_per_kg": 5, **values}
+            **{
+                "expected_revision": 0,
+                "run_id": uuid4(),
+                "kystvand_id": KYSTVAND,
+                "price_kr_per_kg": 5,
+                **values,
+            }
         )
+
+    def move_to_other_opland(self, field_id):
+        with self.sessions.begin() as session:
+            fields = session.execute(select(setups.c.fields)).scalar_one()
+            fields[field_id]["kystvand_id"] = OTHER
+            session.execute(update(setups).values(fields=fields))
 
     def run_yearly(self):
         run = self.submit(self.request(yearly=True), "yearly")
@@ -80,12 +92,12 @@ class QuotaValueJobTests(DatabaseTests):
         )
         self.assertTrue(created)
         execute_quota_value("sim", result.run_id)
-        return quota_value_store.get_quota_value("farm", "sim", EMAIL)
+        return quota_value_store.get_quota_value("farm", "sim", result.kystvand_id, EMAIL)
 
     def test_curve_is_computed_from_the_completed_yearly_run(self):
         self.run_yearly()
-        # The default window (25 % of the 20 kg cap) is too narrow to change the
-        # plan here; buying 20 kg lets one field go high, 40 kg both.
+        # The default window (25 % of the 20 kg kvote) is too narrow to change
+        # the plan here; buying 20 kg lets one field go high, 40 kg both.
         result = self.run_quota_value(
             self.quota_request(trade_range=QuotaTradeRange(min_kg=-10, max_kg=40, step_kg=20))
         )
@@ -94,25 +106,51 @@ class QuotaValueJobTests(DatabaseTests):
         self.assertEqual(result.price_kr_per_kg, 5)
         output = result.output
         self.assertAlmostEqual(output.base_db2, 400)
-        [curve] = output.curves
+        curve = output.curve
         self.assertEqual(curve.kystvand_id, KYSTVAND)
+        self.assertEqual(curve.kvote_kg, 20)
         self.assertEqual(curve.unconstrained_trade_kg, 40)
-        self.assertEqual(curve.base_cap_by_year, {2027 + i: 20 for i in range(NUM_YEARS)})
         points = {p.trade_kg: p for p in curve.points}
         self.assertEqual(sorted(points), [-10, 0, 20, 40])
-        # Both fields at low already use the whole cap, so nothing can be sold.
+        # Both fields at low already use the whole kvote, so nothing can be sold.
         self.assertEqual(points[-10].status, "INFEASIBLE")
         self.assertAlmostEqual(points[0].db2, 400)
         self.assertAlmostEqual(points[20].db2, 800)
         self.assertAlmostEqual(points[40].db2, 1200)
-        self.assertEqual(points[20].cap_by_year[2027], 40)
         self.assertEqual(points[20].n_load_by_year[2027], 40)
         self.assertEqual(len(points[20].changed_fields), 1)
         self.assertEqual({r.field_id for r in points[40].rotations}, {"field-a", "field-b"})
         self.assertEqual({c.field_id for c in points[40].changed_fields}, {"field-a", "field-b"})
         self.assertEqual(points[40].changed_fields[0].from_rotation_id, "1:1:100")
         self.assertEqual(points[40].changed_fields[0].to_rotation_id, "1:2:100")
-        self.assertIsNone(output.interaction)
+
+    def test_only_the_traded_oplands_marker_change_and_each_opland_has_its_curve(self):
+        self.move_to_other_opland("field-b")
+        self.run_yearly()
+        trades = QuotaTradeRange(min_kg=-10, max_kg=40, step_kg=20)
+        result = self.run_quota_value(self.quota_request(trade_range=trades))
+        self.assertEqual(result.status, "completed", result.error)
+        curve = result.output.curve
+        self.assertEqual((curve.kystvand_id, curve.kvote_kg), (KYSTVAND, 10))
+        # field-b keeps the base plan's low rotation in every point, so buying
+        # more than field-a can use (20 kg) adds nothing.
+        self.assertEqual(curve.unconstrained_trade_kg, 20)
+        points = {p.trade_kg: p for p in curve.points}
+        self.assertEqual(sorted(points), [-10, 0, 20])
+        self.assertAlmostEqual(points[0].db2, 400)
+        self.assertAlmostEqual(points[20].db2, 800)
+        self.assertEqual([c.field_id for c in points[20].changed_fields], ["field-a"])
+        rotations = {r.field_id: r.base_ref.variant for r in points[20].rotations}
+        self.assertEqual(rotations, {"field-a": "2", "field-b": "1"})
+        other = self.run_quota_value(self.quota_request(kystvand_id=OTHER, trade_range=trades))
+        self.assertEqual(other.output.curve.kystvand_id, OTHER)
+        values = quota_value_store.get_quota_values("farm", "sim", EMAIL)
+        self.assertEqual([v.kystvand_id for v in values], [KYSTVAND, OTHER])
+
+    def test_an_opland_without_kvotegivende_marker_fails(self):
+        self.run_yearly()
+        result = self.run_quota_value(self.quota_request(kystvand_id=OTHER))
+        self.assertEqual((result.status, result.error.code), ("failed", "INFEASIBLE"))
 
     def test_requires_a_completed_yearly_run(self):
         with self.assertRaises(quota_value_store.QuotaValueConflictError):
@@ -137,14 +175,14 @@ class QuotaValueJobTests(DatabaseTests):
         self.run_yearly()
         self.assertFalse(self.run_quota_value().outdated)
         self.run_yearly()
-        self.assertTrue(quota_value_store.get_quota_value("farm", "sim", EMAIL).outdated)
+        self.assertTrue(quota_value_store.get_quota_value("farm", "sim", KYSTVAND, EMAIL).outdated)
 
     def test_edit_before_the_job_starts_fails_it_as_outdated(self):
         self.run_yearly()
         result, _ = quota_value_store.submit_quota_value("farm", "sim", EMAIL, self.quota_request())
         self.edit(name="renamed")
         execute_quota_value("sim", result.run_id)
-        current = quota_value_store.get_quota_value("farm", "sim", EMAIL)
+        current = quota_value_store.get_quota_value("farm", "sim", KYSTVAND, EMAIL)
         self.assertEqual(current.status, "failed")
         self.assertEqual(current.error.code, "OUTDATED")
 
@@ -152,11 +190,11 @@ class QuotaValueJobTests(DatabaseTests):
         self.run_yearly()
         quota_value_store.submit_quota_value("farm", "sim", EMAIL, self.quota_request())
         quota_value_store.recover_local_quota_values()
-        current = quota_value_store.get_quota_value("farm", "sim", EMAIL)
+        current = quota_value_store.get_quota_value("farm", "sim", KYSTVAND, EMAIL)
         self.assertEqual((current.status, current.error.code), ("failed", "WORKER_LOST"))
 
     def test_non_members_cannot_read_or_start_it(self):
-        self.assertIsNone(quota_value_store.get_quota_value("farm", "sim", "outsider@example.com"))
+        self.assertIsNone(quota_value_store.get_quota_values("farm", "sim", "outsider@example.com"))
         with self.assertRaises(quota_value_store.QuotaValueNotFoundError):
             quota_value_store.submit_quota_value(
                 "farm", "sim", "outsider@example.com", self.quota_request()
@@ -187,14 +225,20 @@ class QuotaValueJobTests(DatabaseTests):
         self.assertEqual(created.unmatched_fields, [])
         simulation = created.simulation
         self.assertEqual(simulation.name, "Køb 20")
-        # The trade is kept on the simulation; its DB2 stays the crops' alone.
-        self.assertEqual(simulation.quota_trade.trade_kg, 20)
-        self.assertEqual(simulation.quota_trade.price_kr_per_kg, 35)
-        stored = repository.get_simulation("farm", simulation.id, EMAIL)
-        self.assertEqual(stored.quota_trade, simulation.quota_trade)
-        self.assertEqual(simulation.optimization_settings.kind, "yearly")
-        [caps] = simulation.optimization_settings.max_n_load_by_kystvandopland
-        self.assertEqual(caps.max_n_load_by_year[2027], 40)
+        # Its Års-optimering trades the opland's kvote at the price.
+        settings = repository.get_simulation("farm", simulation.id, EMAIL).optimization_settings
+        self.assertEqual(settings.kind, "yearly")
+        self.assertEqual(
+            settings.quota_trades,
+            [
+                QuotaTradeSetting(
+                    kystvand_id=KYSTVAND,
+                    buy_price_kr_per_kg=35,
+                    sell_price_kr_per_kg=35,
+                    same_each_year=True,
+                )
+            ],
+        )
         base_fields = repository.list_simulation_fields("farm", "sim", EMAIL)
         fields = repository.list_simulation_fields("farm", simulation.id, EMAIL)
         # The same marker under new ids, each locked to the trade's rotation.
@@ -210,19 +254,24 @@ class QuotaValueApiTests(unittest.TestCase):
     user = type("User", (), {"email": EMAIL})()
 
     def request(self):
-        return QuotaValueRequest(expected_revision=0, run_id=uuid4(), price_kr_per_kg=5)
+        return QuotaValueRequest(
+            expected_revision=0, run_id=uuid4(), kystvand_id=KYSTVAND, price_kr_per_kg=5
+        )
 
-    def test_production_does_not_compute_the_curve_yet(self):
+    def test_production_does_not_compute_or_show_the_curve_yet(self):
         with patch.dict(os.environ, {"APP_ENV": "production"}):
             with self.assertRaises(HTTPException) as raised:
                 simulations_api.post_farm_simulation_quota_value(
                     "farm", "sim", self.user, self.request(), BackgroundTasks()
                 )
-        self.assertEqual(raised.exception.status_code, 503)
+            self.assertEqual(raised.exception.status_code, 503)
+            with self.assertRaises(HTTPException) as raised:
+                simulations_api.get_farm_simulation_quota_values("farm", "sim", self.user)
+            self.assertEqual(raised.exception.status_code, 503)
 
     def test_new_runs_are_started_in_the_background_once(self):
         tasks = BackgroundTasks()
-        result = QuotaValueResult(status="queued", run_id="run")
+        result = QuotaValueResult(kystvand_id=KYSTVAND, status="queued", run_id="run")
         with (
             patch.dict(os.environ, {"APP_ENV": "development"}),
             patch.object(
@@ -255,10 +304,11 @@ class QuotaValueApiTests(unittest.TestCase):
                 )
             self.assertEqual(raised.exception.status_code, status_code)
         with (
-            patch.object(simulations_api, "get_quota_value", return_value=None),
+            patch.dict(os.environ, {"APP_ENV": "development"}),
+            patch.object(simulations_api, "get_quota_values", return_value=None),
             self.assertRaises(HTTPException) as raised,
         ):
-            simulations_api.get_farm_simulation_quota_value("farm", "sim", self.user)
+            simulations_api.get_farm_simulation_quota_values("farm", "sim", self.user)
         self.assertEqual(raised.exception.status_code, 404)
 
 

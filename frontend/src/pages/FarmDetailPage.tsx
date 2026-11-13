@@ -472,61 +472,77 @@ const FarmDetail = () => {
             <Routes>
               <Route
                 index
-                element={selectedSimulation && !isSimulationReady(selectedSimulation) ? (
-                  <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
-                    <h1 className="font-display text-4xl tracking-tight">{selectedSimulation.name}</h1>
-                    <SimulationCreationStatus farmId={loadedFarm.id} simulation={selectedSimulation} />
-                    <Button variant="outline" onClick={() => setSimulationToDelete(selectedSimulation)}>
-                      Slet simulering
-                    </Button>
-                  </div>
-                ) : (
-                  <FarmInspector
-                    farm={loadedFarm}
-                    fields={activeFields}
-                    selection={activeSelection}
-                    selectedSimulation={
-                      activeSelection.kind === 'simulation'
-                        ? simulations.find(
-                            (simulation) =>
-                              simulation.id === activeSelection.id,
-                          )
-                        : undefined
-                    }
-                    simulations={simulations}
-                    fieldsLoading={simulationFieldsLoading}
-                    summaryMissing={
-                      simulationSummaryMissing || hasNoFieldSnapshot
-                    }
-                    fieldsError={
-                      Boolean(simulationFieldsError) &&
-                      simulationFieldsData === undefined
-                    }
-                    fieldsRetrying={simulationFieldsValidating}
-                    onRetryFields={() => void retrySimulationFields()}
-                    mode={mode}
-                    onModeChange={changeMode}
-                    view={snappedView}
-                    effectiveView={effectiveView}
-                    onViewChange={selectView}
-                    onSplitAvailableChange={setSplitAvailable}
-                    onAddModeChange={setAddModeSnap}
-                    listSlack={listSlack}
-                    onListSlackChange={changeListSlack}
-                    selectedFieldId={selectedFieldId}
-                    onSelectedFieldChange={setSelectedFieldId}
-                    onSelectField={selectFieldFromSearch}
-                    selectedYearIndex={selectedYearIndex}
-                    onSelectedYearIndexChange={setSelectedYearIndex}
-                    optimizeDialogOpen={optimizeDialogOpen}
-                    onOptimizeDialogOpenChange={setOptimizeDialogOpen}
-                    onEditBasis={openNewSimulation}
-                    onOpenSimulation={(simulationId) =>
-                      changeSelection({ kind: 'simulation', id: simulationId })
-                    }
-                    onError={showError}
-                  />
-                )}
+                element={
+                  selectedSimulation &&
+                  !isSimulationReady(selectedSimulation) ? (
+                    <div className="mx-auto w-full max-w-3xl space-y-4 p-8">
+                      <h1 className="font-display text-4xl tracking-tight">
+                        {selectedSimulation.name}
+                      </h1>
+                      <SimulationCreationStatus
+                        farmId={loadedFarm.id}
+                        simulation={selectedSimulation}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setSimulationToDelete(selectedSimulation)
+                        }
+                      >
+                        Slet simulering
+                      </Button>
+                    </div>
+                  ) : (
+                    <FarmInspector
+                      farm={loadedFarm}
+                      fields={activeFields}
+                      selection={activeSelection}
+                      selectedSimulation={
+                        activeSelection.kind === 'simulation'
+                          ? simulations.find(
+                              (simulation) =>
+                                simulation.id === activeSelection.id,
+                            )
+                          : undefined
+                      }
+                      simulations={simulations}
+                      fieldsLoading={simulationFieldsLoading}
+                      summaryMissing={
+                        simulationSummaryMissing || hasNoFieldSnapshot
+                      }
+                      fieldsError={
+                        Boolean(simulationFieldsError) &&
+                        simulationFieldsData === undefined
+                      }
+                      fieldsRetrying={simulationFieldsValidating}
+                      onRetryFields={() => void retrySimulationFields()}
+                      mode={mode}
+                      onModeChange={changeMode}
+                      view={snappedView}
+                      effectiveView={effectiveView}
+                      onViewChange={selectView}
+                      onSplitAvailableChange={setSplitAvailable}
+                      onAddModeChange={setAddModeSnap}
+                      listSlack={listSlack}
+                      onListSlackChange={changeListSlack}
+                      selectedFieldId={selectedFieldId}
+                      onSelectedFieldChange={setSelectedFieldId}
+                      onSelectField={selectFieldFromSearch}
+                      selectedYearIndex={selectedYearIndex}
+                      onSelectedYearIndexChange={setSelectedYearIndex}
+                      optimizeDialogOpen={optimizeDialogOpen}
+                      onOptimizeDialogOpenChange={setOptimizeDialogOpen}
+                      onEditBasis={openNewSimulation}
+                      onOpenSimulation={(simulationId) =>
+                        changeSelection({
+                          kind: 'simulation',
+                          id: simulationId,
+                        })
+                      }
+                      onError={showError}
+                    />
+                  )
+                }
               />
               <Route
                 path="simulations"

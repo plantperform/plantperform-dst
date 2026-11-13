@@ -10,7 +10,7 @@ from app.data import economics_recalculation_store, simulation_settings_store
 from app.data.quota_value_store import (
     QuotaValueConflictError,
     QuotaValueNotFoundError,
-    get_quota_value,
+    get_quota_values,
     submit_quota_value,
 )
 from app.data.read_model_store import (
@@ -387,7 +387,7 @@ def post_farm_simulation_quota_value(
     request: QuotaValueRequest,
     background_tasks: BackgroundTasks,
 ) -> QuotaValueResult:
-    """Start the kvote value curve ("Kvotehandel") for the latest Års-optimering."""
+    """Start the kvote value curve ("Kvotehandel") of one opland for the latest Års-optimering."""
     if is_production():
         raise HTTPException(
             status_code=503, detail="Kvotehandel kan endnu kun beregnes i den lokale udgave."
@@ -403,14 +403,18 @@ def post_farm_simulation_quota_value(
     return result
 
 
-@router.get("/{simulation_id}/quota-value", response_model=QuotaValueResult)
-def get_farm_simulation_quota_value(
+@router.get("/{simulation_id}/quota-value", response_model=list[QuotaValueResult])
+def get_farm_simulation_quota_values(
     farm_id: str, simulation_id: str, user: CurrentUser
-) -> QuotaValueResult:
-    result = get_quota_value(farm_id, simulation_id, user.email)
-    if result is None:
+) -> list[QuotaValueResult]:
+    if is_production():
+        raise HTTPException(
+            status_code=503, detail="Kvotehandel kan endnu kun beregnes i den lokale udgave."
+        )
+    results = get_quota_values(farm_id, simulation_id, user.email)
+    if results is None:
         raise HTTPException(status_code=404, detail="Simulering ikke fundet")
-    return result
+    return results
 
 
 @router.post(

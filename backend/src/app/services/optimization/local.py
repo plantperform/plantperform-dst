@@ -10,6 +10,7 @@ from app.data.quota_value_store import fail_quota_value
 
 logger = logging.getLogger(__name__)
 _lock = Lock()
+_quota_value_lock = Lock()
 _runtime = None
 
 
@@ -77,7 +78,11 @@ def execute_local_when_ready(simulation_id, run_id):
 
 
 def execute_quota_value_when_ready(simulation_id, run_id):
-    """Run a kvote value curve once the optimizer (OR-Tools) has been imported."""
+    """Run a kvote value curve once the optimizer (OR-Tools) has been imported.
+
+    Curves run one at a time, so each opland's solves have the memory to
+    themselves; the others wait as queued.
+    """
     try:
         start_local_optimizer().initialized.result()
         from plantperform_fargate.quota_value_worker import execute_quota_value
@@ -93,4 +98,5 @@ def execute_quota_value_when_ready(simulation_id, run_id):
             {"code": "WORKER_ERROR", "message": "Optimeringen kunne ikke startes. Prøv igen."},
         )
         return
-    execute_quota_value(simulation_id, run_id)
+    with _quota_value_lock:
+        execute_quota_value(simulation_id, run_id)

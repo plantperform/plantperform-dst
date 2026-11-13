@@ -425,6 +425,7 @@ simulation_quota_value_table = Table(
     Column(
         "simulation_id", Text, ForeignKey("simulation.id", ondelete="CASCADE"), primary_key=True
     ),
+    Column("kystvand_id", Integer, primary_key=True),
     Column("status", Text, nullable=False, server_default="not_started"),
     Column("run_id", Text),
     Column("base_run_id", Text),

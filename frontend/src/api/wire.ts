@@ -7,6 +7,7 @@ const SHARED_NAMES: Record<string, string> = {
   udledningskvoteKgN: 'totalNLoadQuotaKgN',
   beregnetUdledningKgN: 'calculatedNLoadKgN',
   kvotegivende: 'quotaEligible',
+  kvoteKg: 'quotaKgN',
   overholder: 'withinQuota',
   jbnr: 'soilTypeNumber',
   marknr: 'fieldNumber',

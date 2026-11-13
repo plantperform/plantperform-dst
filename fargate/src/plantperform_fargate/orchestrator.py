@@ -789,6 +789,15 @@ def _locked_yearly_field_contribution(
     candidate = selected_locked_candidate(field, candidates)
     if candidate is None:
         return None
+    return yearly_field_contribution(field, candidate, with_udnyttet_n)
+
+
+def yearly_field_contribution(
+    field: FieldRecord,
+    candidate: RotationCandidateEvaluation,
+    with_udnyttet_n: bool = False,
+) -> FixedYearlyFieldContribution:
+    """A mark's per-year contribution with this candidate, taken as it is."""
     retention_factor = 1 - (field.retention or 0) / 100
     leaching_by_year = tuple(y.leaching_kg_n_ha * field.area_ha for y in candidate.years)
     udnyttet_n_by_year, harmoni_area_by_year = (
@@ -832,12 +841,14 @@ def build_yearly_input(
     email: str,
     snapshot,
     quota_trades: tuple[QuotaTradeSetting, ...] = (),
+    extra_fixed_fields: tuple[FixedYearlyFieldContribution, ...] = (),
 ) -> YearlyInputBuild:
     """Build the "Års-optimering" solver input, including every shifted option.
 
     Expanding the shifted options is the expensive part of a yearly run, so
     callers that solve the same scenarie several times (the kvote value curve)
-    build it once and only vary the constraints.
+    build it once and only vary the constraints. extra_fixed_fields are marker
+    left out of the snapshot that still count, as locked marker do.
     """
     simulation, fields, field_candidates = snapshot
 
@@ -927,7 +938,7 @@ def build_yearly_input(
     return YearlyInputBuild(
         input=YearlyOptimizationInput(
             fields=tuple(field_inputs),
-            fixed_fields=tuple(fixed_fields),
+            fixed_fields=(*fixed_fields, *extra_fixed_fields),
             constraints=YearlyConstraintsInput(
                 max_n_load_by_kystvandopland_and_year=max_n_load_by_year,
                 db2_swing_pct=db2_swing_pct,

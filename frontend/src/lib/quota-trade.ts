@@ -1,11 +1,17 @@
 import type {
+  FieldRecord,
   QuotaProgressStep,
   QuotaTradeRange,
   QuotaValueCurve,
-  QuotaValueInteraction,
   QuotaValuePoint,
 } from '@/api/types'
-import { formatSigned, formatWholeNumber } from '@/lib/field-domain'
+import { formatNameList } from '@/lib/economics'
+import {
+  formatSigned,
+  formatWholeNumber,
+  isFieldLocked,
+} from '@/lib/field-domain'
+import { catchmentQuotaKgN, quotaTradeBlock } from '@/lib/quota-trade-settings'
 
 export type SolvedQuotaPoint = QuotaValuePoint & { db2: number }
 
@@ -18,11 +24,6 @@ export type GainPoint = {
   gainUpperBound: number | null
   point: SolvedQuotaPoint
 }
-
-// Differences between the separate and combined gains below this many kr/år
-// are rounding, not an interaction between catchments.
-const INTERACTION_TOLERANCE_DKK = 100
-const INTERACTION_TOLERANCE_SHARE = 0.05
 
 export const isSolved = (point: QuotaValuePoint): point is SolvedQuotaPoint =>
   (point.status === 'OPTIMAL' || point.status === 'FEASIBLE') &&
@@ -180,14 +181,27 @@ export const sellingLimit = (curve: QuotaValueCurve): SellingLimit | null => {
 export const describeTrade = (tradeKg: number): string => {
   const amount = `${formatWholeNumber(Math.abs(tradeKg))} kg N/år`
   if (tradeKg > 0) return `Køb ${amount}`
-  if (tradeKg < 0) return `Sælg ${amount}`
+  if (tradeKg < 0) return `Salg ${amount}`
   return 'Ingen handel'
 }
 
-// The name of a simulation created from a trade, e.g. "Scenarie A – Køb 53
-// kg N/år – Lillebælt – 35 kr/kg". The catchment is named only when the farm
-// has several, and the price only for an actual trade: it does not change the
-// plan of no trade.
+// "salg 27 kg N/år", for the middle of a sentence.
+export const describeTradeInSentence = (tradeKg: number): string => {
+  const text = describeTrade(tradeKg)
+  return text.charAt(0).toLowerCase() + text.slice(1)
+}
+
+// "køb 20 kg N/år, salg 10 kg N/år og ingen handel"
+export const listTrades = (tradesKg: number[]): string =>
+  formatNameList(tradesKg.map(describeTradeInSentence))
+
+export const formatPrice = (price: number) =>
+  price.toLocaleString('da-DK', { maximumFractionDigits: 1 })
+
+// The name of a simulation created from a trade, e.g. "Simulering A · Køb 53
+// kg N/år · Lillebælt · 35 kr/kg N". The catchment is named only when the
+// farm has several, and the price only for an actual trade: it does not
+// change the plan of no trade.
 export const tradeSimulationName = ({
   originalName,
   tradeKg,
@@ -204,11 +218,11 @@ export const tradeSimulationName = ({
     describeTrade(tradeKg),
     catchmentName,
     tradeKg !== 0
-      ? `${priceKrPerKg.toLocaleString('da-DK', { maximumFractionDigits: 2 })} kr/kg`
+      ? `${priceKrPerKg.toLocaleString('da-DK', { maximumFractionDigits: 2 })} kr/kg N`
       : null,
   ]
     .filter((part) => part !== null)
-    .join(' – ')
+    .join(' · ')
 
 // A non-negative price in kr/kg, accepting a Danish decimal comma.
 export const parsePrice = (input: string): number | null => {
@@ -290,77 +304,114 @@ export const checkTradeRange = (
 export const describeTradeRange = ({ minKg, maxKg, stepKg }: QuotaTradeRange) =>
   `${formatSigned(minKg, formatWholeNumber)} til ${formatSigned(maxKg, formatWholeNumber)} kg N/år, hver ${formatWholeNumber(stepKg)} kg`
 
-export type InteractionCheck =
-  | { kind: 'none' }
-  | { kind: 'other-price'; computedAt: number }
-  | { kind: 'consistent' }
-  | { kind: 'differs'; separateGain: number; combinedGain: number | null }
-
-// Whether each catchment's own curve can be trusted when several trade at once.
-export const interactionCheck = (
-  interaction: QuotaValueInteraction | null,
-  priceKrPerKg: number,
-): InteractionCheck => {
-  if (interaction === null) return { kind: 'none' }
-  if (interaction.priceKrPerKg !== priceKrPerKg) {
-    return { kind: 'other-price', computedAt: interaction.priceKrPerKg }
-  }
-  const { separateGain, combinedGain } = interaction
-  const tolerance = Math.max(
-    INTERACTION_TOLERANCE_DKK,
-    INTERACTION_TOLERANCE_SHARE * Math.abs(separateGain),
-  )
-  if (
-    combinedGain !== null &&
-    Math.abs(combinedGain - separateGain) <= tolerance
-  ) {
-    return { kind: 'consistent' }
-  }
-  return { kind: 'differs', separateGain, combinedGain }
-}
-
 export type QuotaYearRow = {
   year: string
   nLoad: number
-  cap: number | null
+  // The catchment's kvote plus the trade: what it may let out that year.
+  quotaAfterTrade: number
   feedUnits: number
 }
 
-export const quotaYearRows = (point: QuotaValuePoint): QuotaYearRow[] =>
+export const quotaYearRows = (
+  point: QuotaValuePoint,
+  quotaKgN: number,
+): QuotaYearRow[] =>
   Object.keys(point.nLoadByYear)
     .sort()
     .map((year) => ({
       year,
       nLoad: point.nLoadByYear[year],
-      cap: point.capByYear[year] ?? null,
+      quotaAfterTrade: quotaKgN + point.tradeKg,
       feedUnits: point.feedUnitsByYear[year] ?? 0,
     }))
 
-const PROGRESS_LABELS: Record<QuotaProgressStep['key'], string> = {
-  base: 'Plan uden handel',
-  uncapped: 'Plan uden loft (hvor meget køb kan udnyttes)',
-  buying: 'Køb',
-  selling: 'Salg',
-  selling_limit: 'Salgsgrænse og efterberegning',
-  refinement: 'Præcisering af de bedste handler',
-  interaction: 'Samlet kontrol af oplandene',
+export type TradableCatchment = {
+  catchmentId: number
+  quotaKgN: number
+  fieldCount: number
+  lockedCount: number
 }
 
-export const progressLabel = (step: QuotaProgressStep): string =>
-  PROGRESS_LABELS[step.key]
+// The catchments a curve can be computed for: a kvote and kvotegivende marker.
+export const tradableCatchments = (
+  fields: FieldRecord[],
+): TradableCatchment[] =>
+  [
+    ...new Set(
+      fields.flatMap((field) =>
+        field.catchmentId !== null && field.quotaEligible
+          ? [field.catchmentId]
+          : [],
+      ),
+    ),
+  ]
+    .filter((catchmentId) => quotaTradeBlock(catchmentId, fields) === null)
+    .map((catchmentId) => {
+      const quotaFields = fields.filter(
+        (field) => field.catchmentId === catchmentId && field.quotaEligible,
+      )
+      return {
+        catchmentId,
+        quotaKgN: catchmentQuotaKgN(catchmentId, fields),
+        fieldCount: quotaFields.length,
+        lockedCount: quotaFields.filter(isFieldLocked).length,
+      }
+    })
+    .filter((catchment) => catchment.quotaKgN > 0)
 
-// "2 / 3" when the step's size is known, otherwise how many are done so far.
-export const progressCount = (step: QuotaProgressStep): string => {
-  if (step.state === 'skipped') return 'Ikke nødvendig'
-  if (step.total !== null && step.total > 0)
-    return `${step.done} / ${step.total}`
-  return step.done > 0 ? String(step.done) : ''
+export type TradeKind = 'buy' | 'sell' | 'none'
+
+export const tradeKind = (tradeKg: number): TradeKind =>
+  tradeKg > 0 ? 'buy' : tradeKg < 0 ? 'sell' : 'none'
+
+export const bestTradeAt = (
+  output: { baseDb2: number; curve: QuotaValueCurve },
+  priceKrPerKg: number,
+): GainPoint | null =>
+  bestTrade(gainPoints(output.curve, output.baseDb2, priceKrPerKg))
+
+export type GainScale = { min: number; max: number; ticks: number[] }
+
+const niceStep = (span: number) => {
+  const raw = span / 4
+  const power = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].find((factor) => factor * power >= raw)!
+  return step * power
 }
 
-// Whole minutes and seconds since the run started, e.g. "1 min 40 s".
-export const formatElapsed = (seconds: number): string => {
-  const whole = Math.max(0, Math.floor(seconds))
-  const minutes = Math.floor(whole / 60)
-  const rest = whole % 60
-  return minutes > 0 ? `${minutes} min ${rest} s` : `${rest} s`
+export const gainScale = (points: GainPoint[]): GainScale => {
+  const values = points.flatMap((point) => [
+    point.gain,
+    point.gainUpperBound ?? point.gain,
+  ])
+  const low = Math.min(0, ...values)
+  const high = Math.max(0, ...values)
+  if (low === high) return { min: 0, max: 1, ticks: [0] }
+  const step = niceStep(high - low)
+  const min = Math.floor(low / step) * step
+  const max = Math.ceil(high / step) * step
+  const ticks: number[] = []
+  for (let tick = min; tick <= max + step / 2; tick += step) {
+    ticks.push(Math.round(tick * 1e6) / 1e6)
+  }
+  return { min, max, ticks }
 }
+
+export const describeComputedAt = (iso: string, now = new Date()): string => {
+  const at = new Date(iso)
+  return at.toDateString() === now.toDateString()
+    ? `Beregnet kl. ${at.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}`
+    : `Beregnet ${at.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })}`
+}
+
+export const progressFraction = (steps: QuotaProgressStep[]): number =>
+  steps.length === 0
+    ? 0
+    : steps.reduce((sum, step) => {
+        if (step.state === 'done' || step.state === 'skipped') return sum + 1
+        if (step.state === 'running')
+          return (
+            sum + (step.total ? Math.min(0.95, step.done / step.total) : 0.5)
+          )
+        return sum
+      }, 0) / steps.length

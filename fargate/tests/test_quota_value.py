@@ -33,7 +33,6 @@ from plantperform_fargate.quota_value import (
     kvotegivende_n_load_by_year,
     quota_value_curve,
     repair_hint,
-    tradable_kystvandoplande,
 )
 from plantperform_fargate.quota_value_worker import _rotations, parallel_solves
 from plantperform_fargate.yearly_engine import YearlyModel, solve_yearly
@@ -72,22 +71,23 @@ def _field(field_id: str, kystvand_id: int, *options: YearlyRotationOption) -> Y
     )
 
 
-def _input(fields, caps: dict[int, float], max_fen: float | None = None):
+def _input(fields, kvote: dict[int, float], max_fen: float | None = None):
     return YearlyOptimizationInput(
         fields=tuple(fields),
         constraints=YearlyConstraintsInput(
-            max_n_load_by_kystvandopland_and_year={k: (c,) * NUM_YEARS for k, c in caps.items()},
+            max_n_load_by_kystvandopland_and_year={k: (c,) * NUM_YEARS for k, c in kvote.items()},
             db2_swing_pct=None,
             min_fen=None,
             max_fen=max_fen,
+            kvote_by_kystvandopland=dict(kvote),
         ),
         time_limit_seconds=5,
     )
 
 
 def _one_opland_farm():
-    # Cap 100 kg N/år. V(0) = 1500 (both low); +30 kg lets B go mid (2500);
-    # +100 lets A go high (3500); without a cap both go up (4500, needs +130).
+    # Kvote 100 kg N/år. V(0) = 1500 (both low); +30 kg lets B go mid (2500);
+    # +100 lets A go high (3500); without a kvote both go up (4500, needs +130).
     # The lowest udledning is 80, so at most 20 kg can be sold.
     return _input(
         [
@@ -107,7 +107,7 @@ def _recording_solver(calls):
 
 
 def _window_farm():
-    # Cap 120 kg N/år, so the window is 30 kg either way. V(0) = 3500 (a-high +
+    # Kvote 120 kg N/år, so the window is 30 kg either way. V(0) = 3500 (a-high +
     # b-low, 110); +30 kg lets b go mid as well (4500, 150), which is also the
     # uncapped udledning. Selling 20 kg or more drops a to low (1500, 80); the
     # lowest udledning is 80, so at most 40 kg can be sold.
@@ -124,12 +124,12 @@ class QuotaValueCurveTests(unittest.TestCase):
     def setUp(self):
         self.calls = []
         self.analysis = analyse_quota_value(
-            _window_farm(), price_kr_per_kg=20, solver=_recording_solver(self.calls)
+            _window_farm(), KYSTVAND, price_kr_per_kg=20, solver=_recording_solver(self.calls)
         )
-        [self.curve] = self.analysis.curves
+        self.curve = self.analysis.curve
         self.by_trade = {p.trade_kg: p for p in self.curve.points}
 
-    def test_seven_points_spread_over_a_quarter_of_the_cap(self):
+    def test_seven_points_spread_over_a_quarter_of_the_kvote(self):
         expected = {-30: 1500, -20: 1500, -10: 3500, 0: 3500, 10: 3500, 20: 3500, 30: 4500}
         self.assertEqual(sorted(self.by_trade), sorted(expected))
         for trade, db2 in expected.items():
@@ -171,7 +171,7 @@ class QuotaValueCurveTests(unittest.TestCase):
 
 class WindowLimitTests(unittest.TestCase):
     def trades(self, farm, **options):
-        base = analyse_quota_value(farm, 0, solver=solve_yearly).base
+        base = analyse_quota_value(farm, KYSTVAND, 0, solver=solve_yearly).base
         curve = quota_value_curve(farm, KYSTVAND, base, solver=solve_yearly, **options)
         return curve, {p.trade_kg: p for p in curve.points}
 
@@ -181,7 +181,7 @@ class WindowLimitTests(unittest.TestCase):
         self.assertEqual([t for t in sorted(points) if t > 0], [10, 20, 30])
 
     def test_the_uncapped_udledning_outside_the_window_is_not_a_point(self):
-        # Cap 100, so a 25 kg window; buying everything would take 130 kg.
+        # Kvote 100, so a 25 kg window; buying everything would take 130 kg.
         curve, points = self.trades(_one_opland_farm())
         self.assertEqual(curve.unconstrained_trade_kg, 130)
         self.assertEqual([t for t in sorted(points) if t > 0], [8, 17, 25])
@@ -195,7 +195,7 @@ class WindowLimitTests(unittest.TestCase):
         self.assertTrue(points[-40].feasible)
 
     def test_the_step_into_infeasibility_is_bisected(self):
-        # The whole 200 kg cap: -200 is infeasible, -133 is not; at most 160 kg
+        # The whole 200 kg kvote: -200 is infeasible, -133 is not; at most 160 kg
         # can be sold, and the limit is located within 25 kg.
         _, points = self.trades(_selling_farm(), window_share=1)
         self.assertEqual([t for t in sorted(points) if t < 0], [-200, -175, -150, -133, -67])
@@ -203,44 +203,70 @@ class WindowLimitTests(unittest.TestCase):
         self.assertAlmostEqual(points[-150].db2, 700)
 
 
-class InteractionTests(unittest.TestCase):
-    def test_separate_best_trades_are_checked_together(self):
-        # Each opland on its own buys kvote to go high, but the farm may only
-        # produce 1 FE a year, so together only one field can go high.
-        farm = _input(
-            [
-                _field("a", KYSTVAND, _option("a-low", 50, 1000), _option("a-high", 110, 3000, 1)),
-                _field(
-                    "b",
-                    OTHER_KYSTVAND,
-                    _option("b-low", 50, 1000),
-                    _option("b-high", 110, 3000, 1),
-                ),
-            ],
-            {KYSTVAND: 100, OTHER_KYSTVAND: 100},
-            max_fen=1,
+class KvoteTests(unittest.TestCase):
+    def test_the_kvote_bounds_the_opland_and_no_cap_or_other_opland_does(self):
+        # Grænser caps the opland at 300, but a trade starts from its kvote of
+        # 120. The other opland's cap of 10 is below anything it can let out.
+        farm = _window_farm()
+        farm = replace(
+            farm,
+            fields=(*farm.fields, _field("c", OTHER_KYSTVAND, _option("c-only", 50, 100))),
+            constraints=replace(
+                farm.constraints,
+                max_n_load_by_kystvandopland_and_year={
+                    KYSTVAND: (300,) * NUM_YEARS,
+                    OTHER_KYSTVAND: (10,) * NUM_YEARS,
+                },
+                kvote_by_kystvandopland={KYSTVAND: 120, OTHER_KYSTVAND: 10},
+            ),
         )
-        analysis = analyse_quota_value(farm, price_kr_per_kg=5)
-        self.assertEqual(tradable_kystvandoplande(farm), [KYSTVAND, OTHER_KYSTVAND])
-        check = analysis.interaction
-        self.assertEqual(check.trades_kg, {KYSTVAND: 10, OTHER_KYSTVAND: 10})
-        self.assertAlmostEqual(check.separate_gain, 2 * (2000 - 5 * 10))
-        self.assertEqual(check.combined_status, "OPTIMAL")
-        self.assertAlmostEqual(check.combined_gain, 2000 - 5 * 20)
+        curve = analyse_quota_value(farm, KYSTVAND, price_kr_per_kg=20).curve
+        by_trade = {p.trade_kg: p for p in curve.points}
+        self.assertEqual(curve.kvote_kg, 120)
+        self.assertEqual(sorted(by_trade), [-30, -20, -10, 0, 10, 20, 30])
+        self.assertAlmostEqual(by_trade[0].db2, 3600)
+        self.assertEqual(by_trade[-10].cap_by_year, (110,) * NUM_YEARS)
 
-    def test_no_check_when_only_one_opland_trades(self):
-        analysis = analyse_quota_value(_one_opland_farm(), price_kr_per_kg=5)
-        self.assertIsNone(analysis.interaction)
+    def test_an_opland_without_kvote_cannot_be_traded(self):
+        farm = _window_farm()
+        farm = replace(farm, constraints=replace(farm.constraints, kvote_by_kystvandopland={}))
+        with self.assertRaises(ValueError):
+            analyse_quota_value(farm, KYSTVAND, price_kr_per_kg=5)
+
+    def test_no_trade_is_the_base_when_a_smaller_kvote_found_a_better_plan(self):
+        # The base solve stops at a poor plan (both low, 1500); selling 10 kg
+        # finds 3500, which also fits the whole kvote, so no trade is 3500 too.
+        calls = []
+
+        def solver(input, hint):
+            calls.append(_cap(input))
+            if len(calls) == 1:
+                poor = solve_yearly(
+                    replace(
+                        input,
+                        constraints=replace(
+                            input.constraints,
+                            max_n_load_by_kystvandopland_and_year={KYSTVAND: (80,) * NUM_YEARS},
+                        ),
+                    )
+                )
+                return replace(poor, status="FEASIBLE")
+            return solve_yearly(input, hint)
+
+        analysis = analyse_quota_value(_window_farm(), KYSTVAND, 20, solver=solver)
+        no_trade = next(p for p in analysis.curve.points if p.trade_kg == 0)
+        self.assertAlmostEqual(no_trade.db2, 3500)
+        self.assertAlmostEqual(analysis.base.db2, 3500)
 
     def test_unsolved_base_raises_with_its_status(self):
         farm = _input([_field("a", KYSTVAND, _option("a-low", 50, 1000))], {KYSTVAND: 10})
         with self.assertRaises(BaseNotSolvedError) as raised:
-            analyse_quota_value(farm, price_kr_per_kg=5)
+            analyse_quota_value(farm, KYSTVAND, price_kr_per_kg=5)
         self.assertEqual(raised.exception.status, "INFEASIBLE")
 
 
 def _selling_farm():
-    # Cap 200 kg N/år. V(0) = 4000 (a-high 50 + b-high 150). Selling 50 or 100
+    # Kvote 200 kg N/år. V(0) = 4000 (a-high 50 + b-high 150). Selling 50 or 100
     # keeps 1500 (a-high + b-low = 80); selling 150 leaves 700 (40); selling all
     # 200 is infeasible.
     return _input(
@@ -272,15 +298,15 @@ def _unsolved():
 
 class SearchAndEnvelopeTests(unittest.TestCase):
     def curve(self, farm, solver, **options):
-        base = analyse_quota_value(farm, 0, solver=solve_yearly).base
+        base = analyse_quota_value(farm, KYSTVAND, 0, solver=solve_yearly).base
         return {
             p.trade_kg: p
             for p in quota_value_curve(farm, KYSTVAND, base, solver=solver, **options).points
         }
 
     def test_an_unsolved_point_takes_the_solution_of_a_smaller_trade(self):
-        # The solver finds nothing in time at +67 kg (cap 167): V(67) is still
-        # at least V(33), whose solution also meets the larger cap.
+        # The solver finds nothing in time at +67 kg (kvote 167): V(67) is still
+        # at least V(33), whose solution also meets the larger kvote.
         def solver(input, hint):
             return _unsolved() if _cap(input) == 167 else solve_yearly(input, hint)
 
@@ -330,13 +356,13 @@ class UpperBoundTests(unittest.TestCase):
         self.assertAlmostEqual(output.db2_upper_bound, output.total_db2)
 
     def test_every_point_is_bounded_from_above(self):
-        [curve] = analyse_quota_value(_window_farm(), price_kr_per_kg=20).curves
+        curve = analyse_quota_value(_window_farm(), KYSTVAND, price_kr_per_kg=20).curve
         for point in curve.points:
             with self.subTest(trade=point.trade_kg):
                 self.assertGreaterEqual(point.db2_upper_bound, point.db2)
 
     def test_a_larger_trade_bound_lowers_a_smaller_trade_bound(self):
-        # Time-limited solves: +10 kg (cap 130) only proves V <= 9000, but +20 kg
+        # Time-limited solves: +10 kg (kvote 130) only proves V <= 9000, but +20 kg
         # proves V <= 3600, which also holds for every smaller trade.
         def solver(input, hint):
             output = solve_yearly(input, hint)
@@ -345,7 +371,7 @@ class UpperBoundTests(unittest.TestCase):
                 return output
             return replace(output, status="FEASIBLE", db2_upper_bound=bound)
 
-        base = analyse_quota_value(_window_farm(), 0, solver=solve_yearly).base
+        base = analyse_quota_value(_window_farm(), KYSTVAND, 0, solver=solve_yearly).base
         points = {
             p.trade_kg: p
             for p in quota_value_curve(_window_farm(), KYSTVAND, base, solver=solver).points
@@ -361,7 +387,7 @@ class UpperBoundTests(unittest.TestCase):
                 return replace(_unsolved(), db2_upper_bound=3550)
             return solve_yearly(input, hint)
 
-        base = analyse_quota_value(_window_farm(), 0, solver=solve_yearly).base
+        base = analyse_quota_value(_window_farm(), KYSTVAND, 0, solver=solve_yearly).base
         points = {
             p.trade_kg: p
             for p in quota_value_curve(_window_farm(), KYSTVAND, base, solver=solver).points
@@ -373,9 +399,9 @@ class UpperBoundTests(unittest.TestCase):
 
 class TradeRangeTests(unittest.TestCase):
     def trades(self, trade_range):
-        [curve] = analyse_quota_value(
-            _window_farm(), price_kr_per_kg=20, trade_range=trade_range
-        ).curves
+        curve = analyse_quota_value(
+            _window_farm(), KYSTVAND, price_kr_per_kg=20, trade_range=trade_range
+        ).curve
         return {p.trade_kg: p for p in curve.points}
 
     def test_a_chosen_range_replaces_the_window_and_keeps_its_limits(self):
@@ -394,19 +420,21 @@ class TradeRangeTests(unittest.TestCase):
 class ProgressTests(unittest.TestCase):
     def test_every_step_is_reported_in_order_until_done(self):
         reports = []
-        analyse_quota_value(_window_farm(), price_kr_per_kg=20, on_progress=reports.append)
+        analyse_quota_value(
+            _window_farm(), KYSTVAND, price_kr_per_kg=20, on_progress=reports.append
+        )
         steps = lambda report: [  # noqa: E731
-            (s["key"], s["kystvand_id"], s["state"], s["done"], s["total"]) for s in report
+            (s["key"], s["state"], s["done"], s["total"]) for s in report
         ]
         self.assertEqual(
             steps(reports[0]),
             [
-                ("base", None, "running", 0, 1),
-                ("uncapped", KYSTVAND, "pending", 0, None),
-                ("buying", KYSTVAND, "pending", 0, None),
-                ("selling", KYSTVAND, "pending", 0, None),
-                ("selling_limit", KYSTVAND, "pending", 0, None),
-                ("refinement", None, "pending", 0, None),
+                ("base", "running", 0, 1),
+                ("uncapped", "pending", 0, None),
+                ("buying", "pending", 0, None),
+                ("selling", "pending", 0, None),
+                ("selling_limit", "pending", 0, None),
+                ("refinement", "pending", 0, None),
             ],
         )
         # The top buying point is the uncapped solution, not a solve of its own,
@@ -414,37 +442,16 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(
             steps(reports[-1]),
             [
-                ("base", None, "done", 1, 1),
-                ("uncapped", KYSTVAND, "done", 1, 1),
-                ("buying", KYSTVAND, "done", 3, 3),
-                ("selling", KYSTVAND, "done", 3, 3),
-                ("selling_limit", KYSTVAND, "skipped", 0, None),
-                ("refinement", None, "skipped", 0, 0),
+                ("base", "done", 1, 1),
+                ("uncapped", "done", 1, 1),
+                ("buying", "done", 3, 3),
+                ("selling", "done", 3, 3),
+                ("selling_limit", "skipped", 0, None),
+                ("refinement", "skipped", 0, 0),
             ],
         )
         running = [s["key"] for report in reports for s in report if s["state"] == "running"]
         self.assertIn("buying", running)
-
-    def test_the_interaction_check_is_a_step_with_several_oplande(self):
-        farm = _input(
-            [
-                _field("a", KYSTVAND, _option("a-low", 50, 1000)),
-                _field("b", OTHER_KYSTVAND, _option("b-low", 50, 1000)),
-            ],
-            {KYSTVAND: 100, OTHER_KYSTVAND: 100},
-        )
-
-        def final_states(price):
-            reports = []
-            analyse_quota_value(farm, price_kr_per_kg=price, on_progress=reports.append)
-            return {(s["key"], s["kystvand_id"]): s["state"] for s in reports[-1]}
-
-        # At 5 kr/kg both oplande sell their spare 25 kg, which is checked together.
-        at_five = final_states(5)
-        self.assertEqual(at_five[("uncapped", OTHER_KYSTVAND)], "done")
-        self.assertEqual(at_five[("interaction", None)], "done")
-        # At 0 kr/kg selling earns nothing, so neither opland trades.
-        self.assertEqual(final_states(0)[("interaction", None)], "skipped")
 
 
 class ContenderRefinementTests(unittest.TestCase):
@@ -461,7 +468,11 @@ class ContenderRefinementTests(unittest.TestCase):
             return replace(output, db2_upper_bound=output.total_db2 + loose_by)
 
         analysis = analyse_quota_value(
-            _window_farm(), price_kr_per_kg=20, solver=solver, parallel_solves=parallel_solves
+            _window_farm(),
+            KYSTVAND,
+            price_kr_per_kg=20,
+            solver=solver,
+            parallel_solves=parallel_solves,
         )
         return analysis, calls
 
@@ -471,11 +482,31 @@ class ContenderRefinementTests(unittest.TestCase):
         refined = [name for _, gap, name in calls if gap == REFINED_GAP]
         self.assertEqual(len(refined), 3)
         self.assertTrue(all(name.startswith("quota-solve") for name in refined))
-        self.assertEqual(_curves(parallel), _curves(sequential))
+        self.assertEqual(_points(parallel), _points(sequential))
         self.assertEqual(
-            [p.db2_upper_bound for p in parallel.curves[0].points],
-            [p.db2_upper_bound for p in sequential.curves[0].points],
+            [p.db2_upper_bound for p in parallel.curve.points],
+            [p.db2_upper_bound for p in sequential.curve.points],
         )
+
+    def test_the_refinement_threads_keep_the_job_deadline(self):
+        seen = []
+
+        def solver(input, hint):
+            seen.append((threading.current_thread().name, remaining_time.get()))
+            output = solve_yearly(input, hint)
+            loose_by = 0 if input.relative_gap_limit == REFINED_GAP else 500
+            return replace(output, db2_upper_bound=output.total_db2 + loose_by)
+
+        deadline = lambda: 10**9  # noqa: E731  (milliseconds left: plenty)
+        token = remaining_time.set(deadline)
+        try:
+            analyse_quota_value(
+                _window_farm(), KYSTVAND, price_kr_per_kg=20, solver=solver, parallel_solves=3
+            )
+        finally:
+            remaining_time.reset(token)
+        self.assertTrue(any(name.startswith("quota-solve") for name, _ in seen))
+        self.assertTrue(all(found is deadline for _, found in seen))
 
     def test_points_that_could_be_best_are_solved_again_to_the_tighter_gap(self):
         # V - 20 t: +30 is best (3900). With 500 kr ranges, -10 (3700) and 0
@@ -484,7 +515,7 @@ class ContenderRefinementTests(unittest.TestCase):
         refined = sorted(cap for cap, gap, _ in calls if gap == REFINED_GAP)
         self.assertEqual(refined, [110, 120, 150])
         self.assertTrue(all(gap == POINT_GAP for _, gap, _ in calls[: -len(refined)]))
-        [curve] = analysis.curves
+        curve = analysis.curve
         by_trade = {p.trade_kg: p for p in curve.points}
         for trade in (-10, 0, 30):
             with self.subTest(trade=trade):
@@ -501,7 +532,7 @@ class ContenderRefinementTests(unittest.TestCase):
         )
         curve = QuotaCurve(
             KYSTVAND,
-            (),
+            0,
             (point(0, 1000, 1010), point(10, 1200, 1260), point(20, 1300, 1310)),
             20,
             0,
@@ -585,7 +616,7 @@ class RepairHintTests(unittest.TestCase):
             return solve_yearly(input, hint)
 
         farm = _selling_farm()
-        base = analyse_quota_value(farm, 0, solver=solve_yearly).base
+        base = analyse_quota_value(farm, KYSTVAND, 0, solver=solve_yearly).base
         quota_value_curve(farm, KYSTVAND, base, solver=solver, window_share=1)
         # Caps below 40 kg (the lowest possible udledning) cannot be repaired;
         # those steps fall back to the neighbour's hint and prove infeasible.
@@ -611,40 +642,11 @@ def _two_opland_farm():
     )
 
 
-def _curves(analysis):
-    return [
-        (c.kystvand_id, [(p.trade_kg, p.status, round(p.db2 or 0, 6)) for p in c.points])
-        for c in analysis.curves
-    ]
+def _points(analysis):
+    return [(p.trade_kg, p.status, round(p.db2 or 0, 6)) for p in analysis.curve.points]
 
 
-class ParallelOplandeTests(unittest.TestCase):
-    def test_solving_oplande_in_parallel_gives_the_sequential_result(self):
-        sequential = analyse_quota_value(_two_opland_farm(), price_kr_per_kg=20)
-        parallel = analyse_quota_value(_two_opland_farm(), price_kr_per_kg=20, parallel_solves=2)
-        self.assertEqual(len(parallel.curves), 2)
-        self.assertEqual(_curves(parallel), _curves(sequential))
-        self.assertEqual(parallel.interaction, sequential.interaction)
-
-    def test_curves_run_on_their_own_threads_and_keep_the_job_deadline(self):
-        seen = []
-
-        def solver(input, hint):
-            seen.append((threading.current_thread().name, remaining_time.get()))
-            return solve_yearly(input, hint)
-
-        deadline = lambda: 10**9  # noqa: E731  (milliseconds left: plenty)
-        token = remaining_time.set(deadline)
-        try:
-            analyse_quota_value(
-                _two_opland_farm(), price_kr_per_kg=20, solver=solver, parallel_solves=2
-            )
-        finally:
-            remaining_time.reset(token)
-        curve_threads = {name for name, _ in seen if name.startswith("quota-solve")}
-        self.assertEqual(len(curve_threads), 2)
-        self.assertTrue(all(found is deadline for _, found in seen))
-
+class ParallelSolveTests(unittest.TestCase):
     def test_one_worker_solves_on_the_calling_thread(self):
         names = []
 
@@ -652,7 +654,7 @@ class ParallelOplandeTests(unittest.TestCase):
             names.append(threading.current_thread().name)
             return solve_yearly(input, hint)
 
-        analyse_quota_value(_two_opland_farm(), price_kr_per_kg=20, solver=solver)
+        analyse_quota_value(_two_opland_farm(), KYSTVAND, price_kr_per_kg=20, solver=solver)
         self.assertEqual(set(names), {threading.current_thread().name})
 
     def test_the_number_of_parallel_solves_comes_from_the_environment(self):
@@ -660,13 +662,13 @@ class ParallelOplandeTests(unittest.TestCase):
             self.assertEqual(parallel_solves(), 3)
         with mock.patch.dict(os.environ, {"OPTIMIZER_PARALLEL_SOLVES": "0"}):
             self.assertEqual(parallel_solves(), 1)
-        # Without it: half the cores, at OPTIMIZER_SOLVER_THREADS each.
+        # Without it: every core, at OPTIMIZER_SOLVER_THREADS each.
         with (
             mock.patch.dict(os.environ, {"OPTIMIZER_SOLVER_THREADS": "2"}),
             mock.patch.object(os, "cpu_count", return_value=8),
         ):
             os.environ.pop("OPTIMIZER_PARALLEL_SOLVES", None)
-            self.assertEqual(parallel_solves(), 2)
+            self.assertEqual(parallel_solves(), 4)
 
 
 class ReusableModelTests(unittest.TestCase):
@@ -706,11 +708,13 @@ class ReusableModelTests(unittest.TestCase):
                 self.assertAlmostEqual(reused.total_db2, fresh.total_db2)
 
     def test_the_default_analysis_reuses_one_model_with_the_same_result(self):
-        reused = analyse_quota_value(_one_opland_farm(), price_kr_per_kg=20)
-        fresh = analyse_quota_value(_one_opland_farm(), price_kr_per_kg=20, solver=solve_yearly)
+        reused = analyse_quota_value(_one_opland_farm(), KYSTVAND, price_kr_per_kg=20)
+        fresh = analyse_quota_value(
+            _one_opland_farm(), KYSTVAND, price_kr_per_kg=20, solver=solve_yearly
+        )
         self.assertEqual(
-            [(p.trade_kg, p.status, p.db2) for p in reused.curves[0].points],
-            [(p.trade_kg, p.status, p.db2) for p in fresh.curves[0].points],
+            [(p.trade_kg, p.status, p.db2) for p in reused.curve.points],
+            [(p.trade_kg, p.status, p.db2) for p in fresh.curve.points],
         )
 
 
@@ -749,10 +753,11 @@ class StoredPlanTests(unittest.TestCase):
             },
         )
         point = QuotaPoint(50, "OPTIMAL", 1000, (), (), (), {"a": "a-shift"})
-        rotations = _rotations(built, point, {"locked": _candidate("locked")})
+        field_ids = ["a", "locked", "x"]
+        rotations = _rotations(built, point, {"locked": _candidate("locked")}, field_ids)
         self.assertEqual([r.field_id for r in rotations], ["a", "locked"])
         # The shifted option is stored as its base rotation and start year.
         self.assertEqual(rotations[0].base_ref.variant, "4")
         self.assertEqual(rotations[0].start_year, 3)
         self.assertEqual(rotations[1].base_ref.saedskiftevariant, "locked")
-        self.assertEqual(_rotations(built, replace(point, status="INFEASIBLE"), {}), [])
+        self.assertEqual(_rotations(built, replace(point, status="INFEASIBLE"), {}, field_ids), [])
