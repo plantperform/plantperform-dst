@@ -31,6 +31,7 @@ vi.mock('@/api/hooks', () => ({
   useFarmFields: () => ({ data: fields }),
   useFarmEmissions: () => ({ data: [] }),
   useFarmMembers: () => ({ data: [] }),
+  useQuotaValues: () => ({ data: undefined }),
 }))
 vi.mock('@/api/optimization-runs', () => ({
   useOptimizationRun: () => undefined,
