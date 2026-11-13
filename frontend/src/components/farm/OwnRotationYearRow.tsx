@@ -263,16 +263,29 @@ export const OwnRotationYearView = ({
       </span>
       <span
         title={undersownName ?? undefined}
-        className={cn(
-          'min-w-0 flex-1 basis-64 truncate text-[13px]',
-          undersownName === null && 'text-muted-foreground',
-        )}
+        className="min-w-0 flex-1 basis-64 truncate text-[13px]"
       >
-        {undersownName ?? 'Intet virkemiddel'}
+        {undersownName}
       </span>
     </li>
   )
 }
+
+export const OwnRotationYearHeader = ({ editing }: { editing: boolean }) => (
+  <div className="hidden items-center gap-x-3 border-t px-4 py-2 text-xs text-muted-foreground sm:flex">
+    <span className="w-13 shrink-0 pl-5">År</span>
+    <span
+      className={cn(
+        'flex w-55 shrink-0 gap-2 pl-2.5',
+        editing ? 'pr-8.75' : 'pr-2.5',
+      )}
+    >
+      <span className="flex-1">Afgrøde</span>
+      <span>Kode</span>
+    </span>
+    <span className="min-w-0 flex-1">Vinterdække/virkemiddel</span>
+  </div>
+)
 
 const STATUS_LABEL: Record<YearStatus, string | null> = {
   saved: null,
@@ -424,11 +437,6 @@ export const OwnRotationYearRow = ({
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverAnchor asChild>
               <div className="flex min-h-10 flex-wrap items-center gap-1.5 py-1.5">
-                {chips.length === 0 ? (
-                  <span className="text-[13px] text-muted-foreground">
-                    Intet virkemiddel
-                  </span>
-                ) : null}
                 {chips.map((chip) => (
                   <span
                     key={chip.code}
@@ -461,13 +469,13 @@ export const OwnRotationYearRow = ({
                     type="button"
                     variant="outline"
                     size="xs"
-                    aria-label={`${chips.length === 0 ? 'Tilføj' : 'Skift'} virkemiddel i ${label}`}
+                    aria-label={`${chips.length === 0 ? 'Tilføj vinterdække/virkemiddel' : 'Skift virkemiddel'} i ${label}`}
                     className="h-7 gap-1 px-2.5 text-[13px] font-normal text-primary"
                   >
                     {chips.length === 0 ? (
                       <>
                         <Plus className="size-3.5" aria-hidden="true" />
-                        Tilføj virkemiddel
+                        Tilføj vinterdække/virkemiddel
                       </>
                     ) : (
                       'Skift virkemiddel'
