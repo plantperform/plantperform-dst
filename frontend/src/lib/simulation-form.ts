@@ -429,10 +429,11 @@ const rotationsByVariant = (
   return byVariant
 }
 
+const rotationCrops = (rotation: RotationOption): string[] =>
+  rotation.crops ?? rotation.cropSequence
+
 const cropsIn = (rotations: RotationOption[]): string[] =>
-  Array.from(
-    new Set(rotations.flatMap((rotation) => rotation.cropSequence)),
-  ).sort(byDanishName)
+  Array.from(new Set(rotations.flatMap(rotationCrops))).sort(byDanishName)
 
 const fitsFarmingSystem = (
   category: RotationCategoryOption,
@@ -455,9 +456,10 @@ export const cropsForFarmingSystem = (
 const matchesCropChoice = (
   rotation: RotationOption,
   { chosenCrops }: CropChoice,
-): boolean =>
-  rotation.cropSequence.length > 0 &&
-  rotation.cropSequence.every((crop) => chosenCrops.includes(crop))
+): boolean => {
+  const crops = rotationCrops(rotation)
+  return crops.length > 0 && crops.every((crop) => chosenCrops.includes(crop))
+}
 
 export const categoriesMatchingCropChoice = (
   categories: RotationCategoryOption[],
@@ -790,9 +792,7 @@ export const listedAutumnCrops = (
   rotationVariants: string[],
 ): AutumnCropOption[] => {
   const names = new Set(
-    selectedRotations(categories, rotationVariants).flatMap(
-      (rotation) => rotation.cropSequence,
-    ),
+    selectedRotations(categories, rotationVariants).flatMap(rotationCrops),
   )
   return crops.filter((crop) => names.has(crop.name))
 }
