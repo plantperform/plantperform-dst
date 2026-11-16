@@ -1,5 +1,6 @@
 import type { CropAreaLimit, CropAreaRange, FieldRecord } from '@/api/types'
 import { NUM_ROTATION_YEARS, ROTATION_CALENDAR_YEARS } from '@/lib/field-domain'
+import { PERIOD_AVERAGE_OFFERED } from '@/lib/optimization-run'
 
 export type AreaUnit = 'ha' | '%'
 
@@ -252,8 +253,14 @@ export type PossibleCropArea = {
 }
 
 export const possibleCropArea = (range: CropAreaRange): PossibleCropArea => {
-  const optimize = optimizeBounds(range)
   const yearly = yearlyBounds(range)
+  if (!PERIOD_AVERAGE_OFFERED) {
+    return {
+      lowestMaxHa: yearly.lowestMaxHa,
+      highestMinHa: yearly.highestMinHa,
+    }
+  }
+  const optimize = optimizeBounds(range)
   return {
     lowestMaxHa: Math.min(optimize.lowestMaxHa, yearly.lowestMaxHa),
     highestMinHa: Math.max(optimize.highestMinHa, yearly.highestMinHa),
@@ -300,7 +307,9 @@ export const cropAreaRangeWarnings = (
   draft: CropAreaLimitDraft,
   range: CropAreaRange | undefined,
 ): string[] => {
-  if (!range || cropAreaLimitError(draft) !== null) return []
+  if (!PERIOD_AVERAGE_OFFERED || !range || cropAreaLimitError(draft) !== null) {
+    return []
+  }
   if (cropAreaRangeError(draft, range) !== null) return []
   const optimize = optimizeBounds(range)
   const yearly = yearlyBounds(range)

@@ -1,8 +1,10 @@
 import type { OptimizationConstraints, OptimizationSettings } from '@/api/types'
 import { cropAreaLimitError } from '@/lib/crop-area-limits'
+import { PERIOD_AVERAGE_OFFERED } from '@/lib/optimization-run'
 
 // A new simulation starts with the kvote as a ceiling in each year. Stored
-// simulations keep the kind they were saved with.
+// simulations keep the kind they were saved with while PERIOD_AVERAGE_OFFERED
+// is on.
 export const DEFAULT_OPTIMIZATION_SETTINGS: OptimizationSettings = {
   kind: 'yearly',
   excludedCropCodes: [],
@@ -44,7 +46,7 @@ export function optimizationSettingsError(
 export const optimizationSettingsInput = (
   settings: OptimizationSettings,
 ): OptimizationSettings => ({
-  kind: settings.kind,
+  kind: PERIOD_AVERAGE_OFFERED ? settings.kind : 'yearly',
   excludedCropCodes: settings.excludedCropCodes,
   maxNLoadByCatchment: settings.maxNLoadByCatchment,
   db2SwingPct: settings.db2SwingPct,

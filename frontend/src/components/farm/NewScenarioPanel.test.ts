@@ -104,6 +104,16 @@ vi.mock(
   },
 )
 vi.mock('swr', () => ({ mutate: vi.fn().mockResolvedValue(undefined) }))
+const offer = vi.hoisted(() => ({ periodAverage: true }))
+vi.mock('@/lib/optimization-run', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/optimization-run')>()),
+  get PERIOD_AVERAGE_OFFERED() {
+    return offer.periodAverage
+  },
+}))
+afterEach(() => {
+  offer.periodAverage = true
+})
 vi.mock('@/components/ui/step-dialog', () => ({
   StepDialog: ({
     title,
@@ -443,6 +453,22 @@ describe('simulation wizard steps', () => {
     )
     await click('Prøv igen')
     expect(queries.ownDefinitions.mutate).toHaveBeenCalled()
+  })
+
+  it('offers only Loft hvert år while Gennemsnit for perioden is hidden', async () => {
+    offer.periodAverage = false
+    await mount()
+    expect(container.textContent).not.toContain(
+      'når et andet ligger tilsvarende under',
+    )
+    expect(
+      container.querySelectorAll(
+        'input[type="radio"][name="scenario-quota-mode"]',
+      ),
+    ).toHaveLength(1)
+    expect(
+      container.querySelector('input[value="yearly"]')?.getAttribute('checked'),
+    ).not.toBeNull()
   })
 
   it('blocks next, step selection and saving when limits are invalid, then clears errors when corrected', async () => {

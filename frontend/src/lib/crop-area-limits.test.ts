@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { CropAreaRange, FieldRecord, RotationYear } from '@/api/types'
 import {
@@ -23,6 +23,19 @@ import {
   type CropAreaLimitDraft,
   type CropAreaLimitInput,
 } from '@/lib/crop-area-limits'
+
+const offer = vi.hoisted(() => ({ periodAverage: true }))
+
+vi.mock('@/lib/optimization-run', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/optimization-run')>()),
+  get PERIOD_AVERAGE_OFFERED() {
+    return offer.periodAverage
+  },
+}))
+
+afterEach(() => {
+  offer.periodAverage = true
+})
 
 const POTATOES = 150
 
@@ -281,6 +294,14 @@ describe('possible crop area', () => {
     expect(cropAreaRangeWarnings(draft({ minHa: '5' }), weakYears)).toEqual([
       'Kun Gennemsnit for perioden kan opfylde minimum - Loft hvert år kan højst nå 0 ha i 2027, 2034.',
     ])
+  })
+
+  it('checks only Loft hvert år while Gennemsnit for perioden is hidden', () => {
+    offer.periodAverage = false
+    expect(cropAreaRangeError(draft({ maxHa: '2' }), beans)).toBe(
+      'Mindst 4 ha ligger fast med simuleringens sædskifter og låste marker.',
+    )
+    expect(cropAreaRangeWarnings(draft({ maxHa: '5' }), beans)).toEqual([])
   })
 
   it('accepts a limit both can meet, and checks nothing without a range', () => {
