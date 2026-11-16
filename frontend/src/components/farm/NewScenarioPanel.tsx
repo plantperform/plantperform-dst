@@ -204,7 +204,12 @@ export const NewScenarioPanel = ({
   )
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []
-  const referenceQueries = [categoriesQuery, nNormQuery, presetsQuery]
+  const referenceQueries = [
+    categoriesQuery,
+    nNormQuery,
+    presetsQuery,
+    ownDefinitionsQuery,
+  ]
   const referenceLoading = referenceQueries.some((query) => query.isLoading)
   const referenceError = referenceQueries.some((query) => query.error)
   const referenceRetrying = referenceQueries.some((query) => query.isValidating)

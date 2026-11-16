@@ -51,6 +51,13 @@ const queries = vi.hoisted(() => ({
     isValidating: false,
     mutate: vi.fn(),
   },
+  ownDefinitions: {
+    data: [],
+    isLoading: false,
+    error: undefined as Error | undefined,
+    isValidating: false,
+    mutate: vi.fn(),
+  },
 }))
 
 vi.mock('@/api/hooks', () => ({
@@ -70,7 +77,7 @@ vi.mock('@/api/hooks', () => ({
   simulationsKey: vi.fn(),
 }))
 vi.mock('@/api/own-rotations', () => ({
-  useOwnRotationDefinitions: () => queries.reference,
+  useOwnRotationDefinitions: () => queries.ownDefinitions,
 }))
 vi.mock('@/api/optimization-runs', () => ({
   useOptimizationRun: () => undefined,
@@ -215,6 +222,7 @@ describe('settings without a simulation summary', () => {
     queries.stored.isValidating = false
     queries.stored.error = undefined
     queries.storedHook.mockClear()
+    queries.ownDefinitions.error = undefined
   })
 
   it('loads saved fields while allowing settings to be reviewed', () => {
@@ -304,6 +312,7 @@ describe('simulation wizard steps', () => {
     queries.stored.error = undefined
     queries.stored.isLoading = false
     queries.stored.isValidating = false
+    queries.ownDefinitions.error = undefined
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -423,6 +432,17 @@ describe('simulation wizard steps', () => {
     expect(
       container.querySelector('input[value="yearly"]')?.getAttribute('checked'),
     ).not.toBeNull()
+  })
+
+  it('stops before Sædskifter and retries when the own rotations fail to load', async () => {
+    queries.ownDefinitions.error = new Error('down')
+    await mount()
+    await click('Næste')
+    expect(container.textContent).toContain(
+      'Kunne ikke hente sædskifter, N-norm-niveauer og gødningstyper.',
+    )
+    await click('Prøv igen')
+    expect(queries.ownDefinitions.mutate).toHaveBeenCalled()
   })
 
   it('blocks next, step selection and saving when limits are invalid, then clears errors when corrected', async () => {
