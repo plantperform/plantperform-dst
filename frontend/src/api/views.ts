@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import useSWR, { mutate, useSWRConfig, type Cache } from 'swr'
 
 import { fetcher } from '@/api/client'
@@ -118,8 +118,23 @@ export const useFarmView = (farmId?: string) => {
   return { ...response, data }
 }
 
+export const useRefreshWhenChanged = (
+  signature: string | null,
+  refresh: () => unknown,
+) => {
+  const seen = useRef(signature)
+  useEffect(() => {
+    if (signature === seen.current) return
+    const firstLoad = seen.current === null
+    seen.current = signature
+    if (!firstLoad) void refresh()
+  }, [signature, refresh])
+}
+
 export const useSimulationView = (farmId?: string, simulationId?: string) => {
-  const response = useView<SimulationView>(simulationViewKey(farmId, simulationId))
+  const response = useView<SimulationView>(
+    simulationViewKey(farmId, simulationId),
+  )
   const { data: aliases = EMPTY_FIELD_ALIASES } = useFieldAliases()
   const data = applySimulationViewAliases(response.data, aliases)
   return { ...response, data }
