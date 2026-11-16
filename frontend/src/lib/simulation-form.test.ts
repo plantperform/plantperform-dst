@@ -159,7 +159,10 @@ describe('step schemas', () => {
   it('accepts only the two N-loft of the økologisk arealstøtte', () => {
     for (const organicNCeiling of [107, 65] as const) {
       expect(
-        isStepValid(stepIndexOf('basics'), { ...filledValues, organicNCeiling }),
+        isStepValid(stepIndexOf('basics'), {
+          ...filledValues,
+          organicNCeiling,
+        }),
       ).toBe(true)
     }
     expect(
@@ -442,6 +445,32 @@ describe('crop choice', () => {
     expect(count(['Kløvergræs', 'Vårbyg', 'Havre'])).toBe(2)
     expect(count(['Brak'])).toBe(1)
     expect(count([])).toBe(0)
+  })
+
+  it('weighs the crops of every udgave, not only the first', () => {
+    const own: RotationCategoryOption[] = [
+      {
+        category: 'Egne sædskifter',
+        croppingSystem: null,
+        rotationCount: 1,
+        rotations: [
+          {
+            rotationVariant: 'own-1',
+            cropSequence: ['Vinterhvede'],
+            crops: ['Majs', 'Vinterhvede'],
+            activeLen: 1,
+          },
+        ],
+      },
+    ]
+    expect(cropsForFarmingSystem(own, 'Konventionel')).toEqual([
+      'Majs',
+      'Vinterhvede',
+    ])
+    expect(matchingRotationCount(own, { chosenCrops: ['Vinterhvede'] })).toBe(0)
+    expect(
+      matchingRotationCount(own, { chosenCrops: ['Majs', 'Vinterhvede'] }),
+    ).toBe(1)
   })
 
   it('drops the selected rotations that no longer fit the crops', () => {
@@ -795,11 +824,12 @@ describe('efterårstildeling', () => {
       },
     ]
 
-    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1'])).toEqual([winterRape])
-    expect(listedAutumnCrops([winterRape, winterWheat], categories, ['1', '2'])).toEqual([
-      winterRape,
-      winterWheat,
-    ])
+    expect(
+      listedAutumnCrops([winterRape, winterWheat], categories, ['1']),
+    ).toEqual([winterRape])
+    expect(
+      listedAutumnCrops([winterRape, winterWheat], categories, ['1', '2']),
+    ).toEqual([winterRape, winterWheat])
   })
 
   it('drops the amount of a crop that left the rotations', () => {
@@ -809,10 +839,9 @@ describe('efterårstildeling', () => {
   })
 
   it('groups the crops in their order', () => {
-    expect(autumnCropGroups([winterRape, winterWheat]).map(({ group }) => group)).toEqual([
-      'Vinterraps',
-      'Vinterkorn',
-    ])
+    expect(
+      autumnCropGroups([winterRape, winterWheat]).map(({ group }) => group),
+    ).toEqual(['Vinterraps', 'Vinterkorn'])
   })
 
   it('replaces the draft of a crop', () => {
@@ -997,7 +1026,10 @@ describe('toCreateSimulationInput', () => {
 describe('organicNCeilingLabel', () => {
   it('names the N-loft and the støtte it gives for økologisk', () => {
     expect(
-      organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 107 }),
+      organicNCeilingLabel({
+        farmingSystem: 'Økologisk',
+        organicNCeiling: 107,
+      }),
     ).toBe('107 kg N pr. ha harmoniareal · Basisstøtte')
     expect(
       organicNCeilingLabel({ farmingSystem: 'Økologisk', organicNCeiling: 65 }),

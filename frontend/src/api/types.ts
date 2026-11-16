@@ -276,8 +276,10 @@ export type Simulation = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
-  comparisonAvailability?: { kind: 'ready' | 'uncalculated' } |
-    { kind: 'partial'; missingCount: number } | null
+  comparisonAvailability?:
+    | { kind: 'ready' | 'uncalculated' }
+    | { kind: 'partial'; missingCount: number }
+    | null
   includePrecedingCropValue?: boolean
   economicsModuleId?: string
   economicsSnapshot?: EconomicsSnapshot
@@ -472,11 +474,20 @@ export type RotationCandidateYearResult = {
   nNormPct: number
 }
 
-export type FieldYearValue = Pick<RotationCandidateYearResult,
-  'year' | 'leachingKgNHa' | 'dbDkkHa' | 'precedingCropValueKgNHa' |
-  'appliedManureUtilisedKgNHa' | 'appliedMineralFertiliserKgNHa' |
-  'manureOrganicBoundKgNHa' | 'autumnAllocatedKgNHa' | 'manureTonsPerHa' |
-  'cropNormKgNHa' | 'nNormPct'> & {
+export type FieldYearValue = Pick<
+  RotationCandidateYearResult,
+  | 'year'
+  | 'leachingKgNHa'
+  | 'dbDkkHa'
+  | 'precedingCropValueKgNHa'
+  | 'appliedManureUtilisedKgNHa'
+  | 'appliedMineralFertiliserKgNHa'
+  | 'manureOrganicBoundKgNHa'
+  | 'autumnAllocatedKgNHa'
+  | 'manureTonsPerHa'
+  | 'cropNormKgNHa'
+  | 'nNormPct'
+> & {
   feedUnitsPerHa: number
   winterCover: Record<string, unknown>
   economicsMissing?: boolean
@@ -628,6 +639,7 @@ export type EvaluateRotationCandidatesInput = {
 export type RotationOption = {
   rotationVariant: string
   cropSequence: string[]
+  crops?: string[]
   activeLen: number
   name?: string | null
 }
