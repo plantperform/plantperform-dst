@@ -1,6 +1,9 @@
 import { ChoiceCards } from '@/components/farm/ChoiceCards'
 import type { OptimizationKind } from '@/lib/optimization-run'
-import { OPTIMIZATION_KIND_LABELS } from '@/lib/optimization-run'
+import {
+  OPTIMIZATION_KIND_LABELS,
+  PERIOD_AVERAGE_OFFERED,
+} from '@/lib/optimization-run'
 
 type Props = {
   kind: OptimizationKind
@@ -32,7 +35,9 @@ export function SimulationQuotaChoice({ kind, disabled, onChange }: Props) {
     <ChoiceCards
       legend="Hvordan skal udledningskvoten gælde?"
       name="scenario-quota-mode"
-      options={OPTIONS}
+      options={OPTIONS.filter(
+        (option) => PERIOD_AVERAGE_OFFERED || option.value === 'yearly',
+      )}
       value={kind}
       disabled={disabled}
       onChange={onChange}

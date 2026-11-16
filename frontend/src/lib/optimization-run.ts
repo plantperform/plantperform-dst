@@ -14,6 +14,8 @@ export const OPTIMIZATION_KIND_LABELS: Record<OptimizationKind, string> = {
   yearly: 'Loft hvert år',
 }
 
+export const PERIOD_AVERAGE_OFFERED = false
+
 // "Optimering (loft hvert år)", so a run's status names the type it was
 // started with.
 export const optimizationRunName = (kind: OptimizationKind) =>

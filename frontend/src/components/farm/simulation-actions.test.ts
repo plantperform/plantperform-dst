@@ -35,6 +35,10 @@ vi.mock('@/api/optimization-runs', () => ({
   useOptimizationRunActions: () => ({ startRun: mocks.startRun }),
 }))
 vi.mock('swr', () => ({ mutate: mocks.mutate }))
+vi.mock('@/lib/optimization-run', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/optimization-run')>()),
+  PERIOD_AVERAGE_OFFERED: true,
+}))
 
 const source: Simulation = {
   id: 'source',

@@ -42,6 +42,7 @@ field" column is the name on the wire.
 | kvoten under pres | quota pressure | | How close a farm's catchments are to their quota; orders the farm list |
 | udledningsgrænse | `nLoadLimitKgNHa` | `udledningsgraenseKgnHa` | |
 | udledningsloft | `maxNLoadByCatchment` | `maxNLoadByKystvandopland` | |
+| gennemsnit for perioden, loft hvert år | `OptimizationKind` (`'optimize'`, `'yearly'`), `PERIOD_AVERAGE_OFFERED` | `kind` | How the udledningskvote holds in a simulation: for the average of its years, or as a ceiling in each year. Gennemsnit for perioden is hidden while `PERIOD_AVERAGE_OFFERED` is false, so every simulation is saved and run with loft hvert år |
 | kvotegivende | `quotaEligible` | `kvotegivende` | |
 | kvotehandel (fast pris) | `QuotaTrade`, `quotaTrades`, `QuotaTradeDraft`, `SimulationQuotaTradeOptions`, `RulesQuotaTrades` | `quotaTrades` | The Kvotehandel step in Ny simulering, shown read-only under Regler › Grænser. Års-optimering may buy or sell kvote in the chosen kystvandoplande at a fixed price, an amount for each year. Needs a cap in every year and kvotegivende marker |
 | samme mængde i alle år | `sameEachYear` | `sameEachYear` | A kvotehandel that trades one amount in every year instead of an amount per year. Off for a new kvotehandel; on for trades saved before the choice existed |
