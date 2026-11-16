@@ -67,6 +67,7 @@ class SaedskifteOption(CamelModel):
     name: str | None = None
     saedskiftevariant: str
     crop_sequence: list[str]
+    crops: list[str]
     active_len: int
 
 
@@ -90,26 +91,32 @@ class GodningPresetOption(CamelModel):
     godning: GodningSettings
 
 
+def _crop_name(code: int) -> str:
+    return afgroede_normer.lookup_crop_params(code).get("navn", str(code))
+
+
 def _saedskifte_preview(saedskiftevariant: str) -> SaedskifteOption | None:
     """Provide a cheap afgrøde-sequence preview for one saedskiftevariant.
 
-    Uses the first available variant without NLES5/DB2 calculation. Intended
-    for the expandable category list in "Nyt scenarie", not actual evaluation.
+    The sequence is the first variant's, and `crops` holds the afgrøder of
+    every variant, without NLES5/DB2 calculation. Intended for the expandable
+    category list in "Nyt scenarie", not actual evaluation.
     """
     variants = saedskifte_library.list_variants(saedskiftevariant)
     if not variants:
         return None
-    variant = variants[0]
-    raw = saedskifte_library.get_raw_rotation(saedskiftevariant, variant)
-    active_len = saedskifte_library.rotation_active_len(raw)
-    names = [
-        afgroede_normer.lookup_crop_params(code).get("navn", str(code))
-        for code, _udl, _udl_navn in raw[:active_len]
-    ]
+
+    def active_codes(variant: str) -> list[int]:
+        raw = saedskifte_library.get_raw_rotation(saedskiftevariant, variant)
+        active_len = saedskifte_library.rotation_active_len(raw)
+        return [code for code, _udl, _udl_navn in raw[:active_len]]
+
+    sequence = [_crop_name(code) for code in active_codes(variants[0])]
     return SaedskifteOption(
         saedskiftevariant=saedskiftevariant,
-        crop_sequence=names,
-        active_len=active_len,
+        crop_sequence=sequence,
+        crops=sorted({_crop_name(code) for variant in variants for code in active_codes(variant)}),
+        active_len=len(sequence),
     )
 
 
@@ -148,10 +155,10 @@ def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKat
             name=group.name,
             can_copy=group.id in copyable,
             active_len=len(variant.positions),
-            crop_sequence=[
-                afgroede_normer.lookup_crop_params(p.afgrode_kode).get("navn", "")
-                for p in variant.positions
-            ],
+            crop_sequence=[_crop_name(p.afgrode_kode) for p in variant.positions],
+            crops=sorted(
+                {_crop_name(p.afgrode_kode) for other in group.variants for p in other.positions}
+            ),
         )
         category = next(
             (entry for entry in options if entry.kategori == custom.CUSTOM_CATEGORY), None
