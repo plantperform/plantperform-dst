@@ -14,7 +14,9 @@ import {
   useOptimizationRun,
   useOptimizationRunActions,
 } from '@/api/optimization-runs'
+import { useOwnRotationDefinitions } from '@/api/own-rotations'
 import type { Farm, FieldRecord, Simulation } from '@/api/types'
+import { useRefreshWhenChanged } from '@/api/views'
 import { CatchmentPicker } from '@/components/farm/CatchmentPicker'
 import {
   catchmentKey,
@@ -328,6 +330,13 @@ export const FarmInspector = ({
   )
   // The same view as the summary, so this fetches nothing new.
   const simulationView = useSimulationView(farm.id, selectedSimulation?.id)
+  const ownRotations = useOwnRotationDefinitions()
+  useRefreshWhenChanged(
+    ownRotations.data
+      ?.map((definition) => `${definition.id}:${definition.revision}`)
+      .join() ?? null,
+    simulationView.mutate,
+  )
   const rotationOptions = useMemo(
     () => rotationOptionsOf(rotationCategories ?? []),
     [rotationCategories],
@@ -486,67 +495,69 @@ export const FarmInspector = ({
               optimizationKind={selectedSimulation.optimizationSettings?.kind}
               run={optimizationRun}
               fields={fieldsLoading || fieldsError ? undefined : fields}
-              rotationOptionsError={simulationView.data?.data?.rotationOptionsError}
+              rotationOptionsError={
+                simulationView.data?.data?.rotationOptionsError
+              }
             />
           ) : null}
           {showYearWalkthrough ? (
             <>
-            <div id={overviewId} className="flex flex-wrap gap-3">
-              {!overviewCollapsed &&
-              !fieldsLoading &&
-              fields.length > 0 &&
-              singleCatchmentKey === null ? (
-                <CatchmentPicker
-                  farmId={farm.id}
-                  fields={fields}
-                  isSimulationView={isSimulationView}
-                  highlightedKey={effectiveHighlightedCatchmentKey}
-                  onHighlightedKeyChange={setHighlightedCatchmentKey}
+              <div id={overviewId} className="flex flex-wrap gap-3">
+                {!overviewCollapsed &&
+                !fieldsLoading &&
+                fields.length > 0 &&
+                singleCatchmentKey === null ? (
+                  <CatchmentPicker
+                    farmId={farm.id}
+                    fields={fields}
+                    isSimulationView={isSimulationView}
+                    highlightedKey={effectiveHighlightedCatchmentKey}
+                    onHighlightedKeyChange={setHighlightedCatchmentKey}
+                  />
+                ) : null}
+                <YearWalkthrough
+                  key={selectionKey}
+                  entries={catchmentSummary ?? yearlySummary}
+                  loading={
+                    fieldsLoading ||
+                    yearValuesLoading ||
+                    (!isCatchmentScoped &&
+                      (yearlySummaryLoading ||
+                        (optimizationRun?.status === 'succeeded' &&
+                          optimizationRun.refreshing)))
+                  }
+                  fields={highlightedFields}
+                  scopeLabel={scopeLabel}
+                  splitPanels={singleCatchmentKey !== null}
+                  collapsed={overviewCollapsed}
+                  catchmentTotalsByYear={catchmentTotalsByYear}
+                  yearValues={yearValues}
+                  rotationOptions={rotationOptions}
+                  rotationColors={rotationColors}
+                  selectedYearIndex={selectedYearIndex}
+                  onSelectedYearIndexChange={onSelectedYearIndexChange}
+                  catchmentLabel={catchmentLabel}
+                  catchmentColor={catchmentColor}
+                  lastRun={
+                    optimizationRun?.status === 'succeeded'
+                      ? optimizationRun.response
+                      : null
+                  }
+                  history={!isSimulationView}
+                  quotaTrades={quotaTrades}
+                  quotaCaps={quotaCaps}
+                  unavailableMessage={
+                    yearlySummaryError && !isCatchmentScoped
+                      ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
+                      : null
+                  }
                 />
-              ) : null}
-            <YearWalkthrough
-              key={selectionKey}
-              entries={catchmentSummary ?? yearlySummary}
-              loading={
-                fieldsLoading ||
-                yearValuesLoading ||
-                (!isCatchmentScoped &&
-                  (yearlySummaryLoading ||
-                    (optimizationRun?.status === 'succeeded' &&
-                      optimizationRun.refreshing)))
-              }
-              fields={highlightedFields}
-              scopeLabel={scopeLabel}
-              splitPanels={singleCatchmentKey !== null}
-              collapsed={overviewCollapsed}
-              catchmentTotalsByYear={catchmentTotalsByYear}
-              yearValues={yearValues}
-              rotationOptions={rotationOptions}
-              rotationColors={rotationColors}
-              selectedYearIndex={selectedYearIndex}
-              onSelectedYearIndexChange={onSelectedYearIndexChange}
-              catchmentLabel={catchmentLabel}
-              catchmentColor={catchmentColor}
-              lastRun={
-                optimizationRun?.status === 'succeeded'
-                  ? optimizationRun.response
-                  : null
-              }
-              history={!isSimulationView}
-              quotaTrades={quotaTrades}
-              quotaCaps={quotaCaps}
-              unavailableMessage={
-                yearlySummaryError && !isCatchmentScoped
-                  ? `Årstallene kan ikke beregnes: ${yearlySummaryError.message}`
-                  : null
-              }
-            />
-            </div>
-            <OverviewCollapseToggle
-              collapsed={overviewCollapsed}
-              onCollapsedChange={changeOverviewCollapsed}
-              controls={overviewId}
-            />
+              </div>
+              <OverviewCollapseToggle
+                collapsed={overviewCollapsed}
+                onCollapsedChange={changeOverviewCollapsed}
+                controls={overviewId}
+              />
             </>
           ) : null}
           {showQuotaTrade && selectedSimulation ? (
