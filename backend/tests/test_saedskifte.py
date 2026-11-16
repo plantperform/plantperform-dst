@@ -168,6 +168,24 @@ class RotationDefinitionTests(unittest.TestCase):
     def test_udlaeg_catalog_without_hovedafgrode_includes_bar_jord(self):
         self.assertIn(921, {option.code for option in choices.list_udlaeg_koder()})
 
+    def test_category_preview_lists_the_crops_of_every_variant(self):
+        rotations = {
+            "1": [(11, None, None), (1, None, None)],
+            "2": [(11, None, None), (5, None, None)],
+        }
+        with (
+            patch.object(saedskifte_library, "list_variants", return_value=["1", "2"]),
+            patch.object(
+                saedskifte_library,
+                "get_raw_rotation",
+                side_effect=lambda _saedskifte, variant: rotations[variant],
+            ),
+        ):
+            preview = rotation_candidates._saedskifte_preview("S1")
+
+        self.assertEqual(preview.crop_sequence, ["Vinterhvede", "Vårbyg"])
+        self.assertEqual(preview.crops, ["Majs", "Vinterhvede", "Vårbyg"])
+
     def test_explicit_null_patch_is_rejected(self):
         with self.assertRaises(ValidationError):
             UpdateRotationGroupRequest(expected_revision=0, variants=None)
