@@ -18,6 +18,7 @@ import {
 import {
   runSimulationOptimization,
   runYearlySimulationOptimization,
+  updateSimulation,
 } from '@/api/mutations'
 import {
   OptimizationRunsContext,
@@ -37,6 +38,7 @@ import type {
 import { cropAreaViolationsFromDetail } from '@/lib/crop-area-limits'
 import {
   optimizationFailureMessage,
+  PERIOD_AVERAGE_OFFERED,
   summarizeOptimizationChanges,
 } from '@/lib/optimization-run'
 import { rotationErrorMessage } from '@/lib/own-rotations'
@@ -196,7 +198,12 @@ export const OptimizationRunsProvider = ({
   )
 
   const startRun = useCallback<StartOptimizationRun>(
-    (request) => {
+    (requested) => {
+      const periodAverageHidden =
+        !PERIOD_AVERAGE_OFFERED && requested.kind === 'optimize'
+      const request = periodAverageHidden
+        ? { ...requested, kind: 'yearly' as const, input: {} }
+        : requested
       if (runsRef.current.get(request.simulationId)?.status === 'running')
         return null
       const id = crypto.randomUUID()
@@ -213,11 +220,18 @@ export const OptimizationRunsProvider = ({
       void (async () => {
         const submit = async () => {
           // Use the revision the user has seen. The backend rejects concurrent edits.
-          const simulation =
+          const seen =
             simulationsRef.current.get(request.simulationId) ??
             (await fetcher<Simulation>(
               `/farms/${request.farmId}/simulations/${request.simulationId}`,
             ))
+          const simulation =
+            periodAverageHidden && seen.optimizationSettings?.kind === 'optimize'
+              ? await updateSimulation(request.farmId, request.simulationId, {
+                  optimizationSettings: seen.optimizationSettings,
+                  expectedRevision: seen.revision,
+                })
+              : seen
           const input = {
             ...request.input,
             runId: id,

@@ -8,10 +8,9 @@ import type {
   YearlyOptimizeSimulationInput,
 } from '@/api/types'
 import type { CropAreaViolation } from '@/lib/crop-area-limits'
-import {
-  PERIOD_AVERAGE_OFFERED,
-  type OptimizationChanges,
-  type OptimizationKind,
+import type {
+  OptimizationChanges,
+  OptimizationKind,
 } from '@/lib/optimization-run'
 import {
   optimizeSimulationInput,
@@ -98,7 +97,7 @@ export const useOptimizationRunActions = () => {
 export const defaultOptimizationRequest = (
   kind: OptimizationKind | undefined,
 ): OptimizationRunRequest =>
-  kind === 'yearly' || !PERIOD_AVERAGE_OFFERED
+  kind === 'yearly'
     ? { kind: 'yearly', input: {} }
     : { kind: 'optimize', input: {} }
 

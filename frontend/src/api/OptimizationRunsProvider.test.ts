@@ -4,11 +4,26 @@ import { act, createElement, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import {
+  runSimulationOptimization,
+  runYearlySimulationOptimization,
+  updateSimulation,
+} from '@/api/mutations'
 import { OptimizationRunsProvider } from '@/api/OptimizationRunsProvider'
 import { useOptimizationRun, useOptimizationRunsContext } from '@/api/optimization-runs'
 import type { Simulation, SimulationResult } from '@/api/types'
-import { DEFAULT_SIMULATION_CONSTRAINTS } from '@/lib/simulation-settings'
+import {
+  DEFAULT_OPTIMIZATION_SETTINGS,
+  DEFAULT_SIMULATION_CONSTRAINTS,
+} from '@/lib/simulation-settings'
 
+const offer = vi.hoisted(() => ({ periodAverage: true }))
+vi.mock('@/lib/optimization-run', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/optimization-run')>()),
+  get PERIOD_AVERAGE_OFFERED() {
+    return offer.periodAverage
+  },
+}))
 const api = vi.hoisted(() => ({ fetcher: vi.fn(), view: vi.fn() }))
 vi.mock('@/api/client', () => ({ fetcher: api.fetcher, ApiError: class extends Error {} }))
 vi.mock('@/api/hooks', () => ({
@@ -20,6 +35,7 @@ vi.mock('@/api/hooks', () => ({
 vi.mock('@/api/mutations', () => ({
   runSimulationOptimization: vi.fn(),
   runYearlySimulationOptimization: vi.fn(),
+  updateSimulation: vi.fn(),
 }))
 vi.mock('swr', () => ({ mutate: vi.fn().mockResolvedValue(undefined) }))
 
@@ -63,6 +79,55 @@ afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
   vi.useRealTimers()
+  offer.periodAverage = true
+})
+
+const startSavedPeriodAverageRun = async () => {
+  const saved: Simulation = {
+    ...simulation,
+    result: { ...active, runId: null },
+    revision: 3,
+    optimizationSettings: { ...DEFAULT_OPTIMIZATION_SETTINGS, kind: 'optimize' },
+  }
+  vi.mocked(updateSimulation).mockResolvedValue({ ...saved, revision: 4 })
+  vi.mocked(runSimulationOptimization).mockReturnValue(new Promise(() => {}))
+  vi.mocked(runYearlySimulationOptimization).mockReturnValue(new Promise(() => {}))
+  const Starter = () => {
+    const { syncSimulations, startRun } = useOptimizationRunsContext()
+    useEffect(() => {
+      syncSimulations([saved])
+      startRun({ kind: 'optimize', input: {}, farmId: 'farm', simulationId: 'sim', fieldsBefore: [] })
+    }, [syncSimulations, startRun])
+    return createElement('p', null, useOptimizationRun('sim')?.kind)
+  }
+  await act(async () => {
+    root.render(createElement(OptimizationRunsProvider, { children: createElement(Starter) }))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  return saved
+}
+
+it('saves Gennemsnit for perioden as Loft hvert år before running while it is hidden', async () => {
+  offer.periodAverage = false
+  const saved = await startSavedPeriodAverageRun()
+  expect(updateSimulation).toHaveBeenCalledWith('farm', 'sim', {
+    optimizationSettings: saved.optimizationSettings,
+    expectedRevision: 3,
+  })
+  expect(runYearlySimulationOptimization).toHaveBeenCalledWith(
+    'farm', 'sim', expect.objectContaining({ expectedRevision: 4 }),
+  )
+  expect(runSimulationOptimization).not.toHaveBeenCalled()
+  expect(container.textContent).toBe('yearly')
+})
+
+it('runs Gennemsnit for perioden as saved while it is offered', async () => {
+  await startSavedPeriodAverageRun()
+  expect(updateSimulation).not.toHaveBeenCalled()
+  expect(runSimulationOptimization).toHaveBeenCalledWith(
+    'farm', 'sim', expect.objectContaining({ expectedRevision: 3 }),
+  )
+  expect(container.textContent).toBe('optimize')
 })
 
 it('stops showing running when polling returns failure without saved output', async () => {
