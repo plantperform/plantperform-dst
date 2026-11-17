@@ -1425,7 +1425,7 @@ export const YearWalkthrough = ({
       column.entry !== null &&
       catchmentYears(column.entry).some(coveredByTrade),
   ).length
-  const barAreaHeight = compact ? 'h-24' : 'h-[124px]'
+  const barAreaHeight = compact ? 'h-30' : 'h-40'
   const wideBars = columns.length <= WIDE_BAR_YEAR_COUNT
   const barWidth = barWidthClass(catchments.length, wideBars)
   const quotaLinePct = quotaLineHeightPct(

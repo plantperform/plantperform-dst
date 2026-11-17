@@ -170,11 +170,15 @@ describe('changedFieldIds', () => {
 })
 
 describe('quotaLineHeightPct', () => {
-  it('lifts the quota line until the highest bar fills the chart', () => {
-    expect(quotaLineHeightPct([0.6, 0.9])).toBe(70)
-    expect(quotaLineHeightPct([0.8, 2])).toBe(44)
-    expect(quotaLineHeightPct([1, 4])).toBe(34)
-    expect(quotaLineHeightPct([])).toBe(70)
+  it('lets the highest bar reach the top', () => {
+    expect(quotaLineHeightPct([0.8, 2])).toBe(50)
+    expect(quotaLineHeightPct([1, 4])).toBe(25)
+  })
+
+  it('tops the scale at 115 % of the kvote when every bar is under it', () => {
+    expect(quotaLineHeightPct([0.6, 0.9])).toBeCloseTo(86.96, 2)
+    expect(quotaLineHeightPct([1])).toBeCloseTo(86.96, 2)
+    expect(quotaLineHeightPct([])).toBeCloseTo(86.96, 2)
   })
 })
 
