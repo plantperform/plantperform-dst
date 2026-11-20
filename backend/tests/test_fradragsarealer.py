@@ -8,6 +8,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import shapely
 from pyogrio import read_dataframe, write_dataframe
 from shapely import box
 
@@ -53,8 +54,9 @@ class DeductionAreaTests(unittest.TestCase):
 
         area = deduction_area_ha(fields, self.polygons)
 
-        # 175 m² for the pair and 100 m² of the edge polygon; 0.03 ha if the overlap counted twice.
-        np.testing.assert_array_equal(area, [0.0275])
+        # 175 m² for the pair and 100 m² of the edge polygon, 2.75 hundredths of a ha, floored;
+        # 0.03 ha if the overlap counted twice.
+        np.testing.assert_array_equal(area, [0.02])
 
     def test_gives_zero_for_a_field_that_overlaps_nothing_or_only_touches(self) -> None:
         fields = np.array([box(500, 500, 600, 600), box(120, 90, 200, 200)])
@@ -63,12 +65,35 @@ class DeductionAreaTests(unittest.TestCase):
 
         np.testing.assert_array_equal(area, [0.0, 0.0])
 
-    def test_rounds_to_whole_square_metres(self) -> None:
-        fields = np.array([box(0, 0, 100, 100)])
-        polygons = np.array([box(0, 0, 10, 33.33333)])
+    def test_floors_to_whole_hundredths_of_a_hectare(self) -> None:
+        # 333.333 m² (0.03 ha), 196 m² and 115 m² (0.01 ha, as SGAV shows 1-1 and 2-2), 99.9 m²
+        # (none) and exactly 100 m² (0.01 ha).
+        fields = np.array([box(x, 0, x + 100, 100) for x in (0, 200, 400, 600, 800)])
+        polygons = np.array(
+            [
+                box(0, 0, 10, 33.33333),
+                box(200, 0, 214, 14),
+                box(400, 0, 423, 5),
+                box(600, 0, 609.99, 10),
+                box(800, 0, 810, 10),
+            ]
+        )
 
-        # 333.333 m² is 0.0333333 ha.
-        np.testing.assert_array_equal(deduction_area_ha(fields, polygons), [0.0333])
+        np.testing.assert_array_equal(
+            deduction_area_ha(fields, polygons), [0.03, 0.01, 0.01, 0.0, 0.01]
+        )
+
+    def test_does_not_lose_a_hundredth_to_floating_point_noise(self) -> None:
+        # Overlaying the first polygon gives an area one step under 2,900 m², and
+        # np.floor(ha * 100) gives 0.28 even for an area of exactly 0.29 ha (0.29 * 100 is
+        # 28.999999999999996), which is the second polygon.
+        fields = np.array([box(0, 0, 100, 100), box(200, 0, 300, 100)])
+        polygons = np.array([box(0, 0, 100, np.nextafter(29.0, 0.0)), box(200, 0, 250, 58)])
+        overlay_area = shapely.area(shapely.intersection(fields, polygons))
+        self.assertLess(overlay_area[0], 2900.0)
+        self.assertLess(np.floor(overlay_area[0] / 100), 29.0)
+
+        np.testing.assert_array_equal(deduction_area_ha(fields, polygons), [0.29, 0.29])
 
     def test_does_not_depend_on_the_chunk_size(self) -> None:
         fields = np.array([box(0, 0, 100, 100), box(500, 500, 600, 600), box(100, 0, 200, 100)])
@@ -77,7 +102,7 @@ class DeductionAreaTests(unittest.TestCase):
 
         np.testing.assert_array_equal(one_by_one, deduction_area_ha(fields, self.polygons))
         # The third field holds 20 m x 10 m of the edge polygon.
-        np.testing.assert_array_equal(one_by_one, [0.0275, 0.0, 0.02])
+        np.testing.assert_array_equal(one_by_one, [0.02, 0.0, 0.02])
 
 
 class GeoPackageUpdateTests(unittest.TestCase):
@@ -104,8 +129,8 @@ class GeoPackageUpdateTests(unittest.TestCase):
                 load_fradragsarealer(gpkg_path, layers, ("wells", "strips"))
 
             updated = read_dataframe(str(gpkg_path), layer=LAYER)
-            # A part on two layers counts once: 100 + 100 - 25 + 100 m².
-            np.testing.assert_array_equal(updated[DEDUCTION_COLUMN], [0.0275, 0.0])
+            # A part on two layers counts once: 100 + 100 - 25 + 100 m², floored to 0.02 ha.
+            np.testing.assert_array_equal(updated[DEDUCTION_COLUMN], [0.02, 0.0])
             self.assertTrue(updated.geometry.geom_equals(fields.geometry).all())
 
     def test_adds_the_column_to_a_geopackage_that_lacks_it(self) -> None:

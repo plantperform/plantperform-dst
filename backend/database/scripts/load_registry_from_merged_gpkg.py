@@ -37,9 +37,10 @@ RETENTION_ROUND_DIGITS = 2
 # Field A24: the quota, the udledningsgrænse times the area without the
 # deduction (A69 = A3 - A4 - A6), is rounded to 2 decimals.
 QUOTA_ROUND_DIGITS = 2
-# The GeoPackage's fradragsareal (A4), set by load_fradragsarealer.py, in ha.
+# The GeoPackage's fradragsareal (A4), set by load_fradragsarealer.py, in ha,
+# floored to hundredths of a hectare as SGAV shows it.
 DEDUCTION_COLUMN = "Fradragsareal"
-DEDUCTION_ROUND_DIGITS = 4
+DEDUCTION_ROUND_DIGITS = 2
 STATUS_INTERVAL_SECONDS = 10.0
 CROP_HISTORY_YEARS = range(2016, 2027)
 PERCOLATION_COLUMNS_BY_KATEGORI = (

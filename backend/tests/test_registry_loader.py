@@ -17,8 +17,8 @@ class SecondaryCropHistoryTests(unittest.TestCase):
 
 
 class DeductionAreaTests(unittest.TestCase):
-    def test_reads_the_fradragsareal_in_ha_with_four_decimals(self) -> None:
-        self.assertEqual(deduction_area(SimpleNamespace(Fradragsareal=0.123456)), 0.1235)
+    def test_reads_the_fradragsareal_in_ha_with_two_decimals(self) -> None:
+        self.assertEqual(deduction_area(SimpleNamespace(Fradragsareal=0.123456)), 0.12)
 
     def test_gives_no_deduction_without_the_column_or_a_value(self) -> None:
         for row in (

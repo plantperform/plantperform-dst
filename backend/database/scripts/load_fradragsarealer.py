@@ -8,6 +8,9 @@ udledningsgrænse, set by load_udledningsgraenser.py). `pixi run load-registry-d
 deducts Fradragsareal from the area when it calculates the quota, and keeps the
 deduction in registry_field.fradragsareal_ha.
 
+The deduction is floored to whole hundredths of a hectare, as SGAV's Markplan
+shows A4 (a field with 196 m² on the layers has 0.01 ha, not 0.0196).
+
 Run it whenever the GeoPackage or one of the layers is replaced, before
 `pixi run load-registry-data`.
 
@@ -53,9 +56,13 @@ DEDUCTION_LAYERS = (
     "Markkrat_2027",
 )
 DEDUCTION_COLUMN = "Fradragsareal"
-SQUARE_METRES_PER_HA = 10_000
-# Hectares with 4 decimals, that is whole square metres.
-DEDUCTION_DECIMALS = 4
+# SGAV's Markplan shows A4 floored to hundredths of a hectare: 196 m² is 0.01 ha.
+SQUARE_METRES_PER_HUNDREDTH_HA = 100
+# A part-area of exactly n hundredths can come out of the overlay a hair under n
+# (0.29 ha as 28.999999999999996), and the floor would then give n - 1. 1e-6 of a
+# hundredth is 0.0001 m², far above the overlay's rounding noise and far below
+# the smallest real difference.
+FLOOR_TOLERANCE = 1e-6
 
 
 def union_area(index: np.ndarray, parts: np.ndarray, size: int) -> np.ndarray:
@@ -85,8 +92,9 @@ def deduction_area_ha(
     progress: Callable[[int, int], None] | None = None,
 ) -> np.ndarray:
     """Return, for each field, the area in ha of the field that lies on the
-    deduction polygons, rounded to DEDUCTION_DECIMALS. A part on several
-    polygons counts once; a field that overlaps none gets 0."""
+    deduction polygons, floored to whole hundredths of a hectare (100 m²) as
+    SGAV shows A4. A part on several polygons counts once; a field that
+    overlaps none gets 0."""
     tree = shapely.STRtree(deduction_polygons)
     area = np.zeros(len(fields))
     for start in range(0, len(fields), chunk_size):
@@ -96,7 +104,9 @@ def deduction_area_ha(
         area[start : start + len(chunk)] = union_area(chunk_index, parts, len(chunk))
         if progress is not None:
             progress(start + len(chunk), len(fields))
-    return np.round(area / SQUARE_METRES_PER_HA, DEDUCTION_DECIMALS)
+    hundredths = np.floor(area / SQUARE_METRES_PER_HUNDREDTH_HA + FLOOR_TOLERANCE)
+    # Divide by 100 rather than multiply by 0.01: n / 100 is the double nearest n/100.
+    return hundredths / 100
 
 
 def read_deduction_polygons(directory: Path, layers: Sequence[str], crs: object) -> np.ndarray:
