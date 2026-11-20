@@ -4,9 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.v0.farms import FarmMemberRequest, FarmMemberResponse
+from app.api.v0.memberships import membership_router
 from app.auth import AuthenticatedUser, current_user
+from app.data import membership
 from app.data import saedskifte_store as store
+from app.domain.membership import FarmMemberRequest, FarmMemberResponse
 from app.domain.saedskifte import (
     CreateRotationGroupRequest,
     DuplicateRotationGroupRequest,
@@ -26,6 +28,9 @@ def _mutable(group_id):
         if group_id not in saedskifte_library.list_saedskifter():
             raise RotationGroupNotFoundError
         raise HTTPException(status_code=422, detail="Standard rotations are read-only")
+
+
+router.include_router(membership_router(membership.rotations, _mutable))
 
 
 @router.get("/afgrode-koder", response_model=list[AfgrodeKodeOption])

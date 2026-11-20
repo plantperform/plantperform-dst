@@ -1359,25 +1359,33 @@ class EconomicsDatabaseTests(DatabaseTests):
         self.assertEqual(simulation.creation_status, "done")
         self.assertEqual(simulation.economics_snapshot.source_id, module.id)
 
-    def test_farm_members_can_use_snapshot_without_original_module(self):
+    def test_farm_editor_can_use_frozen_values_after_module_deletion(self):
         module = self.module(prices={SALE: 150})
         selected = self.select_module(module)
         _, _, envelope = self.submit_recalculation(selected.revision)
         economics_worker.execute(envelope, CONTEXT)
+        economics_store.delete_module(module.id, EMAIL)
         with self.sessions.begin() as session:
             session.execute(insert(farm_member_table).values(farm_id="farm", email=OTHER))
         simulation = repository.get_simulation("farm", "sim", OTHER)
-        self.assertEqual(simulation.economics_snapshot.overrides.prices[SALE], 150)
         request = RecalculateEconomicsRequest(
             expectedRevision=simulation.revision, requestId=uuid4(), refreshFromModule=False
         )
-        jobs.submit("farm", "sim", request, OTHER)
-        request = RecalculateEconomicsRequest(
-            expectedRevision=repository.get_simulation("farm", "sim", OTHER).revision,
-            requestId=uuid4(),
-        )
-        with self.assertRaises(EconomicsModuleNotFoundError):
-            jobs.submit("farm", "sim", request, OTHER)
+
+        refreshed = jobs.submit("farm", "sim", request, OTHER)
+
+        self.assertEqual(refreshed.economics_snapshot.overrides.prices[SALE], 150)
+
+    def test_farm_editor_can_refresh_from_inherited_module(self):
+        module = self.module(prices={SALE: 150})
+        selected = self.select_module(module)
+        with self.sessions.begin() as session:
+            session.execute(insert(farm_member_table).values(farm_id="farm", email=OTHER))
+        request = RecalculateEconomicsRequest(expectedRevision=selected.revision, requestId=uuid4())
+
+        refreshed = jobs.submit("farm", "sim", request, OTHER)
+
+        self.assertEqual(refreshed.economics_snapshot.overrides.prices[SALE], 150)
 
     def test_deleting_a_module_selects_standard_on_every_farm_and_keeps_the_applied_figures(self):
         module = self.module(prices={SALE: 150})

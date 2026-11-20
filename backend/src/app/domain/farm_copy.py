@@ -31,6 +31,10 @@ class FarmCopyLookup(CamelModel):
         return value
 
 
+class DuplicateFarmRequest(CamelModel):
+    request_id: UUID
+
+
 class CopyFarmRequest(FarmCopyLookup):
     source_farm_id: str = Field(min_length=1)
     request_id: UUID

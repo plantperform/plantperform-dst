@@ -117,7 +117,8 @@ def _row(
         setups.c.id == simulation_id,
         setups.c.farm_id == farm_id,
     )
-    if not repository._member_exists(session, farm_id, email):
+    has_access = repository._farm_editor_exists if lock else repository._member_exists
+    if not has_access(session, farm_id, email):
         return None
     if lock:
         query = query.with_for_update()
@@ -394,7 +395,7 @@ def get_simulation_field_candidate_detail(farm_id, simulation_id, field_id, emai
 
 def delete_simulation(farm_id, simulation_id, email):
     with repository.SessionLocal.begin() as session:
-        if not repository._farm_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
         return (
             session.execute(

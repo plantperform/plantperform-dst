@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from database.scripts.load_saedskifte_lookup import load_saedskifte_lookup
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -77,6 +76,7 @@ from app.domain.simulation import (
 from app.services.optimization import jobs
 from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
 from app.services.scenario import candidate_evaluator
+from database.scripts.load_saedskifte_lookup import load_saedskifte_lookup
 from plantperform_fargate import worker
 
 DATABASE = os.getenv("OPTIMIZER_TEST_DATABASE_URL")
@@ -468,7 +468,7 @@ class RotationDatabaseTests(unittest.TestCase):
             json={"expectedRevision": 0, "name": "Changed"},
         )
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 403)
 
     def test_unrelated_group_cannot_be_copied(self):
         source = store.create_group(definition(), OTHER)
@@ -672,6 +672,19 @@ class RotationDatabaseTests(unittest.TestCase):
                 ),
                 EMAIL,
             )
+
+    def test_farm_editor_can_select_a_viewer_shared_group(self):
+        source = store.create_group(definition(), OTHER)
+        with self.sessions.begin() as session:
+            session.execute(insert(members).values(group_id=source.id, email=EMAIL, role="viewer"))
+
+        response = self.client.post(
+            "/api/v0/farms/farm/simulations",
+            json={"name": "New", "saedskiftevarianter": [source.id], "nNormProcenter": ["100"]},
+        )
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["rotationSaedskiftevarianter"], [source.id])
 
     def test_existing_selection_can_be_kept_by_nonmember(self):
         source = store.create_group(definition(), OTHER)

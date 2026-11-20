@@ -101,7 +101,7 @@ field" column is the name on the wire.
 | brug i en ny simulering | `InitialRotations`, `initialRotations`, `onUseInSimulation`, `newSimulationRotations` | | Opens Ny simulering on top of the eget sædskifte, in its driftsform and with it chosen |
 | udgave (af et eget sædskifte) | variant | `variants` | A crop sequence of an eget sædskifte with its virkemidler. A copy from the library keeps the library's variants |
 | kopi af et sædskifte | `duplicateRotationDefinition`, `LibraryRotationCopyDialog` | `/duplicate` | A new eget sædskifte with the same years and virkemidler. A library sædskifte can only be copied when it is chosen in a simulation on one of the user's farms (`canCopy`) |
-| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Gives another user the eget sædskifte; everyone who has it can edit, share, copy and delete it |
+| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Shares the eget sædskifte as an editor through the current sharing screen |
 | egne sædskifter i Ny simulering | `ownRotationVariantsOf`, `selectRotationsWithinLimit`, `fitsFarmingSystem`, `MAX_OWN_ROTATIONS_IN_SIMULATION` | `dyrkningssystem` `""` | The category Egne sædskifter has no driftsform (`croppingSystem: null`), so it fits every simulation and never counts as the other driftsform. At most 50 can be chosen in a simulation |
 | navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
 | rediger manuelt med et eget sædskifte | `ownVariantToken`, `ownVariantOf`, `allowedUndersownAt` | `rotationGroups` | A field on an eget sædskifte starts on the variant with its virkemidler, and each year offers only the virkemiddel the sædskifte has in that year, also when the start year is shifted. The definitions come from the simulation or the last run |
@@ -200,7 +200,7 @@ field" column is the name on the wire.
 | fælles pris | shared price, `priceCrops` | | A price used by several crops, e.g. Pløjning med pakning |
 | pris eller mængde, der afhænger af jordtypen | `soilVariants` | `soilVariants` | A work rate or work quantity with a value per soil group; a change sets them all |
 | økonomiprofil | `EconomicsProfile`, `economicsProfileId`, `EconomicsModule` | `economicsModuleId` | A user's named set of changes on top of Standard, stored as an economics module that its members can use on all their farms |
-| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember` | `members` | Gives another user the profile; everyone who has it can edit, share and delete it |
+| dele en profil | `EconomicsProfileShareButton`, `addEconomicsModuleMember` | `members` | Shares the profile as an editor through the current sharing screen |
 | forlade en profil | `describeLeaveProfile`, `onLeave` | | Removes yourself from a profile shared with you; the others keep it |
 | har også økonomiprofilen | `memberProfileNames`, `memberProfilesLabel` | | Under Adgang: the farm's profiles that another member also has |
 | profilen tallene er regnet med | `appliedProfile`, `EconomicsSnapshot` | `economicsSnapshot` | The profile a simulation's figures use until it is recalculated |

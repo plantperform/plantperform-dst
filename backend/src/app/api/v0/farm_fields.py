@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_204_NO_CONTENT
 
+from app.api.v0.memberships import require_farm_write_access
 from app.api.v0.simulations import YearlySummaryEntryResponse
 from app.auth import AuthenticatedUser, current_user
 from app.data.field_alias_store import update_alias
@@ -17,7 +18,11 @@ from app.domain.rotation_candidate import RotationCandidateYearResult
 from app.domain.soil import MissingSoilDataError
 from app.services import preparation_jobs
 
-router = APIRouter(prefix="/farms/{farm_id}/fields", tags=["farm fields"])
+router = APIRouter(
+    dependencies=[Depends(require_farm_write_access)],
+    prefix="/farms/{farm_id}/fields",
+    tags=["farm fields"],
+)
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 

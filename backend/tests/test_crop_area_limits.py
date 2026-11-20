@@ -108,7 +108,7 @@ class CropAreaPersistenceTests(unittest.TestCase):
         )
         with (
             patch.object(repository, "SessionLocal") as factory,
-            patch.object(repository, "_farm_exists", return_value=True),
+            patch.object(repository, "_farm_editor_exists", return_value=True),
         ):
             session = factory.begin.return_value.__enter__.return_value
             session.execute.return_value.scalars.return_value.all.return_value = []

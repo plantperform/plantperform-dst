@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.domain.base import CamelModel
+from app.domain.membership import MembershipRole
 
 
 def is_custom(group_id):
@@ -81,6 +82,7 @@ class RotationGroupSnapshot(CamelModel):
 
 
 class RotationGroup(RotationGroupSnapshot):
+    effective_role: MembershipRole = "viewer"
     is_standard: bool = False
     can_copy: bool = False
     created_at: datetime | None = None

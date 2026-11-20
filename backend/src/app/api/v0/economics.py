@@ -5,9 +5,9 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, field_validator
 
-from app.api.v0.farms import FarmMemberRequest, FarmMemberResponse
+from app.api.v0.memberships import membership_router
 from app.auth import AuthenticatedUser, current_user
-from app.data import economics_store
+from app.data import economics_store, membership
 from app.domain.base import CamelModel
 from app.domain.economics import (
     STANDARD_ID,
@@ -18,6 +18,7 @@ from app.domain.economics import (
     EconomicsModuleNotFoundError,
     UpdateEconomicsModuleRequest,
 )
+from app.domain.membership import FarmMemberRequest, FarmMemberResponse
 from app.services.economics.budget import farm_budgets
 from app.services.economics.overrides import assumptions
 
@@ -25,9 +26,16 @@ router = APIRouter(tags=["economics"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 
-def _call(action, *args, module_id=None):
+def _mutable(module_id):
     if module_id == STANDARD_ID:
         raise HTTPException(status_code=422, detail="Standard economics is immutable")
+
+
+router.include_router(membership_router(membership.modules, _mutable), prefix="/economics-modules")
+
+
+def _call(action, *args, module_id=None):
+    _mutable(module_id)
     try:
         return action(*args)
     except EconomicsModuleNotFoundError as error:
@@ -135,6 +143,6 @@ def delete_member(module_id: str, email: str, user: CurrentUser):
         module_id=module_id,
     )
     if result == "last_member":
-        raise HTTPException(status_code=409, detail="A module must have at least one member")
+        raise HTTPException(status_code=409, detail="A module must have at least one editor")
     if result == "member_not_found":
         raise HTTPException(status_code=404, detail="Module member not found")

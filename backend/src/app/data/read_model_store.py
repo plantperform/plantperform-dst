@@ -99,27 +99,38 @@ def require_simulation_view_ready(simulation_id, revision):
 
 
 def get_farm_view(farm_id, email, *, include_data=True):
+    view, _ = get_farm_view_with_role(farm_id, email, include_data=include_data)
+    return view
+
+
+def get_farm_view_with_role(farm_id, email, *, include_data=True):
     with repository.SessionLocal() as session:
-        if not repository._member_exists(session, farm_id, email):
-            return None
         columns = [
+            farm_member_table.c.role,
             farm_table.c.data,
             farm_table.c.revision,
             farm_views.c.status,
             farm_views.c.input_revision,
             farm_views.c.view_version,
+            (farm_views.c.data.is_not(None) & (farm_views.c.data != insert_json(None))).label(
+                "has_view_data"
+            ),
             farm_views.c.error,
         ]
         if include_data:
             columns.append(farm_views.c.data.label("view_data"))
         row = session.execute(
             select(*columns)
-            .select_from(farm_table.outerjoin(farm_views))
-            .where(farm_table.c.id == farm_id)
+            .select_from(farm_table.join(farm_member_table).outerjoin(farm_views))
+            .where(farm_table.c.id == farm_id, farm_member_table.c.email == email)
         ).first()
         if row is None:
-            return None
+            return None, None
         status = row.status if row.input_revision == row.revision else "queued"
+        if row.role == "viewer" and (
+            status in (None, "queued") or (status == "done" and not row.has_view_data)
+        ):
+            status = "missing"
         return {
             "farm": row.data,
             "input_revision": row.revision,
@@ -127,7 +138,7 @@ def get_farm_view(farm_id, email, *, include_data=True):
             "status": status or "queued",
             "error": row.error,
             "data": row.view_data if include_data and status == "done" else None,
-        }
+        }, row.role
 
 
 def _with_rotation_groups(simulation):

@@ -34,7 +34,7 @@ def select_module(farm_id, simulation_id, request, email):
 
 
 def _setup(session, farm_id, simulation_id, email):
-    if not repository._member_exists(session, farm_id, email):
+    if not repository._farm_editor_exists(session, farm_id, email):
         return None
     return session.execute(
         select(setups.c.data, setups.c.revision, setups.c.creation_status)

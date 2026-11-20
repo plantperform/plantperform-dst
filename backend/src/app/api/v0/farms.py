@@ -1,11 +1,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import Field, field_validator
 from starlette.status import HTTP_204_NO_CONTENT
 
+from app.api.v0.memberships import membership_router, require_farm_write_access
 from app.auth import AuthenticatedUser, current_user
-from app.data import farm_copy_store
+from app.data import farm_copy_store, membership
 from app.data.repository import (
     add_farm_member,
     create_farm,
@@ -16,15 +16,16 @@ from app.data.repository import (
     list_farms,
     remove_farm_member,
 )
-from app.domain.base import CamelModel
 from app.domain.farm import CreateFarmRequest, Farm, KystvandoplandUdledning
 from app.domain.farm_copy import (
     CopyFarmRequest,
+    DuplicateFarmRequest,
     FarmCopyConflictError,
     FarmCopyLookup,
     FarmCopyNotFoundError,
     FarmCopyPreview,
 )
+from app.domain.membership import FarmMemberRequest, FarmMemberResponse
 from app.domain.read_model import FarmView
 from app.services.preparation_jobs import get_or_prepare_farm_view, retry_history
 
@@ -32,20 +33,7 @@ router = APIRouter(prefix="/farms", tags=["farms"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
 
-class FarmMemberRequest(CamelModel):
-    email: str = Field(min_length=3, max_length=320)
-
-    @field_validator("email")
-    @classmethod
-    def normalize_member_email(cls, value: str) -> str:
-        value = value.strip().lower()
-        if value.count("@") != 1 or " " in value:
-            raise ValueError("Enter a valid email address")
-        return value
-
-
-class FarmMemberResponse(CamelModel):
-    email: str
+router.include_router(membership_router(membership.farms))
 
 
 @router.get("", response_model=list[Farm])
@@ -85,6 +73,16 @@ def copy_farm(request: CopyFarmRequest, user: CurrentUser):
         raise HTTPException(status_code=409, detail=str(error)) from error
 
 
+@router.post("/{farm_id}/duplicate", response_model=Farm, status_code=201)
+def duplicate_farm(farm_id: str, request: DuplicateFarmRequest, user: CurrentUser):
+    try:
+        return farm_copy_store.duplicate_farm(farm_id, request.request_id, user.email)
+    except FarmCopyNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Farm not found") from error
+    except FarmCopyConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 @router.get("/{farm_id}", response_model=Farm)
 def get_farm_by_id(
     farm_id: str,
@@ -106,7 +104,12 @@ def get_farm_display(farm_id: str, user: CurrentUser, include_data: bool = True)
     return view
 
 
-@router.post("/{farm_id}/history/retry", response_model=FarmView, status_code=200)
+@router.post(
+    "/{farm_id}/history/retry",
+    response_model=FarmView,
+    status_code=200,
+    dependencies=[Depends(require_farm_write_access)],
+)
 def retry_farm_history(farm_id: str, user: CurrentUser):
     view = retry_history(farm_id, user.email)
     if view is None:
@@ -177,6 +180,6 @@ def delete_farm_member(
     if result == "farm_not_found":
         raise HTTPException(status_code=404, detail="Farm not found")
     if result == "last_member":
-        raise HTTPException(status_code=409, detail="A farm must have at least one member")
+        raise HTTPException(status_code=409, detail="A farm must have at least one editor")
     if result == "member_not_found":
         raise HTTPException(status_code=404, detail="Farm member not found")

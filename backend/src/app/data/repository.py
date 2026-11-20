@@ -8,10 +8,9 @@ from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.data import read_model_store, simulation_settings_store, simulation_store
+from app.data import membership, read_model_store, simulation_settings_store, simulation_store
 from app.data.db import (
     SessionLocal,
-    app_user_table,
     farm_member_table,
     farm_table,
     field_table,
@@ -212,6 +211,12 @@ def _member_exists(session: Session, farm_id: str, email: str) -> bool:
     )
 
 
+def _farm_editor_exists(session: Session, farm_id: str, email: str) -> bool:
+    # Membership changes acquire the same farm lock before changing a role.
+    membership.farms.lock_resource(session, farm_id)
+    return membership.farms.is_editor(session, farm_id, email)
+
+
 def _farm_exists(session: Session, farm_id: str, email: str) -> bool:
     return _member_exists(session, farm_id, email)
 
@@ -269,14 +274,9 @@ def get_farm(farm_id: str, email: str) -> Farm | None:
 
 def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
-        result = session.execute(
-            delete(farm_table).where(
-                farm_table.c.id == farm_id,
-                farm_table.c.id.in_(
-                    select(farm_member_table.c.farm_id).where(farm_member_table.c.email == email)
-                ),
-            )
-        )
+        if not _farm_editor_exists(session, farm_id, email):
+            return False
+        result = session.execute(delete(farm_table).where(farm_table.c.id == farm_id))
         return result.rowcount > 0
 
 
@@ -371,9 +371,8 @@ def register_fields(
     """Register a batch; the caller prepares its history after the reservation commits."""
     owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
     with owner as session, session.begin():
-        if _get_farm(session, farm_id, email) is None:
+        if not _farm_editor_exists(session, farm_id, email):
             return None
-        session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
         if not requests:
             return [], None
         existing = {
@@ -416,11 +415,8 @@ def upsert_field(farm_id: str, request: CreateFieldRequest, email: str):
 def detach_field(farm_id: str, field_id: str, email: str, *, execution_session=None) -> bool | None:
     owner = SessionLocal() if execution_session is None else nullcontext(execution_session)
     with owner as session, session.begin():
-        if not _farm_exists(session, farm_id, email):
+        if not _farm_editor_exists(session, farm_id, email):
             return None
-
-        # Preparation and registration lock the farm before its fields.
-        session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
 
         result = session.execute(
             delete(field_table).where(
@@ -660,57 +656,22 @@ class FieldNotOptimizedError(Exception):
 
 def list_farm_members(farm_id: str, email: str) -> list[str] | None:
     with SessionLocal() as session:
-        if not _member_exists(session, farm_id, email):
+        entries = membership.farms.list(session, farm_id, email)
+        if entries is None:
             return None
-        return list(
-            session.execute(
-                select(farm_member_table.c.email)
-                .where(farm_member_table.c.farm_id == farm_id)
-                .order_by(farm_member_table.c.email)
-            ).scalars()
-        )
+        return [entry.email for entry in entries]
 
 
 def add_farm_member(farm_id: str, email: str, member_email: str) -> str:
     with SessionLocal.begin() as session:
-        if not _member_exists(session, farm_id, email):
-            return "farm_not_found"
-        user = session.execute(
-            select(app_user_table.c.email, app_user_table.c.verified_at).where(
-                app_user_table.c.email == member_email
-            )
-        ).first()
-        if user is None or user.verified_at is None:
-            return "user_not_found"
-        if _member_exists(session, farm_id, member_email):
-            return "already_member"
-        session.execute(insert(farm_member_table).values(farm_id=farm_id, email=member_email))
-        return "added"
+        result = membership.farms.add(session, farm_id, email, member_email)
+        return "farm_not_found" if result == "not_found" else result
 
 
 def remove_farm_member(farm_id: str, email: str, member_email: str) -> str:
     with SessionLocal.begin() as session:
-        if not _member_exists(session, farm_id, email):
-            return "farm_not_found"
-        members = (
-            session.execute(
-                select(farm_member_table.c.email)
-                .where(farm_member_table.c.farm_id == farm_id)
-                .with_for_update()
-            )
-            .scalars()
-            .all()
-        )
-        count = len(members)
-        if count <= 1:
-            return "last_member"
-        result = session.execute(
-            delete(farm_member_table).where(
-                farm_member_table.c.farm_id == farm_id,
-                farm_member_table.c.email == member_email,
-            )
-        )
-        return "removed" if result.rowcount else "member_not_found"
+        result = membership.farms.change(session, farm_id, email, member_email, None)
+        return "farm_not_found" if result == "not_found" else result
 
 
 def _get_simulation(session, farm_id, simulation_id, email):

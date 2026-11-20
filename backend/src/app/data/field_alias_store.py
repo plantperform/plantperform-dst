@@ -26,7 +26,7 @@ def list_aliases(email: str) -> dict[str, str]:
 
 def update_alias(farm_id, field_id, email, alias, *, simulation_id=None) -> FieldAlias | None:
     with repository.SessionLocal.begin() as session:
-        if not repository._member_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
         if simulation_id is None:
             data = session.execute(

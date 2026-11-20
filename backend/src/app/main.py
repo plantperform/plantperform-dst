@@ -14,6 +14,7 @@ from app.data.optimization_store import recover_local_optimization_runs
 from app.data.quota_value_store import recover_local_quota_values
 from app.data.read_model_store import recover_local_preparations
 from app.domain.creation import CreationActiveError
+from app.domain.membership import MembershipForbidden
 from app.domain.read_model import ReadModelNotReadyError
 from app.domain.saedskifte import (
     RotationDefinitionError,
@@ -67,6 +68,11 @@ async def calculation_failed(_, error):
             }
         },
     )
+
+
+@app.exception_handler(MembershipForbidden)
+async def membership_forbidden(_, error):
+    return JSONResponse(status_code=403, content={"detail": "Editor membership required"})
 
 
 @app.exception_handler(MissingSoilDataError)

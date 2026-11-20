@@ -1,25 +1,24 @@
 """Copy committed farm data without sharing identities or starting calculation jobs."""
 
 from collections import defaultdict
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from sqlalchemy import insert, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from app.data import read_model_store, repository
+from app.data import farm_copy_definitions, read_model_store, repository
 from app.data.db import (
-    economics_module_member_table,
-    economics_module_table,
     farm_member_table,
     farm_read_model_table,
     farm_table,
     field_historical_detail_table,
     field_table,
+    simulation_quota_value_table,
     simulation_read_model_table,
     simulation_result_table,
     simulation_table,
 )
-from app.domain.economics import STANDARD_ID, EconomicsSnapshot
+from app.domain.economics import STANDARD_ID
 from app.domain.farm import Farm
 from app.domain.farm_copy import (
     COPY_SOURCE_EMAIL,
@@ -35,8 +34,7 @@ _REFERENCE_KEYS = {
     "field_id",
     "simulation_id",
     "run_id",
-    "economics_module_id",
-    "source_id",
+    "base_run_id",
     "field_order",
 }
 _FIELD_MAPS = {"fields", "field_years", "selected_candidates", "contributions"}
@@ -119,18 +117,12 @@ def preview(request: FarmCopyLookup) -> FarmCopyPreview:
         )
 
 
-def _documents(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _documents(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _documents(child)
-
-
 def _remap(value, mapping, key=None):
     """Stored documents use snake_case. Only ownership IDs and field-map keys change."""
+    if key == "rotation_groups":
+        # Definition identities belong to the rotation copy, even if a variant ID
+        # happens to equal a farm or field ID.
+        return value
     if isinstance(value, dict):
         copied = {
             mapping[name] if key in _FIELD_MAPS else name: _remap(child, mapping, name)
@@ -153,36 +145,28 @@ def _remap(value, mapping, key=None):
     return value
 
 
-def _copy_modules(session, documents, mapping, email):
-    referenced, snapshots = set(), {}
-    for doc in _documents(documents):
-        for key in ("economics_module_id", "source_id"):
-            if doc.get(key) and doc[key] != STANDARD_ID:
-                referenced.add(doc[key])
-        if "source_id" in doc and "overrides" in doc:
-            snapshot = EconomicsSnapshot.model_validate(doc)
-            previous = snapshots.get(snapshot.source_id)
-            if previous is None or snapshot.revision > previous.revision:
-                snapshots[snapshot.source_id] = snapshot
-    modules = {
-        row["id"]: row
-        for row in _rows(
-            session, economics_module_table, economics_module_table.c.id.in_(referenced)
-        )
+def _restore_captured_economics(state):
+    """Use the displayed economics for completed results copied from a shared farm."""
+    setups = {row["id"]: row["data"] for row in state[simulation_table]}
+    saved = {
+        row["simulation_id"]: (row["data"] or {}).get("saved_result") or {}
+        for row in state[simulation_read_model_table]
     }
-    for source_id in sorted(referenced):
-        module = modules.get(source_id)
-        if module is None:
-            if source_id not in snapshots:
-                raise FarmCopyConflictError(
-                    "Et økonomimodul mangler. "
-                    "Ret scenariets økonomi på kildebedriften og prøv igen."
-                )
-            module = snapshots[source_id].model_dump(mode="json", by_alias=True)
-        new_id = mapping[source_id]
-        values = {key: module[key] for key in ("name", "revision", "overrides")}
-        session.execute(insert(economics_module_table).values(id=new_id, **values))
-        session.execute(insert(economics_module_member_table).values(module_id=new_id, email=email))
+    for row in state[simulation_result_table]:
+        output = row["output"] or {}
+        captured = (row["parameters"] or {}).get("simulation_settings")
+        if captured is not None:
+            # Job inputs can outlive the run that produced the displayed result.
+            # Bind the copy's captured economics to the available result or setup.
+            simulation_id = row["simulation_id"]
+            applied = (
+                output.get("economics_snapshot")
+                or saved.get(simulation_id, {}).get("economics_snapshot")
+                or setups[simulation_id].get("economics_snapshot")
+                or {}
+            )
+            captured["economics_snapshot"] = applied
+            captured["economics_module_id"] = applied.get("source_id") or STANDARD_ID
 
 
 def _reset_result(result, saved):
@@ -196,6 +180,7 @@ def _reset_result(result, saved):
                 "response",
                 "fields_before",
                 "economics_snapshot",
+                "rotation_groups",
             )
             if key in saved
         }
@@ -261,8 +246,21 @@ def _load_state(session, source):
     return state
 
 
-def _copy_snapshot(session, source, destination_id, email):
+def _copy_snapshot(session, source, destination_id, email, *, member_copy=False):
     state = _load_state(session, source)
+    if member_copy:
+        farm_data = state[farm_table][0]["data"]
+        farm_data["name"] = f"Kopi af {farm_data['name']}"
+        simulations = [row["id"] for row in state[simulation_table]]
+        curves = _rows(
+            session,
+            simulation_quota_value_table,
+            simulation_quota_value_table.c.simulation_id.in_(simulations)
+            & (simulation_quota_value_table.c.status == "completed"),
+        )
+        for curve in curves:
+            curve["requested_by"] = None
+        state[simulation_quota_value_table] = curves
     for simulation in state[simulation_table]:
         simulation["data"].pop("economics_recalculation", None)
         simulation["creation_status"] = "done"
@@ -270,7 +268,10 @@ def _copy_snapshot(session, source, destination_id, email):
     mapping = defaultdict(
         lambda: str(uuid4()), {source["id"]: destination_id, STANDARD_ID: STANDARD_ID}
     )
-    _copy_modules(session, list(state.values()), mapping, email)
+    if member_copy:
+        _restore_captured_economics(state)
+    else:
+        farm_copy_definitions.copy_definitions(session, state, email)
     state = {table: _remap(rows, mapping) for table, rows in state.items()}
     farm = state[farm_table][0]
     history = next(iter(state[farm_read_model_table]), None)
@@ -306,24 +307,47 @@ def _copy_snapshot(session, source, destination_id, email):
 
 
 def copy_farm(request: CopyFarmRequest, email: str) -> Farm:
+    return _copy_farm(request.source_farm_id, request.request_id, email, course_request=request)
+
+
+def duplicate_farm(farm_id: str, request_id: UUID, email: str) -> Farm:
+    return _copy_farm(farm_id, request_id, email)
+
+
+def _copy_farm(farm_id, request_id, email, *, course_request=None):
+    operation = "farm-copy" if course_request else "farm-duplicate"
     destination_id = str(
-        uuid5(
-            NAMESPACE_URL,
-            f"plantperform:farm-copy:{email}:{request.source_farm_id}:{request.request_id}",
-        )
+        uuid5(NAMESPACE_URL, f"plantperform:{operation}:{email}:{farm_id}:{request_id}")
     )
     try:
         with repository.SessionLocal() as session:
             session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+            if course_request is None:
+                source = (
+                    session.execute(
+                        select(farm_table)
+                        .join(farm_member_table)
+                        .where(farm_table.c.id == farm_id, farm_member_table.c.email == email)
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                if source is None:
+                    raise FarmCopyNotFoundError
             existing = repository._get_farm(session, destination_id, email)
             if existing is not None:
-                if not _matches(existing.model_dump(), request):
+                if course_request and not _matches(existing.model_dump(), course_request):
                     raise FarmCopyConflictError("Kopierings-id er allerede brugt. Start forfra.")
                 return existing
-            source = _source(session, request)
-            if source["id"] != request.source_farm_id:
-                raise FarmCopyNotFoundError
-            farm = _copy_snapshot(session, source, destination_id, email)
+            if course_request:
+                source = _source(session, course_request)
+                if source["id"] != farm_id:
+                    raise FarmCopyNotFoundError
+            if session.scalar(select(farm_table.c.id).where(farm_table.c.id == destination_id)):
+                raise FarmCopyConflictError("Kopierings-id er allerede brugt. Start forfra.")
+            farm = _copy_snapshot(
+                session, source, destination_id, email, member_copy=course_request is None
+            )
             session.commit()
             return farm
     except IntegrityError:

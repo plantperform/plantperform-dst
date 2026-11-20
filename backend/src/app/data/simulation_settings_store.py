@@ -14,7 +14,6 @@ from app.data import (
     saedskifte_store,
     simulation_store,
 )
-from app.data.db import farm_table
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.creation import CreationConflictError
@@ -41,9 +40,8 @@ def create(farm_id, request, email):
     request_id = str(request.request_id or uuid4())
     simulation_id = str(uuid5(NAMESPACE_URL, f"plantperform:simulation:{farm_id}:{request_id}"))
     with repository.SessionLocal.begin() as session:
-        if not repository._farm_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
-        session.execute(select(farm_table.c.id).where(farm_table.c.id == farm_id).with_for_update())
         existing = simulation_store._get_simulation(session, farm_id, simulation_id, email)
         if existing is not None:
             return existing
@@ -126,7 +124,7 @@ def copy_fields(farm_id, simulation_id, source_id, email) -> dict[str, str] | No
     either simulation is missing or the new one already has marker.
     """
     with repository.SessionLocal.begin() as session:
-        if not repository._member_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
         rows = {
             row.id: row
@@ -162,7 +160,7 @@ def copy_fields(farm_id, simulation_id, source_id, email) -> dict[str, str] | No
 
 def update_settings(farm_id, simulation_id, request, email):
     with repository.SessionLocal.begin() as session:
-        if not repository._member_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
         row = session.execute(
             select(setups)
@@ -225,7 +223,7 @@ def update_settings(farm_id, simulation_id, request, email):
 
 def recover_creation(farm_id, simulation_id, email, *, expected_revision=None):
     with repository.SessionLocal.begin() as session:
-        if not repository._member_exists(session, farm_id, email):
+        if not repository._farm_editor_exists(session, farm_id, email):
             return None
         row = session.execute(
             select(setups)

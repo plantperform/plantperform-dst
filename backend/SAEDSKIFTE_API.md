@@ -12,9 +12,9 @@ The standard lookup loader never touches custom groups.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/saedskifte-rotations` | Standards and groups the requester belongs to; `standard=true` lists only standards, `standard=false` only groups |
+| GET | `/saedskifte-rotations` | Standards and groups visible to the requester; `standard=true` lists only standards, `standard=false` only groups |
 | POST | `/saedskifte-rotations` | Create a group; returns 201 |
-| GET | `/saedskifte-rotations/{id}` | Read a standard or a group the requester belongs to |
+| GET | `/saedskifte-rotations/{id}` | Read a standard or a group visible to the requester |
 | PATCH | `/saedskifte-rotations/{id}` | Update with `expectedRevision` |
 | DELETE | `/saedskifte-rotations/{id}` | Delete for all members; returns 204 |
 | POST | `/saedskifte-rotations/{id}/duplicate` | Create an independent editable copy; returns 201 |
@@ -45,7 +45,7 @@ Example create request:
 ```
 
 The response includes `id`, `name`, `driftsform`, `variants`, `revision`, timestamps,
-`isStandard`, and `canCopy`. Variants receive UUIDs when omitted. Preserve their
+`isStandard`, `canCopy`, and the caller’s `effectiveRole`. Variants receive UUIDs when omitted. Preserve their
 returned IDs on edits to retain candidate identity. A supplied `variants` array
 replaces the complete variants document; omitted fields are unchanged. Names are
 trimmed and nonempty. Explicit null names/variants and duplicate IDs/codes are invalid.
@@ -59,8 +59,11 @@ farming-system metadata, organic-only choices may be configured; the simulation'
 actual farming system narrows them during calculation. This feature does not add
 new measure formulas or move fertilizer, N-norm or præcisionsjordbrug settings.
 
-All members can read, edit, share, copy and delete. Adding a member requires an
-existing verified user. Emails are normalized; the last member cannot be removed.
+Editors can read, edit, share, copy and delete. Viewers can read, use and
+copy the definition and remove their own membership. Adding a member requires
+an existing verified user. At least one editor must remain. The role-aware
+endpoints are described in the
+[sharing API](../docs/memberships.md).
 Standard definitions cannot be edited, deleted or given members.
 
 ## Copy authorization
@@ -84,9 +87,11 @@ changes the other.
 ## Simulations and results
 
 Existing `saedskiftevarianter` requests accept custom UUIDs as well as standard IDs.
-Newly selecting a custom group requires group membership. Once selected, every farm
-member can calculate and preview it through that simulation, without acquiring
-edit/share rights to the source. The farm candidate endpoints also expose available
+A current selection in a visible simulation grants viewer access to the group's
+latest definition and its explicit member list. An explicit role takes precedence.
+A viewer can select the group on any farm they edit. Members of that farm then
+gain viewer access through its simulation. Inherited access ends with the last
+qualifying selection or farm membership. The farm candidate endpoints also expose available
 custom groups and validate access before stateless evaluation. `GET
 /farms/{id}/rotation-candidates` accepts comma-separated `saedskiftevarianter` and
 `nNormProcenter` to list only those candidates, and the custom-candidate limit then
@@ -119,8 +124,9 @@ variants must be unlocked or reassigned before another optimization. Deletion re
 
 ## Errors
 
+- 403: a viewer attempted to edit, share, or delete a custom group.
 - 404: missing/inaccessible resource, unauthorized copy, or missing/unverified member.
-- 409: stale revision, duplicate member, last-member removal, or deletion during calculation.
+- 409: stale revision, duplicate member, last-editor removal or demotion, or deletion during calculation.
 - 422: invalid definitions, immutable-standard mutations, disallowed measures or excessive expansion.
 
 Rotation errors return `{"detail": {"code": ..., "message": ...}}`. The codes are

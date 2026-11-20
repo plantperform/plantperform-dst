@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import ConfigDict, Field, field_validator
 
 from app.domain.base import CamelModel
+from app.domain.membership import MembershipRole
 
 Nonnegative = Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
 YieldPercentage = Annotated[float, Field(gt=-100, allow_inf_nan=False, strict=True)]
@@ -55,6 +56,7 @@ class EconomicsSnapshot(CamelModel):
 
 
 class EconomicsModule(CamelModel):
+    effective_role: MembershipRole = "viewer"
     id: str
     name: str
     overrides: EconomicsOverrides = Field(default_factory=EconomicsOverrides)

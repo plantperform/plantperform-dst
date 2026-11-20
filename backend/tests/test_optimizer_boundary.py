@@ -36,6 +36,7 @@ class ProductionBoundaryTests(unittest.TestCase):
             main.app.dependency_overrides[current_user] = lambda: AuthenticatedUser(
                 email='member@example.com'
             )
+            main.app.dependency_overrides[simulations.require_farm_write_access] = lambda: None
             with (
                 patch.object(main, 'validate_aws_region') as validate,
                 patch.object(main, 'recover_local_optimization_runs') as recover,

@@ -475,6 +475,8 @@ farm_member_table = Table(
     Column("farm_id", Text, ForeignKey("farm.id", ondelete="CASCADE"), nullable=False),
     Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
     Index("ix_farm_member_email", "email"),
+    Column("role", Text, nullable=False, server_default="editor"),
+    CheckConstraint("role IN ('editor', 'viewer')", name="ck_farm_member_role"),
     PrimaryKeyConstraint("farm_id", "email"),
 )
 
@@ -497,6 +499,8 @@ economics_module_member_table = Table(
         "module_id", Text, ForeignKey("economics_module.id", ondelete="CASCADE"), nullable=False
     ),
     Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Column("role", Text, nullable=False, server_default="editor"),
+    CheckConstraint("role IN ('editor', 'viewer')", name="ck_economics_module_member_role"),
     PrimaryKeyConstraint("module_id", "email"),
     Index("ix_economics_module_member_email", "email"),
 )
@@ -522,6 +526,10 @@ saedskifte_rotation_group_member_table = Table(
         ForeignKey("saedskifte_rotation_group.id", ondelete="CASCADE"), nullable=False,
     ),
     Column("email", Text, ForeignKey("app_user.email", ondelete="CASCADE"), nullable=False),
+    Column("role", Text, nullable=False, server_default="editor"),
+    CheckConstraint(
+        "role IN ('editor', 'viewer')", name="ck_saedskifte_rotation_group_member_role"
+    ),
     PrimaryKeyConstraint("group_id", "email"),
     Index("ix_saedskifte_rotation_group_member_email", "email"),
 )

@@ -157,6 +157,7 @@ class SimulationReadinessTests(unittest.TestCase):
         app.add_exception_handler(ReadModelNotReadyError, not_ready)
         app.include_router(simulations.router, prefix="/api/v0")
         app.dependency_overrides[current_user] = lambda: MEMBER
+        app.dependency_overrides[simulations.require_farm_write_access] = lambda: None
         optimization = {"runId": str(uuid4()), "expectedRevision": 0}
         rotation = {"baseRef": {"saedskiftevariant": "1", "variant": "1", "nNormPct": "100"}}
         cases = (

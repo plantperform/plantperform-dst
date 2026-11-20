@@ -7,7 +7,7 @@ are camelCase. Modules are independent of farms and can be reused across farms.
 
 | Method | Path | Request / response |
 | --- | --- | --- |
-| GET | `/economics-modules` | Standard plus modules the current user belongs to |
+| GET | `/economics-modules` | Standard plus all modules visible to the caller |
 | POST | `/economics-modules` | `{name, overrides?}`; returns module, HTTP 201 |
 | GET | `/economics-modules/{id}` | Returns module |
 | PATCH | `/economics-modules/{id}` | `{expectedRevision, name?, overrides?}`; returns module |
@@ -17,7 +17,7 @@ are camelCase. Modules are independent of farms and can be reused across farms.
 | POST | `/economics-modules/{id}/members` | `{email}`; verified existing user required, HTTP 201 |
 | DELETE | `/economics-modules/{id}/members/{email}` | HTTP 204 |
 
-A module has `id`, `name`, `revision`, `createdAt`, `updatedAt`, and `overrides`.
+A module has `id`, `name`, `revision`, `createdAt`, `updatedAt`, `overrides`, and the caller’s `effectiveRole`.
 The overrides column stores only this structure, never a copy of reference data:
 
 ```json
@@ -35,10 +35,15 @@ nonnegative numbers; yield percentages must be finite and greater than -100.
 Unknown identifiers are rejected when saving overrides. Names are trimmed,
 nonempty, and need not be unique.
 
-Every member has equal read, edit, share, duplicate, and delete rights. Email
-addresses are normalized. The last member cannot be removed. Duplication gives
-membership only to its requester and copies the current overrides. It does not
-copy membership or simulation assignments.
+Editors can edit, share, duplicate, and delete a module. Viewers can read it,
+use it on farms they edit, duplicate it, and remove their own membership.
+Selecting a module in a visible simulation grants viewer access to the live
+module, including its latest revision and explicit member list. The caller's
+explicit role takes precedence. The role expires when its last source of access
+disappears. Applied snapshots and past results retain their captured values.
+A duplicate has the requester as its sole editor. At least one editor must
+remain on the original. For role-aware endpoints, see the
+[sharing API](../docs/memberships.md).
 
 Deleting a module removes it for every member. Every simulation that selects
 it, on any farm, moves back to `standard` and its results are marked outdated.
@@ -50,8 +55,8 @@ returns 409.
 `Standard (SEGES 2026)`. It can be read and duplicated but cannot be changed,
 deleted, or shared. An omitted/null module selection means `standard`.
 
-Inaccessible modules return 404. Stale revisions, duplicate members, and
-last-member removal return 409. Invalid input and attempts to mutate standard
+Viewer attempts to edit, share, or delete a custom module return 403. Inaccessible modules return 404. Stale revisions, duplicate members, and
+last-editor removal or demotion return 409. Invalid input and attempts to mutate standard
 return 422.
 
 ## Reference assumptions and identifiers
@@ -177,7 +182,7 @@ group is not a variant. Identifiers without variants are absent.
 ## Simulation selection and applied snapshots
 
 Creation accepts `economicsModuleId` alongside the existing simulation inputs.
-The server checks module membership and captures a snapshot before submitting
+The server checks effective access to the module and captures a snapshot before submitting
 the existing creation job. Initial generation and creation retries use that
 captured snapshot, even if the module subsequently changes or disappears.
 
@@ -208,7 +213,7 @@ change snapshots or dispatch any simulation jobs.
 {"expectedRevision": 5, "economicsModuleId": "module-uuid"}
 ```
 
-This checks membership, changes the selected ID, advances the simulation revision,
+This checks effective access, changes the selected ID, advances the simulation revision,
 and marks optimization results outdated. It retains the last calculated values
 and display data. It submits no job, including on subsequent view reads. Saving
 an unchanged selection is a no-op.
@@ -234,7 +239,7 @@ different body returns 409. A genuinely new request needs a new UUID and the
 current simulation revision.
 
 `refreshFromModule` defaults to true. It captures the latest selected module's
-overrides at submission, requiring membership in that module. False instead
+overrides at submission, using the caller’s effective access to that module. False instead
 uses the already-applied snapshot, including after source deletion or access
 loss, and does not change the selected ID. Underlying reference defaults are
 not frozen and are reloaded when calculation starts.

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy.orm import Session
 
+from app.api.v0.memberships import require_farm_write_access
 from app.auth import AuthenticatedUser, current_user
 from app.data import saedskifte_store
 from app.data.db import get_db
@@ -26,7 +27,11 @@ from app.services.rotations.historisk_goedning import real_history_lookback
 from app.services.scenario.candidate_evaluator import evaluate_candidate_for_mark
 from app.services.soil.jbnr import jbnr_for_registry
 
-router = APIRouter(prefix="/farms/{farm_id}/rotation-candidates", tags=["rotation candidates"])
+router = APIRouter(
+    dependencies=[Depends(require_farm_write_access)],
+    prefix="/farms/{farm_id}/rotation-candidates",
+    tags=["rotation candidates"],
+)
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 DbSession = Annotated[Session, Depends(get_db)]
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import Field
 from starlette.status import HTTP_204_NO_CONTENT
 
+from app.api.v0.memberships import require_farm_write_access
 from app.api.v0.rotation_candidates import AfgrodeKodeOption
 from app.auth import AuthenticatedUser, current_user
 from app.data import economics_recalculation_store, simulation_settings_store
@@ -136,7 +137,7 @@ def require_completed_creation(request: Request, user: CurrentUser):
 router = APIRouter(
     prefix="/farms/{farm_id}/simulations",
     tags=["simulations"],
-    dependencies=[Depends(require_completed_creation)],
+    dependencies=[Depends(require_farm_write_access), Depends(require_completed_creation)],
 )
 
 

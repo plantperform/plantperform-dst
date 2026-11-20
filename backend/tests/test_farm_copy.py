@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.api.v0 import farms
 from app.auth import AuthenticatedUser, current_user
 from app.data import farm_copy_store as store
-from app.data import read_model_store, repository
+from app.data import quota_value_store, read_model_store, repository
 from app.data.db import (
     app_user_table,
     economics_module_member_table,
@@ -26,10 +26,17 @@ from app.data.db import (
     field_historical_detail_table,
     field_table,
     metadata,
+    simulation_quota_value_table,
     simulation_read_model_table,
     simulation_result_table,
     simulation_table,
     user_field_alias_table,
+)
+from app.data.db import (
+    saedskifte_rotation_group_member_table as group_members,
+)
+from app.data.db import (
+    saedskifte_rotation_group_table as groups,
 )
 from app.domain.economics import EconomicsSnapshot
 from app.domain.farm import Farm
@@ -176,7 +183,10 @@ class FarmCopyDatabaseTests(unittest.TestCase):
                 farm_read_model_table,
                 simulation_table,
                 simulation_result_table,
+                simulation_quota_value_table,
                 simulation_read_model_table,
+                groups,
+                group_members,
                 economics_module_table,
                 economics_module_member_table,
                 user_field_alias_table,
@@ -326,6 +336,149 @@ class FarmCopyDatabaseTests(unittest.TestCase):
     def copied_row(self, table, key, source_id):
         return next(row for row in self.rows(table) if row[key] != source_id)
 
+    def share_as_viewer(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(farm_member_table).values(farm_id="source", email=CREATOR, role="viewer")
+            )
+
+    def test_private_duplicate_requires_direct_membership(self):
+        with client() as api:
+            response = api.post("/api/v0/farms/source/duplicate", json={"requestId": str(uuid4())})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_receives_private_editable_farm(self):
+        self.share_as_viewer()
+
+        with client() as api:
+            response = api.post("/api/v0/farms/source/duplicate", json={"requestId": str(uuid4())})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["name"], "Kopi af Grøn gård")
+        with client() as api:
+            roster = api.get("/api/v0/farms/" + response.json()["id"] + "/memberships")
+        self.assertEqual(roster.json(), [{"email": CREATOR, "role": "editor"}])
+
+    def test_private_duplicate_keeps_original_profile(self):
+        self.share_as_viewer()
+
+        store.duplicate_farm("source", uuid4(), CREATOR)
+
+        setup = self.copied_row(simulation_table, "id", "scenario")["data"]
+        self.assertEqual(setup["economics_module_id"], "economics")
+        self.assertEqual(
+            [row["email"] for row in self.rows(economics_module_member_table)], [COPY_SOURCE_EMAIL]
+        )
+
+    def test_private_duplicate_excludes_unpublished_worker_economics(self):
+        self.share_as_viewer()
+        hidden = {**self.snapshot, "revision": 9, "overrides": {"prices": {"crop:1": 999}}}
+        with self.sessions.begin() as session:
+            session.execute(
+                update(simulation_result_table).values(
+                    parameters={
+                        "simulation_settings": {"economics_snapshot": hidden},
+                    }
+                )
+            )
+
+        store.duplicate_farm("source", uuid4(), CREATOR)
+
+        result = self.copied_row(simulation_result_table, "simulation_id", "scenario")
+        self.assertEqual(
+            result["parameters"]["simulation_settings"]["economics_snapshot"], self.snapshot
+        )
+
+    def test_private_duplicate_does_not_clone_shared_module(self):
+        self.share_as_viewer()
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(economics_module_member_table).values(
+                    module_id="economics", email=CREATOR, role="viewer"
+                )
+            )
+
+        store.duplicate_farm("source", uuid4(), CREATOR)
+
+        self.assertEqual([row["id"] for row in self.rows(economics_module_table)], ["economics"])
+
+    def test_duplicate_preserves_unapplied_selection(self):
+        self.share_as_viewer()
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(economics_module_table).values(id="private", name="Hidden", overrides={})
+            )
+            session.execute(
+                update(simulation_table).values(
+                    data={**self.simulation, "economics_module_id": "private"}
+                )
+            )
+
+        store.duplicate_farm("source", uuid4(), CREATOR)
+
+        setup = self.copied_row(simulation_table, "id", "scenario")["data"]
+        self.assertEqual(setup["economics_module_id"], "private")
+        self.assertEqual(setup["economics_snapshot"], self.snapshot)
+
+    def test_private_duplicate_remaps_completed_quota_curve(self):
+        self.share_as_viewer()
+        rotation = {
+            "field_id": "scenario-field",
+            "base_ref": {"saedskiftevariant": "1", "variant": "1", "n_norm_pct": "100"},
+        }
+        output = {
+            "base_db2": 10,
+            "base_feed_units_by_year": {},
+            "curve": {
+                "kystvand_id": 1,
+                "kvote_kg": 100,
+                "unconstrained_trade_kg": 0,
+                "points": [{"trade_kg": 0, "status": "OPTIMAL", "rotations": [rotation]}],
+            },
+        }
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(simulation_quota_value_table).values(
+                    simulation_id="scenario",
+                    kystvand_id=1,
+                    status="completed",
+                    input_revision=2,
+                    run_id="curve",
+                    base_run_id="saved-run",
+                    requested_by=COPY_SOURCE_EMAIL,
+                    output=output,
+                )
+            )
+            session.execute(
+                insert(simulation_quota_value_table).values(
+                    simulation_id="scenario", kystvand_id=2, status="in_progress"
+                )
+            )
+
+        farm = store.duplicate_farm("source", uuid4(), CREATOR)
+        setup = self.copied_row(simulation_table, "id", "scenario")
+        with patch.object(quota_value_store, "SessionLocal", self.sessions):
+            curves = quota_value_store.get_quota_values(farm.id, setup["id"], CREATOR)
+
+        self.assertEqual(len(curves), 1)
+        self.assertFalse(curves[0].outdated)
+        self.assertEqual(
+            curves[0].output.curve.points[0].rotations[0].field_id, setup["field_order"][0]
+        )
+
+    def test_concurrent_private_duplicate_returns_one_destination(self):
+        self.share_as_viewer()
+        request_id = uuid4()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            copies = list(
+                pool.map(lambda _: store.duplicate_farm("source", request_id, CREATOR), range(2))
+            )
+
+        self.assertEqual(copies[0].id, copies[1].id)
+        self.assertEqual(len(self.rows(farm_table)), 2)
+
     def test_preview_matches_case_and_spaces(self):
         preview = store.preview(FarmCopyLookup.model_validate(LOOKUP))
 
@@ -446,6 +599,129 @@ class FarmCopyDatabaseTests(unittest.TestCase):
         self.assertNotEqual(result["run_id"], "saved-run")
         self.assertEqual(result["run_id"], view["data"]["saved_result"]["run_id"])
 
+    def install_rotation(self, *, selected=True):
+        group_id, variant_id = str(uuid4()), str(uuid4())
+        variant = {"id": variant_id, "positions": [{"afgrode_kode": 1}]}
+        definition = {"id": group_id, "name": "Historisk", "variants": [variant], "revision": 2}
+        candidate = f"{group_id}:{variant_id}~0+manuel-1:100"
+        with self.sessions.begin() as session:
+            session.execute(insert(groups).values({**definition, "name": "Aktuel", "revision": 3}))
+            session.execute(
+                insert(group_members).values(group_id=group_id, email=COPY_SOURCE_EMAIL)
+            )
+            session.execute(
+                update(simulation_table).values(
+                    data={
+                        **self.simulation,
+                        "rotation_saedskiftevarianter": [group_id, "1"] if selected else ["1"],
+                    }
+                )
+            )
+            session.execute(
+                update(field_table).values(
+                    data={
+                        **field("field"),
+                        "rotation_id": candidate,
+                        "allowed_rotation_ids": [candidate],
+                    }
+                )
+            )
+            output = {**self.output, "rotation_groups": {group_id: definition}}
+            session.execute(update(simulation_result_table).values(output=output))
+        return group_id, variant_id
+
+    def test_course_copy_relinks_selection_and_preserves_standard(self):
+        source, _ = self.install_rotation()
+
+        self.copy()
+
+        group = self.copied_row(groups, "id", source)
+        setup = self.copied_row(simulation_table, "id", "scenario")["data"]
+        self.assertEqual(setup["rotation_saedskiftevarianter"], [group["id"], "1"])
+        self.assertEqual(group["name"], "Aktuel")
+        member = self.copied_row(group_members, "group_id", source)
+        self.assertEqual(
+            (member["group_id"], member["email"], member["role"]), (group["id"], CREATOR, "editor")
+        )
+
+    def test_course_copy_relinks_locked_rotation_variant(self):
+        source, old_variant = self.install_rotation()
+
+        self.copy()
+
+        group = self.copied_row(groups, "id", source)
+        variant = group["variants"][0]["id"]
+        copied = self.copied_row(field_table, "id", "field")["data"]
+        expected = f"{group['id']}:{variant}~0+manuel-1:100"
+        self.assertNotEqual(variant, old_variant)
+        self.assertEqual(
+            (copied["rotation_id"], copied["allowed_rotation_ids"]), (expected, [expected])
+        )
+
+    def test_course_copy_preserves_captured_rotation_revision(self):
+        source, _ = self.install_rotation()
+
+        self.copy()
+
+        group = self.copied_row(groups, "id", source)
+        result = self.copied_row(simulation_result_table, "simulation_id", "scenario")
+        snapshot = result["output"]["rotation_groups"][group["id"]]
+        self.assertEqual(
+            (snapshot["id"], snapshot["revision"], snapshot["name"]), (group["id"], 2, "Historisk")
+        )
+        self.assertEqual(snapshot["variants"], group["variants"])
+
+    def test_course_copy_reuses_definitions_across_simulations(self):
+        source, _ = self.install_rotation()
+        data = {**self.simulation, "id": "second", "rotation_saedskiftevarianter": [source]}
+        with self.sessions.begin() as session:
+            session.execute(
+                insert(simulation_table).values(id="second", farm_id="source", data=data)
+            )
+
+        destination = self.copy()
+
+        module = self.copied_row(economics_module_table, "id", "economics")
+        group = self.copied_row(groups, "id", source)
+        selections = [
+            (row["data"]["economics_module_id"], row["data"]["rotation_saedskiftevarianter"][0])
+            for row in self.rows(simulation_table)
+            if row["farm_id"] == destination.id
+        ]
+        self.assertEqual(selections, [(module["id"], group["id"])] * 2)
+
+    def test_course_copy_builds_historical_only_rotation_from_capture(self):
+        source, _ = self.install_rotation(selected=False)
+
+        self.copy()
+
+        self.assertEqual(self.copied_row(groups, "id", source)["name"], "Historisk")
+
+    def test_course_copy_builds_historical_only_economics_from_capture(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                update(simulation_table).values(
+                    data={**self.simulation, "economics_module_id": "standard"}
+                )
+            )
+
+        self.copy()
+
+        self.assertEqual(
+            self.copied_row(economics_module_table, "id", "economics")["revision"],
+            self.snapshot["revision"],
+        )
+
+    def test_private_duplicate_keeps_rotation_identity_and_members(self):
+        group, _ = self.install_rotation()
+        self.share_as_viewer()
+
+        store.duplicate_farm("source", uuid4(), CREATOR)
+
+        setup = self.copied_row(simulation_table, "id", "scenario")["data"]
+        self.assertEqual(setup["rotation_saedskiftevarianter"], [group, "1"])
+        self.assertEqual([row["email"] for row in self.rows(group_members)], [COPY_SOURCE_EMAIL])
+
     def test_economics_keeps_current_profile_and_frozen_snapshot(self):
         self.copy()
         module = self.copied_row(economics_module_table, "id", "economics")
@@ -471,7 +747,8 @@ class FarmCopyDatabaseTests(unittest.TestCase):
 
         self.assertEqual(membership["email"], CREATOR)
 
-    def test_failure_rolls_back_profile_and_farm(self):
+    def test_failure_rolls_back_definitions_and_farm(self):
+        self.install_rotation()
         with self.sessions.begin() as session:
             session.execute(delete(simulation_read_model_table))
 
@@ -482,10 +759,16 @@ class FarmCopyDatabaseTests(unittest.TestCase):
                 self.copy()
 
         self.assertEqual(
-            (len(self.rows(farm_table)), len(self.rows(economics_module_table))), (1, 1)
+            (
+                len(self.rows(farm_table)),
+                len(self.rows(economics_module_table)),
+                len(self.rows(groups)),
+            ),
+            (1, 1, 1),
         )
 
     def test_retry_returns_same_copy(self):
+        self.install_rotation()
         copy_request = request()
         first = store.copy_farm(copy_request, CREATOR)
 
@@ -493,6 +776,7 @@ class FarmCopyDatabaseTests(unittest.TestCase):
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(len(self.rows(economics_module_table)), 2)
+        self.assertEqual(len(self.rows(groups)), 2)
 
     def test_concurrent_retries_create_one_copy(self):
         copy_request = request()
