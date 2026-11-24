@@ -31,8 +31,12 @@ run or lease. OOM counters distinguish memory kills from unexplained exits.
 Both clear the active lease and expose a failed result immediately.
 
 Only identified transient infrastructure errors retry, with at most three
-execution attempts. Memory exhaustion, process crashes, application errors,
-invalid messages/input, infeasibility, timeouts and exhausted attempts go directly
+execution attempts. A proven infeasible optimization is saved as `infeasible`
+with a Danish reason and acknowledged after the transaction commits. A duplicate
+delivery is acknowledged even if an older worker saved it as `failed` with code
+`INFEASIBLE`. The frontend shows the reason alongside the last successful figures.
+Memory exhaustion, process crashes, application errors,
+invalid messages/input, timeouts and exhausted attempts go directly
 to the DLQ. The existing `simulation_result` row stores the failed status and
 error. The consumer
 sends the original body and message attributes directly to the DLQ, then deletes

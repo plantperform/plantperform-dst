@@ -48,9 +48,8 @@ export const shouldAcceptResult = (
   if (current.status === 'outdated') return result.status === 'outdated'
   if (current.status === 'succeeded')
     return result.status === 'completed' || result.status === 'outdated'
-  if (current.status === 'failed')
-    return result.status === 'failed' || result.status === 'outdated'
-  return current.phase !== result.status
+  if (current.status === 'running') return current.phase !== result.status
+  return result.status === current.status || result.status === 'outdated'
 }
 
 export const canPollResults = (hidden: boolean, online: boolean) =>

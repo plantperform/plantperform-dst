@@ -494,6 +494,7 @@ export const FarmInspector = ({
               simulationId={selectedSimulation.id}
               optimizationKind={selectedSimulation.optimizationSettings?.kind}
               run={optimizationRun}
+              onOpenRules={isRules ? undefined : openRules}
               fields={fieldsLoading || fieldsError ? undefined : fields}
               rotationOptionsError={
                 simulationView.data?.data?.rotationOptionsError

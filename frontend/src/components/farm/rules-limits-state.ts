@@ -75,7 +75,7 @@ export const useRulesLimits = (
   const { data: cropAreaRanges = [] } = useCropAreaRanges(farmId, simulation.id)
   const run = useOptimizationRun(simulation.id)
   const cropAreaViolations =
-    run?.status === 'failed' ? run.cropAreaViolations : []
+    run?.status === 'failed' || run?.status === 'infeasible' ? run.cropAreaViolations : []
   const { markStale } = useOptimizationRunActions()
 
   const [editing, setEditing] = useState(false)

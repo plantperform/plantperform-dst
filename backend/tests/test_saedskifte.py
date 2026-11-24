@@ -926,7 +926,7 @@ class RotationDatabaseTests(unittest.TestCase):
 
         result = self.execute(simulation, self.submit(simulation))
 
-        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.status, "infeasible")
         self.assertEqual(result.error.code, "INFEASIBLE")
 
     def test_a_selection_that_no_longer_exists_has_its_own_code(self):

@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS
+from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
+from optimizer.infeasibility import catchment_label, number
 from optimizer.models import (
     RELATIVE_GAP_LIMIT,
     AssignedRotation,
@@ -87,6 +89,8 @@ def _infeasible_output(
 def solve_yearly(
     input: YearlyOptimizationInput,
     hint: Mapping[str, str] | None = None,
+    *,
+    model: cp_model.CpModel | None = None,
 ) -> YearlyOptimizationOutput:
     """Solve "Års-optimering".
 
@@ -94,7 +98,7 @@ def solve_yearly(
     neighbouring solution of a closely related model. It only guides CP-SAT; a
     hint that is infeasible for this model is repaired or ignored by the solver.
     """
-    return YearlyModel(input).solve(
+    return YearlyModel(input, model=model).solve(
         input.constraints.max_n_load_by_kystvandopland_and_year,
         input.time_limit_seconds,
         hint,
@@ -113,9 +117,11 @@ class YearlyModel:
     opland with kvotehandel has no cap variables: its kvote and trade bound it.
     """
 
-    def __init__(self, input: YearlyOptimizationInput):
+    def __init__(self, input: YearlyOptimizationInput, *, model: cp_model.CpModel | None = None):
         self.input = input
-        self.model = model = cp_model.CpModel()
+        if model is None:
+            model = cp_model.CpModel()
+        self.model = model
         self.choice_vars: dict[tuple[str, str], cp_model.IntVar] = {}
         self.cap_vars: dict[tuple[int | None, int], cp_model.IntVar] = {}
         choice_vars = self.choice_vars
@@ -210,9 +216,15 @@ class YearlyModel:
                 )
                 total_area = chosen_area + fixed_area
                 if limit.min_area_ha is not None:
-                    model.Add(total_area >= _scale(limit.min_area_ha))
+                    model.Add(total_area >= _scale(limit.min_area_ha)).with_name(
+                        f"mindst {number(limit.min_area_ha)} "
+                        f"ha med afgrødekode {limit.afgrode_kode} i {START_CALENDAR_YEAR + year}"
+                    )
                 if limit.max_area_ha is not None:
-                    model.Add(total_area <= _scale(limit.max_area_ha))
+                    model.Add(total_area <= _scale(limit.max_area_ha)).with_name(
+                        f"højst {number(limit.max_area_ha)} "
+                        f"ha med afgrødekode {limit.afgrode_kode} i {START_CALENDAR_YEAR + year}"
+                    )
 
         kvote_by_kystvand = constraints.kvote_by_kystvandopland
         self.trades = trades = {trade.kystvand_id: trade for trade in constraints.quota_trades}
@@ -233,7 +245,10 @@ class YearlyModel:
                 if caps[y] is not None:
                     cap = model.NewIntVar(-_NO_CAP, _NO_CAP, f"cap_{kystvand_id}_{y}")
                     self.cap_vars[(kystvand_id, y)] = cap
-                    model.Add(year_totals[y] <= cap)
+                    model.Add(year_totals[y] <= cap).with_name(
+                        f"udledning på højst {number(caps[y])} kg N "
+                        f"for {catchment_label(kystvand_id)} i {START_CALENDAR_YEAR + y}"
+                    )
 
         # A bought and a sold amount per year; a trade that is the same each year
         # shares one pair. Buying and selling the same kg never improves DB2.
@@ -259,7 +274,10 @@ class YearlyModel:
                 for bought, sold in trade_vars
             )
             for y, (bought, sold) in enumerate(trade_vars):
-                model.Add(year_totals[y] <= _scale(kvote) + SCALE * (bought - sold))
+                model.Add(year_totals[y] <= _scale(kvote) + SCALE * (bought - sold)).with_name(
+                    f"udledningskvoten på {number(kvote)} kg N med kvotehandel "
+                    f"for {catchment_label(kystvand_id)} i {START_CALENDAR_YEAR + y}"
+                )
 
         # In every calendar year the farm's total utilised N stays within the
         # ceiling times its total harmoniareal that year, as engine.py's solve()
@@ -281,24 +299,35 @@ class YearlyModel:
                         for fixed in input.fixed_fields
                     )
                 )
-                model.Add(chosen_excess + fixed_excess <= 0)
+                model.Add(chosen_excess + fixed_excess <= 0).with_name(
+                    f"højst {number(ceiling)} kg udnyttet N pr. ha harmoniareal "
+                    f"i {START_CALENDAR_YEAR + y}"
+                )
 
         if constraints.db2_swing_pct is not None:
             pct = constraints.db2_swing_pct
             upper = round(100 + pct)
             lower = round(max(0, 100 - pct))
             for y in range(NUM_YEARS):
-                model.Add(total_db2_by_year[y] * NUM_YEARS * 100 <= total_db2 * upper)
-                model.Add(total_db2_by_year[y] * NUM_YEARS * 100 >= total_db2 * lower)
+                model.Add(total_db2_by_year[y] * NUM_YEARS * 100 <= total_db2 * upper).with_name(
+                    f"højst {number(pct)} % udsving i DB2 i {START_CALENDAR_YEAR + y}"
+                )
+                model.Add(total_db2_by_year[y] * NUM_YEARS * 100 >= total_db2 * lower).with_name(
+                    f"højst {number(pct)} % udsving i DB2 i {START_CALENDAR_YEAR + y}"
+                )
 
         # Unlike the scenarie-average bound in engine.py's solve(), min_fen/max_fen
         # hold in every calendar year: a herd needs its foderenheder each year, so a
         # surplus in one year cannot make up for a shortfall in another.
         for y in range(NUM_YEARS):
             if constraints.min_fen is not None:
-                model.Add(total_fen_by_year[y] >= _scale(constraints.min_fen))
+                model.Add(total_fen_by_year[y] >= _scale(constraints.min_fen)).with_name(
+                    f"mindst {number(constraints.min_fen)} foderenheder i {START_CALENDAR_YEAR + y}"
+                )
             if constraints.max_fen is not None:
-                model.Add(total_fen_by_year[y] <= _scale(constraints.max_fen))
+                model.Add(total_fen_by_year[y] <= _scale(constraints.max_fen)).with_name(
+                    f"højst {number(constraints.max_fen)} foderenheder i {START_CALENDAR_YEAR + y}"
+                )
 
         # total_db2 adds up all NUM_YEARS years, and each year's trade is paid in
         # that year. The swing limit above stays on the crops' DB2, also when the

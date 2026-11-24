@@ -677,6 +677,7 @@ const SimulationMenuItem = ({
     selected && isSimulationReady(simulation) ? farmId : undefined,
     simulation.id,
   )
+  const infeasible = run?.status === 'infeasible'
   const failedRun = run?.status === 'failed' ? run : undefined
   const {
     data: simulationFields,
@@ -736,6 +737,7 @@ const SimulationMenuItem = ({
     !selected &&
     !running &&
     !failedRun &&
+    !infeasible &&
     simulation.creationStatus !== 'failed'
   )
     return null
@@ -836,6 +838,16 @@ const SimulationMenuItem = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {infeasible && (
+        <button
+          type="button"
+          className="pl-2.5 text-xs font-medium text-sidebar-foreground hover:underline"
+          onClick={onSelect}
+          title={run.error}
+        >
+          Ingen mulig løsning
+        </button>
+      )}
       {failedRun ? (
         <SimulationRunFailure run={failedRun} fields={simulationFields} />
       ) : null}

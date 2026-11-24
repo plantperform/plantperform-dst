@@ -19,7 +19,9 @@ RETRY_DELAY_SECONDS = 60
 EXECUTION_TIMEOUT_SECONDS = 3600
 LEASE_DURATION_SECONDS = 3660
 
-ResultStatus = Literal["not_started", "queued", "in_progress", "completed", "failed", "outdated"]
+ResultStatus = Literal[
+    "not_started", "queued", "in_progress", "completed", "infeasible", "failed", "outdated"
+]
 OptimizationKind = Literal["optimize", "yearly"]
 
 
@@ -191,6 +193,13 @@ class ResultError(CamelModel):
     detail: dict | list | str | None = None
 
 
+def effective_result_status(status: ResultStatus, error_code: str | None) -> ResultStatus:
+    """Older workers stored infeasibility as a failed run with a reason code."""
+    if status == "failed" and error_code == "INFEASIBLE":
+        return "infeasible"
+    return status
+
+
 class SimulationResultSummary(CamelModel):
     status: ResultStatus = "not_started"
     run_id: str | None = None
@@ -201,6 +210,11 @@ class SimulationResultSummary(CamelModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: ResultError | None = None
+
+    @model_validator(mode="after")
+    def read_legacy_status(self):
+        self.status = effective_result_status(self.status, self.error.code if self.error else None)
+        return self
 
 
 class SimulationResult(SimulationResultSummary):

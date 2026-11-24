@@ -1,6 +1,8 @@
 import unittest
 from types import SimpleNamespace
 
+from ortools.sat.python import cp_model
+
 from app.domain.optimization import NUM_YEARS
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
@@ -10,7 +12,9 @@ from app.domain.rotation_candidate import (
 )
 from app.domain.simulation import CropAreaLimit
 from app.services.scenario.rotations import selected_locked_candidate
+from optimizer.deadline import remaining_time
 from optimizer.engine import solve
+from optimizer.infeasibility import UNIDENTIFIED_CONFLICT, explain_conflict
 from optimizer.models import (
     ConstraintsInput,
     FieldInput,
@@ -60,6 +64,8 @@ def _run(
     fields: list[tuple[str, float, list[tuple[str, tuple[int, ...], float]]]],
     limits: tuple[CropAreaLimit, ...] = (),
     fixed: tuple[tuple[float, tuple[int, ...], bool], ...] = (),
+    *,
+    model: cp_model.CpModel | None = None,
 ):
     if yearly:
         field_inputs = tuple(
@@ -110,7 +116,8 @@ def _run(
                     crop_area_limits=limits,
                 ),
                 time_limit_seconds=5,
-            )
+            ),
+            model=model,
         )
 
     field_inputs = tuple(
@@ -157,7 +164,8 @@ def _run(
                 crop_area_limits=limits,
             ),
             time_limit_seconds=5,
-        )
+        ),
+        model=model,
     )
 
 
@@ -204,6 +212,33 @@ class CropAreaSolverTests(unittest.TestCase):
             ):
                 with self.subTest(yearly=yearly, bounds=limit):
                     self.assertEqual(_run(yearly, fields, (limit,)).status, "INFEASIBLE")
+
+    def test_conflict_names_the_two_incompatible_crop_limits(self):
+        fields = [("a", 4, [("barley", (1,), 10), ("wheat", (2,), 10)])]
+        limits = tuple(CropAreaLimit(afgrode_kode=code, min_area_ha=4) for code in (1, 2))
+        for yearly in (False, True):
+            with self.subTest(yearly=yearly):
+                model = cp_model.CpModel()
+                result = _run(yearly, fields, limits, model=model)
+
+                reason = explain_conflict(model)
+
+                self.assertEqual(result.status, "INFEASIBLE")
+                self.assertIn("samtidig", reason)
+                self.assertIn("4 ha med afgrødekode 1", reason)
+                self.assertIn("4 ha med afgrødekode 2", reason)
+                self.assertEqual("i gennemsnit" in reason, not yearly)
+
+    def test_explanation_preserves_the_result_persistence_reserve(self):
+        model = cp_model.CpModel()
+        model.add(False).with_name("en regel")
+        token = remaining_time.set(lambda: 30_000)
+        try:
+            reason = explain_conflict(model)
+        finally:
+            remaining_time.reset(token)
+
+        self.assertEqual(reason, UNIDENTIFIED_CONFLICT)
 
     def test_standard_solver_holds_the_average_over_the_period(self) -> None:
         fields = [

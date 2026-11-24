@@ -384,7 +384,8 @@ simulation_result_table = Table(
     Column("error", JSONB),
     Column("output", JSONB),
     CheckConstraint(
-        "status IN ('not_started','queued','in_progress','completed','failed','outdated')",
+        "status IN ('not_started','queued','in_progress','completed',"
+        "'infeasible','failed','outdated')",
         name="ck_simulation_result_status",
     ),
     Index("ix_simulation_result_active", "status", "lease_expires_at"),

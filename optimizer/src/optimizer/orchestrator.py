@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
+from ortools.sat.python import cp_model
+
 from app.data import repository
 from app.data.optimizer_inputs import OptimizerCandidate, OptimizerYear
 from app.domain.field import FieldRecord
@@ -23,6 +25,7 @@ from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
 from optimizer.deadline import check_deadline, solver_time_limit
 from optimizer.engine import solve
+from optimizer.infeasibility import explain_conflict
 from optimizer.models import (
     ConstraintsInput,
     FieldInput,
@@ -521,7 +524,9 @@ def run_optimization(
         fields,
         simulation.constraints.max_n_load_by_kystvandopland,
     )
+    model = cp_model.CpModel()
     output = solve(
+        model=model,
         input=OptimizationInput(
             fields=tuple(field_inputs),
             fixed_fields=tuple(fixed_fields),
@@ -533,7 +538,7 @@ def run_optimization(
                 max_udnyttet_n_per_harmoni_ha=n_ceiling,
             ),
             time_limit_seconds=solver_time_limit(time_limit_seconds),
-        )
+        ),
     )
 
     if output.status == "INFEASIBLE":
@@ -547,10 +552,8 @@ def run_optimization(
             error = _n_ceiling_shortfall_error(
                 n_ceiling, _lowest_udnyttet_n_per_harmoni_ha(field_inputs, fixed_fields)
             )
-        raise error or OptimizationInfeasibleError(
-            "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
-            "maks. udledning eller foderenheder og prøv igen."
-        )
+        raise error or OptimizationInfeasibleError(explain_conflict(model))
+    del model  # Release the CP-SAT model before assembling the result.
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(
@@ -999,8 +1002,10 @@ def run_yearly_optimization(
     n_ceiling = built.input.constraints.max_udnyttet_n_per_harmoni_ha
     names = _kystvand_names(farm_id, email) if quota_trades else {}
     _validate_quota_trades(fields, quota_trades, names)
+    model = cp_model.CpModel()
     output = solve_yearly(
-        input=replace(built.input, time_limit_seconds=solver_time_limit(time_limit_seconds))
+        model=model,
+        input=replace(built.input, time_limit_seconds=solver_time_limit(time_limit_seconds)),
     )
 
     if output.status == "INFEASIBLE":
@@ -1023,10 +1028,8 @@ def run_yearly_optimization(
             error = _n_ceiling_shortfall_error(
                 n_ceiling, _lowest_udnyttet_n_per_harmoni_ha_by_year(field_inputs, fixed_fields)
             )
-        raise error or OptimizationInfeasibleError(
-            "Ingen sædskifte-fordeling kan opfylde de gemte krav — lempe krav som "
-            "maks. udledning eller foderenheder og prøv igen."
-        )
+        raise error or OptimizationInfeasibleError(explain_conflict(model))
+    del model  # Release the CP-SAT model before assembling the result.
 
     if output.status == "UNKNOWN":
         raise OptimizationUnknownError(

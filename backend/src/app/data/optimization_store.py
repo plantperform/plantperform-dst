@@ -22,6 +22,7 @@ from app.domain.optimization import (
     OptimizationAttemptsExhaustedError,
     OptimizationLeaseActiveError,
     OptimizationTerminalError,
+    effective_result_status,
 )
 from app.domain.simulation import Simulation
 
@@ -56,6 +57,10 @@ def fail_queued_run(simulation_id, run_id):
         )
 
 
+def _stored_status(row):
+    return effective_result_status(row.status, (row.error or {}).get("code"))
+
+
 def _raise_if_exhausted(row):
     if (
         row.status == "failed"
@@ -63,7 +68,7 @@ def _raise_if_exhausted(row):
         and (row.error or {}).get("code") == "WORKER_ERROR"
     ):
         raise OptimizationAttemptsExhaustedError(row.error)
-    if row.status == "failed":
+    if _stored_status(row) == "failed":
         raise OptimizationTerminalError(
             row.error or {"code": "WORKER_ERROR", "message": "Optimeringen fejlede."}
         )
@@ -120,7 +125,7 @@ def delivery_result(simulation_id, run_id, farm_id):
         )
     if row.run_id != run_id or row.input_revision != row.revision:
         return ExecutionResult(DeliveryOutcome.ACK)
-    if row.status == "failed":
+    if _stored_status(row) == "failed":
         return ExecutionResult(
             DeliveryOutcome.DEAD_LETTER,
             error=row.error or {"code": "WORKER_ERROR", "message": "Optimeringen fejlede."},
@@ -345,8 +350,11 @@ def finish(
             or (not stopped and row.lease_expires_at < datetime.now(UTC))
         ):
             return False
+        status = "completed"
+        if error:
+            status = effective_result_status("failed", error.get("code"))
         values = dict(
-            status="queued" if retry else "failed" if error else "completed",
+            status="queued" if retry else status,
             lease_token=None,
             lease_expires_at=None,
             finished_at=None if retry else datetime.now(UTC),
@@ -401,7 +409,7 @@ def fail_unclaimed(simulation_id, run_id, farm_id, error):
                             lease_expires_at=None,
                         )
                     )
-                elif row.status == "failed":
+                elif _stored_status(row) == "failed":
                     error = row.error or error
                 else:
                     return None

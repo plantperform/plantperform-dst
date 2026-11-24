@@ -687,6 +687,7 @@ export type SimulationResultSummary = {
     | 'in_progress'
     | 'completed'
     | 'failed'
+    | 'infeasible'
     | 'outdated'
   runId: string | null
   kind: 'optimize' | 'yearly' | null

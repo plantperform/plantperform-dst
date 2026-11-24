@@ -12,6 +12,7 @@ import {
 import { OptimizationRunsProvider } from '@/api/OptimizationRunsProvider'
 import { useOptimizationRun, useOptimizationRunsContext } from '@/api/optimization-runs'
 import type { Simulation, SimulationResult } from '@/api/types'
+import { OptimizationBanner } from '@/components/farm/OptimizationRunStatus'
 import {
   DEFAULT_OPTIMIZATION_SETTINGS,
   DEFAULT_SIMULATION_CONSTRAINTS,
@@ -144,4 +145,34 @@ it('stops showing running when polling returns failure without saved output', as
   expect(api.fetcher).toHaveBeenLastCalledWith(
     '/farms/farm/simulations/sim/result?include_output=false',
   )
+})
+
+it('restores the infeasible result banner and opens the rules after reload', async () => {
+  const reason = 'Højst 20 ha med afgrødekode 1.'
+  const saved: SimulationResult = {
+    ...active, status: 'infeasible', error: { code: 'INFEASIBLE', message: reason },
+  }
+  const onOpenRules = vi.fn()
+  api.fetcher.mockResolvedValue(saved)
+  const Inspector = () => {
+    const { syncSimulations } = useOptimizationRunsContext()
+    useEffect(() => syncSimulations([{ ...simulation, result: saved }]), [syncSimulations])
+    return createElement(OptimizationBanner, {
+      farmId: 'farm', simulationId: 'sim', optimizationKind: 'optimize',
+      run: useOptimizationRun('sim'), fields: [], rotationOptionsError: null, onOpenRules,
+    })
+  }
+
+  await act(async () => root.render(
+    createElement(OptimizationRunsProvider, { children: createElement(Inspector) }),
+  ))
+  await act(async () => vi.advanceTimersByTimeAsync(6000))
+  const button = container.querySelector('button')
+  await act(async () => button?.click())
+
+  expect(container.textContent).toContain('Ingen mulig løsning')
+  expect(container.textContent).toContain(reason)
+  expect(button?.textContent).toBe('Åbn regler')
+  expect(onOpenRules).toHaveBeenCalledOnce()
+  expect(api.fetcher).toHaveBeenCalledTimes(1)
 })

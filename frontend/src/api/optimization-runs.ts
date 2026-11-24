@@ -33,7 +33,7 @@ export type OptimizationRun = OptimizationRunBase &
     | { status: 'running'; phase: 'submitting' | 'queued' | 'in_progress' }
     | { status: 'outdated' }
     | {
-        status: 'failed'
+        status: 'failed' | 'infeasible'
         error: string
         cropAreaViolations: CropAreaViolation[]
       }

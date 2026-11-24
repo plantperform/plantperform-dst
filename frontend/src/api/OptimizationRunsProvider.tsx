@@ -108,16 +108,17 @@ export const OptimizationRunsProvider = ({
         putRun({ ...base, status: 'running', phase: result.status })
       } else if (result.status === 'outdated') {
         putRun({ ...base, status: 'outdated' })
-      } else if (result.status === 'failed') {
+      } else if (result.status === 'failed' || result.status === 'infeasible') {
         putRun({
           ...base,
-          status: 'failed',
-          error: optimizationFailureMessage(
-            {
-              status: result.error?.code === 'TIMEOUT' ? 503 : undefined,
-              message: result.error?.message ?? 'Optimeringen fejlede.',
-            },
-          ),
+          status: result.status,
+          error:
+            result.status === 'infeasible'
+              ? (result.error?.message ?? 'De gemte regler kan ikke opfyldes samtidig.')
+              : optimizationFailureMessage({
+                  status: result.error?.code === 'TIMEOUT' ? 503 : undefined,
+                  message: result.error?.message ?? 'Optimeringen fejlede.',
+                }),
           cropAreaViolations: cropAreaViolationsFromDetail(
             result.error?.detail,
           ),

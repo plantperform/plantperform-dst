@@ -5,6 +5,7 @@ from collections import defaultdict
 from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS
+from optimizer.infeasibility import catchment_label, number
 from optimizer.models import (
     RELATIVE_GAP_LIMIT,
     AssignedRotation,
@@ -30,8 +31,9 @@ def _years_with_crop(crop_codes: tuple[int, ...], afgrode_kode: int) -> int:
     return sum(crop_codes[year % len(crop_codes)] == afgrode_kode for year in range(NUM_YEARS))
 
 
-def solve(input: OptimizationInput) -> OptimizationOutput:
-    model = cp_model.CpModel()
+def solve(input: OptimizationInput, *, model: cp_model.CpModel | None = None) -> OptimizationOutput:
+    if model is None:
+        model = cp_model.CpModel()
     choice_vars: dict[tuple[str, str], cp_model.IntVar] = {}
 
     for field in input.fields:
@@ -95,14 +97,23 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         )
         area_over_years = chosen_area + fixed_area
         if limit.min_area_ha is not None:
-            model.Add(area_over_years >= _scale(limit.min_area_ha) * NUM_YEARS)
+            model.Add(area_over_years >= _scale(limit.min_area_ha) * NUM_YEARS).with_name(
+                f"mindst {number(limit.min_area_ha)} "
+                f"ha med afgrødekode {limit.afgrode_kode} i gennemsnit"
+            )
         if limit.max_area_ha is not None:
-            model.Add(area_over_years <= _scale(limit.max_area_ha) * NUM_YEARS)
+            model.Add(area_over_years <= _scale(limit.max_area_ha) * NUM_YEARS).with_name(
+                f"højst {number(limit.max_area_ha)} "
+                f"ha med afgrødekode {limit.afgrode_kode} i gennemsnit"
+            )
 
     for kystvand_id, cap in constraints.max_n_load_by_kystvandopland.items():
         n_load_for_kystvand = kvotegivende_n_load_by_kystvand.get(kystvand_id)
         if cap is not None and n_load_for_kystvand is not None:
-            model.Add(n_load_for_kystvand <= _scale(cap))
+            model.Add(n_load_for_kystvand <= _scale(cap)).with_name(
+                f"udledning på højst {number(cap)} kg N "
+                f"for {catchment_label(kystvand_id)} i gennemsnit"
+            )
 
     # The farm's average utilised N per ha harmoniareal is its total utilised N
     # over its total harmoniareal, so staying at or under the ceiling means
@@ -119,13 +130,19 @@ def solve(input: OptimizationInput) -> OptimizationOutput:
         fixed_excess = _ceil_scale(
             sum(fixed.udnyttet_n - ceiling * fixed.harmoni_area_ha for fixed in input.fixed_fields)
         )
-        model.Add(chosen_excess + fixed_excess <= 0)
+        model.Add(chosen_excess + fixed_excess <= 0).with_name(
+            f"højst {number(ceiling)} kg udnyttet N pr. ha harmoniareal i gennemsnit"
+        )
 
     if constraints.min_fen is not None:
-        model.Add(total_fen >= _scale(constraints.min_fen))
+        model.Add(total_fen >= _scale(constraints.min_fen)).with_name(
+            f"mindst {number(constraints.min_fen)} foderenheder i gennemsnit"
+        )
 
     if constraints.max_fen is not None:
-        model.Add(total_fen <= _scale(constraints.max_fen))
+        model.Add(total_fen <= _scale(constraints.max_fen)).with_name(
+            f"højst {number(constraints.max_fen)} foderenheder i gennemsnit"
+        )
 
     model.Maximize(total_db2)
 

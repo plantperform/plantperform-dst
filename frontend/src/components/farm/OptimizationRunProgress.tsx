@@ -204,6 +204,14 @@ export const OptimizationRunProgress = ({
   run,
 }: OptimizationRunProgressProps) => {
   const succeeded = run.status === 'succeeded'
+  if (run.status === 'infeasible') {
+    return (
+      <div role="status" className="space-y-1 py-6 text-center">
+        <p className="font-medium">Ingen mulig løsning</p>
+        <p className="whitespace-pre-wrap">{run.error}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">

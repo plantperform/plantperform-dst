@@ -33,7 +33,10 @@ export const useOptimizationDialogRun = (
   return {
     run,
     view,
-    runError: run?.status === 'failed' && run.kind === kind ? run.error : null,
+    runError:
+      (run?.status === 'failed' || run?.status === 'infeasible') && run.kind === kind
+        ? run.error
+        : null,
     startRun: (request: Parameters<typeof startRun>[0]) => {
       const id = startRun(request)
       if (id !== null) setWatchedRunId(id)

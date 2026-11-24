@@ -209,13 +209,20 @@ def execute(
                     },
                 )
         outcome = "completed" if saved else "stale"
+    except OptimizationInfeasibleError as error:
+        saved = optimization_store.finish(
+            simulation_id,
+            run_id,
+            token,
+            row["input_revision"],
+            error={"code": "INFEASIBLE", "message": str(error)},
+        )
+        outcome = "infeasible" if saved else "stale"
     except Exception as error:
         logger.exception("optimizer_attempt_failed run_id=%s", run_id)
         retry = is_transient(error) and row["attempts"] + 1 < MAX_JOB_ATTEMPTS
         if isinstance(error, MemoryError):
             failure = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
-        elif isinstance(error, OptimizationInfeasibleError):
-            failure = {"code": "INFEASIBLE", "message": str(error)}
         elif isinstance(error, (OptimizationUnknownError, OptimizationDeadlineError)):
             failure = {"code": "TIMEOUT", "message": str(error)}
         elif isinstance(error, (MissingSoilDataError, ValueError)):

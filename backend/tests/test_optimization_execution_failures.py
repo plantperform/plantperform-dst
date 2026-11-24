@@ -1,10 +1,12 @@
 """Terminal run state lives in the existing result, independently of SQS delivery."""
 
 import importlib.util
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from sqlalchemy import update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
@@ -14,6 +16,7 @@ from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.optimization import DeliveryOutcome, OptimizationLeaseActiveError
 from optimizer import worker
+from optimizer.consumer import Consumer
 
 FAILURE = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
 
@@ -31,7 +34,6 @@ class ExecutionFailureTests(DatabaseTests):
             (MemoryError(), "OUT_OF_MEMORY"),
             (RuntimeError("bug"), "WORKER_ERROR"),
             (ValueError("invalid"), "INVALID_INPUT"),
-            (worker.OptimizationInfeasibleError("infeasible"), "INFEASIBLE"),
             (worker.OptimizationUnknownError("no solution"), "TIMEOUT"),
             (worker.OptimizationDeadlineError("timeout"), "TIMEOUT"),
         ):
@@ -54,6 +56,67 @@ class ExecutionFailureTests(DatabaseTests):
                     optimization_store.delivery_result("sim", run.run_id, "farm"), result
                 )
                 self.assertEqual(self.row().attempts, 1)
+
+    def test_infeasible_run_preserves_the_previous_success_and_exposes_the_reason(self):
+        self.submit_and_execute()
+        previous = self.row().output
+        run = self.submit()
+        reason = "Marken er låst til et sædskifte, som ikke findes."
+
+        with patch.object(
+            worker, "run_optimization", side_effect=worker.OptimizationInfeasibleError(reason)
+        ):
+            worker.execute("sim", run.run_id, CONTEXT, sqs_delivery=True)
+
+        result = simulation_store.get_result("farm", "sim", EMAIL, include_output=False)
+        self.assertEqual(
+            (result.status, result.error.code, result.error.message),
+            ("infeasible", "INFEASIBLE", reason),
+        )
+        self.assertEqual(self.row().output, previous)
+
+    def test_infeasible_redelivery_removes_the_source_message_without_a_dlq_send(self):
+        run = self.submit()
+        body = self.queue.send_message.call_args.kwargs["MessageBody"]
+        with patch.object(
+            worker,
+            "run_optimization",
+            side_effect=worker.OptimizationInfeasibleError("Ingen løsning"),
+        ):
+            worker.execute("sim", run.run_id, CONTEXT, sqs_delivery=True)
+        self.queue.reset_mock()
+        self.queue.receive_message.side_effect = [
+            {"Messages": [{"Body": body, "MessageId": "source", "ReceiptHandle": "receipt"}]},
+            {},
+        ]
+        with patch.dict(os.environ, {"OPTIMIZER_DLQ_URL": "test-dlq"}):
+            consumer = Consumer(self.queue, Mock(), optimization_store, Mock(), Event())
+
+        consumer.run()
+
+        self.queue.delete_message.assert_called_once_with(
+            QueueUrl="test-queue", ReceiptHandle="receipt"
+        )
+        self.queue.send_message.assert_not_called()
+
+    def test_legacy_infeasibility_is_acknowledged_on_redelivery(self):
+        run = self.submit()
+        with self.sessions.begin() as session:
+            session.execute(
+                update(results)
+                .where(results.c.run_id == run.run_id)
+                .values(
+                    status="failed", error={"code": "INFEASIBLE", "message": "Ingen mulig løsning."}
+                )
+            )
+
+        delivery = optimization_store.delivery_result("sim", run.run_id, "farm")
+
+        self.assertEqual(delivery.outcome, DeliveryOutcome.ACK)
+        self.assertEqual(self.result().status, "infeasible")
+        self.assertEqual(
+            simulation_store.list_simulations("farm", EMAIL)[0].result.status, "infeasible"
+        )
 
     def test_transient_errors_retry_only_until_third_execution(self):
         run = self.submit()

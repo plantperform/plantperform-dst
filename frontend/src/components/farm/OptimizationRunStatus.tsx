@@ -40,6 +40,7 @@ type OptimizationBannerProps = {
   optimizationKind: OptimizationKind | undefined
   run: OptimizationRun | undefined
   fields: FieldRecord[] | undefined
+  onOpenRules?: () => void
   rotationOptionsError: RotationOptionsError | null | undefined
   className?: string
 }
@@ -53,6 +54,7 @@ export const OptimizationBanner = ({
   run,
   fields,
   rotationOptionsError,
+  onOpenRules,
   className,
 }: OptimizationBannerProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
@@ -83,6 +85,28 @@ export const OptimizationBanner = ({
               : 'Tallene er fra før kørslen.'}
           </span>
         </p>
+      </div>
+    )
+  }
+
+  if (run?.status === 'infeasible') {
+    return (
+      <div
+        role="status"
+        className={cn(
+          'flex w-full flex-wrap items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm',
+          className,
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Ingen mulig løsning</p>
+          <p className="whitespace-pre-wrap">{run.error}</p>
+        </div>
+        {onOpenRules && (
+          <Button size="xs" variant="outline" onClick={onOpenRules}>
+            Åbn regler
+          </Button>
+        )}
       </div>
     )
   }

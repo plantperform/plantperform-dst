@@ -726,16 +726,19 @@ class LifecycleTests(DatabaseTests):
         self.assertEqual(self.deliver(run.run_id), True)
         self.assertEqual((self.row().status, self.row().attempts), ("completed", 2))
 
-    def test_sqs_solver_failures_are_dead_lettered_and_completion_acknowledged(self):
-        for error in (worker.OptimizationInfeasibleError, worker.OptimizationDeadlineError):
+    def test_sqs_delivery_of_terminal_solver_results(self):
+        for error, status in (
+            (worker.OptimizationInfeasibleError, "infeasible"),
+            (worker.OptimizationDeadlineError, "failed"),
+        ):
             with self.subTest(error=error):
                 run = self.submit()
                 with patch.object(
                     worker, "run_optimization", side_effect=error("terminal")
                 ) as solve:
-                    self.assertEqual(self.deliver(run.run_id), False)
-                    self.assertEqual(self.deliver(run.run_id), False)
-                self.assertEqual((self.row().status, self.row().attempts), ("failed", 1))
+                    self.assertEqual(self.deliver(run.run_id), status == "infeasible")
+                    self.assertEqual(self.deliver(run.run_id), status == "infeasible")
+                self.assertEqual((self.row().status, self.row().attempts), (status, 1))
                 self.assertEqual(solve.call_count, 1)
         run = self.submit()
         self.assertEqual(self.deliver(run.run_id), True)
@@ -1503,6 +1506,29 @@ class LocalLifecycleTests(DatabaseTests):
         self.run_background()
         self.assertEqual(self.row().attempts, 1)
 
+    def test_polling_an_infeasible_run_returns_its_reason(self):
+        from app.auth import AuthenticatedUser, current_user
+        from app.main import app
+
+        reason = "Med de valgte sædskifter kan foderenhedskravet ikke opfyldes."
+        self.submit()
+        with patch.object(
+            worker, "run_optimization", side_effect=worker.OptimizationInfeasibleError(reason)
+        ):
+            self.run_background()
+
+        with (
+            patch.dict(
+                app.dependency_overrides, {current_user: lambda: AuthenticatedUser(email=EMAIL)}
+            ),
+            TestClient(app) as client,
+        ):
+            response = client.get("/api/v0/farms/farm/simulations/sim/result?include_output=false")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "infeasible")
+        self.assertEqual(response.json()["error"]["message"], reason)
+
     def test_both_endpoints_return_202_and_poll_saved_results(self):
         from app.auth import AuthenticatedUser, current_user
         from app.main import app
@@ -1584,7 +1610,10 @@ class LocalLifecycleTests(DatabaseTests):
         self.assertEqual(self.row().output, before)
 
     def test_infeasibility_and_deadlines_do_not_retry(self):
-        for error in (worker.OptimizationInfeasibleError, worker.OptimizationDeadlineError):
+        for error, status in (
+            (worker.OptimizationInfeasibleError, "infeasible"),
+            (worker.OptimizationDeadlineError, "failed"),
+        ):
             with self.subTest(error=error):
                 self.submit()
                 with (
@@ -1592,7 +1621,7 @@ class LocalLifecycleTests(DatabaseTests):
                     patch.object(worker.time, "sleep") as sleep,
                 ):
                     self.run_background()
-                self.assertEqual((self.result().status, self.row().attempts), ("failed", 1))
+                self.assertEqual((self.result().status, self.row().attempts), (status, 1))
                 sleep.assert_not_called()
 
     def test_restart_fails_queued_and_running_jobs_and_allows_resubmission(self):
