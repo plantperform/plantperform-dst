@@ -371,6 +371,7 @@ export type RotationAssignment = {
 
 export type OptimizeSimulationResponse = {
   status: OptimizationStatus
+  optimalityGapPct?: number | null
   // The crops' DB2 alone, without the quotaTrades' payments.
   objectiveDb2: number
   totalNLoadKg: number
@@ -421,6 +422,7 @@ export type YearlyOptimizationCategoryOption = {
 
 export type YearlyOptimizeSimulationResponse = {
   status: OptimizationStatus
+  optimalityGapPct?: number | null
   objectiveDb2: number
   totalNLoadKg: number
   totalLeachingKg: number

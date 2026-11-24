@@ -35,6 +35,7 @@ export type OptimizationRun = OptimizationRunBase &
     | {
         status: 'failed' | 'infeasible'
         error: string
+        errorCode?: string
         cropAreaViolations: CropAreaViolation[]
       }
     | {

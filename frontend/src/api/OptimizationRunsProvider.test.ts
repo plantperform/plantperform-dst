@@ -147,10 +147,13 @@ it('stops showing running when polling returns failure without saved output', as
   )
 })
 
-it('restores the infeasible result banner and opens the rules after reload', async () => {
-  const reason = 'Højst 20 ha med afgrødekode 1.'
+it.each([
+  ['INFEASIBLE', 'Ingen mulig løsning', 'Højst 20 ha med afgrødekode 1.'],
+  ['NO_SOLUTION_WITHIN_TIME_LIMIT', 'Ingen løsning fundet',
+    'Optimeringen fandt ingen løsning, der opfylder reglerne, inden for 1 time.'],
+])('restores the %s result banner and opens the rules after reload', async (code, heading, reason) => {
   const saved: SimulationResult = {
-    ...active, status: 'infeasible', error: { code: 'INFEASIBLE', message: reason },
+    ...active, status: 'infeasible', error: { code, message: reason },
   }
   const onOpenRules = vi.fn()
   api.fetcher.mockResolvedValue(saved)
@@ -170,7 +173,7 @@ it('restores the infeasible result banner and opens the rules after reload', asy
   const button = container.querySelector('button')
   await act(async () => button?.click())
 
-  expect(container.textContent).toContain('Ingen mulig løsning')
+  expect(container.textContent).toContain(heading)
   expect(container.textContent).toContain(reason)
   expect(button?.textContent).toBe('Åbn regler')
   expect(onOpenRules).toHaveBeenCalledOnce()

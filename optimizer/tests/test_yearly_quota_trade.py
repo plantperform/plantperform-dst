@@ -1,4 +1,7 @@
 import unittest
+from unittest.mock import PropertyMock, patch
+
+from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS, QuotaTradeSetting
 from optimizer.models import (
@@ -102,6 +105,15 @@ CAP_100 = (100.0,) * NUM_YEARS
 
 
 class YearlyQuotaTradeTests(unittest.TestCase):
+    def test_gap_is_relative_to_db2_after_quota_payments(self) -> None:
+        # The best plan earns 1,600 kr/year after buying quota. Give the solver
+        # an upper bound of 1,680 kr/year in its scaled eight-year objective.
+        bound = PropertyMock(return_value=1_680 * 1000 * NUM_YEARS)
+        with patch.object(cp_model.CpSolver, "best_objective_bound", bound):
+            output = _solve((_field("a", 1),), {1: CAP_100}, (_trade(1, 8),))
+
+        self.assertEqual(output.optimality_gap_pct, 5)
+
     def test_without_trade_the_cap_holds(self) -> None:
         output = _solve((_field("a", 1),), {1: CAP_100})
         self.assertEqual(_chosen(output), {"a": "low"})

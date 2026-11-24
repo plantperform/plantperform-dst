@@ -53,7 +53,7 @@ import {
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
 import { cropEdgeColor, readableTextColor } from '@/lib/crop-groups'
-import { RUN_STATUS_LABELS } from '@/lib/optimization-run'
+import { optimizationStatusLabel } from '@/lib/optimization-run'
 import {
   averageLimitAfterTradesFor,
   db2IncludingQuotaTrades,
@@ -1119,7 +1119,7 @@ const YearPanel = ({
                 ) : null}
                 {lastRun && !column && view === 'nLoad' ? (
                   <p className="border-t pt-1.5 text-[11px] leading-4 text-muted-foreground">
-                    Sidste kørsel: {RUN_STATUS_LABELS[lastRun.status]} - DB2
+                    Sidste kørsel: {optimizationStatusLabel(lastRun)} - DB2
                     {lastRun.quotaTrades?.length
                       ? ' inkl. kvotehandel'
                       : ''}{' '}

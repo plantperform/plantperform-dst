@@ -13,6 +13,7 @@ import { useElapsed } from '@/hooks/use-elapsed'
 import { formatFieldCount, isFieldCalculated } from '@/lib/field-domain'
 import {
   formatElapsed,
+  infeasibleRunHeading,
   optimizationRunName,
   type OptimizationKind,
 } from '@/lib/optimization-run'
@@ -99,7 +100,7 @@ export const OptimizationBanner = ({
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="font-medium">Ingen mulig løsning</p>
+          <p className="font-medium">{infeasibleRunHeading(run.errorCode)}</p>
           <p className="whitespace-pre-wrap">{run.error}</p>
         </div>
         {onOpenRules && (

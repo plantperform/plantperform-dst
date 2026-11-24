@@ -91,7 +91,7 @@ class ConsumerTests(unittest.TestCase):
         for request in self.sqs.receive_message.call_args_list:
             self.assertEqual(request.kwargs["WaitTimeSeconds"], 20)
             self.assertEqual(request.kwargs["MaxNumberOfMessages"], 1)
-            self.assertEqual(request.kwargs["VisibilityTimeout"], 3900)
+            self.assertEqual(request.kwargs["VisibilityTimeout"], 7500)
         self.assertEqual(self.sqs.delete_message.call_count, 2)
         self.service.scale_to_zero.assert_called_once_with(self.poll_start)
         self.assertEqual(self.protection.set.call_args_list[-1], call(False))
@@ -448,7 +448,7 @@ class ConsumerTests(unittest.TestCase):
         with patch.object(consumer, "urlopen", return_value=response) as opening:
             consumer.TaskProtection("http://agent").set(True)
         body = json.loads(opening.call_args.args[0].data)
-        self.assertEqual(body, {"ProtectionEnabled": True, "ExpiresInMinutes": 65})
+        self.assertEqual(body, {"ProtectionEnabled": True, "ExpiresInMinutes": 125})
 
     def test_final_poll_uses_existing_protection_after_a_long_solve(self):
         protection = consumer.TaskProtection("http://agent")
@@ -458,7 +458,7 @@ class ConsumerTests(unittest.TestCase):
             patch.object(time, "monotonic", return_value=100) as clock,
         ):
             protection.set(True)
-            clock.return_value += 3600
+            clock.return_value += 7200
 
             protection.protect_for(90)
 

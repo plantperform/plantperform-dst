@@ -609,7 +609,7 @@ class LifecycleTests(DatabaseTests):
             "runId": run_id,
         }
         with patch.object(optimizer_consumer, "initialize_configuration"):
-            optimizer_consumer._child_execute(envelope, time.monotonic() + 3600, connection)
+            optimizer_consumer._child_execute(envelope, time.monotonic() + 7200, connection)
         kind, result = connection.send.call_args.args[0]
         self.assertEqual(kind, "result")
         if result.outcome == "retry":
@@ -675,7 +675,7 @@ class LifecycleTests(DatabaseTests):
             self.assertEqual(self.deliver(run.run_id), False)
         solve.assert_not_called()
         delay = self.queue.change_message_visibility.call_args.kwargs["VisibilityTimeout"]
-        self.assertGreater(delay, 3600)
+        self.assertGreater(delay, 7200)
         self.assertGreater(datetime.now(UTC) + timedelta(seconds=delay), before.lease_expires_at)
         self.assertEqual(self.row(), before)
 

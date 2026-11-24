@@ -26,7 +26,7 @@ from optimizer.configuration import initialize_configuration
 from optimizer.memory import memory_observation
 
 logger = logging.getLogger(__name__)
-VISIBILITY_SECONDS = 3900
+VISIBILITY_SECONDS = EXECUTION_TIMEOUT_SECONDS + 5 * 60
 
 
 def parse_envelope(body):
@@ -143,7 +143,7 @@ class TaskProtection:
         started = time.monotonic()
         payload = {"ProtectionEnabled": enabled}
         if enabled:
-            payload["ExpiresInMinutes"] = 65
+            payload["ExpiresInMinutes"] = VISIBILITY_SECONDS // 60
         request = Request(
             self.url,
             data=json.dumps(payload).encode(),

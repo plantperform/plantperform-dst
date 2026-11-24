@@ -4,7 +4,6 @@ import unittest
 from uuid import uuid4
 
 from app.domain.optimization import (
-    EXECUTION_TIMEOUT_SECONDS,
     OptimizationSettings,
     OptimizeSimulationRequest,
     YearlyOptimizeSimulationRequest,
@@ -23,7 +22,6 @@ class ServerDurationTests(unittest.TestCase):
                         )
                         self.assertNotIn(name, request.model_dump(by_alias=True))
                         self.assertNotIn("time_limit_seconds", request.model_fields)
-        self.assertEqual(EXECUTION_TIMEOUT_SECONDS, 3600)
 
     def test_create_edit_and_existing_simulations_ignore_saved_durations(self):
         legacy = {

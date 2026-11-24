@@ -2,7 +2,7 @@
 
 import math
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import SimpleNamespace
 
 from ortools.sat.python import cp_model
@@ -23,7 +23,7 @@ from app.services.rotations import afgroede_normer, saedskifte_library
 from app.services.rotations.custom import with_snapshot_rotations
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
-from optimizer.deadline import check_deadline, solver_time_limit
+from optimizer.deadline import check_deadline
 from optimizer.engine import solve
 from optimizer.infeasibility import explain_conflict
 from optimizer.models import (
@@ -48,11 +48,7 @@ class OptimizationNotFoundError(Exception):
 
 
 class OptimizationInfeasibleError(Exception):
-    pass
-
-
-class OptimizationUnknownError(Exception):
-    pass
+    code = "INFEASIBLE"
 
 
 @dataclass(frozen=True)
@@ -527,6 +523,7 @@ def run_optimization(
     model = cp_model.CpModel()
     output = solve(
         model=model,
+        require_solution=True,
         input=OptimizationInput(
             fields=tuple(field_inputs),
             fixed_fields=tuple(fixed_fields),
@@ -537,7 +534,7 @@ def run_optimization(
                 crop_area_limits=tuple(simulation.constraints.crop_area_limits),
                 max_udnyttet_n_per_harmoni_ha=n_ceiling,
             ),
-            time_limit_seconds=solver_time_limit(time_limit_seconds),
+            time_limit_seconds=time_limit_seconds,
         ),
     )
 
@@ -554,11 +551,6 @@ def run_optimization(
             )
         raise error or OptimizationInfeasibleError(explain_conflict(model))
     del model  # Release the CP-SAT model before assembling the result.
-
-    if output.status == "UNKNOWN":
-        raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv at lempe kravene."
-        )
 
     updated_by_id = {
         assignment.field_id: _assigned_field(
@@ -1003,10 +995,7 @@ def run_yearly_optimization(
     names = _kystvand_names(farm_id, email) if quota_trades else {}
     _validate_quota_trades(fields, quota_trades, names)
     model = cp_model.CpModel()
-    output = solve_yearly(
-        model=model,
-        input=replace(built.input, time_limit_seconds=solver_time_limit(time_limit_seconds)),
-    )
+    output = solve_yearly(built.input, model=model, require_solution=True)
 
     if output.status == "INFEASIBLE":
         traded = {trade.kystvand_id for trade in quota_trades}
@@ -1030,11 +1019,6 @@ def run_yearly_optimization(
             )
         raise error or OptimizationInfeasibleError(explain_conflict(model))
     del model  # Release the CP-SAT model before assembling the result.
-
-    if output.status == "UNKNOWN":
-        raise OptimizationUnknownError(
-            "Optimeringen fandt ikke en løsning inden for tidsgrænsen — prøv at lempe kravene."
-        )
 
     updated_by_id = {}
     selected = {}

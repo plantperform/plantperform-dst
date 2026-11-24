@@ -3,6 +3,7 @@ from contextvars import ContextVar
 
 remaining_time: ContextVar[Callable[[], int] | None] = ContextVar("remaining_time", default=None)
 RESULT_RESERVE_SECONDS = 30
+SOLVER_TIME_LIMIT_SECONDS = 60 * 60
 
 
 class OptimizationDeadlineError(Exception):
@@ -16,6 +17,7 @@ def check_deadline():
 
 
 def solver_time_limit(requested: float) -> float:
+    requested = min(requested, SOLVER_TIME_LIMIT_SECONDS)
     remaining = remaining_time.get()
     if remaining is None:
         return requested

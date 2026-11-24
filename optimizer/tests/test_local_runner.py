@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import call, patch
 from uuid import uuid4
 
+from ortools.sat.python import cp_model
+
 from app.data import optimization_store
 from app.domain.optimization import DeliveryOutcome, ExecutionResult
 from app.domain.simulation import Simulation
@@ -14,9 +16,17 @@ from optimizer.deadline import (
     solver_time_limit,
 )
 from optimizer.preparation import PreparedSnapshot
+from optimizer.search import search
 
 
 class LocalExecutionTests(unittest.TestCase):
+    def test_invalid_solver_model_is_an_execution_error(self):
+        model = cp_model.CpModel()
+        model.new_int_var(1, 0, "empty_domain")
+
+        with self.assertRaisesRegex(RuntimeError, "Invalid optimization model"):
+            search(model, 5, 0.003, require_solution=True)
+
     def test_transient_errors_retry_twice_then_stop_on_success(self):
         with (
             patch.object(
@@ -39,8 +49,8 @@ class LocalExecutionTests(unittest.TestCase):
         contexts = [args.args[2] for args in execute.call_args_list]
         self.assertEqual(len({id(context) for context in contexts}), 3)
         for context in contexts:
-            self.assertGreater(context.get_remaining_time_in_millis(), 3_590_000)
-            self.assertLessEqual(context.get_remaining_time_in_millis(), 3_600_000)
+            self.assertGreater(context.get_remaining_time_in_millis(), 7_190_000)
+            self.assertLessEqual(context.get_remaining_time_in_millis(), 7_200_000)
 
     def test_error_before_claim_does_not_leave_run_active_after_retry_limit(self):
         with (
@@ -61,13 +71,14 @@ class LocalExecutionTests(unittest.TestCase):
             context = worker._LocalExecutionContext()
             token = remaining_time.set(context.get_remaining_time_in_millis)
             try:
-                self.assertEqual(context.get_remaining_time_in_millis(), 3_600_000)
-                clock.return_value = 3640
+                self.assertEqual(context.get_remaining_time_in_millis(), 7_200_000)
+                self.assertEqual(solver_time_limit(7200), 3600)
+                clock.return_value = 7240
                 self.assertEqual(solver_time_limit(3600), 30)
-                clock.return_value = 3682
+                clock.return_value = 7282
                 with self.assertRaises(OptimizationDeadlineError):
                     check_deadline()
-                clock.return_value = 3701
+                clock.return_value = 7301
                 self.assertEqual(context.get_remaining_time_in_millis(), 0)
             finally:
                 remaining_time.reset(token)
@@ -127,6 +138,7 @@ class LocalExecutionTests(unittest.TestCase):
             return SimpleNamespace(
                 output=SimpleNamespace(
                     status="FEASIBLE",
+                    optimality_gap_pct=3.25,
                     total_db2=1,
                     total_n_load_kg=0,
                     total_leaching_kg=0,
@@ -146,9 +158,12 @@ class LocalExecutionTests(unittest.TestCase):
             patch.object(worker, "run_optimization", side_effect=solve) as average,
             patch.object(worker, "run_yearly_optimization", side_effect=solve) as yearly,
         ):
-            worker.execute("sim", run_id, context)
+            result = worker.execute("sim", run_id, context, sqs_delivery=True)
+
+        self.assertEqual(result.outcome, DeliveryOutcome.ACK)
         (yearly if kind == "yearly" else average).assert_called_once()
         finish.assert_called_once()
         self.assertNotIn("error", finish.call_args.kwargs)
-        self.assertEqual(finish.call_args.kwargs["output"]["response"]["status"], "FEASIBLE")
+        response = finish.call_args.kwargs["output"]["response"]
+        self.assertEqual((response["status"], response["optimality_gap_pct"]), ("FEASIBLE", 3.25))
         self.assertIsNone(remaining_time.get())

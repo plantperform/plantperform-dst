@@ -229,7 +229,8 @@ def execute_quota_value(simulation_id: str, run_id: str) -> None:
         logger.info("quota_value_skipped simulation_id=%s run_id=%s", simulation_id, run_id)
         return
     kystvand_id, price, farm_id, revision, parameters, base_selected, trade_range = claimed
-    deadline_token = remaining_time.set(_LocalExecutionContext().get_remaining_time_in_millis)
+    context = _LocalExecutionContext(timeout_seconds=60 * 60)
+    deadline_token = remaining_time.set(context.get_remaining_time_in_millis)
     outcome = "failed"
     try:
         captured = quota_value_store.load_quota_snapshot(simulation_id, revision)

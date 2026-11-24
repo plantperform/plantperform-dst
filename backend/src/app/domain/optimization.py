@@ -16,8 +16,9 @@ from app.domain.saedskifte import RotationGroupSnapshot
 NUM_YEARS = 8
 MAX_JOB_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 60
-EXECUTION_TIMEOUT_SECONDS = 3600
-LEASE_DURATION_SECONDS = 3660
+EXECUTION_TIMEOUT_SECONDS = 2 * 60 * 60
+LEASE_DURATION_SECONDS = EXECUTION_TIMEOUT_SECONDS + 60
+NO_SOLUTION_WITHIN_TIME_LIMIT = "NO_SOLUTION_WITHIN_TIME_LIMIT"
 
 ResultStatus = Literal[
     "not_started", "queued", "in_progress", "completed", "infeasible", "failed", "outdated"
@@ -175,6 +176,7 @@ class SimulationQuotaTrade(CamelModel):
 
 class OptimizeSimulationResponse(CamelModel):
     status: Literal["OPTIMAL", "FEASIBLE"]
+    optimality_gap_pct: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     # The crops' DB2 alone; subtract the quota_trades' payments to include them.
     objective_db2: float
     total_n_load_kg: float
@@ -195,7 +197,7 @@ class ResultError(CamelModel):
 
 def effective_result_status(status: ResultStatus, error_code: str | None) -> ResultStatus:
     """Older workers stored infeasibility as a failed run with a reason code."""
-    if status == "failed" and error_code == "INFEASIBLE":
+    if status == "failed" and error_code in ("INFEASIBLE", NO_SOLUTION_WITHIN_TIME_LIMIT):
         return "infeasible"
     return status
 

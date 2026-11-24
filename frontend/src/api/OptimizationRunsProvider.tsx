@@ -37,7 +37,6 @@ import type {
 } from '@/api/types'
 import { cropAreaViolationsFromDetail } from '@/lib/crop-area-limits'
 import {
-  optimizationFailureMessage,
   PERIOD_AVERAGE_OFFERED,
   summarizeOptimizationChanges,
 } from '@/lib/optimization-run'
@@ -112,13 +111,10 @@ export const OptimizationRunsProvider = ({
         putRun({
           ...base,
           status: result.status,
+          errorCode: result.error?.code,
           error:
-            result.status === 'infeasible'
-              ? (result.error?.message ?? 'De gemte regler kan ikke opfyldes samtidig.')
-              : optimizationFailureMessage({
-                  status: result.error?.code === 'TIMEOUT' ? 503 : undefined,
-                  message: result.error?.message ?? 'Optimeringen fejlede.',
-                }),
+            result.error?.message ??
+            (result.status === 'infeasible' ? 'Ingen løsning fundet.' : 'Optimeringen fejlede.'),
           cropAreaViolations: cropAreaViolationsFromDetail(
             result.error?.detail,
           ),

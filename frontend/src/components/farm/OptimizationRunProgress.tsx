@@ -17,7 +17,8 @@ import {
   formatElapsed,
   formatFieldNameList,
   optimizationRunName,
-  RUN_STATUS_LABELS,
+  infeasibleRunHeading,
+  optimizationStatusLabel,
   type OptimizationChanges,
 } from '@/lib/optimization-run'
 import { db2IncludingQuotaTrades } from '@/lib/quota-trade-result'
@@ -147,7 +148,7 @@ const SucceededDetails = ({
         {optimizationRunName(run.kind)} færdig
       </p>
       <p className="text-sm text-muted-foreground first-letter:uppercase">
-        {RUN_STATUS_LABELS[run.response.status]} ·{' '}
+        {optimizationStatusLabel(run.response)} ·{' '}
         {formatElapsed(run.finishedAt - run.startedAt)}
       </p>
       {changedCount === 0 ? (
@@ -207,7 +208,7 @@ export const OptimizationRunProgress = ({
   if (run.status === 'infeasible') {
     return (
       <div role="status" className="space-y-1 py-6 text-center">
-        <p className="font-medium">Ingen mulig løsning</p>
+        <p className="font-medium">{infeasibleRunHeading(run.errorCode)}</p>
         <p className="whitespace-pre-wrap">{run.error}</p>
       </div>
     )

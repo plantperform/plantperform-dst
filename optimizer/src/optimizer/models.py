@@ -103,6 +103,7 @@ class OptimizationOutput:
     total_n_load_kg: float
     total_leaching_kg: float
     total_fen: float
+    optimality_gap_pct: float | None = None
 
 
 # Phase 11, "Års-optimering": per-calendar-year udledning cap, DB fluctuation
@@ -199,3 +200,4 @@ class YearlyOptimizationOutput:
     # Proven upper bound on total_db2 (same units). It can be set without a
     # solution (UNKNOWN), and is None when there is nothing to bound.
     db2_upper_bound: float | None = None
+    optimality_gap_pct: float | None = None

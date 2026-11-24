@@ -1,5 +1,4 @@
 import math
-import os
 from collections import defaultdict
 
 from ortools.sat.python import cp_model
@@ -12,6 +11,7 @@ from optimizer.models import (
     OptimizationInput,
     OptimizationOutput,
 )
+from optimizer.search import optimality_gap_pct, search
 
 SCALE = 1000
 
@@ -31,7 +31,12 @@ def _years_with_crop(crop_codes: tuple[int, ...], afgrode_kode: int) -> int:
     return sum(crop_codes[year % len(crop_codes)] == afgrode_kode for year in range(NUM_YEARS))
 
 
-def solve(input: OptimizationInput, *, model: cp_model.CpModel | None = None) -> OptimizationOutput:
+def solve(
+    input: OptimizationInput,
+    *,
+    model: cp_model.CpModel | None = None,
+    require_solution: bool = False,
+) -> OptimizationOutput:
     if model is None:
         model = cp_model.CpModel()
     choice_vars: dict[tuple[str, str], cp_model.IntVar] = {}
@@ -146,15 +151,9 @@ def solve(input: OptimizationInput, *, model: cp_model.CpModel | None = None) ->
 
     model.Maximize(total_db2)
 
-    solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = int(os.getenv("OPTIMIZER_SOLVER_THREADS", "2"))
-    solver.parameters.max_time_in_seconds = input.time_limit_seconds
-    # Presolve spent 10-16 s comparing thousands of near-identical options
-    # before the first solution, while the search ranks them well by itself.
-    # Without it the same optimum came 3-7x faster on the test farms.
-    solver.parameters.cp_model_presolve = False
-    solver.parameters.relative_gap_limit = RELATIVE_GAP_LIMIT
-    status = solver.Solve(model)
+    solver, status = search(
+        model, input.time_limit_seconds, RELATIVE_GAP_LIMIT, require_solution=require_solution
+    )
 
     if status == cp_model.OPTIMAL:
         output_status = "OPTIMAL"
@@ -211,4 +210,5 @@ def solve(input: OptimizationInput, *, model: cp_model.CpModel | None = None) ->
         total_n_load_kg=total_n_load_value,
         total_leaching_kg=total_leaching_value,
         total_fen=total_fen_value,
+        optimality_gap_pct=optimality_gap_pct(solver),
     )

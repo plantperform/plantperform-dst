@@ -6,7 +6,6 @@ a peer system rather than a rewrite of solve().
 """
 
 import math
-import os
 from collections import defaultdict
 from collections.abc import Mapping
 
@@ -21,6 +20,7 @@ from optimizer.models import (
     YearlyOptimizationInput,
     YearlyOptimizationOutput,
 )
+from optimizer.search import optimality_gap_pct, search
 
 SCALE = 1000
 # A cap variable's domain when its opland has no cap in a solve. Far above any
@@ -91,6 +91,7 @@ def solve_yearly(
     hint: Mapping[str, str] | None = None,
     *,
     model: cp_model.CpModel | None = None,
+    require_solution: bool = False,
 ) -> YearlyOptimizationOutput:
     """Solve "Års-optimering".
 
@@ -103,6 +104,7 @@ def solve_yearly(
         input.time_limit_seconds,
         hint,
         input.relative_gap_limit,
+        require_solution=require_solution,
     )
 
 
@@ -395,18 +397,16 @@ class YearlyModel:
         time_limit_seconds: float,
         hint: Mapping[str, str] | None = None,
         relative_gap_limit: float = RELATIVE_GAP_LIMIT,
+        *,
+        require_solution: bool = False,
     ) -> YearlyOptimizationOutput:
         input = self.input
         self._set_caps(caps)
         self._set_hint(hint)
 
-        solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = int(os.getenv("OPTIMIZER_SOLVER_THREADS", "2"))
-        solver.parameters.max_time_in_seconds = time_limit_seconds
-        # See engine.py's solve() for why presolve is off and the gap limit is set.
-        solver.parameters.cp_model_presolve = False
-        solver.parameters.relative_gap_limit = relative_gap_limit
-        status = solver.Solve(self.model)
+        solver, status = search(
+            self.model, time_limit_seconds, relative_gap_limit, require_solution=require_solution
+        )
         # The objective sums the scaled DB2 of every year, less any quota
         # payments; total_db2 is the unscaled yearly average.
         bound = solver.best_objective_bound
@@ -498,4 +498,5 @@ class YearlyModel:
             total_n_load_by_year=total_n_load_by_year_value,
             quota_trades=quota_trades,
             db2_upper_bound=db2_upper_bound,
+            optimality_gap_pct=optimality_gap_pct(solver),
         )

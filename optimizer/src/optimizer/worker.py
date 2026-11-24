@@ -22,6 +22,7 @@ from app.services.optimization.failures import is_transient
 from app.services.rotations.custom import simulation_scope
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
 from optimizer.deadline import (
+    SOLVER_TIME_LIMIT_SECONDS,
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
@@ -29,11 +30,11 @@ from optimizer.deadline import (
 from optimizer.memory import memory_observation
 from optimizer.orchestrator import (
     OptimizationInfeasibleError,
-    OptimizationUnknownError,
     run_optimization,
     run_yearly_optimization,
 )
 from optimizer.preparation import hydrate, prepare
+from optimizer.search import OptimizationUnknownError
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,8 @@ def yearly_caps(
 
 
 class _LocalExecutionContext:
-    def __init__(self):
-        self.deadline = time.monotonic() + EXECUTION_TIMEOUT_SECONDS
+    def __init__(self, timeout_seconds=EXECUTION_TIMEOUT_SECONDS):
+        self.deadline = time.monotonic() + timeout_seconds
 
     def get_remaining_time_in_millis(self):
         return max(0, int((self.deadline - time.monotonic()) * 1000))
@@ -129,8 +130,7 @@ def execute(
                 else OptimizeSimulationRequest
             )
             request = request_type.model_validate(row["parameters"])
-            # Duration belongs to the execution context, never saved client settings.
-            args = (farm_id, simulation_id, EXECUTION_TIMEOUT_SECONDS)
+            args = (farm_id, simulation_id, SOLVER_TIME_LIMIT_SECONDS)
             excluded = frozenset(request.excluded_afgrodekoder)
             with _timed_phase("solve", simulation_id, run_id):
                 if row["kind"] == "yearly":
@@ -162,6 +162,7 @@ def execute(
             check_deadline()
             response = OptimizeSimulationResponse(
                 status=solved.output.status,
+                optimality_gap_pct=solved.output.optimality_gap_pct,
                 objective_db2=solved.output.total_db2,
                 total_n_load_kg=solved.output.total_n_load_kg,
                 total_leaching_kg=solved.output.total_leaching_kg,
@@ -209,13 +210,13 @@ def execute(
                     },
                 )
         outcome = "completed" if saved else "stale"
-    except OptimizationInfeasibleError as error:
+    except (OptimizationInfeasibleError, OptimizationUnknownError) as error:
         saved = optimization_store.finish(
             simulation_id,
             run_id,
             token,
             row["input_revision"],
-            error={"code": "INFEASIBLE", "message": str(error)},
+            error={"code": error.code, "message": str(error)},
         )
         outcome = "infeasible" if saved else "stale"
     except Exception as error:
@@ -223,7 +224,7 @@ def execute(
         retry = is_transient(error) and row["attempts"] + 1 < MAX_JOB_ATTEMPTS
         if isinstance(error, MemoryError):
             failure = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
-        elif isinstance(error, (OptimizationUnknownError, OptimizationDeadlineError)):
+        elif isinstance(error, OptimizationDeadlineError):
             failure = {"code": "TIMEOUT", "message": str(error)}
         elif isinstance(error, (MissingSoilDataError, ValueError)):
             failure = {"code": "INVALID_INPUT", "message": str(error)}

@@ -8,6 +8,7 @@ from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from ortools.sat.python import cp_model
 from sqlalchemy import update
 from test_optimizer_lifecycle import CONTEXT, EMAIL, DatabaseTests
 
@@ -34,7 +35,6 @@ class ExecutionFailureTests(DatabaseTests):
             (MemoryError(), "OUT_OF_MEMORY"),
             (RuntimeError("bug"), "WORKER_ERROR"),
             (ValueError("invalid"), "INVALID_INPUT"),
-            (worker.OptimizationUnknownError("no solution"), "TIMEOUT"),
             (worker.OptimizationDeadlineError("timeout"), "TIMEOUT"),
         ):
             with self.subTest(code=code):
@@ -56,6 +56,63 @@ class ExecutionFailureTests(DatabaseTests):
                     optimization_store.delivery_result("sim", run.run_id, "farm"), result
                 )
                 self.assertEqual(self.row().attempts, 1)
+
+    def test_search_without_a_plan_is_saved_and_acknowledged_on_redelivery(self):
+        self.submit_and_execute()
+        previous = self.row().output
+        budgets = ((7_200_000, "1 time"), (70_000, "den tilgængelige søgetid"))
+        for kind in ("optimize", "yearly"):
+            for remaining_ms, duration in budgets:
+                with self.subTest(kind=kind, duration=duration):
+                    run = self.submit(self.request(yearly=kind == "yearly"), kind)
+                    context = Mock()
+                    context.get_remaining_time_in_millis.return_value = remaining_ms
+
+                    with patch.object(cp_model.CpSolver, "solve", return_value=cp_model.UNKNOWN):
+                        first = worker.execute("sim", run.run_id, context, sqs_delivery=True)
+                    redelivery = optimization_store.delivery_result("sim", run.run_id, "farm")
+
+                    self.assertEqual(first.outcome, DeliveryOutcome.ACK)
+                    self.assertEqual(redelivery, first)
+                    self.assertEqual(self.row().status, "infeasible")
+                    self.assertEqual(
+                        self.row().error,
+                        {
+                            "code": "NO_SOLUTION_WITHIN_TIME_LIMIT",
+                            "message": "Optimeringen fandt ingen løsning, der opfylder reglerne, "
+                            f"inden for {duration}.",
+                        },
+                    )
+                    self.assertEqual(self.row().output, previous)
+
+    def test_feasible_assignments_survive_the_full_search_hour(self):
+        solve = cp_model.CpSolver.solve
+        context = Mock()
+
+        def timed_solve(solver, model):
+            self.assertEqual(solver.parameters.max_time_in_seconds, 3600)
+            self.assertEqual(solve(solver, model), cp_model.OPTIMAL)
+            context.get_remaining_time_in_millis.return_value -= 3_600_000
+            return cp_model.FEASIBLE
+
+        bound = property(lambda solver: 1.025 * solver.objective_value)
+        for kind in ("optimize", "yearly"):
+            with self.subTest(kind=kind):
+                run = self.submit(self.request(yearly=kind == "yearly"), kind)
+                context.get_remaining_time_in_millis.return_value = 7_200_000
+
+                with (
+                    patch.object(cp_model.CpSolver, "solve", timed_solve),
+                    patch.object(cp_model.CpSolver, "best_objective_bound", bound),
+                ):
+                    delivery = worker.execute("sim", run.run_id, context, sqs_delivery=True)
+
+                self.assertEqual(delivery.outcome, DeliveryOutcome.ACK)
+                result = self.result()
+                self.assertEqual(result.status, "completed")
+                self.assertEqual(result.response.status, "FEASIBLE")
+                self.assertEqual(len(result.response.assignments), 2)
+                self.assertAlmostEqual(result.response.optimality_gap_pct, 2.5)
 
     def test_infeasible_run_preserves_the_previous_success_and_exposes_the_reason(self):
         self.submit_and_execute()

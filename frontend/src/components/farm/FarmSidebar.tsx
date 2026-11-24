@@ -107,7 +107,7 @@ import {
   type FarmQuota,
   type QuotaStatusLevel,
 } from '@/lib/field-domain'
-import { optimizationRunName } from '@/lib/optimization-run'
+import { infeasibleRunHeading, optimizationRunName } from '@/lib/optimization-run'
 import {
   averageLimitAfterTradesFor,
   db2IncludingQuotaTrades,
@@ -845,7 +845,7 @@ const SimulationMenuItem = ({
           onClick={onSelect}
           title={run.error}
         >
-          Ingen mulig løsning
+          {infeasibleRunHeading(run.errorCode)}
         </button>
       )}
       {failedRun ? (

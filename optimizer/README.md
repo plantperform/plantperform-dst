@@ -22,8 +22,9 @@ waking the worker; the current UI offers retry only for failed runs. The queue
 accepts only `optimization` envelopes with `farmId`, `simulationId` and `runId`.
 
 The task enables ECS task protection and receives one message using a 20-second
-long poll. Every job runs in a fresh spawned process, with a 60-minute total
-deadline. The database lease lasts 61 minutes and SQS visibility lasts 65 minutes.
+long poll. Every optimization job runs in a fresh spawned process with a two-hour
+total deadline. The database lease lasts 121 minutes. SQS visibility and ECS task
+protection each last 125 minutes.
 Successful results remain guarded by run ID, input revision, lease token and
 lease expiry. After confirming a child has stopped, the parent can fail its
 matching claim even if that lease expired; it cannot overwrite a replacement
@@ -35,8 +36,11 @@ execution attempts. A proven infeasible optimization is saved as `infeasible`
 with a Danish reason and acknowledged after the transaction commits. A duplicate
 delivery is acknowledged even if an older worker saved it as `failed` with code
 `INFEASIBLE`. The frontend shows the reason alongside the last successful figures.
+If search ends at its time limit before finding a plan, the run is also saved
+as `infeasible`, with reason `NO_SOLUTION_WITHIN_TIME_LIMIT`. The message describes
+the search deadline, and both the first delivery and redeliveries are acknowledged.
 Memory exhaustion, process crashes, application errors,
-invalid messages/input, timeouts and exhausted attempts go directly
+invalid messages/input, execution deadline failures and exhausted attempts go directly
 to the DLQ. The existing `simulation_result` row stores the failed status and
 error. The consumer
 sends the original body and message attributes directly to the DLQ, then deletes
@@ -70,9 +74,13 @@ Simulation creation saves settings and an economics snapshot synchronously with
 HTTP 201. It does not generate candidates. Both optimization endpoints return
 HTTP 202, taking `expectedRevision` and UUID `runId`; saved optimization options
 remain authoritative. Run duration is controlled by the worker: preparation,
-solving and publication share the existing one-hour total execution deadline.
-The solver uses the remaining execution time with a 30-second reserve for
-completing and publishing results. Legacy client-supplied or saved durations
+solving and publication share the two-hour execution deadline. After model
+construction, CP-SAT searches for up to one hour, shortened if necessary to
+reserve 30 seconds for publication. It can finish earlier at the 0.3% gap
+target. A feasible plan at the time limit is published as a completed result.
+Successful responses include `optimalityGapPct` when a finite bound is available,
+measured against the solver objective including yearly quota payments. Earlier
+results can omit this field. Legacy client-supplied or saved durations
 are ignored; neither optimization endpoint accepts a duration setting.
 
 The first execution captures farm fields and registry/soil context. Subsequent

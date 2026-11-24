@@ -218,6 +218,7 @@ class QuotaTradeWorkerTests(unittest.TestCase):
         solved = SimpleNamespace(
             output=SimpleNamespace(
                 status="OPTIMAL",
+                optimality_gap_pct=0.0,
                 total_db2=1,
                 total_n_load_kg=0,
                 total_leaching_kg=0,

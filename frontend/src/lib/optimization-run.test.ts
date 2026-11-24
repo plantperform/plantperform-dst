@@ -1,26 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  optimizationFailureMessage,
   optimizationRunName,
+  optimizationStatusLabel,
 } from '@/lib/optimization-run'
 
-describe('optimizationFailureMessage', () => {
-  it('replaces the out-of-time message with one the user can act on', () => {
-    const message = optimizationFailureMessage({
-      status: 503,
-      message: 'prøv en længere tidsgrænse.',
-    })
-    expect(message).toContain('inden for tidsgrænsen')
-    expect(message).toContain('Prøv at lempe reglerne')
-    expect(message).not.toContain('længere tidsgrænse')
-    expect(message).not.toContain('90 sekunder')
+describe('optimizationStatusLabel', () => {
+  it('rounds a time-limited plan’s gap upward in Danish', () => {
+    const label = optimizationStatusLabel({ status: 'FEASIBLE', optimalityGapPct: 2.31 })
+
+    expect(label).toContain('højst 2,4 %')
   })
 
-  it('keeps the backend message for other failures', () => {
-    const message = 'Ingen sædskifte-fordeling kan opfylde de gemte krav'
-    expect(optimizationFailureMessage({ status: 422, message })).toBe(message)
-    expect(optimizationFailureMessage({ message })).toBe(message)
+  it('shows the measured gap for an early success', () => {
+    const label = optimizationStatusLabel({ status: 'OPTIMAL', optimalityGapPct: 0.15 })
+
+    expect(label).toContain('højst 0,2 %')
+  })
+
+  it('keeps the original status text for a saved plan without a gap', () => {
+    const label = optimizationStatusLabel({ status: 'FEASIBLE' })
+
+    expect(label).toBe('brugbar løsning, tidsgrænsen blev nået')
   })
 })
 

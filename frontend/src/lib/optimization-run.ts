@@ -1,4 +1,4 @@
-import type { FieldRecord, OptimizationStatus } from '@/api/types'
+import type { FieldRecord, OptimizeSimulationResponse } from '@/api/types'
 import {
   computeFieldTotals,
   rotationsEqual,
@@ -21,25 +21,21 @@ export const PERIOD_AVERAGE_OFFERED = false
 export const optimizationRunName = (kind: OptimizationKind) =>
   `Optimering (${OPTIMIZATION_KIND_LABELS[kind].toLowerCase()})`
 
-// The solver stops once it has proven its solution within 0.3 % of the best
-// possible DB2 and reports OPTIMAL (RELATIVE_GAP_LIMIT in the optimizer), so
-// OPTIMAL is not "proven best". Keep the percentage in step with it.
-export const RUN_STATUS_LABELS: Record<OptimizationStatus, string> = {
-  OPTIMAL: 'løsning inden for 0,3 % af det bedst mulige',
-  FEASIBLE: 'brugbar løsning, tidsgrænsen blev nået',
+export const optimizationStatusLabel = ({
+  status,
+  optimalityGapPct,
+}: Pick<OptimizeSimulationResponse, 'status' | 'optimalityGapPct'>) => {
+  const timedOut = 'brugbar løsning, tidsgrænsen blev nået'
+  if (optimalityGapPct == null) {
+    return status === 'OPTIMAL' ? 'løsning inden for 0,3 % af det bedst mulige' : timedOut
+  }
+  const gap = (Math.ceil(optimalityGapPct * 10) / 10).toLocaleString('da-DK')
+  const quality = `afstand til den øvre grænse for DB2 er højst ${gap} %`
+  return status === 'FEASIBLE' ? `${timedOut}, ${quality}` : `løsning fundet, ${quality}`
 }
 
-const OUT_OF_TIME_STATUS = 503
-
-export const optimizationFailureMessage = (failure: {
-  status?: number
-  message: string
-}) =>
-  failure.status === OUT_OF_TIME_STATUS
-    ? 'Optimeringen fandt ikke en løsning inden for tidsgrænsen. ' +
-      'Prøv at lempe reglerne, fx en højere maks. udledning, ' +
-      'eller udeluk nogle afgrøder, så der er færre muligheder at gennemgå.'
-    : failure.message
+export const infeasibleRunHeading = (errorCode?: string) =>
+  errorCode === 'NO_SOLUTION_WITHIN_TIME_LIMIT' ? 'Ingen løsning fundet' : 'Ingen mulig løsning'
 
 export type OptimizationChanges = {
   // Fields whose sædskifte or its placement in the years changed, as returned
