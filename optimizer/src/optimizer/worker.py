@@ -21,19 +21,19 @@ from app.domain.soil import MissingSoilDataError
 from app.services.optimization.failures import is_transient
 from app.services.rotations.custom import simulation_scope
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
-from plantperform_fargate.deadline import (
+from optimizer.deadline import (
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
 )
-from plantperform_fargate.memory import memory_observation
-from plantperform_fargate.orchestrator import (
+from optimizer.memory import memory_observation
+from optimizer.orchestrator import (
     OptimizationInfeasibleError,
     OptimizationUnknownError,
     run_optimization,
     run_yearly_optimization,
 )
-from plantperform_fargate.preparation import hydrate, prepare
+from optimizer.preparation import hydrate, prepare
 
 logger = logging.getLogger(__name__)
 

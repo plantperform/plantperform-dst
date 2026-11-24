@@ -43,7 +43,7 @@ from app.services import preparation_runner as read_model_worker
 from app.services.calculation import CalculationFailedError
 from app.services.optimization.crop_area_ranges import crop_area_ranges
 from app.services.scenario.rotations import compute_yearly_summary
-from plantperform_fargate import worker as optimizer_worker
+from optimizer import worker as optimizer_worker
 
 
 def rich_candidate(variant="1"):

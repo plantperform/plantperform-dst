@@ -1,14 +1,14 @@
 import unittest
 
 from app.domain.optimization import NUM_YEARS, QuotaTradeSetting
-from plantperform_fargate.models import (
+from optimizer.models import (
     FixedYearlyFieldContribution,
     YearlyConstraintsInput,
     YearlyFieldInput,
     YearlyOptimizationInput,
     YearlyRotationOption,
 )
-from plantperform_fargate.yearly_engine import solve_yearly
+from optimizer.yearly_engine import solve_yearly
 
 # "high" earns 1,000 kr more per year than "low" and lets out 100 kg N more.
 HIGH = ("high", 2_000.0, 150.0)

@@ -20,7 +20,7 @@ from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, UpdateSimulationRequest
 from app.services.economics import runner as economics_worker
 from app.services.optimization import jobs
-from plantperform_fargate import preparation, worker
+from optimizer import preparation, worker
 
 
 class SimulationSettingsTests(DatabaseTests):

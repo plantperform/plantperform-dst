@@ -33,7 +33,7 @@ openpyxl = ">=3.1.0"
 rasterio = ">=1.4.0"
 
 [feature.local.pypi-dependencies]
-plantperform-fargate = { path = "../fargate", editable = true }
+optimizer = { path = "../optimizer", editable = true }
 ortools = ">=9.10.0"
 
 [environments]
@@ -45,9 +45,9 @@ dev = "uvicorn app.main:app --reload --port 8000 --app-dir src"
 serve = "uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir src"
 lint = "ruff check src"
 test = "PYTHONPATH=src python -m unittest discover -s tests"
-test-fargate = "python -m unittest discover -s ../fargate/tests"
-lint-fargate = "ruff check --config pyproject.toml ../fargate/src ../fargate/tests ../fargate/scripts"
-quota-value-curve = "PYTHONPATH=src python ../fargate/scripts/quota_value_curve.py"
+test-optimizer = "python -m unittest discover -s ../optimizer/tests"
+lint-optimizer = "ruff check --config pyproject.toml ../optimizer/src ../optimizer/tests ../optimizer/scripts"
+quota-value-curve = "PYTHONPATH=src python ../optimizer/scripts/quota_value_curve.py"
 format = "ruff format src"
 db-up = "docker compose -f database/docker-compose.yml up -d postgres"
 db-down = "docker compose -f database/docker-compose.yml down"

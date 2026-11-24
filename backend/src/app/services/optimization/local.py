@@ -18,7 +18,7 @@ def _initialize():
     started = time.monotonic()
     outcome = "failed"
     try:
-        from plantperform_fargate.worker import execute_local
+        from optimizer.worker import execute_local
 
         outcome = "ready"
         return execute_local
@@ -85,7 +85,7 @@ def execute_quota_value_when_ready(simulation_id, run_id):
     """
     try:
         start_local_optimizer().initialized.result()
-        from plantperform_fargate.quota_value_worker import execute_quota_value
+        from optimizer.quota_value_worker import execute_quota_value
     except Exception:
         logger.exception(
             "local_quota_value_initialization_failed simulation_id=%s run_id=%s",

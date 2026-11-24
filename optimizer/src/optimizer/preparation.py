@@ -9,8 +9,8 @@ from app.domain.saedskifte import RotationDefinitionError
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints
 from app.services.rotations.custom import simulation_scope, with_simulation_rotations
 from app.services.scenario import candidate_evaluator
-from plantperform_fargate.deadline import check_deadline
-from plantperform_fargate.orchestrator import OptimizationInfeasibleError
+from optimizer.deadline import check_deadline
+from optimizer.orchestrator import OptimizationInfeasibleError
 
 
 @dataclass

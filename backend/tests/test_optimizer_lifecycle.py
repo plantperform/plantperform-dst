@@ -73,9 +73,9 @@ from app.domain.simulation import CreateSimulationRequest, OptimizationConstrain
 from app.services import read_models
 from app.services.optimization import jobs
 from app.services.rotations import saedskifte_kategorier, saedskifte_library
-from plantperform_fargate import consumer as fargate_consumer
-from plantperform_fargate import worker
-from plantperform_fargate.deadline import remaining_time
+from optimizer import consumer as optimizer_consumer
+from optimizer import worker
+from optimizer.deadline import remaining_time
 
 DATABASE = os.getenv("OPTIMIZER_TEST_DATABASE_URL")
 EMAIL = "member@example.com"
@@ -261,7 +261,7 @@ class DatabaseTests(unittest.TestCase):
 
         # Legacy solver fixtures supply synthetic evaluations in memory.
         # Actual generation and persistence are covered by the settings integration tests.
-        from plantperform_fargate.preparation import PreparedSnapshot
+        from optimizer.preparation import PreparedSnapshot
 
         def prepare_fixture(simulation, fields, setup_fields, contexts):
             with self.sessions() as session:
@@ -455,8 +455,8 @@ class LifecycleTests(DatabaseTests):
             "simulationId": "sim",
             "runId": run_id,
         }
-        with patch.object(fargate_consumer, "initialize_configuration"):
-            fargate_consumer._child_execute(envelope, time.monotonic() + 3600, connection)
+        with patch.object(optimizer_consumer, "initialize_configuration"):
+            optimizer_consumer._child_execute(envelope, time.monotonic() + 3600, connection)
         kind, result = connection.send.call_args.args[0]
         self.assertEqual(kind, "result")
         if result.outcome == "retry":
@@ -1078,7 +1078,7 @@ class LifecycleTests(DatabaseTests):
                 row["candidates"] = [base.model_dump(mode="json")]
             replace_cached_candidates(session, data)
         with patch(
-            "plantperform_fargate.orchestrator.candidate_evaluator.evaluate_with_overrides",
+            "optimizer.orchestrator.candidate_evaluator.evaluate_with_overrides",
             return_value=shifted,
         ):
             self.submit_and_execute(yearly=True)

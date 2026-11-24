@@ -17,7 +17,7 @@ class ProductionBoundaryTests(unittest.TestCase):
 
             class BlockSolverImports(importlib.abc.MetaPathFinder):
                 def find_spec(self, fullname, path=None, target=None):
-                    if fullname.split('.')[0] in {'plantperform_fargate', 'ortools'}:
+                    if fullname.split('.')[0] in {'optimizer', 'ortools'}:
                         raise AssertionError('Production imported solver code: ' + fullname)
 
             sys.meta_path.insert(0, BlockSolverImports())
@@ -87,7 +87,7 @@ class ProductionBoundaryTests(unittest.TestCase):
             assert not created.fields_initialized
             queue.send_message.assert_not_called()
             assert not any(
-                name.split('.')[0] in {'plantperform_fargate', 'ortools'}
+                name.split('.')[0] in {'optimizer', 'ortools'}
                 for name in sys.modules
             )
         """)

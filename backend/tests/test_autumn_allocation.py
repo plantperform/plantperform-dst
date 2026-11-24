@@ -14,7 +14,7 @@ from app.domain.rotation_candidate import RotationCandidateRef
 from app.domain.simulation import GodningSettings
 from app.services.rotations import autumn_n
 from app.services.scenario import candidate_evaluator
-from plantperform_fargate import preparation
+from optimizer import preparation
 
 VAARBYG = 1
 VINTERHVEDE = 11

@@ -23,8 +23,8 @@ from app.domain.optimization import (
 )
 from app.services.fargate_control import set_worker_count
 from app.services.optimization.failures import is_transient
-from plantperform_fargate.configuration import initialize_configuration
-from plantperform_fargate.memory import memory_observation
+from optimizer.configuration import initialize_configuration
+from optimizer.memory import memory_observation
 
 logger = logging.getLogger(__name__)
 VISIBILITY_SECONDS = 3900
@@ -68,7 +68,7 @@ def _child_execute(envelope, deadline, connection):
 
     try:
         initialize_configuration()
-        from plantperform_fargate.worker import execute
+        from optimizer.worker import execute
 
         result = execute(
             envelope["simulationId"],

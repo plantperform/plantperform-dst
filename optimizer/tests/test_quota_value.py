@@ -12,15 +12,15 @@ from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
 )
-from plantperform_fargate.deadline import remaining_time
-from plantperform_fargate.models import (
+from optimizer.deadline import remaining_time
+from optimizer.models import (
     YearlyConstraintsInput,
     YearlyFieldInput,
     YearlyOptimizationInput,
     YearlyOptimizationOutput,
     YearlyRotationOption,
 )
-from plantperform_fargate.quota_value import (
+from optimizer.quota_value import (
     POINT_GAP,
     REFINED_GAP,
     BaseNotSolvedError,
@@ -34,8 +34,8 @@ from plantperform_fargate.quota_value import (
     quota_value_curve,
     repair_hint,
 )
-from plantperform_fargate.quota_value_worker import _rotations, parallel_solves
-from plantperform_fargate.yearly_engine import YearlyModel, solve_yearly
+from optimizer.quota_value_worker import _rotations, parallel_solves
+from optimizer.yearly_engine import YearlyModel, solve_yearly
 
 KYSTVAND, OTHER_KYSTVAND = 233, 244
 

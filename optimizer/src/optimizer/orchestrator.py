@@ -21,9 +21,9 @@ from app.services.rotations import afgroede_normer, saedskifte_library
 from app.services.rotations.custom import with_snapshot_rotations
 from app.services.scenario import candidate_evaluator
 from app.services.scenario.rotations import selected_locked_candidate
-from plantperform_fargate.deadline import check_deadline, solver_time_limit
-from plantperform_fargate.engine import solve
-from plantperform_fargate.models import (
+from optimizer.deadline import check_deadline, solver_time_limit
+from optimizer.engine import solve
+from optimizer.models import (
     ConstraintsInput,
     FieldInput,
     FixedFieldContribution,
@@ -37,7 +37,7 @@ from plantperform_fargate.models import (
     YearlyOptimizationOutput,
     YearlyRotationOption,
 )
-from plantperform_fargate.yearly_engine import solve_yearly
+from optimizer.yearly_engine import solve_yearly
 
 
 class OptimizationNotFoundError(Exception):

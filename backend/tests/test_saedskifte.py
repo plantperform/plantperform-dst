@@ -77,7 +77,7 @@ from app.services.optimization import jobs
 from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
 from app.services.scenario import candidate_evaluator
 from database.scripts.load_saedskifte_lookup import load_saedskifte_lookup
-from plantperform_fargate import worker
+from optimizer import worker
 
 DATABASE = os.getenv("OPTIMIZER_TEST_DATABASE_URL")
 EMAIL = "member@example.com"

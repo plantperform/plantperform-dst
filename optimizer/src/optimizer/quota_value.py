@@ -45,9 +45,9 @@ import numpy as np
 from app.domain.optimization import NUM_YEARS
 from app.domain.quota_value import QuotaTradeRange
 from app.domain.rotation_candidate import RotationCandidateEvaluation
-from plantperform_fargate.deadline import remaining_time
-from plantperform_fargate.models import YearlyOptimizationInput, YearlyOptimizationOutput
-from plantperform_fargate.yearly_engine import YearlyModel, solve_yearly
+from optimizer.deadline import remaining_time
+from optimizer.models import YearlyOptimizationInput, YearlyOptimizationOutput
+from optimizer.yearly_engine import YearlyModel, solve_yearly
 
 # The trades looked at reach this share of the kvote either way, with this many
 # evenly spaced points on each side of t = 0.

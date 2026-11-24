@@ -307,4 +307,4 @@ empty: every `source` is null and work rates fall back to `kr/enhed`.
 
 The Fargate compute change adds no schema migration: economics executes in the
 backend, while the queue carries only optimization jobs. See
-[Fargate deployment](../fargate/README.md).
+[Fargate deployment](../optimizer/README.md).

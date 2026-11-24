@@ -3,8 +3,8 @@ import signal
 from threading import Event
 
 from app.services.fargate_control import ecs_client
-from plantperform_fargate.configuration import initialize_configuration
-from plantperform_fargate.consumer import Consumer, TaskProtection, consumer_sqs_client
+from optimizer.configuration import initialize_configuration
+from optimizer.consumer import Consumer, TaskProtection, consumer_sqs_client
 
 
 def main():

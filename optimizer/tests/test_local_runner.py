@@ -6,14 +6,14 @@ from uuid import uuid4
 from app.data import optimization_store
 from app.domain.optimization import DeliveryOutcome, ExecutionResult
 from app.domain.simulation import Simulation
-from plantperform_fargate import worker
-from plantperform_fargate.deadline import (
+from optimizer import worker
+from optimizer.deadline import (
     OptimizationDeadlineError,
     check_deadline,
     remaining_time,
     solver_time_limit,
 )
-from plantperform_fargate.preparation import PreparedSnapshot
+from optimizer.preparation import PreparedSnapshot
 
 
 class LocalExecutionTests(unittest.TestCase):

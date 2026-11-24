@@ -9,8 +9,8 @@ os.environ.setdefault(
 )
 
 from app.domain.optimization import NUM_YEARS
-from plantperform_fargate import orchestrator
-from plantperform_fargate.models import (
+from optimizer import orchestrator
+from optimizer.models import (
     FieldInput,
     FixedFieldContribution,
     RotationOption,

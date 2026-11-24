@@ -20,15 +20,15 @@ from app.domain.quota_value import (
 )
 from app.domain.rotation_candidate import RotationCandidateEvaluation
 from app.services.scenario.candidate_evaluator import START_CALENDAR_YEAR
-from plantperform_fargate.deadline import OptimizationDeadlineError, remaining_time
-from plantperform_fargate.orchestrator import (
+from optimizer.deadline import OptimizationDeadlineError, remaining_time
+from optimizer.orchestrator import (
     OptimizationInfeasibleError,
     YearlyInputBuild,
     build_yearly_input,
     yearly_field_contribution,
 )
-from plantperform_fargate.preparation import prepare
-from plantperform_fargate.quota_value import (
+from optimizer.preparation import prepare
+from optimizer.quota_value import (
     BaseNotSolvedError,
     QuotaCurve,
     QuotaPoint,
@@ -37,7 +37,7 @@ from plantperform_fargate.quota_value import (
     hint_from_candidates,
     tradable_kystvandoplande,
 )
-from plantperform_fargate.worker import _LocalExecutionContext, yearly_caps
+from optimizer.worker import _LocalExecutionContext, yearly_caps
 
 logger = logging.getLogger(__name__)
 

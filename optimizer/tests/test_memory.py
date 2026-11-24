@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from plantperform_fargate.memory import memory_observation
+from optimizer.memory import memory_observation
 
 
 class MemoryTests(unittest.TestCase):

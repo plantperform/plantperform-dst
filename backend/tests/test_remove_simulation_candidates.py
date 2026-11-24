@@ -28,7 +28,7 @@ from app.domain.economics import RecalculateEconomicsRequest
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.services.economics import runner as economics_worker
 from app.services.scenario.rotations import compute_yearly_summary
-from plantperform_fargate import preparation, worker
+from optimizer import preparation, worker
 
 
 class RemoveCandidatesTests(DatabaseTests):

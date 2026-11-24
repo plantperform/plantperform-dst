@@ -12,7 +12,7 @@ from app.domain.optimization import (
     OptimizationLeaseActiveError,
     OptimizationTerminalError,
 )
-from plantperform_fargate import consumer
+from optimizer import consumer
 
 ENVELOPE = {
     "jobType": "optimization",

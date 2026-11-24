@@ -21,9 +21,9 @@ from app.domain.rotation_candidate import (
 )
 from app.domain.simulation import GodningSettings, OptimizationConstraints
 from app.services.scenario import candidate_evaluator
-from plantperform_fargate import orchestrator, preparation
-from plantperform_fargate.engine import solve
-from plantperform_fargate.models import (
+from optimizer import orchestrator, preparation
+from optimizer.engine import solve
+from optimizer.models import (
     ConstraintsInput,
     FieldInput,
     FixedFieldContribution,
@@ -35,7 +35,7 @@ from plantperform_fargate.models import (
     YearlyOptimizationInput,
     YearlyRotationOption,
 )
-from plantperform_fargate.yearly_engine import solve_yearly
+from optimizer.yearly_engine import solve_yearly
 
 # The marks below have 10 ha each, so 1,070 kg N is exactly 107 kg N/ha.
 CEILING = 107

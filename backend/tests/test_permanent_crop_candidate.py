@@ -14,7 +14,7 @@ from app.domain.field import FieldRecord
 from app.domain.rotation_candidate import RotationCandidateRef, RotationPositionOverride
 from app.domain.simulation import GodningSettings, Simulation
 from app.services.scenario import candidate_evaluator
-from plantperform_fargate import preparation
+from optimizer import preparation
 
 PERMANENT_GRASS = 252
 NORM = {"n_norm": 158.0, "forfrugtsvaerdi": 18.0, "indregn_ffv": True}

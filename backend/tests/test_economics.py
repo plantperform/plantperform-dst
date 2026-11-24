@@ -77,7 +77,7 @@ from app.services.economics import budget, jobs, overrides
 from app.services.economics import db_calculator as calculator
 from app.services.economics import runner as economics_worker
 from app.services.optimization import jobs as optimization_jobs
-from plantperform_fargate import worker as optimizer_worker
+from optimizer import worker as optimizer_worker
 
 OTHER = "other@example.com"
 SALE = overrides.identifier("sale", 1, "Konventionel", "")

@@ -14,7 +14,7 @@ from app.domain.rotation_candidate import (
     RotationPositionOverride,
     RotationYear,
 )
-from plantperform_fargate import orchestrator
+from optimizer import orchestrator
 
 EMPTY = (None, None, None)
 

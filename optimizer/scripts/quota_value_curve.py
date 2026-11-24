@@ -20,15 +20,15 @@ from app.data.quota_value_store import load_quota_snapshot
 from app.domain.optimization import YearlyOptimizeSimulationRequest
 from app.domain.quota_value import QuotaTradeRange
 from app.domain.rotation_candidate import RotationCandidateEvaluation
-from plantperform_fargate import quota_value
-from plantperform_fargate.quota_value import (
+from optimizer import quota_value
+from optimizer.quota_value import (
     BaseNotSolvedError,
     analyse_quota_value,
     best_trade,
     gain,
     hint_from_candidates,
 )
-from plantperform_fargate.quota_value_worker import (
+from optimizer.quota_value_worker import (
     SELLING_POINT_TIME_LIMIT_SECONDS,
     build_opland_input,
     parallel_solves,

@@ -1,8 +1,8 @@
-# Fargate optimization worker
+# Optimizer
 
 Production publishes identifier-only optimization messages to SQS. One Linux
 ARM64 ECS Fargate task per environment uses 4 vCPUs, 16 GiB memory and four
-solver threads. Local development runs the same `plantperform_fargate` solver
+solver threads. Local development runs the same `optimizer` solver
 package through backend background tasks. Production backend dependencies do
 not include this package or OR-Tools.
 
@@ -94,8 +94,8 @@ Fargate receives these names, `OPTIMIZER_DLQ_URL`, `APP_CONFIG_BUCKET` and
 `APP_CONFIG_KEY` from its task definition. Its role can send only to that DLQ. The worker loads `DATABASE_URL` from the S3 dotenv object unless
 it is already set. Secrets are never baked into the image.
 
-From `backend`, run `pixi run test`, `pixi run test-fargate`, `pixi run lint`, and
-`pixi run lint-fargate`. Set `OPTIMIZER_TEST_DATABASE_URL` to a disposable UTF-8
+From `backend`, run `pixi run test`, `pixi run test-optimizer`, `pixi run lint`, and
+`pixi run lint-optimizer`. Set `OPTIMIZER_TEST_DATABASE_URL` to a disposable UTF-8
 PostGIS database to enable integration cases; they create and remove isolated
 schemas. Never point tests at production data. The `production` Pixi environment
 omits local solver dependencies: `pixi install --locked -e production`.
@@ -104,12 +104,12 @@ From the repository root, build with:
 
 ```bash
 docker buildx build --platform linux/arm64 --load --provenance=false \
-  -f fargate/Dockerfile -t plantperform-fargate:test .
+  -f optimizer/Dockerfile -t optimizer:test .
 ```
 
-An ARM host or QEMU support is needed to execute the image. Deployment CI installs
-QEMU, builds ARM64, checks compiled imports and solves a CP-SAT problem before
-publishing. Inspect phase logs for `load_snapshot`, `prepare_candidates`, `solve`,
+The image runs `python -m optimizer`. Running it locally requires an ARM64 host
+or ARM64 emulation. Deployment CI builds on a native ARM64 runner.
+Inspect phase logs for `load_snapshot`, `prepare_candidates`, `solve`,
 `hydrate_winners` and `persist_result`.
 
 Before deploying this worker, manually apply the reviewed infrastructure changes

@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from ortools.sat.python import cp_model
 
 from app.domain.optimization import NUM_YEARS
-from plantperform_fargate.models import (
+from optimizer.models import (
     RELATIVE_GAP_LIMIT,
     AssignedRotation,
     YearlyOptimizationInput,

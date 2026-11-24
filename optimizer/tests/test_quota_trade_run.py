@@ -14,9 +14,9 @@ from app.domain.rotation_candidate import (
     SimulationFieldCandidates,
 )
 from app.domain.simulation import Simulation
-from plantperform_fargate import orchestrator, worker
-from plantperform_fargate.orchestrator import _validate_quota_trades
-from plantperform_fargate.preparation import PreparedSnapshot
+from optimizer import orchestrator, worker
+from optimizer.orchestrator import _validate_quota_trades
+from optimizer.preparation import PreparedSnapshot
 
 NAMES = {1: "Limfjorden"}
 TRADE = QuotaTradeSetting(kystvand_id=1, buy_price_kr_per_kg=35, sell_price_kr_per_kg=30)

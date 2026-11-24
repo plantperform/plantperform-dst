@@ -27,8 +27,8 @@ from app.domain.quota_value import (
 )
 from app.domain.rotation_candidate import SimulationFieldCandidates
 from app.services.scenario import quota_trade, rotations
-from plantperform_fargate import quota_value_worker, worker
-from plantperform_fargate.quota_value_worker import execute_quota_value
+from optimizer import quota_value_worker, worker
+from optimizer.quota_value_worker import execute_quota_value
 
 KYSTVAND, OTHER = 233, 244
 

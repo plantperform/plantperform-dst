@@ -13,7 +13,7 @@ from app.data import optimization_store, simulation_store
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.optimization import DeliveryOutcome, OptimizationLeaseActiveError
-from plantperform_fargate import worker
+from optimizer import worker
 
 FAILURE = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
 
