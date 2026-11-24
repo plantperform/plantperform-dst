@@ -13,7 +13,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Event
+from threading import Barrier, Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -70,7 +70,7 @@ from app.domain.field import FieldRecord, UpdateFieldRequest
 from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
 from app.domain.rotation_candidate import RotationCandidateEvaluation, SimulationFieldCandidates
 from app.domain.simulation import CreateSimulationRequest, OptimizationConstraints, Simulation
-from app.services import read_models
+from app.services import fargate_control, read_models
 from app.services.optimization import jobs
 from app.services.rotations import saedskifte_kategorier, saedskifte_library
 from optimizer import consumer as optimizer_consumer
@@ -189,7 +189,17 @@ class DatabaseTests(unittest.TestCase):
         self.queue = self.enterContext(
             patch.object(jobs, "sqs_client", return_value=Mock())
         ).return_value
-        self.enterContext(patch.object(jobs, "wake_worker"))
+        self.enterContext(patch.object(fargate_control, "SessionLocal", self.sessions))
+        self.enterContext(
+            patch.dict(
+                os.environ,
+                {
+                    "FARGATE_CLUSTER_NAME": "cluster",
+                    "FARGATE_SERVICE_NAME": "optimizer",
+                },
+            )
+        )
+        self.ecs = self.enterContext(patch.object(fargate_control, "ecs_client")).return_value
         with self.sessions.begin() as session:
             session.execute(
                 farm_table.insert().values(
@@ -438,15 +448,158 @@ class CandidateStorageTests(DatabaseTests):
         self.assertEqual(simulation.result.status, "not_started")
 
 
-class LifecycleTests(DatabaseTests):
-    def test_database_publication_clock_detects_queued_jobs_then_completion(self):
-        since = optimization_store.publication_clock()
-        run = self.submit()
-        self.assertGreaterEqual(self.row().published_at, since)
-        self.assertTrue(optimization_store.queued_publication_since(since))
-        worker.execute("sim", run.run_id, CONTEXT)
-        self.assertFalse(optimization_store.queued_publication_since(since))
+class FargateScalingTests(DatabaseTests):
+    def setUp(self):
+        super().setUp()
+        self.service = fargate_control.FargateService("cluster", "optimizer")
 
+    def add_simulation(self, simulation_id, **result):
+        with self.sessions.begin() as session:
+            setup = dict(session.execute(select(setups).where(setups.c.id == "sim")).one()._mapping)
+            setup["data"] = {**setup["data"], "id": simulation_id}
+            session.execute(setups.insert().values({**setup, "id": simulation_id}))
+            session.execute(results.insert().values(simulation_id=simulation_id, **result))
+
+    def publish(self, simulation_id):
+        self.add_simulation(simulation_id, status="queued", run_id=simulation_id)
+        fargate_control.record_publication(simulation_id, simulation_id)
+
+    def test_all_scale_out_thresholds_and_cap(self):
+        expected = [1, 1]
+        for tier in range(2, 11):
+            expected.extend([tier] * 3)
+        expected.append(10)
+        for count, target in enumerate(expected, start=1):
+            with self.subTest(jobs=count):
+                self.publish(str(count))
+
+                self.ecs.update_service.assert_called_with(
+                    cluster="cluster", service="optimizer", desiredCount=target
+                )
+        self.assertEqual(self.ecs.update_service.call_count, len(expected))
+
+    def test_counts_published_queued_and_running_jobs(self):
+        now = datetime.now(UTC)
+        for key, status, published in (
+            ("running", "in_progress", now),
+            ("one", "queued", now),
+            ("unsent", "queued", None),
+            ("failed", "failed", now),
+            ("done", "completed", now),
+            ("expired", "queued", now - timedelta(days=5)),
+        ):
+            self.add_simulation(key, status=status, published_at=published)
+
+        self.publish("two")
+
+        self.assertEqual(self.ecs.update_service.call_args.kwargs["desiredCount"], 2)
+
+    def test_ten_concurrent_submissions_request_four_tasks(self):
+        ids = [str(i) for i in range(10)]
+        for simulation_id in ids:
+            self.add_simulation(simulation_id)
+        publishers = Barrier(len(ids))
+
+        def publish(**kwargs):
+            publishers.wait(timeout=15)
+            return {}
+
+        self.queue.send_message.side_effect = publish
+
+        with ThreadPoolExecutor(max_workers=len(ids)) as pool:
+            submissions = [
+                pool.submit(jobs.submit, "farm", sim, EMAIL, "optimize", self.request())
+                for sim in ids
+            ]
+            for submission in submissions:
+                submission.result(timeout=30)
+
+        requests = [call.kwargs["desiredCount"] for call in self.ecs.update_service.call_args_list]
+        self.assertEqual(requests, [1, 1, 2, 2, 2, 3, 3, 3, 4, 4])
+
+    def test_submission_invalidates_an_older_empty_poll(self):
+        poll_started_at = self.service.poll_started_at()
+        self.publish("one")
+        with self.sessions.begin() as session:
+            session.execute(
+                update(results).where(results.c.run_id == "one").values(status="in_progress")
+            )
+
+        retired = self.service.scale_to_zero(poll_started_at)
+
+        self.assertFalse(retired)
+        self.assertEqual(self.ecs.update_service.call_count, 1)
+
+    def test_submission_racing_a_shutdown_already_sent_to_ecs_wins(self):
+        self.publish("one")
+        stopping, release = Event(), Event()
+
+        def update_service(**request):
+            if request["desiredCount"] == 0:
+                stopping.set()
+                self.assertTrue(release.wait(timeout=5))
+
+        self.ecs.update_service.side_effect = update_service
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            idle = pool.submit(self.service.scale_to_zero, self.service.poll_started_at())
+            self.assertTrue(stopping.wait(timeout=5))
+            submission = pool.submit(self.publish, "two")
+            release.set()
+            idle.result(timeout=5)
+            submission.result(timeout=5)
+
+        self.assertEqual(
+            [call.kwargs["desiredCount"] for call in self.ecs.update_service.call_args_list],
+            [1, 0, 1],
+        )
+
+    def test_next_submission_retries_a_failed_ecs_update_in_the_same_tier(self):
+        self.ecs.update_service.side_effect = [TimeoutError(), {}]
+        with self.assertLogs(fargate_control.logger, "ERROR"):
+            self.publish("one")
+
+        self.publish("two")
+
+        self.assertEqual(self.ecs.update_service.call_count, 2)
+
+    def test_submission_after_completions_can_lower_four_tasks_to_two(self):
+        for i in range(10):
+            self.publish(str(i))
+        with self.sessions.begin() as session:
+            session.execute(
+                update(results)
+                .where(results.c.simulation_id.in_([str(i) for i in range(6)]))
+                .values(status="completed")
+            )
+
+        self.publish("next")
+
+        self.assertEqual(self.ecs.update_service.call_args.kwargs["desiredCount"], 2)
+
+    def test_wakeup_sees_committed_publication(self):
+        markers = []
+
+        def observe(**request):
+            with self.sessions() as session:
+                markers.append(
+                    session.scalar(select(results.c.published_at).where(results.c.run_id == "one"))
+                )
+
+        self.ecs.update_service.side_effect = observe
+
+        self.publish("one")
+
+        self.assertIsNotNone(markers[0])
+
+    def test_manually_started_worker_returns_to_zero(self):
+        self.service.scale_to_zero(self.service.poll_started_at())
+
+        self.ecs.update_service.assert_called_once_with(
+            cluster="cluster", service="optimizer", desiredCount=0
+        )
+
+
+class LifecycleTests(DatabaseTests):
     def deliver(self, run_id):
         connection = Mock()
         envelope = {

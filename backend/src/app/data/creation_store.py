@@ -1,12 +1,10 @@
 """Shared PostgreSQL advisory locks and recovery for projection/economics workers."""
 
-import hashlib
 from contextlib import contextmanager
 
-from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import select, update
 
-from app.data import repository
+from app.data import advisory_lock, repository
 from app.data.db import simulation_table as setups
 from app.domain.creation import CreationActiveError, CreationNotReadyError
 
@@ -20,40 +18,17 @@ def require_ready(session, simulation_id):
 
 
 def advisory_key(simulation_id):
-    digest = hashlib.sha256(f"plantperform:creation:{simulation_id}".encode()).digest()
-    return int.from_bytes(digest[:8], byteorder="big", signed=True)
+    return advisory_lock.advisory_key(f"plantperform:creation:{simulation_id}")
 
 
 @contextmanager
 def execution_session(simulation_id):
-    """Retain the advisory lock and physical connection across short transactions."""
-    with repository.SessionLocal() as owner, owner.get_bind().connect() as connection:
-        key = advisory_key(simulation_id)
-        acquired = False
-        try:
-            acquired = connection.execute(select(func.pg_try_advisory_lock(key))).scalar_one()
-            connection.commit()
-            if not acquired:
-                raise CreationActiveError("Simulation creation is already running")
-            with Session(bind=connection) as session:
-                yield session
-        finally:
-            if acquired:
-                # Never reconnect here: a replacement connection would not own this lock.
-                if connection.invalidated or connection.closed:
-                    connection.invalidate()
-                else:
-                    try:
-                        connection.rollback()
-                        released = connection.execute(
-                            select(func.pg_advisory_unlock(key))
-                        ).scalar_one()
-                        connection.commit()
-                        if not released:
-                            raise RuntimeError("Creation advisory lock was lost")
-                    except Exception:
-                        connection.invalidate()
-                        raise
+    with advisory_lock.advisory_session(
+        repository.SessionLocal, advisory_key(simulation_id), wait=False
+    ) as session:
+        if session is None:
+            raise CreationActiveError("Simulation creation is already running")
+        yield session
 
 
 def recover_local_simulation_creations():

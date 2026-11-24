@@ -1,7 +1,7 @@
 # Optimizer
 
-Production publishes identifier-only optimization messages to SQS. One Linux
-ARM64 ECS Fargate task per environment uses 4 vCPUs, 16 GiB memory and four
+Production publishes identifier-only optimization messages to SQS. Each environment
+runs up to ten Linux ARM64 ECS Fargate tasks, each with 4 vCPUs, 16 GiB memory and four
 solver threads. Local development runs the same `optimizer` solver
 package through backend background tasks. Production backend dependencies do
 not include this package or OR-Tools.
@@ -9,7 +9,12 @@ not include this package or OR-Tools.
 ## Lifecycle
 
 The backend commits the queued run, sends its message, records `published_at`
-using PostgreSQL's clock, then wakes the service with `desiredCount=1`. Wakeup
+using PostgreSQL's clock, then scales the service on submission. Each published,
+unfinished run counts once, including runs already being solved. For 1–2 jobs
+the service requests one task, for 3–5 it requests two, and for 6–8 it requests
+three. Ten jobs request four tasks and 27 or more request ten. Each submission
+sends the calculated total to ECS. If the next submission brings the unfinished
+total to five, it requests two tasks. Wakeup
 failures are logged and leave the accepted message in SQS. A later submission
 for another simulation or a manual service startup must wake the worker to
 drain the queue. Resubmitting an already-published run returns its status without
@@ -29,7 +34,7 @@ Only identified transient infrastructure errors retry, with at most three
 execution attempts. Memory exhaustion, process crashes, application errors,
 invalid messages/input, infeasibility, timeouts and exhausted attempts go directly
 to the DLQ. The existing `simulation_result` row stores the failed status and
-error; no separate database table or schema migration is needed. The consumer
+error. The consumer
 sends the original body and message attributes directly to the DLQ, then deletes
 the source delivery only after a confirmed send. Send or deletion failures retain
 the source request for retry. A redelivered failed run retries only the transfer,
@@ -41,23 +46,19 @@ or deletion failure; correlate them by run ID and `PlantPerformSourceMessageId`
 (when the original message has room within SQS's ten-attribute limit), or by the
 source message ID in worker logs.
 
-After each job the task makes another 20-second poll. Pending retries, DLQ
-transfers, or visible/in-flight/delayed queue counts keep it polling with task
-protection refreshed. Local retry deadlines also guard against stale queue
-counters. Once these are clear, an empty response sets service desired count
-to zero while still protected. It checks for queued
-publications recorded since that poll began and restores desired count to one
-if a new submission raced with shutdown. Otherwise it releases protection and
-exits. Later submissions wake a replacement. ECS/DB verification failures
-restore desired count and retry. Queue metrics do not wake workers. A completely
-killed task still needs a later backend wakeup or manual startup; its unfinished
-delivery becomes available when visibility expires. Queue-age, DLQ and worker-error
-alarms remain available for monitoring.
+After each job the task makes another 20-second poll. On an empty poll it requests
+desired count zero, releases protection and exits. If a run was published since
+the poll started, it polls again. A per-service PostgreSQL advisory lock orders
+these decisions and is released during the SQS wait. Siblings remain protected through
+execution and acknowledgement. A task waiting for its own deferred retry or
+dead-letter handoff keeps polling under protection at desired count zero.
+If every task is lost at zero, the next submission or a manual service start
+wakes the queue. Queue-age, DLQ and worker-error alarms provide monitoring.
 
 SIGTERM stops consumption and terminates any unfinished child without deleting
 its message. Task protection guards normal scale-in and deployments, but cannot
-prevent infrastructure failures or a forced task stop. Deployments allow one
-task at most and wait for the protected worker to drain before replacement.
+prevent infrastructure failures or a forced task stop. Rolling deployments
+allow up to 100% of the service's desired count and wait for protected tasks to drain.
 
 ## API and computation
 
@@ -112,13 +113,12 @@ or ARM64 emulation. Deployment CI builds on a native ARM64 runner.
 Inspect phase logs for `load_snapshot`, `prepare_candidates`, `solve`,
 `hydrate_winners` and `persist_result`.
 
-Before deploying this worker, manually apply the reviewed infrastructure changes
-for 16384 MiB memory, the DLQ URL and DLQ send permission. Deploy dev first,
-verify terminal failure/DLQ handoffs and delayed
-retries, then repeat the representative economics workload while recording peak
-memory. Sixteen GiB is additional capacity, not a proven bound. Use the same
-source revision for the backend and worker. At least four Fargate On-Demand
-vCPUs must be available. Infrastructure application and deployment are manual.
+In dev first, pause submissions and drain the old workers to zero.
+Deploy the backend and worker from the same revision
+before resuming submissions. Ten tasks require 40 available Fargate On-Demand
+vCPUs. Submit ten concurrent runs and verify a target of four. Check that an
+idle task can request zero while protected siblings finish and publish results.
+Exercise delayed retries and dead-letter handoffs at zero before repeating in live.
 
 ## Manual recovery of the confirmed development OOM
 

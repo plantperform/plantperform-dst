@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 
 from app.data import read_model_store, repository, saedskifte_store
 from app.data.db import SessionLocal, field_table
@@ -26,24 +26,6 @@ from app.domain.optimization import (
 from app.domain.simulation import Simulation
 
 logger = logging.getLogger(__name__)
-
-
-def publication_clock():
-    """Use the publisher's database clock for the worker's shutdown barrier."""
-    with SessionLocal() as session:
-        return session.scalar(select(func.clock_timestamp()))
-
-
-def queued_publication_since(since):
-    with SessionLocal() as session:
-        return (
-            session.scalar(
-                select(results.c.simulation_id)
-                .where(results.c.status == "queued", results.c.published_at >= since)
-                .limit(1)
-            )
-            is not None
-        )
 
 
 def fail_queued_run(simulation_id, run_id):

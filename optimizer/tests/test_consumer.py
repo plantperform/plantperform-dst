@@ -3,6 +3,7 @@ import os
 import time
 import unittest
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from threading import Event, Timer
 from unittest.mock import Mock, call, patch
 
@@ -53,20 +54,15 @@ class ConsumerTests(unittest.TestCase):
                 },
             )
         )
-        self.sqs, self.ecs, self.store, self.protection = Mock(), Mock(), Mock(), Mock()
-        self.store.queued_publication_since.return_value = False
+        self.sqs, self.service, self.store, self.protection = Mock(), Mock(), Mock(), Mock()
+        self.poll_start = datetime.now(UTC)
+        self.service.poll_started_at.return_value = self.poll_start
+        self.service.scale_to_zero.return_value = True
         self.store.delivery_result.return_value = None
         self.stop = Event()
-        self.sqs.get_queue_attributes.return_value = {
-            "Attributes": {
-                "ApproximateNumberOfMessages": "0",
-                "ApproximateNumberOfMessagesNotVisible": "0",
-                "ApproximateNumberOfMessagesDelayed": "0",
-            }
-        }
         self.worker = consumer.Consumer(
             self.sqs,
-            self.ecs,
+            self.service,
             self.store,
             self.protection,
             self.stop,
@@ -97,47 +93,30 @@ class ConsumerTests(unittest.TestCase):
             self.assertEqual(request.kwargs["MaxNumberOfMessages"], 1)
             self.assertEqual(request.kwargs["VisibilityTimeout"], 3900)
         self.assertEqual(self.sqs.delete_message.call_count, 2)
-        self.ecs.update_service.assert_called_once_with(
-            cluster="cluster", service="service", desiredCount=0
-        )
+        self.service.scale_to_zero.assert_called_once_with(self.poll_start)
         self.assertEqual(self.protection.set.call_args_list[-1], call(False))
 
-    def test_submission_during_empty_poll_restores_one_and_processes_it(self):
+    def test_submission_during_empty_poll_keeps_the_worker_polling(self):
         self.sqs.receive_message.side_effect = [{}, self.message(), {}]
-        self.store.queued_publication_since.side_effect = [True, False]
+        next_poll = self.poll_start + timedelta(seconds=20)
+        self.service.poll_started_at.side_effect = [self.poll_start, next_poll, next_poll]
+        self.service.scale_to_zero.side_effect = [False, True]
         self.worker.execute = Mock(return_value=ExecutionResult(DeliveryOutcome.ACK))
+
         self.worker.run()
+
         self.assertEqual(
-            [c.kwargs["desiredCount"] for c in self.ecs.update_service.call_args_list],
-            [0, 1, 0],
+            self.service.scale_to_zero.call_args_list, [call(self.poll_start), call(next_poll)]
         )
         self.sqs.delete_message.assert_called_once()
-        self.store.queued_publication_since.assert_any_call(
-            self.store.publication_clock.return_value
-        )
 
-    def test_submission_after_shutdown_check_is_handled_by_the_backend_wakeup(self):
-        def late_wakeup(enabled):
-            if not enabled:
-                self.ecs.update_service(cluster="cluster", service="service", desiredCount=1)
+    def test_uncertain_stop_keeps_task_protection(self):
+        self.service.scale_to_zero.side_effect = RuntimeError("database unavailable")
 
-        self.protection.set.side_effect = late_wakeup
-        self.sqs.receive_message.return_value = {}
-        self.worker.run()
-        self.assertEqual(
-            [c.kwargs["desiredCount"] for c in self.ecs.update_service.call_args_list],
-            [0, 1],
-        )
-        self.assertEqual(self.sqs.receive_message.call_count, 1)
-
-    def test_uncertain_stop_restores_service_and_does_not_exit(self):
-        self.store.queued_publication_since.side_effect = RuntimeError("database unavailable")
         with self.assertLogs(consumer.logger, "ERROR"):
-            self.assertFalse(self.worker.shutdown_if_idle(datetime.now(UTC)))
-        self.assertEqual(
-            [c.kwargs["desiredCount"] for c in self.ecs.update_service.call_args_list],
-            [0, 1],
-        )
+            retired = self.worker.shutdown_if_idle(self.poll_start)
+
+        self.assertFalse(retired)
         self.protection.set.assert_not_called()
 
     def test_failed_delivery_is_deferred_and_not_deleted(self):
@@ -185,7 +164,7 @@ class ConsumerTests(unittest.TestCase):
         self.worker.execute = interrupt
         self.worker.run()
         self.sqs.delete_message.assert_not_called()
-        self.ecs.update_service.assert_not_called()
+        self.service.scale_to_zero.assert_not_called()
 
     def test_ack_failure_leaves_delivery_for_idempotent_redelivery(self):
         self.sqs.receive_message.side_effect = [self.message(), self.message(), {}]
@@ -404,16 +383,42 @@ class ConsumerTests(unittest.TestCase):
             )
         self.store.finish.assert_not_called()
 
-    def test_previous_tasks_invisible_message_prevents_shutdown(self):
-        self.sqs.receive_message.side_effect = [{}, {}]
-        self.sqs.get_queue_attributes.side_effect = [
-            {"Attributes": {"ApproximateNumberOfMessagesNotVisible": "1"}},
-            {"Attributes": {"ApproximateNumberOfMessagesNotVisible": "0"}},
-        ]
+    def test_worker_with_pending_retry_stays_protected_at_desired_zero(self):
+        self.worker.outstanding["retry"] = time.monotonic() + 60
+
+        retired = self.worker.shutdown_if_idle(self.poll_start)
+
+        self.service.scale_to_zero.assert_called_once_with(self.poll_start)
+        self.assertFalse(retired)
+        self.protection.set.assert_not_called()
+
+    def test_busy_worker_acknowledges_after_an_idle_sibling_requests_zero(self):
+        idle_queue = Mock()
+        idle_queue.receive_message.return_value = {}
+        idle = consumer.Consumer(idle_queue, self.service, self.store, Mock(), Event())
+        self.sqs.receive_message.side_effect = [self.message(), {}]
+        events = Mock()
+        events.attach_mock(self.service.scale_to_zero, "request_zero")
+        events.attach_mock(self.protection.set, "protect")
+        events.attach_mock(self.sqs.delete_message, "acknowledge")
+
+        def solve(envelope):
+            idle.run()
+            return ExecutionResult(DeliveryOutcome.ACK)
+
+        self.worker.execute = solve
+
         self.worker.run()
-        self.assertEqual(self.sqs.receive_message.call_count, 2)
-        self.ecs.update_service.assert_called_once_with(
-            cluster="cluster", service="service", desiredCount=0
+
+        self.assertEqual(
+            events.mock_calls,
+            [
+                call.protect(True),
+                call.request_zero(self.poll_start),
+                call.acknowledge(QueueUrl="queue", ReceiptHandle="run"),
+                call.request_zero(self.poll_start),
+                call.protect(False),
+            ],
         )
 
     def test_sigkill_without_oom_counter_is_reported_as_crash(self):
@@ -444,3 +449,17 @@ class ConsumerTests(unittest.TestCase):
             consumer.TaskProtection("http://agent").set(True)
         body = json.loads(opening.call_args.args[0].data)
         self.assertEqual(body, {"ProtectionEnabled": True, "ExpiresInMinutes": 65})
+
+    def test_final_poll_uses_existing_protection_after_a_long_solve(self):
+        protection = consumer.TaskProtection("http://agent")
+        response = BytesIO(b'{"protection":{"ProtectionEnabled":true}}')
+        with (
+            patch.object(consumer, "urlopen", return_value=response) as opening,
+            patch.object(time, "monotonic", return_value=100) as clock,
+        ):
+            protection.set(True)
+            clock.return_value += 3600
+
+            protection.protect_for(90)
+
+        opening.assert_called_once()

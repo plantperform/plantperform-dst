@@ -73,6 +73,7 @@ from app.domain.simulation import (
     Simulation,
     UpdateSimulationRequest,
 )
+from app.services import fargate_control
 from app.services.optimization import jobs
 from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
 from app.services.scenario import candidate_evaluator
@@ -791,7 +792,17 @@ class RotationDatabaseTests(unittest.TestCase):
             patch.dict(os.environ, {"APP_ENV": "production", "OPTIMIZER_QUEUE_URL": "test"})
         )
         self.enterContext(patch.object(jobs, "sqs_client", return_value=Mock()))
-        self.enterContext(patch.object(jobs, "wake_worker"))
+        self.enterContext(patch.object(fargate_control, "SessionLocal", self.sessions))
+        self.enterContext(
+            patch.dict(
+                os.environ,
+                {
+                    "FARGATE_CLUSTER_NAME": "cluster",
+                    "FARGATE_SERVICE_NAME": "optimizer",
+                },
+            )
+        )
+        self.enterContext(patch.object(fargate_control, "ecs_client"))
         field = FieldRecord(
             id="field", farm_id="farm", name="Field", area_ha=2, db2=0, n_load=0, leaching=0, fen=0
         )

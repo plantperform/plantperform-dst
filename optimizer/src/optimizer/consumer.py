@@ -21,7 +21,6 @@ from app.domain.optimization import (
     OptimizationLeaseActiveError,
     OptimizationTerminalError,
 )
-from app.services.fargate_control import set_worker_count
 from app.services.optimization.failures import is_transient
 from optimizer.configuration import initialize_configuration
 from optimizer.memory import memory_observation
@@ -133,8 +132,15 @@ def _child_execute(envelope, deadline, connection):
 class TaskProtection:
     def __init__(self, agent_uri=None):
         self.url = (agent_uri or os.environ["ECS_AGENT_URI"]) + "/task-protection/v1/state"
+        self.protected_until = 0
+
+    def protect_for(self, seconds):
+        if time.monotonic() + seconds >= self.protected_until:
+            self.set(True)
 
     def set(self, enabled):
+        self.protected_until = 0
+        started = time.monotonic()
         payload = {"ProtectionEnabled": enabled}
         if enabled:
             payload["ExpiresInMinutes"] = 65
@@ -148,11 +154,28 @@ class TaskProtection:
             result = json.load(response)
         if result.get("protection", {}).get("ProtectionEnabled") is not enabled:
             raise RuntimeError(f"Task protection update failed: {result}")
+        if enabled:
+            self.protected_until = started + 60 * payload["ExpiresInMinutes"]
 
 
 class Consumer:
-    def __init__(self, sqs, ecs, store, protection, stop, *, process_context=None):
-        self.sqs, self.ecs, self.store = sqs, ecs, store
+    @classmethod
+    def from_environment(cls, stop):
+        initialize_configuration()
+        # Both imports create or reuse the database engine bound to the configured URL.
+        from app.data import optimization_store
+        from app.services.fargate_control import FargateService
+
+        return cls(
+            consumer_sqs_client(),
+            FargateService.configured(),
+            optimization_store,
+            TaskProtection(),
+            stop,
+        )
+
+    def __init__(self, sqs, service, store, protection, stop, *, process_context=None):
+        self.sqs, self.service, self.store = sqs, service, store
         self.protection, self.stop = protection, stop
         self.queue_url = os.environ["OPTIMIZER_QUEUE_URL"]
         self.dlq_url = os.environ["OPTIMIZER_DLQ_URL"]
@@ -278,20 +301,23 @@ class Consumer:
                 self._terminate(process)
                 process.close()
 
-    def shutdown_if_idle(self, since):
-        # Remain protected while lowering desiredCount and checking publications.
+    def shutdown_if_idle(self, poll_started_at):
         try:
-            set_worker_count(self.ecs, 0)
-            if self.store.queued_publication_since(since):
-                set_worker_count(self.ecs, 1)
+            if not self.service.scale_to_zero(poll_started_at):
+                return False
+            # Stay protected at desired count zero while waiting for a retry or
+            # DLQ handoff. Other tasks can retire after their own empty polls.
+            now = time.monotonic()
+            self.outstanding = {
+                key: until for key, until in self.outstanding.items() if now < until
+            }
+            if self.outstanding:
                 return False
             self.protection.set(False)
             logger.info("fargate_idle_shutdown")
             return True
         except Exception:
             logger.exception("fargate_shutdown_verification_failed")
-            # An uncertain stop must not override a producer's wakeup.
-            set_worker_count(self.ecs, 1)
             return False
 
     def publish_dead_letter(self, record, failure, envelope=None):
@@ -321,24 +347,15 @@ class Consumer:
             failure["code"],
         )
 
-    def _queue_busy(self):
-        attributes = self.sqs.get_queue_attributes(
-            QueueUrl=self.queue_url,
-            AttributeNames=[
-                "ApproximateNumberOfMessages",
-                "ApproximateNumberOfMessagesNotVisible",
-                "ApproximateNumberOfMessagesDelayed",
-            ],
-        )["Attributes"]
-        return any(int(value) for value in attributes.values())
-
     def run(self):
         self.protection.set(True)
         while not self.stop.is_set():
             record = None
             try:
-                self.protection.set(True)
-                since = self.store.publication_clock()
+                # Existing protection covers the final poll even when a sibling
+                # has already requested zero and ECS is draining the service.
+                self.protection.protect_for(90)
+                poll_started_at = self.service.poll_started_at()
                 response = self.sqs.receive_message(
                     QueueUrl=self.queue_url,
                     MaxNumberOfMessages=1,
@@ -351,16 +368,7 @@ class Consumer:
                     break
                 messages = response.get("Messages", [])
                 if not messages:
-                    busy = self._queue_busy()
-                    self.outstanding = {
-                        key: until
-                        for key, until in self.outstanding.items()
-                        if time.monotonic() < until
-                    }
-                    if busy or self.outstanding:
-                        self.protection.set(True)
-                        continue
-                    if self.shutdown_if_idle(since):
+                    if self.shutdown_if_idle(poll_started_at):
                         return
                     continue
                 record = messages[0]
@@ -379,7 +387,7 @@ class Consumer:
                         },
                     )
                 else:
-                    self.protection.set(True)
+                    self.protection.protect_for(EXECUTION_TIMEOUT_SECONDS + 120)
                     logger.info(
                         "fargate_received run_id=%s message_id=%s receive_count=%s",
                         envelope["runId"],
