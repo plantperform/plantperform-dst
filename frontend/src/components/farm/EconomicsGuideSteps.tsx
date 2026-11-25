@@ -12,6 +12,7 @@ import {
   YieldPctField,
 } from '@/components/farm/EconomicsNumberField'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { useSharedPriceConfirm } from '@/components/farm/shared-price-confirm'
 import { SharedPriceConfirm } from '@/components/farm/SharedPriceConfirm'
 import { FieldError } from '@/components/ui/field-error'
@@ -431,6 +432,7 @@ export const GuideReviewStep = ({
   onToggleUse,
 }: GuideReviewStepProps) => {
   const id = useId()
+  const readOnly = useFarmReadOnly()
 
   return (
     <div>
@@ -453,46 +455,48 @@ export const GuideReviewStep = ({
         onRestore={onRestore}
         onRestoreAll={onRestoreAll}
       />
-      <div
-        role="group"
-        aria-labelledby={`${id}-use`}
-        className="border-t px-5 py-4"
-      >
-        <p id={`${id}-use`} className="text-sm font-semibold">
-          Brug profilen i
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {usageOptions.length > 0
-            ? 'Vælg de simuleringer, der skal regne med profilen. Tallene skifter, når økonomien er genberegnet. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
-            : 'Bedriften har ingen simuleringer endnu. Profilen kan vælges, når den første er oprettet.'}
-        </p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {usageOptions.map((option) => (
-            <label
-              key={option.id}
-              className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-2.5 transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring',
-                option.checked ? CHOICE_SELECTED_CLASS : 'hover:bg-muted/50',
-              )}
-            >
-              <input
-                type="checkbox"
-                className="mt-1 accent-primary"
-                checked={option.checked}
-                onChange={() => onToggleUse(option.id)}
-              />
-              <span className="min-w-0">
-                <span className="block text-[13px] font-semibold">
-                  {option.label}
+      {readOnly ? null : (
+        <div
+          role="group"
+          aria-labelledby={`${id}-use`}
+          className="border-t px-5 py-4"
+        >
+          <p id={`${id}-use`} className="text-sm font-semibold">
+            Brug profilen i
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {usageOptions.length > 0
+              ? 'Vælg de simuleringer, der skal regne med profilen. Tallene skifter, når økonomien er genberegnet. Vælger du ingen, kan profilen vælges senere under Regler i en simulering.'
+              : 'Bedriften har ingen simuleringer endnu. Profilen kan vælges, når den første er oprettet.'}
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {usageOptions.map((option) => (
+              <label
+                key={option.id}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-2.5 transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring',
+                  option.checked ? CHOICE_SELECTED_CLASS : 'hover:bg-muted/50',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 accent-primary"
+                  checked={option.checked}
+                  onChange={() => onToggleUse(option.id)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-semibold">
+                    {option.label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {option.note}
+                  </span>
                 </span>
-                <span className="block text-xs text-muted-foreground">
-                  {option.note}
-                </span>
-              </span>
-            </label>
-          ))}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

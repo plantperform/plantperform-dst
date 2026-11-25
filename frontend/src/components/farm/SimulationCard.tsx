@@ -11,6 +11,7 @@ import type { FieldRecord, Simulation, SimulationQuotaTrade } from '@/api/types'
 import { useCatchmentLabel } from '@/components/farm/catchment-options'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { EconomicsChip } from '@/components/farm/EconomicsChip'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
 import { KeyFigure, OverviewCard } from '@/components/farm/OverviewCard'
@@ -317,6 +318,7 @@ export const SimulationCard = ({
     summaryMissing,
   } = useSimulationFields(farmId, simulation.id, isSimulationReady(simulation))
   const run = useOptimizationRun(simulation.id)
+  const readOnly = useFarmReadOnly()
   const runningRun = run?.status === 'running' ? run : undefined
   const fieldSet = useFieldSetChanges(farmId, simulation, fields)
   const summary = fields
@@ -360,29 +362,33 @@ export const SimulationCard = ({
               </Link>
             </Button>
           ) : null}
-          <Button
-            size="xs"
-            variant="outline"
-            aria-label={`Kopier ${simulation.name}`}
-            loading={copying}
-            disabled={deleting || !isSimulationReady(simulation)}
-            onClick={onCopy}
-          >
-            {copying ? null : <Copy aria-hidden="true" />}
-            Kopier
-          </Button>
-          <Button
-            size="xs"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            aria-label={`Slet ${simulation.name}`}
-            loading={deleting}
-            disabled={copying}
-            onClick={onDelete}
-          >
-            {deleting ? null : <Trash2 aria-hidden="true" />}
-            Slet
-          </Button>
+          {readOnly ? null : (
+            <>
+              <Button
+                size="xs"
+                variant="outline"
+                aria-label={`Kopier ${simulation.name}`}
+                loading={copying}
+                disabled={deleting || !isSimulationReady(simulation)}
+                onClick={onCopy}
+              >
+                {copying ? null : <Copy aria-hidden="true" />}
+                Kopier
+              </Button>
+              <Button
+                size="xs"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                aria-label={`Slet ${simulation.name}`}
+                loading={deleting}
+                disabled={copying}
+                onClick={onDelete}
+              >
+                {deleting ? null : <Trash2 aria-hidden="true" />}
+                Slet
+              </Button>
+            </>
+          )}
         </>
       }
     >

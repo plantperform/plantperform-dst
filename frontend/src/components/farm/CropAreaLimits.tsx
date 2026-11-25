@@ -8,6 +8,7 @@ import type {
   FieldRecord,
 } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import {
   LimitValue,
   RulesHint,
@@ -91,6 +92,7 @@ export const CropAreaLimits = ({
   onPickerOpenChange,
   onChange,
 }: CropAreaLimitsProps) => {
+  const readOnly = useFarmReadOnly()
   const [touchedCodes, setTouchedCodes] = useState<ReadonlySet<number>>(
     () => new Set(),
   )
@@ -202,16 +204,18 @@ export const CropAreaLimits = ({
         <span className="text-[13px] text-muted-foreground">
           {NO_LIMITS_TEXT}
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="-mr-3 gap-1.5 text-primary hover:text-primary"
-          onClick={() => onPickerOpenChange(true)}
-        >
-          <Plus className="size-3.5" aria-hidden="true" />
-          Tilføj afgrøde
-        </Button>
+        {readOnly ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-mr-3 gap-1.5 text-primary hover:text-primary"
+            onClick={() => onPickerOpenChange(true)}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            Tilføj afgrøde
+          </Button>
+        )}
       </div>
     ) : (
       <SummaryList>

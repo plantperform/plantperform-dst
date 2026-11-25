@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Simulation } from '@/api/types'
 import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -34,6 +35,15 @@ export const EconomicsProfileMenu = ({
   const profile = economics.profileForSimulation(simulation)
   const known = economics.findProfile(profile.id) !== undefined
   const isStandard = profile.id === STANDARD_PROFILE_ID
+  const readOnly = useFarmReadOnly()
+
+  if (readOnly) {
+    return (
+      <span className="max-w-full truncate text-sm font-medium">
+        {profile.name}
+      </span>
+    )
+  }
 
   return (
     <DropdownMenu>

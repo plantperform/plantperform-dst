@@ -44,6 +44,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { useFieldSetChanges } from '@/components/farm/field-set-changes'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { OptimizationRunElapsed } from '@/components/farm/OptimizationRunStatus'
@@ -252,6 +253,7 @@ export const FarmSidebar = ({
     overviewActive || economicsPageActive || ownRotationsActive || aboutActive
   const { user } = useAuth()
   const { data: members } = useFarmMembers(farm.id)
+  const readOnly = useFarmReadOnly()
   const economics = useEconomicsProfiles()
   const { data: ownRotations } = useOwnRotationDefinitions()
   const historyActive = !pageActive && selection.kind === 'current'
@@ -296,25 +298,27 @@ export const FarmSidebar = ({
                     <KeyFiguresLine figures={historyFigures} />
                   </ViewMenuLabel>
                 </SidebarMenuButton>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <SidebarMenuAction
-                      aria-label="Handlinger for afgrødehistorik"
-                      disabled={recalculatingHistory}
-                    >
-                      <MoreVertical />
-                    </SidebarMenuAction>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent side="right" align="start">
-                    <DropdownMenuItem
-                      disabled={recalculatingHistory}
-                      onSelect={onRecalculateHistory}
-                    >
-                      <RefreshCw />
-                      Genberegn historik
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {readOnly ? null : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <SidebarMenuAction
+                        aria-label="Handlinger for afgrødehistorik"
+                        disabled={recalculatingHistory}
+                      >
+                        <MoreVertical />
+                      </SidebarMenuAction>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="right" align="start">
+                      <DropdownMenuItem
+                        disabled={recalculatingHistory}
+                        onSelect={onRecalculateHistory}
+                      >
+                        <RefreshCw />
+                        Genberegn historik
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
@@ -377,7 +381,7 @@ export const FarmSidebar = ({
                       />
                     )
                   })}
-                  {simulationsOpen ? (
+                  {simulationsOpen && !readOnly ? (
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         className={cn(
@@ -661,6 +665,7 @@ const SimulationMenuItem = ({
   onCopy,
   onDelete,
 }: SimulationMenuItemProps) => {
+  const readOnly = useFarmReadOnly()
   const economics = useEconomicsProfiles()
   const profile = economics.appliedProfile(simulation)
   const ownProfileName =
@@ -797,46 +802,48 @@ const SimulationMenuItem = ({
             </div>
           </TooltipContent>
         </Tooltip>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction
-              showOnHover
-              disabled={deleting || copying}
-              className="top-1/2! -translate-y-1/2"
-              aria-label={`Handlinger for ${simulation.name}`}
-            >
-              {copying || deleting ? <Spinner /> : <MoreVertical />}
-            </SidebarMenuAction>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem
-              disabled={!isSimulationReady(simulation)}
-              onSelect={() => {
-                onSelect()
-                onOptimize()
-              }}
-            >
-              Indstillinger og navn
-            </DropdownMenuItem>
-            <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Kopien får bedriftens marker, så låse og tilføjede eller fjernede marker følger ikke med.">
-              <DropdownMenuItem
-                disabled={copying || !isSimulationReady(simulation)}
-                onSelect={onCopy}
+        {readOnly ? null : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuAction
+                showOnHover
+                disabled={deleting || copying}
+                className="top-1/2! -translate-y-1/2"
+                aria-label={`Handlinger for ${simulation.name}`}
               >
-                <Copy className="mr-2 size-4" aria-hidden="true" />
-                Kopier som ny
+                {copying || deleting ? <Spinner /> : <MoreVertical />}
+              </SidebarMenuAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="start">
+              <DropdownMenuItem
+                disabled={!isSimulationReady(simulation)}
+                onSelect={() => {
+                  onSelect()
+                  onOptimize()
+                }}
+              >
+                Indstillinger og navn
               </DropdownMenuItem>
-            </AppTooltip>
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              disabled={deleting}
-              onSelect={onDelete}
-            >
-              <Trash2 className="mr-2 size-4" aria-hidden="true" />
-              Slet
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Kopien får bedriftens marker, så låse og tilføjede eller fjernede marker følger ikke med.">
+                <DropdownMenuItem
+                  disabled={copying || !isSimulationReady(simulation)}
+                  onSelect={onCopy}
+                >
+                  <Copy className="mr-2 size-4" aria-hidden="true" />
+                  Kopier som ny
+                </DropdownMenuItem>
+              </AppTooltip>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                disabled={deleting}
+                onSelect={onDelete}
+              >
+                <Trash2 className="mr-2 size-4" aria-hidden="true" />
+                Slet
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
       {infeasible && (
         <button
@@ -857,6 +864,7 @@ const SimulationMenuItem = ({
           disabled={loading}
           running={running}
           quotaTrade={quotaValues.data !== undefined}
+          readOnly={readOnly}
           onModeChange={onModeChange}
           onOptimize={onOptimize}
         />
@@ -873,6 +881,7 @@ type SimulationRunFailureProps = {
 // Kept until dismissed, so a failure is not missed while the user is elsewhere.
 const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
+  const readOnly = useFarmReadOnly()
   return (
     <div
       role="alert"
@@ -889,14 +898,16 @@ const SimulationRunFailure = ({ run, fields }: SimulationRunFailureProps) => {
       >
         <span className="min-w-0 flex-1 truncate">Optimering fejlede</span>
       </AppTooltip>
-      <button
-        type="button"
-        className="shrink-0 rounded px-1 font-medium underline-offset-2 hover:underline disabled:opacity-50"
-        disabled={!retry}
-        onClick={retry}
-      >
-        Prøv igen
-      </button>
+      {readOnly ? null : (
+        <button
+          type="button"
+          className="shrink-0 rounded px-1 font-medium underline-offset-2 hover:underline disabled:opacity-50"
+          disabled={!retry}
+          onClick={retry}
+        >
+          Prøv igen
+        </button>
+      )}
       <button
         type="button"
         className="shrink-0 rounded p-0.5 hover:bg-sidebar-accent"
@@ -916,6 +927,7 @@ type SimulationSubMenuProps = {
   disabled: boolean
   running: boolean
   quotaTrade: boolean
+  readOnly: boolean
   onModeChange: (mode: FarmInspectorMode) => void
   onOptimize: () => void
 }
@@ -925,6 +937,7 @@ const SimulationSubMenu = ({
   disabled,
   running,
   quotaTrade,
+  readOnly,
   onModeChange,
   onOptimize,
 }: SimulationSubMenuProps) => (
@@ -965,20 +978,22 @@ const SimulationSubMenu = ({
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
     </AppTooltip>
-    <AppTooltip content={running ? RUN_IN_PROGRESS_TITLE : undefined}>
-      <SidebarMenuSubItem>
-        <SidebarMenuSubButton asChild className="w-full">
-          <button
-            type="button"
-            disabled={disabled || running}
-            onClick={onOptimize}
-          >
-            <Play />
-            <span>Optimér</span>
-          </button>
-        </SidebarMenuSubButton>
-      </SidebarMenuSubItem>
-    </AppTooltip>
+    {readOnly ? null : (
+      <AppTooltip content={running ? RUN_IN_PROGRESS_TITLE : undefined}>
+        <SidebarMenuSubItem>
+          <SidebarMenuSubButton asChild className="w-full">
+            <button
+              type="button"
+              disabled={disabled || running}
+              onClick={onOptimize}
+            >
+              <Play />
+              <span>Optimér</span>
+            </button>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      </AppTooltip>
+    )}
     {quotaTrade ? (
       <AppTooltip content="Se hvad det er værd at købe eller sælge udledningskvote">
         <SidebarMenuSubItem>

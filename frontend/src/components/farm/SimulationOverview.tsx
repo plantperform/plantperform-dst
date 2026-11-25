@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { FieldRecord, Simulation } from '@/api/types'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { SimulationCard } from '@/components/farm/SimulationCard'
 import type {
   FarmInspectorMode,
@@ -41,6 +42,7 @@ export const SimulationOverview = ({
 }: SimulationOverviewProps) => {
   const historyQuota = resolveFarmQuota(fields, false)
   const economics = useEconomicsProfiles()
+  const readOnly = useFarmReadOnly()
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -65,10 +67,12 @@ export const SimulationOverview = ({
                 </Link>
               </Button>
             ) : null}
-            <Button onClick={onNewSimulation}>
-              <Plus aria-hidden="true" />
-              Ny simulering
-            </Button>
+            {readOnly ? null : (
+              <Button onClick={onNewSimulation}>
+                <Plus aria-hidden="true" />
+                Ny simulering
+              </Button>
+            )}
           </div>
         </header>
         <p className="text-sm text-muted-foreground">
@@ -110,9 +114,11 @@ export const SimulationOverview = ({
                 eller lad Optimér finde det bedste dækningsbidrag inden for
                 kvoten.
               </p>
-              <Button onClick={onNewSimulation}>
-                Lav den første simulering
-              </Button>
+              {readOnly ? null : (
+                <Button onClick={onNewSimulation}>
+                  Lav den første simulering
+                </Button>
+              )}
             </Card>
           ) : null}
         </div>

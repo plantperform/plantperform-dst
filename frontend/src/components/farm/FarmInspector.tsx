@@ -26,6 +26,7 @@ import {
 } from '@/components/farm/catchment-options'
 import { useDetachFields } from '@/components/farm/detach-fields'
 import { DetachFieldsDialog } from '@/components/farm/DetachFieldsDialog'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { FarmFieldsList } from '@/components/farm/FarmFieldsList'
 import {
   DEFAULT_FIELDS_SORT,
@@ -173,6 +174,7 @@ export const FarmInspector = ({
 }: FarmInspectorProps) => {
   const optimizationRun = useOptimizationRun(selectedSimulation?.id)
   const { markStale } = useOptimizationRunActions()
+  const readOnly = useFarmReadOnly()
   const [fieldsSort, setFieldsSort] =
     useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const [listRequiredWidth, setListRequiredWidth] = useState<number | null>(
@@ -235,6 +237,7 @@ export const FarmInspector = ({
   const effectiveMode: FarmInspectorMode = canSwitchMode ? mode : 'values'
   const isRules = effectiveMode === 'rules'
   const canEditFields =
+    !readOnly &&
     !isRules &&
     (!isSimulationView ||
       (selectedSimulation !== undefined &&
@@ -577,14 +580,18 @@ export const FarmInspector = ({
             />
           ) : summaryMissing && !fieldsLoading && fields.length > 0 ? (
             <SimulationSummaryMissing
-              onOpenSettings={() => onOptimizeDialogOpenChange(true)}
+              onOpenSettings={
+                readOnly ? undefined : () => onOptimizeDialogOpenChange(true)
+              }
             />
           ) : null}
           {showQuotaTrade ? null : fieldsLoading ? (
             <FarmFieldsSkeleton message={loadingMessage} />
           ) : summaryMissing && fields.length === 0 ? (
             <SimulationSummaryMissing
-              onOpenSettings={() => onOptimizeDialogOpenChange(true)}
+              onOpenSettings={
+                readOnly ? undefined : () => onOptimizeDialogOpenChange(true)
+              }
             />
           ) : fieldsError && !summaryMissing ? (
             <LoadError

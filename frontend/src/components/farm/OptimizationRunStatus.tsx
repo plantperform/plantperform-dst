@@ -4,6 +4,7 @@ import {
   type OptimizationRun,
 } from '@/api/optimization-runs'
 import type { FieldRecord, RotationOptionsError } from '@/api/types'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { OwnRotationOptionsWarning } from '@/components/farm/OwnRotationOptionsWarning'
 import { useOptimizationRunRetry } from '@/components/farm/optimization-run-retry'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,7 @@ export const OptimizationBanner = ({
 }: OptimizationBannerProps) => {
   const { retry, dismiss } = useOptimizationRunRetry(run, fields)
   const startDefaultRun = useStartDefaultOptimization()
+  const readOnly = useFarmReadOnly()
   const stale = useOptimizationStale(simulationId) || run?.status === 'outdated'
   const uncalculatedCount =
     fields?.filter((field) => !isFieldCalculated(field, true)).length ?? 0
@@ -117,7 +119,7 @@ export const OptimizationBanner = ({
       <LoadError
         className={cn('w-full whitespace-pre-wrap', className)}
         message={`${optimizationRunName(run.kind)} fejlede: ${run.error}`}
-        onRetry={retry}
+        onRetry={readOnly ? undefined : retry}
         onDismiss={dismiss}
       />
     )
@@ -144,15 +146,17 @@ export const OptimizationBanner = ({
           ? `${formatFieldCount(uncalculatedCount)} er ikke beregnet.`
           : 'Simuleringen er ændret siden sidste kørsel. Resultatet er forældet.'}
       </p>
-      <Button
-        size="xs"
-        variant="outline"
-        onClick={() =>
-          startDefaultRun(farmId, simulationId, fields, optimizationKind)
-        }
-      >
-        Kør Optimér
-      </Button>
+      {readOnly ? null : (
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() =>
+            startDefaultRun(farmId, simulationId, fields, optimizationKind)
+          }
+        >
+          Kør Optimér
+        </Button>
+      )}
     </div>
   )
 }

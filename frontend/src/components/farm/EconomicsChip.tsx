@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import type { FarmingSystem, Simulation } from '@/api/types'
 import type { ReturnTarget } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +113,7 @@ export const EconomicsChip = ({
   className,
 }: EconomicsChipProps) => {
   const { profilePath, findProfile, setFarmingSystem } = useEconomicsProfiles()
+  const readOnly = useFarmReadOnly()
   const content = (
     <>
       <Coins className="size-3 shrink-0" aria-hidden="true" />
@@ -121,7 +123,7 @@ export const EconomicsChip = ({
   const linked = findProfile(profile.id) !== undefined
   const open = () => setFarmingSystem(farmingSystem)
 
-  if (simulation) {
+  if (simulation && !readOnly) {
     const nameClass =
       'flex min-w-0 items-center gap-1.5 rounded-l-full pr-1.5 pl-2'
     return (

@@ -69,7 +69,10 @@ const recalculationError = (error: unknown) => {
 const attemptKey = (simulation: Simulation, profile: EconomicsProfile) =>
   `${simulation.id}:${simulation.revision}:${profile.revision}`
 
-export const useEconomicsProfilesStore = (farmId: string | undefined) => {
+export const useEconomicsProfilesStore = (
+  farmId: string | undefined,
+  autoRecalculate: boolean,
+) => {
   const [farmingSystem, setFarmingSystem] =
     useState<FarmingSystem>('Konventionel')
   const {
@@ -239,7 +242,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
   // so its figures and regnskab follow the profile. Each state is tried once; if
   // that fails, the warning on the simulation still offers Genberegn.
   useEffect(() => {
-    if (!farmId || !moduleList || !simulations) return
+    if (!autoRecalculate || !farmId || !moduleList || !simulations) return
     const timer = setTimeout(() => {
       if (reconciling.current) return
       const available = allProfiles(moduleList)
@@ -272,7 +275,7 @@ export const useEconomicsProfilesStore = (farmId: string | undefined) => {
     return () => clearTimeout(timer)
     // recalculate only reads refs and stable SWR functions
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [farmId, moduleList, simulations])
+  }, [autoRecalculate, farmId, moduleList, simulations])
 
   return {
     farmId,

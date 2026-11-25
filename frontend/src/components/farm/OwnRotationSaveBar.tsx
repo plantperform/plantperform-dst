@@ -1,5 +1,6 @@
 import { Circle, CircleCheck } from 'lucide-react'
 
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import {
   describeChangeCount,
@@ -109,55 +110,58 @@ export const OwnRotationSaveBar = ({
   onCancel,
   onUseInSimulation,
   ...status
-}: OwnRotationSaveBarProps) => (
-  <footer
-    className={cn(
-      'sticky bottom-3 z-10 overflow-hidden rounded-lg border bg-card text-sm shadow-sm',
-      status.changed && 'border-primary',
-    )}
-  >
-    <div
+}: OwnRotationSaveBarProps) => {
+  const readOnly = useFarmReadOnly()
+  return (
+    <footer
       className={cn(
-        'flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5',
-        status.changed && 'bg-primary/5',
+        'sticky bottom-3 z-10 overflow-hidden rounded-lg border bg-card text-sm shadow-sm',
+        status.changed && 'border-primary',
       )}
     >
-      <div className="min-w-0 flex-1">
-        <SaveStatus {...status} />
-      </div>
-      {status.isNew ? (
-        <Button
-          type="submit"
-          form={formId}
-          loading={saving}
-          disabled={!canSave}
-        >
-          Opret sædskifte
-        </Button>
-      ) : editing ? (
-        <>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={onCancel}
-          >
-            Annuller
-          </Button>
+      <div
+        className={cn(
+          'flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5',
+          status.changed && 'bg-primary/5',
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <SaveStatus {...status} />
+        </div>
+        {status.isNew ? (
           <Button
             type="submit"
             form={formId}
             loading={saving}
             disabled={!canSave}
           >
-            Gem ændringer
+            Opret sædskifte
           </Button>
-        </>
-      ) : onUseInSimulation ? (
-        <Button type="button" variant="outline" onClick={onUseInSimulation}>
-          Brug i en ny simulering
-        </Button>
-      ) : null}
-    </div>
-  </footer>
-)
+        ) : editing ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={onCancel}
+            >
+              Annuller
+            </Button>
+            <Button
+              type="submit"
+              form={formId}
+              loading={saving}
+              disabled={!canSave}
+            >
+              Gem ændringer
+            </Button>
+          </>
+        ) : onUseInSimulation && !readOnly ? (
+          <Button type="button" variant="outline" onClick={onUseInSimulation}>
+            Brug i en ny simulering
+          </Button>
+        ) : null}
+      </div>
+    </footer>
+  )
+}

@@ -4,6 +4,7 @@ import { useId } from 'react'
 import { useCropCodes } from '@/api/hooks'
 import type { CropCodeOption, Simulation } from '@/api/types'
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import { cropLabelByCode } from '@/lib/crop-label'
 import { formatNumber } from '@/lib/field-domain'
@@ -99,6 +100,7 @@ export const SimulationBasisCard = ({
 }: SimulationBasisCardProps) => {
   const id = useId()
   const cropCodes = useCropCodes(simulation.farmId).data ?? []
+  const readOnly = useFarmReadOnly()
 
   return (
     <section
@@ -116,16 +118,18 @@ export const SimulationBasisCard = ({
           </h3>
           <p className="text-xs text-muted-foreground">Gemte indstillinger</p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto shrink-0"
-          onClick={onEditBasis}
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-          Ret grundlag
-        </Button>
+        {readOnly ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={onEditBasis}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Ret grundlag
+          </Button>
+        )}
       </div>
       <div className="border-t">
         <p className="px-5 pt-3 pl-11.5 text-xs text-muted-foreground">
