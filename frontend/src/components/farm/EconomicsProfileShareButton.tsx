@@ -21,7 +21,7 @@ export const EconomicsProfileShareButton = ({
     <MemberShareButton
       name={profile.name}
       membersPath={economicsModuleMembersPath(profile.id)}
-      description="Alle, profilen er delt med, kan bruge den på deres egne bedrifter og rette, dele og slette den."
+      description="Læsere kan se profilen, bruge den på deres egne bedrifter og lave en kopi. Redaktører kan også rette, dele og slette den."
       leaveDescription={describeLeaveProfile}
       leaveLabel="Forlad profil"
       leaveFailure="Kunne ikke forlade profilen."

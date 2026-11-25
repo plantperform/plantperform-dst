@@ -20,7 +20,7 @@ export const OwnRotationShareButton = ({
   <MemberShareButton
     name={definition.name}
     membersPath={rotationDefinitionMembersPath(definition.id)}
-    description="Alle, sædskiftet er delt med, kan vælge det i simuleringer på deres egne bedrifter og rette, dele og slette det."
+    description="Læsere kan se sædskiftet, vælge det i simuleringer på deres egne bedrifter og lave en kopi. Redaktører kan også rette, dele og slette det."
     leaveDescription={describeLeaveRotation}
     leaveLabel="Forlad sædskifte"
     leaveFailure="Kunne ikke forlade sædskiftet."

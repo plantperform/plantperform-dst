@@ -90,4 +90,4 @@ export const duplicateRotationDefinition = (
   )
 
 export const rotationDefinitionMembersPath = (definitionId: string) =>
-  `${definitionPath(definitionId)}/members`
+  `${definitionPath(definitionId)}/memberships`

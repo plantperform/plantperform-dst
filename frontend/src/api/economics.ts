@@ -7,6 +7,7 @@ import type {
   EconomicsOverrides,
   FarmingSystem,
   FarmMember,
+  MembershipRole,
   Simulation,
 } from '@/api/types'
 import {
@@ -136,7 +137,7 @@ export const deleteEconomicsModule = (moduleId: string) =>
   deleteJson(modulePath(moduleId))
 
 export const economicsModuleMembersPath = (moduleId: string) =>
-  `${modulePath(moduleId)}/members`
+  `${modulePath(moduleId)}/memberships`
 
 const MODULES_MEMBERS_KEY = 'economics-modules-members'
 
@@ -162,8 +163,11 @@ export const useEconomicsModulesMembers = (moduleIds: string[]) =>
     ([, ids]: [string, string]) => fetchModulesMembers(ids.split(',')),
   )
 
-export const addEconomicsModuleMember = (moduleId: string, email: string) =>
-  addMember(economicsModuleMembersPath(moduleId), email)
+export const addEconomicsModuleMember = (
+  moduleId: string,
+  email: string,
+  role: MembershipRole,
+) => addMember(economicsModuleMembersPath(moduleId), email, role)
 
 const simulationEconomicsPath = (farmId: string, simulationId: string) =>
   `/farms/${encodeURIComponent(farmId)}/simulations/${encodeURIComponent(simulationId)}/economics`

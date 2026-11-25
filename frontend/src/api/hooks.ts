@@ -67,10 +67,11 @@ export const farmsKey = '/farms'
 
 export const useFarms = () => useSWR<Farm[]>(farmsKey, fetcher)
 
-export const farmMembersKey = (farmId?: string) => {
-  if (!farmId) return null
-  return `/farms/${encodeURIComponent(farmId)}/members`
-}
+export const farmMembersPath = (farmId: string) =>
+  `/farms/${encodeURIComponent(farmId)}/memberships`
+
+export const farmMembersKey = (farmId?: string) =>
+  farmId ? farmMembersPath(farmId) : null
 
 export const useFarmMembers = (farmId?: string) =>
   useSWR<FarmMember[]>(farmMembersKey(farmId), fetcher)

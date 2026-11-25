@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
+import type { FarmMember } from '@/api/types'
 import {
+  canLeave,
   describeFarmAccess,
   describeLeaveFarm,
   describeLeaveProfile,
@@ -10,12 +12,13 @@ import {
   memberProfilesLabel,
   notShared,
   otherMemberEmails,
+  ownRole,
   shareEmailError,
 } from '@/lib/farm-access'
 
-const members = [
-  { email: 'Anders.Bak@example.com' },
-  { email: 'karen.holm@example.com' },
+const members: FarmMember[] = [
+  { email: 'Anders.Bak@example.com', role: 'editor' },
+  { email: 'karen.holm@example.com', role: 'viewer' },
 ]
 
 describe('notShared', () => {
@@ -91,7 +94,10 @@ describe('describeLeaveProfile', () => {
 describe('memberProfileNames', () => {
   const profiles = [
     { name: 'Højere hvedepris', members },
-    { name: 'Dyrere diesel', members: [{ email: 'karen.holm@example.com' }] },
+    {
+      name: 'Dyrere diesel',
+      members: [{ email: 'karen.holm@example.com', role: 'editor' as const }],
+    },
   ]
 
   it('lists the profiles the member also has whatever the casing', () => {
@@ -114,9 +120,31 @@ describe('memberProfilesLabel', () => {
 })
 
 describe('describeShareFarm', () => {
-  it('warns that the new member gets the same control', () => {
-    expect(describeShareFarm('karen.holm@example.com')).toBe(
+  it('warns that an editor gets the same control and a viewer only looks', () => {
+    expect(describeShareFarm('karen.holm@example.com', 'editor')).toBe(
       'karen.holm@example.com får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.',
     )
+    expect(describeShareFarm('karen.holm@example.com', 'viewer')).toBe(
+      'karen.holm@example.com kan se bedriftens marker og simuleringer og lave en kopi af bedriften, men ikke ændre noget.',
+    )
+  })
+})
+
+describe('ownRole and canLeave', () => {
+  it('finds the role whatever the casing and lets a viewer leave', () => {
+    expect(ownRole(members, 'anders.bak@example.com')).toBe('editor')
+    expect(ownRole(members, 'ny@example.com')).toBeNull()
+    expect(canLeave(members, 'karen.holm@example.com')).toBe(true)
+  })
+
+  it('keeps the last editor and anyone without an explicit membership', () => {
+    expect(canLeave(members, 'anders.bak@example.com')).toBe(false)
+    expect(
+      canLeave(
+        [...members, { email: 'ole@example.com', role: 'editor' }],
+        'anders.bak@example.com',
+      ),
+    ).toBe(true)
+    expect(canLeave(members, 'ny@example.com')).toBe(false)
   })
 })

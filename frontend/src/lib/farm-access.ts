@@ -1,5 +1,5 @@
 import { ApiError } from '@/api/client'
-import type { FarmMember } from '@/api/types'
+import type { FarmMember, MembershipRole } from '@/api/types'
 import { validateEmail } from '@/lib/auth-form'
 
 export const shareEmailError = (
@@ -24,13 +24,46 @@ export const notShared = <T>(
     )
   })
 
+export const sameEmail = (left: string, right: string) =>
+  left.toLowerCase() === right.toLowerCase()
+
 export const otherMemberEmails = (
   members: FarmMember[],
   ownEmail: string,
 ): string[] =>
   members
     .map((member) => member.email)
-    .filter((email) => email.toLowerCase() !== ownEmail.toLowerCase())
+    .filter((email) => !sameEmail(email, ownEmail))
+
+export const MEMBERSHIP_ROLE_LABELS: Record<MembershipRole, string> = {
+  viewer: 'Læser',
+  editor: 'Redaktør',
+}
+
+export const MEMBERSHIP_ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
+  viewer: 'Kan se og lave en kopi',
+  editor: 'Kan også rette og dele',
+}
+
+export const DEFAULT_SHARE_ROLE: MembershipRole = 'viewer'
+
+export const ownRole = (
+  members: FarmMember[],
+  ownEmail: string,
+): MembershipRole | null =>
+  members.find((member) => sameEmail(member.email, ownEmail))?.role ?? null
+
+export const canLeave = (members: FarmMember[], ownEmail: string): boolean => {
+  const role = ownRole(members, ownEmail)
+  return (
+    role === 'viewer' ||
+    (role === 'editor' &&
+      members.some(
+        (member) =>
+          member.role === 'editor' && !sameEmail(member.email, ownEmail),
+      ))
+  )
+}
 
 const shareAgain = (otherEmails: string[]): string =>
   `${
@@ -56,17 +89,20 @@ export const memberProfileNames = (
 ): string[] =>
   profiles
     .filter((profile) =>
-      profile.members.some(
-        (member) => member.email.toLowerCase() === email.toLowerCase(),
-      ),
+      profile.members.some((member) => sameEmail(member.email, email)),
     )
     .map((profile) => profile.name)
 
 export const memberProfilesLabel = (count: number): string =>
   `Har også ${count === 1 ? 'økonomiprofilen' : 'økonomiprofilerne'}:`
 
-export const describeShareFarm = (email: string): string =>
-  `${email} får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.`
+export const describeShareFarm = (
+  email: string,
+  role: MembershipRole,
+): string =>
+  role === 'editor'
+    ? `${email} får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.`
+    : `${email} kan se bedriftens marker og simuleringer og lave en kopi af bedriften, men ikke ændre noget.`
 
 export const describeFarmAccess = (otherEmails: string[]): string => {
   if (otherEmails.length === 0) return 'Kun dig'
