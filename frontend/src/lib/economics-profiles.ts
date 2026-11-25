@@ -140,6 +140,9 @@ export const profileNameError = (
     : null
 }
 
+export const isViewerProfile = (profile: EconomicsProfile): boolean =>
+  profile.id !== STANDARD_PROFILE_ID && profile.effectiveRole === 'viewer'
+
 export const freeName = (
   items: { name: string }[],
   baseName: string,

@@ -1,6 +1,6 @@
-import { Pencil, TextCursorInput, Trash2 } from 'lucide-react'
+import { Copy, Pencil, TextCursorInput, Trash2 } from 'lucide-react'
 import { useId, useRef, useState } from 'react'
-import { Navigate, useLocation, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import type { Simulation } from '@/api/types'
@@ -40,6 +40,7 @@ import {
 } from '@/lib/economics'
 import {
   describeProfileUsers,
+  isViewerProfile,
   PROFILE_USERS_ON_FARM,
   sharedProfileNote,
   STANDARD_PROFILE_ID,
@@ -116,6 +117,7 @@ const ProfileBody = ({
   const location = useLocation()
   const economics = useEconomicsProfiles()
   const isStandard = profile.id === STANDARD_PROFILE_ID
+  const editable = !isStandard && !isViewerProfile(profile)
   const [changesOpen, setChangesOpen] = useState(false)
   const users = economics.simulationsUsingProfile(simulations, profile.id)
   const userNames = new Map(
@@ -179,15 +181,21 @@ const ProfileBody = ({
         <EconomicsProfileChanges
           className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
           changes={changes}
-          onRestore={(change) =>
-            economics.changeOverrides(profile.id, (current) =>
-              withoutProfileChange(assumptions, current, change),
-            )
+          onRestore={
+            editable
+              ? (change) =>
+                  economics.changeOverrides(profile.id, (current) =>
+                    withoutProfileChange(assumptions, current, change),
+                  )
+              : undefined
           }
-          onRestoreAll={() =>
-            economics.changeOverrides(profile.id, (current) =>
-              withoutProfileChanges(assumptions, current),
-            )
+          onRestoreAll={
+            editable
+              ? () =>
+                  economics.changeOverrides(profile.id, (current) =>
+                    withoutProfileChanges(assumptions, current),
+                  )
+              : undefined
           }
         />
       ) : null}
@@ -197,9 +205,9 @@ const ProfileBody = ({
         assumptions={assumptions}
         overrides={profile.overrides}
         onOverridesChange={
-          isStandard
-            ? undefined
-            : (change) => economics.changeOverrides(profile.id, change)
+          editable
+            ? (change) => economics.changeOverrides(profile.id, change)
+            : undefined
         }
         focus={focus.success ? focus.data : undefined}
       />
@@ -227,11 +235,21 @@ const ProfileView = ({
   const location = useLocation()
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
+  const navigate = useNavigate()
   const isStandard = profile.id === STANDARD_PROFILE_ID
+  const viewer = isViewerProfile(profile)
   const [editingName, setEditingName] = useState(false)
+  const [copying, setCopying] = useState(false)
   const returnState = returnStateSchema.safeParse(location.state)
   const returnTo = returnState.success ? returnState.data.returnTo : null
   const budgets = useEconomicsAssumptions()
+
+  const copy = async () => {
+    setCopying(true)
+    const copyId = await economics.copyProfile(profile.id)
+    setCopying(false)
+    if (copyId) navigate(economics.profilePath(copyId))
+  }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -259,16 +277,28 @@ const ProfileView = ({
               {farmName} ·{' '}
               {isStandard
                 ? `${STANDARD_SOURCE}. Standard kan ikke rettes.`
-                : `Dine priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen kan bruges på alle dine bedrifter. Rettelser gemmes med det samme, og simuleringer, der bruger profilen, genberegnes automatisk.`}
+                : viewer
+                  ? `Priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen er delt med dig som læser, så du kan bruge den på dine bedrifter, men ikke rette den. Lav en kopi, hvis du vil ændre noget.`
+                  : `Dine priser, mængder og udbytter oven på ${STANDARD_SOURCE}. Profilen kan bruges på alle dine bedrifter. Rettelser gemmes med det samme, og simuleringer, der bruger profilen, genberegnes automatisk.`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FarmingSystemSwitch />
-            <Button onClick={() => startGuide({ fromProfileId: profile.id })}>
-              <Pencil aria-hidden="true" />
-              {isStandard ? 'Lav en profil ud fra Standard' : 'Tilpas i guiden'}
-            </Button>
-            {isStandard ? null : (
+            {viewer ? (
+              <Button loading={copying} onClick={() => void copy()}>
+                {copying ? null : <Copy aria-hidden="true" />}
+                Lav en kopi
+              </Button>
+            ) : (
+              <Button onClick={() => startGuide({ fromProfileId: profile.id })}>
+                <Pencil aria-hidden="true" />
+                {isStandard
+                  ? 'Lav en profil ud fra Standard'
+                  : 'Tilpas i guiden'}
+              </Button>
+            )}
+            {viewer ? <EconomicsProfileShareButton profile={profile} /> : null}
+            {isStandard || viewer ? null : (
               <>
                 <Button variant="outline" onClick={() => setEditingName(true)}>
                   <TextCursorInput aria-hidden="true" />

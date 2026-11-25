@@ -115,6 +115,12 @@ export const useEconomicsModules = () =>
     revalidateOnReconnect: false,
   })
 
+export const duplicateEconomicsModule = (moduleId: string, name: string) =>
+  postJson<EconomicsModule, { name: string }>(
+    `${modulePath(moduleId)}/duplicate`,
+    { name },
+  )
+
 export const createEconomicsModule = (
   name: string,
   overrides: EconomicsOverrides,

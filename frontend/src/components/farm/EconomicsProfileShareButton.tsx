@@ -4,6 +4,7 @@ import { economicsModuleMembersPath } from '@/api/economics'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { MemberShareButton } from '@/components/farm/MemberShareButton'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
+import { isViewerProfile } from '@/lib/economics-profiles'
 import { describeLeaveProfile } from '@/lib/farm-access'
 
 type EconomicsProfileShareButtonProps = {
@@ -27,6 +28,7 @@ export const EconomicsProfileShareButton = ({
       leaveFailure="Kunne ikke forlade profilen."
       shareFailure="Kunne ikke dele profilen. Personen skal have en bekræftet konto i PlantPerform."
       onLeft={() => economics.forgetProfile(profile.id)}
+      viewer={isViewerProfile(profile)}
       size={size}
     />
   )

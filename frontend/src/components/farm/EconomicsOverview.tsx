@@ -40,6 +40,7 @@ import {
   describeProfileUsers,
   describeStandard,
   ECONOMICS_INVITATION,
+  isViewerProfile,
   STANDARD_PROFILE,
   STANDARD_PROFILE_ID,
   type EconomicsProfile,
@@ -129,15 +130,17 @@ const ProfileCard = ({
   const startGuide = useStartGuide()
   const changes = profileChanges(assumptions, profile.overrides)
   const movedCrops = effects.filter((effect) => effect.deltaDkkHa !== 0).length
+  const viewer = isViewerProfile(profile)
+  const users = describeProfileUsers(
+    economics
+      .simulationsUsingProfile(simulations, profile.id)
+      .map((simulation) => simulation.name),
+  )
 
   return (
     <OverviewCard
       title={profile.name}
-      subtitle={describeProfileUsers(
-        economics
-          .simulationsUsingProfile(simulations, profile.id)
-          .map((simulation) => simulation.name),
-      )}
+      subtitle={viewer ? `Delt med dig som læser. ${users}` : users}
       actions={
         <>
           <Button size="xs" asChild>
@@ -148,25 +151,29 @@ const ProfileCard = ({
               Åbn
             </Link>
           </Button>
-          <Button
-            size="xs"
-            variant="outline"
-            aria-label={`Tilpas i guiden: ${profile.name}`}
-            onClick={() => startGuide({ fromProfileId: profile.id })}
-          >
-            Tilpas i guiden
-          </Button>
+          {viewer ? null : (
+            <Button
+              size="xs"
+              variant="outline"
+              aria-label={`Tilpas i guiden: ${profile.name}`}
+              onClick={() => startGuide({ fromProfileId: profile.id })}
+            >
+              Tilpas i guiden
+            </Button>
+          )}
           <EconomicsProfileShareButton profile={profile} size="xs" />
-          <Button
-            size="xs"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            aria-label={`Slet ${profile.name}`}
-            onClick={onDelete}
-          >
-            <Trash2 aria-hidden="true" />
-            Slet
-          </Button>
+          {viewer ? null : (
+            <Button
+              size="xs"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              aria-label={`Slet ${profile.name}`}
+              onClick={onDelete}
+            >
+              <Trash2 aria-hidden="true" />
+              Slet
+            </Button>
+          )}
         </>
       }
     >
