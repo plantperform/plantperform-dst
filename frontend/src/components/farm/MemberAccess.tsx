@@ -174,9 +174,13 @@ export const MemberList = ({
                   <TruncatedTooltip content={member.email} className="truncate">
                     {member.email}
                   </TruncatedTooltip>
-                  {isSelf ? (
+                  {isSelf || member.creator ? (
                     <span className="shrink-0 text-[13px] text-muted-foreground">
-                      (dig)
+                      (
+                      {[isSelf && 'dig', member.creator && 'opretter']
+                        .filter(Boolean)
+                        .join(', ')}
+                      )
                     </span>
                   ) : null}
                 </div>
@@ -186,7 +190,7 @@ export const MemberList = ({
                   </p>
                 ) : null}
               </div>
-              {canManage && !isSelf ? (
+              {canManage && !isSelf && !member.creator ? (
                 <RoleMenu
                   email={member.email}
                   role={member.role}
@@ -213,7 +217,7 @@ export const MemberList = ({
                     Forlad
                   </Button>
                 ) : null
-              ) : canManage ? (
+              ) : canManage && !member.creator ? (
                 <Button
                   variant="ghost"
                   size="sm"

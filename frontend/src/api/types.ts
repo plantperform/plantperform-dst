@@ -13,6 +13,7 @@ export type MembershipRole = 'editor' | 'viewer'
 export type FarmMember = {
   email: string
   role: MembershipRole
+  creator?: boolean
 }
 
 export type Farm = {

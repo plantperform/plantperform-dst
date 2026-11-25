@@ -8,6 +8,7 @@ import {
   describeLeaveFarm,
   describeLeaveProfile,
   describeShareFarm,
+  farmCreator,
   memberProfileNames,
   memberProfilesLabel,
   notShared,
@@ -119,12 +120,29 @@ describe('memberProfilesLabel', () => {
   })
 })
 
+describe('farmCreator', () => {
+  it('finds the creator and is null without one', () => {
+    const withCreator: FarmMember[] = [
+      { email: 'Anders.Bak@example.com', role: 'editor', creator: true },
+      { email: 'karen.holm@example.com', role: 'editor' },
+    ]
+    expect(farmCreator(withCreator)).toBe('Anders.Bak@example.com')
+    expect(farmCreator(members)).toBeNull()
+  })
+})
+
 describe('describeShareFarm', () => {
+  it('says an editor cannot remove the creator or delete the farm', () => {
+    expect(describeShareFarm('karen.holm@example.com', 'editor', 'dig')).toBe(
+      'karen.holm@example.com kan ændre marker og simuleringer, dele bedriften med andre og fjerne andres adgang, men ikke fjerne dig eller slette bedriften.',
+    )
+  })
+
   it('warns that an editor gets the same control and a viewer only looks', () => {
-    expect(describeShareFarm('karen.holm@example.com', 'editor')).toBe(
+    expect(describeShareFarm('karen.holm@example.com', 'editor', null)).toBe(
       'karen.holm@example.com får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.',
     )
-    expect(describeShareFarm('karen.holm@example.com', 'viewer')).toBe(
+    expect(describeShareFarm('karen.holm@example.com', 'viewer', null)).toBe(
       'karen.holm@example.com kan se bedriftens marker og simuleringer og lave en kopi af bedriften, men ikke ændre noget.',
     )
   })
