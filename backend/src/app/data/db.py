@@ -327,6 +327,7 @@ farm_table = Table(
     Column("id", Text, primary_key=True),
     Column("data", JSONB, nullable=False),
     Column("revision", Integer, nullable=False, server_default="0"),
+    Column("created_by", Text, ForeignKey("app_user.email", ondelete="SET NULL")),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )

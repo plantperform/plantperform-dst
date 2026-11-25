@@ -21,6 +21,7 @@ from app.domain.field import (
     CreateFieldRequest,
     FieldRecord,
 )
+from app.domain.membership import MembershipForbidden
 from app.domain.rotation_candidate import (
     RotationCandidateEvaluation,
     RotationCandidateRef,
@@ -257,6 +258,7 @@ def create_farm(request: CreateFarmRequest, email: str) -> Farm:
             insert(farm_table).values(
                 id=farm.id,
                 data=_dump(farm),
+                created_by=email,
             ),
         )
         session.execute(
@@ -276,6 +278,8 @@ def delete_farm(farm_id: str, email: str) -> bool:
     with SessionLocal.begin() as session:
         if not _farm_editor_exists(session, farm_id, email):
             return False
+        if membership.farms.creator_email(session, farm_id) not in (None, email):
+            raise MembershipForbidden
         result = session.execute(delete(farm_table).where(farm_table.c.id == farm_id))
         return result.rowcount > 0
 

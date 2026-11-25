@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.data import db
-from app.domain.membership import Membership, MembershipForbidden, MembershipRole
+from app.domain.membership import MembershipEntry, MembershipForbidden, MembershipRole
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,20 @@ class ResourceMemberships:
     members: Table
     resource_key: Column
     selection: ColumnElement | None = None
+    creator: Column | None = None
+
+    def creator_email(self, session, resource_id):
+        """The creator, while they are still an editor; other editors cannot remove them."""
+        if self.creator is None:
+            return None
+        return session.scalar(
+            select(self.creator)
+            .join(
+                self.members,
+                and_(self.resource_key == self.resource.c.id, self.members.c.email == self.creator),
+            )
+            .where(self.resource.c.id == resource_id, self.members.c.role == "editor")
+        )
 
     def selected_ids(self, email):
         """IDs selected in simulations the caller can read, before any proposed change."""
@@ -100,7 +114,11 @@ class ResourceMemberships:
             .where(self.resource_key == resource_id)
             .order_by(self.members.c.email)
         )
-        return [Membership(email=row.email, role=row.role) for row in rows]
+        creator = self.creator_email(session, resource_id)
+        return [
+            MembershipEntry(email=row.email, role=row.role, creator=row.email == creator or None)
+            for row in rows
+        ]
 
     def add(self, session, resource_id, actor, email, role: MembershipRole = "editor"):
         self.lock_resource(session, resource_id)
@@ -136,6 +154,8 @@ class ResourceMemberships:
             if role is not None and self.effective_role(session, resource_id, email) == "viewer":
                 return self._insert_member(session, resource_id, email, role)
             return "member_not_found"
+        if actor != email and email == self.creator_email(session, resource_id):
+            return "creator"
         if previous == "editor" and role != "editor":
             other_editor = session.scalar(
                 select(self.members.c.email)
@@ -156,7 +176,12 @@ class ResourceMemberships:
         return "updated"
 
 
-farms = ResourceMemberships(db.farm_table, db.farm_member_table, db.farm_member_table.c.farm_id)
+farms = ResourceMemberships(
+    db.farm_table,
+    db.farm_member_table,
+    db.farm_member_table.c.farm_id,
+    creator=db.farm_table.c.created_by,
+)
 modules = ResourceMemberships(
     db.economics_module_table,
     db.economics_module_member_table,

@@ -31,6 +31,10 @@ class Membership(FarmMemberResponse):
     role: MembershipRole
 
 
+class MembershipEntry(Membership):
+    creator: bool | None = None
+
+
 class ChangeMembershipRole(CamelModel):
     role: MembershipRole
 
