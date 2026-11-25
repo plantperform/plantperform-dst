@@ -45,6 +45,11 @@ export const MEMBERSHIP_ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
   editor: 'Kan også rette og dele',
 }
 
+export const MEMBERSHIP_ROLE_TINTS: Record<MembershipRole, string> = {
+  viewer: 'bg-muted text-muted-foreground',
+  editor: 'bg-primary text-primary-foreground',
+}
+
 export const DEFAULT_SHARE_ROLE: MembershipRole = 'viewer'
 
 export const ownRole = (

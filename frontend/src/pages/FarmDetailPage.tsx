@@ -681,6 +681,7 @@ const FarmDetail = () => {
                   <FarmAboutPage
                     key={loadedFarm.id}
                     farm={loadedFarm}
+                    fields={fieldsData}
                     simulations={simulations}
                   />
                 }

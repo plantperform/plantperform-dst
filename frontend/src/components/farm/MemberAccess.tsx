@@ -21,7 +21,9 @@ import {
 import {
   MEMBERSHIP_ROLE_DESCRIPTIONS,
   MEMBERSHIP_ROLE_LABELS,
+  MEMBERSHIP_ROLE_TINTS,
 } from '@/lib/farm-access'
+import { userInitials } from '@/lib/user-name'
 import { cn } from '@/lib/utils'
 
 const ROW_ACTION_CLASS =
@@ -30,6 +32,17 @@ const ROW_ACTION_CLASS =
 const ROLES = Object.keys(MEMBERSHIP_ROLE_LABELS) as MembershipRole[]
 
 const ROLE_ICONS = { viewer: Eye, editor: Pencil }
+
+export const RoleIcon = ({
+  role,
+  className,
+}: {
+  role: MembershipRole
+  className?: string
+}) => {
+  const Icon = ROLE_ICONS[role]
+  return <Icon className={className} aria-hidden="true" />
+}
 
 const ROLE_OPTIONS = ROLES.map(
   (value): SegmentedControlOption<MembershipRole> => ({
@@ -102,6 +115,7 @@ type MemberListProps = {
   onChangeRole: (email: string, role: MembershipRole) => void
   onLeave: () => void
   describeMember?: (email: string) => ReactNode
+  ownCard?: boolean
 }
 
 export const MemberList = ({
@@ -120,6 +134,7 @@ export const MemberList = ({
   onChangeRole,
   onLeave,
   describeMember,
+  ownCard = false,
 }: MemberListProps) => (
   <>
     {loading || loadError ? (
@@ -129,7 +144,7 @@ export const MemberList = ({
         loading="Henter, hvem der har adgang..."
         retrying={retrying}
         onRetry={onRetry}
-        className="border-b px-6 py-4"
+        className={cn('px-6 py-4', !ownCard && 'border-b')}
       />
     ) : (
       <ul>
@@ -140,8 +155,20 @@ export const MemberList = ({
           return (
             <li
               key={member.email}
-              className="flex items-center gap-3.5 border-b border-border/60 px-6 py-3"
+              className={cn(
+                'flex items-center gap-3.5 border-b border-border/60 px-6 py-3',
+                ownCard && 'last:border-b-0',
+              )}
             >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'flex size-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold',
+                  MEMBERSHIP_ROLE_TINTS[member.role],
+                )}
+              >
+                {userInitials(null, member.email)}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2 text-[15px]">
                   <TruncatedTooltip content={member.email} className="truncate">
@@ -174,9 +201,9 @@ export const MemberList = ({
               {isSelf ? (
                 canLeave ? (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className={ROW_ACTION_CLASS}
+                    className="shrink-0 gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     loading={removing}
                     onClick={onLeave}
                   >
@@ -209,7 +236,10 @@ export const MemberList = ({
     {memberError ? (
       <p
         role="alert"
-        className="border-b px-6 py-3 text-[13px] text-destructive"
+        className={cn(
+          'px-6 py-3 text-[13px] text-destructive',
+          ownCard ? 'border-t' : 'border-b',
+        )}
       >
         {memberError}
       </p>
