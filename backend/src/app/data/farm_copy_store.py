@@ -274,6 +274,7 @@ def _copy_snapshot(session, source, destination_id, email, *, member_copy=False)
         farm_copy_definitions.copy_definitions(session, state, email)
     state = {table: _remap(rows, mapping) for table, rows in state.items()}
     farm = state[farm_table][0]
+    farm["created_by"] = email
     history = next(iter(state[farm_read_model_table]), None)
     state[farm_read_model_table] = [_farm_history(farm, state[field_table], history)]
 

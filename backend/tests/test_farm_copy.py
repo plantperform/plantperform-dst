@@ -358,7 +358,7 @@ class FarmCopyDatabaseTests(unittest.TestCase):
         self.assertEqual(response.json()["name"], "Kopi af Grøn gård")
         with client() as api:
             roster = api.get("/api/v0/farms/" + response.json()["id"] + "/memberships")
-        self.assertEqual(roster.json(), [{"email": CREATOR, "role": "editor"}])
+        self.assertEqual(roster.json(), [{"email": CREATOR, "role": "editor", "creator": True}])
 
     def test_private_duplicate_keeps_original_profile(self):
         self.share_as_viewer()
@@ -934,6 +934,11 @@ class FarmCopyDatabaseTests(unittest.TestCase):
 
         for table in tables:
             self.assertIn(before[table.name][0], self.rows(table), table.name)
+
+    def test_copy_records_the_copier_as_creator(self):
+        self.copy()
+
+        self.assertEqual(self.copied_row(farm_table, "id", "source")["created_by"], CREATOR)
 
     def test_editing_and_deleting_copy_preserves_source(self):
         copied = self.copy()

@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.auth import AuthenticatedUser, current_user
 from app.data import membership, repository
-from app.domain.membership import AddMembershipRequest, ChangeMembershipRole, Membership
+from app.domain.membership import (
+    AddMembershipRequest,
+    ChangeMembershipRole,
+    Membership,
+    MembershipEntry,
+)
 
 CurrentUser = Annotated[AuthenticatedUser, Depends(current_user)]
 
@@ -27,6 +32,7 @@ def _check(result):
         "member_not_found": (404, "Member not found"),
         "already_member": (409, "User is already a member"),
         "last_member": (409, "At least one editor must remain"),
+        "creator": (409, "Only the creator can remove or demote themselves"),
     }
     if result in errors:
         code, detail = errors[result]
@@ -45,7 +51,7 @@ def membership_router(
         dependencies=[Depends(current_user), Depends(validate_resource)],
     )
 
-    @router.get("", response_model=list[Membership])
+    @router.get("", response_model=list[MembershipEntry], response_model_exclude_none=True)
     def list_memberships(resource_id: str, user: CurrentUser):
         with repository.SessionLocal() as session:
             entries = store.list(session, resource_id, user.email)

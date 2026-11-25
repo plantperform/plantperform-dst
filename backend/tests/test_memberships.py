@@ -282,6 +282,66 @@ class MembershipTests(DatabaseTests):
 
                 self.assertEqual(response.json(), expected)
 
+    def make_creator_with_other_editor(self):
+        with self.sessions.begin() as session:
+            session.execute(
+                update(db.farm_table).where(db.farm_table.c.id == "farm").values(created_by=EMAIL)
+            )
+            session.execute(
+                insert(db.farm_member_table).values(farm_id="farm", email=OTHER, role="editor")
+            )
+
+    def test_roster_marks_only_the_creator(self):
+        self.make_creator_with_other_editor()
+
+        response = self.call("GET", "/farms/farm/memberships", actor=VIEWER)
+
+        self.assertEqual(
+            response.json(),
+            [
+                {"email": EMAIL, "role": "editor", "creator": True},
+                {"email": OTHER, "role": "editor"},
+                {"email": VIEWER, "role": "viewer"},
+            ],
+        )
+
+    def test_other_editor_cannot_remove_or_demote_the_creator(self):
+        self.make_creator_with_other_editor()
+        for method, suffix, body in [
+            ("PATCH", f"/memberships/{EMAIL}", {"role": "viewer"}),
+            ("DELETE", f"/memberships/{EMAIL}", None),
+            ("DELETE", f"/members/{EMAIL}", None),
+        ]:
+            with self.subTest(method=method, suffix=suffix):
+                response = self.call(method, "/farms/farm" + suffix, actor=OTHER, json=body)
+
+                self.assertEqual(response.status_code, 409)
+        self.assertIn(
+            {"email": EMAIL, "role": "editor", "creator": True},
+            self.call("GET", "/farms/farm/memberships").json(),
+        )
+
+    def test_creator_who_steps_down_can_be_removed(self):
+        self.make_creator_with_other_editor()
+        self.call("PATCH", f"/farms/farm/memberships/{EMAIL}", json={"role": "viewer"})
+
+        response = self.call("DELETE", f"/farms/farm/memberships/{EMAIL}", actor=OTHER)
+
+        self.assertEqual(response.status_code, 204)
+
+    def test_new_farm_marks_its_creator(self):
+        farm = self.call("POST", "/farms", json={"name": "Ny gård", "ownerName": "Anders Bak"})
+
+        roster = self.call("GET", f"/farms/{farm.json()['id']}/memberships")
+
+        self.assertEqual(roster.json(), [{"email": EMAIL, "role": "editor", "creator": True}])
+
+    def test_only_the_creator_can_delete_the_farm(self):
+        self.make_creator_with_other_editor()
+
+        self.assertEqual(self.call("DELETE", "/farms/farm", actor=OTHER).status_code, 403)
+        self.assertEqual(self.call("DELETE", "/farms/farm").status_code, 204)
+
     def test_legacy_add_assigns_editor(self):
         for path in self.resources:
             with self.subTest(path=path):

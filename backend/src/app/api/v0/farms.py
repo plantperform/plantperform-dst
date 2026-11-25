@@ -181,5 +181,9 @@ def delete_farm_member(
         raise HTTPException(status_code=404, detail="Farm not found")
     if result == "last_member":
         raise HTTPException(status_code=409, detail="A farm must have at least one editor")
+    if result == "creator":
+        raise HTTPException(
+            status_code=409, detail="Only the creator can remove or demote themselves"
+        )
     if result == "member_not_found":
         raise HTTPException(status_code=404, detail="Farm member not found")
