@@ -20,3 +20,9 @@ export const useFarmCopyPreview = (input: FarmCopyLookup) =>
 
 export const copyFarm = (input: CopyFarmInput) =>
   postJson<Farm, CopyFarmInput>('/farms/copy', input)
+
+export const duplicateFarm = (farmId: string, requestId: string) =>
+  postJson<Farm, { requestId: string }>(
+    `/farms/${encodeURIComponent(farmId)}/duplicate`,
+    { requestId },
+  )

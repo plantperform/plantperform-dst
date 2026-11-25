@@ -7,6 +7,7 @@ import type { FieldRecord, Simulation } from '@/api/types'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { useStartGuide } from '@/components/farm/economics-navigation'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import {
   BudgetsGate,
   DbDelta,
@@ -161,6 +162,7 @@ type CardBodyProps = SimulationEconomicsCardProps & {
 const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
   const economics = useEconomicsProfiles()
   const startGuide = useStartGuide()
+  const readOnly = useFarmReadOnly()
   const profile = economics.profileForSimulation(simulation)
   if (
     economics.findProfile(profile.id) === undefined &&
@@ -185,8 +187,8 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
         <b className="font-semibold text-foreground">{simulation.name}</b> har
         Standard valgt, altså priser og mængder fra {STANDARD_SOURCE} uden
         ændringer.{' '}
-        {economics.ownProfiles === undefined ? null : economics.ownProfiles
-            .length > 0 ? (
+        {economics.ownProfiles === undefined || readOnly ? null : economics
+            .ownProfiles.length > 0 ? (
           'Vælg en af dine egne profiler for at se, hvad den betyder for simuleringen.'
         ) : (
           <>
@@ -267,8 +269,15 @@ const Recalculation = ({ simulation }: { simulation: Simulation }) => {
   const economics = useEconomicsProfiles()
   const optimizing = useOptimizationRun(simulation.id)?.status === 'running'
   const [busy, setBusy] = useState(false)
+  const readOnly = useFarmReadOnly()
 
-  if (!economics.ready || economics.isEconomicsCurrent(simulation)) return null
+  if (
+    readOnly ||
+    !economics.ready ||
+    economics.isEconomicsCurrent(simulation)
+  ) {
+    return null
+  }
   const available =
     economics.findProfile(
       simulation.economicsModuleId ?? STANDARD_PROFILE_ID,

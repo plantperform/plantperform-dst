@@ -20,6 +20,7 @@ import type {
   Simulation,
 } from '@/api/types'
 import { CHOICE_SELECTED_CLASS } from '@/components/farm/choice-styles'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -438,6 +439,7 @@ export const QuotaTradePanel = ({
   onError,
 }: QuotaTradePanelProps) => {
   const priceId = useId()
+  const readOnly = useFarmReadOnly()
   const {
     data: results,
     error,
@@ -542,7 +544,7 @@ export const QuotaTradePanel = ({
     )
   }
 
-  const computeButton = (
+  const computeButton = readOnly ? null : (
     <Button onClick={() => void start()} disabled={!canStart}>
       {starting ? <Spinner /> : null}
       {result?.status === 'completed' || result?.status === 'failed'
@@ -771,7 +773,10 @@ export const QuotaTradePanel = ({
               <div className="w-fit max-w-full rounded-lg border bg-muted/30 p-3">
                 {form}
               </div>
-              <QuotaTradeStatus result={result} canCompute={canCompute} />
+              <QuotaTradeStatus
+                result={result}
+                canCompute={canCompute && !readOnly}
+              />
               {result?.status === 'completed' &&
               result.output &&
               price !== null ? (
@@ -1228,6 +1233,7 @@ const CreateTradeSimulationButton = ({
   priceKrPerKg: number
 }) => {
   const { startRun } = useOptimizationRunActions()
+  const readOnly = useFarmReadOnly()
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const name = tradeSimulationName({
@@ -1273,6 +1279,8 @@ const CreateTradeSimulationButton = ({
       setCreating(false)
     }
   }
+
+  if (readOnly) return null
 
   return (
     <div className="flex max-w-xs flex-col items-start gap-1">

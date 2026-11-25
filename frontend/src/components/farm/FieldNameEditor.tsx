@@ -3,6 +3,7 @@ import { useId, useRef, useState } from 'react'
 
 import { useFieldAliases } from '@/api/field-aliases'
 import type { FieldRecord } from '@/api/types'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fieldAliasKey } from '@/lib/field-aliases'
@@ -20,6 +21,7 @@ export const FieldNameEditor = ({
   simulationId,
 }: FieldNameEditorProps) => {
   const aliases = useFieldAliases()
+  const readOnly = useFarmReadOnly()
   const alias = aliases.data?.[fieldAliasKey(field)] ?? null
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -61,7 +63,7 @@ export const FieldNameEditor = ({
         <h2 className="truncate font-display text-2xl tracking-tight @2xl:text-3xl">
           {fieldTitle({ ...field, alias })}
         </h2>
-        {!editing ? (
+        {!editing && !readOnly ? (
           <Button
             type="button"
             variant="ghost"

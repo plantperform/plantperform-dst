@@ -2,6 +2,7 @@ import { Lock, LockOpen, Search } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 
 import type { FieldRecord } from '@/api/types'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import {
   DEFAULT_FIELDS_SORT,
   type FieldsSortKey,
@@ -62,6 +63,7 @@ const FieldRuleRow = ({
   onToggleLock,
   onBindRotation,
 }: FieldRuleRowProps) => {
+  const readOnly = useFarmReadOnly()
   const locked = isFieldLocked(field)
   const noRotation = field.rotationId === null
   const years = rotationByYear(field)
@@ -115,48 +117,50 @@ const FieldRuleRow = ({
       ) : (
         <span>{field.allowedRotationIds.length} valgt</span>
       )}
-      <span
-        className={cn(
-          'flex justify-end gap-0.5',
-          actionsDisabled && 'pointer-events-none opacity-50',
-        )}
-      >
-        <AppTooltip content={noRotation ? NO_ROTATION_TITLE : undefined}>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="ghost"
-              className={actionClass}
-              disabled={noRotation || actionsDisabled}
-              onClick={() => onBindRotation(field)}
-            >
-              Vælg og lås sædskifte…
-            </Button>
-          </span>
-        </AppTooltip>
-        <AppTooltip content={noRotation ? NO_ROTATION_TITLE : undefined}>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="ghost"
-              className={cn(
-                actionClass,
-                'gap-1.5',
-                locked && 'text-rules hover:bg-rules/10 hover:text-rules',
-              )}
-              disabled={noRotation || actionsDisabled}
-              loading={locking}
-              aria-label={`${locked ? 'Lås op' : 'Lås'} ${fieldDisplayName(field)}`}
-              onClick={() => onToggleLock(field)}
-            >
-              {locked || locking ? null : (
-                <Lock className="size-3" aria-hidden="true" />
-              )}
-              {locked ? 'Lås op' : 'Lås'}
-            </Button>
-          </span>
-        </AppTooltip>
-      </span>
+      {readOnly ? null : (
+        <span
+          className={cn(
+            'flex justify-end gap-0.5',
+            actionsDisabled && 'pointer-events-none opacity-50',
+          )}
+        >
+          <AppTooltip content={noRotation ? NO_ROTATION_TITLE : undefined}>
+            <span className="inline-flex">
+              <Button
+                type="button"
+                variant="ghost"
+                className={actionClass}
+                disabled={noRotation || actionsDisabled}
+                onClick={() => onBindRotation(field)}
+              >
+                Vælg og lås sædskifte…
+              </Button>
+            </span>
+          </AppTooltip>
+          <AppTooltip content={noRotation ? NO_ROTATION_TITLE : undefined}>
+            <span className="inline-flex">
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  actionClass,
+                  'gap-1.5',
+                  locked && 'text-rules hover:bg-rules/10 hover:text-rules',
+                )}
+                disabled={noRotation || actionsDisabled}
+                loading={locking}
+                aria-label={`${locked ? 'Lås op' : 'Lås'} ${fieldDisplayName(field)}`}
+                onClick={() => onToggleLock(field)}
+              >
+                {locked || locking ? null : (
+                  <Lock className="size-3" aria-hidden="true" />
+                )}
+                {locked ? 'Lås op' : 'Lås'}
+              </Button>
+            </span>
+          </AppTooltip>
+        </span>
+      )}
     </div>
   )
 }
@@ -183,6 +187,7 @@ export const FieldRulesCard = ({
   onBindRotation,
 }: FieldRulesCardProps) => {
   const id = useId()
+  const readOnly = useFarmReadOnly()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<FieldsSortState>(DEFAULT_FIELDS_SORT)
   const rowElements = useRef(new Map<string, HTMLDivElement>())
@@ -300,7 +305,7 @@ export const FieldRulesCard = ({
             <span>Status</span>
             <span>Bundet sædskifte</span>
             <span>Tilladte sædskifter</span>
-            <span className="text-right">Handlinger</span>
+            {readOnly ? null : <span className="text-right">Handlinger</span>}
           </div>
 
           {shown.length === 0 ? (

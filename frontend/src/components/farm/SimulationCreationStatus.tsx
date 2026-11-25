@@ -5,6 +5,7 @@ import { retrySimulationEconomics } from '@/api/economics'
 import { simulationsKey } from '@/api/hooks'
 import { retrySimulationCreation } from '@/api/mutations'
 import type { Simulation } from '@/api/types'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -21,6 +22,7 @@ export const SimulationCreationStatus = ({
 }) => {
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const readOnly = useFarmReadOnly()
   const recalculationFailed = simulation.economicsRecalculationFailed === true
   const retry = async () => {
     setRetrying(true)
@@ -57,9 +59,11 @@ export const SimulationCreationStatus = ({
                 : 'Kunne ikke oprette simuleringen.')}
           </p>
 
-          <Button size="sm" loading={retrying} onClick={() => void retry()}>
-            {recalculationFailed ? 'Genberegn igen' : 'Åbn indstillinger'}
-          </Button>
+          {readOnly ? null : (
+            <Button size="sm" loading={retrying} onClick={() => void retry()}>
+              {recalculationFailed ? 'Genberegn igen' : 'Åbn indstillinger'}
+            </Button>
+          )}
         </>
       ) : (
         <>

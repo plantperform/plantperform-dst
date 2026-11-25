@@ -13,6 +13,7 @@ import type {
 import { GlossaryInfo, type GlossaryTerm } from '@/components/GlossaryInfo'
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
 import { TEXT_LINK_CLASS } from '@/components/farm/economics-ui'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import {
   FieldEconomicsContext,
   useFieldEconomics,
@@ -168,6 +169,7 @@ export const FieldPanel = ({
     fieldEconomics.openAtYearIndex !== undefined,
   )
   const [manualEditorOpen, setManualEditorOpen] = useState(false)
+  const readOnly = useFarmReadOnly()
 
   useEffect(() => {
     onCalcOpenChange?.(calcOpen)
@@ -434,45 +436,47 @@ export const FieldPanel = ({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 border-t bg-background p-4 @2xl:flex-row @2xl:justify-end @2xl:px-6">
-        {onRequestDetach ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            className={cn(
-              'w-full @2xl:w-auto @2xl:px-5',
-              isSimulationView && '@2xl:mr-auto',
-            )}
-            onClick={onRequestDetach}
-            loading={isDetaching}
-          >
-            {isDetaching ? 'Fjerner...' : 'Fjern mark'}
-          </Button>
-        ) : null}
-        {isSimulationView ? (
-          <AppTooltip
-            content={
-              !canEditRotation
-                ? 'Opret en simulering for at redigere sædskifter.'
-                : field.rotationId === null
-                  ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
-                  : 'Rediger sædskifte manuelt'
-            }
-          >
-            <span className="block w-full @2xl:w-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full @2xl:w-auto @2xl:px-5"
-                disabled={!canEditRotation || field.rotationId === null}
-                onClick={() => setManualEditorOpen(true)}
-              >
-                Rediger sædskifte
-              </Button>
-            </span>
-          </AppTooltip>
-        ) : null}
-      </div>
+      {readOnly ? null : (
+        <div className="flex flex-col gap-2 border-t bg-background p-4 @2xl:flex-row @2xl:justify-end @2xl:px-6">
+          {onRequestDetach ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              className={cn(
+                'w-full @2xl:w-auto @2xl:px-5',
+                isSimulationView && '@2xl:mr-auto',
+              )}
+              onClick={onRequestDetach}
+              loading={isDetaching}
+            >
+              {isDetaching ? 'Fjerner...' : 'Fjern mark'}
+            </Button>
+          ) : null}
+          {isSimulationView ? (
+            <AppTooltip
+              content={
+                !canEditRotation
+                  ? 'Opret en simulering for at redigere sædskifter.'
+                  : field.rotationId === null
+                    ? 'Kør Optimér for denne mark, før du kan redigere manuelt.'
+                    : 'Rediger sædskifte manuelt'
+              }
+            >
+              <span className="block w-full @2xl:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full @2xl:w-auto @2xl:px-5"
+                  disabled={!canEditRotation || field.rotationId === null}
+                  onClick={() => setManualEditorOpen(true)}
+                >
+                  Rediger sædskifte
+                </Button>
+              </span>
+            </AppTooltip>
+          ) : null}
+        </div>
+      )}
 
       {isSimulationView && simulationId && simulation && manualEditorOpen ? (
         <ManualRotationEditor

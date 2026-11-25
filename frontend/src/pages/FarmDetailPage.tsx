@@ -13,6 +13,7 @@ import {
 import { ApiError } from '@/api/client'
 import {
   useFarm,
+  useFarmMembers,
   useFarmView,
   useFarmFields,
   useSimulationFields,
@@ -36,8 +37,14 @@ import {
 import { EconomicsGuidePage } from '@/components/farm/EconomicsGuidePage'
 import { EconomicsOverview } from '@/components/farm/EconomicsOverview'
 import { EconomicsProfilePage } from '@/components/farm/EconomicsProfilePage'
+import {
+  FarmReadOnlyContext,
+  useFarmReadOnly,
+  useOwnFarmRole,
+} from '@/components/farm/farm-access-context'
 import { FarmAboutPage } from '@/components/farm/FarmAboutPage'
 import { FarmInspector } from '@/components/farm/FarmInspector'
+import { FarmReadOnlyNotice } from '@/components/farm/FarmReadOnlyNotice'
 import {
   FarmContentSkeleton,
   FarmSidebarSkeleton,
@@ -102,8 +109,10 @@ const FarmDetail = () => {
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const farmView = useFarmView(farmId)
+  const { isLoading: membersLoading } = useFarmMembers(farmId)
   const [retryingHistory, setRetryingHistory] = useState(false)
   const email = user?.email ?? ''
+  const readOnly = useFarmReadOnly()
   const economics = useEconomicsProfiles()
   const {
     data: farm,
@@ -220,7 +229,11 @@ const FarmDetail = () => {
     if (simulationsFailed) void retrySimulations()
   }
   const isReady =
-    farm !== undefined && !farmLoading && !fieldsLoading && !simulationsLoading
+    farm !== undefined &&
+    !farmLoading &&
+    !fieldsLoading &&
+    !simulationsLoading &&
+    !membersLoading
   const activeFields =
     activeSelection.kind === 'current'
       ? fields
@@ -398,7 +411,7 @@ const FarmDetail = () => {
                 <p role="alert" className="text-sm text-destructive">
                   Markernes historik kunne ikke beregnes.
                 </p>
-                {farmId ? (
+                {farmId && !readOnly ? (
                   <Button
                     size="sm"
                     loading={retryingHistory}
@@ -488,6 +501,9 @@ const FarmDetail = () => {
             aria-label="Vis eller skjul sidepanelet"
           />
           <ShowSidebarButton />
+          {loadedFarm && readOnly ? (
+            <FarmReadOnlyNotice farmId={loadedFarm.id} />
+          ) : null}
           {loadedFarm ? (
             <Routes>
               <Route
@@ -503,14 +519,16 @@ const FarmDetail = () => {
                         farmId={loadedFarm.id}
                         simulation={selectedSimulation}
                       />
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setSimulationToDelete(selectedSimulation)
-                        }
-                      >
-                        Slet simulering
-                      </Button>
+                      {readOnly ? null : (
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            setSimulationToDelete(selectedSimulation)
+                          }
+                        >
+                          Slet simulering
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <FarmInspector
@@ -737,11 +755,14 @@ const FarmDetail = () => {
 
 export const FarmDetailPage = () => {
   const { farmId } = useParams()
-  const economics = useEconomicsProfilesStore(farmId)
+  const role = useOwnFarmRole(farmId)
+  const economics = useEconomicsProfilesStore(farmId, role === 'editor')
 
   return (
-    <EconomicsProfilesContext.Provider value={economics}>
-      <FarmDetail />
-    </EconomicsProfilesContext.Provider>
+    <FarmReadOnlyContext.Provider value={role === 'viewer'}>
+      <EconomicsProfilesContext.Provider value={economics}>
+        <FarmDetail />
+      </EconomicsProfilesContext.Provider>
+    </FarmReadOnlyContext.Provider>
   )
 }

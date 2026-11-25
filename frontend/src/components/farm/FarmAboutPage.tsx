@@ -15,6 +15,7 @@ import { useAuth } from '@/auth/context'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { DeleteFarmDialog } from '@/components/farm/DeleteFarmDialog'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { useMemberAccess } from '@/components/farm/member-access-state'
 import { MemberList, ShareByEmailForm } from '@/components/farm/MemberAccess'
 import { NameList } from '@/components/NameList'
@@ -46,6 +47,7 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
   const { user } = useAuth()
   const { showToast, showError } = useToast()
   const economics = useEconomicsProfiles()
+  const readOnly = useFarmReadOnly()
   const farmProfiles = profilesInUse(economics.ownProfiles ?? [], simulations)
   const { data: profileMembers, mutate: refreshProfileMembers } =
     useEconomicsModulesMembers(farmProfiles.map((profile) => profile.id))
@@ -225,29 +227,31 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
           ) : null}
         </Card>
 
-        <Card
-          className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 px-6 py-5"
-          role="region"
-          aria-labelledby="about-delete"
-        >
-          <div>
-            <h2 id="about-delete" className={CARD_TITLE_CLASS}>
-              Slet bedrift
-            </h2>
-            <p className="mt-1 max-w-[440px] text-[13px] leading-normal text-muted-foreground">
-              Bedriften, alle dens marker og alle simuleringer slettes for alle,
-              der har adgang.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="shrink-0 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setDeleteOpen(true)}
+        {readOnly ? null : (
+          <Card
+            className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 px-6 py-5"
+            role="region"
+            aria-labelledby="about-delete"
           >
-            <Trash2 className="size-4" aria-hidden="true" />
-            Slet bedrift
-          </Button>
-        </Card>
+            <div>
+              <h2 id="about-delete" className={CARD_TITLE_CLASS}>
+                Slet bedrift
+              </h2>
+              <p className="mt-1 max-w-[440px] text-[13px] leading-normal text-muted-foreground">
+                Bedriften, alle dens marker og alle simuleringer slettes for
+                alle, der har adgang.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="shrink-0 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+              Slet bedrift
+            </Button>
+          </Card>
+        )}
       </div>
 
       <ConfirmDialog

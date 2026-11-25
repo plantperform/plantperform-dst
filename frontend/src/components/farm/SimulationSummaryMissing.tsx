@@ -9,7 +9,10 @@ export const SimulationSummaryMissing = ({
     role="status"
     className="space-y-3 rounded-lg border bg-muted/40 p-4 text-sm"
   >
-    <p>Simuleringens oversigt mangler. Kør en optimering for at oprette den.</p>
+    <p>
+      Simuleringens oversigt mangler.
+      {onOpenSettings ? ' Kør en optimering for at oprette den.' : null}
+    </p>
     {onOpenSettings ? (
       <Button variant="outline" size="sm" onClick={onOpenSettings}>
         Åbn indstillinger

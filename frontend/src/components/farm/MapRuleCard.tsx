@@ -2,6 +2,7 @@ import { Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 
 import type { FieldRecord } from '@/api/types'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { RotationSwatches } from '@/components/farm/RotationSwatches'
 import { RotationYearRow } from '@/components/farm/RotationYearRow'
 import { AppTooltip, TruncatedTooltip } from '@/components/ui/app-tooltip'
@@ -58,6 +59,7 @@ export const MapRuleCard = ({
   onClose,
 }: MapRuleCardProps) => {
   const cardRef = useRef<HTMLDivElement>(null)
+  const readOnly = useFarmReadOnly()
 
   useEffect(() => {
     const card = cardRef.current
@@ -160,43 +162,45 @@ export const MapRuleCard = ({
         )}
       </div>
 
-      <TooltipProvider>
-        <div className="grid grid-cols-2 gap-2 border-t p-2">
-          <ActionTooltip text={editTooltip}>
-            <Button
-              variant="outline"
-              size="xs"
-              className="w-full gap-1.5 px-2"
-              disabled={noRotation}
-              onClick={() => onBindRotation(field)}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-              Vælg sædskifte
-            </Button>
-          </ActionTooltip>
-          <ActionTooltip text={lockTooltip}>
-            <Button
-              variant="outline"
-              size="xs"
-              className={cn(
-                'w-full gap-1.5 px-2',
-                locked &&
-                  'border-locked/40 bg-locked/15 text-locked-strong hover:bg-locked/25 hover:text-locked-strong',
-              )}
-              disabled={noRotation}
-              loading={locking}
-              onClick={() => onToggleLock(field)}
-            >
-              {locking ? null : locked ? (
-                <LockOpen className="size-3.5" aria-hidden="true" />
-              ) : (
-                <Lock className="size-3.5" aria-hidden="true" />
-              )}
-              {locked ? 'Lås op' : 'Lås'}
-            </Button>
-          </ActionTooltip>
-        </div>
-      </TooltipProvider>
+      {readOnly ? null : (
+        <TooltipProvider>
+          <div className="grid grid-cols-2 gap-2 border-t p-2">
+            <ActionTooltip text={editTooltip}>
+              <Button
+                variant="outline"
+                size="xs"
+                className="w-full gap-1.5 px-2"
+                disabled={noRotation}
+                onClick={() => onBindRotation(field)}
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Vælg sædskifte
+              </Button>
+            </ActionTooltip>
+            <ActionTooltip text={lockTooltip}>
+              <Button
+                variant="outline"
+                size="xs"
+                className={cn(
+                  'w-full gap-1.5 px-2',
+                  locked &&
+                    'border-locked/40 bg-locked/15 text-locked-strong hover:bg-locked/25 hover:text-locked-strong',
+                )}
+                disabled={noRotation}
+                loading={locking}
+                onClick={() => onToggleLock(field)}
+              >
+                {locking ? null : locked ? (
+                  <LockOpen className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <Lock className="size-3.5" aria-hidden="true" />
+                )}
+                {locked ? 'Lås op' : 'Lås'}
+              </Button>
+            </ActionTooltip>
+          </div>
+        </TooltipProvider>
+      )}
     </div>
   )
 }

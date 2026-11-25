@@ -9,6 +9,7 @@ import {
   numberToInput,
 } from '@/components/farm/catchment-options'
 import { CropAreaLimits } from '@/components/farm/CropAreaLimits'
+import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import type { RulesLimits } from '@/components/farm/rules-limits-state'
 import {
   FieldLabel,
@@ -100,6 +101,7 @@ export const RulesLimitsCard = ({
   quotaTrades,
 }: RulesLimitsCardProps) => {
   const id = useId()
+  const readOnly = useFarmReadOnly()
   const {
     catchments,
     quotaByKey,
@@ -148,17 +150,19 @@ export const RulesLimitsCard = ({
             forskellig grænse pr. år i Optimér.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          aria-expanded={editing}
-          onClick={() => setEditing((current) => !current)}
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-          {editing ? 'Luk redigering' : 'Rediger grænser'}
-        </Button>
+        {readOnly ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            aria-expanded={editing}
+            onClick={() => setEditing((current) => !current)}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            {editing ? 'Luk redigering' : 'Rediger grænser'}
+          </Button>
+        )}
       </div>
 
       <div className="grid divide-y border-t @3xl:grid-cols-3 @3xl:divide-x @3xl:divide-y-0">
