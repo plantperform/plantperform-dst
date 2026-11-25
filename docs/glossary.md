@@ -29,7 +29,7 @@ field" column is the name on the wire.
 | forlade (en bedrift, profil eller et sædskifte) | leave, `canLeave` | | Removes one's own access. The last redaktør cannot leave |
 | kun se en bedrift | read-only farm, `useFarmReadOnly`, `FarmReadOnlyContext`, `useOwnFarmRole`, `FarmReadOnlyNotice` | | A læser of a farm sees no buttons that change it. A line at the top says "Du kan kun se denne bedrift" and offers Lav en kopi |
 | kopi af en bedrift | `duplicateFarm` | `/duplicate` | A copy named "Kopi af <navn>" with the user as its only redaktør |
-| læser af en profil | `isViewerProfile`, `copyProfile`, `duplicateEconomicsModule` | `effectiveRole` | Shown as "Delt med dig som læser". It can be used and copied, not changed, shared or deleted |
+| læser af en profil eller et sædskifte | `isViewerProfile`, `isViewerRotation`, `copyProfile`, `duplicateEconomicsModule` | `effectiveRole` | Shown as "Delt med dig som læser". It can be used and copied, not changed, shared or deleted |
 | kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota

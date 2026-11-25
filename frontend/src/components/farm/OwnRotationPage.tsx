@@ -12,9 +12,7 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { useCropCodes, useUndersownCropCodes } from '@/api/hooks'
-import { useMembers } from '@/api/members'
 import {
-  rotationDefinitionMembersPath,
   useLibraryRotationDefinitions,
   useOwnRotationDefinitions,
   useUndersownCropCodeLoader,
@@ -24,7 +22,6 @@ import type {
   FarmingSystem,
   RotationDefinition,
 } from '@/api/types'
-import { useAuth } from '@/auth/context'
 import { BackLink } from '@/components/BackLink'
 import { LeaveFlowDialog } from '@/components/LeaveFlowDialog'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
@@ -42,6 +39,7 @@ import {
   ROTATION_GONE,
   ownRotationsPath,
   useOwnRotationActions,
+  useRotationSharedWith,
   type SaveFailure,
 } from '@/components/farm/own-rotations-state'
 import { useToast } from '@/components/toast'
@@ -56,7 +54,7 @@ import { useLeaveGuard } from '@/hooks/use-leave-guard'
 import { cropGroupFor } from '@/lib/crop-groups'
 import { FARMING_SYSTEMS } from '@/lib/economics'
 import { isNameTaken } from '@/lib/economics-profiles'
-import { describeFarmAccess, otherMemberEmails } from '@/lib/farm-access'
+import { describeFarmAccess } from '@/lib/farm-access'
 import {
   DELETE_ROTATION_DIALOG,
   MAX_ROTATION_YEARS,
@@ -70,6 +68,7 @@ import {
   draftFromDefinition,
   insertYearAfter,
   isDraftChanged,
+  isViewerRotation,
   keepAllowedUndersownCrops,
   libraryCropOptions,
   libraryUndersownDefaults,
@@ -105,12 +104,8 @@ const PageFrame = ({ children }: { children: ReactNode }) => (
 )
 
 const SharedWith = ({ definition }: { definition: RotationDefinition }) => {
-  const { user } = useAuth()
-  const { data: members = [] } = useMembers(
-    rotationDefinitionMembersPath(definition.id),
-  )
-  const others = otherMemberEmails(members, user?.email ?? '')
-  return others.length === 0 ? null : <> · {describeFarmAccess(others)}</>
+  const others = useRotationSharedWith(definition.id)
+  return others?.length ? <> · {describeFarmAccess(others)}</> : null
 }
 
 const RotationMeta = ({ definition }: { definition: RotationDefinition }) => (
@@ -119,10 +114,13 @@ const RotationMeta = ({ definition }: { definition: RotationDefinition }) => (
       definition.farmingSystem ?? 'Uden driftsform',
       describeYearCount(definition.variants[0]?.positions.length ?? 0),
       definition.createdAt ? formatCreatedAt(definition.createdAt) : null,
+      isViewerRotation(definition) ? 'Delt med dig som læser' : null,
     ]
       .filter(Boolean)
       .join(' · ')}
-    <SharedWith definition={definition} />
+    {isViewerRotation(definition) ? null : (
+      <SharedWith definition={definition} />
+    )}
   </p>
 )
 
@@ -618,7 +616,7 @@ const OwnRotationEditor = ({
         </div>
         {base ? (
           <div className="flex flex-wrap gap-2">
-            {editing ? null : (
+            {editing || isViewerRotation(base) ? null : (
               <Button type="button" onClick={() => setEditing(true)}>
                 <Pencil aria-hidden="true" />
                 Rediger
@@ -638,15 +636,17 @@ const OwnRotationEditor = ({
               <Copy aria-hidden="true" />
               Kopier
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving}
-              onClick={() => setConfirmingDelete(true)}
-            >
-              <Trash2 aria-hidden="true" />
-              Slet
-            </Button>
+            {isViewerRotation(base) ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saving}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 aria-hidden="true" />
+                Slet
+              </Button>
+            )}
           </div>
         ) : showStart ? (
           <LibraryRotationCopyDialog

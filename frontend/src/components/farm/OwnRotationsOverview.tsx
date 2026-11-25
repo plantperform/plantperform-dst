@@ -28,6 +28,7 @@ import {
   definitionYears,
   describeRotationYear,
   describeYearCount,
+  isViewerRotation,
 } from '@/lib/own-rotations'
 import { cn } from '@/lib/utils'
 import { MEASURE_COVERS, measureCover } from '@/lib/winter-cover'
@@ -113,17 +114,22 @@ const OwnRotationRow = ({
     definition.variants.length > 1
       ? `${definition.variants.length} udgaver`
       : null,
+    isViewerRotation(definition) ? 'Delt med dig som læser' : null,
   ]
     .filter((part) => part !== null)
     .join(' · ')
 
   return (
     <li className={cn(FULL_GRID_CLASS, rowClass(selected), 'py-3.5')}>
-      <SelectBox
-        label={`Vælg ${definition.name}`}
-        checked={selected}
-        onChange={onSelect}
-      />
+      {isViewerRotation(definition) ? (
+        <span />
+      ) : (
+        <SelectBox
+          label={`Vælg ${definition.name}`}
+          checked={selected}
+          onChange={onSelect}
+        />
+      )}
       <div className="min-w-0">
         <Link
           to={path}
@@ -180,12 +186,16 @@ const OwnRotationCompactRow = ({
   onSelect,
 }: OwnRotationRowProps) => (
   <li className={cn(COMPACT_GRID_CLASS, rowClass(selected), 'py-2.5')}>
-    <SelectBox
-      compact
-      label={`Vælg ${definition.name}`}
-      checked={selected}
-      onChange={onSelect}
-    />
+    {isViewerRotation(definition) ? (
+      <span />
+    ) : (
+      <SelectBox
+        compact
+        label={`Vælg ${definition.name}`}
+        checked={selected}
+        onChange={onSelect}
+      />
+    )}
     <Link
       to={path}
       title={definition.name}
@@ -195,6 +205,7 @@ const OwnRotationCompactRow = ({
     </Link>
     <span className="truncate text-[13px] leading-snug">
       {definition.farmingSystem ?? 'Uden driftsform'}
+      {isViewerRotation(definition) ? ' · læser' : null}
     </span>
     <span className="text-[13px] leading-snug tabular-nums">
       {years.length}
@@ -267,11 +278,14 @@ export const OwnRotationsOverview = ({
   const selected = own
     .map(({ definition }) => definition)
     .filter((definition) => selectedIds.includes(definition.id))
-  const shownSelectedCount = shown.filter(({ definition }) =>
+  const selectable = shown.filter(
+    ({ definition }) => !isViewerRotation(definition),
+  )
+  const shownSelectedCount = selectable.filter(({ definition }) =>
     selectedIds.includes(definition.id),
   ).length
   const allShownSelected =
-    shown.length > 0 && shownSelectedCount === shown.length
+    selectable.length > 0 && shownSelectedCount === selectable.length
   const one = selected.length === 1 ? selected[0] : null
   const columns = Math.max(1, ...own.map(({ years }) => years.length))
 
@@ -290,7 +304,7 @@ export const OwnRotationsOverview = ({
       indeterminate={shownSelectedCount > 0 && !allShownSelected}
       onChange={(checked) =>
         select(
-          shown.map(({ definition }) => definition.id),
+          selectable.map(({ definition }) => definition.id),
           checked,
         )
       }

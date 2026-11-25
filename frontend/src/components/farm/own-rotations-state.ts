@@ -4,24 +4,36 @@ import { mutate } from 'swr'
 
 import { ApiError } from '@/api/client'
 import { isSimulationKey } from '@/api/hooks'
+import { useMembers } from '@/api/members'
 import {
   createRotationDefinition,
   deleteRotationDefinition,
   duplicateRotationDefinition,
   ownRotationDefinitionsKey,
+  rotationDefinitionMembersPath,
   updateRotationDefinition,
   useOwnRotationDefinitions,
 } from '@/api/own-rotations'
 import type { RotationDefinition } from '@/api/types'
+import { useAuth } from '@/auth/context'
 import { useToast } from '@/components/toast'
 import { formatCount, formatNameList } from '@/lib/economics'
 import { freeName } from '@/lib/economics-profiles'
+import { otherMemberEmails } from '@/lib/farm-access'
 import {
   definitionInputFromDraft,
   type OwnRotationDraft,
 } from '@/lib/own-rotations'
 
 export const NEW_OWN_ROTATION_ID = 'new'
+
+export const useRotationSharedWith = (definitionId: string) => {
+  const { user } = useAuth()
+  const { data: members } = useMembers(
+    rotationDefinitionMembersPath(definitionId),
+  )
+  return members && otherMemberEmails(members, user?.email ?? '')
+}
 
 export const ownRotationsPath = (farmId: string) =>
   `/farms/${farmId}/own-rotations`
