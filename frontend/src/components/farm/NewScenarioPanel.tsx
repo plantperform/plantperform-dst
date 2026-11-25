@@ -43,6 +43,7 @@ import type {
   RotationCategoryOption,
   Simulation,
 } from '@/api/types'
+import { isActiveOptimizationStatus } from '@/lib/optimization-run'
 import { GlossaryInfo } from '@/components/GlossaryInfo'
 import { useEconomicsProfiles } from '@/components/farm/economics-profiles-state'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
@@ -173,8 +174,7 @@ export const NewScenarioPanel = ({
   const run = useOptimizationRun(source?.id)
   const running =
     run?.status === 'running' ||
-    source?.result.status === 'queued' ||
-    source?.result.status === 'in_progress'
+    isActiveOptimizationStatus(source?.result.status)
   const [optimizationSettings, setOptimizationSettings] = useState(
     optimizationSettingsInput(
       source?.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS,

@@ -7,6 +7,20 @@ from app.services.calculation import CalculationContext
 
 
 class FargateControlTests(unittest.TestCase):
+    def test_large_worker_uses_its_own_service_name_for_idle_shutdown(self):
+        with patch.dict(
+            os.environ,
+            {
+                "OPTIMIZER_WORKER_TIER": "large",
+                "FARGATE_CLUSTER_NAME": "cluster",
+                "FARGATE_SERVICE_NAME": "large-worker",
+            },
+            clear=True,
+        ):
+            service = fargate_control.FargateService.configured()
+
+        self.assertEqual((service.name, service.tier), ("large-worker", "large"))
+
     def test_missing_configuration_does_not_attempt_an_aws_call(self):
         with (
             patch.dict(os.environ, {"FARGATE_CLUSTER_NAME": "", "FARGATE_SERVICE_NAME": ""}),

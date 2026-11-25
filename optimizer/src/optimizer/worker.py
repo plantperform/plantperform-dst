@@ -1,6 +1,7 @@
 """Execute revision-bound optimization jobs locally or in Fargate."""
 
 import logging
+import os
 import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -16,6 +17,8 @@ from app.domain.optimization import (
     OptimizeSimulationRequest,
     OptimizeSimulationResponse,
     YearlyOptimizeSimulationRequest,
+    attempt_limit,
+    worker_tier,
 )
 from app.domain.soil import MissingSoilDataError
 from app.services.optimization.failures import is_transient
@@ -27,7 +30,7 @@ from optimizer.deadline import (
     check_deadline,
     remaining_time,
 )
-from optimizer.memory import memory_observation
+from optimizer.memory import allocation_failed, memory_observation, memory_pressure
 from optimizer.orchestrator import (
     OptimizationInfeasibleError,
     run_optimization,
@@ -85,20 +88,22 @@ def execute(
     *,
     sqs_delivery=False,
     farm_id=None,
-    on_claim=None,
+    claimed=None,
+    memory_limit=None,
 ):
     started = time.monotonic()
     received_at = datetime.now(UTC)
-    with _timed_phase("claim", simulation_id, run_id):
-        claimed = optimization_store.claim(
-            simulation_id, run_id, sqs_delivery=sqs_delivery, farm_id=farm_id
-        )
+    supervised = claimed is not None
+    if not supervised:
+        with _timed_phase("claim", simulation_id, run_id):
+            claimed = optimization_store.claim(
+                simulation_id, run_id, sqs_delivery=sqs_delivery, farm_id=farm_id
+            )
     if claimed is None:
         logger.info("optimizer_skipped simulation_id=%s run_id=%s", simulation_id, run_id)
         return ExecutionResult(DeliveryOutcome.ACK)
     row, farm_id, token = claimed
-    if on_claim is not None:
-        on_claim(simulation_id, run_id, token, row["input_revision"])
+    tier = worker_tier(row["status"])
     deadline_token = remaining_time.set(context.get_remaining_time_in_millis)
     outcome = "failed"
     saved = False
@@ -220,8 +225,20 @@ def execute(
         )
         outcome = "infeasible" if saved else "stale"
     except Exception as error:
+        if supervised and allocation_failed(error):
+            outcome = "memory_limit"
+            raise
+        # A native allocation or thread creation can surface as a generic error
+        # between supervisor polls. Check for actual pressure before persisting it.
+        if (
+            memory_limit
+            and isinstance(error, RuntimeError)
+            and memory_pressure(os.getpid(), memory_limit)
+        ):
+            outcome = "memory_limit"
+            raise MemoryError from error
         logger.exception("optimizer_attempt_failed run_id=%s", run_id)
-        retry = is_transient(error) and row["attempts"] + 1 < MAX_JOB_ATTEMPTS
+        retry = is_transient(error) and row["attempts"] + 1 < attempt_limit(tier)
         if isinstance(error, MemoryError):
             failure = {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."}
         elif isinstance(error, OptimizationDeadlineError):
@@ -256,8 +273,8 @@ def execute(
             outcome,
             time.monotonic() - started,
         )
-        if sqs_delivery and not saved:
-            optimization_store.check_delivery_state(simulation_id, run_id)
+        if sqs_delivery and not saved and outcome != "memory_limit":
+            optimization_store.check_delivery_state(simulation_id, run_id, tier)
     return result
 
 

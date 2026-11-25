@@ -17,6 +17,7 @@ from app.data import (
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.creation import CreationConflictError
+from app.domain.optimization import ACTIVE_STATUSES
 from app.domain.simulation import Simulation
 from app.services.rotations import custom
 
@@ -30,7 +31,7 @@ def require_idle(session, simulation_id):
     status = session.execute(
         select(results.c.status).where(results.c.simulation_id == simulation_id).with_for_update()
     ).scalar_one_or_none()
-    if status in ("queued", "in_progress"):
+    if status in ACTIVE_STATUSES:
         raise simulation_store.SetupRevisionConflictError(
             "Optimeringen er i gang. Vent med at ændre indstillingerne, til den er færdig."
         )

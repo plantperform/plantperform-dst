@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useElapsed } from '@/hooks/use-elapsed'
 import { formatFieldCount, isFieldCalculated } from '@/lib/field-domain'
 import {
+  LARGE_PHASE_LABELS,
   formatElapsed,
   infeasibleRunHeading,
   optimizationRunName,
@@ -24,6 +25,7 @@ type RunProps = {
 }
 
 const RUN_PHASE_LABELS = {
+  ...LARGE_PHASE_LABELS,
   submitting: 'starter',
   queued: 'venter i kø',
   in_progress: 'kører',

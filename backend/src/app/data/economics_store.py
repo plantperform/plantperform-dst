@@ -17,6 +17,7 @@ from app.domain.economics import (
     EconomicsModuleNotFoundError,
     EconomicsSnapshot,
 )
+from app.domain.optimization import ACTIVE_STATUSES
 from app.services.economics.overrides import validate_identifiers
 
 _BUSY = "A simulation is being calculated; try again when it is done"
@@ -48,7 +49,7 @@ def require_idle(session, simulation_ids):
         .where(results.c.simulation_id.in_(simulation_ids))
         .with_for_update()
     ).scalars()
-    if any(status in ("queued", "in_progress") for status in statuses):
+    if any(status in ACTIVE_STATUSES for status in statuses):
         raise EconomicsConflictError(_BUSY)
 
 

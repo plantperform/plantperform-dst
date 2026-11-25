@@ -1,5 +1,6 @@
 import type { OptimizationRun } from '@/api/optimization-runs'
 import type { SimulationResult } from '@/api/types'
+import { isLargeOptimizationStatus } from '@/lib/optimization-run'
 
 export const JOB_POLL_INTERVAL_MS = 2000
 
@@ -48,7 +49,13 @@ export const shouldAcceptResult = (
   if (current.status === 'outdated') return result.status === 'outdated'
   if (current.status === 'succeeded')
     return result.status === 'completed' || result.status === 'outdated'
-  if (current.status === 'running') return current.phase !== result.status
+  if (current.status === 'running') {
+    if (
+      isLargeOptimizationStatus(current.phase) &&
+      (result.status === 'queued' || result.status === 'in_progress')
+    ) return false
+    return current.phase !== result.status
+  }
   return result.status === current.status || result.status === 'outdated'
 }
 

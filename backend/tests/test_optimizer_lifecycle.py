@@ -518,7 +518,7 @@ class FargateScalingTests(DatabaseTests):
         self.assertEqual(requests, [1, 1, 2, 2, 2, 3, 3, 3, 4, 4])
 
     def test_submission_invalidates_an_older_empty_poll(self):
-        poll_started_at = self.service.poll_started_at()
+        poll_started_at = self.enterContext(self.service.idle_poll())
         self.publish("one")
         with self.sessions.begin() as session:
             session.execute(
@@ -541,7 +541,9 @@ class FargateScalingTests(DatabaseTests):
 
         self.ecs.update_service.side_effect = update_service
         with ThreadPoolExecutor(max_workers=2) as pool:
-            idle = pool.submit(self.service.scale_to_zero, self.service.poll_started_at())
+            idle = pool.submit(
+                self.service.scale_to_zero, self.enterContext(self.service.idle_poll())
+            )
             self.assertTrue(stopping.wait(timeout=5))
             submission = pool.submit(self.publish, "two")
             release.set()
@@ -591,8 +593,90 @@ class FargateScalingTests(DatabaseTests):
 
         self.assertIsNotNone(markers[0])
 
+    def test_standard_publication_wakes_previously_published_large_run(self):
+        self.add_simulation("big", status="queued_large", published_at=datetime.now(UTC))
+        self.ecs.describe_services.return_value = {"services": [{"desiredCount": 0}]}
+
+        with patch.dict(os.environ, {"FARGATE_LARGE_SERVICE_NAME": "big-worker"}):
+            self.publish("new")
+
+        self.assertEqual(
+            self.ecs.update_service.call_args.kwargs,
+            {"cluster": "cluster", "service": "big-worker", "desiredCount": 1},
+        )
+
+    def test_large_wake_invalidates_earlier_empty_poll_even_when_already_running(self):
+        service = fargate_control.FargateService("cluster", "big-worker", "large")
+        self.add_simulation("big", status="in_progress_large", published_at=datetime.now(UTC))
+        self.ecs.describe_services.return_value = {"services": [{"desiredCount": 1}]}
+        started = self.enterContext(service.idle_poll())
+
+        service.wake_large()
+        retired = service.scale_to_zero(started)
+
+        self.assertFalse(retired)
+        self.ecs.update_service.assert_not_called()
+
+    def test_large_publication_after_idle_shutdown_wakes_service(self):
+        service = fargate_control.FargateService("cluster", "optimizer-large", "large")
+        self.add_simulation("big", run_id="run", status="queued_large")
+        self.ecs.describe_services.return_value = {"services": [{"desiredCount": 0}]}
+
+        with service.idle_poll() as poll:
+            service.scale_to_zero(poll)
+        service.wake_large("big", "run", sent=True)
+
+        counts = [
+            request.kwargs["desiredCount"] for request in self.ecs.update_service.call_args_list
+        ]
+        self.assertEqual(counts, [0, 1])
+
+    def test_lost_large_listener_keeps_service_running(self):
+        service = fargate_control.FargateService("cluster", "optimizer-large", "large")
+        connections = []
+
+        def capture_listener(dbapi_connection, record, proxy):
+            connections.append(dbapi_connection)
+
+        event.listen(self.engine, "checkout", capture_listener)
+        self.addCleanup(event.remove, self.engine, "checkout", capture_listener)
+        with patch.dict(os.environ, {"OPTIMIZER_DLQ_URL": "dlq"}):
+            consumer = optimizer_consumer.Consumer(
+                self.queue, service, optimization_store, Mock(), Event()
+            )
+
+        with service.idle_poll() as poll, self.assertLogs(optimizer_consumer.logger, "ERROR"):
+            connections[-1].close()
+            retired = consumer.shutdown_if_idle(poll)
+
+        self.assertFalse(retired)
+        self.ecs.update_service.assert_not_called()
+
+    def test_large_retry_wakes_do_not_extend_message_retention(self):
+        service = fargate_control.FargateService("cluster", "optimizer-large", "large")
+        published = datetime.now(UTC) - timedelta(days=1)
+        self.add_simulation("big", run_id="run", status="queued_large", published_at=published)
+        self.ecs.describe_services.return_value = {"services": [{"desiredCount": 1}]}
+
+        service.wake_large("big", "run", sent=True)
+
+        with self.sessions() as session:
+            stored = session.scalar(
+                select(results.c.published_at).where(results.c.simulation_id == "big")
+            )
+        self.assertEqual(stored, published)
+
+    def test_unpublished_and_completed_large_runs_do_not_request_capacity(self):
+        self.add_simulation("unsent", status="queued_large")
+        self.add_simulation("done", status="completed", published_at=datetime.now(UTC))
+
+        with patch.dict(os.environ, {"FARGATE_LARGE_SERVICE_NAME": "big-worker"}):
+            self.publish("new")
+
+        self.ecs.describe_services.assert_not_called()
+
     def test_manually_started_worker_returns_to_zero(self):
-        self.service.scale_to_zero(self.service.poll_started_at())
+        self.service.scale_to_zero(self.enterContext(self.service.idle_poll()))
 
         self.ecs.update_service.assert_called_once_with(
             cluster="cluster", service="optimizer", desiredCount=0
@@ -600,23 +684,220 @@ class FargateScalingTests(DatabaseTests):
 
 
 class LifecycleTests(DatabaseTests):
-    def deliver(self, run_id):
+    def execute_inline(self, consumer, envelope):
+        claim = consumer.claim_delivery(envelope)
+        if isinstance(claim, optimizer_consumer.ExecutionResult):
+            return claim
         connection = Mock()
+        with (
+            patch.object(optimizer_consumer, "initialize_configuration"),
+            patch.object(optimizer_consumer, "limit_address_space"),
+        ):
+            optimizer_consumer._child_execute(
+                envelope, time.monotonic() + 7200, connection, claim, consumer.memory_limit
+            )
+        kind, result = connection.send.call_args.args[0]
+        if kind == "failure":
+            row, _, token = claim
+            key = (envelope["simulationId"], envelope["runId"], token, row["input_revision"])
+            return consumer._failure(key, result, envelope)
+        return result
+
+    def deliver(self, run_id):
         envelope = {
             "jobType": "optimization",
             "farmId": "farm",
             "simulationId": "sim",
             "runId": run_id,
         }
-        with patch.object(optimizer_consumer, "initialize_configuration"):
-            optimizer_consumer._child_execute(envelope, time.monotonic() + 7200, connection)
-        kind, result = connection.send.call_args.args[0]
-        self.assertEqual(kind, "result")
+        with patch.dict(os.environ, {"OPTIMIZER_DLQ_URL": "dlq"}):
+            consumer = optimizer_consumer.Consumer(
+                self.queue, None, optimization_store, None, Event()
+            )
+        result = self.execute_inline(consumer, envelope)
         if result.outcome == "retry":
             self.queue.change_message_visibility(
                 QueueUrl="test-queue", ReceiptHandle="receipt", VisibilityTimeout=result.retry_after
             )
         return result.outcome == "ack"
+
+    def test_standard_solver_allocation_failure_completes_the_same_run_on_large(self):
+        run = self.submit()
+        source_body = self.queue.send_message.call_args.kwargs["MessageBody"]
+        self.ecs.describe_services.return_value = {"services": [{"desiredCount": 0}]}
+        large_service = fargate_control.FargateService("cluster", "optimizer-large", "large")
+
+        def consume(tier, body):
+            config = {
+                "OPTIMIZER_WORKER_TIER": tier,
+                "OPTIMIZER_QUEUE_URL": tier,
+                "OPTIMIZER_DLQ_URL": f"{tier}-dlq",
+            }
+            if tier == "standard":
+                config["OPTIMIZER_LARGE_QUEUE_URL"] = "large"
+            with patch.dict(os.environ, config):
+                consumer = optimizer_consumer.Consumer(
+                    self.queue,
+                    fargate_control.FargateService("cluster", "optimizer", tier)
+                    if tier == "standard"
+                    else large_service,
+                    optimization_store,
+                    Mock(),
+                    Event(),
+                    large_service=large_service,
+                )
+            record = {"MessageId": "id", "ReceiptHandle": "receipt", "Body": body}
+            self.queue.receive_message.side_effect = [{"Messages": [record]}, {}]
+            with patch.object(
+                consumer, "execute", side_effect=lambda e: self.execute_inline(consumer, e)
+            ):
+                consumer.run()
+
+        with patch.object(worker, "run_optimization", side_effect=MemoryError):
+            consume("standard", source_body)
+        forwarded = self.queue.send_message.call_args.kwargs
+        self.assertEqual(forwarded["QueueUrl"], "large")
+        consume("large", forwarded["MessageBody"])
+
+        result = self.row()
+        self.assertEqual((result.run_id, result.status), (run.run_id, "completed"))
+
+    def test_last_standard_attempt_can_promote_and_claim_on_large(self):
+        run = self.submit()
+        with self.sessions.begin() as session:
+            session.execute(update(results).values(attempts=2))
+        row, _, token = optimization_store.claim("sim", run.run_id)
+
+        promoted = optimization_store.promote_to_large(
+            "sim", run.run_id, token, row["input_revision"]
+        )
+
+        self.assertTrue(promoted)
+        self.assertEqual(self.row().status, "queued_large")
+        self.assertEqual(
+            optimization_store.delivery_result("sim", run.run_id, "farm").outcome, "forward_large"
+        )
+        self.assertIsNone(optimization_store.claim("sim", run.run_id))
+        self.assertIsNotNone(optimization_store.claim("sim", run.run_id, tier="large"))
+        self.assertIsNotNone(self.row().published_at)
+
+    def test_large_phases_prevent_submitting_a_replacement_run(self):
+        self.submit()
+        for status in ("queued_large", "in_progress_large"):
+            with self.subTest(status=status):
+                with self.sessions.begin() as session:
+                    session.execute(update(results).values(status=status))
+
+                with self.assertRaises(jobs.SubmissionConflictError):
+                    self.submit()
+
+    def test_late_standard_publication_leaves_large_handoff_pending(self):
+        run = self.submit()
+        row, _, token = optimization_store.claim("sim", run.run_id)
+        optimization_store.promote_to_large("sim", run.run_id, token, row["input_revision"])
+
+        fargate_control.record_publication("sim", run.run_id)
+
+        self.assertEqual(
+            optimization_store.delivery_result("sim", run.run_id, "farm").outcome, "forward_large"
+        )
+
+    def test_api_poll_reports_each_large_phase(self):
+        from app.auth import AuthenticatedUser, current_user
+        from app.main import app
+
+        run = self.submit()
+        row, _, token = optimization_store.claim("sim", run.run_id)
+        optimization_store.promote_to_large("sim", run.run_id, token, row["input_revision"])
+        path = "/api/v0/farms/farm/simulations/sim/result?include_output=false"
+        with patch.dict(
+            app.dependency_overrides, {current_user: lambda: AuthenticatedUser(email=EMAIL)}
+        ):
+            client = TestClient(app)
+            queued = client.get(path)
+            optimization_store.claim("sim", run.run_id, tier="large")
+            running = client.get(path)
+
+        self.assertEqual((queued.status_code, queued.json()["status"]), (200, "queued_large"))
+        self.assertEqual(
+            (running.status_code, running.json()["status"]), (200, "in_progress_large")
+        )
+        self.assertEqual(queued.json()["queuedAt"], running.json()["queuedAt"])
+
+    def test_ambiguous_standard_send_returns_the_large_workers_terminal_result(self):
+        def send(**request):
+            run_id = json.loads(request["MessageBody"])["runId"]
+            row, _, lease = optimization_store.claim("sim", run_id)
+            optimization_store.promote_to_large("sim", run_id, lease, row["input_revision"])
+            row, _, lease = optimization_store.claim("sim", run_id, tier="large")
+            optimization_store.finish(
+                "sim",
+                run_id,
+                lease,
+                row["input_revision"],
+                error={"code": "INFEASIBLE", "message": "Ingen mulig løsning"},
+            )
+            raise TimeoutError("Source send response lost")
+
+        self.queue.send_message.side_effect = send
+
+        self.assertEqual(self.submit().status, "infeasible")
+
+    def test_large_claim_before_send_confirmation_keeps_first_publication_time(self):
+        run = self.submit()
+        row, _, token = optimization_store.claim("sim", run.run_id)
+        optimization_store.promote_to_large("sim", run.run_id, token, row["input_revision"])
+        optimization_store.claim("sim", run.run_id, tier="large")
+        confirmed = self.row().published_at
+
+        service = fargate_control.FargateService("cluster", "optimizer-large", "large")
+        service.wake_large("sim", run.run_id, sent=True)
+
+        self.assertEqual(self.row().published_at, confirmed)
+        self.ecs.describe_services.assert_not_called()
+
+    def test_transient_large_retry_stays_in_large_queue(self):
+        run = self.submit()
+        with self.sessions.begin() as session:
+            session.execute(update(results).values(status="queued_large"))
+        row, _, token = optimization_store.claim("sim", run.run_id, tier="large")
+
+        optimization_store.finish(
+            "sim",
+            run.run_id,
+            token,
+            row["input_revision"],
+            retry=True,
+            error={"code": "WORKER_ERROR", "message": "temporary"},
+        )
+
+        self.assertEqual(self.result().status, "queued_large")
+        self.assertEqual(
+            optimization_store.delivery_result("sim", run.run_id, "farm").outcome, "wake_large"
+        )
+
+    def test_only_large_delivery_dead_letters_a_large_worker_failure(self):
+        run = self.submit()
+        with self.sessions.begin() as session:
+            session.execute(update(results).values(status="queued_large"))
+        row, _, token = optimization_store.claim("sim", run.run_id, tier="large")
+
+        optimization_store.finish(
+            "sim",
+            run.run_id,
+            token,
+            row["input_revision"],
+            error={"code": "OUT_OF_MEMORY", "message": "memory"},
+            stopped=True,
+        )
+
+        self.assertEqual(
+            optimization_store.delivery_result("sim", run.run_id, "farm").outcome, "ack"
+        )
+        self.assertEqual(
+            optimization_store.delivery_result("sim", run.run_id, "farm", "large").outcome,
+            "dead_letter",
+        )
 
     def test_sqs_retries_transient_errors_and_preserves_exhausted_failure(self):
         self.submit_and_execute()
@@ -1072,6 +1353,20 @@ class LifecycleTests(DatabaseTests):
             )
         optimization_store.recover_run("sim", run.run_id)
         self.assertEqual(self.result().status, "failed")
+
+    def test_large_queue_retention_starts_when_the_large_message_was_sent(self):
+        run = self.submit()
+        now = datetime.now(UTC)
+        with self.sessions.begin() as session:
+            session.execute(
+                update(results).values(
+                    status="queued_large", published_at=now, queued_at=now - timedelta(days=5)
+                )
+            )
+
+        optimization_store.recover_run("sim", run.run_id)
+
+        self.assertEqual(self.result().status, "queued_large")
 
     def test_transient_retry_preserves_previous_success(self):
         self.submit_and_execute()
@@ -1673,6 +1968,50 @@ class LocalLifecycleTests(DatabaseTests):
         self.assertEqual(self.result().status, "failed")
         self.assertEqual(self.result().error.code, "WORKER_ERROR")
         self.assertEqual(self.row().output, before)
+
+
+class LargeStatusMigrationTests(DatabaseTests):
+    def setUp(self):
+        super().setUp()
+        path = (
+            Path(__file__).parents[1]
+            / "database/migrations/versions/20261125_0001_large_optimizer_statuses.py"
+        )
+        spec = importlib.util.spec_from_file_location("large_status_migration", path)
+        self.migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.migration)
+
+    def test_upgrade_changes_allowed_statuses_with_the_same_columns(self):
+        with (
+            self.engine.begin() as connection,
+            Operations.context(MigrationContext.configure(connection)),
+        ):
+            self.migration.downgrade()
+            before = inspect(connection).get_columns("simulation_result")
+            connection.execute(update(results).values(status="infeasible"))
+
+            self.migration.upgrade()
+
+            self.assertEqual(connection.scalar(select(results.c.status)), "infeasible")
+            self.assertEqual(
+                [c["name"] for c in inspect(connection).get_columns("simulation_result")],
+                [c["name"] for c in before],
+            )
+            for status in ("queued_large", "in_progress_large"):
+                connection.execute(update(results).values(status=status))
+
+    def test_downgrade_preserves_active_large_runs(self):
+        with self.sessions.begin() as session:
+            session.execute(update(results).values(status="queued_large"))
+
+        with (
+            self.assertRaises(IntegrityError),
+            self.engine.begin() as connection,
+            Operations.context(MigrationContext.configure(connection)),
+        ):
+            self.migration.downgrade()
+
+        self.assertEqual(self.row().status, "queued_large")
 
 
 class MigrationTests(DatabaseTests):

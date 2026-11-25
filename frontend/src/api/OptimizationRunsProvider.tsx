@@ -37,6 +37,7 @@ import type {
 } from '@/api/types'
 import { cropAreaViolationsFromDetail } from '@/lib/crop-area-limits'
 import {
+  isActiveOptimizationStatus,
   PERIOD_AVERAGE_OFFERED,
   summarizeOptimizationChanges,
 } from '@/lib/optimization-run'
@@ -103,7 +104,7 @@ export const OptimizationRunsProvider = ({
                 result.queuedAt ?? result.startedAt ?? new Date().toISOString(),
               ),
       }
-      if (result.status === 'queued' || result.status === 'in_progress') {
+      if (isActiveOptimizationStatus(result.status)) {
         putRun({ ...base, status: 'running', phase: result.status })
       } else if (result.status === 'outdated') {
         putRun({ ...base, status: 'outdated' })
@@ -257,9 +258,7 @@ export const OptimizationRunsProvider = ({
             return true
           if (
             result.runId &&
-            (result.status === 'queued' ||
-              result.status === 'in_progress' ||
-              result.runId === id)
+            (isActiveOptimizationStatus(result.status) || result.runId === id)
           ) {
             await acceptResult(request.farmId, request.simulationId, result)
             return true

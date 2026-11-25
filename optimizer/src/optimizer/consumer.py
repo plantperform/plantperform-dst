@@ -23,7 +23,12 @@ from app.domain.optimization import (
 )
 from app.services.optimization.failures import is_transient
 from optimizer.configuration import initialize_configuration
-from optimizer.memory import memory_observation
+from optimizer.memory import (
+    allocation_failed,
+    limit_address_space,
+    memory_observation,
+    memory_pressure,
+)
 
 logger = logging.getLogger(__name__)
 VISIBILITY_SECONDS = EXECUTION_TIMEOUT_SECONDS + 5 * 60
@@ -56,16 +61,10 @@ class ExecutionContext:
         return max(0, int((self.deadline - time.monotonic()) * 1000))
 
 
-def _child_execute(envelope, deadline, connection):
-    logging.basicConfig(level=logging.INFO)
-    claim = None
-
-    def on_claim(*value):
-        nonlocal claim
-        claim = value
-        connection.send(("claim", claim))
-
+def _child_execute(envelope, deadline, connection, claimed, memory_limit):
     try:
+        limit_address_space(memory_limit)
+        logging.basicConfig(level=logging.INFO)
         initialize_configuration()
         from optimizer.worker import execute
 
@@ -74,56 +73,33 @@ def _child_execute(envelope, deadline, connection):
             envelope["runId"],
             ExecutionContext(deadline),
             sqs_delivery=True,
-            farm_id=envelope["farmId"],
-            on_claim=on_claim,
+            claimed=claimed,
+            memory_limit=memory_limit,
         )
         connection.send(("result", result))
     except Exception as error:
-        logger.exception("fargate_job_failed run_id=%s", envelope["runId"])
-        if is_transient(error):
+        if allocation_failed(error):
+            connection.send(
+                (
+                    "failure",
+                    {"code": "OUT_OF_MEMORY", "message": "Optimeringen løb tør for hukommelse."},
+                )
+            )
+        elif isinstance(error, OptimizationTerminalError):
+            connection.send(
+                ("result", ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=error.error))
+            )
+        elif is_transient(error):
             connection.send(
                 ("result", ExecutionResult(DeliveryOutcome.RETRY, retry_seconds(error)))
             )
-            return
-        failure = (
-            error.error
-            if isinstance(error, OptimizationTerminalError)
-            else {
-                "code": "OUT_OF_MEMORY" if isinstance(error, MemoryError) else "WORKER_ERROR",
-                "message": "Optimeringen løb tør for hukommelse."
-                if isinstance(error, MemoryError)
-                else "Optimeringen kunne ikke fuldføres.",
-            }
-        )
-        try:
-            from app.data import optimization_store
-
-            if isinstance(error, OptimizationTerminalError):
-                pass  # The terminal failure is already persisted.
-            elif claim is not None:
-                if not optimization_store.finish(*claim, error=failure):
-                    optimization_store.check_delivery_state(claim[0], claim[1])
-                    connection.send(("result", ExecutionResult(DeliveryOutcome.ACK)))
-                    return
-            else:
-                failure = optimization_store.fail_unclaimed(
-                    envelope["simulationId"],
-                    envelope["runId"],
-                    envelope["farmId"],
-                    failure,
+        else:
+            logger.exception("fargate_job_failed run_id=%s", envelope["runId"])
+            connection.send(
+                (
+                    "failure",
+                    {"code": "WORKER_ERROR", "message": "Optimeringen kunne ikke fuldføres."},
                 )
-                if failure is None:
-                    connection.send(("result", ExecutionResult(DeliveryOutcome.ACK)))
-                    return
-            connection.send(("result", ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=failure)))
-        except OptimizationTerminalError as terminal:
-            connection.send(
-                ("result", ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=terminal.error))
-            )
-        except Exception as persistence_error:
-            logger.exception("fargate_job_failed failure_persistence run_id=%s", envelope["runId"])
-            connection.send(
-                ("result", ExecutionResult(DeliveryOutcome.RETRY, retry_seconds(persistence_error)))
             )
     finally:
         connection.close()
@@ -172,13 +148,22 @@ class Consumer:
             optimization_store,
             TaskProtection(),
             stop,
+            large_service=FargateService.configured(large_target=True)
+            if os.getenv("OPTIMIZER_LARGE_QUEUE_URL")
+            else None,
         )
 
-    def __init__(self, sqs, service, store, protection, stop, *, process_context=None):
+    def __init__(
+        self, sqs, service, store, protection, stop, *, process_context=None, large_service=None
+    ):
         self.sqs, self.service, self.store = sqs, service, store
         self.protection, self.stop = protection, stop
         self.queue_url = os.environ["OPTIMIZER_QUEUE_URL"]
         self.dlq_url = os.environ["OPTIMIZER_DLQ_URL"]
+        self.tier = os.getenv("OPTIMIZER_WORKER_TIER", "standard")
+        self.memory_limit = {"standard": 9, "large": 29}[self.tier] * 1024**3
+        self.large_service = large_service
+        self.large_queue_url = os.getenv("OPTIMIZER_LARGE_QUEUE_URL")
         self.outstanding = {}
         self.process_context = process_context or multiprocessing.get_context("spawn")
 
@@ -192,59 +177,87 @@ class Consumer:
         if process.is_alive():
             raise RuntimeError("Optimization child could not be stopped")
 
-    def _failure(self, claim, failure, envelope=None):
+    def _failure(self, claim, failure, envelope):
         try:
-            if claim is not None:
-                if not self.store.finish(*claim, error=failure, stopped=True):
-                    self.store.check_delivery_state(claim[0], claim[1])
-                    return ExecutionResult(DeliveryOutcome.ACK)
-            elif envelope is not None:
-                failure = self.store.fail_unclaimed(
-                    envelope["simulationId"],
-                    envelope["runId"],
-                    envelope["farmId"],
-                    failure,
-                )
-                if failure is None:
-                    return ExecutionResult(DeliveryOutcome.ACK)
-            else:
-                return ExecutionResult(DeliveryOutcome.RETRY, RETRY_DELAY_SECONDS)
-            return ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=failure)
+            promote = (
+                failure["code"] == "OUT_OF_MEMORY"
+                and self.tier == "standard"
+                and self.large_queue_url is not None
+            )
+            if promote:
+                if self.store.promote_to_large(*claim):
+                    logger.info(
+                        "fargate_memory_handoff run_id=%s detail=%s",
+                        claim[1],
+                        failure.get("detail"),
+                    )
+                    return ExecutionResult(DeliveryOutcome.FORWARD_LARGE)
+            elif self.store.finish(*claim, error=failure, stopped=True):
+                return ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=failure)
+            return self._delivery_result(envelope) or ExecutionResult(
+                DeliveryOutcome.RETRY, RETRY_DELAY_SECONDS
+            )
         except OptimizationTerminalError as error:
             return ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=error.error)
         except Exception as error:
             logger.exception("fargate_job_failed failure_persistence claim=%s", claim)
             return ExecutionResult(DeliveryOutcome.RETRY, retry_seconds(error))
 
-    def _timeout(self, claim, envelope=None):
+    def _timeout(self, claim, envelope):
         return self._failure(
             claim,
             {"code": "TIMEOUT", "message": "Optimeringen overskred tidsgrænsen."},
             envelope,
         )
 
-    def execute(self, envelope):
+    def _delivery_result(self, envelope):
+        return self.store.delivery_result(
+            envelope["simulationId"], envelope["runId"], envelope["farmId"], self.tier
+        )
+
+    def claim_delivery(self, envelope):
         try:
-            result = self.store.delivery_result(
-                envelope["simulationId"], envelope["runId"], envelope["farmId"]
-            )
+            result = self._delivery_result(envelope)
             if result is not None:
                 return result
+            claimed = self.store.claim(
+                envelope["simulationId"],
+                envelope["runId"],
+                farm_id=envelope["farmId"],
+                sqs_delivery=True,
+                tier=self.tier,
+            )
+            if claimed is not None:
+                return claimed
+            # State may have changed between the initial read and the row lock.
+            return self._delivery_result(envelope) or ExecutionResult(
+                DeliveryOutcome.RETRY, RETRY_DELAY_SECONDS
+            )
+        except OptimizationTerminalError as error:
+            logger.error("fargate_job_failed run_id=%s error=%s", envelope["runId"], error)
+            return ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=error.error)
         except Exception as error:
             logger.exception("fargate_job_failed delivery_state run_id=%s", envelope["runId"])
             return ExecutionResult(DeliveryOutcome.RETRY, retry_seconds(error))
-        parent, child = self.process_context.Pipe(duplex=False)
+
+    def execute(self, envelope):
         deadline = time.monotonic() + EXECUTION_TIMEOUT_SECONDS
+        claimed = self.claim_delivery(envelope)
+        if isinstance(claimed, ExecutionResult):
+            return claimed
+        row, _, token = claimed
+        claim = envelope["simulationId"], envelope["runId"], token, row["input_revision"]
+        parent, child = self.process_context.Pipe(duplex=False)
         process = self.process_context.Process(
-            target=_child_execute, args=(envelope, deadline, child)
+            target=_child_execute, args=(envelope, deadline, child, claimed, self.memory_limit)
         )
-        claim = None
+        failure = None
         outcome = None
         before_memory = memory_observation()
         try:
             process.start()
             child.close()
-            while outcome is None:
+            while outcome is None and failure is None:
                 if self.stop.is_set():
                     self._terminate(process)
                     return ExecutionResult(DeliveryOutcome.INTERRUPTED)
@@ -256,18 +269,29 @@ class Consumer:
                         kind, value = parent.recv()
                     except EOFError:
                         break
-                    if kind == "claim":
-                        claim = value
+                    if kind == "failure":
+                        failure = value
                     else:
                         outcome = value
                 elif not process.is_alive():
                     break
+                else:
+                    pressure = memory_pressure(process.pid, self.memory_limit)
+                    if pressure:
+                        self._terminate(process)
+                        failure = {
+                            "code": "OUT_OF_MEMORY",
+                            "message": "Optimeringen løb tør for hukommelse.",
+                            "detail": pressure,
+                        }
             process.join(5)
             self._terminate(process)
             if self.stop.is_set():
                 return ExecutionResult(DeliveryOutcome.INTERRUPTED)
             if outcome is not None:
                 return outcome
+            if failure is not None:
+                return self._failure(claim, failure, envelope)
             after_memory = memory_observation()
             before_kills, after_kills = before_memory["oom_kills"], after_memory["oom_kills"]
             oom = (
@@ -301,9 +325,9 @@ class Consumer:
                 self._terminate(process)
                 process.close()
 
-    def shutdown_if_idle(self, poll_started_at):
+    def shutdown_if_idle(self, woke_during_poll):
         try:
-            if not self.service.scale_to_zero(poll_started_at):
+            if not self.service.scale_to_zero(woke_during_poll):
                 return False
             # Stay protected at desired count zero while waiting for a retry or
             # DLQ handoff. Other tasks can retire after their own empty polls.
@@ -355,22 +379,22 @@ class Consumer:
                 # Existing protection covers the final poll even when a sibling
                 # has already requested zero and ECS is draining the service.
                 self.protection.protect_for(90)
-                poll_started_at = self.service.poll_started_at()
-                response = self.sqs.receive_message(
-                    QueueUrl=self.queue_url,
-                    MaxNumberOfMessages=1,
-                    WaitTimeSeconds=20,
-                    VisibilityTimeout=VISIBILITY_SECONDS,
-                    MessageSystemAttributeNames=["All"],
-                    MessageAttributeNames=["All"],
-                )
-                if self.stop.is_set():
-                    break
-                messages = response.get("Messages", [])
-                if not messages:
-                    if self.shutdown_if_idle(poll_started_at):
-                        return
-                    continue
+                with self.service.idle_poll() as woke_during_poll:
+                    response = self.sqs.receive_message(
+                        QueueUrl=self.queue_url,
+                        MaxNumberOfMessages=1,
+                        WaitTimeSeconds=20,
+                        VisibilityTimeout=VISIBILITY_SECONDS,
+                        MessageSystemAttributeNames=["All"],
+                        MessageAttributeNames=["All"],
+                    )
+                    if self.stop.is_set():
+                        break
+                    messages = response.get("Messages", [])
+                    if not messages:
+                        if self.shutdown_if_idle(woke_during_poll):
+                            return
+                        continue
                 record = messages[0]
                 message_id = record["MessageId"]
                 self.outstanding[message_id] = time.monotonic() + VISIBILITY_SECONDS + 40
@@ -397,6 +421,18 @@ class Consumer:
                     result = self.execute(envelope)
                 if self.stop.is_set() or result.outcome == DeliveryOutcome.INTERRUPTED:
                     break
+                if result.outcome in (DeliveryOutcome.FORWARD_LARGE, DeliveryOutcome.WAKE_LARGE):
+                    send = result.outcome == DeliveryOutcome.FORWARD_LARGE
+                    if send:
+                        self.sqs.send_message(
+                            QueueUrl=self.large_queue_url,
+                            MessageBody=record["Body"],
+                            MessageAttributes=record.get("MessageAttributes", {}),
+                        )
+                    self.large_service.wake_large(
+                        envelope["simulationId"], envelope["runId"], sent=send
+                    )
+                    result = ExecutionResult(DeliveryOutcome.ACK)
                 if result.outcome == DeliveryOutcome.DEAD_LETTER:
                     self.publish_dead_letter(record, result.error, envelope)
                 if self.stop.is_set():

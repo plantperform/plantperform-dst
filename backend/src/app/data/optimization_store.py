@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import Text, literal, select, update
 
 from app.data import read_model_store, repository, saedskifte_store
 from app.data.db import SessionLocal, field_table
@@ -14,15 +14,19 @@ from app.data.db import simulation_table as setups
 from app.data.simulation_store import _fields, split_field
 from app.domain.field import FieldRecord
 from app.domain.optimization import (
+    ACTIVE_STATUSES,
+    LARGE_ACTIVE_STATUSES,
     LEASE_DURATION_SECONDS,
-    MAX_JOB_ATTEMPTS,
     RETRY_DELAY_SECONDS,
+    RUNNING_STATUSES,
     DeliveryOutcome,
     ExecutionResult,
     OptimizationAttemptsExhaustedError,
     OptimizationLeaseActiveError,
     OptimizationTerminalError,
+    attempt_limit,
     effective_result_status,
+    worker_tier,
 )
 from app.domain.simulation import Simulation
 
@@ -64,7 +68,7 @@ def _stored_status(row):
 def _raise_if_exhausted(row):
     if (
         row.status == "failed"
-        and row.attempts >= MAX_JOB_ATTEMPTS
+        and row.attempts >= attempt_limit(worker_tier(row.status, row.error))
         and (row.error or {}).get("code") == "WORKER_ERROR"
     ):
         raise OptimizationAttemptsExhaustedError(row.error)
@@ -74,7 +78,7 @@ def _raise_if_exhausted(row):
         )
 
 
-def check_delivery_state(simulation_id, run_id):
+def check_delivery_state(simulation_id, run_id, tier="standard"):
     """Only acknowledge a rejected write when this delivery no longer needs execution."""
     with SessionLocal() as session:
         row = session.execute(
@@ -93,14 +97,18 @@ def check_delivery_state(simulation_id, run_id):
         ).first()
     if row is None:
         return
+    if worker_tier(row.status, row.error) != tier:
+        if tier == "standard" and row.status == "queued_large":
+            raise RuntimeError("The large queue handoff still requires confirmation")
+        return
     _raise_if_exhausted(row)
-    if row.status == "in_progress" and row.lease_expires_at is not None:
+    if row.status in RUNNING_STATUSES and row.lease_expires_at is not None:
         raise OptimizationLeaseActiveError(row.lease_expires_at)
-    if row.status in ("queued", "in_progress"):
+    if row.status in ACTIVE_STATUSES:
         raise RuntimeError("The optimization run still requires execution")
 
 
-def delivery_result(simulation_id, run_id, farm_id):
+def delivery_result(simulation_id, run_id, farm_id, tier="standard"):
     """Resolve redelivery without starting the optimizer or incrementing attempts."""
     with SessionLocal() as session:
         row = session.execute(
@@ -109,6 +117,7 @@ def delivery_result(simulation_id, run_id, farm_id):
                 setups.c.revision,
                 results.c.run_id,
                 results.c.input_revision,
+                results.c.published_at,
                 results.c.status,
                 results.c.error,
                 results.c.lease_expires_at,
@@ -125,15 +134,24 @@ def delivery_result(simulation_id, run_id, farm_id):
         )
     if row.run_id != run_id or row.input_revision != row.revision:
         return ExecutionResult(DeliveryOutcome.ACK)
+    if worker_tier(row.status, row.error) != tier:
+        if tier == "standard" and row.status == "queued_large":
+            outcome = (
+                DeliveryOutcome.FORWARD_LARGE
+                if row.published_at is None
+                else DeliveryOutcome.WAKE_LARGE
+            )
+            return ExecutionResult(outcome)
+        return ExecutionResult(DeliveryOutcome.ACK)
     if _stored_status(row) == "failed":
         return ExecutionResult(
             DeliveryOutcome.DEAD_LETTER,
             error=row.error or {"code": "WORKER_ERROR", "message": "Optimeringen fejlede."},
         )
-    if row.status not in ("queued", "in_progress"):
+    if row.status not in ACTIVE_STATUSES:
         return ExecutionResult(DeliveryOutcome.ACK)
     if (
-        row.status == "in_progress"
+        row.status in RUNNING_STATUSES
         and row.lease_expires_at is not None
         and row.lease_expires_at >= datetime.now(UTC)
     ):
@@ -141,7 +159,7 @@ def delivery_result(simulation_id, run_id, farm_id):
     return None
 
 
-def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
+def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None, tier="standard"):
     with SessionLocal.begin() as session:
         setup = session.execute(
             select(setups.c.id, setups.c.farm_id, setups.c.revision)
@@ -153,29 +171,40 @@ def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
         if farm_id is not None and setup.farm_id != farm_id:
             raise ValueError("Optimization message farm does not match the simulation")
         row = session.execute(
-            select(*[c for c in results.c if c.name != "output"])
+            # The supervisor passes only request options to the capped child.
+            # load_snapshot reads the captured simulation settings under its lease.
+            select(
+                *[c for c in results.c if c.name not in ("output", "parameters")],
+                results.c.parameters.op("-")(literal("simulation_settings", type_=Text)).label(
+                    "parameters"
+                ),
+            )
             .where(results.c.simulation_id == simulation_id)
             .with_for_update()
         ).one()
         if row.run_id != run_id or row.input_revision != setup.revision:
             return None
+        if worker_tier(row.status, row.error) != tier:
+            return None
         if sqs_delivery:
             _raise_if_exhausted(row)
-        if row.status not in ("queued", "in_progress"):
+        if row.status not in ACTIVE_STATUSES:
             return None
         now = datetime.now(UTC)
-        if row.status == "in_progress":
+        if row.status in RUNNING_STATUSES:
             if row.lease_expires_at is None:
                 raise RuntimeError("The active optimization run has no execution lease")
             if row.lease_expires_at >= now:
                 if sqs_delivery:
                     raise OptimizationLeaseActiveError(row.lease_expires_at)
                 return None
-        if row.attempts >= MAX_JOB_ATTEMPTS:
+        if row.attempts >= attempt_limit(tier):
             error = {
                 "code": "WORKER_ERROR",
                 "message": "Optimeringen nåede det maksimale antal forsøg. Prøv igen.",
             }
+            if tier == "large":
+                error["worker_tier"] = "large"
             session.execute(
                 update(results)
                 .where(results.c.simulation_id == simulation_id)
@@ -193,18 +222,49 @@ def claim(simulation_id, run_id, *, sqs_delivery=False, farm_id=None):
                 update(results)
                 .where(results.c.simulation_id == simulation_id)
                 .values(
-                    status="in_progress",
+                    status="in_progress_large" if tier == "large" else "in_progress",
                     started_at=now,
                     lease_token=token,
                     lease_expires_at=now + timedelta(seconds=LEASE_DURATION_SECONDS),
                     attempts=row.attempts + 1,
+                    # Receipt by the large worker also confirms an ambiguous send.
+                    published_at=(row.published_at or now) if tier == "large" else row.published_at,
                 )
             )
             return dict(row._mapping), setup.farm_id, token
     # Commit the terminal status before reporting an unsuccessful SQS delivery.
     if sqs_delivery:
-        raise OptimizationAttemptsExhaustedError("The optimization attempt limit was reached")
+        raise OptimizationAttemptsExhaustedError(error)
     return None
+
+
+def promote_to_large(simulation_id, run_id, token, revision):
+    """The supervisor has stopped the child. Only its own lease may be released."""
+    with SessionLocal.begin() as session:
+        current_revision = session.scalar(
+            select(setups.c.revision).where(setups.c.id == simulation_id).with_for_update()
+        )
+        if current_revision != revision:
+            return False
+        promoted = session.execute(
+            update(results)
+            .where(
+                results.c.simulation_id == simulation_id,
+                results.c.run_id == run_id,
+                results.c.input_revision == revision,
+                results.c.status == "in_progress",
+                results.c.lease_token == token,
+            )
+            .values(
+                status="queued_large",
+                published_at=None,
+                lease_token=None,
+                lease_expires_at=None,
+                finished_at=None,
+                error=None,
+            )
+        )
+        return promoted.rowcount == 1
 
 
 def _execution_setup(session, simulation_id, run_id, token, revision, *, include_data=False):
@@ -236,7 +296,7 @@ def _execution_setup(session, simulation_id, run_id, token, revision, *, include
         row.run_id != run_id
         or row.lease_token != token
         or row.input_revision != revision
-        or row.status != "in_progress"
+        or row.status not in RUNNING_STATUSES
         or row.lease_expires_at is None
         or row.lease_expires_at < datetime.now(UTC)
     ):
@@ -339,13 +399,21 @@ def finish(
         if setup is None or setup.revision != revision:
             return False
         row = session.execute(
-            select(results).where(results.c.simulation_id == simulation_id).with_for_update()
+            select(
+                results.c.run_id,
+                results.c.lease_token,
+                results.c.input_revision,
+                results.c.status,
+                results.c.lease_expires_at,
+            )
+            .where(results.c.simulation_id == simulation_id)
+            .with_for_update()
         ).one()
         if (
             row.run_id != run_id
             or row.lease_token != token
             or row.input_revision != revision
-            or row.status != "in_progress"
+            or row.status not in RUNNING_STATUSES
             or row.lease_expires_at is None
             or (not stopped and row.lease_expires_at < datetime.now(UTC))
         ):
@@ -353,8 +421,12 @@ def finish(
         status = "completed"
         if error:
             status = effective_result_status("failed", error.get("code"))
+        if retry:
+            status = "queued_large" if row.status == "in_progress_large" else "queued"
+        elif status == "failed" and row.status == "in_progress_large":
+            error = {**error, "worker_tier": "large"}
         values = dict(
-            status="queued" if retry else status,
+            status=status,
             lease_token=None,
             lease_expires_at=None,
             finished_at=None if retry else datetime.now(UTC),
@@ -378,7 +450,7 @@ def finish(
         return True
 
 
-def fail_unclaimed(simulation_id, run_id, farm_id, error):
+def fail_unclaimed(simulation_id, run_id, farm_id, error, *, tier="standard"):
     """Fail startup errors without taking an active claim away from another worker."""
     with SessionLocal.begin() as session:
         setup = session.execute(
@@ -390,14 +462,18 @@ def fail_unclaimed(simulation_id, run_id, farm_id, error):
             row = session.execute(
                 select(results).where(results.c.simulation_id == simulation_id).with_for_update()
             ).one()
+            if worker_tier(row.status, row.error) != tier:
+                return None
             if row.run_id == run_id and row.input_revision == setup.revision:
-                if row.status == "in_progress" and (
+                if row.status in RUNNING_STATUSES and (
                     row.lease_expires_at is None or row.lease_expires_at >= datetime.now(UTC)
                 ):
                     if row.lease_expires_at is None:
                         raise RuntimeError("The active optimization run has no execution lease")
                     raise OptimizationLeaseActiveError(row.lease_expires_at)
-                if row.status in ("queued", "in_progress"):
+                if row.status in ACTIVE_STATUSES:
+                    if row.status in LARGE_ACTIVE_STATUSES:
+                        error = {**error, "worker_tier": "large"}
                     session.execute(
                         update(results)
                         .where(results.c.simulation_id == simulation_id)
@@ -422,7 +498,7 @@ def recover_local_optimization_runs():
     with SessionLocal() as session:
         rows = session.execute(
             select(results.c.simulation_id, results.c.run_id).where(
-                results.c.status.in_(("queued", "in_progress"))
+                results.c.status.in_(ACTIVE_STATUSES)
             )
         ).all()
     for row in rows:
@@ -442,10 +518,14 @@ def recover_run(simulation_id, run_id, *, dead_letter=False, interrupted=False):
             select(results).where(results.c.simulation_id == simulation_id).with_for_update()
         ).one()
         now = datetime.now(UTC)
-        if row.run_id != run_id or row.status not in ("queued", "in_progress"):
+        if row.run_id != run_id or row.status not in ACTIVE_STATUSES:
             return
-        if row.status == "in_progress":
+        if row.status in RUNNING_STATUSES:
             expired = row.lease_expires_at is not None and row.lease_expires_at < now
+        elif row.status == "queued_large":
+            # The original delivery owns a pending handoff until the large send is confirmed.
+            retained_since = row.published_at or row.queued_at
+            expired = dead_letter or retained_since < now - timedelta(days=4)
         else:
             expired = (
                 dead_letter
@@ -456,6 +536,12 @@ def recover_run(simulation_id, run_id, *, dead_letter=False, interrupted=False):
                 or row.queued_at < now - timedelta(days=4)
             )
         if interrupted or expired:
+            error = {
+                "code": "WORKER_LOST",
+                "message": "Optimeringen kunne ikke fuldføres. Prøv igen.",
+            }
+            if row.status in LARGE_ACTIVE_STATUSES:
+                error["worker_tier"] = "large"
             session.execute(
                 update(results)
                 .where(results.c.simulation_id == simulation_id)
@@ -464,9 +550,6 @@ def recover_run(simulation_id, run_id, *, dead_letter=False, interrupted=False):
                     lease_token=None,
                     lease_expires_at=None,
                     finished_at=now,
-                    error={
-                        "code": "WORKER_LOST",
-                        "message": "Optimeringen kunne ikke fuldføres. Prøv igen.",
-                    },
+                    error=error,
                 )
             )

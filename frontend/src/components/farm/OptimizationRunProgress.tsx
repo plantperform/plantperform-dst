@@ -15,6 +15,8 @@ import {
 } from '@/lib/field-domain'
 import {
   formatElapsed,
+  LARGE_PHASE_LABELS,
+  isLargeOptimizationStatus,
   formatFieldNameList,
   optimizationRunName,
   infeasibleRunHeading,
@@ -55,14 +57,18 @@ const RunningDetails = ({
 }) => {
   const elapsed = useElapsed(run.startedAt, run.status === 'running')
 
+  const title = isLargeOptimizationStatus(run.phase)
+    ? LARGE_PHASE_LABELS[run.phase]
+    : {
+        submitting: 'Starter optimeringen',
+        queued: 'Venter i kø',
+        in_progress: `Kører ${optimizationRunName(run.kind).toLowerCase()}`,
+      }[run.phase]
+
   return (
     <>
       <p className="text-base font-semibold">
-        {run.phase === 'submitting'
-          ? 'Starter optimeringen...'
-          : run.phase === 'queued'
-            ? 'Venter i kø...'
-            : `Kører ${optimizationRunName(run.kind).toLowerCase()}...`}
+        {title}...
       </p>
       <p className="text-sm tabular-nums text-muted-foreground">
         {formatElapsed(elapsed)}

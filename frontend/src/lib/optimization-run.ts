@@ -1,9 +1,20 @@
-import type { FieldRecord, OptimizeSimulationResponse } from '@/api/types'
+import type { ActiveOptimizationStatus, FieldRecord, OptimizeSimulationResponse } from '@/api/types'
 import {
   computeFieldTotals,
   rotationsEqual,
   type FieldTotals,
 } from '@/lib/field-domain'
+
+export const LARGE_PHASE_LABELS = {
+  queued_large: 'Venter på mere hukommelse',
+  in_progress_large: 'Kører med mere hukommelse',
+} as const
+
+export const isLargeOptimizationStatus = (status?: string): status is keyof typeof LARGE_PHASE_LABELS =>
+  status === 'queued_large' || status === 'in_progress_large'
+
+export const isActiveOptimizationStatus = (status?: string): status is ActiveOptimizationStatus =>
+  status === 'queued' || status === 'in_progress' || isLargeOptimizationStatus(status)
 
 export type OptimizationKind = 'optimize' | 'yearly'
 

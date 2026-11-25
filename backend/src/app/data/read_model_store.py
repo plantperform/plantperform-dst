@@ -12,7 +12,7 @@ from app.data.db import simulation_table as setups
 from app.domain.creation import CreationActiveError
 from app.domain.economics import EconomicsSnapshot
 from app.domain.field import FieldRecord
-from app.domain.optimization import SimulationResultSummary
+from app.domain.optimization import ACTIVE_STATUSES, SimulationResultSummary
 from app.domain.read_model import ReadModelNotReadyError, preparation_job
 from app.domain.rotation_candidate import RotationCandidateEvaluation, RotationCandidateRef
 from app.domain.saedskifte import RotationDefinitionError
@@ -202,11 +202,8 @@ def get_simulation_view(farm_id, simulation_id, email, *, include_data=True):
         status = row.creation_status
     elif row.view_status == "done" and row.input_revision == row.revision and row.has_view_data:
         status = "done"
-    elif summary.get("input_revision") == row.revision and summary.get("status") in (
-        "queued",
-        "in_progress",
-    ):
-        status = "queued" if summary["status"] == "queued" else "running"
+    elif summary.get("input_revision") == row.revision and summary.get("status") in ACTIVE_STATUSES:
+        status = "queued" if summary["status"] in ("queued", "queued_large") else "running"
     else:
         status = "missing"
     simulation = _with_rotation_groups(simulation)

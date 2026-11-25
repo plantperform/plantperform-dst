@@ -21,9 +21,36 @@ LEASE_DURATION_SECONDS = EXECUTION_TIMEOUT_SECONDS + 60
 NO_SOLUTION_WITHIN_TIME_LIMIT = "NO_SOLUTION_WITHIN_TIME_LIMIT"
 
 ResultStatus = Literal[
-    "not_started", "queued", "in_progress", "completed", "infeasible", "failed", "outdated"
+    "not_started",
+    "queued",
+    "in_progress",
+    "queued_large",
+    "in_progress_large",
+    "completed",
+    "infeasible",
+    "failed",
+    "outdated",
 ]
 OptimizationKind = Literal["optimize", "yearly"]
+
+
+STANDARD_ACTIVE_STATUSES = ("queued", "in_progress")
+LARGE_ACTIVE_STATUSES = ("queued_large", "in_progress_large")
+ACTIVE_STATUSES = STANDARD_ACTIVE_STATUSES + LARGE_ACTIVE_STATUSES
+RUNNING_STATUSES = ("in_progress", "in_progress_large")
+
+
+def worker_tier(status: str, error: dict | None = None) -> Literal["standard", "large"]:
+    if status in LARGE_ACTIVE_STATUSES or (
+        status == "failed" and (error or {}).get("worker_tier") == "large"
+    ):
+        return "large"
+    return "standard"
+
+
+def attempt_limit(worker_tier):
+    # Escalation gets a large attempt even after the last standard claim.
+    return MAX_JOB_ATTEMPTS + 1 if worker_tier == "large" else MAX_JOB_ATTEMPTS
 
 
 class DeliveryOutcome(StrEnum):
@@ -31,6 +58,8 @@ class DeliveryOutcome(StrEnum):
     RETRY = "retry"
     DEAD_LETTER = "dead_letter"
     INTERRUPTED = "interrupted"
+    FORWARD_LARGE = "forward_large"
+    WAKE_LARGE = "wake_large"
 
 
 @dataclass(frozen=True)

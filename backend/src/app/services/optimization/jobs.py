@@ -15,7 +15,11 @@ from app.data import saedskifte_store
 from app.data.db import SessionLocal
 from app.data.db import simulation_result_table as results
 from app.data.simulation_store import _row, get_result, read_result
-from app.domain.optimization import OptimizeSimulationRequest, YearlyOptimizeSimulationRequest
+from app.domain.optimization import (
+    ACTIVE_STATUSES,
+    OptimizeSimulationRequest,
+    YearlyOptimizeSimulationRequest,
+)
 from app.domain.simulation import Simulation
 from app.services.fargate_control import record_publication
 from app.services.optimization.local import execute_local_when_ready
@@ -120,7 +124,7 @@ def submit(
                 ).one()
                 return read_result(result)
         else:
-            if result.status in ("queued", "in_progress"):
+            if result.status in ACTIVE_STATUSES:
                 raise SubmissionConflictError("Scenariet har allerede en aktiv optimering.")
             rotation_groups = saedskifte_store.resolve_selected(
                 session, simulation.rotation_saedskiftevarianter
@@ -203,16 +207,18 @@ def submit(
             if production
             else "Kunne ikke starte den lokale optimering. Prøv igen."
         )
-        # An ambiguous SendMessage error must not fail a worker that already claimed the run.
+        # A late source-publisher error can race a successful dispatch or an entire large run.
         with SessionLocal.begin() as session:
+            unclaimed = update(results).where(
+                results.c.simulation_id == simulation_id,
+                results.c.run_id == run_id,
+                results.c.status == "queued",
+                results.c.attempts == 0,
+            )
+            if production:
+                unclaimed = unclaimed.where(results.c.published_at.is_(None))
             session.execute(
-                update(results)
-                .where(
-                    results.c.simulation_id == simulation_id,
-                    results.c.run_id == run_id,
-                    results.c.status == "queued",
-                )
-                .values(
+                unclaimed.values(
                     status="failed",
                     finished_at=datetime.now(UTC),
                     error={
@@ -224,7 +230,14 @@ def submit(
             current = session.execute(
                 select(results).where(results.c.simulation_id == simulation_id)
             ).first()
-        if current and current.run_id == run_id and current.status in ("in_progress", "completed"):
+        if (
+            current
+            and current.run_id == run_id
+            and (
+                current.attempts > 0
+                or (current.status == "queued" and current.published_at is not None)
+            )
+        ):
             return read_result(current)
         raise QueueUnavailableError(message) from error
     current = get_result(farm_id, simulation_id, email)

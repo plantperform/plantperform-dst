@@ -14,6 +14,7 @@ from app.domain.economics import (
     EconomicsSnapshot,
     recalculation_job_id,
 )
+from app.domain.optimization import ACTIVE_STATUSES
 
 
 def select_module(farm_id, simulation_id, request, email):
@@ -86,7 +87,7 @@ def submit(farm_id, simulation_id, request, email, *, execution_session=None):
             .where(results.c.simulation_id == simulation_id)
             .with_for_update()
         ).scalar_one()
-        if active in ("queued", "in_progress"):
+        if active in ACTIVE_STATUSES:
             raise EconomicsConflictError("Simulation already has active optimization")
         snapshot = (
             economics_store.resolve_snapshot(

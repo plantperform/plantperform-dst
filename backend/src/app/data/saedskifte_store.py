@@ -11,6 +11,7 @@ from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.data.rotation_snapshot_store import load_selected as load_selected
 from app.data.rotation_snapshot_store import resolve_selected as resolve_selected
+from app.domain.optimization import ACTIVE_STATUSES
 from app.domain.saedskifte import (
     RotationGroup,
     RotationGroupConflictError,
@@ -172,7 +173,7 @@ def delete_group(group_id, email):
             .with_for_update()
         ).scalars()
         if any(row.creation_status in ("queued", "running") for row in selecting) or any(
-            status in ("queued", "in_progress") for status in states
+            status in ACTIVE_STATUSES for status in states
         ):
             raise RotationGroupConflictError("A simulation is being calculated; try again later")
         for row in selecting:

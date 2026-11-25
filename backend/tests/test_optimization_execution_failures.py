@@ -16,6 +16,7 @@ from app.data import optimization_store, simulation_store
 from app.data.db import simulation_result_table as results
 from app.data.db import simulation_table as setups
 from app.domain.optimization import DeliveryOutcome, OptimizationLeaseActiveError
+from app.services.fargate_control import FargateService
 from optimizer import worker
 from optimizer.consumer import Consumer
 
@@ -147,7 +148,9 @@ class ExecutionFailureTests(DatabaseTests):
             {},
         ]
         with patch.dict(os.environ, {"OPTIMIZER_DLQ_URL": "test-dlq"}):
-            consumer = Consumer(self.queue, Mock(), optimization_store, Mock(), Event())
+            consumer = Consumer(
+                self.queue, FargateService.configured(), optimization_store, Mock(), Event()
+            )
 
         consumer.run()
 

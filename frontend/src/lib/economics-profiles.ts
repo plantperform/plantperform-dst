@@ -1,3 +1,4 @@
+import { isActiveOptimizationStatus } from '@/lib/optimization-run'
 import type { EconomicsModule, Simulation } from '@/api/types'
 import {
   describeNames,
@@ -97,8 +98,7 @@ export const canRecalculateEconomics = (
   (simulation.creationStatus === undefined ||
     simulation.creationStatus === 'done' ||
     simulation.creationStatus === 'failed') &&
-  simulation.result.status !== 'queued' &&
-  simulation.result.status !== 'in_progress'
+  !isActiveOptimizationStatus(simulation.result.status)
 
 export const simulationsUsingProfile = <T extends ProfiledSimulation>(
   simulations: T[],

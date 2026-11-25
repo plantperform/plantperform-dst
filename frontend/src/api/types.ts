@@ -682,11 +682,12 @@ export type RotationCategoryOption = {
   rotations: RotationOption[]
 }
 
+export type ActiveOptimizationStatus = 'queued' | 'in_progress' | 'queued_large' | 'in_progress_large'
+
 export type SimulationResultSummary = {
   status:
     | 'not_started'
-    | 'queued'
-    | 'in_progress'
+    | ActiveOptimizationStatus
     | 'completed'
     | 'failed'
     | 'infeasible'

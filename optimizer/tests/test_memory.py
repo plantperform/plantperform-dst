@@ -1,8 +1,11 @@
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from optimizer.memory import memory_observation
+from optimizer.memory import memory_observation, memory_pressure
 
 
 class MemoryTests(unittest.TestCase):
@@ -47,3 +50,45 @@ class MemoryTests(unittest.TestCase):
             self.assertIsNone(memory_observation(root)["oom_kills"])
             (root / "memory.events").write_text("oom 4\nmax 10\n")
             self.assertIsNone(memory_observation(root)["oom_kills"])
+
+    def test_usage_from_own_cgroup_in_a_shared_hierarchy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            membership = root / "membership"
+            membership.write_text("0::/task/worker")
+            group = root / "task/worker"
+            group.mkdir(parents=True)
+            (group / "memory.current").write_text("512")
+            (root / "memory.current").write_text("4096")
+
+            observed = memory_observation(root, membership)
+
+            self.assertEqual(observed["current_bytes"], 512)
+
+    def test_child_virtual_size_cutoff_includes_the_256_mib_margin(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("optimizer.memory._integer", return_value=0),
+        ):
+            proc = Path(directory)
+            (proc / "123").mkdir()
+            size = 9 * 1024**3 - 256 * 1024**2
+            (proc / "123/status").write_text(f"VmSize: {size // 1024} kB")
+
+            pressure = memory_pressure(123, 9 * 1024**3, root=proc)
+
+            self.assertEqual(pressure["child_virtual_bytes"], size)
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux address-space limits")
+    def test_hard_limit_rejects_a_single_large_allocation_in_a_child(self):
+        program = """from optimizer.memory import limit_address_space
+limit_address_space(256 * 1024**2)
+try:
+    bytearray(512 * 1024**2)
+except MemoryError:
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+        child = subprocess.run([sys.executable, "-c", program], timeout=10)
+
+        self.assertEqual(child.returncode, 0)

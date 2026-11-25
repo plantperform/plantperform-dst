@@ -28,6 +28,7 @@ from app.domain.farm_copy import (
     FarmCopyNotFoundError,
     FarmCopyPreview,
 )
+from app.domain.optimization import ACTIVE_STATUSES
 
 _REFERENCE_KEYS = {
     "farm_id",
@@ -103,7 +104,7 @@ def preview(request: FarmCopyLookup) -> FarmCopyPreview:
             or history.status != "done"
             or history.input_revision != source["revision"]
             or any(
-                state.creation_status != "done" or state.status in ("queued", "in_progress")
+                state.creation_status != "done" or state.status in ACTIVE_STATUSES
                 for state in states
             )
         )
@@ -192,7 +193,7 @@ def _reset_result(result, saved):
     result.update(
         lease_token=None, lease_expires_at=None, attempts=0, requested_by=None, published_at=None
     )
-    if result["status"] in ("queued", "in_progress"):
+    if result["status"] in ACTIVE_STATUSES:
         has_saved = output.get("response") is not None
         result.update(
             status="outdated" if has_saved else "not_started",

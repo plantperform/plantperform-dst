@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 
 import type {
+  ActiveOptimizationStatus,
   FieldRecord,
   OptimizeSimulationInput,
   OptimizeSimulationResponse,
@@ -30,7 +31,7 @@ type OptimizationRunBase = OptimizationRunRequest & {
 
 export type OptimizationRun = OptimizationRunBase &
   (
-    | { status: 'running'; phase: 'submitting' | 'queued' | 'in_progress' }
+    | { status: 'running'; phase: 'submitting' | ActiveOptimizationStatus }
     | { status: 'outdated' }
     | {
         status: 'failed' | 'infeasible'

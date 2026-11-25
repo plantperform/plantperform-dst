@@ -33,6 +33,15 @@ describe('persisted result tracking', () => {
     ).toBe(true)
   })
 
+  it.each(['queued_large', 'in_progress_large'] as const)(
+    'ignores a stale standard response after the run reaches %s',
+    (phase) => {
+      const large = { ...running, status: 'running', phase } as OptimizationRun
+
+      expect(shouldAcceptResult(large, result('in_progress'))).toBe(false)
+    },
+  )
+
   it('ignores responses from superseded runs', () => {
     expect(shouldAcceptResult(running, result('completed', 'old'), 'new')).toBe(
       false,

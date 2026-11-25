@@ -2,6 +2,7 @@ import json
 import os
 import time
 import unittest
+from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from threading import Event, Timer
@@ -11,7 +12,6 @@ from app.domain.optimization import (
     DeliveryOutcome,
     ExecutionResult,
     OptimizationLeaseActiveError,
-    OptimizationTerminalError,
 )
 from optimizer import consumer
 
@@ -25,19 +25,16 @@ CLAIM = ("sim", "run", "token", 1)
 FAILURE = {"code": "OUT_OF_MEMORY", "message": "memory"}
 
 
-def successful_child(envelope, deadline, connection):
-    connection.send(("claim", CLAIM))
+def successful_child(envelope, deadline, connection, claimed, memory_limit):
     connection.send(("result", ExecutionResult(DeliveryOutcome.ACK, error={"pid": os.getpid()})))
     connection.close()
 
 
-def hanging_child(envelope, deadline, connection):
-    connection.send(("claim", CLAIM))
+def hanging_child(envelope, deadline, connection, claimed, memory_limit):
     time.sleep(30)
 
 
-def crashed_child(envelope, deadline, connection):
-    connection.send(("claim", CLAIM))
+def crashed_child(envelope, deadline, connection, claimed, memory_limit):
     os._exit(1)
 
 
@@ -56,9 +53,11 @@ class ConsumerTests(unittest.TestCase):
         )
         self.sqs, self.service, self.store, self.protection = Mock(), Mock(), Mock(), Mock()
         self.poll_start = datetime.now(UTC)
-        self.service.poll_started_at.return_value = self.poll_start
+        self.service.idle_poll.return_value = nullcontext(self.poll_start)
         self.service.scale_to_zero.return_value = True
         self.store.delivery_result.return_value = None
+        self.store.claim.return_value = ({"input_revision": 1}, "farm", "token")
+        self.enterContext(patch.object(consumer, "memory_pressure", return_value=None))
         self.stop = Event()
         self.worker = consumer.Consumer(
             self.sqs,
@@ -99,7 +98,9 @@ class ConsumerTests(unittest.TestCase):
     def test_submission_during_empty_poll_keeps_the_worker_polling(self):
         self.sqs.receive_message.side_effect = [{}, self.message(), {}]
         next_poll = self.poll_start + timedelta(seconds=20)
-        self.service.poll_started_at.side_effect = [self.poll_start, next_poll, next_poll]
+        self.service.idle_poll.side_effect = [
+            nullcontext(poll) for poll in (self.poll_start, next_poll, next_poll)
+        ]
         self.service.scale_to_zero.side_effect = [False, True]
         self.worker.execute = Mock(return_value=ExecutionResult(DeliveryOutcome.ACK))
 
@@ -198,16 +199,15 @@ class ConsumerTests(unittest.TestCase):
         self.store.finish.side_effect = RuntimeError("database lost")
         with self.assertLogs(consumer.logger, "ERROR"):
             self.assertEqual(
-                self.worker._timeout(CLAIM), ExecutionResult(DeliveryOutcome.RETRY, 60)
+                self.worker._timeout(CLAIM, ENVELOPE), ExecutionResult(DeliveryOutcome.RETRY, 60)
             )
-        self.assertEqual(self.worker._timeout(None), ExecutionResult(DeliveryOutcome.RETRY, 60))
 
     def test_rejected_timeout_write_requires_delivery_state_confirmation(self):
         self.store.finish.return_value = False
         expires = datetime.now(UTC) + timedelta(minutes=30)
-        self.store.check_delivery_state.side_effect = OptimizationLeaseActiveError(expires)
+        self.store.delivery_result.side_effect = OptimizationLeaseActiveError(expires)
         with self.assertLogs(consumer.logger, "ERROR"):
-            result = self.worker._timeout(CLAIM)
+            result = self.worker._timeout(CLAIM, ENVELOPE)
         self.assertEqual(result.outcome, "retry")
         self.assertGreater(result.retry_after, 1700)
 
@@ -224,7 +224,8 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(self.store.finish.call_args.kwargs["error"]["code"], "WORKER_CRASH")
         self.assertTrue(self.store.finish.call_args.kwargs["stopped"])
 
-    def test_oom_counter_increase_identifies_memory_exhaustion(self):
+    def test_large_worker_oom_counter_increase_is_terminal(self):
+        self.worker.tier = "large"
         with (
             patch.object(consumer, "_child_execute", crashed_child),
             patch.object(
@@ -241,6 +242,67 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(result.outcome, "dead_letter")
         self.assertEqual(result.error["code"], "OUT_OF_MEMORY")
         self.assertEqual(self.store.finish.call_args.kwargs["error"]["code"], "OUT_OF_MEMORY")
+
+    def test_large_worker_sends_terminal_failure_to_large_dlq(self):
+        with patch.dict(
+            os.environ,
+            {
+                "OPTIMIZER_WORKER_TIER": "large",
+                "OPTIMIZER_QUEUE_URL": "large",
+                "OPTIMIZER_DLQ_URL": "large-dlq",
+            },
+        ):
+            worker = consumer.Consumer(
+                self.sqs, self.service, self.store, self.protection, self.stop
+            )
+        self.store.delivery_result.return_value = ExecutionResult(
+            DeliveryOutcome.DEAD_LETTER, error=FAILURE
+        )
+        self.sqs.receive_message.side_effect = [self.message(), {}]
+
+        with self.assertLogs(consumer.logger, "ERROR"):
+            worker.run()
+
+        self.assertEqual(self.sqs.send_message.call_args.kwargs["QueueUrl"], "large-dlq")
+
+    def test_watchdog_promotes_the_stopped_standard_claim(self):
+        self.worker.large_queue_url = "large"
+        self.store.promote_to_large.return_value = True
+
+        with (
+            patch.object(consumer, "_child_execute", hanging_child),
+            patch.object(consumer, "memory_pressure", return_value={"task_bytes": 100}),
+        ):
+            result = self.worker.execute(ENVELOPE)
+
+        self.assertEqual(result.outcome, DeliveryOutcome.FORWARD_LARGE)
+        self.store.promote_to_large.assert_called_once_with(*CLAIM)
+        self.store.finish.assert_not_called()
+
+    def test_failed_wakeup_retries_without_a_second_confirmed_send(self):
+        self.worker.large_queue_url = "large"
+        self.worker.large_service = Mock()
+        self.worker.large_service.wake_large.side_effect = [TimeoutError(), None]
+        self.store.delivery_result.side_effect = [
+            ExecutionResult(DeliveryOutcome.FORWARD_LARGE),
+            ExecutionResult(DeliveryOutcome.WAKE_LARGE),
+        ]
+        message = self.message()
+        record = message["Messages"][0]
+        record["MessageAttributes"] = {"binary": {"DataType": "Binary", "BinaryValue": b"x"}}
+        self.sqs.receive_message.side_effect = [message, message, {}]
+
+        with patch.object(self.stop, "wait"), self.assertLogs(level="ERROR"):
+            self.worker.run()
+
+        self.sqs.send_message.assert_called_once_with(
+            QueueUrl="large",
+            MessageBody=record["Body"],
+            MessageAttributes=record["MessageAttributes"],
+        )
+        self.sqs.delete_message.assert_called_once()
+        self.sqs.change_message_visibility.assert_called_once()
+        self.store.claim.assert_not_called()
 
     def test_forced_stop_kills_child_without_terminal_write(self):
         timer = Timer(1, self.stop.set)
@@ -371,8 +433,10 @@ class ConsumerTests(unittest.TestCase):
 
     def test_persisted_failure_is_used_if_child_died_after_saving_it(self):
         self.store.finish.return_value = False
-        self.store.check_delivery_state.side_effect = OptimizationTerminalError(FAILURE)
-        result = self.worker._failure(CLAIM, {"code": "WORKER_CRASH"})
+        self.store.delivery_result.return_value = ExecutionResult(
+            DeliveryOutcome.DEAD_LETTER, error=FAILURE
+        )
+        result = self.worker._failure(CLAIM, {"code": "WORKER_CRASH"}, ENVELOPE)
         self.assertEqual(result, ExecutionResult(DeliveryOutcome.DEAD_LETTER, error=FAILURE))
 
     def test_failed_delivery_state_read_keeps_source_message(self):
@@ -429,7 +493,7 @@ class ConsumerTests(unittest.TestCase):
         process.is_alive.return_value = False
         parent, child = Mock(), Mock()
         parent.poll.return_value = True
-        parent.recv.side_effect = [("claim", CLAIM), EOFError()]
+        parent.recv.side_effect = EOFError()
         with (
             patch.object(context, "Process", return_value=process),
             patch.object(context, "Pipe", return_value=(parent, child)),

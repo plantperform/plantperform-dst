@@ -131,6 +131,33 @@ it('runs Gennemsnit for perioden as saved while it is offered', async () => {
   expect(container.textContent).toBe('optimize')
 })
 
+it('polls through a large-worker handoff and keeps the original start time', async () => {
+  const Inspector = () => {
+    const { syncSimulations } = useOptimizationRunsContext()
+    useEffect(() => syncSimulations([simulation]), [syncSimulations])
+    const run = useOptimizationRun('sim')
+    return createElement('div', { 'data-start': run?.startedAt },
+      createElement(OptimizationBanner, {
+        farmId: 'farm', simulationId: 'sim', optimizationKind: 'optimize',
+        run, fields: [], rotationOptionsError: null,
+      }))
+  }
+  api.fetcher.mockResolvedValueOnce(active)
+    .mockResolvedValueOnce({ ...active, status: 'queued_large' })
+    .mockResolvedValueOnce({ ...active, status: 'in_progress_large' })
+  await act(async () => root.render(
+    createElement(OptimizationRunsProvider, { children: createElement(Inspector) }),
+  ))
+  const start = container.firstElementChild?.getAttribute('data-start')
+
+  await act(async () => vi.advanceTimersByTimeAsync(2000))
+  expect(container.textContent).toContain('Venter på mere hukommelse')
+  await act(async () => vi.advanceTimersByTimeAsync(2000))
+
+  expect(container.textContent).toContain('Kører med mere hukommelse')
+  expect(container.firstElementChild?.getAttribute('data-start')).toBe(start)
+})
+
 it('stops showing running when polling returns failure without saved output', async () => {
   api.fetcher.mockResolvedValue(active)
   await act(async () => root.render(

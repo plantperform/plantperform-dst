@@ -112,6 +112,7 @@ class LocalExecutionTests(unittest.TestCase):
             "input_revision": 0,
             "requested_by": "test@example.com",
             "attempts": 0,
+            "status": "queued",
             "parameters": {
                 "expected_revision": 0,
                 "run_id": run_id,
