@@ -25,7 +25,7 @@ field" column is the name on the wire.
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
 | Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi, Egne sædskifter and Om bedriften in the sidebar, which can be minimised |
 | adgang (til en bedrift, profil eller et sædskifte) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | `memberships` | The users a farm, a profile or an eget sædskifte is shared with, each with a rolle |
-| rolle: læser, redaktør | `MembershipRole`, viewer, editor, `MEMBERSHIP_ROLE_LABELS`, `MEMBERSHIP_ROLE_DESCRIPTIONS`, `DEFAULT_SHARE_ROLE`, `ownRole`, `changeMemberRole` | `role`, `viewer`, `editor` | A læser can see, copy and leave. A redaktør can also change, share and delete. Sharing starts on Læser |
+| rolle: læser, redaktør | `MembershipRole`, viewer, editor, `MEMBERSHIP_ROLE_LABELS`, `MEMBERSHIP_ROLE_DESCRIPTIONS`, `MEMBERSHIP_ROLE_TINTS`, `RoleIcon`, `DEFAULT_SHARE_ROLE`, `ownRole`, `changeMemberRole` | `role`, `viewer`, `editor` | A læser can see, copy and leave. A redaktør can also change, share and delete. Sharing starts on Læser |
 | forlade (en bedrift, profil eller et sædskifte) | leave, `canLeave` | | Removes one's own access. The last redaktør cannot leave |
 | kun se en bedrift | read-only farm, `useFarmReadOnly`, `FarmReadOnlyContext`, `useOwnFarmRole`, `FarmReadOnlyNotice` | | A læser of a farm sees no buttons that change it. A line at the top says "Du kan kun se denne bedrift" and offers Lav en kopi |
 | kopi af en bedrift | `duplicateFarm` | `/duplicate` | A copy named "Kopi af <navn>" with the user as its only redaktør |
