@@ -166,6 +166,10 @@ const OwnRotationEditor = ({
   const loadUndersownCropCodes = useUndersownCropCodeLoader(farmId)
   const allUndersown = useUndersownCropCodes(farmId)
   const changed = isDraftChanged(draft, base)
+  const current = base && {
+    ...base,
+    effectiveRole: definition?.effectiveRole ?? base.effectiveRole,
+  }
   const leaveGuard = useLeaveGuard(changed && !(saving && base === null))
 
   if (
@@ -612,31 +616,31 @@ const OwnRotationEditor = ({
           <h1 className="font-display text-4xl tracking-tight break-words">
             {draft.name.trim() || base?.name || 'Nyt sædskifte'}
           </h1>
-          {base ? <RotationMeta definition={base} /> : null}
+          {current ? <RotationMeta definition={current} /> : null}
         </div>
-        {base ? (
+        {current ? (
           <div className="flex flex-wrap gap-2">
-            {editing || isViewerRotation(base) ? null : (
+            {editing || isViewerRotation(current) ? null : (
               <Button type="button" onClick={() => setEditing(true)}>
                 <Pencil aria-hidden="true" />
                 Rediger
               </Button>
             )}
             <OwnRotationShareButton
-              definition={base}
+              definition={current}
               onLeft={leaveToOverview}
             />
             <Button
               type="button"
               variant="outline"
               disabled={changed || actions.copyingId !== null}
-              loading={actions.copyingId === base.id}
-              onClick={() => void actions.copy(base)}
+              loading={actions.copyingId === current.id}
+              onClick={() => void actions.copy(current)}
             >
               <Copy aria-hidden="true" />
               Kopier
             </Button>
-            {isViewerRotation(base) ? null : (
+            {isViewerRotation(current) ? null : (
               <Button
                 type="button"
                 variant="outline"
