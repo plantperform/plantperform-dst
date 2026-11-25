@@ -32,11 +32,13 @@ import { profilesInUse } from '@/lib/economics-profiles'
 import {
   describeLeaveFarm,
   describeShareFarm,
+  farmCreator,
   MEMBERSHIP_ROLE_LABELS,
   MEMBERSHIP_ROLE_TINTS,
   memberProfileNames,
   memberProfilesLabel,
   otherMemberEmails,
+  sameEmail,
 } from '@/lib/farm-access'
 import { formatCvr } from '@/lib/farm-form'
 import { formatHectares, formatWholeNumber } from '@/lib/field-domain'
@@ -91,6 +93,8 @@ export const FarmAboutPage = ({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const ownEmail = user?.email ?? ''
   const otherEmails = otherMemberEmails(members, ownEmail)
+  const creator = farmCreator(members)
+  const isCreator = creator !== null && sameEmail(creator, ownEmail)
   const access = useMemberAccess({
     name: farm.name,
     members,
@@ -281,6 +285,12 @@ export const FarmAboutPage = ({
               </li>
             ))}
           </ul>
+          {creator ? (
+            <p className="-mt-1 px-6 pb-5 text-[13px] leading-normal text-muted-foreground">
+              Den, der har oprettet bedriften, kan ikke fjernes af andre, og kun
+              opretteren kan slette bedriften.
+            </p>
+          ) : null}
           {access.list.canManage ? (
             <ShareByEmailForm
               {...access.form}
@@ -310,15 +320,21 @@ export const FarmAboutPage = ({
                 alle, der har adgang.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="size-4" aria-hidden="true" />
-              Slet bedrift
-            </Button>
+            {creator === null || isCreator ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Slet bedrift
+              </Button>
+            ) : (
+              <p className="text-[13px] text-muted-foreground">
+                Kun {creator}, der har oprettet bedriften, kan slette den.
+              </p>
+            )}
           </section>
         )}
       </div>
@@ -326,7 +342,11 @@ export const FarmAboutPage = ({
       <ConfirmDialog
         name={confirmEmail}
         title={`Del ${farm.name} med ${confirmEmail}?`}
-        description={describeShareFarm(confirmEmail ?? '', access.form.role)}
+        description={describeShareFarm(
+          confirmEmail ?? '',
+          access.form.role,
+          isCreator ? 'dig' : creator,
+        )}
         confirmLabel="Del bedrift"
         destructive={false}
         onOpenChange={(open) => {

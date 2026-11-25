@@ -101,13 +101,21 @@ export const memberProfileNames = (
 export const memberProfilesLabel = (count: number): string =>
   `Har også ${count === 1 ? 'økonomiprofilen' : 'økonomiprofilerne'}:`
 
+export const farmCreator = (members: FarmMember[]): string | null =>
+  members.find((member) => member.creator)?.email ?? null
+
 export const describeShareFarm = (
   email: string,
   role: MembershipRole,
-): string =>
-  role === 'editor'
-    ? `${email} får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.`
-    : `${email} kan se bedriftens marker og simuleringer og lave en kopi af bedriften, men ikke ændre noget.`
+  creator: string | null,
+): string => {
+  if (role === 'viewer') {
+    return `${email} kan se bedriftens marker og simuleringer og lave en kopi af bedriften, men ikke ændre noget.`
+  }
+  return creator
+    ? `${email} kan ændre marker og simuleringer, dele bedriften med andre og fjerne andres adgang, men ikke fjerne ${creator} eller slette bedriften.`
+    : `${email} får samme adgang som dig og kan ændre marker og simuleringer, dele bedriften med andre, fjerne andres adgang og slette bedriften.`
+}
 
 export const describeFarmAccess = (otherEmails: string[]): string => {
   if (otherEmails.length === 0) return 'Kun dig'
