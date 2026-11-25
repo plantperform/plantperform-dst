@@ -645,6 +645,7 @@ export type RotationDefinition = {
   revision: number
   isStandard: boolean
   canCopy: boolean
+  effectiveRole?: MembershipRole
   createdAt: string | null
   updatedAt: string | null
 }

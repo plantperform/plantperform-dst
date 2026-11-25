@@ -15,6 +15,10 @@ export const MAX_ROTATION_YEARS = 8
 const MAX_OWN_ROTATION_COMBINATIONS = 4096
 export const MAX_OWN_ROTATIONS_IN_SIMULATION = 50
 
+export const isViewerRotation = (
+  definition: Pick<RotationDefinition, 'effectiveRole'>,
+): boolean => definition.effectiveRole === 'viewer'
+
 export type OwnRotationYear = {
   cropCode: number | null
   undersownCropCodes: number[]

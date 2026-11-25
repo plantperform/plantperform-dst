@@ -16,6 +16,7 @@ import {
   draftFromDefinition,
   insertYearAfter,
   isDraftChanged,
+  isViewerRotation,
   keepAllowedUndersownCrops,
   libraryCropOptions,
   libraryUndersownDefaults,
@@ -393,5 +394,13 @@ describe('editing a field with an own rotation', () => {
     expect(allowedUndersownAt(variant, 1, 0)).toEqual([CATCH_CROP])
     expect(allowedUndersownAt(variant, 2, 0)).toEqual([])
     expect(allowedUndersownAt(variant, 0, 0)).toEqual([])
+  })
+})
+
+describe('isViewerRotation', () => {
+  it('marks only a sædskifte shared with the user as a læser', () => {
+    expect(isViewerRotation({ effectiveRole: 'viewer' })).toBe(true)
+    expect(isViewerRotation({ effectiveRole: 'editor' })).toBe(false)
+    expect(isViewerRotation({})).toBe(false)
   })
 })

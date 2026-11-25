@@ -5,6 +5,7 @@ import type { RotationDefinition } from '@/api/types'
 import { MemberShareButton } from '@/components/farm/MemberShareButton'
 import { forgetDefinition } from '@/components/farm/own-rotations-state'
 import { describeLeaveRotation } from '@/lib/farm-access'
+import { isViewerRotation } from '@/lib/own-rotations'
 
 type OwnRotationShareButtonProps = {
   definition: RotationDefinition
@@ -29,7 +30,7 @@ export const OwnRotationShareButton = ({
       await forgetDefinition(definition.id)
       onLeft?.()
     }}
-    viewer={false}
+    viewer={isViewerRotation(definition)}
     size={size}
   />
 )

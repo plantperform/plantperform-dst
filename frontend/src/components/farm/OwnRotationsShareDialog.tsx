@@ -5,6 +5,7 @@ import { addMember } from '@/api/members'
 import { rotationDefinitionMembersPath } from '@/api/own-rotations'
 import type { MembershipRole, RotationDefinition } from '@/api/types'
 import { ShareByEmailForm } from '@/components/farm/MemberAccess'
+import { useRotationSharedWith } from '@/components/farm/own-rotations-state'
 import { useToast } from '@/components/toast'
 import {
   Dialog,
@@ -16,9 +17,19 @@ import {
 import { formatCount, formatNameList } from '@/lib/economics'
 import {
   DEFAULT_SHARE_ROLE,
+  describeFarmAccess,
   notShared,
   shareEmailError,
 } from '@/lib/farm-access'
+
+const SharedWithNote = ({ definitionId }: { definitionId: string }) => {
+  const others = useRotationSharedWith(definitionId)
+  return others ? (
+    <span className="shrink-0 text-[13px] text-muted-foreground">
+      {describeFarmAccess(others)}
+    </span>
+  ) : null
+}
 
 type OwnRotationsShareDialogProps = {
   definitions: RotationDefinition[]
@@ -93,8 +104,12 @@ export const OwnRotationsShareDialog = ({
         <div className="-mx-6 border-t">
           <ul className="max-h-48 space-y-1 overflow-y-auto px-6 py-3 text-sm">
             {definitions.map((definition) => (
-              <li key={definition.id} className="truncate">
-                {definition.name}
+              <li
+                key={definition.id}
+                className="flex items-baseline justify-between gap-3"
+              >
+                <span className="truncate">{definition.name}</span>
+                <SharedWithNote definitionId={definition.id} />
               </li>
             ))}
           </ul>
