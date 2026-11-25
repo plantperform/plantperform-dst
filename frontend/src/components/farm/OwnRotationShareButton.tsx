@@ -29,6 +29,7 @@ export const OwnRotationShareButton = ({
       await forgetDefinition(definition.id)
       onLeft?.()
     }}
+    viewer={false}
     size={size}
   />
 )

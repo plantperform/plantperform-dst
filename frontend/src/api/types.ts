@@ -308,6 +308,7 @@ export type EconomicsModule = {
   name: string
   revision: number
   overrides: EconomicsOverrides
+  effectiveRole?: MembershipRole
 }
 
 export type CreateSimulationInput = {

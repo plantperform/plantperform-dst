@@ -19,6 +19,7 @@ import {
   freeName,
   isEconomicsCurrent,
   isProfileApplied,
+  isViewerProfile,
   profileForSimulation,
   profileNameError,
   profilesInUse,
@@ -306,6 +307,22 @@ describe('economics profiles', () => {
         ...idle,
         result: { status: 'queued' },
       } as never),
+    ).toBe(false)
+  })
+})
+describe('isViewerProfile', () => {
+  it('marks only a shared profile the user can see but not change', () => {
+    const profile = {
+      id: 'p1',
+      name: 'Delt',
+      overrides: NO_OVERRIDES,
+      revision: 1,
+    }
+    expect(isViewerProfile({ ...profile, effectiveRole: 'viewer' })).toBe(true)
+    expect(isViewerProfile({ ...profile, effectiveRole: 'editor' })).toBe(false)
+    expect(isViewerProfile(profile)).toBe(false)
+    expect(
+      isViewerProfile({ ...STANDARD_PROFILE, effectiveRole: 'viewer' }),
     ).toBe(false)
   })
 })

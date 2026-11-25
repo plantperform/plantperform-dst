@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import {
   createEconomicsModule,
   deleteEconomicsModule,
+  duplicateEconomicsModule,
   economicsModulesKey,
   recalculateSimulationEconomics,
   selectSimulationEconomics,
@@ -304,6 +305,23 @@ export const useEconomicsProfilesStore = (
     nameError: (name: string, profileId?: string) =>
       profileNameError(profiles, name, profileId),
     newProfileName: (baseName: string) => freeName(profiles, baseName),
+    copyProfile: async (profileId: string): Promise<string | null> => {
+      const source = profiles.find((profile) => profile.id === profileId)
+      if (!source) return null
+      try {
+        const copy = await duplicateEconomicsModule(
+          profileId,
+          freeName(profiles, `Kopi af ${source.name}`),
+        )
+        await mutateModules((current = []) => [...current, copy], {
+          revalidate: false,
+        })
+        return copy.id
+      } catch {
+        showError('Profilen kunne ikke kopieres. Prøv igen.')
+        return null
+      }
+    },
     saveProfile: async (
       profileId: string,
       name: string,

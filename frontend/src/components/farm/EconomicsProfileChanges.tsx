@@ -12,8 +12,8 @@ import {
 type EconomicsProfileChangesProps = {
   changes: ProfileChange[]
   className?: string
-  onRestore: (change: ProfileChange) => void
-  onRestoreAll: () => void
+  onRestore?: (change: ProfileChange) => void
+  onRestoreAll?: () => void
 }
 
 export const EconomicsProfileChanges = ({
@@ -30,7 +30,7 @@ export const EconomicsProfileChanges = ({
         <h2 id={titleId} className="text-sm font-semibold">
           {profileChangesTitle(changes.length)}
         </h2>
-        {changes.length > 0 ? (
+        {changes.length > 0 && onRestoreAll ? (
           <Button
             type="button"
             variant="outline"
@@ -60,10 +60,12 @@ export const EconomicsProfileChanges = ({
                 <span className="text-muted-foreground">{change.from} → </span>
                 <ChangedValue>{change.to}</ChangedValue>
               </span>
-              <RestoreButton
-                label={`${change.label} for ${crops}`}
-                onRestore={() => onRestore(change)}
-              />
+              {onRestore ? (
+                <RestoreButton
+                  label={`${change.label} for ${crops}`}
+                  onRestore={() => onRestore(change)}
+                />
+              ) : null}
             </li>
           )
         })}

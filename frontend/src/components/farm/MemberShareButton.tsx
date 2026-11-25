@@ -1,4 +1,4 @@
-import { UserPlus } from 'lucide-react'
+import { UserPlus, Users } from 'lucide-react'
 import type { ComponentProps, FormEvent } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -111,27 +111,34 @@ const Members = ({
 
 type MemberShareButtonProps = MembersProps & {
   description: string
+  viewer: boolean
   size?: ComponentProps<typeof Button>['size']
 }
 
 export const MemberShareButton = ({
   description,
+  viewer,
   size,
   ...members
-}: MemberShareButtonProps) => (
-  <Dialog>
-    <DialogTrigger asChild>
-      <Button variant="outline" size={size} aria-label={`Del ${members.name}`}>
-        <UserPlus aria-hidden="true" />
-        Del
-      </Button>
-    </DialogTrigger>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Del {members.name}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
-      <Members {...members} />
-    </DialogContent>
-  </Dialog>
-)
+}: MemberShareButtonProps) => {
+  const action = viewer ? 'Adgang' : 'Del'
+  const title = viewer ? `Adgang til ${members.name}` : `Del ${members.name}`
+  const Icon = viewer ? Users : UserPlus
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size={size} aria-label={title}>
+          <Icon aria-hidden="true" />
+          {action}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <Members {...members} />
+      </DialogContent>
+    </Dialog>
+  )
+}
