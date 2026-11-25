@@ -7,12 +7,14 @@ import {
   describeFarmAccess,
   describeLeaveFarm,
   describeLeaveProfile,
+  describeKeptRoles,
   describeShareFarm,
   farmCreator,
   memberProfileNames,
   memberProfilesLabel,
   notShared,
   otherMemberEmails,
+  otherRoleHolders,
   ownRole,
   shareEmailError,
 } from '@/lib/farm-access'
@@ -34,6 +36,28 @@ describe('notShared', () => {
         ],
       ),
     ).toEqual(['fejlede'])
+  })
+})
+
+describe('otherRoleHolders and describeKeptRoles', () => {
+  it('finds the items where the member keeps another role', () => {
+    expect(
+      otherRoleHolders(
+        ['ny', 'samme rolle', 'redaktør'],
+        [
+          [],
+          [{ email: 'Karen.Holm@example.com', role: 'viewer' }],
+          [{ email: 'karen.holm@example.com', role: 'editor' }],
+        ],
+        'karen.holm@example.com',
+        'viewer',
+      ),
+    ).toEqual(['redaktør'])
+    expect(
+      describeKeptRoles('karen.holm@example.com', ['Korn og raps'], 'viewer'),
+    ).toBe(
+      'karen.holm@example.com har allerede adgang til Korn og raps som redaktør. Rollen er ikke ændret.',
+    )
   })
 })
 

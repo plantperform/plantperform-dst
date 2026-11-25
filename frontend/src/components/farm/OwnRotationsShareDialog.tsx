@@ -1,9 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { mutate } from 'swr'
 
+import { fetcher } from '@/api/client'
 import { addMember } from '@/api/members'
 import { rotationDefinitionMembersPath } from '@/api/own-rotations'
-import type { MembershipRole, RotationDefinition } from '@/api/types'
+import type {
+  FarmMember,
+  MembershipRole,
+  RotationDefinition,
+} from '@/api/types'
 import { ShareByEmailForm } from '@/components/farm/MemberAccess'
 import { useRotationSharedWith } from '@/components/farm/own-rotations-state'
 import { useToast } from '@/components/toast'
@@ -18,7 +23,9 @@ import { formatCount, formatNameList } from '@/lib/economics'
 import {
   DEFAULT_SHARE_ROLE,
   describeFarmAccess,
+  describeKeptRoles,
   notShared,
+  otherRoleHolders,
   shareEmailError,
 } from '@/lib/farm-access'
 
@@ -44,7 +51,7 @@ export const OwnRotationsShareDialog = ({
   onOpenChange,
   onShared,
 }: OwnRotationsShareDialogProps) => {
-  const { showToast } = useToast()
+  const { showToast, showError } = useToast()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<MembershipRole>(DEFAULT_SHARE_ROLE)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +71,13 @@ export const OwnRotationsShareDialog = ({
     const results = await Promise.allSettled(
       paths.map((path) => addMember(path, address, role)),
     )
-    await Promise.all(paths.map((path) => mutate(path)))
+    const rosters = await Promise.all(
+      paths.map((path) =>
+        mutate(path, fetcher<FarmMember[]>(path), { revalidate: false }).catch(
+          () => undefined,
+        ),
+      ),
+    )
     setSharing(false)
     const failed = notShared(definitions, results)
     if (failed.length === definitions.length) {
@@ -79,7 +92,21 @@ export const OwnRotationsShareDialog = ({
       )
       return
     }
-    showToast(`${count} er delt med ${address}`)
+    const kept = otherRoleHolders(definitions, rosters, address, role)
+    if (kept.length < definitions.length) {
+      showToast(
+        `${formatCount(definitions.length - kept.length, 'sædskifte', 'sædskifter')} er delt med ${address}`,
+      )
+    }
+    if (kept.length > 0) {
+      showError(
+        describeKeptRoles(
+          address,
+          kept.map((definition) => definition.name),
+          role,
+        ),
+      )
+    }
     setEmail('')
     onShared()
   }

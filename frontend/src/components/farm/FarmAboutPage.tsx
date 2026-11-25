@@ -30,6 +30,7 @@ import { formatNameList } from '@/lib/economics'
 import { totalFieldAreaHa } from '@/lib/crop-area-limits'
 import { profilesInUse } from '@/lib/economics-profiles'
 import {
+  describeKeptRoles,
   describeLeaveFarm,
   describeShareFarm,
   farmCreator,
@@ -38,6 +39,7 @@ import {
   memberProfileNames,
   memberProfilesLabel,
   otherMemberEmails,
+  otherRoleHolders,
   sameEmail,
 } from '@/lib/farm-access'
 import { formatCvr } from '@/lib/farm-form'
@@ -151,8 +153,9 @@ export const FarmAboutPage = ({
         .filter((profile) => ids.includes(profile.id))
         .map((profile) =>
           addEconomicsModuleMember(profile.id, email, access.form.role).then(
-            () => ({ name: profile.name, shared: true }),
+            () => ({ id: profile.id, name: profile.name, shared: true }),
             (error: unknown) => ({
+              id: profile.id,
               name: profile.name,
               shared: error instanceof ApiError && error.status === 409,
             }),
@@ -165,22 +168,35 @@ export const FarmAboutPage = ({
       async () => {
         await addMember(farmMembersPath(farm.id), email, access.form.role)
         const profiles = await shareProfiles(email, ids)
-        await Promise.all([
+        const [, rosters] = await Promise.all([
           mutate(farmMembersPath(farm.id)),
           refreshProfileMembers(),
         ])
-        const names = (shared: boolean) =>
-          profiles
-            .filter((profile) => profile.shared === shared)
-            .map((profile) => profile.name)
-        showToast(
-          `${email} har nu adgang til ${formatNameList([farm.name, ...names(true)])}`,
+        const shared = profiles.filter((profile) => profile.shared)
+        const failed = profiles.filter((profile) => !profile.shared)
+        const kept = otherRoleHolders(
+          shared,
+          shared.map((profile) => rosters?.[profile.id]),
+          email,
+          access.form.role,
         )
-        if (names(false).length > 0) {
-          showError(
-            `${formatNameList(names(false))} kunne ikke deles med ${email}. Del dem fra Økonomi.`,
-          )
-        }
+        const names = (list: typeof profiles) =>
+          list.map((profile) => profile.name)
+        showToast(
+          `${email} har nu adgang til ${formatNameList([
+            farm.name,
+            ...names(shared.filter((profile) => !kept.includes(profile))),
+          ])}`,
+        )
+        const problems = [
+          failed.length > 0
+            ? `${formatNameList(names(failed))} kunne ikke deles med ${email}. Del dem fra Økonomi.`
+            : null,
+          kept.length > 0
+            ? describeKeptRoles(email, names(kept), access.form.role)
+            : null,
+        ].filter((problem) => problem !== null)
+        if (problems.length > 0) showError(problems.join(' '))
       },
       () =>
         'Kunne ikke dele bedriften. Personen skal have en bekræftet konto i PlantPerform.',

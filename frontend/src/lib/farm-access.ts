@@ -1,6 +1,7 @@
 import { ApiError } from '@/api/client'
 import type { FarmMember, MembershipRole } from '@/api/types'
 import { validateEmail } from '@/lib/auth-form'
+import { formatNameList } from '@/lib/economics'
 
 export const shareEmailError = (
   email: string,
@@ -27,6 +28,19 @@ export const notShared = <T>(
 export const sameEmail = (left: string, right: string) =>
   left.toLowerCase() === right.toLowerCase()
 
+export const otherRoleHolders = <T>(
+  items: T[],
+  rosters: (FarmMember[] | undefined)[],
+  email: string,
+  role: MembershipRole,
+): T[] =>
+  items.filter((_, index) => {
+    const member = rosters[index]?.find((entry) =>
+      sameEmail(entry.email, email),
+    )
+    return member !== undefined && member.role !== role
+  })
+
 export const otherMemberEmails = (
   members: FarmMember[],
   ownEmail: string,
@@ -51,6 +65,13 @@ export const MEMBERSHIP_ROLE_TINTS: Record<MembershipRole, string> = {
 }
 
 export const DEFAULT_SHARE_ROLE: MembershipRole = 'viewer'
+
+export const describeKeptRoles = (
+  email: string,
+  names: string[],
+  role: MembershipRole,
+): string =>
+  `${email} har allerede adgang til ${formatNameList(names)} som ${MEMBERSHIP_ROLE_LABELS[role === 'viewer' ? 'editor' : 'viewer'].toLowerCase()}. Rollen er ikke ændret.`
 
 export const ownRole = (
   members: FarmMember[],
