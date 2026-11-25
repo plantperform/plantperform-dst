@@ -16,6 +16,7 @@ import {
 import { profileChanges, type EconomicsAssumptions } from '@/lib/economics'
 import {
   describeProfileOption,
+  isViewerProfile,
   STANDARD_PROFILE_ID,
 } from '@/lib/economics-profiles'
 
@@ -82,19 +83,21 @@ export const EconomicsProfileMenu = ({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() =>
-            startGuide({
-              fromProfileId: profile.id,
-              simulationId: simulation.id,
-            })
-          }
-        >
-          <Pencil className="mr-2 size-4 shrink-0" aria-hidden="true" />
-          {isStandard || !known
-            ? 'Tilpas økonomien til bedriften'
-            : 'Tilpas i guiden'}
-        </DropdownMenuItem>
+        {isViewerProfile(profile) ? null : (
+          <DropdownMenuItem
+            onSelect={() =>
+              startGuide({
+                fromProfileId: profile.id,
+                simulationId: simulation.id,
+              })
+            }
+          >
+            <Pencil className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            {isStandard || !known
+              ? 'Tilpas økonomien til bedriften'
+              : 'Tilpas i guiden'}
+          </DropdownMenuItem>
+        )}
         {known ? (
           <DropdownMenuItem asChild>
             <Link
