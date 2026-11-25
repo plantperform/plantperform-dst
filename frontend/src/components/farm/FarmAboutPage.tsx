@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatNameList } from '@/lib/economics'
 import { totalFieldAreaHa } from '@/lib/crop-area-limits'
-import { profilesInUse } from '@/lib/economics-profiles'
+import { isViewerProfile, profilesInUse } from '@/lib/economics-profiles'
 import {
   describeKeptRoles,
   describeLeaveFarm,
@@ -76,7 +76,10 @@ export const FarmAboutPage = ({
   const { showToast, showError } = useToast()
   const economics = useEconomicsProfiles()
   const readOnly = useFarmReadOnly()
-  const farmProfiles = profilesInUse(economics.ownProfiles ?? [], simulations)
+  const farmProfiles = profilesInUse(
+    economics.ownProfiles ?? [],
+    simulations,
+  ).filter((profile) => !isViewerProfile(profile))
   const { data: profileMembers, mutate: refreshProfileMembers } =
     useEconomicsModulesMembers(farmProfiles.map((profile) => profile.id))
   const sharedProfiles = farmProfiles.map((profile) => ({
