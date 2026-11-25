@@ -109,7 +109,13 @@ const FarmDetail = () => {
   const farmPath = `/farms/${farmId}`
   const { user } = useAuth()
   const farmView = useFarmView(farmId)
-  const { isLoading: membersLoading } = useFarmMembers(farmId)
+  const {
+    data: members,
+    error: membersError,
+    isLoading: membersLoading,
+    isValidating: membersValidating,
+    mutate: retryMembers,
+  } = useFarmMembers(farmId)
   const [retryingHistory, setRetryingHistory] = useState(false)
   const email = user?.email ?? ''
   const readOnly = useFarmReadOnly()
@@ -213,20 +219,26 @@ const FarmDetail = () => {
   const fieldsFailed = Boolean(fieldsError) && fieldsData === undefined
   const simulationsFailed =
     Boolean(simulationsError) && simulationsData === undefined
-  const loadFailed = farmFailed || fieldsFailed || simulationsFailed
+  const membersFailed = Boolean(membersError) && members === undefined
+  const loadFailed =
+    farmFailed || fieldsFailed || simulationsFailed || membersFailed
   const loadFailedMessage = farmFailed
     ? 'Kunne ikke hente bedriften.'
     : fieldsFailed
       ? 'Kunne ikke hente bedriftens marker.'
-      : 'Kunne ikke hente bedriftens simuleringer.'
+      : simulationsFailed
+        ? 'Kunne ikke hente bedriftens simuleringer.'
+        : 'Kunne ikke hente, hvem der har adgang til bedriften.'
   const retryingLoad =
     (farmFailed && farmValidating) ||
     (fieldsFailed && fieldsValidating) ||
-    (simulationsFailed && simulationsValidating)
+    (simulationsFailed && simulationsValidating) ||
+    (membersFailed && membersValidating)
   const retryLoad = () => {
     if (farmFailed) void retryFarm()
     if (fieldsFailed) void retryFields()
     if (simulationsFailed) void retrySimulations()
+    if (membersFailed) void retryMembers()
   }
   const isReady =
     farm !== undefined &&
