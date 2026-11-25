@@ -1,17 +1,90 @@
-import { LogOut, UserPlus, X } from 'lucide-react'
+import { ChevronDown, Eye, LogOut, Pencil, UserPlus, X } from 'lucide-react'
 import { useId, type FormEvent, type ReactNode } from 'react'
 
-import type { FarmMember } from '@/api/types'
+import type { FarmMember, MembershipRole } from '@/api/types'
 import { TruncatedTooltip } from '@/components/ui/app-tooltip'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { FieldError } from '@/components/ui/field-error'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Pending } from '@/components/ui/pending'
+import {
+  SegmentedControl,
+  type SegmentedControlOption,
+} from '@/components/ui/segmented-control'
+import {
+  MEMBERSHIP_ROLE_DESCRIPTIONS,
+  MEMBERSHIP_ROLE_LABELS,
+} from '@/lib/farm-access'
 import { cn } from '@/lib/utils'
 
 const ROW_ACTION_CLASS =
   'shrink-0 gap-1.5 text-muted-foreground hover:text-destructive'
+
+const ROLES = Object.keys(MEMBERSHIP_ROLE_LABELS) as MembershipRole[]
+
+const ROLE_ICONS = { viewer: Eye, editor: Pencil }
+
+const ROLE_OPTIONS = ROLES.map(
+  (value): SegmentedControlOption<MembershipRole> => ({
+    value,
+    label: MEMBERSHIP_ROLE_LABELS[value],
+    icon: ROLE_ICONS[value],
+    title: MEMBERSHIP_ROLE_DESCRIPTIONS[value],
+  }),
+)
+
+type RoleMenuProps = {
+  email: string
+  role: MembershipRole
+  changing: boolean
+  onChange: (role: MembershipRole) => void
+}
+
+const RoleMenu = ({ email, role, changing, onChange }: RoleMenuProps) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="shrink-0 gap-1 text-muted-foreground"
+        loading={changing}
+        aria-label={`Rolle for ${email}: ${MEMBERSHIP_ROLE_LABELS[role]}`}
+      >
+        {MEMBERSHIP_ROLE_LABELS[role]}
+        {changing ? null : (
+          <ChevronDown className="size-3.5" aria-hidden="true" />
+        )}
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-56">
+      {ROLES.map((option) => (
+        <DropdownMenuCheckboxItem
+          key={option}
+          checked={option === role}
+          className="py-2"
+          onSelect={() => {
+            if (option !== role) onChange(option)
+          }}
+        >
+          <span>
+            <span className="block">{MEMBERSHIP_ROLE_LABELS[option]}</span>
+            <span className="block text-xs text-muted-foreground">
+              {MEMBERSHIP_ROLE_DESCRIPTIONS[option]}
+            </span>
+          </span>
+        </DropdownMenuCheckboxItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+)
 
 type MemberListProps = {
   members: FarmMember[]
@@ -20,9 +93,13 @@ type MemberListProps = {
   retrying: boolean
   onRetry: () => void
   ownEmail: string
+  canManage: boolean
+  canLeave: boolean
   removingEmail: string | null
-  removeError: string | null
+  changingEmail: string | null
+  memberError: string | null
   onRemove: (email: string) => void
+  onChangeRole: (email: string, role: MembershipRole) => void
   onLeave: () => void
   describeMember?: (email: string) => ReactNode
 }
@@ -34,9 +111,13 @@ export const MemberList = ({
   retrying,
   onRetry,
   ownEmail,
+  canManage,
+  canLeave,
   removingEmail,
-  removeError,
+  changingEmail,
+  memberError,
   onRemove,
+  onChangeRole,
   onLeave,
   describeMember,
 }: MemberListProps) => (
@@ -78,8 +159,20 @@ export const MemberList = ({
                   </p>
                 ) : null}
               </div>
+              {canManage && !isSelf ? (
+                <RoleMenu
+                  email={member.email}
+                  role={member.role}
+                  changing={changingEmail === member.email}
+                  onChange={(role) => onChangeRole(member.email, role)}
+                />
+              ) : (
+                <span className="shrink-0 text-[13px] text-muted-foreground">
+                  {MEMBERSHIP_ROLE_LABELS[member.role]}
+                </span>
+              )}
               {isSelf ? (
-                members.length > 1 ? (
+                canLeave ? (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -93,7 +186,7 @@ export const MemberList = ({
                     Forlad
                   </Button>
                 ) : null
-              ) : (
+              ) : canManage ? (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -107,18 +200,18 @@ export const MemberList = ({
                   )}
                   Fjern
                 </Button>
-              )}
+              ) : null}
             </li>
           )
         })}
       </ul>
     )}
-    {removeError ? (
+    {memberError ? (
       <p
         role="alert"
         className="border-b px-6 py-3 text-[13px] text-destructive"
       >
-        {removeError}
+        {memberError}
       </p>
     ) : null}
   </>
@@ -126,18 +219,22 @@ export const MemberList = ({
 
 type ShareByEmailFormProps = {
   email: string
+  role: MembershipRole
   error: string | null
   sharing: boolean
   onEmailChange: (email: string) => void
+  onRoleChange: (role: MembershipRole) => void
   onSubmit: (event: FormEvent) => void
   className?: string
 }
 
 export const ShareByEmailForm = ({
   email,
+  role,
   error,
   sharing,
   onEmailChange,
+  onRoleChange,
   onSubmit,
   className,
 }: ShareByEmailFormProps) => {
@@ -152,7 +249,7 @@ export const ShareByEmailForm = ({
       <Label htmlFor={`${id}-email`} className="text-[13px] font-normal">
         Del med
       </Label>
-      <div className="mt-1.5 flex gap-2.5">
+      <div className="mt-1.5 flex flex-wrap gap-2">
         <Input
           id={`${id}-email`}
           type="email"
@@ -161,8 +258,17 @@ export const ShareByEmailForm = ({
           value={email}
           aria-invalid={error ? true : undefined}
           aria-describedby={`${id}-help ${id}-error`}
-          className="min-w-0 flex-1 bg-card"
+          className="min-w-36 flex-1 bg-card"
           onChange={(event) => onEmailChange(event.target.value)}
+        />
+        <SegmentedControl
+          aria-label="Rolle"
+          value={role}
+          options={ROLE_OPTIONS}
+          labelClassName=""
+          className="h-10 p-1"
+          optionClassName="h-full px-3.5 text-sm"
+          onValueChange={onRoleChange}
         />
         <Button type="submit" className="shrink-0" loading={sharing}>
           {sharing ? null : <UserPlus className="size-4" aria-hidden="true" />}

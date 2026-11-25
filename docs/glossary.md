@@ -24,7 +24,9 @@ field" column is the name on the wire.
 | fornavn, efternavn | `firstName`, `lastName` | | `UserName`; kept in the browser until the backend stores a name on the user |
 | Om bedriften | `FarmAboutPage`, about | | The farm's details, who has access to it, and deleting it |
 | Bedriften (gruppe i sidepanelet) | farm group, `farmGroupOpen` | | Økonomi, Egne sædskifter and Om bedriften in the sidebar, which can be minimised |
-| adgang (til en bedrift, profil eller et sædskifte) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | | The users a farm, a profile or an eget sædskifte is shared with |
+| adgang (til en bedrift, profil eller et sædskifte) | access, `FarmMember`, `MemberList`, `useMemberAccess`, `MemberShareButton`, `useMembers` | `memberships` | The users a farm, a profile or an eget sædskifte is shared with, each with a rolle |
+| rolle: læser, redaktør | `MembershipRole`, viewer, editor, `MEMBERSHIP_ROLE_LABELS`, `MEMBERSHIP_ROLE_DESCRIPTIONS`, `DEFAULT_SHARE_ROLE`, `ownRole`, `changeMemberRole` | `role`, `viewer`, `editor` | A læser can see, copy and leave. A redaktør can also change, share and delete. Sharing starts on Læser |
+| forlade (en bedrift, profil eller et sædskifte) | leave, `canLeave` | | Removes one's own access. The last redaktør cannot leave |
 | kvittering | toast, `useToast` | | The short message at the bottom after an action |
 
 ## Catchments and quota
@@ -101,7 +103,7 @@ field" column is the name on the wire.
 | brug i en ny simulering | `InitialRotations`, `initialRotations`, `onUseInSimulation`, `newSimulationRotations` | | Opens Ny simulering on top of the eget sædskifte, in its driftsform and with it chosen |
 | udgave (af et eget sædskifte) | variant | `variants` | A crop sequence of an eget sædskifte with its virkemidler. A copy from the library keeps the library's variants |
 | kopi af et sædskifte | `duplicateRotationDefinition`, `LibraryRotationCopyDialog` | `/duplicate` | A new eget sædskifte with the same years and virkemidler. A library sædskifte can only be copied when it is chosen in a simulation on one of the user's farms (`canCopy`) |
-| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `members` | Shares the eget sædskifte as an editor through the current sharing screen |
+| dele et sædskifte | `OwnRotationShareButton`, `rotationDefinitionMembersPath` | `memberships` | Shares the eget sædskifte as a læser or a redaktør |
 | egne sædskifter i Ny simulering | `ownRotationVariantsOf`, `selectRotationsWithinLimit`, `fitsFarmingSystem`, `MAX_OWN_ROTATIONS_IN_SIMULATION` | `dyrkningssystem` `""` | The category Egne sædskifter has no driftsform (`croppingSystem: null`), so it fits every simulation and never counts as the other driftsform. At most 50 can be chosen in a simulation |
 | navn på et eget sædskifte | `rotationNamesOf`, `RotationShare.name` | `name` | Shown instead of "Sædskifte" and the id in the Sædskifter tab, on the map and in the column Sædskifte nr. |
 | rediger manuelt med et eget sædskifte | `ownVariantToken`, `ownVariantOf`, `allowedUndersownAt` | `rotationGroups` | A field on an eget sædskifte starts on the variant with its virkemidler, and each year offers only the virkemiddel the sædskifte has in that year, also when the start year is shifted. The definitions come from the simulation or the last run |

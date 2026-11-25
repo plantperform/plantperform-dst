@@ -8,8 +8,11 @@ export type TokenResponse = {
   expiresIn: number
 }
 
+export type MembershipRole = 'editor' | 'viewer'
+
 export type FarmMember = {
   email: string
+  role: MembershipRole
 }
 
 export type Farm = {

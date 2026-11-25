@@ -3,7 +3,7 @@ import { mutate } from 'swr'
 
 import { addMember } from '@/api/members'
 import { rotationDefinitionMembersPath } from '@/api/own-rotations'
-import type { RotationDefinition } from '@/api/types'
+import type { MembershipRole, RotationDefinition } from '@/api/types'
 import { ShareByEmailForm } from '@/components/farm/MemberAccess'
 import { useToast } from '@/components/toast'
 import {
@@ -14,7 +14,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { formatCount, formatNameList } from '@/lib/economics'
-import { notShared, shareEmailError } from '@/lib/farm-access'
+import {
+  DEFAULT_SHARE_ROLE,
+  notShared,
+  shareEmailError,
+} from '@/lib/farm-access'
 
 type OwnRotationsShareDialogProps = {
   definitions: RotationDefinition[]
@@ -31,6 +35,7 @@ export const OwnRotationsShareDialog = ({
 }: OwnRotationsShareDialogProps) => {
   const { showToast } = useToast()
   const [email, setEmail] = useState('')
+  const [role, setRole] = useState<MembershipRole>(DEFAULT_SHARE_ROLE)
   const [error, setError] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const count = formatCount(definitions.length, 'sædskifte', 'sædskifter')
@@ -46,7 +51,7 @@ export const OwnRotationsShareDialog = ({
       rotationDefinitionMembersPath(definition.id),
     )
     const results = await Promise.allSettled(
-      paths.map((path) => addMember(path, address)),
+      paths.map((path) => addMember(path, address, role)),
     )
     await Promise.all(paths.map((path) => mutate(path)))
     setSharing(false)
@@ -80,8 +85,9 @@ export const OwnRotationsShareDialog = ({
         <DialogHeader>
           <DialogTitle>Del {count}</DialogTitle>
           <DialogDescription>
-            Alle, sædskifterne er delt med, kan vælge dem i simuleringer på
-            deres egne bedrifter og rette, dele og slette dem.
+            Læsere kan se sædskifterne, vælge dem i simuleringer på deres egne
+            bedrifter og lave en kopi. Redaktører kan også rette, dele og slette
+            dem.
           </DialogDescription>
         </DialogHeader>
         <div className="-mx-6 border-t">
@@ -94,6 +100,7 @@ export const OwnRotationsShareDialog = ({
           </ul>
           <ShareByEmailForm
             email={email}
+            role={role}
             error={error}
             sharing={sharing}
             className="border-t pb-0"
@@ -101,6 +108,7 @@ export const OwnRotationsShareDialog = ({
               setEmail(value)
               setError(null)
             }}
+            onRoleChange={setRole}
             onSubmit={(event) => void share(event)}
           />
         </div>

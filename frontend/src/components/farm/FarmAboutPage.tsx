@@ -8,8 +8,8 @@ import {
   addEconomicsModuleMember,
   useEconomicsModulesMembers,
 } from '@/api/economics'
-import { farmMembersKey, farmsKey, useFarmMembers } from '@/api/hooks'
-import { addFarmMember, removeFarmMember } from '@/api/mutations'
+import { farmMembersPath, farmsKey, useFarmMembers } from '@/api/hooks'
+import { addMember, changeMemberRole, removeMember } from '@/api/members'
 import type { Farm, Simulation } from '@/api/types'
 import { useAuth } from '@/auth/context'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
@@ -69,11 +69,14 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
     name: farm.name,
     members,
     ownEmail,
-    removeMember: (email) => removeFarmMember(farm.id, email),
+    removeMember: (email) => removeMember(farmMembersPath(farm.id), email),
+    changeRole: (email, role) =>
+      changeMemberRole(farmMembersPath(farm.id), email, role),
     onRemoved: async (email) => {
-      await mutate(farmMembersKey(farm.id))
+      await mutate(farmMembersPath(farm.id))
       showToast(`${email} har ikke længere adgang`)
     },
+    onRoleChanged: () => mutate(farmMembersPath(farm.id)),
     onLeft: async () => {
       await mutate(farmsKey)
       showToast(`Du har forladt ${farm.name}`)
@@ -110,7 +113,7 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
       farmProfiles
         .filter((profile) => ids.includes(profile.id))
         .map((profile) =>
-          addEconomicsModuleMember(profile.id, email).then(
+          addEconomicsModuleMember(profile.id, email, access.form.role).then(
             () => ({ name: profile.name, shared: true }),
             (error: unknown) => ({
               name: profile.name,
@@ -123,10 +126,10 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
   const share = (email: string, ids: string[]) =>
     access.share(
       async () => {
-        await addFarmMember(farm.id, email)
+        await addMember(farmMembersPath(farm.id), email, access.form.role)
         const profiles = await shareProfiles(email, ids)
         await Promise.all([
-          mutate(farmMembersKey(farm.id)),
+          mutate(farmMembersPath(farm.id)),
           refreshProfileMembers(),
         ])
         const names = (shared: boolean) =>
@@ -201,8 +204,8 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
               Adgang
             </h2>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              Alle med adgang kan det samme: se marker, oprette simuleringer og
-              dele bedriften videre.
+              Redaktører kan ændre marker og simuleringer og dele bedriften.
+              Læsere kan se den og lave en kopi.
             </p>
           </div>
           <MemberList
@@ -213,11 +216,13 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
             onRetry={() => void retryMembers()}
             describeMember={describeMember}
           />
-          <ShareByEmailForm
-            {...access.form}
-            className="bg-background/50"
-            onSubmit={confirmShare}
-          />
+          {access.list.canManage ? (
+            <ShareByEmailForm
+              {...access.form}
+              className="bg-background/50"
+              onSubmit={confirmShare}
+            />
+          ) : null}
         </Card>
 
         <Card
@@ -248,7 +253,7 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
       <ConfirmDialog
         name={confirmEmail}
         title={`Del ${farm.name} med ${confirmEmail}?`}
-        description={describeShareFarm(confirmEmail ?? '')}
+        description={describeShareFarm(confirmEmail ?? '', access.form.role)}
         confirmLabel="Del bedrift"
         destructive={false}
         onOpenChange={(open) => {
@@ -278,8 +283,9 @@ export const FarmAboutPage = ({ farm, simulations }: FarmAboutPageProps) => {
               </label>
             ))}
             <p className="text-[13px] text-muted-foreground">
-              Den, du deler med, kan også rette, dele og slette de profiler, du
-              vælger.
+              {access.form.role === 'editor'
+                ? 'Den, du deler med, kan også rette, dele og slette de profiler, du vælger.'
+                : 'Den, du deler med, kan også se og bruge de profiler, du vælger, på sine egne bedrifter.'}
             </p>
           </fieldset>
         ) : null}

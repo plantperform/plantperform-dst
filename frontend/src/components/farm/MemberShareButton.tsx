@@ -2,7 +2,12 @@ import { UserPlus } from 'lucide-react'
 import type { ComponentProps, FormEvent } from 'react'
 
 import { ApiError } from '@/api/client'
-import { addMember, removeMember, useMembers } from '@/api/members'
+import {
+  addMember,
+  changeMemberRole,
+  removeMember,
+  useMembers,
+} from '@/api/members'
 import { useAuth } from '@/auth/context'
 import { ConfirmDialog } from '@/components/farm/ConfirmDialog'
 import { useMemberAccess } from '@/components/farm/member-access-state'
@@ -53,10 +58,12 @@ const Members = ({
     members,
     ownEmail,
     removeMember: (email) => removeMember(membersPath, email),
+    changeRole: (email, role) => changeMemberRole(membersPath, email, role),
     onRemoved: async (email) => {
       await mutate()
       showToast(`${email} har ikke længere adgang til ${name}`)
     },
+    onRoleChanged: () => mutate(),
     onLeft: async () => {
       showToast(`Du har forladt ${name}`)
       await onLeft()
@@ -70,7 +77,7 @@ const Members = ({
     if (!email) return
     void access.share(
       async () => {
-        await addMember(membersPath, email)
+        await addMember(membersPath, email, access.form.role)
         await mutate()
         showToast(`${name} er delt med ${email}`)
       },
@@ -90,7 +97,9 @@ const Members = ({
         retrying={isValidating}
         onRetry={() => void mutate()}
       />
-      <ShareByEmailForm {...access.form} className="pb-0" onSubmit={share} />
+      {access.list.canManage ? (
+        <ShareByEmailForm {...access.form} className="pb-0" onSubmit={share} />
+      ) : null}
       <ConfirmDialog
         {...access.leave}
         description={leaveDescription(otherMemberEmails(members, ownEmail))}
