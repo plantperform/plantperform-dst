@@ -59,6 +59,7 @@ import {
   type EconomicsOverrides,
 } from '@/lib/economics'
 import {
+  isViewerProfile,
   sharedProfileNote,
   STANDARD_PROFILE_ID,
   STANDARD_SOURCE,
@@ -547,6 +548,9 @@ export const EconomicsGuidePage = (props: EconomicsGuidePageProps) => {
   }
   if (!profile || profile.id === STANDARD_PROFILE_ID) {
     return <Navigate to={economics.overviewPath} replace />
+  }
+  if (isViewerProfile(profile)) {
+    return <Navigate to={economics.profilePath(profile.id)} replace />
   }
 
   return (
