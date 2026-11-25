@@ -405,7 +405,11 @@ class YearlyModel:
         self._set_hint(hint)
 
         solver, status = search(
-            self.model, time_limit_seconds, relative_gap_limit, require_solution=require_solution
+            self.model,
+            time_limit_seconds,
+            relative_gap_limit,
+            require_solution=require_solution,
+            objective_units_per_dkk_year=SCALE * NUM_YEARS,
         )
         # The objective sums the scaled DB2 of every year, less any quota
         # payments; total_db2 is the unscaled yearly average.

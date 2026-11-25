@@ -79,6 +79,8 @@ def _solve(
     trades: tuple[QuotaTradeSetting, ...] = (),
     fixed: tuple[FixedYearlyFieldContribution, ...] = (),
     kvotes: dict[int, float] | None = None,
+    *,
+    require_solution: bool = False,
 ):
     return solve_yearly(
         YearlyOptimizationInput(
@@ -93,7 +95,8 @@ def _solve(
                 kvote_by_kystvandopland={1: 100.0, 2: 100.0} if kvotes is None else kvotes,
             ),
             time_limit_seconds=5,
-        )
+        ),
+        require_solution=require_solution,
     )
 
 
@@ -105,6 +108,17 @@ CAP_100 = (100.0,) * NUM_YEARS
 
 
 class YearlyQuotaTradeTests(unittest.TestCase):
+    def test_search_logs_report_the_annual_objective_after_quota_payments(self) -> None:
+        fields = (_field("a", 1),)
+
+        with (
+            patch("optimizer.search.PROGRESS_AFTER_SECONDS", 0),
+            self.assertLogs("optimizer.search", level="INFO") as logs,
+        ):
+            _solve(fields, {1: CAP_100}, (_trade(1, 8),), require_solution=True)
+
+        self.assertIn("net_db2_dkk_per_year=1600.0 ", logs.output[-1])
+
     def test_gap_is_relative_to_db2_after_quota_payments(self) -> None:
         # The best plan earns 1,600 kr/year after buying quota. Give the solver
         # an upper bound of 1,680 kr/year in its scaled eight-year objective.

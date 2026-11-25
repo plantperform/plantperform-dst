@@ -152,7 +152,11 @@ def solve(
     model.Maximize(total_db2)
 
     solver, status = search(
-        model, input.time_limit_seconds, RELATIVE_GAP_LIMIT, require_solution=require_solution
+        model,
+        input.time_limit_seconds,
+        RELATIVE_GAP_LIMIT,
+        require_solution=require_solution,
+        objective_units_per_dkk_year=SCALE,
     )
 
     if status == cp_model.OPTIMAL:
