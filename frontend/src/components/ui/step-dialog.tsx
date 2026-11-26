@@ -38,17 +38,18 @@ const StepIndicator = ({
 
   return (
     <nav aria-label="Trin">
-      <div className="space-y-1.5 sm:hidden">
+      <div className="space-y-1.5 md:hidden">
         <p className="text-xs font-medium text-muted-foreground">
           Trin {currentIndex + 1} af {steps.length} · {current?.label}
         </p>
         <ProgressBar valuePct={progressPct} />
       </div>
 
-      {/* Equal columns keep every connector the same length, whatever the labels. */}
       <ol
-        className="hidden sm:grid"
-        style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+        className="hidden md:grid"
+        style={{
+          gridTemplateColumns: `repeat(${steps.length}, minmax(max-content, 1fr))`,
+        }}
       >
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex
@@ -57,17 +58,23 @@ const StepIndicator = ({
           const isSelectable =
             !disabled && !isCurrent && step.status !== 'upcoming'
           return (
-            <li
-              key={step.id}
-              className="relative flex min-w-0 justify-center"
-            >
+            <li key={step.id} className="relative flex justify-center">
+              {index > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'absolute top-3.5 left-0 right-[calc(50%+1.25rem)] h-px',
+                    index <= currentIndex ? 'bg-primary' : 'bg-border',
+                  )}
+                />
+              ) : null}
               <button
                 type="button"
                 aria-current={isCurrent ? 'step' : undefined}
                 disabled={!isSelectable}
                 onClick={() => onStepSelect(index)}
                 className={cn(
-                  'group relative z-10 flex min-w-0 max-w-full flex-col items-center gap-1 rounded-md px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'group relative z-10 flex flex-col items-center gap-1 rounded-md px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   isSelectable ? 'cursor-pointer' : 'cursor-default',
                 )}
               >
@@ -97,7 +104,7 @@ const StepIndicator = ({
                 </span>
                 <span
                   className={cn(
-                    'truncate',
+                    'whitespace-nowrap',
                     isCurrent
                       ? 'font-medium text-foreground'
                       : 'text-muted-foreground',
@@ -113,8 +120,7 @@ const StepIndicator = ({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    // From just right of this circle to just left of the next one.
-                    'absolute top-3.5 right-[calc(-50%+1.25rem)] left-[calc(50%+1.25rem)] h-px',
+                    'absolute top-3.5 right-0 left-[calc(50%+1.25rem)] h-px',
                     index < currentIndex ? 'bg-primary' : 'bg-border',
                   )}
                 />
