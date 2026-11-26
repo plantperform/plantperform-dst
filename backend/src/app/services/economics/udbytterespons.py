@@ -26,6 +26,8 @@ Every other crop is fertilized at 100 % and keeps its full udbyttenorm.
 """
 from __future__ import annotations
 
+from app.domain.soil import is_sandjord
+
 KONVENTIONEL = "Konventionel"
 OEKOLOGISK = "Økologisk"
 
@@ -185,7 +187,7 @@ _RESPONS_BY_DRIFTSFORM = {KONVENTIONEL: _RESPONS, OEKOLOGISK: _RESPONS_OEKO}
 
 def _jordtype(jbnr: int, irrigated: bool) -> str | None:
     """Map a JB-nr to the master CSV jordtype group used for the N-norms."""
-    if irrigated and jbnr in (1, 2, 3, 4):
+    if irrigated and is_sandjord(jbnr):
         return "sandjord_vandet"
     if jbnr in (1, 3):
         return "grovsand"

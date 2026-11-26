@@ -24,6 +24,7 @@ from app.data.db import (
     prisliste_table,
     salgspris_table,
 )
+from app.domain.soil import is_sandjord
 from app.services.economics.overrides import identifier, post_label, price_unit, quantity_id
 from app.services.economics.udbytterespons import har_udbytterespons, udbytte_faktor
 from app.services.rotations import saedskifte_library
@@ -39,7 +40,7 @@ _VANDING_PRIORITY = {
 
 
 def _jordbonitet_kandidater(jbnr: int, irrigated: bool) -> list[str]:
-    if jbnr <= 4:
+    if is_sandjord(jbnr):
         return ["JB1-4", "JB1-3", "JB5-6"] if irrigated else ["JB1-3", "JB1-4", "JB5-6"]
     return ["JB5-6", "JB1-4", "JB1-3"]
 

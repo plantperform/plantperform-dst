@@ -9,6 +9,7 @@ from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
 from app.domain.optimization import OptimizationSettings, SimulationResultSummary
 from app.domain.saedskifte import RotationGroupSnapshot
+from app.domain.soil import is_sandjord
 
 # (afgrode_kode, kg N/ha, is husdyrgødning): hashable for the evaluator's caches.
 AutumnPlan = tuple[tuple[int, float, bool], ...]
@@ -26,7 +27,6 @@ class AutumnAllocation(CamelModel):
 # for reduceret N-tilførsel is paid on top of it for a farm that keeps to 65.
 OEKO_N_LOFT_BASIS = 107
 OEKO_N_LOFT_REDUCERET = 65
-VANDING_MAX_JBNR = 4
 
 
 def gets_oeko_n_tillaeg(driftsform: str, oeko_n_loft: int) -> bool:
@@ -191,7 +191,7 @@ class VandingSettings(CamelModel):
     afgrode_koder: list[int] = Field(default_factory=list)
 
     def crops_for(self, imk_id: int | None, jbnr: int) -> frozenset[int]:
-        if imk_id in self.imk_ids and jbnr <= VANDING_MAX_JBNR:
+        if imk_id in self.imk_ids and is_sandjord(jbnr):
             return frozenset(self.afgrode_koder)
         return frozenset()
 

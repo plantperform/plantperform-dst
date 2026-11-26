@@ -7,6 +7,10 @@ PercolationByKategori = tuple[float, float, float, float, float, float, float, f
 RegistrySoilData = tuple[PercolationByKategori, float, float]
 
 
+def is_sandjord(jbnr: int) -> bool:
+    return jbnr <= 4
+
+
 class MissingSoilDataError(Exception):
     """A field has no complete, real P/S/Nt input set for NLES5."""
 
