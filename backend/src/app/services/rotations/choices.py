@@ -9,6 +9,7 @@ from app.services.virkemidler import virkemiddel_tilladt
 class AfgrodeKodeOption(CamelModel):
     code: int
     navn: str
+    permanent: bool = False
 
 
 # Real afgrødekoder valid as a sekundær afgrøde/udlæg (Afgrødetabellens egen
@@ -63,9 +64,9 @@ def list_afgrode_koder() -> list[AfgrodeKodeOption]:
     """
     names = afgroede_normer.crop_names_from_normer()
     options = [
-        AfgrodeKodeOption(code=code, navn=navn)
+        AfgrodeKodeOption(code=code, navn=navn, permanent=bool(params.get("permanent")))
         for code, navn in names.items()
-        if afgroede_normer.lookup_crop_params(code).get("er_hovedafgrode")
+        if (params := afgroede_normer.lookup_crop_params(code)).get("er_hovedafgrode")
     ]
     return sorted(options, key=lambda o: o.navn)
 

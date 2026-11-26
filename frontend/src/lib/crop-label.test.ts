@@ -38,8 +38,8 @@ describe('cropLabel', () => {
 })
 
 const cropCodes = [
-  { code: 11, name: 'Vinterhvede' },
-  { code: 210, name: 'Vårbyg, helsæd' },
+  { code: 11, name: 'Vinterhvede', permanent: false },
+  { code: 210, name: 'Vårbyg, helsæd', permanent: false },
 ]
 
 describe('cropLabelByCode', () => {

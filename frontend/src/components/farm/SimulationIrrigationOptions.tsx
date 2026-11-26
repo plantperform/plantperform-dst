@@ -1,4 +1,4 @@
-import { useCropsInRotations } from '@/api/hooks'
+import { useCropCodes, useCropsInRotations } from '@/api/hooks'
 import type { FieldRecord } from '@/api/types'
 import { CropGroupChecklist } from '@/components/farm/CropGroupChecklist'
 import { FieldError } from '@/components/ui/field-error'
@@ -12,6 +12,8 @@ import {
 import {
   groupSelection,
   irrigableFields,
+  irrigatedCropOptions,
+  irrigatedFields,
   toggleGroup,
   toggleValue,
 } from '@/lib/simulation-form'
@@ -40,6 +42,7 @@ export function SimulationIrrigationOptions({
   error,
 }: Props) {
   const listed = useCropsInRotations(farmId, variants, nNormPercentages)
+  const crops = useCropCodes(farmId)
   const irrigable = irrigableFields(fields)
   const otherCount = fields.length - irrigable.length
   const keys = irrigable.map((field) => String(field.imkId))
@@ -125,7 +128,11 @@ export function SimulationIrrigationOptions({
           <div className="max-h-72 overflow-y-auto rounded-md border p-2">
             <CropGroupChecklist
               label="Afgrøder der vandes"
-              items={listed.crops.map((crop) => ({
+              items={irrigatedCropOptions(
+                listed.crops,
+                crops.data ?? [],
+                irrigatedFields(fields, imkIds),
+              ).map((crop) => ({
                 key: String(crop.code),
                 code: crop.code,
                 name: crop.name,

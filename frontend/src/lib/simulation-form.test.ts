@@ -29,6 +29,7 @@ import {
   groupSelection,
   initialFormValues,
   irrigableFields,
+  irrigatedCropOptions,
   irrigationLabel,
   isNNormOptionLocked,
   isPresetModified,
@@ -253,6 +254,19 @@ describe('irrigation', () => {
         irrigatedCropCodes: [1],
       }).irrigation,
     ).toEqual({ imkIds: [], cropCodes: [] })
+  })
+
+  it('adds the permanent crop of a chosen vandingsmark to the crop list', () => {
+    const barley = { code: 1, name: 'Vårbyg', permanent: false }
+    const grass = { code: 252, name: 'Permanent græs', permanent: true }
+    const growing = (cropCode: number) =>
+      ({ cropRotation: [{ cropCode }] }) as FieldRecord
+    expect(
+      irrigatedCropOptions([barley], [barley, grass], [growing(252)]),
+    ).toEqual([barley, grass])
+    expect(
+      irrigatedCropOptions([barley], [barley, grass], [growing(1)]),
+    ).toEqual([barley])
   })
 
   it('describes the choice in the grundlag', () => {

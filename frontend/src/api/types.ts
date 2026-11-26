@@ -625,6 +625,7 @@ export type RecomputeFieldRotationInput = {
 export type CropCodeOption = {
   code: number
   name: string
+  permanent: boolean
 }
 
 export type FieldRotationCandidates = {

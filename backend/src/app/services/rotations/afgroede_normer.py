@@ -116,6 +116,7 @@ def _load_nuar_koder() -> dict[int, dict]:
             "MP_ambig": row.mp_ambig,
             "WP_ambig": row.wp_ambig,
             "er_hovedafgrode": row.er_hovedafgrode,
+            "permanent": row.permanent,
             "grund6procent": row.grund6procent,
             "mellemafgroede_mulig": row.mellemafgroede_mulig,
             "tidlig_saaning_mulig": row.tidlig_saaning_mulig,

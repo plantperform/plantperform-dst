@@ -7,6 +7,7 @@ from app.data import repository, simulation_store
 from app.domain.field import FieldRecord
 from app.domain.rotation_candidate import RotationCandidateRef
 from app.domain.simulation import Simulation, VandingSettings
+from app.services.rotations import afgroede_normer, choices
 from app.services.scenario import candidate_evaluator
 from optimizer import preparation
 
@@ -21,6 +22,20 @@ class VandingSettingsTests(unittest.TestCase):
         self.assertEqual(vanding.crops_for(7, 5), frozenset())
         self.assertEqual(vanding.crops_for(8, 3), frozenset())
         self.assertEqual(vanding.crops_for(None, 3), frozenset())
+
+    def test_the_crop_list_marks_permanent_crops(self) -> None:
+        names = {VAARBYG: "Vårbyg", PERMANENT_GRASS: "Permanent græs"}
+        params = {
+            VAARBYG: {"er_hovedafgrode": True},
+            PERMANENT_GRASS: {"er_hovedafgrode": True, "permanent": True},
+        }
+        with (
+            patch.object(afgroede_normer, "crop_names_from_normer", return_value=names),
+            patch.object(afgroede_normer, "lookup_crop_params", side_effect=params.get),
+        ):
+            options = choices.list_afgrode_koder()
+        permanent = {option.code: option.permanent for option in options}
+        self.assertEqual(permanent, {VAARBYG: False, PERMANENT_GRASS: True})
 
     def test_a_removed_field_is_no_longer_a_vandingsmark(self) -> None:
         kept, removed = (

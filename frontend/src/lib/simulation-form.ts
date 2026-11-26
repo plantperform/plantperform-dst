@@ -5,6 +5,7 @@ import type {
   AutumnCropOption,
   AutumnFertiliser,
   CreateSimulationInput,
+  CropCodeOption,
   FarmingSystem,
   FertiliserPresetOption,
   FertiliserSettings,
@@ -148,6 +149,28 @@ export const irrigableFields = (fields: FieldRecord[]) =>
       field.soilTypeNumber !== null &&
       field.soilTypeNumber <= MAX_IRRIGATED_SOIL_TYPE,
   )
+
+export const irrigatedFields = (fields: FieldRecord[], imkIds: number[]) =>
+  irrigableFields(fields).filter((field) => imkIds.includes(field.imkId))
+
+export const irrigatedCropOptions = (
+  rotationCrops: CropCodeOption[],
+  crops: CropCodeOption[],
+  fields: FieldRecord[],
+) => {
+  const current = new Set(
+    fields.map((field) => field.cropRotation.at(-1)?.cropCode),
+  )
+  return [
+    ...rotationCrops,
+    ...crops.filter(
+      (crop) =>
+        crop.permanent &&
+        current.has(crop.code) &&
+        !rotationCrops.some((listed) => listed.code === crop.code),
+    ),
+  ]
+}
 
 export const irrigationLabel = (irrigation?: Irrigation): string =>
   irrigation && irrigation.imkIds.length > 0

@@ -79,12 +79,12 @@ describe('libraryCropOptions', () => {
     expect(
       libraryCropOptions(
         [
-          { code: SPRING_BARLEY, name: 'Vårbyg' },
-          { code: SPRING_OATS, name: 'Vårhavre' },
+          { code: SPRING_BARLEY, name: 'Vårbyg', permanent: false },
+          { code: SPRING_OATS, name: 'Vårhavre', permanent: false },
         ],
         [library],
       ),
-    ).toEqual([{ code: SPRING_BARLEY, name: 'Vårbyg' }])
+    ).toEqual([{ code: SPRING_BARLEY, name: 'Vårbyg', permanent: false }])
   })
 })
 
