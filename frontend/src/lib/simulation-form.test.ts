@@ -5,6 +5,7 @@ import type {
   AutumnFertiliser,
   FarmingSystem,
   FertiliserPresetOption,
+  FieldRecord,
   RotationCategoryOption,
   Simulation,
 } from '@/api/types'
@@ -27,6 +28,8 @@ import {
   forcedAutumnFertiliser,
   groupSelection,
   initialFormValues,
+  irrigableFields,
+  irrigationLabel,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -214,6 +217,49 @@ describe('step schemas', () => {
     const withoutName = { ...filledValues, name: '' }
     expect(isStepValid(stepIndexOf('basics'), withoutName)).toBe(false)
     expect(isStepValid(stepIndexOf('rotations'), withoutName)).toBe(true)
+  })
+
+  it('asks for the watered crops once a vandingsmark is chosen', () => {
+    expect(
+      messageFor(
+        { ...filledValues, irrigatedImkIds: [7], irrigatedCropCodes: [] },
+        'irrigatedCropCodes',
+      ),
+    ).toBe('Vælg de afgrøder, der vandes')
+    expect(
+      isStepValid(stepIndexOf('irrigation'), {
+        ...filledValues,
+        irrigatedImkIds: [7],
+        irrigatedCropCodes: [1],
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('irrigation', () => {
+  const field = (imkId: number | null, soilTypeNumber: number | null) =>
+    ({ imkId, soilTypeNumber }) as FieldRecord
+
+  it('offers only fields with an IMK id on JB 1-4', () => {
+    const offered = [field(1, 4), field(2, 5), field(null, 2), field(3, null)]
+    expect(irrigableFields(offered).map((each) => each.imkId)).toEqual([1])
+  })
+
+  it('sends no crops when no vandingsmark is chosen', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        irrigatedImkIds: [],
+        irrigatedCropCodes: [1],
+      }).irrigation,
+    ).toEqual({ imkIds: [], cropCodes: [] })
+  })
+
+  it('describes the choice in the grundlag', () => {
+    expect(irrigationLabel(undefined)).toBe('Ingen')
+    expect(irrigationLabel({ imkIds: [7], cropCodes: [1, 2] })).toBe(
+      '1 mark, 2 afgrøder',
+    )
   })
 })
 
@@ -920,6 +966,7 @@ describe('toCreateSimulationInput', () => {
       precisionFarming: false,
       earlySowing: true,
       intermediateCrop: true,
+      irrigation: { imkIds: [], cropCodes: [] },
       includePrecedingCropValue: true,
     })
   })
@@ -1102,7 +1149,12 @@ describe('simulationToFormValues', () => {
   })
 
   it('fills the form so the copy gets the same grundlag', () => {
-    const values = simulationToFormValues(simulation, [kvaeggylle], offered)
+    const irrigation = { imkIds: [7], cropCodes: [1] }
+    const values = simulationToFormValues(
+      { ...simulation, irrigation },
+      [kvaeggylle],
+      offered,
+    )
     expect(values.fertiliserChoice).toBe('Kvæggylle')
     expect(toCreateSimulationInput(values)).toEqual({
       name: 'Test2 (kopi)',
@@ -1114,6 +1166,7 @@ describe('simulationToFormValues', () => {
       precisionFarming: true,
       earlySowing: false,
       intermediateCrop: true,
+      irrigation,
       includePrecedingCropValue: true,
     })
   })

@@ -136,6 +136,13 @@ describe('toWire', () => {
     })
   })
 
+  it('sends the vanding both ways under the same names', () => {
+    const vanding = { vanding: { imkIds: [7], afgrodeKoder: [1] } }
+    const irrigation = { irrigation: { imkIds: [7], cropCodes: [1] } }
+    expect(toWire(irrigation)).toEqual(vanding)
+    expect(fromWire(vanding)).toEqual(irrigation)
+  })
+
   it('keeps a name that only responses translate', () => {
     expect(toWire({ name: 'Bakkegården' })).toEqual({ name: 'Bakkegården' })
   })

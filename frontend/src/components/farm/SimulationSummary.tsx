@@ -18,6 +18,7 @@ import {
 import { NotInCalculationNote } from '@/components/farm/economics-ui'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 import {
+  fieldDisplayName,
   formatFieldCount,
   formatNumber,
   ROTATION_CALENDAR_YEARS,
@@ -35,6 +36,7 @@ import {
   combinationCount,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  irrigableFields,
   isPresetModified,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
@@ -112,6 +114,9 @@ export const SimulationSummary = ({
   const catchments = useCatchmentOptions(farmId, fields)
   const crops = useCropCodes(farmId)
   const cropLabelFor = (code: number) => cropLabelByCode(code, crops.data ?? [])
+  const irrigatedFields = irrigableFields(fields).filter((field) =>
+    values.irrigatedImkIds.includes(field.imkId),
+  )
   const cropLabelByChosenName = (name: string) =>
     cropLabelByName(name, crops.data ?? [])
   const quotas = effectiveMaxNLoadByCatchment(fields, [])
@@ -261,6 +266,22 @@ export const SimulationSummary = ({
             Tidlig såning: {yesNo(Boolean(input.earlySowing))} · Mellemafgrøde:{' '}
             {yesNo(Boolean(input.intermediateCrop))}
           </p>
+        </Section>
+        <Section step="irrigation" onEditStep={onEditStep}>
+          {irrigatedFields.length === 0 ? (
+            <p>Ingen vandingsmarker</p>
+          ) : (
+            <>
+              <p className="text-foreground">
+                {formatFieldCount(irrigatedFields.length)}:{' '}
+                {irrigatedFields.map(fieldDisplayName).join(', ')}
+              </p>
+              <p>
+                Afgrøder der vandes:{' '}
+                {values.irrigatedCropCodes.map(cropLabelFor).join(' · ')}
+              </p>
+            </>
+          )}
         </Section>
         <Section step="limits" onEditStep={onEditStep}>
           {catchments.map((catchment) => {

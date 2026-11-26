@@ -8,13 +8,15 @@ import type {
   FarmingSystem,
   FertiliserPresetOption,
   FertiliserSettings,
+  FieldRecord,
+  Irrigation,
   OrganicNCeiling,
   RotationCategoryOption,
   RotationOption,
   Simulation,
 } from '@/api/types'
 import { STANDARD_PROFILE_ID } from '@/lib/economics-profiles'
-import { formatNumber } from '@/lib/field-domain'
+import { formatFieldCount, formatNumber } from '@/lib/field-domain'
 import {
   NTHETA_COEFFICIENTS,
   SOWING_DATE_INTERVALS,
@@ -107,6 +109,8 @@ export type SimulationFormValues = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
+  irrigatedImkIds: number[]
+  irrigatedCropCodes: number[]
 }
 
 export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
@@ -131,7 +135,24 @@ export const DEFAULT_SIMULATION_FORM_VALUES: SimulationFormValues = {
   precisionFarming: false,
   earlySowing: true,
   intermediateCrop: true,
+  irrigatedImkIds: [],
+  irrigatedCropCodes: [],
 }
+
+const MAX_IRRIGATED_SOIL_TYPE = 4
+
+export const irrigableFields = (fields: FieldRecord[]) =>
+  fields.filter(
+    (field): field is FieldRecord & { imkId: number; soilTypeNumber: number } =>
+      field.imkId !== null &&
+      field.soilTypeNumber !== null &&
+      field.soilTypeNumber <= MAX_IRRIGATED_SOIL_TYPE,
+  )
+
+export const irrigationLabel = (irrigation?: Irrigation): string =>
+  irrigation && irrigation.imkIds.length > 0
+    ? `${formatFieldCount(irrigation.imkIds.length)}, ${irrigation.cropCodes.length} ${irrigation.cropCodes.length === 1 ? 'afgrøde' : 'afgrøder'}`
+    : 'Ingen'
 
 // Checks a number field kept as text. The first failing message is the one
 // shown, so an empty field reads "Udfyld feltet", not a range message.
@@ -311,6 +332,27 @@ export const SIMULATION_FORM_STEPS = [
       earlySowing: z.boolean(),
       intermediateCrop: z.boolean(),
     }),
+  },
+  {
+    id: 'irrigation',
+    label: 'Vanding',
+    schema: z
+      .object({
+        irrigatedImkIds: z.array(z.number()),
+        irrigatedCropCodes: z.array(z.number()),
+      })
+      .superRefine((values, ctx) => {
+        if (
+          values.irrigatedImkIds.length > 0 &&
+          values.irrigatedCropCodes.length === 0
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['irrigatedCropCodes'],
+            message: 'Vælg de afgrøder, der vandes',
+          })
+        }
+      }),
   },
   {
     id: 'limits',
@@ -914,6 +956,11 @@ export const toCreateSimulationInput = (
     precisionFarming: values.precisionFarming,
     earlySowing: values.earlySowing,
     intermediateCrop: values.intermediateCrop,
+    irrigation: {
+      imkIds: values.irrigatedImkIds,
+      cropCodes:
+        values.irrigatedImkIds.length > 0 ? values.irrigatedCropCodes : [],
+    },
     includePrecedingCropValue: values.includePrecedingCropValue,
   }
 }
@@ -996,6 +1043,8 @@ export const simulationToFormValues = (
     precisionFarming: simulation.precisionFarming,
     earlySowing: simulation.earlySowing,
     intermediateCrop: simulation.intermediateCrop,
+    irrigatedImkIds: simulation.irrigation?.imkIds ?? [],
+    irrigatedCropCodes: simulation.irrigation?.cropCodes ?? [],
     includePrecedingCropValue:
       simulation.includePrecedingCropValue ??
       DEFAULT_SIMULATION_FORM_VALUES.includePrecedingCropValue,

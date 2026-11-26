@@ -280,6 +280,7 @@ export type Simulation = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
+  irrigation?: Irrigation
   comparisonAvailability?:
     | { kind: 'ready' | 'uncalculated' }
     | { kind: 'partial'; missingCount: number }
@@ -312,6 +313,11 @@ export type EconomicsModule = {
   effectiveRole?: MembershipRole
 }
 
+export type Irrigation = {
+  imkIds: number[]
+  cropCodes: number[]
+}
+
 export type CreateSimulationInput = {
   optimizationSettings?: OptimizationSettings
   economicsModuleId?: string
@@ -327,6 +333,7 @@ export type CreateSimulationInput = {
   precisionFarming?: boolean
   earlySowing?: boolean
   intermediateCrop?: boolean
+  irrigation?: Irrigation
   includePrecedingCropValue?: boolean
 }
 

@@ -135,6 +135,7 @@ field" column is the name on the wire.
 | tilskudsordning | `subsidyScheme` | `tilskudsordning` | MARS tile property |
 | præcisionsjordbrug | `precisionFarming` | `praecisionsjordbrug` | |
 | tidlig såning | `earlySowing` | `tidligSaaning` | |
+| vanding, vandingsmark | irrigation, `Irrigation`, `irrigatedImkIds`, `irrigatedCropCodes`, `irrigableFields` | `vanding`, `imkIds`, `afgrodeKoder` | A simulation's vandingsmarker (by IMK id, only JB 1-4) and the afgrøder watered on them. Such a crop year uses the irrigated norm, N-fixation and economics |
 | F-dato for efterafgrøde | `catchCropSowingDate`, `sowingDate` | `eeaFdato` | |
 | dagsbasis | `catchCropDailyBasis` | `eeaPrecisionDagsbasis` | |
 

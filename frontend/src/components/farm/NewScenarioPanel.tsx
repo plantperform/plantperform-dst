@@ -27,6 +27,7 @@ import {
   simulationLimitsError,
 } from '@/lib/simulation-settings'
 import { OrganicNCeilingChoice } from '@/components/farm/OrganicNCeilingChoice'
+import { SimulationIrrigationOptions } from '@/components/farm/SimulationIrrigationOptions'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
 import { SimulationQuotaTradeOptions } from '@/components/farm/SimulationQuotaTradeOptions'
@@ -1310,6 +1311,22 @@ export const NewScenarioPanel = ({
               </label>
             </div>
           </div>
+        ) : null}
+
+        {!referenceBlocked && stepId === 'irrigation' ? (
+          <SimulationIrrigationOptions
+            farmId={farmId}
+            fields={effectiveFields}
+            variants={values.rotationVariants}
+            nNormPercentages={values.nNormPercentages}
+            imkIds={values.irrigatedImkIds}
+            cropCodes={values.irrigatedCropCodes}
+            onImkIdsChange={(next) => updateValue('irrigatedImkIds', next)}
+            onCropCodesChange={(next) =>
+              updateValue('irrigatedCropCodes', next)
+            }
+            error={errors.irrigatedCropCodes?.message}
+          />
         ) : null}
 
         {!referenceBlocked && stepId === 'limits' ? (

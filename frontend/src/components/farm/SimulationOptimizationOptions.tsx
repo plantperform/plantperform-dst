@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 
-import { useCropCodes, useRotationCandidateOptions } from '@/api/hooks'
+import { useCropCodes, useCropsInRotations } from '@/api/hooks'
 import type {
   FieldRecord,
   OptimizationConstraints,
@@ -120,22 +120,14 @@ export function SimulationOptimizationOptions({
 }: Props) {
   const catchments = useCatchmentOptions(farmId, fields)
   const crops = useCropCodes(farmId)
-  const options = useRotationCandidateOptions(
-    farmId,
-    variants,
-    nNormPercentages,
-  )
-  const names = new Set(
-    (options.data ?? []).flatMap((option) => option.cropSequence),
-  )
-  const listedCrops = (crops.data ?? []).filter((crop) => names.has(crop.name))
+  const listed = useCropsInRotations(farmId, variants, nNormPercentages)
   const patch = (value: Partial<OptimizationSettings>) =>
     onSettingsChange({ ...settings, ...value })
   const setIncludedCrops = (included: string[]) =>
     patch({
       excludedCropCodes: excludedCropCodesAfter(
         settings.excludedCropCodes,
-        listedCrops.map((crop) => crop.code),
+        listed.crops.map((crop) => crop.code),
         included.map(Number),
       ),
     })
@@ -348,10 +340,9 @@ export function SimulationOptimizationOptions({
           }}
         >
           <option value="">Tilføj afgrøde...</option>
-          {(crops.data ?? [])
+          {listed.crops
             .filter(
               (crop) =>
-                names.has(crop.name) &&
                 !constraints.cropAreaLimits.some(
                   (limit) => limit.cropCode === crop.code,
                 ),
@@ -370,27 +361,24 @@ export function SimulationOptimizationOptions({
             (fjern fluebenet, hvis afgrøden ikke skal indgå i simuleringen)
           </span>
         </Label>
-        {crops.error || options.error ? (
+        {listed.error ? (
           <LoadError
             message="Kunne ikke hente afgrøder."
-            onRetry={() => {
-              void crops.mutate()
-              void options.mutate()
-            }}
+            onRetry={listed.retry}
           />
         ) : null}
-        {crops.isLoading || options.isLoading ? (
+        {listed.isLoading ? (
           <p className="text-sm text-muted-foreground">Henter afgrøder...</p>
         ) : null}
         <div className="max-h-72 overflow-y-auto rounded-md border p-2">
           <CropGroupChecklist
             label="Afgrøder i de valgte sædskifter"
-            items={listedCrops.map((crop) => ({
+            items={listed.crops.map((crop) => ({
               key: String(crop.code),
               code: crop.code,
               name: crop.name,
             }))}
-            selected={listedCrops
+            selected={listed.crops
               .filter((crop) => !settings.excludedCropCodes.includes(crop.code))
               .map((crop) => String(crop.code))}
             onChange={setIncludedCrops}

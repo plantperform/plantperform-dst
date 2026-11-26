@@ -32,6 +32,8 @@ const SHARED_NAMES: Record<string, string> = {
   dyrkningssystem: 'croppingSystem',
   praecisionsjordbrug: 'precisionFarming',
   tidligSaaning: 'earlySowing',
+  vanding: 'irrigation',
+  afgrodeKoder: 'cropCodes',
   eeaFdato: 'catchCropSowingDate',
   eeaPrecisionDagsbasis: 'catchCropDailyBasis',
   godning: 'fertiliser',
