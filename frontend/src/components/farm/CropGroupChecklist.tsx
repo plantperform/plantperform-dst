@@ -40,6 +40,7 @@ export const CropGroupChecklist = ({
           <label className="flex cursor-pointer items-center gap-2 self-start text-sm leading-5 font-medium">
             <input
               type="checkbox"
+              className={crops.length === 1 ? 'invisible' : undefined}
               checked={selection === 'all'}
               ref={(input) => {
                 if (input) input.indeterminate = selection === 'some'
