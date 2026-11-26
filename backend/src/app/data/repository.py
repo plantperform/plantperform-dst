@@ -496,6 +496,7 @@ def prepare_simulation_field(
         if registry_row is not None and registry_row.jbnr is not None
         else FALLBACK_JBNR
     )
+    irrigated_crops = request.vanding.crops_for(copied_field.imk_id, jbnr)
     latest_crop_code = (
         registry_row.crop_history.get(str(REAL_HISTORY_END_YEAR))
         if registry_row is not None and registry_row.crop_history
@@ -529,6 +530,7 @@ def prepare_simulation_field(
                 org_n_topsoil=org_n_topsoil,
                 s_soil=s_soil,
                 economics_key=economics_key,
+                irrigated_crops=irrigated_crops,
             )
             candidates.append(permanent_candidate)
             locked_id = permanent_candidate.ref.to_id()
@@ -566,6 +568,7 @@ def prepare_simulation_field(
                 s_soil=s_soil,
                 prepared=prepared,
                 economics_key=economics_key,
+                irrigated_crops=irrigated_crops,
             )
         )
     setup = split_field(_dump(copied_field))

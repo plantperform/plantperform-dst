@@ -26,6 +26,7 @@ class AutumnAllocation(CamelModel):
 # for reduceret N-tilførsel is paid on top of it for a farm that keeps to 65.
 OEKO_N_LOFT_BASIS = 107
 OEKO_N_LOFT_REDUCERET = 65
+VANDING_MAX_JBNR = 4
 
 
 def gets_oeko_n_tillaeg(driftsform: str, oeko_n_loft: int) -> bool:
@@ -185,6 +186,16 @@ class OptimizationConstraints(CamelModel):
         return self
 
 
+class VandingSettings(CamelModel):
+    imk_ids: list[int] = Field(default_factory=list)
+    afgrode_koder: list[int] = Field(default_factory=list)
+
+    def crops_for(self, imk_id: int | None, jbnr: int) -> frozenset[int]:
+        if imk_id in self.imk_ids and jbnr <= VANDING_MAX_JBNR:
+            return frozenset(self.afgrode_koder)
+        return frozenset()
+
+
 class Simulation(CamelModel):
     # Server-resolved inputs: None means resolve latest; a job captures an explicit map.
     rotation_groups: dict[str, RotationGroupSnapshot] | None = None
@@ -221,6 +232,7 @@ class Simulation(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    vanding: VandingSettings = Field(default_factory=VandingSettings)
 
 
 class CreateSimulationRequest(CamelModel):
@@ -241,6 +253,7 @@ class CreateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    vanding: VandingSettings = Field(default_factory=VandingSettings)
 
     @field_validator("name")
     @classmethod
@@ -264,6 +277,7 @@ class UpdateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool | None = None
     tidlig_saaning: bool | None = None
     mellemafgrode: bool | None = None
+    vanding: VandingSettings | None = None
     optimization_settings: OptimizationSettings | None = None
 
     @model_validator(mode="after")
