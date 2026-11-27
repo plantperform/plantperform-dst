@@ -53,6 +53,7 @@ from app.data.db import (
     simulation_table as setups,
 )
 from app.domain.economics import (
+    SIGNED_PRICE_IDS,
     CreateEconomicsModuleRequest,
     CropBudgets,
     EconomicsConflictError,
@@ -98,6 +99,17 @@ class EconomicsValidationTests(unittest.TestCase):
                 EconomicsOverrides(yieldPct={"1": value})
         self.assertEqual(EconomicsOverrides(prices={SALE: 0}).prices[SALE], 0)
         self.assertEqual(EconomicsOverrides(yieldPct={"1": -99}).yield_pct["1"], -99)
+
+    def test_only_the_early_sowing_prices_can_be_a_saving(self):
+        signed = {
+            overrides.identifier("list", f"Tidlig såning, {part}")
+            for part in ("udsæd", "etablering")
+        }
+        self.assertEqual(SIGNED_PRICE_IDS, signed)
+        for price_id in signed:
+            self.assertEqual(EconomicsOverrides(prices={price_id: -150}).prices[price_id], -150)
+        with self.assertRaises(ValidationError):
+            EconomicsOverrides(prices={overrides.identifier("list", "Efterafgrøde, udsæd"): -1})
 
     def test_empty_and_order_independent_cache_keys(self):
         self.assertEqual(EconomicsOverrides().cache_key(), "")
