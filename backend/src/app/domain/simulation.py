@@ -241,6 +241,9 @@ class CreateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    # "Kopier som ny": a simulation of the same farm whose fields, with their locks
+    # and manual rotations, and saved result the new one starts from.
+    copy_from: str | None = None
 
     @field_validator("name")
     @classmethod
