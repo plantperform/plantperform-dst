@@ -57,6 +57,49 @@ export type StandardManure = {
   nKgPerTon: number
 }
 
+export type CrossCropPriceGroup = 'catchCrops' | 'fieldWork' | 'fertiliser'
+
+// A price-list price that a calculation adds on top of a crop's own budget.
+export type CrossCropPrice = {
+  priceId: string
+  group: CrossCropPriceGroup
+  canBeNegative: boolean
+}
+
+export type CrossCropPriceRow = CrossCropPrice & { price: UnitPrice }
+
+export const CROSS_CROP_PRICES_LABEL = 'Priser på tværs af afgrøder'
+
+export const CROSS_CROP_PRICE_GROUPS: readonly {
+  id: CrossCropPriceGroup
+  title: string
+  note: string
+  appliesTo: string
+  guideStep: 2 | 5
+}[] = [
+  {
+    id: 'catchCrops',
+    title: 'Efterafgrøder, mellemafgrøder og tidlig såning',
+    note: 'Lægges til i de år i en simulering, hvor marken har efterafgrøden, mellemafgrøden eller den tidlige såning. Tidlig såning er forskellen til almindelig såning, så en besparelse skrives med minus.',
+    appliesTo: 'År med efterafgrøde, mellemafgrøde eller tidlig såning',
+    guideStep: 5,
+  },
+  {
+    id: 'fieldWork',
+    title: 'Markarbejde',
+    note: 'Lægges til i simuleringer med præcisionsjordbrug på de afgrøder, der tillader det.',
+    appliesTo: 'Simuleringer med præcisionsjordbrug',
+    guideStep: 5,
+  },
+  {
+    id: 'fertiliser',
+    title: 'Gødning',
+    note: 'Udbringning af handelsgødning gælder konventionel drift og regnes, når afgrødens eget budget ikke dækker den. Husdyrgødningens udbringning og købspris er pr. ton og gælder, når en simulering bruger husdyrgødning.',
+    appliesTo: 'Konventionelle simuleringer med handelsgødning',
+    guideStep: 2,
+  },
+]
+
 export type EconomicsAssumptions = {
   soilTypeNumber: number | null
   farmingSystem: FarmingSystem
@@ -65,6 +108,8 @@ export type EconomicsAssumptions = {
   // even when no budget row uses them.
   manureSpreadingPriceId?: string | null
   manurePurchasePriceId?: string | null
+  // The cross-crop prices, in `prices` on either farming system.
+  crossCropPrices?: readonly CrossCropPrice[]
   standardManure?: StandardManure | null
   crops: CropEconomics[]
   soilVariants: Readonly<Record<string, readonly SoilVariant[]>>
@@ -572,6 +617,12 @@ export const parseEconomicsInput = (text: string): EconomicsInput => {
   return { value }
 }
 
+// For a price that is a net amount, where a saving is negative.
+export const parseNetPriceInput = (text: string): EconomicsInput => {
+  const value = parseEconomicsNumber(text)
+  return Number.isFinite(value) ? { value } : { error: 'Skriv et tal.' }
+}
+
 export const parseCorrectionInput = (text: string): EconomicsInput => {
   const value = parseEconomicsNumber(text)
   if (!Number.isFinite(value)) return { error: 'Skriv et tal.' }
@@ -694,6 +745,30 @@ export const mineralFertiliserPrices = (
   )
 }
 
+export const crossCropPriceRows = (
+  assumptions: EconomicsAssumptions,
+): CrossCropPriceRow[] =>
+  (assumptions.crossCropPrices ?? []).flatMap((entry) => {
+    const price = findPrice(assumptions, entry.priceId)
+    return price ? [{ ...entry, price }] : []
+  })
+
+// The guide's Gødning step: the N price and the other fertiliser rows of the
+// crop budgets, and the cross-crop fertiliser prices whether or not a crop has
+// a row for them.
+export const guideFertiliserPrices = (
+  assumptions: EconomicsAssumptions,
+): UnitPrice[] => {
+  const prices = [
+    ...mineralFertiliserPrices(assumptions),
+    ...crossCropPriceRows(assumptions)
+      .filter((row) => row.group === 'fertiliser')
+      .map((row) => row.price),
+    ...manurePrices(assumptions),
+  ]
+  return [...new Map(prices.map((price) => [price.id, price])).values()]
+}
+
 export type CropDbDelta = {
   cropCode: number
   cropName: string
@@ -803,7 +878,7 @@ export type ProfileChange = {
   appliesTo?: string
   from: string
   to: string
-  guideStep: 1 | 2 | 3 | 4 | 5 | null
+  guideStep: 1 | 2 | 3 | 4 | 5 | 6 | null
 }
 
 const economicsCropLabel = (crop: CropEconomics): string =>
@@ -839,7 +914,7 @@ const correctionChange = (
   cropLabels: [economicsCropLabel(crop)],
   from: '0 kr/ha',
   to: `${formatCorrection(cropCorrection(overrides, crop))} kr/ha`,
-  guideStep: 5,
+  guideStep: 6,
 })
 
 const priceChange = (
@@ -893,19 +968,31 @@ const quantityChange = (
 
 const MANURE_APPLIES_TO = 'Simuleringer med husdyrgødning'
 
-// The husdyrgødning prices belong to no crop row in the standard, so they are
-// listed on their own.
-const manureChanges = (
+// A cross-crop price that no crop row in the budget uses is listed on its own,
+// with what it applies to.
+const crossCropChanges = (
   assumptions: EconomicsAssumptions,
   overrides: EconomicsOverrides,
   listed: ReadonlySet<string>,
-): ProfileChange[] =>
-  manurePrices(assumptions)
+): ProfileChange[] => {
+  const entries = new Map<
+    string,
+    { price: UnitPrice; appliesTo: string; guideStep: 2 | 5 }
+  >()
+  for (const { price, group } of crossCropPriceRows(assumptions)) {
+    for (const info of CROSS_CROP_PRICE_GROUPS) {
+      if (info.id === group) entries.set(price.id, { price, ...info })
+    }
+  }
+  for (const price of manurePrices(assumptions)) {
+    entries.set(price.id, { price, appliesTo: MANURE_APPLIES_TO, guideStep: 2 })
+  }
+  return [...entries.values()]
     .filter(
-      (price) =>
+      ({ price }) =>
         isPriceCustomised(overrides, price.id) && !listed.has(price.id),
     )
-    .map((price): ProfileChange => {
+    .map(({ price, appliesTo, guideStep }): ProfileChange => {
       const withUnit = (value: number) =>
         `${formatEconomicsNumber(value)} ${price.unit}`
       return {
@@ -913,12 +1000,21 @@ const manureChanges = (
         kind: 'price',
         label: price.label,
         cropLabels: [],
-        appliesTo: MANURE_APPLIES_TO,
+        appliesTo,
         from: withUnit(price.valueDkk),
         to: withUnit(priceValue(assumptions, overrides, price.id)),
-        guideStep: 2,
+        guideStep,
       }
     })
+}
+
+// A changed cross-crop price without a crop row changes no crop's figures here.
+export const priceChangesOutsideCrops = (
+  changes: ProfileChange[],
+): ProfileChange[] =>
+  changes.filter(
+    (change) => change.kind === 'price' && change.cropLabels.length === 0,
+  )
 
 export const profileChanges = (
   assumptions: EconomicsAssumptions,
@@ -964,7 +1060,7 @@ export const profileChanges = (
     ...yields,
     ...corrections,
     ...lines,
-    ...manureChanges(assumptions, overrides, listed),
+    ...crossCropChanges(assumptions, overrides, listed),
   ]
 }
 

@@ -95,13 +95,13 @@ _OEKO_UDBYTTE_REDUKTION = 0.32
 _KALKULE_KODE: dict[int, int] = {70: 1, 71: 2, 72: 3}
 
 # Udlægskode -> the price-list category covering seed/establishment for this
-# udlæg. This uses the same code family as bridge_v2.py's _UDL_VIRKEMIDDEL but
-# groups by the PHYSICAL afgrøde being sown, not NUAR virkemiddel eligibility.
-# For example, 960-966 ("udlæg/eftersslæt" clover grass) and 2000 ("udlæg til
-# frø") are not NUAR virkemidler but still incur actual seed costs. Code 921
-# ("Bar jord", replaces the old pseudo-code 3000 "Jordbearbejdning efterår"
-# in the source data - see docs/nles5-kategorier.md) is not a sown afgrøde
-# and has no entry here.
+# secondary crop. This uses the same code family as bridge_v2.py's
+# _UDL_VIRKEMIDDEL but groups by the PHYSICAL afgrøde being sown, not NUAR
+# virkemiddel eligibility. Undersown grass (960-966) and grass seed (2000)
+# have no entry: the budget of the crop they establish has the seed, so a
+# post here would charge it twice. Code 921 ("Bar jord", replaces the old
+# pseudo-code 3000 "Jordbearbejdning efterår" in the source data - see
+# docs/nles5-kategorier.md) is not a sown crop and has no entry either.
 _UDL_KOSTKATEGORI: dict[int, str] = {
     968: "Efterafgrøde",
     970: "Efterafgrøde",
@@ -109,15 +109,19 @@ _UDL_KOSTKATEGORI: dict[int, str] = {
     9682: "Mellemafgrøde",
     9684: "Mellemafgrøde, frøgræs",
     9683: "Tidlig såning",
-    960: "Udlæg",
-    961: "Udlæg",
-    962: "Udlæg",
-    963: "Udlæg",
-    964: "Udlæg",
-    965: "Udlæg",
-    966: "Udlæg",
-    2000: "Udlæg",
 }
+_MAIZE_SILAGE_CATCH_CROP_CATEGORY = "Efterafgrøde, majshelsæd"
+# The categories whose seed and establishment posts a profile can price, in the
+# order it lists them. The grass seed (frøgræs) categories are grass, which has
+# crop codes of its own, so a profile lists no price for their posts; the
+# calculator still adds them.
+_PROFILE_PRICED_CATEGORIES = (
+    "Efterafgrøde",
+    _MAIZE_SILAGE_CATCH_CROP_CATEGORY,
+    "Mellemafgrøde",
+    "Tidlig såning",
+)
+_PRECISION_FARMING_POST = "Præcisionsjordbrug"
 
 
 def _fetch_rows(table, task_name: str):
@@ -509,6 +513,20 @@ def mangler_oekonomi(afgrodekode: int, driftsform: str) -> bool:
     return afgrodekode not in _afgroeder_i_saedskifter()
 
 
+def _list_price(post: str, label: str) -> dict | None:
+    """A price-list post as a budget price, or None if the price list lacks it."""
+    entry = _load_prisliste().get(post)
+    if entry is None:
+        return None
+    return dict(
+        id=identifier("list", post),
+        label=label,
+        unit=price_unit(entry["enhed"]),
+        value=entry["pris"],
+        source=entry["kilde"],
+    )
+
+
 def manure_prices() -> dict[str, dict | None]:
     """The two husdyrgødning prices per tonne a profile can set.
 
@@ -516,24 +534,33 @@ def manure_prices() -> dict[str, dict | None]:
     spreads no husdyrgødning, but a simulation that does uses the prices, on
     both driftsformer. A price missing from an older price list is None.
     """
-    prisliste = _load_prisliste()
-
-    def price(post: str, label: str) -> dict | None:
-        entry = prisliste.get(post)
-        if entry is None:
-            return None
-        return dict(
-            id=identifier("list", post),
-            label=label,
-            unit=price_unit(entry["enhed"]),
-            value=entry["pris"],
-            source=entry["kilde"],
-        )
-
     return {
-        "spreading": price(_GYLLE_UDBRINGNING_POST, _GYLLE_UDBRINGNING_LABEL),
-        "purchase": price(_GYLLE_KOEB_POST, _GYLLE_KOEB_LABEL),
+        "spreading": _list_price(_GYLLE_UDBRINGNING_POST, _GYLLE_UDBRINGNING_LABEL),
+        "purchase": _list_price(_GYLLE_KOEB_POST, _GYLLE_KOEB_LABEL),
     }
+
+
+def cross_crop_prices() -> list[tuple[str, dict]]:
+    """The (group, price) pairs a profile sets across crops.
+
+    A calculation adds these price-list posts on top of a crop's own budget, so a
+    standard crop budget has rows for few or none of them. They are listed on
+    both farming systems, since a profile applies to either. A post missing from
+    an older price list is left out.
+    """
+    posts = [
+        *(
+            ("catchCrops", post, post)
+            for category in _PROFILE_PRICED_CATEGORIES
+            for post in (f"{category}, udsæd", f"{category}, etablering")
+        ),
+        ("fieldWork", _PRECISION_FARMING_POST, _PRECISION_FARMING_POST),
+        ("fertiliser", _N_UDBRINGNING_POST, _MINERAL_SPREADING_LABEL),
+        ("fertiliser", _GYLLE_UDBRINGNING_POST, _GYLLE_UDBRINGNING_LABEL),
+        ("fertiliser", _GYLLE_KOEB_POST, _GYLLE_KOEB_LABEL),
+    ]
+    priced = ((group, _list_price(post, label)) for group, post, label in posts)
+    return [(group, price) for group, price in priced if price is not None]
 
 
 @lru_cache(maxsize=1)
@@ -555,6 +582,7 @@ def _load_prisliste() -> dict[str, dict]:
 _STORED_LINE_KEYS = ("kategori", "behandling", "udgift_kr_ha")
 _N_POST = "Handelsgødning, kvælstof (N)"
 _N_UDBRINGNING_POST = "Handelsgødning, udbringning"
+_MINERAL_SPREADING_LABEL = "Udbringning, handelsgødning"
 _AUTUMN_SPREADING_LABEL = "Udbringning, handelsgødning, efterår"
 _BUDGET_SPREADING = "Gødningsspredning"
 # A budget with this many spreadings is taken to include the one in autumn.
@@ -563,14 +591,15 @@ _MAJSHELSAED_KODE = 216
 
 
 def _udlaeg_kategori(udlaeg_kode: int | None, afgrodekode: int) -> str | None:
-    """The price-list category for the position's udlæg seed and establishment.
+    """The price-list category for the secondary crop's seed and establishment.
 
-    Covers efterafgrøde, mellemafgrøde, and other udlæg. None when there is no
-    udlæg or its code has no priced category, such as 921 for bar jord.
+    Covers catch crops, intermediate crops, and early sowing. None when there
+    is no secondary crop or its code has no priced category, such as undersown
+    grass or 921 for bare soil.
     """
     kategori = _UDL_KOSTKATEGORI.get(udlaeg_kode) if udlaeg_kode is not None else None
     if kategori == "Efterafgrøde" and afgrodekode == _MAJSHELSAED_KODE:
-        return "Efterafgrøde, majshelsæd"
+        return _MAIZE_SILAGE_CATCH_CROP_CATEGORY
     return kategori
 
 
@@ -684,8 +713,8 @@ def calculate_db(
 
     udlaeg_kode: The rotation position's udlægskode, also passed to
     bridge_v2.evaluate_leaching_position. It determines whether an additional
-    seed/establishment cost is added for efterafgrøde, mellemafgrøde, or another
-    udlæg (see _udlaeg_kategori).
+    seed/establishment cost is added for a catch crop, intermediate crop, or
+    early sowing (see _udlaeg_kategori).
 
     forfrugtsvaerdi: The forfrugt's N contribution (kg N/ha). Together with
     mncs and mnca it is the available N that the udbyttenorm is scaled by for
@@ -834,7 +863,7 @@ def calculate_db(
         goedning_linjer.append(
             list_line(
                 "Gødning",
-                "Udbringning, handelsgødning",
+                _MINERAL_SPREADING_LABEL,
                 _N_UDBRINGNING_POST,
                 quantity=spring_spreading,
                 purpose="mineralSpreading",
@@ -920,7 +949,7 @@ def calculate_db(
                 linjer.append(line)
     if praecisionsjordbrug and praecisionsgoedskning_tilladt(afgrodekode):
         linjer.append(
-            list_line("Markarbejde", "Præcisionsjordbrug", "Præcisionsjordbrug", optional=True)
+            list_line("Markarbejde", "Præcisionsjordbrug", _PRECISION_FARMING_POST, optional=True)
         )
     correction = economics.get("crop_corrections", {}).get(str(afgrodekode), 0.0)
     if correction:

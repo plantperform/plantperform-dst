@@ -14,6 +14,9 @@ import {
   describeProfileChanges,
   fertiliserNote,
   formatChangeCount,
+  guideFertiliserPrices,
+  parseNetPriceInput,
+  priceChangesOutsideCrops,
   formatDbDkk,
   formatEconomicsNumber,
   formatSignedDkk,
@@ -1393,5 +1396,108 @@ describe('customisedBreakdownLine', () => {
         category: 'Gødning',
       }),
     ).toBeNull()
+  })
+})
+
+describe('cross-crop prices', () => {
+  const price = (id: string, label: string, valueDkk: number) => ({
+    id,
+    label,
+    unit: 'kr/ha',
+    valueDkk,
+    source: null,
+  })
+
+  const CROSS_CROP: EconomicsAssumptions = {
+    ...WITH_WHEAT,
+    prices: [
+      ...WITH_WHEAT.prices,
+      price('earlySowingSeed', 'Tidlig såning, udsæd', -150),
+      price('precision', 'Præcisionsjordbrug', 50),
+      price('mineralSpreading', 'Udbringning, handelsgødning', 115),
+      price('manurePurchase', 'Husdyrgødning, køb', 0),
+    ],
+    manurePurchasePriceId: 'manurePurchase',
+    crossCropPrices: [
+      {
+        priceId: 'earlySowingSeed',
+        group: 'catchCrops',
+        canBeNegative: true,
+      },
+      { priceId: 'precision', group: 'fieldWork', canBeNegative: false },
+      {
+        priceId: 'mineralSpreading',
+        group: 'fertiliser',
+        canBeNegative: false,
+      },
+      { priceId: 'manurePurchase', group: 'fertiliser', canBeNegative: false },
+    ],
+  }
+
+  const changed = ['earlySowingSeed', 'precision', 'manurePurchase'].reduce(
+    (overrides, id) => withPriceOverride(CROSS_CROP, overrides, id, 20),
+    NO_OVERRIDES,
+  )
+
+  it('lists a price that no crop row uses with what it applies to', () => {
+    const changes = profileChanges(CROSS_CROP, changed)
+    expect(
+      changes.map((change) => [
+        change.label,
+        change.appliesTo,
+        change.from,
+        change.to,
+        change.guideStep,
+      ]),
+    ).toEqual([
+      [
+        'Tidlig såning, udsæd',
+        'År med efterafgrøde, mellemafgrøde eller tidlig såning',
+        '-150 kr/ha',
+        '20 kr/ha',
+        5,
+      ],
+      [
+        'Præcisionsjordbrug',
+        'Simuleringer med præcisionsjordbrug',
+        '50 kr/ha',
+        '20 kr/ha',
+        5,
+      ],
+      [
+        'Husdyrgødning, køb',
+        'Simuleringer med husdyrgødning',
+        '0 kr/ha',
+        '20 kr/ha',
+        2,
+      ],
+    ])
+    expect(priceChangesOutsideCrops(changes)).toEqual(changes)
+    expect(withoutProfileChanges(CROSS_CROP, changed)).toEqual(NO_OVERRIDES)
+  })
+
+  it('leaves the dækningsbidrag of the crop budgets unchanged', () => {
+    expect(
+      profileDbEffect(CROSS_CROP, changed).map((effect) => effect.deltaDkkHa),
+    ).toEqual(CROSS_CROP.crops.map(() => 0))
+  })
+
+  it('offers every fertiliser price once in the Gødning step', () => {
+    const ids = guideFertiliserPrices(CROSS_CROP).map((entry) => entry.id)
+    expect(ids).toEqual([
+      ...mineralFertiliserPrices(CROSS_CROP).map((entry) => entry.id),
+      'mineralSpreading',
+      'manurePurchase',
+    ])
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('reads a saving as a negative net price only where that is allowed', () => {
+    expect(parseNetPriceInput('−150')).toEqual({ value: -150 })
+    expect(parseNetPriceInput('-12,5')).toEqual({ value: -12.5 })
+    expect(parseNetPriceInput('abc')).toEqual({ error: 'Skriv et tal.' })
+    expect(parseEconomicsInput('-150')).toEqual({
+      error: 'Tallet kan ikke være negativt.',
+    })
   })
 })

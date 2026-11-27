@@ -163,6 +163,9 @@ field" column is the name on the wire.
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
 | udbringning af husdyrgødning, pr. ton | `manureSpreading`, `manureSpreadingPriceId` | `manureSpreadingPriceId` | The price per tonne of spreading husdyrgødning, set in the Gødning step on both driftsformer |
 | købspris for husdyrgødning, pr. ton | `manurePurchase`, `manurePurchasePriceId` | `manurePurchasePriceId` | What a tonne of husdyrgødning costs to buy, standard 0 kr/ton |
+| priser på tværs af afgrøder | `CrossCropPrice`, `CrossCropPriceGroup`, `CROSS_CROP_PRICES_LABEL`, `CROSS_CROP_PRICE_GROUPS`, `crossCropPriceRows`, `CrossCropPrices` | `crossCropPrices`, `CrossCropPrice` | The prices of the price list that belong to no single crop: the posts for efterafgrøde, mellemafgrøde and tidlig såning, præcisionsjordbrug, spreading of handelsgødning and husdyrgødning, and buying husdyrgødning. Frøgræs and udlæg are not among them: they are grass, which has crop codes of its own. The calculator adds the frøgræs posts, but none for a grass udlæg, as the budget of the crop it establishes has the seed. Neither is the økologisk N-tillæg among them. A profile prices them like any other price. The budgets payload lists them in `crossCropPrices` even when no crop budget has a row for them. The profile page shows them under "Priser på tværs af afgrøder", the guide in step 5 (the fertiliser ones in step 2, Gødning) |
+| pris der kan være negativ | `canBeNegative`, `parseNetPriceInput` | `SIGNED_PRICE_IDS`, `can_be_negative` | Tidlig såning, udsæd is −150 kr/ha: a saving against normal sowing. Only these two prices may be a negative net price in a profile; every other price is 0 or more |
+| pris uden for afgrødernes budgetter | `priceChangesOutsideCrops`, `uncountedPriceLabels` | | A changed cross-crop price that no crop budget has a row for. It does not move the dækningsbidrag in the guide, on the profile page or in the estimate on a simulation, but counts in the simulation's own results, where it is used |
 | standard svinegylle | `StandardManure`, `standardManure` | `standardManure` | What an økologisk Standard budget without a simulation is fertilised with: svinegylle covering the whole N-norm, at 6 kg udnyttet N pr. ton |
 
 ## Economics
@@ -222,7 +225,7 @@ field" column is the name on the wire.
 | afgrødekorrektion | `cropCorrection`, `withCropCorrection`, `CROP_CORRECTION_LABEL` | `cropCorrections` | kr/ha added to the dækningsbidrag of one crop alone; minus lowers it. Booked as the cost line "Afgrødekorrektion" under Andet, so no shared price changes |
 | ændring i forhold til Standard | `ProfileChange` | | One changed yield, price, quantity or afgrødekorrektion in a profile |
 | profilens virkning i en simulering | `SimulationEconomicsEffect`, `simulationEconomicsEffect` | | A profile's change in dækningsbidrag for the crops a simulation grows, weighted by each crop's average area per year |
-| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | Six steps; step 5, Dækningsbidrag, lists the dækningsbidrag of every crop (`CropsOverview`) and opens a crop for editing |
+| Tilpas økonomien til bedriften | the guide, `EconomicsGuidePage` | | Seven steps; step 5, Priser på tværs, holds the cross-crop prices, and step 6, Dækningsbidrag, lists the dækningsbidrag of every crop (`CropsOverview`) and opens a crop for editing |
 | sådan er tallene beregnet | breakdown, `BreakdownRow` | | The calculation under a field |
 
 ## Soil and calculation

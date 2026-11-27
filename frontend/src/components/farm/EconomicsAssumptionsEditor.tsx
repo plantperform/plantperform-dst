@@ -1,4 +1,4 @@
-import { LayoutList } from 'lucide-react'
+import { LayoutList, Tags } from 'lucide-react'
 import { useState } from 'react'
 
 import { CropGroupTile } from '@/components/farm/CropGroupTile'
@@ -7,17 +7,21 @@ import {
   DbDelta,
   GRID_HEAD_CLASS,
 } from '@/components/farm/economics-ui'
+import { CrossCropPrices } from '@/components/farm/EconomicsCrossCropPrices'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import { RULES_CARD_CLASS } from '@/components/farm/rules-ui'
 import { cropGroupFor } from '@/lib/crop-groups'
 import { cropLabel } from '@/lib/crop-label'
 import {
+  CROSS_CROP_PRICES_LABEL,
   cropDbChange,
   cropTotals,
+  crossCropPriceRows,
   fertiliserNote,
   formatDbDkk,
   formatSignedDkk,
   isCropCustomised,
+  isPriceCustomised,
   type EconomicsAssumptions,
   type EconomicsOverrides,
   type OverridesChange,
@@ -137,13 +141,22 @@ export const EconomicsAssumptionsEditor = ({
   focus,
 }: EconomicsAssumptionsEditorProps) => {
   const [opened, setOpened] = useState<{
-    cropCode: number | null
+    cropCode: number | 'crossCrop' | null
     lineId?: string
   }>({ cropCode: focus?.cropCode ?? null, lineId: focus?.lineId })
   const active = assumptions.crops.find(
     (crop) => crop.cropCode === opened.cropCode,
   )
-  const openCrop = (cropCode: number | null) => setOpened({ cropCode })
+  const crossCropRows = crossCropPriceRows(assumptions)
+  const showingCrossCrop =
+    opened.cropCode === 'crossCrop' && crossCropRows.length > 0
+  const openCrop = (cropCode: number | 'crossCrop' | null) =>
+    setOpened({ cropCode })
+  const sectionLabel = showingCrossCrop
+    ? CROSS_CROP_PRICES_LABEL
+    : active
+      ? `Priser og mængder for ${cropLabel(active.cropCode, active.cropName)}`
+      : 'Alle afgrøder'
 
   return (
     <div className="grid gap-4 @3xl:grid-cols-[20rem_minmax(0,1fr)] @3xl:items-start">
@@ -152,7 +165,7 @@ export const EconomicsAssumptionsEditor = ({
           <li>
             <button
               type="button"
-              aria-current={active ? undefined : 'true'}
+              aria-current={active || showingCrossCrop ? undefined : 'true'}
               className={LIST_ITEM_CLASS}
               onClick={() => openCrop(null)}
             >
@@ -163,6 +176,29 @@ export const EconomicsAssumptionsEditor = ({
               Alle afgrøder
             </button>
           </li>
+          {crossCropRows.length > 0 ? (
+            <li>
+              <button
+                type="button"
+                aria-current={showingCrossCrop ? 'true' : undefined}
+                className={LIST_ITEM_CLASS}
+                onClick={() => openCrop('crossCrop')}
+              >
+                <Tags
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1">
+                  {CROSS_CROP_PRICES_LABEL}
+                </span>
+                {crossCropRows.some((row) =>
+                  isPriceCustomised(overrides, row.priceId),
+                ) ? (
+                  <CustomisedDot />
+                ) : null}
+              </button>
+            </li>
+          ) : null}
           {assumptions.crops.map((crop) => (
             <li key={crop.cropCode}>
               <button
@@ -185,14 +221,34 @@ export const EconomicsAssumptionsEditor = ({
       </nav>
 
       <section
-        aria-label={
-          active
-            ? `Priser og mængder for ${cropLabel(active.cropCode, active.cropName)}`
-            : 'Alle afgrøder'
-        }
+        aria-label={sectionLabel}
         className={cn(RULES_CARD_CLASS, 'overflow-hidden')}
       >
-        {active ? (
+        {showingCrossCrop ? (
+          <div>
+            <div className="px-5 pt-4 pb-3">
+              <h2 className="text-base font-semibold">
+                {CROSS_CROP_PRICES_LABEL}
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Priser, der ikke hører til én afgrøde. De lægges oven på
+                afgrødernes egne budgetter, hvor de er relevante.
+              </p>
+            </div>
+            <CrossCropPrices
+              assumptions={assumptions}
+              overrides={overrides}
+              onChange={onOverridesChange}
+            />
+            <p className="bg-muted/30 px-5 py-2.5 text-[11px] text-muted-foreground">
+              {onOverridesChange
+                ? 'Et tomt felt bruger standardens pris. '
+                : null}
+              De fleste står ikke i afgrødernes egne budgetter, så de ændrer
+              ikke tallene under Alle afgrøder. De tæller med i simuleringerne.
+            </p>
+          </div>
+        ) : active ? (
           <EconomicsCropDetail
             key={active.cropCode}
             assumptions={assumptions}

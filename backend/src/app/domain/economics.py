@@ -11,6 +11,13 @@ from app.domain.base import CamelModel
 from app.domain.membership import MembershipRole
 
 Nonnegative = Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
+Price = Annotated[float, Field(allow_inf_nan=False, strict=True)]
+# Early sowing is priced as the difference from normal sowing, so its two
+# price-list amounts can be a saving, which is a negative price. No other price
+# can be negative.
+SIGNED_PRICE_IDS = frozenset(
+    {'list:["Tidlig såning, udsæd"]', 'list:["Tidlig såning, etablering"]'}
+)
 YieldPercentage = Annotated[float, Field(gt=-100, allow_inf_nan=False, strict=True)]
 # kr/ha added to one crop's dækningsbidrag; negative lowers it.
 CropCorrection = Annotated[float, Field(ge=-100_000, le=100_000, allow_inf_nan=False, strict=True)]
@@ -40,10 +47,22 @@ class EconomicsCalculationInputs(CamelModel):
 
 class EconomicsOverrides(CamelModel):
     model_config = ConfigDict(extra="forbid")
-    prices: dict[str, Nonnegative] = Field(default_factory=dict)
+    prices: dict[str, Price] = Field(default_factory=dict)
     quantities: dict[str, Nonnegative] = Field(default_factory=dict)
     yield_pct: dict[str, YieldPercentage] = Field(default_factory=dict)
     crop_corrections: dict[str, CropCorrection] = Field(default_factory=dict)
+
+    @field_validator("prices")
+    @classmethod
+    def only_signed_prices_are_negative(cls, prices):
+        negative = sorted(
+            price_id
+            for price_id, value in prices.items()
+            if value < 0 and price_id not in SIGNED_PRICE_IDS
+        )
+        if negative:
+            raise ValueError(f"These prices cannot be negative: {negative}")
+        return prices
 
     def cache_key(self) -> str:
         if not any((self.prices, self.quantities, self.yield_pct, self.crop_corrections)):
@@ -139,6 +158,14 @@ class StandardManure(CamelModel):
     n_kg_per_ton: float
 
 
+class CrossCropPrice(CamelModel):
+    """A price-list price that is added on top of a crop's own budget."""
+
+    price_id: str
+    group: Literal["catchCrops", "fieldWork", "fertiliser"]
+    can_be_negative: bool = False
+
+
 class CropBudgets(CamelModel):
     jb_nr: int | None
     farming_system: str
@@ -146,6 +173,8 @@ class CropBudgets(CamelModel):
     # The husdyrgødning prices per tonne, always in `prices`, on either driftsform.
     manure_spreading_price_id: str | None = None
     manure_purchase_price_id: str | None = None
+    # The cross-crop prices, also always in `prices`, on either driftsform.
+    cross_crop_prices: list[CrossCropPrice] = Field(default_factory=list)
     standard_manure: StandardManure | None = None
     crops: list[CropBudget]
     soil_variants: dict[str, list[SoilVariant]]

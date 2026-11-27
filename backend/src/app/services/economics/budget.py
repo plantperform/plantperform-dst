@@ -12,10 +12,12 @@ from sqlalchemy import select
 from app.data.db import SessionLocal, afgroede_table
 from app.data.repository import list_fields, list_simulations, scenario_afgrodekoder
 from app.data.saedskifte_store import load_selected
+from app.domain.economics import SIGNED_PRICE_IDS
 from app.domain.simulation import GodningSettings
 from app.services.economics.db_calculator import (
     OEKOLOGISK,
     calculate_db,
+    cross_crop_prices,
     manure_prices,
     soil_variants,
 )
@@ -125,12 +127,14 @@ def crop_budgets(
                 costs=[_line(line, prices) for line in detail["linjer"]],
             )
         )
-    # The husdyrgødning prices belong to the budget even though only a
-    # simulation that spreads it has rows for them, on either driftsform.
+    # The cross-crop prices belong to the budget even when no crop has a row for
+    # them. A row's wording gives way to the price's own name: the autumn
+    # spreading row shares the price of every handelsgødning spreading.
+    cross_crop = cross_crop_prices()
+    for _, price in cross_crop:
+        row_price = prices.get(price["id"], price)
+        prices[price["id"]] = {**row_price, "label": price["label"]}
     manure = manure_prices()
-    for price in manure.values():
-        if price is not None:
-            prices.setdefault(price["id"], price)
     used = set(prices).union(
         line["quantityId"]
         for crop in budgets
@@ -143,6 +147,10 @@ def crop_budgets(
         prices=list(prices.values()),
         manureSpreadingPriceId=manure["spreading"] and manure["spreading"]["id"],
         manurePurchasePriceId=manure["purchase"] and manure["purchase"]["id"],
+        crossCropPrices=[
+            dict(priceId=price["id"], group=group, canBeNegative=price["id"] in SIGNED_PRICE_IDS)
+            for group, price in cross_crop
+        ],
         standardManure=standard_manure,
         crops=budgets,
         soilVariants={

@@ -53,6 +53,7 @@ from app.data.db import (
     simulation_table as setups,
 )
 from app.domain.economics import (
+    SIGNED_PRICE_IDS,
     CreateEconomicsModuleRequest,
     CropBudgets,
     EconomicsConflictError,
@@ -98,6 +99,17 @@ class EconomicsValidationTests(unittest.TestCase):
                 EconomicsOverrides(yieldPct={"1": value})
         self.assertEqual(EconomicsOverrides(prices={SALE: 0}).prices[SALE], 0)
         self.assertEqual(EconomicsOverrides(yieldPct={"1": -99}).yield_pct["1"], -99)
+
+    def test_only_the_early_sowing_prices_can_be_a_saving(self):
+        signed = {
+            overrides.identifier("list", f"Tidlig såning, {part}")
+            for part in ("udsæd", "etablering")
+        }
+        self.assertEqual(SIGNED_PRICE_IDS, signed)
+        for price_id in signed:
+            self.assertEqual(EconomicsOverrides(prices={price_id: -150}).prices[price_id], -150)
+        with self.assertRaises(ValidationError):
+            EconomicsOverrides(prices={overrides.identifier("list", "Efterafgrøde, udsæd"): -1})
 
     def test_empty_and_order_independent_cache_keys(self):
         self.assertEqual(EconomicsOverrides().cache_key(), "")
@@ -1262,6 +1274,114 @@ class EconomicsDatabaseTests(DatabaseTests):
             economics_key=changes.cache_key(),
         )
         self.assertEqual(result["goedning"], 10 * 30 + 10 * 15)
+
+    def test_the_cross_crop_prices_are_listed_and_priced_by_a_profile(self):
+        posts = (
+            ("Efterafgrøde, udsæd", 280),
+            ("Efterafgrøde, etablering", 260),
+            ("Tidlig såning, udsæd", -150),
+            ("Tidlig såning, etablering", 450),
+            ("Præcisionsjordbrug", 50),
+            ("Efterafgrøde, frøgræs, udsæd", 0),
+            ("Udlæg, udsæd", 400),
+        )
+        with self.sessions.begin() as session:
+            for index, (post, price) in enumerate(posts, 20):
+                session.execute(
+                    insert(prisliste_table).values(
+                        source_order=index,
+                        post=post,
+                        kategori="Efterafgrøde/udlæg",
+                        type="Omkostning",
+                        pris=price,
+                        enhed="ha",
+                    )
+                )
+        calculator.clear_lookup_cache()
+        ids = {post: overrides.identifier("list", post) for post, _ in posts}
+        for system, only_organic in (("Konventionel", False), ("Økologisk", True)):
+            with self.subTest(system=system):
+                result = budget.crop_budgets([1], 5, system, only_organic)
+                CropBudgets.model_validate(result)
+                listed = [
+                    (entry["priceId"], entry["group"], entry["canBeNegative"])
+                    for entry in result["crossCropPrices"]
+                ]
+                # A post the price list lacks is left out, and so are the grass
+                # seed and udlæg posts.
+                self.assertEqual(
+                    listed,
+                    [
+                        (ids["Efterafgrøde, udsæd"], "catchCrops", False),
+                        (ids["Efterafgrøde, etablering"], "catchCrops", False),
+                        (ids["Tidlig såning, udsæd"], "catchCrops", True),
+                        (ids["Tidlig såning, etablering"], "catchCrops", True),
+                        (ids["Præcisionsjordbrug"], "fieldWork", False),
+                        (
+                            overrides.identifier("list", "Handelsgødning, udbringning"),
+                            "fertiliser",
+                            False,
+                        ),
+                        (
+                            overrides.identifier("list", "Gylleudbringning, slæbeslanger"),
+                            "fertiliser",
+                            False,
+                        ),
+                        (
+                            overrides.identifier("list", "Husdyrgødning, køb"),
+                            "fertiliser",
+                            False,
+                        ),
+                    ],
+                )
+                prices = {price["id"]: price for price in result["prices"]}
+                self.assertEqual(
+                    [prices[price_id]["label"] for price_id, _, _ in listed[-3:]],
+                    [
+                        "Udbringning, handelsgødning",
+                        "Udbringning, husdyrgødning",
+                        "Husdyrgødning, køb",
+                    ],
+                )
+                self.assertEqual(prices[ids["Tidlig såning, udsæd"]]["value"], -150)
+
+        changes = EconomicsOverrides(
+            prices={ids["Efterafgrøde, udsæd"]: 300, ids["Tidlig såning, udsæd"]: -200}
+        )
+        overrides.validate_identifiers(changes)
+
+        def seed(udlaeg_kode):
+            return calculator.calculate_db(
+                1, "Konventionel", 5, udlaeg_kode=udlaeg_kode, economics_key=changes.cache_key()
+            )["udsaed"]
+
+        self.assertEqual((seed(968) - seed(None), seed(9683) - seed(None)), (300, -200))
+
+    def test_undersown_grass_adds_no_seed_or_sowing_of_its_own(self):
+        # The grass or grass seed crop that undersown grass establishes has the
+        # seed in its own budget, so the price list's udlæg posts are not charged.
+        posts = (("Udlæg, udsæd", 400), ("Udlæg, etablering", 150))
+        with self.sessions.begin() as session:
+            for index, (post, price) in enumerate(posts, 20):
+                session.execute(
+                    insert(prisliste_table).values(
+                        source_order=index,
+                        post=post,
+                        kategori="Efterafgrøde/udlæg",
+                        type="Omkostning",
+                        pris=price,
+                        enhed="ha",
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        def costs(udlaeg_kode):
+            result = calculator.calculate_db(1, "Konventionel", 5, udlaeg_kode=udlaeg_kode)
+            return result["udsaed"], result["markarbejde"], result["db"]
+
+        for udlaeg_kode in (*range(960, 967), 2000):
+            with self.subTest(udlaeg_kode=udlaeg_kode):
+                self.assertEqual(costs(udlaeg_kode), costs(None))
 
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))

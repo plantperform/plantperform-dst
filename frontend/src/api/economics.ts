@@ -13,6 +13,7 @@ import type {
 import {
   COST_CATEGORIES,
   type CostCategory,
+  type CrossCropPrice,
   type EconomicsAssumptions,
   type EconomicsLine,
   type SoilVariant,
@@ -45,6 +46,7 @@ type CropBudgets = {
   }[]
   manureSpreadingPriceId: string | null
   manurePurchasePriceId: string | null
+  crossCropPrices?: CrossCropPrice[]
   standardManure: StandardManure | null
   crops: CropBudget[]
   soilVariants: Record<string, SoilVariant[]>
@@ -87,6 +89,7 @@ const toAssumptions = (budgets: CropBudgets): EconomicsAssumptions => ({
   })),
   manureSpreadingPriceId: budgets.manureSpreadingPriceId,
   manurePurchasePriceId: budgets.manurePurchasePriceId,
+  crossCropPrices: budgets.crossCropPrices ?? [],
   standardManure: budgets.standardManure,
   crops: budgets.crops.map((crop) => ({
     cropCode: crop.cropCode,
