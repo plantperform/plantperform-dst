@@ -186,14 +186,26 @@ class OptimizationConstraints(CamelModel):
         return self
 
 
+class VandingUndtagelse(CamelModel):
+    imk_id: int
+    tilvalgte_afgrode_koder: list[int] = Field(default_factory=list)
+    fravalgte_afgrode_koder: list[int] = Field(default_factory=list)
+
+
 class VandingSettings(CamelModel):
     imk_ids: list[int] = Field(default_factory=list)
     afgrode_koder: list[int] = Field(default_factory=list)
+    undtagelser: list[VandingUndtagelse] = Field(default_factory=list)
 
     def crops_for(self, imk_id: int | None, jbnr: int) -> frozenset[int]:
-        if imk_id in self.imk_ids and is_sandjord(jbnr):
-            return frozenset(self.afgrode_koder)
-        return frozenset()
+        if imk_id not in self.imk_ids or not is_sandjord(jbnr):
+            return frozenset()
+        crops = set(self.afgrode_koder)
+        for undtagelse in self.undtagelser:
+            if undtagelse.imk_id == imk_id:
+                crops |= set(undtagelse.tilvalgte_afgrode_koder)
+                crops -= set(undtagelse.fravalgte_afgrode_koder)
+        return frozenset(crops)
 
 
 class Simulation(CamelModel):

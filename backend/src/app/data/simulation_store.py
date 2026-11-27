@@ -585,7 +585,15 @@ def _fit_settings(data, before, after):
     if vanding:
         present = {field.imk_id for field in after}
         imk_ids = [imk_id for imk_id in vanding["imk_ids"] if imk_id in present]
-        data = {**data, "vanding": {**vanding, "imk_ids": imk_ids}}
+        undtagelser = [
+            undtagelse
+            for undtagelse in vanding.get("undtagelser", [])
+            if undtagelse["imk_id"] in present
+        ]
+        data = {
+            **data,
+            "vanding": {**vanding, "imk_ids": imk_ids, "undtagelser": undtagelser},
+        }
 
     return {
         **data,

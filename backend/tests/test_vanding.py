@@ -6,7 +6,7 @@ from test_permanent_crop_candidate import HISTORY, NORM, ORGANIC, PERMANENT_GRAS
 from app.data import repository, simulation_store
 from app.domain.field import FieldRecord
 from app.domain.rotation_candidate import RotationCandidateRef
-from app.domain.simulation import Simulation, VandingSettings
+from app.domain.simulation import Simulation, VandingSettings, VandingUndtagelse
 from app.services.rotations import afgroede_normer, choices
 from app.services.scenario import candidate_evaluator
 from optimizer import preparation
@@ -23,6 +23,21 @@ class VandingSettingsTests(unittest.TestCase):
         self.assertEqual(vanding.crops_for(7, 0), frozenset())
         self.assertEqual(vanding.crops_for(8, 3), frozenset())
         self.assertEqual(vanding.crops_for(None, 3), frozenset())
+
+    def test_a_field_adds_and_removes_crops_on_top_of_the_shared_list(self) -> None:
+        vanding = VandingSettings(
+            imk_ids=[7, 8],
+            afgrode_koder=[VAARBYG],
+            undtagelser=[
+                VandingUndtagelse(
+                    imk_id=7,
+                    tilvalgte_afgrode_koder=[VINTERHVEDE],
+                    fravalgte_afgrode_koder=[VAARBYG],
+                )
+            ],
+        )
+        self.assertEqual(vanding.crops_for(7, 4), frozenset({VINTERHVEDE}))
+        self.assertEqual(vanding.crops_for(8, 4), frozenset({VAARBYG}))
 
     def test_the_crop_list_marks_permanent_crops(self) -> None:
         names = {VAARBYG: "Vårbyg", PERMANENT_GRASS: "Permanent græs"}
@@ -52,9 +67,17 @@ class VandingSettingsTests(unittest.TestCase):
             )
             for imk_id in (7, 8)
         )
-        data = {"vanding": {"imk_ids": [7, 8], "afgrode_koder": [VAARBYG]}}
+        undtagelser = [
+            {"imk_id": imk_id, "tilvalgte_afgrode_koder": [VINTERHVEDE]} for imk_id in (7, 8)
+        ]
+        data = {
+            "vanding": {"imk_ids": [7, 8], "afgrode_koder": [VAARBYG], "undtagelser": undtagelser}
+        }
         fitted = simulation_store._fit_settings(data, [kept, removed], [kept])
-        self.assertEqual(fitted["vanding"], {"imk_ids": [7], "afgrode_koder": [VAARBYG]})
+        self.assertEqual(
+            fitted["vanding"],
+            {"imk_ids": [7], "afgrode_koder": [VAARBYG], "undtagelser": undtagelser[:1]},
+        )
 
 
 class IrrigatedYearTests(unittest.TestCase):
