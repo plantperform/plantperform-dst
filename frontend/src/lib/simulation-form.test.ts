@@ -5,6 +5,7 @@ import type {
   AutumnFertiliser,
   FarmingSystem,
   FertiliserPresetOption,
+  FieldRecord,
   RotationCategoryOption,
   Simulation,
 } from '@/api/types'
@@ -27,6 +28,13 @@ import {
   forcedAutumnFertiliser,
   groupSelection,
   initialFormValues,
+  irrigableFields,
+  fieldIrrigatedCropCodes,
+  irrigableSoilTypes,
+  irrigatedCropOptions,
+  irrigationLabel,
+  keepOfferedIrrigation,
+  withFieldIrrigation,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -214,6 +222,133 @@ describe('step schemas', () => {
     const withoutName = { ...filledValues, name: '' }
     expect(isStepValid(stepIndexOf('basics'), withoutName)).toBe(false)
     expect(isStepValid(stepIndexOf('rotations'), withoutName)).toBe(true)
+  })
+
+  it('asks for the watered crops once a vandingsmark is chosen', () => {
+    expect(
+      messageFor(
+        { ...filledValues, irrigatedImkIds: [7], irrigatedCropCodes: [] },
+        'irrigatedCropCodes',
+      ),
+    ).toBe('Vælg de afgrøder, der vandes')
+    expect(
+      isStepValid(stepIndexOf('irrigation'), {
+        ...filledValues,
+        irrigatedImkIds: [7],
+        irrigatedCropCodes: [1],
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('irrigation', () => {
+  const field = (imkId: number | null, soilTypeNumber: number | null) =>
+    ({ imkId, soilTypeNumber }) as FieldRecord
+
+  it('offers only fields with an IMK id on JB 1-4', () => {
+    const offered = [
+      field(1, 4),
+      field(2, 5),
+      field(null, 2),
+      field(3, null),
+      field(4, 0),
+    ]
+    expect(irrigableFields(offered).map((each) => each.imkId)).toEqual([1])
+  })
+
+  it('sends no crops when no vandingsmark is chosen', () => {
+    expect(
+      toCreateSimulationInput({
+        ...filledValues,
+        irrigatedImkIds: [],
+        irrigatedCropCodes: [1],
+        irrigationExceptions: [
+          { imkId: 7, addedCropCodes: [11], removedCropCodes: [] },
+        ],
+      }).irrigation,
+    ).toEqual({ imkIds: [], cropCodes: [], exceptions: [] })
+  })
+
+  it('groups the vandingsmarker by JB', () => {
+    expect(
+      irrigableSoilTypes([field(1, 4), field(2, 3), field(3, 4)]).map(
+        ({ soilTypeNumber, fields }) => [
+          soilTypeNumber,
+          fields.map((each) => each.imkId),
+        ],
+      ),
+    ).toEqual([
+      [3, [2]],
+      [4, [1, 3]],
+    ])
+  })
+
+  it('keeps only what a field adds to or removes from the shared crops', () => {
+    const exceptions = withFieldIrrigation(
+      [],
+      7,
+      [1, 22],
+      [1, 11, 22],
+      [11, 22],
+    )
+    expect(exceptions).toEqual([
+      { imkId: 7, addedCropCodes: [11], removedCropCodes: [1] },
+    ])
+    expect(fieldIrrigatedCropCodes([1, 22, 216], exceptions[0])).toEqual([
+      22, 216, 11,
+    ])
+    expect(
+      withFieldIrrigation(exceptions, 7, [1, 22], [1, 11, 22], [1, 22]),
+    ).toEqual([])
+  })
+
+  it('accepts a crop chosen only on one field', () => {
+    expect(
+      isStepValid(stepIndexOf('irrigation'), {
+        ...filledValues,
+        irrigatedImkIds: [7],
+        irrigatedCropCodes: [],
+        irrigationExceptions: [
+          { imkId: 7, addedCropCodes: [11], removedCropCodes: [] },
+        ],
+      }),
+    ).toBe(true)
+  })
+
+  it('drops watered crops that are no longer offered', () => {
+    const exception = { imkId: 7, addedCropCodes: [11], removedCropCodes: [] }
+    expect(keepOfferedIrrigation([1, 22], [exception], [1, 22])).toEqual({
+      cropCodes: [1, 22],
+      exceptions: [],
+    })
+    expect(keepOfferedIrrigation([1], [exception], [1, 11])).toBeNull()
+  })
+
+  it('adds the permanent crop of a chosen vandingsmark to the crop list', () => {
+    const barley = { code: 1, name: 'Vårbyg', permanent: false }
+    const grass = { code: 252, name: 'Permanent græs', permanent: true }
+    const growing = (cropCode: number) =>
+      ({ cropRotation: [{ cropCode }] }) as FieldRecord
+    expect(
+      irrigatedCropOptions([barley], [barley, grass], [growing(252)]),
+    ).toEqual([barley, grass])
+    expect(
+      irrigatedCropOptions([barley], [barley, grass], [growing(1)]),
+    ).toEqual([barley])
+  })
+
+  it('describes the choice in the grundlag', () => {
+    expect(irrigationLabel(undefined)).toBe('Ingen')
+    expect(
+      irrigationLabel({ imkIds: [7], cropCodes: [1, 2], exceptions: [] }),
+    ).toBe('1 mark, 2 afgrøder')
+    expect(
+      irrigationLabel({
+        imkIds: [7, 8],
+        cropCodes: [1],
+        exceptions: [{ imkId: 7, addedCropCodes: [11], removedCropCodes: [] }],
+      }),
+    ).toBe('2 marker, 1 afgrøde, egne afgrøder på 1 mark')
   })
 })
 
@@ -920,6 +1055,7 @@ describe('toCreateSimulationInput', () => {
       precisionFarming: false,
       earlySowing: true,
       intermediateCrop: true,
+      irrigation: { imkIds: [], cropCodes: [], exceptions: [] },
       includePrecedingCropValue: true,
     })
   })
@@ -1102,7 +1238,16 @@ describe('simulationToFormValues', () => {
   })
 
   it('fills the form so the copy gets the same grundlag', () => {
-    const values = simulationToFormValues(simulation, [kvaeggylle], offered)
+    const irrigation = {
+      imkIds: [7],
+      cropCodes: [1],
+      exceptions: [{ imkId: 7, addedCropCodes: [11], removedCropCodes: [] }],
+    }
+    const values = simulationToFormValues(
+      { ...simulation, irrigation },
+      [kvaeggylle],
+      offered,
+    )
     expect(values.fertiliserChoice).toBe('Kvæggylle')
     expect(toCreateSimulationInput(values)).toEqual({
       name: 'Test2 (kopi)',
@@ -1114,6 +1259,7 @@ describe('simulationToFormValues', () => {
       precisionFarming: true,
       earlySowing: false,
       intermediateCrop: true,
+      irrigation,
       includePrecedingCropValue: true,
     })
   })

@@ -280,6 +280,7 @@ export type Simulation = {
   precisionFarming: boolean
   earlySowing: boolean
   intermediateCrop: boolean
+  irrigation?: Irrigation
   comparisonAvailability?:
     | { kind: 'ready' | 'uncalculated' }
     | { kind: 'partial'; missingCount: number }
@@ -312,6 +313,18 @@ export type EconomicsModule = {
   effectiveRole?: MembershipRole
 }
 
+export type IrrigationException = {
+  imkId: number
+  addedCropCodes: number[]
+  removedCropCodes: number[]
+}
+
+export type Irrigation = {
+  imkIds: number[]
+  cropCodes: number[]
+  exceptions: IrrigationException[]
+}
+
 export type CreateSimulationInput = {
   optimizationSettings?: OptimizationSettings
   economicsModuleId?: string
@@ -327,6 +340,7 @@ export type CreateSimulationInput = {
   precisionFarming?: boolean
   earlySowing?: boolean
   intermediateCrop?: boolean
+  irrigation?: Irrigation
   includePrecedingCropValue?: boolean
 }
 
@@ -618,6 +632,7 @@ export type RecomputeFieldRotationInput = {
 export type CropCodeOption = {
   code: number
   name: string
+  permanent: boolean
 }
 
 export type FieldRotationCandidates = {

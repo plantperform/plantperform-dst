@@ -209,6 +209,7 @@ def evaluate_sequence_for_mark(
     only_organic: bool,
     n_indhold_kg_per_ton: float = 6.0,
     irrigated: bool = False,
+    irrigated_crops: frozenset[int] = frozenset(),
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
@@ -310,6 +311,9 @@ def evaluate_sequence_for_mark(
             return autumn_by_crop[code]
         return 0.0, False
 
+    def irrigated_at(code: int | None) -> bool:
+        return irrigated or code in irrigated_crops
+
     n_inputs = [
         compute_n_inputs(
             afgrode_seq[i],
@@ -320,7 +324,7 @@ def evaluate_sequence_for_mark(
             org_mineral_n,
             mineralsk_andel_pct,
             only_organic,
-            irrigated,
+            irrigated_at(afgrode_seq[i]),
             driftsform,
             *autumn_for(i),
         )
@@ -347,7 +351,7 @@ def evaluate_sequence_for_mark(
                 return code, f, entry["mncs"] + entry["mnca"], entry["g0"]
         wrapped = idx % active_len
         code = afgrode_seq[wrapped]
-        f = afgroede_normer.lookup_nfix(code, jbnr, irrigated) if code is not None else 0.0
+        f = afgroede_normer.lookup_nfix(code, jbnr, irrigated_at(code)) if code is not None else 0.0
         return code, f, n_inputs[wrapped]["mncs"] + mnca[wrapped], g0_by_year[wrapped]
 
     years: list[RotationCandidateYearResult] = []
@@ -359,7 +363,7 @@ def evaluate_sequence_for_mark(
         udl_code = udlaeg_seq[i]
 
         f0 = (
-            afgroede_normer.lookup_nfix(this_code, jbnr, irrigated)
+            afgroede_normer.lookup_nfix(this_code, jbnr, irrigated_at(this_code))
             if this_code is not None
             else 0.0
         )
@@ -377,7 +381,7 @@ def evaluate_sequence_for_mark(
                 mnca=mnca[i],
                 g0=g0_by_year[i],
                 m1=m1, m2=m2, f0=f0, f1=f1, f2=f2, g1=g1, g2=g2,
-                irrigated=irrigated,
+                irrigated=irrigated_at(this_code),
                 fdato=fdato, precision_dagsbasis=precision_dagsbasis,
                 praecisionsjordbrug=praecisionsjordbrug,
                 y=START_CALENDAR_YEAR + i,
@@ -412,7 +416,7 @@ def evaluate_sequence_for_mark(
         db = calculate_db(
             this_code, driftsform, jbnr,
             mncs=crop_n - n_inputs[i]["autumn_mineral_n"],
-            mnca=n_inputs[i]["autumn_mineral_n"], irrigated=irrigated,
+            mnca=n_inputs[i]["autumn_mineral_n"], irrigated=irrigated_at(this_code),
             org_mineral_n_applied=tildelt_husdyrgodning_udnyttet,
             udlaeg_kode=udl_code, only_organic=only_organic,
             praecisionsjordbrug=praecisionsjordbrug,
@@ -548,6 +552,7 @@ def evaluate_with_overrides(
     only_organic: bool,
     n_indhold_kg_per_ton: float = 6.0,
     irrigated: bool = False,
+    irrigated_crops: frozenset[int] = frozenset(),
     fdato: str = "20/8",
     precision_dagsbasis: bool = False,
     praecisionsjordbrug: bool = False,
@@ -618,7 +623,8 @@ def evaluate_with_overrides(
         result_ref, afgrode_seq, udlaeg_seq, udlaeg_navn_seq, active_len,
         jbnr, driftsform, org_mineral_n, mineralsk_andel_pct, only_organic,
         n_indhold_kg_per_ton=n_indhold_kg_per_ton,
-        irrigated=irrigated, fdato=fdato, precision_dagsbasis=precision_dagsbasis,
+        irrigated=irrigated, irrigated_crops=irrigated_crops,
+        fdato=fdato, precision_dagsbasis=precision_dagsbasis,
         praecisionsjordbrug=praecisionsjordbrug,
         base_ref=base_ref, overrides=overrides, start_year=start_year,
         real_history=real_history,
@@ -685,6 +691,7 @@ def generate_candidates_for_field(
     s_soil: float | None = None,
     economics_key: str = "",
     prepared: tuple[PreparedCandidate, ...] | None = None,
+    irrigated_crops: frozenset[int] = frozenset(),
 ) -> list[RotationCandidateEvaluation]:
     """Evaluate prepared rotations using this field's soil and history."""
     if prepared is None:
@@ -704,6 +711,7 @@ def generate_candidates_for_field(
             godning.mineralsk_andel_pct,
             godning.only_organic,
             n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+            irrigated_crops=irrigated_crops,
             fdato=fdato,
             precision_dagsbasis=precision_dagsbasis,
             praecisionsjordbrug=praecisionsjordbrug,
@@ -730,6 +738,7 @@ def generate_permanent_crop_candidate(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    irrigated_crops: frozenset[int] = frozenset(),
 ) -> RotationCandidateEvaluation:
     """Evaluate the "keep growing this permanent crop" candidate for a field.
 
@@ -754,6 +763,7 @@ def generate_permanent_crop_candidate(
         godning.mineralsk_andel_pct,
         godning.only_organic,
         n_indhold_kg_per_ton=godning.n_indhold_kg_per_ton,
+        irrigated_crops=irrigated_crops,
         fdato=fdato,
         precision_dagsbasis=precision_dagsbasis,
         real_history=real_history,

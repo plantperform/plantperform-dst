@@ -581,6 +581,19 @@ def _fit_settings(data, before, after):
     fitted_settings = {**settings, "max_n_load_by_kystvandopland": yearly_caps}
     if "quota_trades" in settings:
         fitted_settings["quota_trades"] = quota_trades
+    vanding = data.get("vanding")
+    if vanding:
+        present = {field.imk_id for field in after}
+        imk_ids = [imk_id for imk_id in vanding["imk_ids"] if imk_id in present]
+        undtagelser = [
+            undtagelse
+            for undtagelse in vanding.get("undtagelser", [])
+            if undtagelse["imk_id"] in present
+        ]
+        data = {
+            **data,
+            "vanding": {**vanding, "imk_ids": imk_ids, "undtagelser": undtagelser},
+        }
 
     return {
         **data,

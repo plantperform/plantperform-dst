@@ -644,6 +644,31 @@ export const cropCodesKey = (farmId?: string) => {
 export const useCropCodes = (farmId?: string) =>
   useSWR<CropCodeOption[]>(cropCodesKey(farmId), fetcher)
 
+export const useCropsInRotations = (
+  farmId: string | undefined,
+  rotationVariants: string[],
+  nNormPercentages: string[],
+) => {
+  const crops = useCropCodes(farmId)
+  const options = useRotationCandidateOptions(
+    farmId,
+    rotationVariants,
+    nNormPercentages,
+  )
+  const names = new Set(
+    (options.data ?? []).flatMap((option) => option.cropSequence),
+  )
+  return {
+    crops: (crops.data ?? []).filter((crop) => names.has(crop.name)),
+    error: crops.error ?? options.error,
+    isLoading: crops.isLoading || options.isLoading,
+    retry: () => {
+      void crops.mutate()
+      void options.mutate()
+    },
+  }
+}
+
 export const undersownCropCodesKey = (
   farmId?: string,
   cropCode?: number,

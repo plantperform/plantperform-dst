@@ -31,13 +31,14 @@ class PreparedSnapshot:
         return (self.simulation, self.fields, self.candidates)[index]
 
 
-def evaluation_args(simulation, registry, real_history, jbnr):
+def evaluation_args(simulation, registry, real_history, jbnr, imk_id):
     soil = repository._soil_data_for_context(registry)
     percolation, org_n, s_soil = soil if soil else (None, None, None)
     return {
         **simulation.godning.model_dump(exclude={"autumn_allocations"}),
         "autumn_plan": simulation.godning.autumn_plan(),
         "jbnr": jbnr,
+        "irrigated_crops": simulation.vanding.crops_for(imk_id, jbnr),
         "fdato": simulation.eea_fdato,
         "precision_dagsbasis": simulation.eea_precision_dagsbasis,
         "praecisionsjordbrug": simulation.praecisionsjordbrug,
@@ -92,7 +93,7 @@ def prepare(simulation, fields, setup_fields, contexts):
             economics_key=simulation.economics_snapshot.overrides.cache_key(),
         )
         previous = setup_fields.get(field.id, {})
-        args = evaluation_args(simulation, registry, full.real_history, full.jbnr)
+        args = evaluation_args(simulation, registry, full.real_history, full.jbnr, field.imk_id)
         for key in ("manual_candidate", "fixed_candidate"):
             value = previous.get(key)
             if not value or (
@@ -171,6 +172,7 @@ def hydrate(snapshot, selected):
 def _hydrate(snapshot, selected):
     result = {}
     rows = {row.field_id: row for row in snapshot.candidates}
+    imk_ids = {field.id: field.imk_id for field in snapshot.fields}
     for field_id, candidate in selected.items():
         check_deadline()
         if candidate.ref.saedskiftevariant == "permanent":
@@ -184,7 +186,9 @@ def _hydrate(snapshot, selected):
             candidate.base_ref or candidate.ref,
             candidate.overrides,
             start_year=candidate.start_year,
-            **evaluation_args(snapshot.simulation, registry, row.real_history, row.jbnr),
+            **evaluation_args(
+                snapshot.simulation, registry, row.real_history, row.jbnr, imk_ids[field_id]
+            ),
         )
         if value is None:
             raise ValueError("Selected rotation could not be reconstructed")

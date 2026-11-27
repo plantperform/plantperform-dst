@@ -139,7 +139,7 @@ class PermanentCropCandidateTests(unittest.TestCase):
         accepted = inspect.signature(candidate_evaluator.evaluate_with_overrides).parameters
         simulation = MagicMock(godning=GodningSettings())
         with patch.object(preparation.repository, "_soil_data_for_context", return_value=None):
-            arguments = preparation.evaluation_args(simulation, None, None, 4)
+            arguments = preparation.evaluation_args(simulation, None, None, 4, None)
         self.assertIn("oeko_n_loft", arguments)
         self.assertLessEqual(set(arguments), set(accepted))
 

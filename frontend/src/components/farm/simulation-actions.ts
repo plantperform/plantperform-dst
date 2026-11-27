@@ -31,6 +31,7 @@ const buildCopyInput = (
   precisionFarming: simulation.precisionFarming,
   earlySowing: simulation.earlySowing,
   intermediateCrop: simulation.intermediateCrop,
+  irrigation: simulation.irrigation,
   economicsModuleId: simulation.economicsModuleId ?? STANDARD_PROFILE_ID,
   allowedRotationVariants: simulation.rotationVariants,
   allowedNNormPercentages: copiedNNormPercentages(

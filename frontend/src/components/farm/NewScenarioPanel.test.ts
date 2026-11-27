@@ -72,6 +72,12 @@ vi.mock('@/api/hooks', () => ({
   useAutumnCrops: () => ({ data: [], isLoading: false }),
   useCropCodes: () => queries.reference,
   useRotationCandidateOptions: () => queries.reference,
+  useCropsInRotations: () => ({
+    crops: [],
+    error: undefined,
+    isLoading: false,
+    retry: vi.fn(),
+  }),
   useFarmEmissions: () => queries.reference,
   simulationViewKey: vi.fn(),
   simulationsKey: vi.fn(),
@@ -412,7 +418,7 @@ describe('simulation wizard steps', () => {
       (input) => (input as HTMLInputElement).checked,
     )
 
-  it('renders eight steps and the explanatory quota choice in Grundlag', async () => {
+  it('renders nine steps and the explanatory quota choice in Grundlag', async () => {
     await mount()
     expect(SIMULATION_FORM_STEPS.map((step) => step.label)).toEqual([
       'Grundlag',
@@ -420,6 +426,7 @@ describe('simulation wizard steps', () => {
       'Sædskifter',
       'Kvælstof',
       'Dyrkningspraksis',
+      'Vanding',
       'Grænser',
       'Kvotehandel',
       'Bekræft',
@@ -674,7 +681,20 @@ describe('simulation wizard steps', () => {
     })
   })
 
-  it('creates a new simulation through all eight steps', async () => {
+  it('drops a watered crop that the chosen sædskifter no longer offer', async () => {
+    queries.farm.data = [
+      { ...field, imkId: 7, soilTypeNumber: 3, cropRotation: [] },
+    ]
+    await mount({
+      ...source,
+      fieldsInitialized: false,
+      irrigation: { imkIds: [7], cropCodes: [1], exceptions: [] },
+    })
+    await click('Bekræft')
+    expect(currentStep()).toBe('Vanding')
+  })
+
+  it('creates a new simulation through all nine steps', async () => {
     await mount(null)
     await change('Simuleringens navn', 'Ny simulering')
     await click('Næste')
@@ -691,12 +711,15 @@ describe('simulation wizard steps', () => {
     await click('Næste')
     expect(currentStep()).toBe('Dyrkningspraksis')
     await click('Næste')
+    expect(currentStep()).toBe('Vanding')
+    await click('Næste')
     expect(currentStep()).toBe('Grænser')
     await click('Næste')
     expect(currentStep()).toBe('Kvotehandel')
     await click('Næste')
     expect(currentStep()).toBe('Bekræft')
     expect(container.textContent).toContain('Ingen kvotehandel')
+    expect(container.textContent).toContain('Ingen vandingsmarker')
     await click('Gem')
     expect(queries.create).toHaveBeenCalledOnce()
     expect(queries.create.mock.calls[0][1]).toMatchObject({
@@ -724,7 +747,7 @@ describe('simulation wizard steps', () => {
     await check('Afgrøder', 'Hvede')
     await click('Næste')
     await click('Vælg alle')
-    for (let step = 0; step < 5; step += 1) await click('Næste')
+    for (let step = 0; step < 6; step += 1) await click('Næste')
     await click('Gem')
     expect(onOpenChange).toHaveBeenCalledWith(false)
 

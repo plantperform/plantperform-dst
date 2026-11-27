@@ -19,7 +19,7 @@ from app.domain.rotation_candidate import (
     RotationYear,
     SimulationFieldCandidates,
 )
-from app.domain.simulation import GodningSettings, OptimizationConstraints
+from app.domain.simulation import GodningSettings, OptimizationConstraints, VandingSettings
 from app.services.scenario import candidate_evaluator
 from optimizer import orchestrator, preparation
 from optimizer.engine import solve
@@ -545,6 +545,7 @@ class RunOptimizationTest(HarmoniStubTest):
             praecisionsjordbrug=False,
             tidlig_saaning=False,
             mellemafgrode=False,
+            vanding=VandingSettings(),
             economics_snapshot=SimpleNamespace(overrides=SimpleNamespace(cache_key=lambda: "")),
         )
         field = FieldRecord(

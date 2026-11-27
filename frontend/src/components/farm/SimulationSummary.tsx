@@ -18,6 +18,7 @@ import {
 import { NotInCalculationNote } from '@/components/farm/economics-ui'
 import type { EconomicsProfile } from '@/lib/economics-profiles'
 import {
+  fieldDisplayName,
   formatFieldCount,
   formatNumber,
   ROTATION_CALENDAR_YEARS,
@@ -35,6 +36,8 @@ import {
   combinationCount,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  irrigableSoilTypes,
+  irrigatedFields,
   isPresetModified,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
@@ -112,6 +115,12 @@ export const SimulationSummary = ({
   const catchments = useCatchmentOptions(farmId, fields)
   const crops = useCropCodes(farmId)
   const cropLabelFor = (code: number) => cropLabelByCode(code, crops.data ?? [])
+  const irrigated = irrigatedFields(fields, values.irrigatedImkIds)
+  const ownIrrigation = irrigated.filter((field) =>
+    values.irrigationExceptions.some(
+      (exception) => exception.imkId === field.imkId,
+    ),
+  )
   const cropLabelByChosenName = (name: string) =>
     cropLabelByName(name, crops.data ?? [])
   const quotas = effectiveMaxNLoadByCatchment(fields, [])
@@ -261,6 +270,31 @@ export const SimulationSummary = ({
             Tidlig såning: {yesNo(Boolean(input.earlySowing))} · Mellemafgrøde:{' '}
             {yesNo(Boolean(input.intermediateCrop))}
           </p>
+        </Section>
+        <Section step="irrigation" onEditStep={onEditStep}>
+          {irrigated.length === 0 ? (
+            <p>Ingen vandingsmarker</p>
+          ) : (
+            <>
+              <p className="text-foreground">
+                {formatFieldCount(irrigated.length)} på{' '}
+                {irrigableSoilTypes(irrigated)
+                  .map(({ soilTypeNumber }) => `JB ${soilTypeNumber}`)
+                  .join(', ')}
+              </p>
+              <p>
+                Afgrøder der vandes:{' '}
+                {values.irrigatedCropCodes.map(cropLabelFor).join(' · ') ||
+                  'Ingen'}
+              </p>
+              {ownIrrigation.length > 0 ? (
+                <p>
+                  Egne afgrøder på{' '}
+                  {ownIrrigation.map(fieldDisplayName).join(', ')}
+                </p>
+              ) : null}
+            </>
+          )}
         </Section>
         <Section step="limits" onEditStep={onEditStep}>
           {catchments.map((catchment) => {

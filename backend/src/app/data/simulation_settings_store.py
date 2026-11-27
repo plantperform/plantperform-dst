@@ -193,7 +193,7 @@ def update_settings(farm_id, simulation_id, request, email):
                 existing=current["rotation_saedskiftevarianter"],
             )
         # PATCH updates nested settings too; omitted values keep their saved meaning.
-        for key in ("constraints", "godning", "optimization_settings"):
+        for key in ("constraints", "godning", "optimization_settings", "vanding"):
             if key in patch:
                 patch[key] = {**current[key], **patch[key]}
         changed = {key: value for key, value in patch.items() if value != current.get(key)}

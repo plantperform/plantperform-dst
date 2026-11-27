@@ -11,6 +11,7 @@ import { formatNumber } from '@/lib/field-domain'
 import {
   autumnAllocationLabel,
   catchCropSowingLabel,
+  irrigationLabel,
   nNormPercentagesLabel,
   organicFertiliserNLabel,
   organicNCeilingLabel,
@@ -86,6 +87,7 @@ const basisValues = (
     { label: 'Præcisionsjordbrug', value: yesNo(simulation.precisionFarming) },
     { label: 'Tidlig såning', value: yesNo(simulation.earlySowing) },
     { label: 'Mellemafgrøde', value: yesNo(simulation.intermediateCrop) },
+    { label: 'Vanding', value: irrigationLabel(simulation.irrigation) },
   ]
 }
 

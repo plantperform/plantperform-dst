@@ -618,6 +618,7 @@ def _expand_yearly_options(
     org_n_topsoil: float | None = None,
     s_soil: float | None = None,
     economics_key: str = "",
+    irrigated_crops: frozenset[int] = frozenset(),
 ) -> tuple[YearlyRotationOption, ...]:
     """Expand each stored candidate to one variant per distinct start year.
 
@@ -684,6 +685,7 @@ def _expand_yearly_options(
                     s_soil=s_soil,
                     economics_key=economics_key,
                     autumn_plan=godning.autumn_plan(),
+                    irrigated_crops=irrigated_crops,
                 )
             )
             if variant is None:
@@ -908,6 +910,7 @@ def build_yearly_input(
             org_n_topsoil=org_n_topsoil,
             s_soil=s_soil,
             economics_key=simulation.economics_snapshot.overrides.cache_key(),
+            irrigated_crops=simulation.vanding.crops_for(field.imk_id, jbnr),
         )
         if not options:
             raise OptimizationInfeasibleError(

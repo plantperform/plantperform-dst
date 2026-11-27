@@ -162,7 +162,7 @@ class GodningSettingsTests(unittest.TestCase):
         with patch.object(
             preparation.repository, "_soil_data_for_context", return_value=None
         ):
-            args = preparation.evaluation_args(simulation, None, None, 4)
+            args = preparation.evaluation_args(simulation, None, None, 4, None)
         self.assertEqual(args["autumn_plan"], ((VINTERRAPS, 40.0, False),))
         self.assertNotIn("autumn_allocations", args)
 

@@ -176,6 +176,7 @@ class SimulationSettingsTests(DatabaseTests):
             godning={"mineralsk_andel_pct": 50},
             constraints={"max_fen": 100},
             optimization_settings=OptimizationSettings(excluded_afgrodekoder=[11]),
+            vanding={"imk_ids": [7], "afgrode_koder": [1]},
         )
         changed = settings.update_settings(
             "farm",
@@ -185,10 +186,13 @@ class SimulationSettingsTests(DatabaseTests):
                 godning={"org_mineral_n": 10},
                 constraints={"min_fen": 5},
                 optimization_settings={"db2_swing_pct": 30},
+                vanding={"afgrode_koder": [11]},
             ),
             EMAIL,
         )
         self.assertEqual(changed.godning.mineralsk_andel_pct, 50)
+        self.assertEqual(changed.vanding.imk_ids, [7])
+        self.assertEqual(changed.vanding.afgrode_koder, [11])
         self.assertEqual(changed.constraints.max_fen, 100)
         self.assertEqual(changed.optimization_settings.excluded_afgrodekoder, [11])
 

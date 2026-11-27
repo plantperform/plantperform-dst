@@ -9,6 +9,7 @@ from app.domain.economics import EconomicsSnapshot
 from app.domain.field import Crop
 from app.domain.optimization import OptimizationSettings, SimulationResultSummary
 from app.domain.saedskifte import RotationGroupSnapshot
+from app.domain.soil import is_sandjord
 
 # (afgrode_kode, kg N/ha, is husdyrgødning): hashable for the evaluator's caches.
 AutumnPlan = tuple[tuple[int, float, bool], ...]
@@ -185,6 +186,28 @@ class OptimizationConstraints(CamelModel):
         return self
 
 
+class VandingUndtagelse(CamelModel):
+    imk_id: int
+    tilvalgte_afgrode_koder: list[int] = Field(default_factory=list)
+    fravalgte_afgrode_koder: list[int] = Field(default_factory=list)
+
+
+class VandingSettings(CamelModel):
+    imk_ids: list[int] = Field(default_factory=list)
+    afgrode_koder: list[int] = Field(default_factory=list)
+    undtagelser: list[VandingUndtagelse] = Field(default_factory=list)
+
+    def crops_for(self, imk_id: int | None, jbnr: int) -> frozenset[int]:
+        if imk_id not in self.imk_ids or not is_sandjord(jbnr):
+            return frozenset()
+        crops = set(self.afgrode_koder)
+        for undtagelse in self.undtagelser:
+            if undtagelse.imk_id == imk_id:
+                crops |= set(undtagelse.tilvalgte_afgrode_koder)
+                crops -= set(undtagelse.fravalgte_afgrode_koder)
+        return frozenset(crops)
+
+
 class Simulation(CamelModel):
     # Server-resolved inputs: None means resolve latest; a job captures an explicit map.
     rotation_groups: dict[str, RotationGroupSnapshot] | None = None
@@ -221,6 +244,7 @@ class Simulation(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    vanding: VandingSettings = Field(default_factory=VandingSettings)
 
 
 class CreateSimulationRequest(CamelModel):
@@ -241,6 +265,7 @@ class CreateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool = False
     tidlig_saaning: bool = True
     mellemafgrode: bool = True
+    vanding: VandingSettings = Field(default_factory=VandingSettings)
 
     @field_validator("name")
     @classmethod
@@ -264,6 +289,7 @@ class UpdateSimulationRequest(CamelModel):
     praecisionsjordbrug: bool | None = None
     tidlig_saaning: bool | None = None
     mellemafgrode: bool | None = None
+    vanding: VandingSettings | None = None
     optimization_settings: OptimizationSettings | None = None
 
     @model_validator(mode="after")

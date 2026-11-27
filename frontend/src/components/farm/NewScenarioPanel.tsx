@@ -8,6 +8,7 @@ import {
   simulationViewKey,
   useAutumnCrops,
   useCropCodes,
+  useCropsInRotations,
   useFarmFields,
   useStoredSimulationFields,
   useFertiliserPresets,
@@ -27,6 +28,7 @@ import {
   simulationLimitsError,
 } from '@/lib/simulation-settings'
 import { OrganicNCeilingChoice } from '@/components/farm/OrganicNCeilingChoice'
+import { SimulationIrrigationOptions } from '@/components/farm/SimulationIrrigationOptions'
 import { SimulationOptimizationOptions } from '@/components/farm/SimulationOptimizationOptions'
 import { SimulationQuotaChoice } from '@/components/farm/SimulationQuotaChoice'
 import { SimulationQuotaTradeOptions } from '@/components/farm/SimulationQuotaTradeOptions'
@@ -75,6 +77,10 @@ import {
   fertiliserFieldsForChoice,
   forcedAutumnFertiliser,
   initialFormValues,
+  fieldIrrigationOptions,
+  irrigatedCropOptions,
+  irrigatedFields,
+  keepOfferedIrrigation,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -375,6 +381,33 @@ export const NewScenarioPanel = ({
   useEffect(() => {
     if (dropsRotations) setValue('rotationVariants', selectableSelection)
   }, [dropsRotations, selectableSelection, setValue])
+  const rotationCrops = useCropsInRotations(
+    farmId,
+    values.rotationVariants,
+    values.nNormPercentages,
+  )
+  const irrigationCrops = irrigatedCropOptions(
+    rotationCrops.crops,
+    cropCodes,
+    irrigatedFields(effectiveFields, values.irrigatedImkIds),
+  )
+  const keptIrrigation =
+    values.rotationVariants.length > 0 &&
+    !rotationCrops.isLoading &&
+    !rotationCrops.error &&
+    !fieldsLoading
+      ? keepOfferedIrrigation(
+          values.irrigatedCropCodes,
+          values.irrigationExceptions,
+          irrigationCrops.map((crop) => crop.code),
+        )
+      : null
+  useEffect(() => {
+    if (keptIrrigation) {
+      setValue('irrigatedCropCodes', keptIrrigation.cropCodes)
+      setValue('irrigationExceptions', keptIrrigation.exceptions)
+    }
+  }, [keptIrrigation, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -1310,6 +1343,30 @@ export const NewScenarioPanel = ({
               </label>
             </div>
           </div>
+        ) : null}
+
+        {!referenceBlocked && stepId === 'irrigation' ? (
+          <SimulationIrrigationOptions
+            fields={effectiveFields}
+            crops={irrigationCrops}
+            cropOptionsFor={(field) =>
+              fieldIrrigationOptions(rotationCrops.crops, cropCodes, field)
+            }
+            cropsLoading={rotationCrops.isLoading}
+            cropsFailed={Boolean(rotationCrops.error)}
+            onRetryCrops={rotationCrops.retry}
+            imkIds={values.irrigatedImkIds}
+            cropCodes={values.irrigatedCropCodes}
+            onImkIdsChange={(next) => updateValue('irrigatedImkIds', next)}
+            exceptions={values.irrigationExceptions}
+            onCropCodesChange={(next) =>
+              updateValue('irrigatedCropCodes', next)
+            }
+            onExceptionsChange={(next) =>
+              updateValue('irrigationExceptions', next)
+            }
+            error={errors.irrigatedCropCodes?.message}
+          />
         ) : null}
 
         {!referenceBlocked && stepId === 'limits' ? (
