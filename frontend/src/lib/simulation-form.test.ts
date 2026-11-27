@@ -242,7 +242,13 @@ describe('irrigation', () => {
     ({ imkId, soilTypeNumber }) as FieldRecord
 
   it('offers only fields with an IMK id on JB 1-4', () => {
-    const offered = [field(1, 4), field(2, 5), field(null, 2), field(3, null)]
+    const offered = [
+      field(1, 4),
+      field(2, 5),
+      field(null, 2),
+      field(3, null),
+      field(4, 0),
+    ]
     expect(irrigableFields(offered).map((each) => each.imkId)).toEqual([1])
   })
 

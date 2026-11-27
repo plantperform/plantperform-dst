@@ -147,6 +147,7 @@ export const irrigableFields = (fields: FieldRecord[]) =>
     (field): field is FieldRecord & { imkId: number; soilTypeNumber: number } =>
       field.imkId !== null &&
       field.soilTypeNumber !== null &&
+      field.soilTypeNumber >= 1 &&
       field.soilTypeNumber <= MAX_IRRIGATED_SOIL_TYPE,
   )
 

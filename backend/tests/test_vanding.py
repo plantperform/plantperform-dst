@@ -20,6 +20,7 @@ class VandingSettingsTests(unittest.TestCase):
         vanding = VandingSettings(imk_ids=[7], afgrode_koder=[VAARBYG])
         self.assertEqual(vanding.crops_for(7, 4), frozenset({VAARBYG}))
         self.assertEqual(vanding.crops_for(7, 5), frozenset())
+        self.assertEqual(vanding.crops_for(7, 0), frozenset())
         self.assertEqual(vanding.crops_for(8, 3), frozenset())
         self.assertEqual(vanding.crops_for(None, 3), frozenset())
 

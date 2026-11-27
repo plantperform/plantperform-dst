@@ -8,7 +8,7 @@ RegistrySoilData = tuple[PercolationByKategori, float, float]
 
 
 def is_sandjord(jbnr: int) -> bool:
-    return jbnr <= 4
+    return 1 <= jbnr <= 4
 
 
 class MissingSoilDataError(Exception):
