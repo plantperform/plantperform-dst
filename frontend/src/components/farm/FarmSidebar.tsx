@@ -824,7 +824,7 @@ const SimulationMenuItem = ({
               >
                 Indstillinger og navn
               </DropdownMenuItem>
-              <AppTooltip content="Gemmer en ny simulering med samme indstillinger og regler. Du kan ændre kopien, før du kører Optimér. Kopien får bedriftens marker, så låse og tilføjede eller fjernede marker følger ikke med.">
+              <AppTooltip content="Gemmer en ny simulering med samme indstillinger, regler, marker, låse, sædskifter og optimeringsresultat. Ændringer i kopien påvirker ikke originalen.">
                 <DropdownMenuItem
                   disabled={copying || !isSimulationReady(simulation)}
                   onSelect={onCopy}

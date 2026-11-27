@@ -33,6 +33,7 @@ const buildCopyInput = (
   simulation: Simulation,
   offeredNNormPercentages: string[],
 ) => ({
+  copyFrom: simulation.id,
   name: copiedSimulationName(simulation.name),
   constraints: simulation.constraints,
   optimizationSettings: optimizationSettingsInput(simulation.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS),

@@ -140,6 +140,7 @@ describe('saving simulation copies', () => {
       expect(mocks.create).toHaveBeenCalledExactlyOnceWith('farm', {
         name: savedCopy.name,
         requestId: expect.any(String),
+        copyFrom: source.id,
         constraints: source.constraints,
         optimizationSettings: settings,
         allowedRotationVariants: source.rotationVariants,

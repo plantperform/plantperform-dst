@@ -328,6 +328,9 @@ export type CreateSimulationInput = {
   earlySowing?: boolean
   intermediateCrop?: boolean
   includePrecedingCropValue?: boolean
+  // A simulation of the same farm whose fields, with their locks and manual
+  // rotations, and saved result the new one starts from.
+  copyFrom?: string
 }
 
 export type OptimizationSettings = {
