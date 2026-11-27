@@ -95,13 +95,13 @@ _OEKO_UDBYTTE_REDUKTION = 0.32
 _KALKULE_KODE: dict[int, int] = {70: 1, 71: 2, 72: 3}
 
 # Udlægskode -> the price-list category covering seed/establishment for this
-# udlæg. This uses the same code family as bridge_v2.py's _UDL_VIRKEMIDDEL but
-# groups by the PHYSICAL afgrøde being sown, not NUAR virkemiddel eligibility.
-# For example, 960-966 ("udlæg/eftersslæt" clover grass) and 2000 ("udlæg til
-# frø") are not NUAR virkemidler but still incur actual seed costs. Code 921
-# ("Bar jord", replaces the old pseudo-code 3000 "Jordbearbejdning efterår"
-# in the source data - see docs/nles5-kategorier.md) is not a sown afgrøde
-# and has no entry here.
+# secondary crop. This uses the same code family as bridge_v2.py's
+# _UDL_VIRKEMIDDEL but groups by the PHYSICAL afgrøde being sown, not NUAR
+# virkemiddel eligibility. Undersown grass (960-966) and grass seed (2000)
+# have no entry: the budget of the crop they establish has the seed, so a
+# post here would charge it twice. Code 921 ("Bar jord", replaces the old
+# pseudo-code 3000 "Jordbearbejdning efterår" in the source data - see
+# docs/nles5-kategorier.md) is not a sown crop and has no entry either.
 _UDL_KOSTKATEGORI: dict[int, str] = {
     968: "Efterafgrøde",
     970: "Efterafgrøde",
@@ -109,14 +109,6 @@ _UDL_KOSTKATEGORI: dict[int, str] = {
     9682: "Mellemafgrøde",
     9684: "Mellemafgrøde, frøgræs",
     9683: "Tidlig såning",
-    960: "Udlæg",
-    961: "Udlæg",
-    962: "Udlæg",
-    963: "Udlæg",
-    964: "Udlæg",
-    965: "Udlæg",
-    966: "Udlæg",
-    2000: "Udlæg",
 }
 
 
@@ -563,10 +555,11 @@ _MAJSHELSAED_KODE = 216
 
 
 def _udlaeg_kategori(udlaeg_kode: int | None, afgrodekode: int) -> str | None:
-    """The price-list category for the position's udlæg seed and establishment.
+    """The price-list category for the secondary crop's seed and establishment.
 
-    Covers efterafgrøde, mellemafgrøde, and other udlæg. None when there is no
-    udlæg or its code has no priced category, such as 921 for bar jord.
+    Covers catch crops, intermediate crops, and early sowing. None when there
+    is no secondary crop or its code has no priced category, such as undersown
+    grass or 921 for bare soil.
     """
     kategori = _UDL_KOSTKATEGORI.get(udlaeg_kode) if udlaeg_kode is not None else None
     if kategori == "Efterafgrøde" and afgrodekode == _MAJSHELSAED_KODE:
@@ -684,8 +677,8 @@ def calculate_db(
 
     udlaeg_kode: The rotation position's udlægskode, also passed to
     bridge_v2.evaluate_leaching_position. It determines whether an additional
-    seed/establishment cost is added for efterafgrøde, mellemafgrøde, or another
-    udlæg (see _udlaeg_kategori).
+    seed/establishment cost is added for a catch crop, intermediate crop, or
+    early sowing (see _udlaeg_kategori).
 
     forfrugtsvaerdi: The forfrugt's N contribution (kg N/ha). Together with
     mncs and mnca it is the available N that the udbyttenorm is scaled by for

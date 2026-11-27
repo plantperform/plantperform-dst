@@ -1263,6 +1263,32 @@ class EconomicsDatabaseTests(DatabaseTests):
         )
         self.assertEqual(result["goedning"], 10 * 30 + 10 * 15)
 
+    def test_undersown_grass_adds_no_seed_or_sowing_of_its_own(self):
+        # The grass or grass seed crop that undersown grass establishes has the
+        # seed in its own budget, so the price list's udlæg posts are not charged.
+        posts = (("Udlæg, udsæd", 400), ("Udlæg, etablering", 150))
+        with self.sessions.begin() as session:
+            for index, (post, price) in enumerate(posts, 20):
+                session.execute(
+                    insert(prisliste_table).values(
+                        source_order=index,
+                        post=post,
+                        kategori="Efterafgrøde/udlæg",
+                        type="Omkostning",
+                        pris=price,
+                        enhed="ha",
+                    )
+                )
+        calculator.clear_lookup_cache()
+
+        def costs(udlaeg_kode):
+            result = calculator.calculate_db(1, "Konventionel", 5, udlaeg_kode=udlaeg_kode)
+            return result["udsaed"], result["markarbejde"], result["db"]
+
+        for udlaeg_kode in (*range(960, 967), 2000):
+            with self.subTest(udlaeg_kode=udlaeg_kode):
+                self.assertEqual(costs(udlaeg_kode), costs(None))
+
     def test_farm_budgets_require_membership_and_a_soil_type(self):
         self.assertIsNone(budget.farm_budgets("farm", OTHER, "Konventionel"))
         self.assertEqual(
