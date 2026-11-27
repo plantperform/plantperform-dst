@@ -681,6 +681,19 @@ describe('simulation wizard steps', () => {
     })
   })
 
+  it('drops a watered crop that the chosen sædskifter no longer offer', async () => {
+    queries.farm.data = [
+      { ...field, imkId: 7, soilTypeNumber: 3, cropRotation: [] },
+    ]
+    await mount({
+      ...source,
+      fieldsInitialized: false,
+      irrigation: { imkIds: [7], cropCodes: [1] },
+    })
+    await click('Bekræft')
+    expect(currentStep()).toBe('Vanding')
+  })
+
   it('creates a new simulation through all nine steps', async () => {
     await mount(null)
     await change('Simuleringens navn', 'Ny simulering')

@@ -8,6 +8,7 @@ import {
   simulationViewKey,
   useAutumnCrops,
   useCropCodes,
+  useCropsInRotations,
   useFarmFields,
   useStoredSimulationFields,
   useFertiliserPresets,
@@ -76,6 +77,8 @@ import {
   fertiliserFieldsForChoice,
   forcedAutumnFertiliser,
   initialFormValues,
+  irrigatedCropOptions,
+  irrigatedFields,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -376,6 +379,30 @@ export const NewScenarioPanel = ({
   useEffect(() => {
     if (dropsRotations) setValue('rotationVariants', selectableSelection)
   }, [dropsRotations, selectableSelection, setValue])
+  const rotationCrops = useCropsInRotations(
+    farmId,
+    values.rotationVariants,
+    values.nNormPercentages,
+  )
+  const irrigationCrops = irrigatedCropOptions(
+    rotationCrops.crops,
+    cropCodes,
+    irrigatedFields(effectiveFields, values.irrigatedImkIds),
+  )
+  const offeredIrrigatedCrops = values.irrigatedCropCodes.filter((code) =>
+    irrigationCrops.some((crop) => crop.code === code),
+  )
+  const dropsIrrigatedCrops =
+    values.rotationVariants.length > 0 &&
+    !rotationCrops.isLoading &&
+    !rotationCrops.error &&
+    !fieldsLoading &&
+    offeredIrrigatedCrops.length < values.irrigatedCropCodes.length
+  useEffect(() => {
+    if (dropsIrrigatedCrops) {
+      setValue('irrigatedCropCodes', offeredIrrigatedCrops)
+    }
+  }, [dropsIrrigatedCrops, offeredIrrigatedCrops, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -1315,10 +1342,11 @@ export const NewScenarioPanel = ({
 
         {!referenceBlocked && stepId === 'irrigation' ? (
           <SimulationIrrigationOptions
-            farmId={farmId}
             fields={effectiveFields}
-            variants={values.rotationVariants}
-            nNormPercentages={values.nNormPercentages}
+            crops={irrigationCrops}
+            cropsLoading={rotationCrops.isLoading}
+            cropsFailed={Boolean(rotationCrops.error)}
+            onRetryCrops={rotationCrops.retry}
             imkIds={values.irrigatedImkIds}
             cropCodes={values.irrigatedCropCodes}
             onImkIdsChange={(next) => updateValue('irrigatedImkIds', next)}

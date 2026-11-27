@@ -1,5 +1,4 @@
-import { useCropCodes, useCropsInRotations } from '@/api/hooks'
-import type { FieldRecord } from '@/api/types'
+import type { CropCodeOption, FieldRecord } from '@/api/types'
 import { CropGroupChecklist } from '@/components/farm/CropGroupChecklist'
 import { FieldError } from '@/components/ui/field-error'
 import { Label } from '@/components/ui/label'
@@ -12,17 +11,16 @@ import {
 import {
   groupSelection,
   irrigableFields,
-  irrigatedCropOptions,
-  irrigatedFields,
   toggleGroup,
   toggleValue,
 } from '@/lib/simulation-form'
 
 type Props = {
-  farmId: string
   fields: FieldRecord[]
-  variants: string[]
-  nNormPercentages: string[]
+  crops: CropCodeOption[]
+  cropsLoading: boolean
+  cropsFailed: boolean
+  onRetryCrops: () => void
   imkIds: number[]
   cropCodes: number[]
   onImkIdsChange: (imkIds: number[]) => void
@@ -31,18 +29,17 @@ type Props = {
 }
 
 export function SimulationIrrigationOptions({
-  farmId,
   fields,
-  variants,
-  nNormPercentages,
+  crops,
+  cropsLoading,
+  cropsFailed,
+  onRetryCrops,
   imkIds,
   cropCodes,
   onImkIdsChange,
   onCropCodesChange,
   error,
 }: Props) {
-  const listed = useCropsInRotations(farmId, variants, nNormPercentages)
-  const crops = useCropCodes(farmId)
   const irrigable = irrigableFields(fields)
   const otherCount = fields.length - irrigable.length
   const keys = irrigable.map((field) => String(field.imkId))
@@ -116,23 +113,19 @@ export function SimulationIrrigationOptions({
       {imkIds.length > 0 ? (
         <div className="space-y-2">
           <Label className="leading-snug">Afgrøder der vandes</Label>
-          {listed.error ? (
+          {cropsFailed ? (
             <LoadError
               message="Kunne ikke hente afgrøder."
-              onRetry={listed.retry}
+              onRetry={onRetryCrops}
             />
           ) : null}
-          {listed.isLoading ? (
+          {cropsLoading ? (
             <p className="text-sm text-muted-foreground">Henter afgrøder...</p>
           ) : null}
           <div className="max-h-72 overflow-y-auto rounded-md border p-2">
             <CropGroupChecklist
               label="Afgrøder der vandes"
-              items={irrigatedCropOptions(
-                listed.crops,
-                crops.data ?? [],
-                irrigatedFields(fields, imkIds),
-              ).map((crop) => ({
+              items={crops.map((crop) => ({
                 key: String(crop.code),
                 code: crop.code,
                 name: crop.name,
