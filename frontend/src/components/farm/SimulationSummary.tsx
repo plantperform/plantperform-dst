@@ -36,6 +36,7 @@ import {
   combinationCount,
   farmingSystemMismatchCount,
   farmingSystemMismatchMessage,
+  irrigableSoilTypes,
   irrigatedFields,
   isPresetModified,
   nNormPercentagesLabel,
@@ -115,6 +116,11 @@ export const SimulationSummary = ({
   const crops = useCropCodes(farmId)
   const cropLabelFor = (code: number) => cropLabelByCode(code, crops.data ?? [])
   const irrigated = irrigatedFields(fields, values.irrigatedImkIds)
+  const ownIrrigation = irrigated.filter((field) =>
+    values.irrigationExceptions.some(
+      (exception) => exception.imkId === field.imkId,
+    ),
+  )
   const cropLabelByChosenName = (name: string) =>
     cropLabelByName(name, crops.data ?? [])
   const quotas = effectiveMaxNLoadByCatchment(fields, [])
@@ -271,13 +277,22 @@ export const SimulationSummary = ({
           ) : (
             <>
               <p className="text-foreground">
-                {formatFieldCount(irrigated.length)}:{' '}
-                {irrigated.map(fieldDisplayName).join(', ')}
+                {formatFieldCount(irrigated.length)} på{' '}
+                {irrigableSoilTypes(irrigated)
+                  .map(({ soilTypeNumber }) => `JB ${soilTypeNumber}`)
+                  .join(', ')}
               </p>
               <p>
                 Afgrøder der vandes:{' '}
-                {values.irrigatedCropCodes.map(cropLabelFor).join(' · ')}
+                {values.irrigatedCropCodes.map(cropLabelFor).join(' · ') ||
+                  'Ingen'}
               </p>
+              {ownIrrigation.length > 0 ? (
+                <p>
+                  Egne afgrøder på{' '}
+                  {ownIrrigation.map(fieldDisplayName).join(', ')}
+                </p>
+              ) : null}
             </>
           )}
         </Section>

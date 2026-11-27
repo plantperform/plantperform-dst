@@ -77,8 +77,10 @@ import {
   fertiliserFieldsForChoice,
   forcedAutumnFertiliser,
   initialFormValues,
+  fieldIrrigationOptions,
   irrigatedCropOptions,
   irrigatedFields,
+  keepOfferedIrrigation,
   isNNormOptionLocked,
   isPresetModified,
   isStepValid,
@@ -389,20 +391,23 @@ export const NewScenarioPanel = ({
     cropCodes,
     irrigatedFields(effectiveFields, values.irrigatedImkIds),
   )
-  const offeredIrrigatedCrops = values.irrigatedCropCodes.filter((code) =>
-    irrigationCrops.some((crop) => crop.code === code),
-  )
-  const dropsIrrigatedCrops =
+  const keptIrrigation =
     values.rotationVariants.length > 0 &&
     !rotationCrops.isLoading &&
     !rotationCrops.error &&
-    !fieldsLoading &&
-    offeredIrrigatedCrops.length < values.irrigatedCropCodes.length
+    !fieldsLoading
+      ? keepOfferedIrrigation(
+          values.irrigatedCropCodes,
+          values.irrigationExceptions,
+          irrigationCrops.map((crop) => crop.code),
+        )
+      : null
   useEffect(() => {
-    if (dropsIrrigatedCrops) {
-      setValue('irrigatedCropCodes', offeredIrrigatedCrops)
+    if (keptIrrigation) {
+      setValue('irrigatedCropCodes', keptIrrigation.cropCodes)
+      setValue('irrigationExceptions', keptIrrigation.exceptions)
     }
-  }, [dropsIrrigatedCrops, offeredIrrigatedCrops, setValue])
+  }, [keptIrrigation, setValue])
 
   // Values set outside a native input revalidate like typed ones: only once
   // the field has been touched, so an error never appears before it is due.
@@ -1344,14 +1349,21 @@ export const NewScenarioPanel = ({
           <SimulationIrrigationOptions
             fields={effectiveFields}
             crops={irrigationCrops}
+            cropOptionsFor={(field) =>
+              fieldIrrigationOptions(rotationCrops.crops, cropCodes, field)
+            }
             cropsLoading={rotationCrops.isLoading}
             cropsFailed={Boolean(rotationCrops.error)}
             onRetryCrops={rotationCrops.retry}
             imkIds={values.irrigatedImkIds}
             cropCodes={values.irrigatedCropCodes}
             onImkIdsChange={(next) => updateValue('irrigatedImkIds', next)}
+            exceptions={values.irrigationExceptions}
             onCropCodesChange={(next) =>
               updateValue('irrigatedCropCodes', next)
+            }
+            onExceptionsChange={(next) =>
+              updateValue('irrigationExceptions', next)
             }
             error={errors.irrigatedCropCodes?.message}
           />

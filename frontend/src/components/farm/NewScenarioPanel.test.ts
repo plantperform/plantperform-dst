@@ -688,7 +688,7 @@ describe('simulation wizard steps', () => {
     await mount({
       ...source,
       fieldsInitialized: false,
-      irrigation: { imkIds: [7], cropCodes: [1] },
+      irrigation: { imkIds: [7], cropCodes: [1], exceptions: [] },
     })
     await click('Bekræft')
     expect(currentStep()).toBe('Vanding')

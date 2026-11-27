@@ -313,9 +313,16 @@ export type EconomicsModule = {
   effectiveRole?: MembershipRole
 }
 
+export type IrrigationException = {
+  imkId: number
+  addedCropCodes: number[]
+  removedCropCodes: number[]
+}
+
 export type Irrigation = {
   imkIds: number[]
   cropCodes: number[]
+  exceptions: IrrigationException[]
 }
 
 export type CreateSimulationInput = {
