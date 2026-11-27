@@ -158,6 +158,14 @@ class StandardManure(CamelModel):
     n_kg_per_ton: float
 
 
+class CrossCropPrice(CamelModel):
+    """A price-list price that is added on top of a crop's own budget."""
+
+    price_id: str
+    group: Literal["catchCrops", "fieldWork", "fertiliser"]
+    can_be_negative: bool = False
+
+
 class CropBudgets(CamelModel):
     jb_nr: int | None
     farming_system: str
@@ -165,6 +173,8 @@ class CropBudgets(CamelModel):
     # The husdyrgødning prices per tonne, always in `prices`, on either driftsform.
     manure_spreading_price_id: str | None = None
     manure_purchase_price_id: str | None = None
+    # The cross-crop prices, also always in `prices`, on either driftsform.
+    cross_crop_prices: list[CrossCropPrice] = Field(default_factory=list)
     standard_manure: StandardManure | None = None
     crops: list[CropBudget]
     soil_variants: dict[str, list[SoilVariant]]

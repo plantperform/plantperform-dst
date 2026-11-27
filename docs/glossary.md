@@ -163,7 +163,8 @@ field" column is the name on the wire.
 | ton husdyrgødning pr. ha | `manureTonsPerHa` | `husdyrgodningTonPrHa` | |
 | udbringning af husdyrgødning, pr. ton | `manureSpreading`, `manureSpreadingPriceId` | `manureSpreadingPriceId` | The price per tonne of spreading husdyrgødning, set in the Gødning step on both driftsformer |
 | købspris for husdyrgødning, pr. ton | `manurePurchase`, `manurePurchasePriceId` | `manurePurchasePriceId` | What a tonne of husdyrgødning costs to buy, standard 0 kr/ton |
-| pris der kan være negativ | | `SIGNED_PRICE_IDS` | Tidlig såning, udsæd is −150 kr/ha: a saving against normal sowing. Only the two Tidlig såning prices may be negative in a profile; every other price is 0 or more |
+| priser på tværs af afgrøder | `CrossCropPrice` | `crossCropPrices`, `CrossCropPrice` | The prices of the price list that belong to no single crop: the posts for efterafgrøde, mellemafgrøde and tidlig såning, præcisionsjordbrug, spreading of handelsgødning and husdyrgødning, and buying husdyrgødning. Frøgræs and udlæg are not among them: they are grass, which has crop codes of its own. The calculator adds the frøgræs posts, but none for a grass udlæg, as the budget of the crop it establishes has the seed. Neither is the økologisk N-tillæg among them. A profile prices them like any other price. The budgets payload lists them in `crossCropPrices` even when no crop budget has a row for them |
+| pris der kan være negativ | | `SIGNED_PRICE_IDS`, `can_be_negative` | Tidlig såning, udsæd is −150 kr/ha: a saving against normal sowing. Only the two Tidlig såning prices may be negative in a profile; every other price is 0 or more |
 | standard svinegylle | `StandardManure`, `standardManure` | `standardManure` | What an økologisk Standard budget without a simulation is fertilised with: svinegylle covering the whole N-norm, at 6 kg udnyttet N pr. ton |
 
 ## Economics
