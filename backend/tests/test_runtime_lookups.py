@@ -13,7 +13,7 @@ os.environ.setdefault(
 
 from database.scripts import load_saedskifte_lookup
 
-from app.services.rotations import historisk_goedning, saedskifte_library
+from app.services.rotations import historisk_goedning, saedskifte_kategorier, saedskifte_library
 
 
 def source_row(
@@ -151,6 +151,45 @@ class RuntimeLookupServiceTests(unittest.TestCase):
                 saedskifte_library.generate_rotation("1", "2", start_year=2)[:4],
                 [(10, 20, "Udlæg"), (10, None, None), (10, 20, "Udlæg"), (10, None, None)],
             )
+
+    def test_numbers_without_a_category_are_listed_as_retired(self) -> None:
+        position = {"afgrode_kode": 10, "udlaeg_kode": None, "udlaeg_navn": None}
+        rotation_rows = [
+            SimpleNamespace(
+                saedskiftevariant=number,
+                variant=1,
+                rotation=[position] * 8,
+                driftsform=driftsform,
+            )
+            for number, driftsform in (
+                (2, "Konventionel"),
+                (27, "Konventionel"),
+                (327, "Økologisk"),
+            )
+        ]
+        category_rows = [SimpleNamespace(saedskiftevariant=2, kategori="Plante")]
+
+        with patch.object(
+            saedskifte_library,
+            "_fetch_lookup_rows",
+            return_value=(rotation_rows, category_rows),
+        ):
+            saedskifte_library.clear_lookup_cache()
+            saedskifte_kategorier._reverse.cache_clear()
+            self.addCleanup(saedskifte_kategorier._reverse.cache_clear)
+            retired = saedskifte_kategorier.list_retired_kategorier()
+            self.assertEqual(retired, ["Udgåede konventionelle", "Udgåede økologiske"])
+            self.assertEqual(
+                [saedskifte_kategorier.saedskifter_for_kategori(name) for name in retired],
+                [["27"], ["327"]],
+            )
+            self.assertEqual(
+                [saedskifte_kategorier.dyrkningssystem_for_kategori(name) for name in retired],
+                ["Konventionel", "Økologisk"],
+            )
+            self.assertEqual(saedskifte_kategorier.saedskifter_for_kategori("Plante"), ["2"])
+            # A permanent afgrøde is no library number, so it is not retired.
+            self.assertEqual(saedskifte_kategorier.kategorier_for_saedskifte("permanent"), [])
 
     def test_historical_lookup_uses_database_rows(self) -> None:
         rows = [

@@ -686,6 +686,8 @@ export type RotationCategoryOption = {
   croppingSystem: FarmingSystem | null
   rotationCount: number
   rotations: RotationOption[]
+  // Rotations that have left the library, only offered where already used.
+  retired?: boolean
 }
 
 export type SimulationResultSummary = {

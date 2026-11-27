@@ -175,7 +175,12 @@ def load_saedskifte_lookup(
     path: Path = CSV_PATH,
     database_url: str | None = None,
 ) -> None:
-    """Atomically replace the runtime rotation lookup tables from ``path``."""
+    """Atomically load the runtime rotation lookup tables from ``path``.
+
+    A number that has left the file is retired, not deleted: its rotations
+    stay, so the simulations that use it still work, but it loses its
+    categories. Delete its rotation rows by hand to remove it for good.
+    """
     records = parse_saedskifte_lookup(path)
     load_dotenv(ROOT.parent / ".env")
     database_url = database_url or os.getenv("DATABASE_URL")
@@ -184,10 +189,15 @@ def load_saedskifte_lookup(
     dsn = database_url.replace("postgresql+psycopg://", "postgresql://")
 
     rotation_rows, category_rows = _database_rows(records)
+    numbers = sorted({number for number, _ in records})
 
     start = time.monotonic()
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute("TRUNCATE saedskifte_category, saedskifte_rotation")
+        cursor.execute("TRUNCATE saedskifte_category")
+        cursor.execute(
+            "DELETE FROM saedskifte_rotation WHERE saedskiftevariant = ANY(%s)",
+            (numbers,),
+        )
         cursor.executemany(
             """
             INSERT INTO saedskifte_rotation
@@ -203,6 +213,15 @@ def load_saedskifte_lookup(
             """,
             category_rows,
         )
+        cursor.execute(
+            """
+            SELECT DISTINCT saedskiftevariant FROM saedskifte_rotation
+            WHERE NOT saedskiftevariant = ANY(%s)
+            ORDER BY saedskiftevariant
+            """,
+            (numbers,),
+        )
+        retired = [number for (number,) in cursor.fetchall()]
 
     elapsed = time.monotonic() - start
     print(
@@ -210,6 +229,12 @@ def load_saedskifte_lookup(
         f"in {elapsed:.1f}s",
         flush=True,
     )
+    if retired:
+        print(
+            f"Kept {len(retired)} retired rotation numbers that are not in the file: "
+            f"{', '.join(map(str, retired))}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

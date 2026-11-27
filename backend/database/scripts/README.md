@@ -27,7 +27,8 @@ Brug `--restart` for at starte forfra, fx efter ændringer i kildefilerne, og
 understøttes også af `pixi run load-registry-from-merged-gpkg`. En afbrudt
 indlæsning skal genoptages med den kommando, der startede den.
 
-**Genindlæsningen erstatter hele `registry_field` og referencedataene.**
+**Genindlæsningen erstatter hele `registry_field` og referencedataene**
+(undtagen udgåede sædskifter, se trin 7).
 Registeret bruger GeoPackage-filens egne `IMK_ID`, så gemte bedrifter og
 scenarier med gamle id’er kan blive forældreløse. Stop backend’en før
 indlæsningen, og start den igen, når alle trin er gennemført.
@@ -45,7 +46,7 @@ Migrationernes stier er relative til `backend/`.
 | 4 | `pixi run load-goedningsregioner` | [load_goedningsregioner.py](load_goedningsregioner.py) | Ingen. Kystvandoplandene i hver egn står i scriptet (`KYSTVAND_IDS_BY_EGN_NR`) | Opdaterer `registry_field.goedningsregion` ud fra markens kystvandopland: egn 1 Sjælland, 2 Fyn, 3 Øst og Nordjylland, 4 Vestjylland, 5 Bornholm og 6 Lolland/Falster, som i Bilag 3. Marker uden kystvandopland (fx på småøer uden for oplandskortet), eller i et opland som tabellen ikke nævner, får regionen fra den nærmeste mark, hvis opland står i tabellen. Deres `kystvand_id` ændres ikke. Skal køre efter trin 3. |
 | 5 | `pixi run load-mars-projekter` | [load_mars_projekter.py](load_mars_projekter.py) | `ANGJ-data/Marker 24-25-25/Mars_data.gpkg`, lag `marsprojekter_samlet` | Erstatter `mars_projekt` og opdaterer markernes `omlaegningsplan_virkemiddel`, `omlaegningsplan_status` og `in_takeout_plan` efter overlap. |
 | 6 | `pixi run load-historisk-goedningsfordeling` | [load_historisk_goedningsfordeling.py](load_historisk_goedningsfordeling.py) | `ANGJ-data/Historisk_goedningsfordeling_2025_og_2026_bilag3_lookup.csv` | Erstatter `historisk_goedningsfordeling`: mineralsk og organisk N-input pr. region, driftsform, afgrøde og JB-nr. |
-| 7 | `pixi run load-saedskifte-lookup` | [load_saedskifte_lookup.py](load_saedskifte_lookup.py) | `ANGJ-data/Ny_sædskifte_lookup_sammenlagt.csv` | Erstatter `saedskifte_rotation` og `saedskifte_category`. |
+| 7 | `pixi run load-saedskifte-lookup` | [load_saedskifte_lookup.py](load_saedskifte_lookup.py) | `ANGJ-data/Ny_sædskifte_lookup_sammenlagt.csv` | Erstatter `saedskifte_category` og sædskifterne i `saedskifte_rotation` for numrene i filen. Numre, der ikke længere står i filen, er udgåede: deres sædskifter bliver liggende uden kategori, så gamle simuleringer stadig virker, og kun de tilbyder dem. Slet rækkerne i `saedskifte_rotation` i hånden for at fjerne et nummer helt. Genstart backend’en og optimeringsworkeren bagefter, da de husker listen. |
 | 8 | `pixi run load-afgroeder` | [load_afgroeder.py](load_afgroeder.py) | `ANGJ-data/Afgroedetabel2027_master.csv`; `V1_1_IMK2026_n604144_gpkg_merged.gpkg` bruges også, hvis den findes, til historiske afgrødenavne | Erstatter `afgroede`, `afgroede_norm_lookup` og `afgroede_nfix_lookup`, inkl. NUAR, afstrømningskategorier og permanente afgrødekoder. Læser også historiske koder fra `registry_field.crop_history`. |
 | 9 | `pixi run load-oekonomital-afgroedebundet` | [load_oekonomital_afgroedebundet.py](load_oekonomital_afgroedebundet.py) | `ANGJ-data/Oekonomital_afgroedebundet.csv` | Erstatter `salgspris`, `halmudbytte`, `arbejdsmaengde` og `dyrkningsomkostning`. |
 | 10 | `pixi run load-oekonomital-generelle-satser` | [load_oekonomital_generelle_satser.py](load_oekonomital_generelle_satser.py) | `ANGJ-data/Oekonomital_generelle_satser.csv` | Erstatter `arbejdssats` og `prisliste`. |

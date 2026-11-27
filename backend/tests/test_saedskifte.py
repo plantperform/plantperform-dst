@@ -75,7 +75,13 @@ from app.domain.simulation import (
 )
 from app.services import fargate_control
 from app.services.optimization import jobs
-from app.services.rotations import afgroede_normer, choices, custom, saedskifte_library
+from app.services.rotations import (
+    afgroede_normer,
+    choices,
+    custom,
+    saedskifte_kategorier,
+    saedskifte_library,
+)
 from app.services.scenario import candidate_evaluator
 from database.scripts.load_saedskifte_lookup import load_saedskifte_lookup
 from optimizer import worker
@@ -783,6 +789,33 @@ class RotationDatabaseTests(unittest.TestCase):
             load_saedskifte_lookup(path, url.render_as_string(hide_password=False))
 
         self.assertEqual(store.get_group(source.id, EMAIL).name, source.name)
+
+    def test_lookup_reload_retires_a_number_that_left_the_file(self):
+        url = self.engine.url.update_query_dict({"options": f"-csearch_path={self.schema}"})
+        kept = source_row(1, 1, "Plante", first_crop="11", second_undersow="")
+        removed = source_row(27, 1, "Plante", first_crop="11", second_undersow="")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lookup.csv"
+            for rows in ([kept, removed], [kept]):
+                write_lookup(path, rows)
+                load_saedskifte_lookup(path, url.render_as_string(hide_password=False))
+        saedskifte_library.clear_lookup_cache()
+        saedskifte_kategorier._reverse.cache_clear()
+        self.addCleanup(saedskifte_kategorier._reverse.cache_clear)
+
+        response = self.client.get("/api/v0/farms/farm/rotation-candidates/kategorier")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        listed = {
+            category["kategori"]: (
+                category["retired"],
+                [option["saedskiftevariant"] for option in category["saedskifter"]],
+            )
+            for category in response.json()
+        }
+        self.assertEqual(listed["Plante"], (False, ["1"]))
+        self.assertEqual(listed["Udgåede konventionelle"], (True, ["27"]))
+        self.assertEqual(saedskifte_library.list_variants("27"), ["1"])
 
     def enable_optimizer(self, simulation, *, kind="optimize"):
         calculation_data(self)

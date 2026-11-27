@@ -81,6 +81,8 @@ class RotationKategoriOption(CamelModel):
     dyrkningssystem: str
     antal_saedskifter: int
     saedskifter: list[SaedskifteOption]
+    # Numbers that have left the lookup file, only to be offered where already used.
+    retired: bool = False
 
 
 class AutumnCropOption(CamelModel):
@@ -131,10 +133,14 @@ def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKat
 
     Each category contains its individual sædskifte options with afgrøde-sequence
     previews, allowing users to expand it and select specific sædskifter in
-    "Nyt scenarie".
+    "Nyt scenarie". The user's own sædskifter follow in a category of their own,
+    and the retired numbers come last.
     """
     options = []
-    for kategori in saedskifte_kategorier.list_kategorier():
+    for kategori in [
+        *saedskifte_kategorier.list_kategorier(),
+        *saedskifte_kategorier.list_retired_kategorier(),
+    ]:
         saedskiftevarianter = saedskifte_kategorier.saedskifter_for_kategori(kategori)
         saedskifter = [
             preview
@@ -147,6 +153,7 @@ def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKat
                 dyrkningssystem=saedskifte_kategorier.dyrkningssystem_for_kategori(kategori),
                 antal_saedskifter=len(saedskiftevarianter),
                 saedskifter=saedskifter,
+                retired=kategori in saedskifte_kategorier.RETIRED_KATEGORIER,
             )
         )
     groups, copyable = saedskifte_store.available_for_farm(farm_id, user.email)
@@ -178,7 +185,7 @@ def list_rotation_kategorier(farm_id: str, user: FarmMember) -> list[RotationKat
             options.append(category)
         category.saedskifter.append(preview)
         category.antal_saedskifter += 1
-    return options
+    return sorted(options, key=lambda option: option.retired)
 
 
 _ALL_JB_NUMBERS = list(range(1, 13))

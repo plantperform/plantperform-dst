@@ -45,6 +45,17 @@ KONV_SVIN_SAMLET = "Konv. svin samlet"
 KONV_KVAEG = "Konv. kvæg"
 OEKO_SAMLET = "Øko samlet"
 
+# A standard number without a category has left the lookup file: the loader
+# keeps its rotations for the simulations that use it. It is listed in the
+# retired category of its driftsform, which only those simulations offer.
+RETIRED_KONVENTIONEL = "Udgåede konventionelle"
+RETIRED_OEKOLOGISK = "Udgåede økologiske"
+# {kategori: dyrkningssystem}
+RETIRED_KATEGORIER: dict[str, str] = {
+    RETIRED_KONVENTIONEL: KONVENTIONEL,
+    RETIRED_OEKOLOGISK: OEKOLOGISK,
+}
+
 # {kategori: {org_mineral_n, mineralsk_andel_pct, only_organic, dyrkningssystem}}
 # org_mineral_n = kg utilized N/ha from organisk gødning (0 = pure kunstgødning).
 # mineralsk_andel_pct = share of org_mineral_n considered immediately utilized
@@ -73,9 +84,9 @@ KATEGORI_GODNING: dict[str, dict] = {
 @lru_cache(maxsize=1)
 def _reverse() -> dict[str, list[str]]:
     """Map kategori to numerically sorted saedskiftevariant values."""
-    reverse: dict[str, list[str]] = {k: [] for k in KATEGORI_GODNING}
+    reverse: dict[str, list[str]] = {k: [] for k in [*KATEGORI_GODNING, *RETIRED_KATEGORIER]}
     for nr in saedskifte_library.list_saedskifter():
-        for kategori in saedskifte_library.get_kategori(nr):
+        for kategori in kategorier_for_saedskifte(nr):
             reverse.setdefault(kategori, []).append(nr)
     for nr_list in reverse.values():
         nr_list.sort(key=int)
@@ -87,9 +98,22 @@ def list_kategorier() -> list[str]:
     return list(KATEGORI_GODNING.keys())
 
 
+def list_retired_kategorier() -> list[str]:
+    """Return the retired categories that hold at least one number."""
+    return [kategori for kategori in RETIRED_KATEGORIER if _reverse()[kategori]]
+
+
 def kategorier_for_saedskifte(saedskiftevariant: str) -> list[str]:
-    """Return the categories to which a saedskiftevariant belongs."""
-    return saedskifte_library.get_kategori(saedskiftevariant)
+    """Return the categories to which a saedskiftevariant belongs.
+
+    A library number without a category is retired, see RETIRED_KATEGORIER.
+    """
+    categories = saedskifte_library.get_kategori(saedskiftevariant)
+    # No variants means no library number, e.g. the ref of a permanent afgrøde.
+    if categories or not saedskifte_library.list_variants(saedskiftevariant):
+        return categories
+    organic = saedskifte_library.get_driftsform(saedskiftevariant) == OEKOLOGISK
+    return [RETIRED_OEKOLOGISK if organic else RETIRED_KONVENTIONEL]
 
 
 def saedskifter_for_kategori(kategori: str) -> list[str]:
@@ -98,4 +122,6 @@ def saedskifter_for_kategori(kategori: str) -> list[str]:
 
 
 def dyrkningssystem_for_kategori(kategori: str) -> str:
+    if kategori in RETIRED_KATEGORIER:
+        return RETIRED_KATEGORIER[kategori]
     return KATEGORI_GODNING[kategori]["dyrkningssystem"]

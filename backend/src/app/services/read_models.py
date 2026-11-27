@@ -429,7 +429,12 @@ def _rotation_catalog(by_pair):
                 )
             ),
         }
-        for category in ["Brak", *saedskifte_kategorier.list_kategorier(), CUSTOM_CATEGORY]
+        for category in [
+            "Brak",
+            *saedskifte_kategorier.list_kategorier(),
+            CUSTOM_CATEGORY,
+            *saedskifte_kategorier.RETIRED_KATEGORIER,
+        ]
         if category in groups
     ]
 
