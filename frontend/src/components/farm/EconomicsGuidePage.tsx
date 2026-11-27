@@ -25,6 +25,7 @@ import {
 import { CropsOverview } from '@/components/farm/EconomicsAssumptionsEditor'
 import { EconomicsCropDetail } from '@/components/farm/EconomicsCropDetail'
 import {
+  GuideCrossCropStep,
   GuideFertiliserStep,
   GuideMachinesStep,
   GuidePricesStep,
@@ -51,6 +52,7 @@ import {
   formatDbDkk,
   NO_OVERRIDES,
   profileChanges,
+  priceChangesOutsideCrops,
   profileDbEffect,
   sameOverrides,
   withoutProfileChange,
@@ -94,12 +96,18 @@ const STEPS = [
   },
   {
     id: 5,
+    label: 'Priser på tværs',
+    intro:
+      'Skriv dine priser på efterafgrøder og andet, der lægges oven på afgrødernes egne budgetter.',
+  },
+  {
+    id: 6,
     label: 'Dækningsbidrag',
     intro:
       'Se dækningsbidraget for alle afgrøder med dine tal. Klik på en afgrøde for at rette den.',
   },
   {
-    id: 6,
+    id: 7,
     label: 'Gennemgang',
     intro:
       'Giv profilen et navn, gå ændringerne igennem og vælg, hvor den skal bruges.',
@@ -118,6 +126,9 @@ type GuideEffectProps = {
 
 const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
   const effects = profileDbEffect(assumptions, overrides)
+  const outsideCrops = priceChangesOutsideCrops(
+    profileChanges(assumptions, overrides),
+  )
   const moved = effects.filter((effect) => effect.deltaDkkHa !== 0)
   const unchanged = effects.length - moved.length
   const note =
@@ -182,6 +193,12 @@ const GuideEffect = ({ assumptions, overrides }: GuideEffectProps) => {
           )}
         >
           {note}
+        </p>
+      ) : null}
+      {outsideCrops.length > 0 ? (
+        <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
+          Priser, som ingen af afgrødernes budgetter har, ses ikke her. De
+          tæller med i de simuleringer, der bruger dem.
         </p>
       ) : null}
     </section>
@@ -381,6 +398,13 @@ const Guide = ({
               />
             ) : null}
             {step === 5 ? (
+              <GuideCrossCropStep
+                assumptions={assumptions}
+                overrides={overrides}
+                onChange={setOverrides}
+              />
+            ) : null}
+            {step === 6 ? (
               <CropsOverview
                 assumptions={assumptions}
                 overrides={overrides}

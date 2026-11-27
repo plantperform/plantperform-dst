@@ -154,6 +154,28 @@ describe('simulationEconomicsEffect', () => {
     expect(effect.deltaDkk).toBe(0)
   })
 
+  it('names the changed prices the estimate by crop leaves out', () => {
+    const assumptions: EconomicsAssumptions = {
+      ...ASSUMPTIONS,
+      prices: [
+        ...ASSUMPTIONS.prices,
+        price('precision', 'Præcisionsjordbrug', 'kr/ha', 50),
+      ],
+      crossCropPrices: [
+        { priceId: 'precision', group: 'fieldWork', canBeNegative: false },
+      ],
+    }
+    const overrides = withPriceOverride(
+      assumptions,
+      withPriceOverride(assumptions, NO_OVERRIDES, 'precision', 70),
+      'sale:1',
+      110,
+    )
+    const effect = simulationEconomicsEffect(assumptions, overrides, FIELDS)
+    expect(effect.uncountedPriceLabels).toEqual(['Præcisionsjordbrug'])
+    expect(effect.deltaDkk).toBe(3000)
+  })
+
   it('adds up the whole kroner shown for each crop', () => {
     const overrides = withPriceOverride(
       ASSUMPTIONS,

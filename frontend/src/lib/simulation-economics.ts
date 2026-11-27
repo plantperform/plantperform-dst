@@ -2,6 +2,7 @@ import type { FieldRecord } from '@/api/types'
 import { cropLabel } from '@/lib/crop-label'
 import {
   isCropCustomised,
+  priceChangesOutsideCrops,
   profileChanges,
   profileDbEffect,
   type CropDbEffect,
@@ -29,6 +30,9 @@ export type SimulationEconomicsEffect = {
   otherCrops: CropArea[]
   deltaDkk: number
   unusedCropLabels: string[]
+  // Changed prices that no crop budget has a row for, so the estimate by crop
+  // leaves them out.
+  uncountedPriceLabels: string[]
 }
 
 const yearlyCropAreas = (fields: RotationField[]): CropArea[] => {
@@ -84,5 +88,8 @@ export const simulationEconomicsEffect = (
           isCropCustomised(overrides, crop),
       )
       .map((crop) => cropLabel(crop.cropCode, crop.cropName)),
+    uncountedPriceLabels: priceChangesOutsideCrops(changes).map(
+      (change) => change.label,
+    ),
   }
 }

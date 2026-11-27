@@ -11,6 +11,11 @@ import {
   EconomicsNumberField,
   YieldPctField,
 } from '@/components/farm/EconomicsNumberField'
+import {
+  CrossCropPrices,
+  PriceRow,
+  PRICES_GRID_CLASS,
+} from '@/components/farm/EconomicsCrossCropPrices'
 import { EconomicsProfileChanges } from '@/components/farm/EconomicsProfileChanges'
 import { useFarmReadOnly } from '@/components/farm/farm-access-context'
 import { useSharedPriceConfirm } from '@/components/farm/shared-price-confirm'
@@ -27,10 +32,10 @@ import {
   findPrice,
   formatDbDkk,
   formatEconomicsNumber,
+  guideFertiliserPrices,
   isPriceCustomised,
   lineAmountDkkHa,
   lineQuantity,
-  manurePrices,
   mineralFertiliserPrices,
   priceValue,
   quantityUnitLabel,
@@ -46,7 +51,6 @@ import {
   type EconomicsOverrides,
   type OverridesChange,
   type ProfileChange,
-  type UnitPrice,
 } from '@/lib/economics'
 import { cn } from '@/lib/utils'
 
@@ -71,41 +75,6 @@ const CropName = ({ crop, children }: CropNameProps) => (
       {children}
     </span>
   </span>
-)
-
-const PRICES_GRID_CLASS =
-  'grid grid-cols-[minmax(9rem,1fr)_8rem_11rem] items-center gap-x-4 px-5'
-
-type PriceRowProps = {
-  price: UnitPrice
-  value: number
-  label: string
-  onCommit: (value: number) => void
-  children: ReactNode
-}
-
-const PriceRow = ({
-  price,
-  value,
-  label,
-  onCommit,
-  children,
-}: PriceRowProps) => (
-  <div className={cn(PRICES_GRID_CLASS, 'py-2.5 text-[13px]')}>
-    {children}
-    <span className="text-right text-muted-foreground tabular-nums">
-      {formatEconomicsNumber(price.valueDkk)} {price.unit}
-    </span>
-    <span className="flex items-start justify-end gap-1.5 leading-7 text-muted-foreground">
-      <EconomicsNumberField
-        value={value}
-        standard={price.valueDkk}
-        label={label}
-        onCommit={onCommit}
-      />
-      <span>{price.unit}</span>
-    </span>
-  </div>
 )
 
 type GuidePricesStepProps = StepProps & {
@@ -197,7 +166,7 @@ export const GuideFertiliserStep = ({
   onChange,
 }: StepProps) => {
   const mineral = mineralFertiliserPrices(assumptions)
-  const prices = [...mineral, ...manurePrices(assumptions)]
+  const prices = guideFertiliserPrices(assumptions)
 
   return (
     <div className="overflow-x-auto">
@@ -226,13 +195,33 @@ export const GuideFertiliserStep = ({
         <p className={FOOT_CLASS}>
           {mineral.length > 0
             ? 'Handelsgødningen følger afgrødens kvælstofnorm. I en simulering med husdyrgødning dækker den en del af normen. Husdyrgødningens udbringning og købspris er pr. ton og gælder både for konventionel og økologisk drift, når en simulering bruger husdyrgødning.'
-            : 'Husdyrgødningen dækker hele kvælstofnormen. Udbringning og købspris er pr. ton.'}{' '}
+            : 'Husdyrgødningen dækker hele kvælstofnormen. Udbringning og købspris er pr. ton. Udbringning af handelsgødning gælder kun konventionel drift.'}{' '}
           Standardens købspris er 0 kr/ton.
         </p>
       </div>
     </div>
   )
 }
+
+export const GuideCrossCropStep = ({
+  assumptions,
+  overrides,
+  onChange,
+}: StepProps) => (
+  <div>
+    <CrossCropPrices
+      assumptions={assumptions}
+      overrides={overrides}
+      groups={['catchCrops', 'fieldWork']}
+      onChange={onChange}
+    />
+    <p className={FOOT_CLASS}>
+      Et tomt felt bruger standardens pris. Gødningens priser rettes under
+      Gødning. Priserne her står ikke i afgrødernes egne budgetter, så de ændrer
+      ikke dækningsbidraget i guiden. De tæller med i simuleringerne.
+    </p>
+  </div>
+)
 
 const YIELD_GRID_CLASS =
   'grid grid-cols-[minmax(9rem,1fr)_11rem_11rem] items-center gap-x-4 px-5'

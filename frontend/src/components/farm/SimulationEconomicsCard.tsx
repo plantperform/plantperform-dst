@@ -254,6 +254,16 @@ const CardBody = ({ simulation, fields, assumptions }: CardBodyProps) => {
             ? NO_SOIL_TYPE_NOTE
             : `Arealet er gennemsnittet pr. år over markernes sædskifter, og ændringen pr. ha er regnet for ${budgetSoilType(assumptions)}, bedriftens mest udbredte jordtype, med simuleringens driftsform og gødningsvalg.`}
         </p>
+        {effect.uncountedPriceLabels.length > 0 ? (
+          <p>
+            Skønnet medregner ikke ændringen af{' '}
+            {formatNameList(
+              effect.uncountedPriceLabels.map((label) => `«${label}»`),
+            )}
+            . Priserne tæller med i simuleringens egne resultater, hvor de
+            bruges.
+          </p>
+        ) : null}
         {unused.length > 0 ? (
           <p>
             Profilen ændrer også {formatCropLabels(unused)}, som simuleringen
