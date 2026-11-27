@@ -59,6 +59,7 @@ import {
   withAutumnDraft,
   withCropChoice,
   withFarmingSystem,
+  withoutUnusedRetiredRotations,
   type SimulationFormValues,
 } from '@/lib/simulation-form'
 
@@ -1320,5 +1321,43 @@ describe('own rotations in Ny simulering', () => {
         new Set(['own-0', created]),
       ),
     ).toEqual(['12', 'own-0', created, '99'])
+  })
+})
+
+describe('retired rotations in the simulation wizard', () => {
+  const retired: RotationCategoryOption = {
+    category: 'Udgåede konventionelle',
+    croppingSystem: 'Konventionel',
+    rotationCount: 2,
+    rotations: [
+      { rotationVariant: '27', cropSequence: ['Vårbyg'], activeLen: 1 },
+      { rotationVariant: '28', cropSequence: ['Rug'], activeLen: 1 },
+    ],
+    retired: true,
+  }
+  const categories = [...CATEGORIES, retired]
+
+  it('offers only the retired rotations the source simulation uses', () => {
+    expect(withoutUnusedRetiredRotations(categories, ['10', '27'])).toEqual([
+      ...CATEGORIES,
+      { ...retired, rotationCount: 1, rotations: [retired.rotations[0]] },
+    ])
+    expect(withoutUnusedRetiredRotations(categories, ['10'])).toEqual(
+      CATEGORIES,
+    )
+  })
+
+  it('counts and keeps a used one like any other rotation', () => {
+    const offered = withoutUnusedRetiredRotations(categories, ['10', '27'])
+    expect(
+      farmingSystemMismatchCount(offered, ['10', '27'], 'Konventionel'),
+    ).toBe(0)
+    expect(
+      withCropChoice(offered, {
+        chosenCrops: ['Vårbyg', 'Kløvergræs'],
+        rotationVariants: ['10', '27'],
+      }).rotationVariants,
+    ).toEqual(['10', '27'])
+    expect(cropsForFarmingSystem(offered, 'Konventionel')).not.toContain('Rug')
   })
 })

@@ -558,6 +558,22 @@ export const selectableRotationCategories = (
       : [{ ...category, rotationCount: rotations.length, rotations }]
   })
 
+// The simulation wizard offers a retired rotation only to a simulation that
+// already uses it, so a new simulation never gets one.
+export const withoutUnusedRetiredRotations = (
+  categories: RotationCategoryOption[],
+  usedRotationVariants: readonly string[],
+): RotationCategoryOption[] =>
+  categories.flatMap((category) => {
+    if (!category.retired) return [category]
+    const rotations = category.rotations.filter((rotation) =>
+      usedRotationVariants.includes(rotation.rotationVariant),
+    )
+    return rotations.length === 0
+      ? []
+      : [{ ...category, rotationCount: rotations.length, rotations }]
+  })
+
 const OWN_ROTATION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

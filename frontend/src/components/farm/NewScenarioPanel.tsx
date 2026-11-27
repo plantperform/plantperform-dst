@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { mutate } from 'swr'
 
@@ -92,6 +92,7 @@ import {
   toggleNNormPercentage,
   withCropChoice,
   withFarmingSystem,
+  withoutUnusedRetiredRotations,
   type CropChoice,
   type InitialRotations,
   type RotationChoice,
@@ -192,7 +193,16 @@ export const NewScenarioPanel = ({
   const presetsQuery = useFertiliserPresets(farmId)
   const economicsProfiles = useEconomicsProfiles()
   const cropCodes = useCropCodes(farmId).data ?? NO_CROP_CODES
-  const categories = categoriesQuery.data ?? NO_CATEGORIES
+  const sourceRotationVariants =
+    source?.rotationVariants ?? NO_ROTATION_VARIANTS
+  const categories = useMemo(
+    () =>
+      withoutUnusedRetiredRotations(
+        categoriesQuery.data ?? NO_CATEGORIES,
+        sourceRotationVariants,
+      ),
+    [categoriesQuery.data, sourceRotationVariants],
+  )
   const ownDefinitionsQuery = useOwnRotationDefinitions()
   const ownRotationIds = new Set(
     (ownDefinitionsQuery.data ?? []).map((definition) => definition.id),
@@ -200,7 +210,7 @@ export const NewScenarioPanel = ({
   const selectableCategories = selectableRotationCategories(
     categories,
     ownRotationIds,
-    source?.rotationVariants ?? NO_ROTATION_VARIANTS,
+    sourceRotationVariants,
   )
   const nNormOptions = nNormQuery.data ?? []
   const fertiliserPresets = presetsQuery.data ?? []

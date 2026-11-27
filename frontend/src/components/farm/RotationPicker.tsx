@@ -171,6 +171,12 @@ export const RotationPicker = ({
               sædskifter valgt
             </p>
           ) : null}
+          {active.retired ? (
+            <p className="mr-auto text-xs text-muted-foreground">
+              Sædskifterne er udgået. De vises kun, fordi simuleringen allerede
+              bruger dem.
+            </p>
+          ) : null}
           <Button
             variant="outline"
             size="xs"

@@ -819,6 +819,57 @@ describe('simulation wizard steps', () => {
     ).toBe('Kvæg1/1')
   })
 
+  describe('retired rotations', () => {
+    const WITH_RETIRED: RotationCategoryOption[] = [
+      ...WHEAT_CATEGORIES,
+      {
+        category: 'Udgåede konventionelle',
+        croppingSystem: 'Konventionel',
+        retired: true,
+        rotationCount: 2,
+        rotations: [
+          { rotationVariant: '27', cropSequence: ['Hvede'], activeLen: 1 },
+          { rotationVariant: '28', cropSequence: ['Hvede'], activeLen: 1 },
+        ],
+      },
+    ]
+
+    it('keeps the ones the source simulation uses, and only those', async () => {
+      queries.categories.data = WITH_RETIRED
+      await mount({ ...source, rotationVariants: ['27'] })
+      await click('Sædskifter')
+      expect(
+        container.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent,
+      ).toBe('Udgåede konventionelle1/1')
+      expect(container.textContent).toContain('Sædskifterne er udgået.')
+      expect(container.textContent).not.toContain('økologiske sædskifter')
+      await click('Vælg alle')
+      await click('Bekræft')
+      await click('Gem')
+      expect(queries.update.mock.calls[0][2]).toMatchObject({
+        allowedRotationVariants: ['27'],
+      })
+    })
+
+    it('offers none to a new simulation', async () => {
+      queries.categories.data = WITH_RETIRED
+      await mount(null)
+      await change('Simuleringens navn', 'Ny simulering')
+      await click('Næste')
+      await check('Afgrøder', 'Hvede')
+      await click('Næste')
+      expect(currentStep()).toBe('Sædskifter')
+      expect(container.textContent).not.toContain('Udgåede')
+      await click('Vælg alle')
+      await click('Bekræft')
+      await click('Gem')
+      expect(queries.create.mock.calls[0][1]).toMatchObject({
+        allowedRotationVariants: ['1'],
+      })
+    })
+  })
+
   it('selects and clears every crop of a group with its checkbox', async () => {
     queries.categories.data = [
       {
