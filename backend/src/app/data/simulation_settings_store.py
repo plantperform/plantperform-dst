@@ -9,6 +9,7 @@ from sqlalchemy import insert, select, update
 from app.data import (
     creation_store,
     economics_store,
+    farm_copy_store,
     read_model_store,
     repository,
     saedskifte_store,
@@ -23,6 +24,18 @@ from app.services.rotations import custom
 REQUEST_TO_SETUP = {
     "saedskiftevarianter": "rotation_saedskiftevarianter",
     "n_norm_procenter": "rotation_n_norm_procenter",
+}
+# What names a simulation or tells its state, as opposed to what it is calculated with.
+NOT_CALCULATION_SETTINGS = {
+    "id",
+    "name",
+    "created_at",
+    "revision",
+    "result",
+    "creation_status",
+    "economics_recalculation_failed",
+    "comparison_availability",
+    "rotation_groups",
 }
 
 
@@ -54,12 +67,22 @@ def create(farm_id, request, email):
         ):
             custom.check_expansion(request.saedskiftevarianter, request.n_norm_procenter)
         snapshot = economics_store.resolve_snapshot(session, request.economics_module_id, email)
+        module_id = snapshot.source_id
+        captured = None
+        if request.copy_from is not None:
+            captured = _locked_copy_source(session, farm_id, request.copy_from)
+            if captured.economics_module_id == module_id:
+                # The copied figures are priced with it, so the copy keeps it too.
+                snapshot = captured.economics_snapshot
+        # A source without fields of its own follows the farm, and so does its copy.
+        copies_fields = captured is not None and captured.fields_initialized
         settings = request.model_dump(
             mode="json",
             exclude={
                 "request_id",
                 "optimize_on_create",
                 "economics_module_id",
+                "copy_from",
             },
         )
         settings = {REQUEST_TO_SETUP.get(key, key): value for key, value in settings.items()}
@@ -68,8 +91,8 @@ def create(farm_id, request, email):
             id=simulation_id,
             farm_id=farm_id,
             created_at=datetime.now(UTC).isoformat(),
-            fields_initialized=False,
-            economics_module_id=snapshot.source_id,
+            fields_initialized=copies_fields,
+            economics_module_id=module_id,
             economics_snapshot=snapshot,
         )
         session.execute(
@@ -91,6 +114,17 @@ def create(farm_id, request, email):
             )
         )
         session.execute(insert(results).values(simulation_id=simulation_id))
+        if copies_fields:
+            farm_copy_store.copy_simulation_contents(
+                session,
+                request.copy_from,
+                simulation_id,
+                farm_id,
+                # A result belongs to the settings it was calculated with.
+                outdated=_calculation_settings(simulation) != _calculation_settings(captured),
+            )
+            read_model_store.refresh_simulation_view(session, simulation_id)
+            return simulation_store._get_simulation(session, farm_id, simulation_id, email)
         # A settings-only simulation does not require display preparation.
         read_model_store.publish_simulation(
             session,
@@ -107,6 +141,25 @@ def create(farm_id, request, email):
             {"version": 3, "contributions": {}},
         )
         return simulation
+
+
+def _locked_copy_source(session, farm_id, source_id) -> Simulation:
+    """The simulation being copied, locked so all of it is read as one state."""
+    data = session.execute(
+        select(setups.c.data)
+        .where(setups.c.id == source_id, setups.c.farm_id == farm_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if data is None:
+        raise CreationConflictError("Simuleringen, der skal kopieres, findes ikke længere.")
+    return Simulation.model_validate(data)
+
+
+def _calculation_settings(simulation) -> dict:
+    settings = simulation.model_dump(mode="json", exclude=NOT_CALCULATION_SETTINGS)
+    # The N-norm levels are a set: a copy sends them sorted, not in the order picked.
+    settings["rotation_n_norm_procenter"] = sorted(settings["rotation_n_norm_procenter"])
+    return settings
 
 
 # A copied mark keeps its data and captured context, never another scenarie's choice.

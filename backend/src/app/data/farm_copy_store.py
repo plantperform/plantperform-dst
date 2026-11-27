@@ -3,7 +3,7 @@
 from collections import defaultdict
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from sqlalchemy import insert, or_, select
+from sqlalchemy import insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.data import farm_copy_definitions, read_model_store, repository
@@ -244,6 +244,57 @@ def _load_state(session, source):
     ):
         state[table] = _rows(session, table, condition)
     return state
+
+
+def copy_simulation_contents(session, source_id, copy_id, farm_id, *, outdated=False):
+    """Give a new simulation of the same farm the source's fields and saved result.
+
+    Everything keeps its content under the copy's own ids, and completed quota
+    value curves follow the result. No calculation is started or carried over: the
+    copy's result is outdated if the source's latest run is unfinished or failed,
+    or if the caller says it does not fit the copy. The caller locks the source.
+    """
+    ids = defaultdict(
+        lambda: str(uuid4()),
+        {farm_id: farm_id, source_id: copy_id, STANDARD_ID: STANDARD_ID},
+    )
+    [source] = _rows(session, simulation_table, simulation_table.c.id == source_id)
+    session.execute(
+        update(simulation_table)
+        .where(simulation_table.c.id == copy_id)
+        .values(
+            fields=_remap(source["fields"], ids, "fields"),
+            field_order=_remap(source["field_order"], ids, "field_order"),
+            # Edits and results are ordered by revision, so the copy counts on from here.
+            revision=source["revision"],
+        )
+    )
+    [result] = _rows(
+        session, simulation_result_table, simulation_result_table.c.simulation_id == source_id
+    )
+    saved = session.scalar(
+        select(simulation_read_model_table.c.data["saved_result"]).where(
+            simulation_read_model_table.c.simulation_id == source_id
+        )
+    )
+    _reset_result(result, saved)
+    if (result["output"] or {}).get("response") is None:
+        return
+    if outdated or result["status"] != "completed":
+        result.update(status="outdated", error=None)
+    session.execute(
+        update(simulation_result_table)
+        .where(simulation_result_table.c.simulation_id == copy_id)
+        .values(**_remap(result, ids))
+    )
+    curves = simulation_quota_value_table.c
+    for curve in _rows(
+        session,
+        simulation_quota_value_table,
+        (curves.simulation_id == source_id) & (curves.status == "completed"),
+    ):
+        curve["requested_by"] = None
+        session.execute(insert(simulation_quota_value_table).values(**_remap(curve, ids)))
 
 
 def _copy_snapshot(session, source, destination_id, email, *, member_copy=False):
