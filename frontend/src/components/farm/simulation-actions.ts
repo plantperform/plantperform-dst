@@ -21,10 +21,18 @@ import {
   type CreationRequestIdentity,
 } from '@/lib/simulation-creation'
 
+// Everything a new simulation can be given, apart from what steers the request
+// itself. A setting added to CreateSimulationInput does not compile until the
+// copy takes it along.
+type CopiedSetting = Exclude<
+  keyof CreateSimulationInput,
+  'requestId' | 'optimizeOnCreate'
+>
+
 const buildCopyInput = (
   simulation: Simulation,
   offeredNNormPercentages: string[],
-): CreateSimulationInput => ({
+) => ({
   name: copiedSimulationName(simulation.name),
   constraints: simulation.constraints,
   optimizationSettings: optimizationSettingsInput(simulation.optimizationSettings ?? DEFAULT_OPTIMIZATION_SETTINGS),
@@ -40,7 +48,8 @@ const buildCopyInput = (
   fertiliser: simulation.fertiliser,
   catchCropSowingDate: simulation.catchCropSowingDate,
   catchCropDailyBasis: simulation.catchCropDailyBasis,
-})
+  includePrecedingCropValue: simulation.includePrecedingCropValue,
+}) satisfies CreateSimulationInput & Record<CopiedSetting, unknown>
 
 type SimulationActionsOptions = {
   farmId: string | undefined
